@@ -11,13 +11,13 @@
     "hot",
     "reload"
   ],
-  "homepage": "https://github.com/sillsdev/Paranext#readme",
+  "homepage": "https://github.com/paranext/paranext#readme",
   "bugs": {
-    "url": "https://github.com/sillsdev/Paranext/issues"
+    "url": "https://github.com/paranext/paranext/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sillsdev/Paranext.git"
+    "url": "git+https://github.com/paranext/paranext.git"
   },
   "license": "MIT",
   "author": {
