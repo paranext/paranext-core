@@ -25,6 +25,10 @@ class AppUpdater {
 
 let mainWindow: BrowserWindow | null = null;
 
+if (require('electron-squirrel-startup')) {
+  app.quit();
+}
+
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
   console.log(msgTemplate(arg));
