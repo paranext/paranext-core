@@ -46,6 +46,21 @@ To package apps for the local platform:
 npm run package
 ```
 
+## Publishing
+
+1. Create a branch of the form `release/*`, e.g. `release/v1.2.3`, or `release/v1.2.3-rc1`.
+2. Update the _version_ in your project's `package.json` file (e.g. _1.2.3_).
+3. Run `npm i` to update `package-lock.json`.
+4. Create a new draft GitHub **Release**, ensure the following are included:
+   - a _Tag version_, e.g. `v1.2.3`.
+   - a copy of the change log. Click **Generate release notes** as a starting point.
+5. Update `CHANGELOG.md` with changes in this release from the GitHub draft **Release**.
+6. Commit these changes to your release branch.
+7. Tag your commit, e.g. `v1.2.3`.
+8. Push the tag then the commit to GitHub.
+9. Once the GitHub build **Action** has finished, it will add build artifact files to the draft release. Remove the `.blockmap` and `.yml` files and leave the executable, e.g. `.exe` on Windows.
+10. Publish the release on GitHub.
+
 ## Linux Development
 
 Add the system libraries needed for Electron, [Build Instructions (Linux)](https://www.electronjs.org/docs/latest/development/build-instructions-linux).
