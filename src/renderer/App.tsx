@@ -22,18 +22,20 @@ const Hello = () => {
             Read our docs
           </button>
         </a>
-        <a
-          href="https://github.com/sponsors/electron-react-boilerplate"
-          target="_blank"
-          rel="noreferrer"
+        <button
+          type="button"
+          onClick={() => {
+            window.electronAPI.edge.invoke(
+              'EdgeMethods.UseDynamicInput',
+              'Node!',
+            );
+          }}
         >
-          <button type="button">
-            <span role="img" aria-label="folded hands">
-              🙏
-            </span>
-            Donate
-          </button>
-        </a>
+          <span role="img" aria-label="folded hands">
+            🙏
+          </span>
+          Donate
+        </button>
       </div>
     </div>
   );

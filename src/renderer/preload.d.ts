@@ -1,7 +1,8 @@
-import { ElectronHandler } from 'main/preload';
+import { ElectronAPIHandler, ElectronHandler } from 'main/preload';
 
 declare global {
   interface Window {
+    electronAPI: ElectronAPIHandler;
     electron: ElectronHandler;
   }
 }

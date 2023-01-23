@@ -1,5 +1,23 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
+const electronAPIHandler = {
+  edge: {
+    /**
+     * Calls electron to invoke an edge method
+     * @param classMethod Class name and method to call in dot notation like ClassName.Method
+     * @param args arguments to pass into the method
+     * @returns Promise that resolves with the return from the called method
+     */
+    invoke: (classMethod: string, args: unknown) =>
+      ipcRenderer.invoke('electronAPI.edge.invoke', classMethod, args),
+  },
+};
+
+contextBridge.exposeInMainWorld('electronAPI', electronAPIHandler);
+
+export type ElectronAPIHandler = typeof electronAPIHandler;
+
+// TODO: REMOVE test code
 export type Channels = 'ipc-example';
 
 const electronHandler = {
