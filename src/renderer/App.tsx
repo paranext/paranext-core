@@ -11,6 +11,19 @@ const Hello = () => {
       <div className="Hello">
         <h1>Paranext</h1>
       </div>
+      <div className="Hello">
+        <button
+          type="button"
+          onClick={() => {
+            window.electronAPI.edge.invoke(
+              'EdgeMethods.UseDynamicInput',
+              'Node!',
+            );
+          }}
+        >
+          Test Edge
+        </button>
+      </div>
     </div>
   );
 };
