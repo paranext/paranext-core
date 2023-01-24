@@ -25,8 +25,8 @@ This software is not yet ready for users. We'll update here with where you can i
 Clone the repo and install dependencies:
 
 ```bash
-git clone https://github.com/paranext/paranext.git
-cd paranext
+git clone https://github.com/paranext/paranext-core.git
+cd paranext-core
 npm install
 ```
 
@@ -51,15 +51,15 @@ npm run package
 1. Create a branch of the form `release/*`, e.g. `release/v1.2.3`, or `release/v1.2.3-rc1`.
 2. Update the _version_ in your project's `package.json` file (e.g. _1.2.3_).
 3. Run `npm i` to update `package-lock.json`.
-4. Create a new draft GitHub **Release**, ensure the following are included:
+4. Create a new draft [GitHub **Release**](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository), ensure the following are included:
    - a _Tag version_, e.g. `v1.2.3`.
    - a copy of the change log. Click **Generate release notes** as a starting point.
+   - Click **Save draft**.
 5. Update `CHANGELOG.md` with changes in this release from the GitHub draft **Release**.
 6. Commit these changes to your release branch.
-7. Tag your commit, e.g. `v1.2.3`.
-8. Push the tag then the commit to GitHub.
-9. Once the GitHub build **Action** has finished, it will add build artifact files to the draft release. Remove the `.blockmap` and `.yml` files and leave the executable, e.g. `.exe` on Windows.
-10. Publish the release on GitHub.
+7. Push the commit to GitHub.
+8. Once the GitHub build **Action** has finished, it will add build artifact files to the draft release. Remove the `.blockmap` files and leave the `.yml` files and the installers and executable, e.g. `.exe` on Windows.
+9. Publish the release on GitHub.
 
 ## Linux Development
 
