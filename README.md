@@ -1,6 +1,6 @@
 # paranext-core
 
-Backend webserver/extension host and frontend Electron client for Paranext
+Electron client, extension host, and C# library for Paranext
 
 <div align="center" style="background-color: #b8d432;">
   <br />
@@ -22,13 +22,21 @@ This software is not yet ready for users. We'll update here with where you can i
 
 ## Developer Install
 
+Set up pre-requisites for building Node native dependencies (electron-edge-js):
+
+1. Install Visual Studio 2022 (or something that enables `dotnet`. Probably can be older than 2022).
+   - In the Visual Studio Installer, install ".NET desktop development" and "Desktop development with C++" workloads in VS Installer. Or install .NET 7 and C++ build tools separately from the Visual Studio Installer.
+2. Install Python 3.6.x (or probably newer).
+
 Clone the repo and install dependencies:
 
 ```bash
-git clone https://github.com/paranext/paranext.git
-cd paranext
+git clone https://github.com/paranext/paranext-core.git
+cd paranext-core
 npm install
 ```
+
+If you experience problems here or when running and trying to use C# calls, see [Troubleshooting C# Edge function calls](#troubleshooting-c-edge-function-calls).
 
 ## Starting Development
 
@@ -37,6 +45,10 @@ Start the app in the `dev` environment:
 ```bash
 npm start
 ```
+
+After you run `npm start`, you can edit the Electron and frontend files, and they will hot reload. To edit C# files, you must run `npm run build:edge` afterward and restart Electron.
+
+If you experience problems here or when running and trying to use C# calls, see [Troubleshooting C#](#troubleshooting-c-edge-function-calls).
 
 ## Packaging for Production
 
@@ -76,6 +88,16 @@ On Windows, you can install [WSL](https://learn.microsoft.com/en-us/windows/wsl/
 
 You'll be running a copy of the repo in both Windows and WSL so make sure they are both up-to-date.
 
+## Troubleshooting C# Edge function calls
+
+If you experience problems with installing/running Paranext and calling C# functions, try the following:
+
+1. You can try rebuilding native dependencies like `electron-edge-js` and look at any problems that arise: navigate to `./release/app` and run `npm install`.
+   - If you see an error stating that node-abi could not find the abi for Electron, try running `npm uninstall @electron/rebuild` and then `npm install @electron/rebuild --save-dev`.
+   - If you see an error stating that it couldn't find Python or Visual Studio, try setting up the development environment as described in [Developer Install](#developer-install).
+2. If you see an error like `Error invoking remote method 'electronAPI.edge.invoke': TypeError: edge.initializeClrFunc is not a function` when running Edge functions, your native dependencies are probably not rebuilding properly. See #1 above. If that does not solve the problem, ensure `main.ts` is setting the `EDGE_APP_ROOT` environment variable properly to the `c-sharp` dll build folder, and make sure you have built the `EdgeLibrary.csproj` project or run `npm run build:edge`.
+3. If you see an error like `Error: Call to coreclr_create_delegate() for G failed with a return code of 0x80070002`, ensure your `EdgeLibrary.csproj`'s `EdgeJs.dll` reference is pointing to the right location. The `EdgeJs.dll` should be in `./release/app/node_modules/electron-edge-js/lib/bootstrap/bin/Release/netcoreapp1.1/EdgeJs.dll` by default after running `npm install`.
+
 ## License
 
-MIT © [SIL International](https://www.sil.org/)
+MIT © [Paranext](https://github.com/paranext)
