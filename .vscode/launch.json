@@ -21,10 +21,10 @@
       "timeout": 15000
     },
     {
-        "command": "npm run build:native-modules",
-        "name": "Build Native Modules",
-        "request": "launch",
-        "type": "node-terminal"
+      "command": "npm run build:native-modules",
+      "name": "Build Native Modules",
+      "request": "launch",
+      "type": "node-terminal"
     }
   ],
   "compounds": [

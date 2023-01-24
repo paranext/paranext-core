@@ -15,6 +15,8 @@ import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 
+/** ELECTRON SETUP */
+
 class AppUpdater {
   constructor() {
     log.transports.file.level = 'info';
@@ -46,6 +48,7 @@ if (isDebug) {
   require('electron-debug')();
 }
 
+/** Install extensions into the Chromium renderer process */
 const installExtensions = async () => {
   const installer = require('electron-devtools-installer');
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS;
@@ -59,18 +62,20 @@ const installExtensions = async () => {
     .catch(console.log);
 };
 
+/** The path to the app package directory */
+const RESOURCES_PATH = app.isPackaged
+  ? process.resourcesPath
+  : path.join(__dirname, '../../');
+
+const getAssetPath = (...paths: string[]): string => {
+  return path.join(RESOURCES_PATH, 'assets', ...paths);
+};
+
+/** Sets up the electron BrowserWindow renderer process */
 const createWindow = async () => {
   if (isDebug) {
     await installExtensions();
   }
-
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets')
-    : path.join(__dirname, '../../assets');
-
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
 
   mainWindow = new BrowserWindow({
     show: false,
@@ -115,10 +120,6 @@ const createWindow = async () => {
   new AppUpdater();
 };
 
-/**
- * Add event listeners...
- */
-
 app.on('window-all-closed', () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
@@ -132,7 +133,7 @@ app.on('window-all-closed', () => {
 const namespace = 'EdgeLibrary';
 
 // TODO: figure out how to specify the base net app path in production. Put dll in assets and use getResourcePath?
-const baseNetAppPath = path.join(__dirname, '../../c-sharp/bin/Debug/net7.0');
+const baseNetAppPath = path.join(RESOURCES_PATH, '/c-sharp/bin/Debug/net7.0');
 process.env.EDGE_USE_CORECLR = '1';
 process.env.EDGE_APP_ROOT = baseNetAppPath;
 const edge = require('electron-edge-js');

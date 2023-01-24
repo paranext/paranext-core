@@ -64,6 +64,7 @@
   },
   "browserslist": [],
   "prettier": {
+    "trailingComma": "all",
     "singleQuote": true,
     "overrides": [
       {
@@ -227,10 +228,6 @@
     "win": {
       "target": [
         "nsis"
-      ],
-      "extraResources": [
-        "./c-sharp/bin/Debug/net7.0/**",
-        "./release/app/node_modules/electron-edge-js/**"
       ]
     },
     "linux": {
