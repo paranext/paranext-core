@@ -46,7 +46,7 @@ Start the app in the `dev` environment:
 npm start
 ```
 
-After you run `npm start`, you can edit the Electron and frontend files, and they will hot reload. To edit C# files, you must run `npm run build:edge` afterward and restart Electron.
+After you run `npm start`, you can edit the Electron and frontend files, and they will hot reload. To edit C# files, you must stop the `npm start` process (or only close Paranext), run `npm run build:edge`, and restart `npm start` (or if you only closed Paranext, make a trivial edit to `src/main/main.ts`, and save it to launch Paranext again).
 
 If you experience problems here or when running and trying to use C# calls, see [Troubleshooting C#](#troubleshooting-c-edge-function-calls).
 
