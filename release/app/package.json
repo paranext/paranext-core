@@ -4,8 +4,8 @@
   "description": "Extensible Bible translation software",
   "license": "MIT",
   "author": {
-    "name": "SIL International",
-    "url": "https://software.sil.org/"
+    "name": "Paranext",
+    "url": "https://github.com/paranext/"
   },
   "main": "./dist/main/main.js",
   "scripts": {

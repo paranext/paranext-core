@@ -12,7 +12,6 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
-import edge from 'electron-edge-js';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 
@@ -133,10 +132,11 @@ app.on('window-all-closed', () => {
 const namespace = 'EdgeLibrary';
 
 // TODO: figure out how to specify the base net app path in production. Put dll in assets and use getResourcePath?
-const baseNetAppPath = path.join(__dirname, '../../c-sharp/bin/Debug/net6.0');
+const baseNetAppPath = path.join(__dirname, '../../c-sharp/bin/Debug/net7.0');
 // TODO: Figure out how to specify these in the package.json in production
-/* process.env.EDGE_USE_CORECLR = '1';
-process.env.EDGE_APP_ROOT = baseNetAppPath; */
+process.env.EDGE_USE_CORECLR = '1';
+process.env.EDGE_APP_ROOT = baseNetAppPath;
+const edge = require('electron-edge-js');
 
 const baseDll = path.join(baseNetAppPath, `${namespace}.dll`);
 

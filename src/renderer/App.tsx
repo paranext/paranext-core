@@ -15,10 +15,10 @@ const Hello = () => {
         <button
           type="button"
           onClick={() => {
-            window.electronAPI.edge.invoke(
-              'EdgeMethods.UseDynamicInput',
-              'Node!',
-            );
+            window.electronAPI.edge
+              .invoke('EdgeMethods.UseDynamicInput', 'Node!')
+              .then((result) => console.log(result))
+              .catch((e) => console.error(e));
           }}
         >
           Test Edge
