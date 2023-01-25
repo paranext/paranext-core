@@ -24,9 +24,30 @@ This software is not yet ready for users. We'll update here with where you can i
 
 Set up pre-requisites for building Node native dependencies (electron-edge-js):
 
+### Windows Development Pre-requisites
+
 1. Install Visual Studio 2022 (or something that enables `dotnet`. Probably can be older than 2022).
    - In the Visual Studio Installer, install ".NET desktop development" and "Desktop development with C++" workloads in VS Installer. Or install .NET 7 and C++ build tools separately from the Visual Studio Installer.
 2. Install Python 3.6.x (or probably newer).
+3. Install Node 16.17.1 (or install [nvm-windows](https://github.com/coreybutler/nvm-windows) and use Node 16.17.1 with the following steps)
+   1. Uninstall Node
+   2. Install [nvm-windows](https://github.com/coreybutler/nvm-windows)
+   3. Run `nvm install 16.17.1`
+   4. Run `nvm use 16.17.1`
+   5. In this project folder, run `node --version` to make sure you are running Node 16.17.1
+   6. [Optional] If desired, run `nvm install lts` or `nvm install latest` for LTS or latest to use in other projects
+
+Please see [edge-js build requirements on Windows](https://github.com/agracio/edge-js#building-on-windows) for more information.
+
+### OSX Development Pre-requisites
+
+Please see [edge-js build requirements on OSX](https://github.com/agracio/edge-js#building-on-osx) for more information.
+
+### Linux Development Pre-requisites
+
+Please see [edge-js build requirements on Linux](https://github.com/agracio/edge-js#building-on-linux) for more information.
+
+### Cloning and installing dependencies (all platforms)
 
 Clone the repo and install dependencies:
 

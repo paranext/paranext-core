@@ -133,7 +133,7 @@ app.on('window-all-closed', () => {
 const namespace = 'EdgeLibrary';
 
 // TODO: figure out how to specify the base net app path in production. Put dll in assets and use getResourcePath?
-const baseNetAppPath = path.join(RESOURCES_PATH, '/c-sharp/bin/Debug/net7.0');
+const baseNetAppPath = path.join(RESOURCES_PATH, '/c-sharp/bin/Debug/net6.0');
 process.env.EDGE_USE_CORECLR = '1';
 process.env.EDGE_APP_ROOT = baseNetAppPath;
 const edge = require('electron-edge-js');
