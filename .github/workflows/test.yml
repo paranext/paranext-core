@@ -1,6 +1,11 @@
 name: Test
 
-on: [push, pull_request]
+on:
+  push:
+    branches: ['main']
+  pull_request:
+    # The branches below should be a subset of the branches above
+    branches: ['main']
 
 jobs:
   test:

@@ -11,18 +11,18 @@
     "hot",
     "reload"
   ],
-  "homepage": "https://github.com/paranext/paranext#readme",
+  "homepage": "https://github.com/paranext/paranext-core#readme",
   "bugs": {
-    "url": "https://github.com/paranext/paranext/issues"
+    "url": "https://github.com/paranext/paranext-core/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/paranext/paranext.git"
+    "url": "git+https://github.com/paranext/paranext-core.git"
   },
   "license": "MIT",
   "author": {
-    "name": "SIL International",
-    "url": "https://software.sil.org/"
+    "name": "Paranext",
+    "url": "https://github.com/paranext/"
   },
   "contributors": [
     {
@@ -184,8 +184,8 @@
     "webpack-merge": "^5.8.0"
   },
   "build": {
-    "productName": "Paranext",
-    "appId": "org.sil.Paranext",
+    "productName": "ParanextCore",
+    "appId": "org.paranext.ParanextCore",
     "asar": true,
     "asarUnpack": "**\\*.{node,dll}",
     "files": [
@@ -243,8 +243,8 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "SIL International",
-      "repo": "Paranext"
+      "owner": "paranext",
+      "repo": "paranext-core"
     }
   },
   "devEngines": {
