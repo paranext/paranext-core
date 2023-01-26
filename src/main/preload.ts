@@ -11,6 +11,16 @@ const electronAPIHandler = {
     invoke: (classMethod: string, args: unknown) =>
       ipcRenderer.invoke('electronAPI.edge.invoke', classMethod, args),
   },
+  env: {
+    /**
+     * Get an environment variable's value
+     * TODO: remove this as it is only for debugging purposes
+     * @param name name of environment variable to get
+     * @returns string of environment variable contents
+     */
+    getVar: (name: string): Promise<string> =>
+      ipcRenderer.invoke('electronAPI.env.getVar', name),
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPIHandler);

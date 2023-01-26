@@ -179,7 +179,12 @@ const baseNetAppPath = path.join(
 );
 process.env.EDGE_USE_CORECLR = '1';
 process.env.EDGE_APP_ROOT = baseNetAppPath;
-let edge: any;
+if (app.isPackaged)
+  process.env.EDGE_BOOTSTRAP_DIR = path.join(
+    RESOURCES_PATH,
+    '/app.asar.unpacked/node_modules/electron-edge-js/lib/bootstrap/obj/Release/netcoreapp1.1',
+  );
+let edge: typeof import('electron-edge-js');
 const edgePromise = import('electron-edge-js').then((importedEdge) => {
   edge = importedEdge;
 });
@@ -278,13 +283,14 @@ const ipcHandlers: {
     // We don't know the exact parameter types since ipc handlers can be anything
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...args: any[]
-  ) => Promise<unknown>;
+  ) => Promise<unknown> | unknown;
 } = {
   'electronAPI.edge.invoke': (
     _event: Electron.IpcMainInvokeEvent,
     classMethod: string,
     args: unknown,
   ) => invoke(classMethod, args),
+  'electronAPI.env.getVar': (_event, name: string) => process.env[name],
 };
 
 app
