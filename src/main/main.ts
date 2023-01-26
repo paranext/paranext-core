@@ -81,7 +81,7 @@ const createWindow = async () => {
     show: false,
     width: 1024,
     height: 728,
-    icon: getAssetPath('pt-react.png'),
+    icon: getAssetPath('icon.png'),
     webPreferences: {
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
@@ -132,11 +132,57 @@ app.on('window-all-closed', () => {
 
 const namespace = 'EdgeLibrary';
 
-// TODO: figure out how to specify the base net app path in production. Put dll in assets and use getResourcePath?
-const baseNetAppPath = path.join(RESOURCES_PATH, '/c-sharp/bin/Debug/net6.0');
+/** OS name for C# project build folder */
+let buildFolderOS: string;
+switch (process.platform) {
+  case 'win32':
+    buildFolderOS = 'win';
+    break;
+  case 'darwin':
+    buildFolderOS = 'osx';
+    break;
+  case 'linux':
+    buildFolderOS = 'linux';
+    break;
+  default:
+    buildFolderOS = 'win';
+    console.warn(
+      `Edge Setup: Operating System ${process.platform} is apparently not supported. Trying win`,
+    );
+    break;
+}
+/** Architecture name for C# project build folder */
+let buildFolderArch: string;
+if (process.platform === 'darwin' && process.arch.startsWith('arm')) {
+  if (process.arch !== 'arm64')
+    console.warn(
+      `Edge Setup: OS Architecture is ${process.arch}, but we only have x64 and arm64. Trying arm64.`,
+    );
+  buildFolderArch = 'arm64';
+} else {
+  if (process.arch !== 'x64')
+    console.warn(
+      `Edge Setup: Architecture is ${process.arch}, but we only have x64${
+        process.platform === 'darwin' ? ' and arm64' : ''
+      }. Trying x64.`,
+    );
+  buildFolderArch = 'x64';
+}
+
+const baseNetAppPath = path.join(
+  RESOURCES_PATH,
+  `/c-sharp/bin/${
+    app.isPackaged
+      ? `Release/net6.0/publish/${buildFolderOS}-${buildFolderArch}`
+      : 'Debug/net6.0'
+  }`,
+);
 process.env.EDGE_USE_CORECLR = '1';
 process.env.EDGE_APP_ROOT = baseNetAppPath;
-const edge = require('electron-edge-js');
+let edge: any;
+const edgePromise = import('electron-edge-js').then((importedEdge) => {
+  edge = importedEdge;
+});
 
 const baseDll = path.join(baseNetAppPath, `${namespace}.dll`);
 
@@ -150,11 +196,13 @@ const edgeFuncs = new Map<string, (args?: unknown) => Promise<unknown>>();
  * @param method method name for edge function
  * @returns promise that resolves with the results of the edge function call and rejects on exceptions
  */
-function createEdgeFunc<TParam, TReturn>(
+async function createEdgeFunc<TParam, TReturn>(
   ns: string,
   className: string,
   method: string,
 ) {
+  // Wait for the edge dynamic import
+  await edgePromise;
   // Load up an edge function with the specs provided
   const edgeFunc = edge.func({
     assemblyFile: baseDll,
@@ -214,7 +262,7 @@ async function invoke(classMethod: string, args: unknown) {
 
   if (!edgeFunc) {
     // Didn't find an edgeFunc, so create one
-    edgeFunc = createEdgeFunc(ns, className, method);
+    edgeFunc = await createEdgeFunc(ns, className, method);
     edgeFuncs.set(fullClassMethod, edgeFunc);
   }
 

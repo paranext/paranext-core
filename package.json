@@ -28,6 +28,15 @@
     {
       "name": "Ira J Hopkinson",
       "url": "https://github.com/irahopkinson"
+    },
+    {
+      "name": "Tim Steenwyk",
+      "url": "https://github.com/FoolRunning"
+    },
+    {
+      "name": "TJ Couch",
+      "email": "tj_couch@sil.org",
+      "url": "https://github.com/tjcouch-sil"
     }
   ],
   "main": "./src/main/main.ts",
@@ -36,10 +45,15 @@
     "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.main.prod.ts",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",
     "build:edge": "dotnet build c-sharp/EdgeLibrary.sln",
+    "build:edge-release": "run-script-os",
+    "build:edge-release:windows": "dotnet publish c-sharp/EdgeLibrary.csproj -p:PublishProfile=FolderProfile",
+    "build:edge-release:linux": "dotnet publish c-sharp/EdgeLibrary.csproj -p:PublishProfile=FolderProfile -r linux-x64 -o ./c-sharp/bin/Release/net6.0/publish/linux-x64/",
+    "build:edge-release:macos": "dotnet publish c-sharp/EdgeLibrary.csproj -p:PublishProfile=FolderProfile -r osx-x64 -o ./c-sharp/bin/Release/net6.0/publish/osx-x64/ && dotnet publish c-sharp/EdgeLibrary.csproj -p:PublishProfile=FolderProfile -r osx-arm64 -o ./c-sharp/bin/Release/net6.0/publish/osx-arm64/",
     "build:native-modules": "cd ./release/app && npm install",
     "postinstall": "ts-node .erb/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:edge && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
-    "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --publish never",
+    "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && npm run build:edge-release && electron-builder build --publish never",
+    "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "prepare": "husky install",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "start": "ts-node ./.erb/scripts/check-port-in-use.js && npm run start:renderer",
@@ -170,6 +184,7 @@
     "react-refresh": "^0.14.0",
     "react-test-renderer": "^18.2.0",
     "rimraf": "^3.0.2",
+    "run-script-os": "^1.1.6",
     "sass": "^1.54.4",
     "sass-loader": "^13.0.2",
     "style-loader": "^3.3.1",
@@ -205,6 +220,10 @@
           "x64"
         ]
       },
+      "extraResources": [
+        "./c-sharp/bin/Release/net6.0/publish/osx-x64/**",
+        "./c-sharp/bin/Release/net6.0/publish/osx-arm64/**"
+      ],
       "type": "distribution",
       "hardenedRuntime": true,
       "entitlements": "assets/entitlements.mac.plist",
@@ -227,12 +246,20 @@
     },
     "win": {
       "target": [
-        "nsis"
+        "nsis",
+        "portable",
+        "dir"
+      ],
+      "extraResources": [
+        "./c-sharp/bin/Release/net6.0/publish/win-x64/**"
       ]
     },
     "linux": {
       "target": [
         "AppImage"
+      ],
+      "extraResources": [
+        "./c-sharp/bin/Release/net6.0/publish/linux-x64/**"
       ],
       "category": "Development"
     },

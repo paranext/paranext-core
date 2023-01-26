@@ -4,7 +4,7 @@ Electron client, extension host, and C# library for Paranext
 
 <div align="center" style="background-color: #b8d432;">
   <br />
-  <img src="assets/pt-react.png" />
+  <img src="assets/icon.png" />
   <br />
   <br />
 </div>
