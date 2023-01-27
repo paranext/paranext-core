@@ -179,10 +179,11 @@ const baseNetAppPath = path.join(
 );
 process.env.EDGE_USE_CORECLR = '1';
 process.env.EDGE_APP_ROOT = baseNetAppPath;
+// TODO: try removing when we get production edge working. I don't think this is required
 if (app.isPackaged)
   process.env.EDGE_BOOTSTRAP_DIR = path.join(
     RESOURCES_PATH,
-    '/app.asar.unpacked/node_modules/electron-edge-js/lib/bootstrap/obj/Release/netcoreapp1.1',
+    '/app.asar/node_modules/electron-edge-js/lib/bootstrap/obj/Release/netcoreapp1.1',
   );
 let edge: typeof import('electron-edge-js');
 const edgePromise = import('electron-edge-js').then((importedEdge) => {
@@ -193,6 +194,16 @@ const baseDll = path.join(baseNetAppPath, `${namespace}.dll`);
 
 /** Map of generated and wrapped edge functions to call on invoking edge functions */
 const edgeFuncs = new Map<string, (args?: unknown) => Promise<unknown>>();
+
+/**
+ * Give edge error information including C# stack trace if there is one.
+ * Note: Edge errors have the following keys: Message,TypeName,Data,InnerException,TargetSite,StackTrace,HelpLink,Source,HResult,message,name
+ * TODO: Remove this before we get to production? This is a security violation. Not supposed to give stack traces to users. But maybe it doesn't matter since we're open source
+ * @param e edge error about which to get information
+ * @returns error information string
+ */
+const getEdgeErrorInfo = (e: Error & { StackTrace?: string }): string =>
+  `${e.toString()}${e.StackTrace ? ` Stack Trace: ${e.StackTrace}.` : e}`;
 
 /**
  * Creates an edge function that asynchronously calls C# and returns a promise
@@ -206,33 +217,44 @@ async function createEdgeFunc<TParam, TReturn>(
   className: string,
   method: string,
 ) {
-  // Wait for the edge dynamic import
-  await edgePromise;
-  // Load up an edge function with the specs provided
-  const edgeFunc = edge.func({
-    assemblyFile: baseDll,
-    typeName: `${ns}.${className}`,
-    methodName: method,
-  });
-  // Wrap the edge function in a promise function
-  return (args: TParam) =>
-    new Promise<TReturn>((resolve, reject) => {
-      try {
-        edgeFunc(args, (error: Error, result: unknown) => {
-          if (error) {
-            console.error(
-              'Error in callback! Under what conditions does this occur?',
-              error,
-            );
-            reject(error);
-          }
-          resolve(result as TReturn);
-        });
-      } catch (error) {
-        // C# exceptions are caught here
-        reject(error);
-      }
+  try {
+    // Wait for the edge dynamic import
+    await edgePromise;
+    // Load up an edge function with the specs provided
+    const edgeFunc = edge.func({
+      assemblyFile: baseDll,
+      typeName: `${ns}.${className}`,
+      methodName: method,
     });
+    // Wrap the edge function in a promise function
+    return (args: TParam) =>
+      new Promise<TReturn>((resolve, reject) => {
+        try {
+          edgeFunc(args, (error: Error, result: unknown) => {
+            if (error) {
+              console.error(
+                'Error in callback! Under what conditions does this occur?',
+                error,
+              );
+              reject(new Error(getEdgeErrorInfo(error)));
+            }
+            resolve(result as TReturn);
+          });
+        } catch (error) {
+          // Exceptions thrown in the C# code are caught here
+          reject(
+            new Error(
+              `edge.func failed to run! ${getEdgeErrorInfo(error as Error)}`,
+            ),
+          );
+        }
+      });
+  } catch (error) {
+    // Exceptions thrown while building the edge.func are caught here
+    throw new Error(
+      `edge.func failed to build! ${getEdgeErrorInfo(error as Error)}`,
+    );
+  }
 }
 
 /**
@@ -285,12 +307,10 @@ const ipcHandlers: {
     ...args: any[]
   ) => Promise<unknown> | unknown;
 } = {
-  'electronAPI.edge.invoke': (
-    _event: Electron.IpcMainInvokeEvent,
-    classMethod: string,
-    args: unknown,
-  ) => invoke(classMethod, args),
+  'electronAPI.edge.invoke': (_event, classMethod: string, args: unknown) =>
+    invoke(classMethod, args),
   'electronAPI.env.getVar': (_event, name: string) => process.env[name],
+  'electronAPI.env.test': (_event) => 'From main.ts: test',
 };
 
 app

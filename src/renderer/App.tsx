@@ -22,6 +22,25 @@ const Hello = () => {
     'retrieving',
   );
 
+  const edgeInvoke = useCallback(
+    (name: string) => {
+      return window.electronAPI.edge
+        .invoke(name, 'Node!')
+        .then((result) => {
+          console.log(result);
+          setEdgeReturn(result);
+          return undefined;
+        })
+        .catch((e) => {
+          console.error(e);
+          console.error('TEST!');
+          setEdgeReturn(e.message);
+          return undefined;
+        });
+    },
+    [setEdgeReturn],
+  );
+
   return (
     <div>
       <div className="Hello">
@@ -33,9 +52,21 @@ const Hello = () => {
       <div className="Hello">
         <button
           type="button"
+          onClick={() => edgeInvoke('EdgeMethods.UseDynamicInput')}
+        >
+          Test Edge Input
+        </button>
+        <button
+          type="button"
+          onClick={() => edgeInvoke('EdgeMethods.ThrowException')}
+        >
+          Test Edge Exception
+        </button>
+        <button
+          type="button"
           onClick={() => {
-            window.electronAPI.edge
-              .invoke('EdgeMethods.UseDynamicInput', 'Node!')
+            window.electronAPI.env
+              .test()
               .then((result) => {
                 console.log(result);
                 setEdgeReturn(result);
@@ -48,7 +79,7 @@ const Hello = () => {
               });
           }}
         >
-          Test Edge
+          Test
         </button>
       </div>
       <div className="Hello">

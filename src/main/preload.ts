@@ -20,6 +20,7 @@ const electronAPIHandler = {
      */
     getVar: (name: string): Promise<string> =>
       ipcRenderer.invoke('electronAPI.env.getVar', name),
+    test: () => ipcRenderer.invoke('electronAPI.env.test'),
   },
 };
 
