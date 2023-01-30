@@ -311,6 +311,14 @@ const ipcHandlers: {
     invoke(classMethod, args),
   'electronAPI.env.getVar': (_event, name: string) => process.env[name],
   'electronAPI.env.test': (_event) => 'From main.ts: test',
+  'electronAPI.client.getId': (event) => event.sender.id,
+  /** Actions to perform when the client is finished connecting */
+  'electronAPI.client.clientConnect': (event, clientId) => {
+    if (event.sender.id !== clientId) {
+      throw new Error('clientId does not match id assigned by main process');
+    }
+    console.log(`Client finished connecting: ${clientId}`);
+  },
 };
 
 app

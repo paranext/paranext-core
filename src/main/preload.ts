@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import {
+  InternalRequest,
+  InternalResponse,
+} from '@shared/data/InternalConnectionTypes';
+import { Unsubscriber } from '@shared/util/PapiUtil';
 
 const electronAPIHandler = {
+  /** Info and commands regarding the edge connection to C# */
   edge: {
     /**
      * Calls electron to invoke an edge method
@@ -21,6 +27,52 @@ const electronAPIHandler = {
     getVar: (name: string): Promise<string> =>
       ipcRenderer.invoke('electronAPI.env.getVar', name),
     test: () => ipcRenderer.invoke('electronAPI.env.test'),
+  },
+  /** Info and commands related to this current window */
+  client: {
+    /** Get the current window's electron id */
+    getId: (): Promise<number> =>
+      ipcRenderer.invoke('electronAPI.client.getId'),
+    /** Notify the main process that this client is finished connecting */
+    clientConnect: (clientId: number) =>
+      ipcRenderer.invoke('electronAPI.client.clientConnect', clientId),
+    /**
+     * Register a handler on this client to run when the server sends a request
+     * @param callback handler to run with request from server, async returns a response to the server
+     * @returns unsubscriber to remove this handler from running on server requests
+     */
+    onRequest: (
+      callback: (
+        requestType: string,
+        request: InternalRequest,
+      ) => Promise<InternalResponse>,
+    ): Unsubscriber => {
+      ipcRenderer.on(
+        'electronAPI.client.request',
+        async (_event, requestType: string, request: InternalRequest) => {
+          try {
+            const response = await callback(requestType, request);
+            ipcRenderer.send('electronAPI.client.response', response);
+          } catch (e) {
+            // TODO: send error to the main process
+            ipcRenderer.send('electronAPI.client.response', {
+              success: false,
+              errorMessage: e,
+            });
+            throw e;
+          }
+        },
+      );
+      return () => {
+        ipcRenderer.off('electronAPI.client.request', callback);
+        return true;
+      };
+    },
+    request: <TParam, TReturn>(
+      requestType: string,
+      request: InternalRequest<TParam>,
+    ): Promise<InternalResponse<TReturn>> =>
+      ipcRenderer.invoke('electronAPI.client.request', requestType, request),
   },
 };
 

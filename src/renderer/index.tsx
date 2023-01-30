@@ -1,8 +1,14 @@
 import { createRoot } from 'react-dom/client';
+import * as NetworkService from '@services/NetworkService';
+import * as CommandService from '@services/CommandService';
 import App from './App';
 
-const container = document.getElementById('root')!;
-const root = createRoot(container);
+// App-wide service setup
+NetworkService.initialize();
+CommandService.initialize();
+
+const container = document.getElementById('root');
+const root = createRoot(container as HTMLElement);
 root.render(<App />);
 
 // calling IPC exposed from preload script
