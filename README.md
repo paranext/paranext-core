@@ -2,11 +2,8 @@
 
 Backend webserver/extension host and frontend Electron client for Paranext
 
-<div align="center" style="background-color: #b8d432;">
-  <br />
-  <img src="assets/pt-react.png" />
-  <br />
-  <br />
+<div align="center">
+  <img src="doc-meta/doc-icon.png" />
 </div>
 
 <div align="center">
