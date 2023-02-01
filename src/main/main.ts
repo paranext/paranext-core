@@ -12,6 +12,7 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import { NetworkConnectorInfo } from '@shared/data/InternalConnectionTypes';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 
@@ -311,13 +312,19 @@ const ipcHandlers: {
     invoke(classMethod, args),
   'electronAPI.env.getVar': (_event, name: string) => process.env[name],
   'electronAPI.env.test': (_event) => 'From main.ts: test',
-  'electronAPI.client.getId': (event) => event.sender.id,
+  'electronAPI.client.getConnectorInfo': (event) =>
+    ({ clientId: event.sender.id } as NetworkConnectorInfo),
   /** Actions to perform when the client is finished connecting */
-  'electronAPI.client.clientConnect': (event, clientId) => {
-    if (event.sender.id !== clientId) {
-      throw new Error('clientId does not match id assigned by main process');
+  'electronAPI.client.notifyClientConnected': (
+    event,
+    connectorInfo: NetworkConnectorInfo,
+  ) => {
+    if (event.sender.id !== connectorInfo.clientId) {
+      throw new Error(
+        'connectorInfo.clientId does not match id assigned by main process',
+      );
     }
-    console.log(`Client finished connecting: ${clientId}`);
+    console.log(`Client finished connecting: ${connectorInfo.clientId}`);
   },
 };
 

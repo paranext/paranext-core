@@ -6,7 +6,8 @@ namespace EdgeLibrary
 {
   public class EdgeMethods
   {
-    private static int timesCalled = 0;
+    private static int timesCalledStatic = 0;
+    private int timesCalled = 0;
 
     public EdgeMethods()
     {
@@ -15,7 +16,7 @@ namespace EdgeLibrary
 
     private string GetTimesCalled()
     {
-      return " Times called: " + ++timesCalled;
+      return " Times called static: " + ++timesCalledStatic + " Times called: " + ++timesCalled;
     }
 
     public async Task<object> GetAppDomainDirectory(dynamic input)

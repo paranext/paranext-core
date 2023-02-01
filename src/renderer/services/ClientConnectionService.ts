@@ -4,15 +4,17 @@
  */
 // TODO: Refactor into a class and an interface
 
-import { InternalResponse } from '@shared/data/InternalConnectionTypes';
-import { ComplexRequest, ComplexResponse } from '@shared/util/PapiUtil';
+import {
+  CLIENT_ID_UNASSIGNED,
+  InternalResponse,
+  RequestHandler,
+} from '@shared/data/InternalConnectionTypes';
+import { ComplexResponse } from '@shared/util/PapiUtil';
 
 /** Whether the connection is being set up or has finished connecting (does not return to false when connected is true) */
 let connecting = false;
 /** Whether this service has a connection */
 let connected = false;
-/** Represents when the client id has not been assigned by the server */
-const CLIENT_ID_UNASSIGNED = -1;
 /** The client id for this browser as assigned by the server */
 let clientId = CLIENT_ID_UNASSIGNED;
 /** The next requestId to use for identifying requests */
@@ -27,12 +29,7 @@ let connectReject: ((reason?: string) => void) | undefined;
 /** Function that unsubscribes from listening to server requests */
 let unsubscribeRequestHandler: (() => void) | undefined;
 /** Function that accepts requests from the server and responds accordingly */
-let connectionRequestHandler: RequestHandler;
-
-/** Handler for requests from the server */
-type RequestHandler =
-  | ((requestType: string, request: ComplexRequest) => Promise<ComplexResponse>)
-  | undefined;
+let connectionRequestHandler: RequestHandler | undefined;
 
 /**
  * Gets the electron client connection if connected. Throws otherwise.
@@ -57,6 +54,7 @@ export const request = async <TParam, TReturn>(
   requestType: string,
   contents: TParam,
 ): Promise<ComplexResponse<TReturn>> => {
+  // TODO: move the request and clientId code into the NetworkConnector? Leaving for now since it is currently shared between the implementations
   const requestId = nextRequestId;
   nextRequestId += 1;
 
@@ -66,6 +64,11 @@ export const request = async <TParam, TReturn>(
     senderId: clientId,
     contents,
   });
+
+  if (requestId !== response.requestId)
+    throw new Error(
+      `Received response from ${response.responderId} with wrong requestId! requestId = ${requestId}, response.requestId = ${response.requestId}`,
+    );
 
   if (clientId !== response.senderId)
     throw new Error(
@@ -89,7 +92,7 @@ export const disconnect = () => {
 };
 
 /**
- * Sets up the NetworkService by connecting to the server and setting up event handlers
+ * Sets up the ClientConnectionService by connecting to the server and setting up event handlers
  * @param requestHandler function that handles requests from the server by accepting a requestType and a ComplexRequest and returning a Promise of a Complex Response
  * @returns Promise that resolves when finished connecting
  */
@@ -141,14 +144,8 @@ export const connect = (requestHandler: RequestHandler): Promise<void> => {
         throw new Error(
           'connectResolve not defined. Tried to connect but somehow this is undefined',
         );
-      connected = true;
-      connectResolve();
-
-      // Notify server that we are finished connecting
-      getClient().clientConnect(clientId);
-
       // Respond to requests from the server. Server is not able to send us requests until we are finished connecting
-      unsubscribeRequestHandler = getClient().onRequest(
+      unsubscribeRequestHandler = getClient(true).handleRequest(
         async (requestType, incomingRequest) => {
           // Not sure if it's really responsible to put the whole incomingRequest in. Might want to destructure and just pass ComplexRequest members
           const response = await requestHandler(requestType, incomingRequest);
@@ -160,6 +157,11 @@ export const connect = (requestHandler: RequestHandler): Promise<void> => {
           } as InternalResponse;
         },
       );
+      connected = true;
+      connectResolve();
+
+      // Notify server that we are finished connecting
+      getClient().notifyClientConnected(clientId);
 
       return undefined;
     })

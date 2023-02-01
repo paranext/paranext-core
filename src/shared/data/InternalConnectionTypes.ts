@@ -24,3 +24,29 @@ export type InternalResponse<TReturn = unknown> = {
   /** The process that sent this Response */
   responderId: number;
 } & ComplexResponse<TReturn>;
+
+/** Handler for requests from the server */
+export type InternalRequestHandler = <TParam, TReturn>(
+  requestType: string,
+  request: InternalRequest<TParam>,
+) => Promise<InternalResponse<TReturn>>;
+
+/** Handler for requests from the server */
+export type RequestHandler = <TParam, TReturn>(
+  requestType: string,
+  request: ComplexRequest<TParam>,
+) => Promise<ComplexResponse<TReturn>>;
+
+/** Represents when the client id has not been assigned by the server */
+export const CLIENT_ID_UNASSIGNED = -1;
+
+/** "Client id" for the server */
+export const CLIENT_ID_SERVER = 0;
+
+/** Represents when the connector info has not been populated by the server */
+export const CONNECTOR_INFO_DISCONNECTED = { clientId: CLIENT_ID_UNASSIGNED };
+
+/** Information about the network connector */
+export type NetworkConnectorInfo = {
+  clientId: number;
+};

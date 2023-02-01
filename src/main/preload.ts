@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import {
   InternalRequest,
   InternalResponse,
+  NetworkConnectorInfo,
 } from '@shared/data/InternalConnectionTypes';
 import { Unsubscriber } from '@shared/util/PapiUtil';
 
@@ -30,18 +31,23 @@ const electronAPIHandler = {
   },
   /** Info and commands related to this current window */
   client: {
-    /** Get the current window's electron id */
-    getId: (): Promise<number> =>
-      ipcRenderer.invoke('electronAPI.client.getId'),
+    /** Get the current window's electron id and other connector info */
+    getConnectorInfo: (): Promise<NetworkConnectorInfo> =>
+      ipcRenderer.invoke('electronAPI.client.getConnectorInfo'),
     /** Notify the main process that this client is finished connecting */
-    clientConnect: (clientId: number) =>
-      ipcRenderer.invoke('electronAPI.client.clientConnect', clientId),
+    notifyClientConnected: (
+      connectorInfo: NetworkConnectorInfo,
+    ): Promise<void> =>
+      ipcRenderer.invoke(
+        'electronAPI.client.notifyClientConnected',
+        connectorInfo,
+      ),
     /**
      * Register a handler on this client to run when the server sends a request
      * @param callback handler to run with request from server, async returns a response to the server
      * @returns unsubscriber to remove this handler from running on server requests
      */
-    onRequest: (
+    handleRequest: (
       callback: (
         requestType: string,
         request: InternalRequest,

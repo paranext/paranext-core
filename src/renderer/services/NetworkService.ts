@@ -4,6 +4,7 @@
  */
 
 import * as ClientConnectionService from '@services/ClientConnectionService';
+import { RequestHandler } from '@shared/data/InternalConnectionTypes';
 import {
   ComplexRequest,
   ComplexResponse,
@@ -22,7 +23,9 @@ const requestRegistrations = new Map<string, RequestRegistration>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RequestRegistration<TParam = any, TReturn = any> = {
   requestType: string;
-  handler: RequestHandler<TParam, TReturn> | RequestHandler<TParam[], TReturn>;
+  handler:
+    | RoutedRequestHandler<TParam, TReturn>
+    | RoutedRequestHandler<TParam[], TReturn>;
   handlerType: RequestHandlerType;
 };
 
@@ -62,7 +65,7 @@ type ComplexRequestHandler<T = any, K = any> = (
 /** Handler function for a request */
 // Any is probably fine because we likely never know or care about the args or return
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type RequestHandler<T = any, K = any> =
+type RoutedRequestHandler<T = any, K = any> =
   | ArgsRequestHandler<T[], K>
   | ContentsRequestHandler<T, K>
   | ComplexRequestHandler<T, K>;
@@ -80,10 +83,10 @@ enum RequestHandlerType {
  * @param request the request to handle
  * @returns promise of response to the request
  */
-const routeIncomingRequest = async (
+const routeIncomingRequest: RequestHandler = async (
   requestType: string,
   incomingRequest: ComplexRequest,
-): Promise<ComplexResponse> => {
+) => {
   const registration = requestRegistrations.get(requestType);
 
   let result: unknown | undefined;
@@ -153,7 +156,7 @@ const routeIncomingRequest = async (
  */
 function unregisterRequestHandler(
   requestType: string,
-  handler: RequestHandler,
+  handler: RoutedRequestHandler,
 ): boolean {
   if (requestRegistrations.get(requestType)?.handler === handler) {
     requestRegistrations.delete(requestType);
@@ -186,7 +189,7 @@ export function registerRequestHandler(
 ): Unsubscriber;
 export function registerRequestHandler(
   requestType: string,
-  handler: RequestHandler,
+  handler: RoutedRequestHandler,
   handlerType = RequestHandlerType.Args,
 ): Unsubscriber {
   requestRegistrations.set(requestType, {

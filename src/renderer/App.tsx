@@ -27,9 +27,9 @@ const Hello = () => {
       return window.electronAPI.edge
         .invoke(name, 'Node!')
         .then((result) => {
-          console.log(result);
-          setEdgeReturn(result);
-          return undefined;
+          // console.log(result);
+          // setEdgeReturn(result);
+          return result;
         })
         .catch((e) => {
           console.error(e);
@@ -53,6 +53,50 @@ const Hello = () => {
         <button
           type="button"
           onClick={() => edgeInvoke('EdgeMethods.UseDynamicInput')}
+          onContextMenu={(e) => {
+            const numRequests = 10000;
+            const requests = new Array<Promise<ComplexResponse<number> | void>>(
+              numRequests,
+            );
+            const requestTime = new Array<number>(numRequests);
+            const start = performance.now();
+            for (let i = 0; i < numRequests; i++) {
+              requestTime[i] = performance.now();
+              requests[i] = edgeInvoke('EdgeMethods.UseDynamicInput')
+                .then((response) => {
+                  requestTime[i] = performance.now() - requestTime[i];
+                  return response;
+                })
+                .catch((err) => console.error(err));
+            }
+            e.preventDefault();
+
+            Promise.all(requests)
+              .then((responses) => {
+                const finish = performance.now();
+
+                const avgResponseTime =
+                  requestTime.reduce((sum, time) => sum + time, 0) /
+                  numRequests;
+                const maxTime = requestTime.reduce(
+                  (max, time) => Math.max(max, time),
+                  0,
+                );
+                const minTime = requestTime.reduce(
+                  (min, time) => Math.min(min, time),
+                  Number.MAX_VALUE,
+                );
+                console.log(
+                  `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
+                    finish - start
+                  }\n\tResponse times:`,
+                  requestTime,
+                );
+                console.log(responses[responses.length - 1]);
+                return undefined;
+              })
+              .catch((err) => console.error(err));
+          }}
         >
           Test Edge Input
         </button>
@@ -77,6 +121,51 @@ const Hello = () => {
                 setEdgeReturn(e.message);
                 return undefined;
               });
+          }}
+          onContextMenu={(e) => {
+            const numRequests = 10000;
+            const requests = new Array<Promise<ComplexResponse<number> | void>>(
+              numRequests,
+            );
+            const requestTime = new Array<number>(numRequests);
+            const start = performance.now();
+            for (let i = 0; i < numRequests; i++) {
+              requestTime[i] = performance.now();
+              requests[i] = window.electronAPI.env
+                .test()
+                .then((response) => {
+                  requestTime[i] = performance.now() - requestTime[i];
+                  return response;
+                })
+                .catch((err) => console.error(err));
+            }
+            e.preventDefault();
+
+            Promise.all(requests)
+              .then((responses) => {
+                const finish = performance.now();
+
+                const avgResponseTime =
+                  requestTime.reduce((sum, time) => sum + time, 0) /
+                  numRequests;
+                const maxTime = requestTime.reduce(
+                  (max, time) => Math.max(max, time),
+                  0,
+                );
+                const minTime = requestTime.reduce(
+                  (min, time) => Math.min(min, time),
+                  Number.MAX_VALUE,
+                );
+                console.log(
+                  `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
+                    finish - start
+                  }\n\tResponse times:`,
+                  requestTime,
+                );
+                console.log(responses[responses.length - 1]);
+                return undefined;
+              })
+              .catch((err) => console.error(err));
           }}
         >
           Test
