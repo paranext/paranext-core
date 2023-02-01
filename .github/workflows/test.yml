@@ -31,6 +31,8 @@ jobs:
 
       - name: npm test
         env:
+          # no hardlinks so dependencies are copied
+          USE_HARD_LINKS: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run package
