@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         node_version: [16.x]
-        os: [macos-latest]
+        os: [macos-latest, ubuntu-latest]
 
     steps:
       - name: Checkout git repo
@@ -28,12 +28,11 @@ jobs:
       - name: Install and build
         run: |
           npm install
-          npm run postinstall
           npm run build
 
-      - name: Publish releases
+      - name: Publish releases - Windows and MacOS
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
-        if: ${{ startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        if: ${{ matrix.os == 'macos-latest' && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
         env:
           # These values are used for auto updates signing
           # APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -43,4 +42,15 @@ jobs:
           # This is used for uploading release assets to github
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm exec electron-builder -- --publish always --win --mac --linux
+          npm exec electron-builder -- --publish always --win --mac
+
+      - name: Publish releases - Linux
+        # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
+        if: ${{ matrix.os == 'ubuntu-latest' && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        env:
+          # no hardlinks so dependencies are copied
+          USE_HARD_LINKS: false
+          # This is used for uploading release assets to github
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm exec electron-builder -- --publish always --linux
