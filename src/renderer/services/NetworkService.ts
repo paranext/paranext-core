@@ -83,13 +83,13 @@ enum RequestHandlerType {
  * @param request the request to handle
  * @returns promise of response to the request
  */
-const routeIncomingRequest: RequestHandler = async (
+const routeIncomingRequest: RequestHandler = async <TParam, TReturn>(
   requestType: string,
-  incomingRequest: ComplexRequest,
-) => {
+  incomingRequest: ComplexRequest<TParam>,
+): Promise<ComplexResponse<TReturn>> => {
   const registration = requestRegistrations.get(requestType);
 
-  let result: unknown | undefined;
+  let result: TReturn | undefined;
   let success = false;
   let errorMessage = '';
 
@@ -121,13 +121,17 @@ const routeIncomingRequest: RequestHandler = async (
         }
         break;
       case RequestHandlerType.Complex: {
-        const response = (registration.handler as ComplexRequestHandler)(
-          incomingRequest,
-        );
-        // Break out the contents of the ComplexResponse to use existing variables. Should we destructure instead to future-proof for other fields? It was not playing well with Typescript
-        result = response.contents;
-        success = response.success;
-        errorMessage = response.errorMessage;
+        try {
+          const response = (registration.handler as ComplexRequestHandler)(
+            incomingRequest,
+          );
+          // Break out the contents of the ComplexResponse to use existing variables. Should we destructure instead to future-proof for other fields? It was not playing well with Typescript
+          result = response.contents;
+          success = response.success;
+          errorMessage = response.errorMessage;
+        } catch (e) {
+          errorMessage = getErrorMessage(e);
+        }
         break;
       }
       default:
