@@ -3,7 +3,7 @@
  * Likely shouldn't need/want to expose on papi
  */
 
-import * as ClientConnectionService from '@services/ClientConnectionService';
+import * as ClientConnectionService from '@shared/services/ConnectionService';
 import { RequestHandler } from '@shared/data/InternalConnectionTypes';
 import {
   ComplexRequest,

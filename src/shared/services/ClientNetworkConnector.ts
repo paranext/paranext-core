@@ -6,7 +6,7 @@ import {
   NetworkConnectorInfo,
 } from '@shared/data/InternalConnectionTypes';
 import { Unsubscriber } from '@shared/util/PapiUtil';
-import INetworkConnector from './INetworkConnector';
+import INetworkConnector from '@shared/services/INetworkConnector';
 
 /** Websocket message type that indicates how to handle it */
 enum MessageType {

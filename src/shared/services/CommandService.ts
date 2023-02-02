@@ -3,7 +3,7 @@
  * Exposed on papi
  */
 
-import * as NetworkService from '@services/NetworkService';
+import * as NetworkService from '@shared/services/NetworkService';
 import {
   CATEGORY_COMMAND,
   CATEGORY_EPM,

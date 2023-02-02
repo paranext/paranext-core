@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
-import * as NetworkService from '@services/NetworkService';
-import * as CommandService from '@services/CommandService';
+import * as NetworkService from '@shared/services/NetworkService';
+import * as CommandService from '@shared/services/CommandService';
 import App from './App';
 
 // App-wide service setup
