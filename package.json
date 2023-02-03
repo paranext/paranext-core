@@ -110,6 +110,7 @@
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-updater": "^5.2.3",
+    "electron-window-state": "^5.0.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.4.0"
@@ -224,7 +225,9 @@
     },
     "win": {
       "target": [
-        "nsis"
+        "nsis",
+        "nsis-web",
+        "portable"
       ]
     },
     "linux": {

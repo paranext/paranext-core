@@ -25,7 +25,7 @@ To use `.AppImage` files in Linux, [install FUSE](https://github.com/AppImage/Ap
 sudo apt install libfuse2
 ```
 
-Then simply [execute/run](https://github.com/AppImage/AppImageKit/wiki) the `.AppImage` file, which you can download from [Releases](releases).
+Then simply [execute/run](https://github.com/AppImage/AppImageKit/wiki) the `.AppImage` file, which you can download from [Releases](/paranext/paranext-core/releases).
 
 ## Developer Install
 
