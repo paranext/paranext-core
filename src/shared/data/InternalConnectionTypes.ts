@@ -12,7 +12,9 @@ export const CLIENT_ID_UNASSIGNED = -1;
 export const CLIENT_ID_SERVER = 0;
 
 /** Represents when the connector info has not been populated by the server */
-export const CONNECTOR_INFO_DISCONNECTED = { clientId: CLIENT_ID_UNASSIGNED };
+export const CONNECTOR_INFO_DISCONNECTED = Object.freeze({
+  clientId: CLIENT_ID_UNASSIGNED,
+});
 
 /** Information about the network connector */
 export type NetworkConnectorInfo = {

@@ -3,6 +3,7 @@
  * Do not use outside NetworkService.ts. For communication, use NetworkService.ts as it is an abstraction over this.
  */
 // TODO: Refactor into a class and an interface
+// TODO: Combine with NetworkSerice?
 
 import {
   CLIENT_ID_UNASSIGNED,
@@ -32,6 +33,8 @@ let connectResolve: (() => void) | undefined;
 let connectReject: ((reason?: string) => void) | undefined;
 /** Function that accepts requests from the server and responds accordingly. From connect() */
 let requestHandler: RequestHandler | undefined;
+/** Function that determines the appropriate clientId to which to send requests of the given type. From connect() */
+let requestRouter: ((requestType: string) => number) | undefined;
 /** The network connector this service uses to send and receive messages */
 let networkConnector: INetworkConnector | undefined;
 
@@ -77,6 +80,7 @@ export const request = async <TParam, TReturn>(
 /** Disconnects from the server */
 export const disconnect = () => {
   requestHandler = undefined;
+  requestRouter = undefined;
   connectPromise = undefined;
   networkConnector = undefined;
   if (!connected && connectReject)
@@ -120,11 +124,18 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
  */
 export const connect = (
   networkRequestHandler: RequestHandler,
+  networkRequestRouter: (requestType: string) => number,
 ): Promise<void> => {
   // We don't need to run this more than once
   if (connectPromise /* connecting || connected */) {
-    if (networkRequestHandler === requestHandler) return connectPromise;
-    throw new Error('Cannot connect with two different request handlers');
+    if (
+      networkRequestHandler === requestHandler &&
+      networkRequestRouter === requestRouter
+    )
+      return connectPromise;
+    throw new Error(
+      'Cannot connect with two different request handlers or request routers',
+    );
   }
 
   if (!networkRequestHandler) throw new Error('Must provide a request handler');
@@ -136,12 +147,13 @@ export const connect = (
     connectReject = reject;
   });
   requestHandler = networkRequestHandler;
+  requestRouter = networkRequestRouter;
   networkConnector = NetworkConnectorFactory.createNetworkConnector();
 
   // Set up subscriptions that the service needs to work
   // Get the client id from the server on new connections
   networkConnector
-    .connect(handleInternalRequest)
+    .connect(handleInternalRequest, requestRouter)
     .then((newConnectorInfo) => {
       if (clientId !== CLIENT_ID_UNASSIGNED) {
         if (!connectReject)
@@ -197,3 +209,6 @@ export const connect = (
 
   return connectPromise;
 };
+
+/** Gets this connection's clientId */
+export const getClientId = () => clientId;

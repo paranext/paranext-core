@@ -13,10 +13,11 @@ import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import { NetworkConnectorInfo } from '@shared/data/InternalConnectionTypes';
+import * as NetworkService from '@shared/services/NetworkService';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 
-/** ELECTRON SETUP */
+// #region ELECTRON SETUP
 
 class AppUpdater {
   constructor() {
@@ -29,13 +30,6 @@ class AppUpdater {
 // Keep a global reference of the window object. If you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow: BrowserWindow | null = null;
-
-// TODO: REMOVE test code
-ipcMain.on('ipc-example', async (event, arg) => {
-  const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
-  console.log(msgTemplate(arg));
-  event.reply('ipc-example', msgTemplate('pong'));
-});
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
@@ -129,7 +123,9 @@ app.on('window-all-closed', () => {
   }
 });
 
-/** EDGE SETUP */
+// #endregion
+
+// #region EDGE SETUP
 
 const namespace = 'EdgeLibrary';
 
@@ -297,7 +293,9 @@ async function invoke(classMethod: string, args: unknown) {
   return edgeFunc(args);
 }
 
-/** IPC HANDLING SETUP */
+// #endregion
+
+// #region IPC HANDLING SETUP
 
 /** Map from ipc channel to handler function */
 const ipcHandlers: {
@@ -344,3 +342,20 @@ app
     });
   })
   .catch(console.log);
+
+// #endregion
+
+// #region Services setup
+
+NetworkService.initialize()
+  .then(() => {
+    // Set up test handlers
+    Object.keys(ipcHandlers).forEach((ipcHandle) => {
+      NetworkService.registerRequestHandler(ipcHandle, (...args: unknown[]) =>
+        ipcHandlers[ipcHandle]({} as Electron.IpcMainInvokeEvent, ...args),
+      );
+    });
+  })
+  .catch((e) => console.error(e));
+
+// #endregion

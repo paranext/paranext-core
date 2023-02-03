@@ -1,31 +1,54 @@
 import { useCallback, useState } from 'react';
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
+import * as NetworkService from '@shared/services/NetworkService';
+import { ComplexResponse } from '@shared/util/PapiUtil';
 import icon from '../../assets/icon.png';
 import './App.css';
 import usePromise from './hooks/usePromise';
+
+const createRequest = (requestType: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return async (...args: any[]) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await NetworkService.request<any[], any>(
+      requestType,
+      args,
+    );
+    return response.contents;
+  };
+};
+
+const getVar: (envVar: string) => Promise<string> = createRequest(
+  'electronAPI.env.getVar',
+);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const invoke: (classMethod: string, args: unknown) => Promise<any> =
+  createRequest('electronAPI.edge.invoke');
+
+const test: () => Promise<string> = createRequest('electronAPI.env.test');
 
 const Hello = () => {
   const [edgeReturn, setEdgeReturn] = useState('');
 
   const [EDGE_USE_CORECLR] = usePromise(
-    useCallback(() => window.electronAPI.env.getVar('EDGE_USE_CORECLR'), []),
+    useCallback(() => getVar('EDGE_USE_CORECLR'), []),
     'retrieving',
   );
 
   const [EDGE_APP_ROOT] = usePromise(
-    useCallback(() => window.electronAPI.env.getVar('EDGE_APP_ROOT'), []),
+    useCallback(() => getVar('EDGE_APP_ROOT'), []),
     'retrieving',
   );
 
   const [EDGE_BOOTSTRAP_DIR] = usePromise(
-    useCallback(() => window.electronAPI.env.getVar('EDGE_BOOTSTRAP_DIR'), []),
+    useCallback(() => getVar('EDGE_BOOTSTRAP_DIR'), []),
     'retrieving',
   );
 
   const edgeInvoke = useCallback(
     (name: string) => {
-      return window.electronAPI.edge
-        .invoke(name, 'Node!')
+      return invoke(name, 'Node!')
         .then((result) => {
           // console.log(result);
           // setEdgeReturn(result);
@@ -55,9 +78,7 @@ const Hello = () => {
           onClick={() => edgeInvoke('EdgeMethods.UseDynamicInput')}
           onContextMenu={(e) => {
             const numRequests = 10000;
-            const requests = new Array<Promise<ComplexResponse<number> | void>>(
-              numRequests,
-            );
+            const requests = new Array<Promise<string>>(numRequests);
             const requestTime = new Array<number>(numRequests);
             const start = performance.now();
             for (let i = 0; i < numRequests; i++) {
@@ -109,8 +130,7 @@ const Hello = () => {
         <button
           type="button"
           onClick={() => {
-            window.electronAPI.env
-              .test()
+            test()
               .then((result) => {
                 console.log(result);
                 setEdgeReturn(result);
@@ -124,15 +144,12 @@ const Hello = () => {
           }}
           onContextMenu={(e) => {
             const numRequests = 10000;
-            const requests = new Array<Promise<ComplexResponse<number> | void>>(
-              numRequests,
-            );
+            const requests = new Array<Promise<string | void>>(numRequests);
             const requestTime = new Array<number>(numRequests);
             const start = performance.now();
             for (let i = 0; i < numRequests; i++) {
               requestTime[i] = performance.now();
-              requests[i] = window.electronAPI.env
-                .test()
+              requests[i] = test()
                 .then((response) => {
                   requestTime[i] = performance.now() - requestTime[i];
                   return response;
