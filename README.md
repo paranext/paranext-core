@@ -25,7 +25,7 @@ To use `.AppImage` files in Linux, [install FUSE](https://github.com/AppImage/Ap
 sudo apt install libfuse2
 ```
 
-Then simply [execute/run](https://github.com/AppImage/AppImageKit/wiki) the `.AppImage` file, which you can download from [Releases](/paranext/paranext-core/releases).
+Then simply [execute/run](https://github.com/AppImage/AppImageKit/wiki) the `.AppImage` file, which you can download from [Releases](https://github.com/paranext/paranext-core/releases).
 
 ## Developer Install
 
@@ -67,14 +67,15 @@ npm run package
 2. Update the _version_ in your project's `package.json` file (e.g. _1.2.3_).
 3. Run `npm i` to update `package-lock.json`.
 4. Create a new draft [GitHub **Release**](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository), ensure the following are included:
-   - a _Tag version_, e.g. `v1.2.3`.
+   - a _Tag version_, e.g. `v1.2.3`, choose _Create new tag on publish_.
+   - set the **Target** to the release branch.
    - a copy of the change log. Click **Generate release notes** as a starting point.
    - Click **Save draft**.
 5. Update `CHANGELOG.md` with changes in this release from the GitHub draft **Release**.
-6. Commit these changes to your release branch.
-7. Push the commit to GitHub.
-8. Once the GitHub build **Action** has finished, it will add build artifact files to the draft release. Remove the `.blockmap` files and leave the `.yml` files and the installers and executable, e.g. `.exe` on Windows.
-9. Publish the release on GitHub.
+6. Commit these changes to your release branch and push the commit to GitHub.
+7. Once the GitHub build **Action** has finished, it will add build artifact files to the draft release. Remove the `.blockmap` files and leave the `.yml` files and the installers and executable, e.g. `.exe` on Windows.
+8. Publish the release on GitHub.
+9. Merge the release branch back into **main** with a merge commit.
 
 ## Windows Development with WSL2
 
@@ -90,3 +91,10 @@ You'll be running a copy of the repo in both Windows and WSL so make sure they a
 ## License
 
 MIT © [SIL International](https://www.sil.org/)
+
+<!-- define variables used above -->
+
+[github-actions-status]: https://github.com/paranext/paranext-core/workflows/Test/badge.svg
+[github-actions-url]: https://github.com/paranext/paranext-core/actions
+[github-tag-image]: https://img.shields.io/github/tag/paranext/paranext-core.svg?label=version
+[github-tag-url]: https://github.com/paranext/paranext-core/releases/latest
