@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
 import * as NetworkService from '@shared/services/NetworkService';
-import { ComplexResponse } from '@shared/util/PapiUtil';
 import icon from '../../assets/icon.png';
 import './App.css';
 import usePromise from './hooks/usePromise';
@@ -14,7 +13,7 @@ const createRequest = (requestType: string) => {
       requestType,
       args,
     );
-    return response.contents;
+    return response.contents || response.errorMessage;
   };
 };
 
@@ -50,8 +49,8 @@ const Hello = () => {
     (name: string) => {
       return invoke(name, 'Node!')
         .then((result) => {
-          // console.log(result);
-          // setEdgeReturn(result);
+          console.log(result);
+          setEdgeReturn(result);
           return result;
         })
         .catch((e) => {

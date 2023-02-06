@@ -1,7 +1,7 @@
 import {
   InternalRequestHandler,
   NetworkConnectorInfo,
-} from '@shared/data/InternalConnectionTypes';
+} from '../data/InternalConnectionTypes';
 
 /**
  * Interface that defines the network connection functionality the server and the client must implement.

@@ -3,18 +3,18 @@
  * Likely shouldn't need/want to expose on papi
  */
 
-import * as ConnectionService from '@shared/services/ConnectionService';
+import memoizeOne from 'memoize-one';
 import {
   CLIENT_ID_SERVER,
   RequestHandler,
-} from '@shared/data/InternalConnectionTypes';
+} from '../data/InternalConnectionTypes';
 import {
   ComplexRequest,
   ComplexResponse,
   Unsubscriber,
-} from '@shared/util/PapiUtil';
-import { getErrorMessage } from '@shared/util/Util';
-import memoizeOne from 'memoize-one';
+} from '../util/PapiUtil';
+import { getErrorMessage } from '../util/Util';
+import * as ConnectionService from './ConnectionService';
 
 /** Whether this service has finished setting up */
 let initialized = false;
@@ -55,7 +55,7 @@ type RequestRegistration<TParam = any, TReturn = any> =
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ArgsRequestHandler<T extends Array<unknown> = any[], K = any> = (
   ...args: T
-) => K;
+) => Promise<K>;
 
 /**
  * Contents handler function for a request. Called when a request is handled.
@@ -64,7 +64,7 @@ type ArgsRequestHandler<T extends Array<unknown> = any[], K = any> = (
  */
 // Any is probably fine because we likely never know or care about the args or return
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ContentsRequestHandler<T = any, K = any> = (contents: T) => K;
+type ContentsRequestHandler<T = any, K = any> = (contents: T) => Promise<K>;
 
 /**
  * Complex handler function for a request. Called when a request is handled.
@@ -76,7 +76,7 @@ type ContentsRequestHandler<T = any, K = any> = (contents: T) => K;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ComplexRequestHandler<T = any, K = any> = (
   request: ComplexRequest<T>,
-) => ComplexResponse<K>;
+) => Promise<ComplexResponse<K>>;
 
 /** Handler function for a request */
 // Any is probably fine because we likely never know or care about the args or return
@@ -146,6 +146,12 @@ export function registerRequestHandler(
   handler: RoutedRequestHandler,
   handlerType = RequestHandlerType.Args,
 ): Unsubscriber {
+  // Only register the first handler provided for this request type
+  if (requestRegistrations.has(requestType))
+    throw new Error(
+      `requestType ${requestType} already has a handler registered`,
+    );
+
   requestRegistrations.set(requestType, {
     registrationType: 'local',
     requestType,
@@ -157,19 +163,6 @@ export function registerRequestHandler(
 
   return () => unregisterRequestHandler(requestType, handler);
 }
-
-/**
- * Send a request to the server and resolve after receiving a response
- * @param requestType the type of request
- * @param contents contents to send in the request
- * @returns promise that resolves with the response message
- */
-export const request = async <TParam, TReturn>(
-  requestType: string,
-  contents: TParam,
-) => {
-  return ConnectionService.request<TParam, TReturn>(requestType, contents);
-};
 
 /**
  * Calls the appropriate request handler according to the request type and returns a promise of the response
@@ -196,11 +189,11 @@ const handleLocalRequest: RequestHandler = async <TParam, TReturn>(
     switch (registration.handlerType) {
       case RequestHandlerType.Args:
         try {
-          result = incomingRequest.contents
+          result = await (incomingRequest.contents
             ? (registration.handler as ArgsRequestHandler)(
                 ...(incomingRequest.contents as unknown[]),
               )
-            : (registration.handler as ArgsRequestHandler)();
+            : (registration.handler as ArgsRequestHandler)());
           success = true;
         } catch (e) {
           errorMessage = getErrorMessage(e);
@@ -208,7 +201,7 @@ const handleLocalRequest: RequestHandler = async <TParam, TReturn>(
         break;
       case RequestHandlerType.Contents:
         try {
-          result = (registration.handler as ContentsRequestHandler)(
+          result = await (registration.handler as ContentsRequestHandler)(
             incomingRequest.contents,
           );
           success = true;
@@ -218,9 +211,9 @@ const handleLocalRequest: RequestHandler = async <TParam, TReturn>(
         break;
       case RequestHandlerType.Complex: {
         try {
-          const response = (registration.handler as ComplexRequestHandler)(
-            incomingRequest,
-          );
+          const response = await (
+            registration.handler as ComplexRequestHandler
+          )(incomingRequest);
           // Break out the contents of the ComplexResponse to use existing variables. Should we destructure instead to future-proof for other fields? It was not playing well with Typescript
           result = response.contents;
           success = response.success;
@@ -273,9 +266,23 @@ export const initialize = memoizeOne(async (): Promise<void> => {
 
   // On closing, try to close the connection
   // TODO: should probably do this on the server when the connection closes
-  window.addEventListener('beforeunload', async () => {
+  /* window.addEventListener('beforeunload', async () => {
     await ConnectionService.disconnect();
-  });
+  }); */
 
   initialized = true;
 });
+
+/**
+ * Send a request to the server and resolve after receiving a response
+ * @param requestType the type of request
+ * @param contents contents to send in the request
+ * @returns promise that resolves with the response message
+ */
+export const request = async <TParam, TReturn>(
+  requestType: string,
+  contents: TParam,
+) => {
+  await initialize();
+  return ConnectionService.request<TParam, TReturn>(requestType, contents);
+};

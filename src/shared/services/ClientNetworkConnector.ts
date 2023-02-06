@@ -4,9 +4,9 @@ import {
   InternalRequestHandler,
   InternalResponse,
   NetworkConnectorInfo,
-} from '@shared/data/InternalConnectionTypes';
-import { Unsubscriber } from '@shared/util/PapiUtil';
-import INetworkConnector from '@shared/services/INetworkConnector';
+} from '../data/InternalConnectionTypes';
+import { Unsubscriber } from '../util/PapiUtil';
+import INetworkConnector from './INetworkConnector';
 import {
   InitClient,
   Message,
@@ -48,13 +48,19 @@ export default class ClientNetworkConnector implements INetworkConnector {
   private connectPromise?: Promise<NetworkConnectorInfo>;
 
   /** Function that removes this initClient handler from the connection */
-  private unsubscribeHandleInitClientMessage?: () => boolean;
+  private unsubscribeHandleInitClientMessage?: Unsubscriber;
 
   /** Function that removes this response handler from the connection */
-  private unsubscribeHandleResponseMessage?: () => boolean;
+  private unsubscribeHandleResponseMessage?: Unsubscriber;
 
   /** Function that removes this handleRequest from the connection */
-  private unsubscribeHandleRequestMessage?: () => boolean;
+  private unsubscribeHandleRequestMessage?: Unsubscriber;
+
+  /** Function that removes this onMessage handler from the websocket message event */
+  private unsubscribeWebsocketMessageListener?: Unsubscriber;
+
+  /** Function that removes this disconnect handler from the websocket close event */
+  private unsubscribeWebsocketCloseListener?: Unsubscriber;
 
   /**
    * Function to call when we receive a request that is registered on this connector.
@@ -209,7 +215,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
         // Listen for responses from the server and resolve the request promise
         this.unsubscribeHandleResponseMessage = this.subscribe(
           MessageType.Response,
-          this.handleResponseMessage,
+          this.handleResponseMessage.bind(this),
         );
 
         // Listen for requests from the server and run the request handler
@@ -226,9 +232,23 @@ export default class ClientNetworkConnector implements INetworkConnector {
     );
 
     // Connect the websocket
-    this.websocket = new WebSocket('ws://localhost:5122/ws ???');
-    this.websocket.addEventListener('message', this.onMessage);
-    this.websocket.addEventListener('close', this.disconnect);
+    this.websocket = new WebSocket('ws://localhost:8876');
+
+    // Attach event listeners and create unsubscribers for them
+    const messageEventListener = this.onMessage.bind(this);
+    const closeEventListener = this.disconnect.bind(this);
+    this.websocket.addEventListener('message', messageEventListener);
+    this.websocket.addEventListener('close', closeEventListener);
+    this.unsubscribeWebsocketMessageListener = () => {
+      if (!this.websocket) return false;
+      this.websocket.removeEventListener('message', messageEventListener);
+      return true;
+    };
+    this.unsubscribeWebsocketCloseListener = () => {
+      if (!this.websocket) return false;
+      this.websocket.removeEventListener('close', closeEventListener);
+      return true;
+    };
 
     return this.connectPromise;
   }
@@ -331,9 +351,12 @@ export default class ClientNetworkConnector implements INetworkConnector {
     if (this.unsubscribeHandleRequestMessage)
       this.unsubscribeHandleRequestMessage();
 
+    if (this.unsubscribeWebsocketMessageListener)
+      this.unsubscribeWebsocketMessageListener();
+    if (this.unsubscribeWebsocketCloseListener)
+      this.unsubscribeWebsocketCloseListener();
+
     if (this.websocket) {
-      this.websocket.removeEventListener('message', this.onMessage);
-      this.websocket.removeEventListener('close', this.disconnect);
       this.websocket.close();
       this.websocket = undefined;
     }

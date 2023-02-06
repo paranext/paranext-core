@@ -1,13 +1,13 @@
+import { CloseEvent, MessageEvent, WebSocket, WebSocketServer } from 'ws';
 import {
   CLIENT_ID_SERVER,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
   NetworkConnectorInfo,
-} from '@shared/data/InternalConnectionTypes';
-import INetworkConnector from '@shared/services/INetworkConnector';
-import { Unsubscriber } from '@shared/util/PapiUtil';
-import { CloseEvent, MessageEvent, WebSocket, WebSocketServer } from 'ws';
+} from '../data/InternalConnectionTypes';
+import INetworkConnector from './INetworkConnector';
+import { Unsubscriber } from '../util/PapiUtil';
 import {
   ClientConnect,
   Message,
@@ -221,14 +221,15 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * Does not consider the client fully connected yet until they respond and tell us they connected with ClientConnect
    */
   private onClientConnect(websocket: WebSocket) {
+    console.log(`this:${this}, this.nextClientId: ${this.nextClientId}`);
     const clientId = this.nextClientId;
     this.nextClientId += 1;
 
     // TODO: probably do something better than just print the error
     websocket.addEventListener('error', console.error);
 
-    websocket.addEventListener('message', this.onMessage);
-    websocket.addEventListener('close', this.onClientDisconnect);
+    websocket.addEventListener('message', this.onMessage.bind(this));
+    websocket.addEventListener('close', this.onClientDisconnect.bind(this));
 
     /** This clientSocket's connector info */
     const connectorInfo = { clientId };
@@ -259,16 +260,17 @@ export default class ServerNetworkConnector implements INetworkConnector {
   /** Closes connection and unregisters a client websocket when it has disconnected */
   private disconnectClient(websocket: WebSocket) {
     const clientId = this.getClientIdFromSocket(websocket);
-    websocket.off('error', console.error);
+    /* websocket.off('error', console.error);
     websocket.off('message', this.onMessage);
-    websocket.off('close', this.disconnectClient);
+    websocket.off('close', this.disconnectClient); */
+    websocket.removeAllListeners();
     websocket.close();
     this.clientSockets.delete(clientId);
   }
 
   async connect(
     localRequestHandler: InternalRequestHandler,
-    requestRouter?: (requestType: string) => number,
+    requestRouter: (requestType: string) => number,
   ) {
     // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
     // We don't need to run this more than once
@@ -292,19 +294,19 @@ export default class ServerNetworkConnector implements INetworkConnector {
     // Listen for responses from the clients and resolve the request promise
     this.unsubscribeHandleResponseMessage = this.subscribe(
       MessageType.Response,
-      this.handleResponseMessage,
+      this.handleResponseMessage.bind(this),
     );
 
     // Listen for requests from the clients and run the request handler
     this.unsubscribeHandleRequestMessage = this.subscribe(
       MessageType.Request,
-      this.handleRequestMessage,
+      this.handleRequestMessage.bind(this),
     );
 
     // Start the websocket server
     this.websocketServer = new WebSocketServer({ port: 8876 });
-    this.websocketServer.on('connection', this.onClientConnect);
-    this.websocketServer.on('close', this.disconnect);
+    this.websocketServer.on('connection', this.onClientConnect.bind(this));
+    this.websocketServer.on('close', this.disconnect.bind(this));
 
     // Finished setting up server synchronously with this implementation.
     this.connected = true;
@@ -405,8 +407,9 @@ export default class ServerNetworkConnector implements INetworkConnector {
     );
 
     if (this.websocketServer) {
-      this.websocketServer.off('connection', this.onClientConnect);
-      this.websocketServer.off('close', this.disconnect);
+      /* this.websocketServer.off('connection', this.onClientConnect);
+      this.websocketServer.off('close', this.disconnect); */
+      this.websocketServer.removeAllListeners();
       this.websocketServer.close();
       this.websocketServer = undefined;
     }

@@ -3,7 +3,8 @@
  * Exposed on papi
  */
 
-import * as NetworkService from '@shared/services/NetworkService';
+import memoizeOne from 'memoize-one';
+import * as NetworkService from './NetworkService';
 import {
   CATEGORY_COMMAND,
   CATEGORY_EPM,
@@ -11,8 +12,7 @@ import {
   ComplexResponse,
   serializeRequestType,
   Unsubscriber,
-} from '@shared/util/PapiUtil';
-import memoizeOne from 'memoize-one';
+} from '../util/PapiUtil';
 
 /** Whether this service has finished setting up */
 let initialized = false;
