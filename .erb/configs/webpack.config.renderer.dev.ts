@@ -162,13 +162,6 @@ const configuration: webpack.Configuration = {
       isDevelopment: process.env.NODE_ENV !== 'production',
       nodeModules: webpackPaths.appNodeModulesPath,
     }),
-
-    new webpack.IgnorePlugin({
-      checkResource(resource, _context) {
-        const isServerOnly = /^\.\/ServerNetworkConnector$/.test(resource);
-        return isServerOnly;
-      },
-    }),
   ],
 
   node: {

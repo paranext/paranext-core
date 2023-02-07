@@ -5,16 +5,16 @@ import {
   InternalRequestHandler,
   InternalResponse,
   NetworkConnectorInfo,
-} from '../data/InternalConnectionTypes';
-import INetworkConnector from './INetworkConnector';
-import { Unsubscriber } from '../util/PapiUtil';
+} from '../../shared/data/InternalConnectionTypes';
+import INetworkConnector from '../../shared/services/INetworkConnector';
+import { Unsubscriber } from '../../shared/util/PapiUtil';
 import {
   ClientConnect,
   Message,
   MessageType,
   WebsocketRequest,
   WebsocketResponse,
-} from '../data/NetworkConnectorTypes';
+} from '../../shared/data/NetworkConnectorTypes';
 
 // TODO: implement request timeout logic
 /** Holds promises for a request */
