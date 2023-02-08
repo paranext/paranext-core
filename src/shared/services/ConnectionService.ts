@@ -118,7 +118,7 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
 };
 
 /**
- * Sets up the ClientConnectionService by connecting to the server and setting up event handlers
+ * Sets up the ConnectionService by connecting to the server and setting up event handlers
  * @param networkRequestHandler function that handles requests from the server by accepting a requestType and a ComplexRequest and returning a Promise of a Complex Response
  * @returns Promise that resolves when finished connecting
  */
@@ -139,6 +139,7 @@ export const connect = (
   }
 
   if (!networkRequestHandler) throw new Error('Must provide a request handler');
+  if (!networkRequestRouter) throw new Error('Must provide a request router');
 
   // Start connecting
   connecting = true;
@@ -152,68 +153,74 @@ export const connect = (
   // Set up subscriptions that the service needs to work
   // Get the client id from the server on new connections
   NetworkConnectorFactory.createNetworkConnector()
-    .then((nC) => {
+    .then(async (nC) => {
       networkConnector = nC;
+
+      try {
+        if (!requestRouter) throw new Error('requestRouter not defined.');
+
+        const newConnectorInfo = await networkConnector.connect(
+          handleInternalRequest,
+          requestRouter,
+        );
+
+        if (clientId !== CLIENT_ID_UNASSIGNED) {
+          if (!connectReject)
+            throw new Error(
+              'connectReject not defined. Not connecting? But we already have a clientId',
+            );
+          connectReject(
+            `Received clientId when already assigned! Current clientId: ${clientId}. New clientId: ${newConnectorInfo}`,
+          );
+          return undefined;
+        }
+
+        clientId = newConnectorInfo.clientId;
+        console.log(`Got clientId ${clientId}`);
+
+        if (!connecting) {
+          if (!connectReject)
+            throw new Error('connectReject not defined and not connecting.');
+          connectReject('No longer connecting');
+          return undefined;
+        }
+
+        if (!networkConnector) {
+          if (!connectReject)
+            throw new Error(
+              'connectReject not defined and networkConnector not defined.',
+            );
+          connectReject('networkConnector not defined');
+          return undefined;
+        }
+
+        // Finished setting up and connecting! Resolve the promise
+        if (!connectResolve)
+          throw new Error(
+            'connectResolve not defined. Tried to connect but somehow this is undefined',
+          );
+
+        // Server is not able to send us requests until we are finished connecting
+        connected = true;
+        connectResolve();
+
+        // Notify server that we are finished connecting
+        networkConnector.notifyClientConnected();
+      } catch (e) {
+        connecting = false;
+        const err = `ConnectionService: Connecting and getting clientId failed: ${e}`;
+        if (connectReject) connectReject(err);
+        throw new Error(err);
+      }
+
       return networkConnector;
     })
-    .then((nc) =>
-      // eslint-disable-next-line promise/no-nesting
-      nc
-        .connect(handleInternalRequest, requestRouter)
-        .then((newConnectorInfo) => {
-          if (clientId !== CLIENT_ID_UNASSIGNED) {
-            if (!connectReject)
-              throw new Error(
-                'connectReject not defined. Not connecting? But we already have a clientId',
-              );
-            connectReject(
-              `Received clientId when already assigned! Current clientId: ${clientId}. New clientId: ${newConnectorInfo}`,
-            );
-            return undefined;
-          }
-
-          clientId = newConnectorInfo.clientId;
-          console.log(`Got clientId ${clientId}`);
-
-          if (!connecting) {
-            if (!connectReject)
-              throw new Error('connectReject not defined and not connecting.');
-            connectReject('No longer connecting');
-            return undefined;
-          }
-
-          if (!networkConnector) {
-            if (!connectReject)
-              throw new Error(
-                'connectReject not defined and networkConnector not defined.',
-              );
-            connectReject('networkConnector not defined');
-            return undefined;
-          }
-
-          // Finished setting up and connecting! Resolve the promise
-          if (!connectResolve)
-            throw new Error(
-              'connectResolve not defined. Tried to connect but somehow this is undefined',
-            );
-
-          // Server is not able to send us requests until we are finished connecting
-          connected = true;
-          connectResolve();
-
-          // Notify server that we are finished connecting
-          networkConnector.notifyClientConnected();
-
-          return undefined;
-        })
-        .catch((e) => {
-          connecting = false;
-          const err = `ClientConnectionService: Getting clientId failed: ${e}`;
-          if (connectReject) connectReject(err);
-          throw new Error(err);
-        }),
-    )
-    .catch((e) => console.error(e));
+    .catch((e) => {
+      connecting = false;
+      const err = `ConnectionService: Failed to creacte NetworkConnection object: ${e}`;
+      if (connectReject) connectReject(err);
+      throw new Error(err);
+    });
 
   return connectPromise;
 };

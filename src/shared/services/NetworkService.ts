@@ -176,13 +176,14 @@ const handleLocalRequest: RequestHandler = async <TParam, TReturn>(
 ): Promise<ComplexResponse<TReturn>> => {
   const registration = requestRegistrations.get(requestType);
 
-  let result: TReturn | undefined;
+  // Result can be undefined if there is an error, so we initialize it here to undefined. But it should always be of type TReturn if there is a success
+  let result: TReturn = undefined as TReturn;
   let success = false;
   let errorMessage = '';
 
   if (!registration)
     // There is no handler registered for this request. Respond failure
-    errorMessage = 'No handler was found to process the request';
+    errorMessage = `No handler was found to process the request of type ${requestType}`;
   else if (registration.registrationType === 'remote')
     errorMessage = `Requested to handle local request but request ${requestType} is remote`;
   else
@@ -217,7 +218,7 @@ const handleLocalRequest: RequestHandler = async <TParam, TReturn>(
           // Break out the contents of the ComplexResponse to use existing variables. Should we destructure instead to future-proof for other fields? It was not playing well with Typescript
           result = response.contents;
           success = response.success;
-          errorMessage = response.errorMessage;
+          if (!response.success) errorMessage = response.errorMessage;
         } catch (e) {
           errorMessage = getErrorMessage(e);
         }
@@ -230,7 +231,7 @@ const handleLocalRequest: RequestHandler = async <TParam, TReturn>(
     }
 
   if (!success && !errorMessage) {
-    errorMessage = 'The JS-handled request was not handled successfully';
+    errorMessage = `The JS-handled request of type ${requestType} was not handled successfully`;
   }
 
   return {
@@ -274,15 +275,32 @@ export const initialize = memoizeOne(async (): Promise<void> => {
 });
 
 /**
- * Send a request to the server and resolve after receiving a response
+ * Send a request to the server and resolve a ComplexResponse after receiving a response.
+ * Note: Unless you need access to ComplexResponse properties, you probably just want to use request
  * @param requestType the type of request
  * @param contents contents to send in the request
  * @returns promise that resolves with the response message
  */
-export const request = async <TParam, TReturn>(
+export const requestRaw = async <TParam, TReturn>(
   requestType: string,
   contents: TParam,
-) => {
+): Promise<ComplexResponse<TReturn>> => {
   await initialize();
   return ConnectionService.request<TParam, TReturn>(requestType, contents);
+};
+
+export const request = async <TParam extends Array<unknown>, TReturn>(
+  requestType: string,
+  ...args: TParam
+) => {
+  const response = await requestRaw<TParam, TReturn>(requestType, args);
+  if (!response.success) throw new Error(response.errorMessage);
+  return response.contents;
+};
+
+export const createRequestFunction = <TParam extends Array<unknown>, TReturn>(
+  requestType: string,
+) => {
+  return async (...args: TParam) =>
+    request<TParam, TReturn>(requestType, ...args);
 };

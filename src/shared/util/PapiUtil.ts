@@ -6,8 +6,32 @@ export type Unsubscriber = () => boolean;
  * This type is used as the public-facing interface for requests
  */
 export type ComplexRequest<TParam = unknown> = {
-  contents?: TParam;
+  contents: TParam;
 };
+
+type ComplexResponseSuccess<TReturn = unknown> = {
+  /** Whether the handler that created this response was successful in handling the request */
+  success: true;
+  /** Content with which to respond to the request. Must be provided unless the response failed or TReturn is undefined */
+  contents: TReturn;
+};
+
+type ComplexResponseFailure<TReturn = unknown> = {
+  /** Whether the handler that created this response was successful in handling the request */
+  success: false;
+  /** Content with which to respond to the request. Must be provided unless the response failed or TReturn is undefined */
+  contents?: TReturn;
+  /** Error explaining the problem that is only populated if success is false */
+  errorMessage: string;
+};
+
+/**
+ * Type of object to create when handling a complex request where you desire to provide additional information beyond the contents of the response
+ * This type is used as the public-facing interface for responses
+ */
+export type ComplexResponse<TReturn = unknown> =
+  | ComplexResponseSuccess<TReturn>
+  | ComplexResponseFailure<TReturn>;
 
 /** Type of request handler - indicates what type of parameters and what return type the handler has */
 export enum RequestHandlerType {
@@ -15,17 +39,6 @@ export enum RequestHandlerType {
   Contents = 'contents',
   Complex = 'complex',
 }
-
-/**
- * Type of object to create when handling a complex request where you desire to provide additional information beyond the contents of the response
- * This type is used as the public-facing interface for responses
- */
-export type ComplexResponse<TReturn = unknown> = {
-  contents?: TReturn;
-  success: boolean;
-  /** Error explaining the problem that is only populated if success is false */
-  errorMessage: string;
-};
 
 /** Handler function for a command. Called when a command is executed */
 // Any is probably fine because we likely never know or care about the args or return

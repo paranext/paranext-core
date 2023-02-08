@@ -5,27 +5,16 @@ import icon from '../../assets/icon.png';
 import './App.css';
 import usePromise from './hooks/usePromise';
 
-const createRequest = (requestType: string) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return async (...args: any[]) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await NetworkService.request<any[], any>(
-      requestType,
-      args,
-    );
-    return response.contents || response.errorMessage;
-  };
-};
-
-const getVar: (envVar: string) => Promise<string> = createRequest(
-  'electronAPI.env.getVar',
-);
+const getVar: (envVar: string) => Promise<string> =
+  NetworkService.createRequestFunction('electronAPI.env.getVar');
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const invoke: (classMethod: string, args: unknown) => Promise<any> =
-  createRequest('electronAPI.edge.invoke');
+  NetworkService.createRequestFunction('electronAPI.edge.invoke');
 
-const test: () => Promise<string> = createRequest('electronAPI.env.test');
+const test: () => Promise<string> = NetworkService.createRequestFunction(
+  'electronAPI.env.test',
+);
 
 const Hello = () => {
   const [edgeReturn, setEdgeReturn] = useState('');

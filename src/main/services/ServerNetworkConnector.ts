@@ -89,7 +89,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
   private requests = new Map<number, LiveRequest<any>>();
 
   /** Get the client socket for a certain clientId. Throws if not found */
-  private getClientSocket(clientId: number): WebSocketClient {
+  private getClientSocket = (clientId: number): WebSocketClient => {
     if (!this.websocketServer)
       throw new Error('Trying to get client socket when not connected!');
 
@@ -101,16 +101,16 @@ export default class ServerNetworkConnector implements INetworkConnector {
       );
 
     return clientSocket;
-  }
+  };
 
   /** Get the clientId for a certain websocket. Throws if not found */
-  private getClientIdFromSocket(websocket: WebSocket): number {
+  private getClientIdFromSocket = (websocket: WebSocket): number => {
     // Using for...of on iterator here because it is significantly faster (not converting to array first) and cleaner this way in this case
     // eslint-disable-next-line no-restricted-syntax
     for (const [clientId, clientSocket] of this.clientSockets.entries())
       if (clientSocket.websocket === websocket) return clientId;
     throw new Error('Could not find clientId for websocket');
-  }
+  };
 
   /**
    * Send a message to a client via websocket. Throws if not connected
@@ -118,7 +118,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * @param recipientId the client to which to send the message. TODO: determine if we can intuit this instead
    */
   // Add if needed: @param unsafe whether to get the client even if we aren't connected. WARNING: SETTING THIS FLAG MEANS NOT CHECKING FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. There may be no clientId
-  private sendMessage(message: Message, recipientId: number): void {
+  private sendMessage = (message: Message, recipientId: number): void => {
     // TODO: add message queueing
     if (!this.connected || !this.websocketServer)
       throw new Error(
@@ -137,14 +137,14 @@ export default class ServerNetworkConnector implements INetworkConnector {
       // This message is for someone else. Send the message
       this.getClientSocket(recipientId).websocket.send(JSON.stringify(message));
     }
-  }
+  };
 
   /**
    * Receives and appropriately publishes websocket messages
    * @param event websocket message information
    * @param fromSelf whether this message is from this connector instead of from someone else
    */
-  private onMessage(event: MessageEvent, fromSelf = false) {
+  private onMessage = (event: MessageEvent, fromSelf = false) => {
     const data = fromSelf
       ? (event.data as unknown as Message)
       : (JSON.parse(event.data as string) as Message);
@@ -163,7 +163,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
     const callbacks = this.messageSubscriptions.get(data.type);
     if (callbacks) callbacks.forEach((callback) => callback(data, clientId));
-  }
+  };
 
   /**
    * Unsubscribes a function from running on websocket messages
@@ -172,10 +172,10 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * @returns true if successfully unsubscribed
    * Likely will never need to be exported from this file. Just use subscribe, which returns a matching unsubscriber function that runs this.
    */
-  private unsubscribe(
+  private unsubscribe = (
     messageType: MessageType,
     callback: (eventData: Message, clientId: number) => void,
-  ): boolean {
+  ): boolean => {
     const callbacks = this.messageSubscriptions.get(messageType);
 
     if (!callbacks) return false; // Did not find any callbacks for the message type
@@ -191,7 +191,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
     // Indicate successfully removed the callback
     return true;
-  }
+  };
 
   /**
    * Subscribes a function to run on websocket messages of a particular type
@@ -199,13 +199,13 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * @param callback function to run with the contents of the websocket message
    * @returns unsubscriber function to run to stop calling the passed-in function on websocket messages
    */
-  private subscribe(
+  private subscribe = (
     messageType: MessageType,
     // Any is here because I dunno how to narrow Message type to a specific message type in parameters of a function
     // TODO: investigate this further another time
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     callback: (eventData: Message | any, clientId: number) => void,
-  ): Unsubscriber {
+  ): Unsubscriber => {
     let callbacks = this.messageSubscriptions.get(messageType);
     if (!callbacks) {
       callbacks = [];
@@ -214,13 +214,13 @@ export default class ServerNetworkConnector implements INetworkConnector {
     callbacks.push(callback);
 
     return () => this.unsubscribe(messageType, callback);
-  }
+  };
 
   /**
    * Registers an incoming websocket connection and sends connection info with InitClient.
    * Does not consider the client fully connected yet until they respond and tell us they connected with ClientConnect
    */
-  private onClientConnect(websocket: WebSocket) {
+  private onClientConnect = (websocket: WebSocket) => {
     console.log(`this:${this}, this.nextClientId: ${this.nextClientId}`);
     const clientId = this.nextClientId;
     this.nextClientId += 1;
@@ -228,8 +228,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
     // TODO: probably do something better than just print the error
     websocket.addEventListener('error', console.error);
 
-    websocket.addEventListener('message', this.onMessage.bind(this));
-    websocket.addEventListener('close', this.onClientDisconnect.bind(this));
+    websocket.addEventListener('message', this.onMessage);
+    websocket.addEventListener('close', this.onClientDisconnect);
 
     /** This clientSocket's connector info */
     const connectorInfo = { clientId };
@@ -250,15 +250,15 @@ export default class ServerNetworkConnector implements INetworkConnector {
       },
       clientId,
     );
-  }
+  };
 
   /** Handles when client connection disconnects. Unregisters and such */
-  private onClientDisconnect(event: CloseEvent) {
+  private onClientDisconnect = (event: CloseEvent) => {
     this.disconnectClient(event.target);
-  }
+  };
 
   /** Closes connection and unregisters a client websocket when it has disconnected */
-  private disconnectClient(websocket: WebSocket) {
+  private disconnectClient = (websocket: WebSocket) => {
     const clientId = this.getClientIdFromSocket(websocket);
     /* websocket.off('error', console.error);
     websocket.off('message', this.onMessage);
@@ -266,12 +266,12 @@ export default class ServerNetworkConnector implements INetworkConnector {
     websocket.removeAllListeners();
     websocket.close();
     this.clientSockets.delete(clientId);
-  }
+  };
 
-  async connect(
+  connect = async (
     localRequestHandler: InternalRequestHandler,
     requestRouter: (requestType: string) => number,
-  ) {
+  ) => {
     // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
     // We don't need to run this more than once
     if (this.connectPromise) return this.connectPromise;
@@ -294,26 +294,26 @@ export default class ServerNetworkConnector implements INetworkConnector {
     // Listen for responses from the clients and resolve the request promise
     this.unsubscribeHandleResponseMessage = this.subscribe(
       MessageType.Response,
-      this.handleResponseMessage.bind(this),
+      this.handleResponseMessage,
     );
 
     // Listen for requests from the clients and run the request handler
     this.unsubscribeHandleRequestMessage = this.subscribe(
       MessageType.Request,
-      this.handleRequestMessage.bind(this),
+      this.handleRequestMessage,
     );
 
     // Start the websocket server
     this.websocketServer = new WebSocketServer({ port: 8876 });
-    this.websocketServer.on('connection', this.onClientConnect.bind(this));
-    this.websocketServer.on('close', this.disconnect.bind(this));
+    this.websocketServer.on('connection', this.onClientConnect);
+    this.websocketServer.on('close', this.disconnect);
 
     // Finished setting up server synchronously with this implementation.
     this.connected = true;
     this.connectPromise = Promise.resolve(this.connectorInfo);
 
     return this.connectPromise;
-  }
+  };
 
   /**
    * Function that handles websocket messages of type Response.
@@ -321,10 +321,10 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * @param response Response message to resolve
    * @param responderId responding client
    */
-  private handleResponseMessage(
+  private handleResponseMessage = (
     response: WebsocketResponse<unknown>,
     responderId: number,
-  ) {
+  ) => {
     const { senderId, requestId } = response;
     if (this.connectorInfo.clientId === senderId) {
       // This response is for us. Resolve the associated request
@@ -343,7 +343,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
       // This response is for someone else. Forward the response on
       this.sendMessage(response, senderId);
     }
-  }
+  };
 
   /**
    * Function that handles incoming websocket messages and locally sent messages of type Request.
@@ -351,10 +351,10 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * @param requestMessage request to handle
    * @param senderId who sent this message
    */
-  private async handleRequestMessage(
+  private handleRequestMessage = async (
     requestMessage: WebsocketRequest<unknown>,
     senderId: number,
-  ) {
+  ) => {
     if (!this.requestRouter)
       throw new Error(
         `Received a request but cannot route it without a requestRouter`,
@@ -386,16 +386,16 @@ export default class ServerNetworkConnector implements INetworkConnector {
       // This request is for someone else. Forward the request on
       this.sendMessage(requestMessage, responderId);
     }
-  }
+  };
 
   // Don't need self here because there's nothing to do. This is just implementing the interface method as a placeholder for now
   // eslint-disable-next-line class-methods-use-this
-  async notifyClientConnected() {
+  notifyClientConnected = async () => {
     // Don't think we need to do anything to tell the client that the server is ready
     return Promise.resolve();
-  }
+  };
 
-  disconnect() {
+  disconnect = () => {
     this.connecting = false;
     this.connected = false;
     this.localRequestHandler = undefined;
@@ -420,12 +420,12 @@ export default class ServerNetworkConnector implements INetworkConnector {
       this.unsubscribeHandleResponseMessage();
     if (this.unsubscribeHandleRequestMessage)
       this.unsubscribeHandleRequestMessage();
-  }
+  };
 
-  async request<TParam, TReturn>(
+  request = async <TParam, TReturn>(
     requestType: string,
     request: InternalRequest<TParam>,
-  ) {
+  ) => {
     // Set up a promise we can resolve later
     let liveRequest: LiveRequest<TReturn> | undefined;
     const requestPromise = new Promise<InternalResponse<TReturn>>(
@@ -457,5 +457,5 @@ export default class ServerNetworkConnector implements INetworkConnector {
     );
 
     return requestPromise;
-  }
+  };
 }
