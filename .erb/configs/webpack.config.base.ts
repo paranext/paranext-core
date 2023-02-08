@@ -3,8 +3,7 @@
  */
 
 import webpack from 'webpack';
-/* import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin'; */
-import path from 'path';
+import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin';
 import webpackPaths from './webpack.paths';
 import { dependencies as externals } from '../../release/app/package.json';
 
@@ -51,20 +50,7 @@ const configuration: webpack.Configuration = {
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
     modules: [webpackPaths.srcPath, 'node_modules'],
     // There is no need to add aliases here, the paths in tsconfig get mirrored
-    /* plugins: [
-      new TsconfigPathsPlugins({
-        logLevel: 'INFO',
-      }),
-    ], */
-    alias: {
-      '@components': path.resolve(webpackPaths.srcRendererPath, 'components/'),
-      '@services': path.resolve(webpackPaths.srcRendererPath, 'services/'),
-      '@util': path.resolve(webpackPaths.srcRendererPath, 'util/'),
-      '@shared': path.resolve(webpackPaths.srcPath, 'shared/'),
-      '@node_modules': path.resolve(webpackPaths.srcPath, 'node_modules/'),
-      '@assets': path.resolve(webpackPaths.srcPath, 'assets/'),
-      '@mainServices': path.resolve(webpackPaths.srcPath, 'main/services/'),
-    },
+    plugins: [new TsconfigPathsPlugins()],
   },
 
   plugins: [
@@ -74,10 +60,10 @@ const configuration: webpack.Configuration = {
 
     new webpack.IgnorePlugin({
       checkResource(resource, context) {
-        // Don't include stuff from the main folder in renderer and renderer folder in main folder
+        // Don't include stuff from the main folder or @main... in renderer and renderer folder in main folder
         const exclude = isRenderer
-          ? /main\//.test(resource)
-          : /renderer\//.test(resource);
+          ? resource.startsWith('@main') || resource.includes('main/')
+          : resource.startsWith('@renderer') || /renderer\//.test(resource);
 
         // Log if a file is excluded just fyi
         if (!context.includes('node_modules') && exclude)

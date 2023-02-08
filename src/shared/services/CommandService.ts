@@ -4,7 +4,7 @@
  */
 
 import memoizeOne from 'memoize-one';
-import * as NetworkService from './NetworkService';
+import * as NetworkService from '@shared/services/NetworkService';
 import {
   CATEGORY_COMMAND,
   CATEGORY_EPM,
@@ -12,7 +12,7 @@ import {
   ComplexResponse,
   serializeRequestType,
   Unsubscriber,
-} from '../util/PapiUtil';
+} from '@shared/util/PapiUtil';
 
 /** Whether this service has finished setting up */
 let initialized = false;

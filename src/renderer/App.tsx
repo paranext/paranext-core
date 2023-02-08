@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
 import * as NetworkService from '@shared/services/NetworkService';
-import icon from '../../assets/icon.png';
+import icon from '@assets/icon.png';
 import './App.css';
 import usePromise from './hooks/usePromise';
 

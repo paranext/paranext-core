@@ -7,14 +7,14 @@ import memoizeOne from 'memoize-one';
 import {
   CLIENT_ID_SERVER,
   RequestHandler,
-} from '../data/InternalConnectionTypes';
+} from '@shared/data/InternalConnectionTypes';
 import {
   ComplexRequest,
   ComplexResponse,
   Unsubscriber,
-} from '../util/PapiUtil';
-import { getErrorMessage } from '../util/Util';
-import * as ConnectionService from './ConnectionService';
+} from '@shared/util/PapiUtil';
+import { getErrorMessage } from '@shared/util/Util';
+import * as ConnectionService from '@shared/services/ConnectionService';
 
 /** Whether this service has finished setting up */
 let initialized = false;

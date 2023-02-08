@@ -11,10 +11,10 @@ import {
   InternalRequestHandler,
   InternalResponse,
   RequestHandler,
-} from '../data/InternalConnectionTypes';
-import INetworkConnector from './INetworkConnector';
-import * as NetworkConnectorFactory from './NetworkConnectorFactory';
-import { ComplexResponse } from '../util/PapiUtil';
+} from '@shared/data/InternalConnectionTypes';
+import INetworkConnector from '@shared/services/INetworkConnector';
+import * as NetworkConnectorFactory from '@shared/services/NetworkConnectorFactory';
+import { ComplexResponse } from '@shared/util/PapiUtil';
 
 /** Whether the connection is being set up or has finished connecting (does not return to false when connected is true) */
 let connecting = false;

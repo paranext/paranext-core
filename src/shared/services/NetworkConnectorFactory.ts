@@ -2,8 +2,8 @@
  * Creates a ServerNetworkConnector or a ClientNetworkConnector depending on if we're in main or renderer
  */
 
-import { isClient } from '../util/InternalUtil';
-import INetworkConnector from './INetworkConnector';
+import { isClient } from '@shared/util/InternalUtil';
+import INetworkConnector from '@shared/services/INetworkConnector';
 
 /**
  * Creates a NetworkConnector for the client or the server depending on where you're running
@@ -13,12 +13,12 @@ import INetworkConnector from './INetworkConnector';
 export const createNetworkConnector = async (): Promise<INetworkConnector> => {
   if (isClient()) {
     const ClientNetworkConnector = (
-      await import('../../renderer/services/ClientNetworkConnector')
+      await import('@rendererServices/ClientNetworkConnector')
     ).default;
     return new ClientNetworkConnector();
   }
   const ServerNetworkConnector = (
-    await import('../../main/services/ServerNetworkConnector')
+    await import('@mainServices/ServerNetworkConnector')
   ).default;
   return new ServerNetworkConnector();
 };
