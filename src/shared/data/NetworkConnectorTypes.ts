@@ -1,3 +1,7 @@
+// **********************************************************************************************
+// NOTE: The types defined in this file should match what is defined in NetworkConnectorTypes.cs
+// **********************************************************************************************
+
 /**
  * Types that are relevant particularly to the implementation of communication on NetworkConnector.ts files
  * Do not use these types outside of ClientNetworkConnector.ts and ServerNetworkConnector.ts
