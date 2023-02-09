@@ -14,6 +14,8 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import { NetworkConnectorInfo } from '@shared/data/InternalConnectionTypes';
 import * as NetworkService from '@shared/services/NetworkService';
+import papi from '@shared/services/papi';
+import { CommandHandler } from '@shared/util/PapiUtil';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 
@@ -347,15 +349,29 @@ app
 
 // #region Services setup
 
+const commandHandlers: { [commandName: string]: CommandHandler } = {
+  echo: async (message: string) => {
+    /* const start = performance.now(); */
+    const result = await papi.commands.sendCommand('addThree', 1, 4, 9);
+    /* console.log(
+      `addThree(...) = ${result} took ${performance.now() - start} ms`,
+    ); */
+    return message;
+  },
+};
+
 NetworkService.initialize()
   .then(() => {
     // Set up test handlers
-    Object.keys(ipcHandlers).forEach((ipcHandle) => {
+    Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
       NetworkService.registerRequestHandler(
         ipcHandle,
         async (...args: unknown[]) =>
-          ipcHandlers[ipcHandle]({} as Electron.IpcMainInvokeEvent, ...args),
+          handler({} as Electron.IpcMainInvokeEvent, ...args),
       );
+    });
+    Object.entries(commandHandlers).forEach(([commandName, handler]) => {
+      papi.commands.registerCommand(commandName, handler);
     });
   })
   .catch((e) => console.error(e));

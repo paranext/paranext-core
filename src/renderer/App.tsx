@@ -3,6 +3,7 @@ import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
 import * as NetworkService from '@shared/services/NetworkService';
 import icon from '@assets/icon.png';
 import './App.css';
+import papi from '@shared/services/papi';
 import usePromise from './hooks/usePromise';
 
 const getVar: (envVar: string) => Promise<string> =
@@ -12,9 +13,62 @@ const getVar: (envVar: string) => Promise<string> =
 const invoke: (classMethod: string, args: unknown) => Promise<any> =
   NetworkService.createRequestFunction('electronAPI.edge.invoke');
 
-const test: () => Promise<string> = NetworkService.createRequestFunction(
+const testBase: () => Promise<string> = NetworkService.createRequestFunction(
   'electronAPI.env.test',
 );
+
+const test = async () => {
+  /* const start = performance.now(); */
+  const result = await testBase();
+  /* console.log(`Test took ${performance.now() - start} ms`); */
+  return result;
+};
+
+const echo = async (message: string) => {
+  const result = await papi.commands.sendCommand<[string], string>(
+    'echo',
+    message,
+  );
+  return result;
+};
+
+const executeMany = async <T,>(fn: () => Promise<T>) => {
+  const numRequests = 10000;
+  const requests = new Array<Promise<T | void>>(numRequests);
+  const requestTime = new Array<number>(numRequests);
+  const start = performance.now();
+  for (let i = 0; i < numRequests; i++) {
+    requestTime[i] = performance.now();
+    requests[i] = fn()
+      .then((response) => {
+        requestTime[i] = performance.now() - requestTime[i];
+        return response;
+      })
+      .catch((err) => console.error(err));
+  }
+
+  try {
+    const responses = await Promise.all(requests);
+    const finish = performance.now();
+
+    const avgResponseTime =
+      requestTime.reduce((sum, time) => sum + time, 0) / numRequests;
+    const maxTime = requestTime.reduce((max, time) => Math.max(max, time), 0);
+    const minTime = requestTime.reduce(
+      (min, time) => Math.min(min, time),
+      Number.MAX_VALUE,
+    );
+    console.log(
+      `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
+        finish - start
+      }\n\tResponse times:`,
+      requestTime,
+    );
+    console.log(responses[responses.length - 1]);
+  } catch (e) {
+    console.error(e);
+  }
+};
 
 const Hello = () => {
   const [edgeReturn, setEdgeReturn] = useState('');
@@ -65,46 +119,8 @@ const Hello = () => {
           type="button"
           onClick={() => edgeInvoke('EdgeMethods.UseDynamicInput')}
           onContextMenu={(e) => {
-            const numRequests = 10000;
-            const requests = new Array<Promise<string>>(numRequests);
-            const requestTime = new Array<number>(numRequests);
-            const start = performance.now();
-            for (let i = 0; i < numRequests; i++) {
-              requestTime[i] = performance.now();
-              requests[i] = edgeInvoke('EdgeMethods.UseDynamicInput')
-                .then((response) => {
-                  requestTime[i] = performance.now() - requestTime[i];
-                  return response;
-                })
-                .catch((err) => console.error(err));
-            }
             e.preventDefault();
-
-            Promise.all(requests)
-              .then((responses) => {
-                const finish = performance.now();
-
-                const avgResponseTime =
-                  requestTime.reduce((sum, time) => sum + time, 0) /
-                  numRequests;
-                const maxTime = requestTime.reduce(
-                  (max, time) => Math.max(max, time),
-                  0,
-                );
-                const minTime = requestTime.reduce(
-                  (min, time) => Math.min(min, time),
-                  Number.MAX_VALUE,
-                );
-                console.log(
-                  `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
-                    finish - start
-                  }\n\tResponse times:`,
-                  requestTime,
-                );
-                console.log(responses[responses.length - 1]);
-                return undefined;
-              })
-              .catch((err) => console.error(err));
+            executeMany(() => edgeInvoke('EdgeMethods.UseDynamicInput'));
           }}
         >
           Test Edge Input
@@ -131,49 +147,27 @@ const Hello = () => {
               });
           }}
           onContextMenu={(e) => {
-            const numRequests = 10000;
-            const requests = new Array<Promise<string | void>>(numRequests);
-            const requestTime = new Array<number>(numRequests);
-            const start = performance.now();
-            for (let i = 0; i < numRequests; i++) {
-              requestTime[i] = performance.now();
-              requests[i] = test()
-                .then((response) => {
-                  requestTime[i] = performance.now() - requestTime[i];
-                  return response;
-                })
-                .catch((err) => console.error(err));
-            }
             e.preventDefault();
-
-            Promise.all(requests)
-              .then((responses) => {
-                const finish = performance.now();
-
-                const avgResponseTime =
-                  requestTime.reduce((sum, time) => sum + time, 0) /
-                  numRequests;
-                const maxTime = requestTime.reduce(
-                  (max, time) => Math.max(max, time),
-                  0,
-                );
-                const minTime = requestTime.reduce(
-                  (min, time) => Math.min(min, time),
-                  Number.MAX_VALUE,
-                );
-                console.log(
-                  `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
-                    finish - start
-                  }\n\tResponse times:`,
-                  requestTime,
-                );
-                console.log(responses[responses.length - 1]);
-                return undefined;
-              })
-              .catch((err) => console.error(err));
+            executeMany(test);
           }}
         >
           Test
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            const start = performance.now();
+            const result = await echo('Stuff');
+            console.log(
+              `command:echo '${result}' took ${performance.now() - start} ms`,
+            );
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(() => echo('Stuff'));
+          }}
+        >
+          Echo
         </button>
       </div>
       <div className="Hello">

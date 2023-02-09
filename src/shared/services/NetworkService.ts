@@ -9,8 +9,12 @@ import {
   RequestHandler,
 } from '@shared/data/InternalConnectionTypes';
 import {
+  aggregateUnsubscriberAsyncs,
+  CommandHandler,
   ComplexRequest,
   ComplexResponse,
+  createSafeRegisterFn,
+  UnsubPromiseAsync,
   UnsubscriberAsync,
 } from '@shared/util/PapiUtil';
 import { getErrorMessage } from '@shared/util/Util';
@@ -59,7 +63,7 @@ type ArgsRequestHandler<
   // Any is probably fine because we likely never know or care about the args or return
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   TReturn = any,
-> = (...args: TParam) => Promise<TReturn>;
+> = CommandHandler<TParam, TReturn>;
 
 /**
  * Contents handler function for a request. Called when a request is handled.
@@ -195,28 +199,28 @@ async function unregisterRequestHandlerUnsafe(
  * @param requestType the type of request on which to register the handler
  * @param handler function to register to run on requests
  * @param handlerType type of handler function - indicates what type of parameters and what return type the handler has
- * @returns unsubscriber function to run to stop the passed-in function from handling requests
+ * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
  */
 function registerRequestHandlerUnsafe(
   requestType: string,
   handler: ArgsRequestHandler,
   handlerType?: RequestHandlerType,
-): { promise: Promise<void>; unsubscriber: UnsubscriberAsync };
+): UnsubPromiseAsync<void>;
 function registerRequestHandlerUnsafe(
   requestType: string,
   handler: ContentsRequestHandler,
   handlerType?: RequestHandlerType,
-): { promise: Promise<void>; unsubscriber: UnsubscriberAsync };
+): UnsubPromiseAsync<void>;
 function registerRequestHandlerUnsafe(
   requestType: string,
   handler: ComplexRequestHandler,
   handlerType?: RequestHandlerType,
-): { promise: Promise<void>; unsubscriber: UnsubscriberAsync };
+): UnsubPromiseAsync<void>;
 function registerRequestHandlerUnsafe(
   requestType: string,
   handler: RoutedRequestHandler,
   handlerType = RequestHandlerType.Args,
-): { promise: Promise<void>; unsubscriber: UnsubscriberAsync } {
+): UnsubPromiseAsync<void> {
   let resolveRegistration:
     | ((value: void | PromiseLike<void>) => void)
     | undefined;
@@ -459,15 +463,9 @@ export const initialize = memoizeOne(async (): Promise<void> => {
     ).map(([requestType, handler]) =>
       registerRequestHandlerUnsafe(requestType, handler),
     );
-    unsubscribeServerRequestHandlers = async () => {
-      // Run the unsubscriber for each handler
-      const unsubPromises = registrationUnsubAndPromises.map(
-        ({ unsubscriber }) => unsubscriber(),
-      );
-      // If any of the unsubscribers resolves to false, we did not succeed
-      // TODO: make a util function to tune up this Promise.all so they all resolve even if one throws
-      return !(await Promise.all(unsubPromises)).includes(false);
-    };
+    unsubscribeServerRequestHandlers = aggregateUnsubscriberAsyncs(
+      registrationUnsubAndPromises.map(({ unsubscriber }) => unsubscriber),
+    );
     // Wait to successfully register all requests
     await Promise.all(
       registrationUnsubAndPromises.map(({ promise }) => promise),
@@ -516,84 +514,41 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   return requestUnsafe<TParam, TReturn>(requestType, ...args);
 };
 
+/** Helper function so we can overload registerRequestHandler */
+const registerRequestHandlerInternal = createSafeRegisterFn(
+  registerRequestHandlerUnsafe,
+  initialized,
+  initialize,
+  unregisterRequestHandlerUnsafe,
+);
 /**
  * Register a local request handler to run on requests.
- * TODO: This isn't quite safe yet. See TODO below. Basically, if you run this
- * before initializing, the unsubscriber returned may not work if you call it
- * immediately, and it will throw an exception (we can remove this if we
- * actually run into this case and it seems to work fine). You must wait to call it later
  * @param requestType the type of request on which to register the handler
  * @param handler function to register to run on requests
  * @param handlerType type of handler function - indicates what type of parameters and what return type the handler has
- * @returns unsubscriber function to run to stop the passed-in function from handling requests
+ * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
  */
 export function registerRequestHandler(
   requestType: string,
   handler: ArgsRequestHandler,
   handlerType?: RequestHandlerType,
-): { promise: Promise<void>; unsubscriber: UnsubscriberAsync };
+): UnsubPromiseAsync<void>;
 export function registerRequestHandler(
   requestType: string,
   handler: ContentsRequestHandler,
   handlerType?: RequestHandlerType,
-): { promise: Promise<void>; unsubscriber: UnsubscriberAsync };
+): UnsubPromiseAsync<void>;
 export function registerRequestHandler(
   requestType: string,
   handler: ComplexRequestHandler,
   handlerType?: RequestHandlerType,
-): { promise: Promise<void>; unsubscriber: UnsubscriberAsync };
+): UnsubPromiseAsync<void>;
 export function registerRequestHandler(
   requestType: string,
   handler: RoutedRequestHandler,
   handlerType = RequestHandlerType.Args,
-): { promise: Promise<void>; unsubscriber: UnsubscriberAsync } {
-  // If we're already initialized, run registerRequestHandler almost like normal but with an initialize check in the unsubscriber
-  if (initialized) {
-    const { promise, unsubscriber: regUnsubscriber } =
-      registerRequestHandlerUnsafe(requestType, handler, handlerType);
-    // Use the returned unsubAndPromise's unsubscriber to make a safe unregisterRequestHandler
-    return {
-      promise,
-      unsubscriber: async () => {
-        await initialize();
-        return regUnsubscriber();
-      },
-    };
-  }
-
-  // Create an object with a stable unsubscriber reference that we can change when we get the real unsubscriber after awaiting intialize
-  const unsubRef: { unsubscriber: UnsubscriberAsync } = {
-    unsubscriber: async () => {
-      // TODO: The unsubscriber we return might not actually do anything meaningful at first (it expliticly calls unregisterRequestHandlerUnsafe, which is a no-no), so it throws an exception. Refactor this mess so we aren't giving a stunted unsubscriber at first and then subsequently empowering it after initialize is finished
-      // TODO: Should the unsubscriber await initialize first, or should it just go ahead and run it? Also below
-      const unregistered = await unregisterRequestHandlerUnsafe(
-        requestType,
-        handler,
-      );
-      throw new Error(
-        `unsubscribe run from registerRequestHandler before NetworkService finished initializing! unsubscribe was${
-          unregistered ? '' : ' not'
-        } successful.`,
-      );
-    },
-  };
-  return {
-    promise: initialize().then(() => {
-      const newUnsubAndPromise = registerRequestHandlerUnsafe(
-        requestType,
-        handler,
-        handlerType,
-      );
-      // Change the returned unsubAndPromise's unsubscriber to be a safe unregisterRequestHandler
-      unsubRef.unsubscriber = async () => {
-        // TODO: Should the unsubscriber await initialize first, or should it just go ahead and run it? Also above
-        await initialize();
-        return newUnsubAndPromise.unsubscriber();
-      };
-      return newUnsubAndPromise.promise;
-    }),
-    unsubscriber: () => unsubRef.unsubscriber(),
-  };
+): UnsubPromiseAsync<void> {
+  return registerRequestHandlerInternal(requestType, handler, handlerType);
 }
 
 // #endregion
