@@ -1,6 +1,9 @@
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
 
+/** Function to run to dispose of something that runs asynchronously. The promise resolves to true if successfully unsubscribed */
+export type UnsubscriberAsync = () => Promise<boolean>;
+
 /**
  * Type of object passed to a complex request handler that provides information about the request.
  * This type is used as the public-facing interface for requests
@@ -16,11 +19,14 @@ type ComplexResponseSuccess<TReturn = unknown> = {
   contents: TReturn;
 };
 
-type ComplexResponseFailure<TReturn = unknown> = {
+type ComplexResponseFailure = {
   /** Whether the handler that created this response was successful in handling the request */
   success: false;
-  /** Content with which to respond to the request. Must be provided unless the response failed or TReturn is undefined */
-  contents?: TReturn;
+  /**
+   * Content with which to respond to the request. Must be provided unless the response failed or TReturn is undefined
+   * Removed from failure so we do not change the type of contents for type safety. We could add errorContents one day if we really need it
+   */
+  /* contents?: TReturn; */
   /** Error explaining the problem that is only populated if success is false */
   errorMessage: string;
 };
@@ -31,7 +37,7 @@ type ComplexResponseFailure<TReturn = unknown> = {
  */
 export type ComplexResponse<TReturn = unknown> =
   | ComplexResponseSuccess<TReturn>
-  | ComplexResponseFailure<TReturn>;
+  | ComplexResponseFailure;
 
 /** Type of request handler - indicates what type of parameters and what return type the handler has */
 export enum RequestHandlerType {

@@ -413,9 +413,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
     );
 
     if (this.websocketServer) {
-      /* this.websocketServer.off('connection', this.onClientConnect);
-      this.websocketServer.off('close', this.disconnect); */
-      this.websocketServer.removeAllListeners();
+      this.websocketServer.off('connection', this.onClientConnect);
+      this.websocketServer.off('close', this.disconnect);
       this.websocketServer.close();
       this.websocketServer = undefined;
     }

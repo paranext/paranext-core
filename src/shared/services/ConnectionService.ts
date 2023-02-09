@@ -82,7 +82,10 @@ export const disconnect = () => {
   requestHandler = undefined;
   requestRouter = undefined;
   connectPromise = undefined;
-  networkConnector = undefined;
+  if (networkConnector) {
+    networkConnector.disconnect();
+    networkConnector = undefined;
+  }
   if (!connected && connectReject)
     connectReject('Disconnecting - client never finished connecting');
   connectResolve = undefined;

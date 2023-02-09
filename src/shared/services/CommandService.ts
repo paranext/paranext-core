@@ -54,7 +54,7 @@ const sendCommandUnsafe = async <TParam extends Array<unknown>, TReturn>(
 ): Promise<ComplexResponse<TReturn>> => {
   return NetworkService.request(
     serializeRequestType(CATEGORY_COMMAND, type),
-    args,
+    ...args,
   );
 };
 
@@ -66,7 +66,10 @@ const sendEpmRequestUnsafe = async <TParam extends Array<unknown>, TReturn>(
   type: string,
   ...args: TParam
 ): Promise<ComplexResponse<TReturn>> => {
-  return NetworkService.request(serializeRequestType(CATEGORY_EPM, type), args);
+  return NetworkService.request(
+    serializeRequestType(CATEGORY_EPM, type),
+    ...args,
+  );
 };
 
 /**
