@@ -1,4 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "exclude": ["release/build", "release/app/dist", ".erb/dll"]
-}
