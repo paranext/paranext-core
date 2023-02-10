@@ -15,7 +15,7 @@
       "@shared/*": ["./shared/*"],
       "@node_modules/*": ["../node_modules/*"],
       "@assets/*": ["../assets/*"],
-      "@mainServices/*": ["./main/services/*"],
+      "@mainServices/*": ["./main/services/*"]
     },
     "noUnusedLocals": true,
     "noUnusedParameters": true,
