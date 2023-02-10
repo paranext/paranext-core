@@ -42,6 +42,7 @@ jobs:
           USE_HARD_LINKS: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          npm run build
           npm test
           npm run package
           npm run lint
