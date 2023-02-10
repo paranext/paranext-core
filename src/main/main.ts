@@ -1,5 +1,3 @@
-/* eslint global-require: off, no-console: off, promise/always-return: off */
-
 /**
  * This module executes inside of electron's main process. You can start
  * electron renderer process from here and communicate with the other processes
@@ -16,8 +14,16 @@ import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
 import windowStateKeeper from 'electron-window-state';
+import { fork } from 'child_process';
+import { ProcessType } from '@shared/globalThis';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+
+// #region globalThis setup
+
+globalThis.processType = ProcessType.Main;
+
+// #endregion
 
 // #region ELECTRON SETUP
 
@@ -34,6 +40,7 @@ class AppUpdater {
 let mainWindow: BrowserWindow | null = null;
 
 if (process.env.NODE_ENV === 'production') {
+  // eslint-disable-next-line global-require
   const sourceMapSupport = require('source-map-support');
   sourceMapSupport.install();
 }
@@ -42,11 +49,13 @@ const isDebug =
   process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
 
 if (isDebug) {
+  // eslint-disable-next-line global-require
   require('electron-debug')();
 }
 
 /** Install extensions into the Chromium renderer process */
 const installExtensions = async () => {
+  // eslint-disable-next-line global-require
   const installer = require('electron-devtools-installer');
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS;
   const extensions = ['REACT_DEVELOPER_TOOLS'];
@@ -169,6 +178,8 @@ app
       // dock icon is clicked and there are no other windows open.
       if (mainWindow === null) createWindow();
     });
+
+    return undefined;
   })
   .catch(console.log);
 
@@ -178,11 +189,18 @@ app
 
 const commandHandlers: { [commandName: string]: CommandHandler } = {
   echo: async (message: string) => {
+    return message;
+  },
+  echoRenderer: async (message: string) => {
     /* const start = performance.now(); */
     /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
     /* console.log(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
+    return message;
+  },
+  echoExtensionHost: async (message: string) => {
+    await papi.commands.sendCommand('addMany', 3, 5, 7, 1, 4);
     return message;
   },
   throwError: async (message: string) => {
@@ -203,7 +221,52 @@ NetworkService.initialize()
     Object.entries(commandHandlers).forEach(([commandName, handler]) => {
       papi.commands.registerCommand(commandName, handler);
     });
+
+    // TODO: Probably should return Promise.all of these registrations
+    return undefined;
   })
   .catch((e) => console.error(e));
+
+// #endregion
+
+// #region Extension Host
+
+// Fork a new process for the extension host
+const extensionHost = fork(
+  path.join(
+    __dirname,
+    `../extension-host/extension-host.${app.isPackaged ? 'js' : 'ts'}`,
+  ),
+  {
+    execArgv: app.isPackaged
+      ? []
+      : // Enable TypeScript on the extension host in development. These args match the npm run start:main args passed to electronmon
+        [
+          '-r',
+          'ts-node/register/transpile-only',
+          '-r',
+          'tsconfig-paths/register',
+        ],
+  },
+);
+
+// This does not pass errors to the main process. Not sure what this does
+extensionHost.on('error', (err) =>
+  console.error(`extensionHost.error: ${err.toString()}`),
+);
+
+extensionHost.on('exit', () => console.warn('extensionHost just exited!'));
+
+setTimeout(async () => {
+  console.log(
+    `Add Many (from EH): ${await papi.commands.sendCommand(
+      'addMany',
+      2,
+      5,
+      9,
+      7,
+    )}`,
+  );
+}, 3000);
 
 // #endregion

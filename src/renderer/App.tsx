@@ -24,6 +24,23 @@ const test = async () => {
 const echo = async (message: string) =>
   papi.commands.sendCommand<[string], string>('echo', message);
 
+const echoRenderer = async (message: string) =>
+  papi.commands.sendCommand<[string], string>('echoRenderer', message);
+
+const echoExtensionHost = async (message: string) =>
+  papi.commands.sendCommand<[string], string>('echoExtensionHost', message);
+
+const addThree = async (a: number, b: number, c: number) =>
+  papi.commands.sendCommand<[number, number, number], number>(
+    'addThree',
+    a,
+    b,
+    c,
+  );
+
+const addMany = async (...nums: number[]) =>
+  papi.commands.sendCommand<number[], number>('addMany', ...nums);
+
 const throwError = async (message: string) =>
   papi.commands.sendCommand<[string], string>('throwError', message);
 
@@ -116,9 +133,77 @@ const Hello = () => {
         </button>
         <button
           type="button"
+          onClick={async () => {
+            const start = performance.now();
+            const result = await runPromise(() => echoRenderer('Stuff'));
+            console.log(
+              `command:echoRenderer '${result}' took ${
+                performance.now() - start
+              } ms`,
+            );
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(() => echoRenderer('Stuff'));
+          }}
+        >
+          Echo Renderer
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            const start = performance.now();
+            const result = await runPromise(() => echoExtensionHost('Stuff'));
+            console.log(
+              `command:echoExtensionHost '${result}' took ${
+                performance.now() - start
+              } ms`,
+            );
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(() => echoExtensionHost('Stuff'));
+          }}
+        >
+          Echo Extension Host
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            const start = performance.now();
+            const result = await runPromise(() => addThree(1, 2, 3));
+            console.log(
+              `command:addThree ${result} took ${performance.now() - start} ms`,
+            );
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(() => addThree(1, 2, 3));
+          }}
+        >
+          AddThree (Renderer)
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            const start = performance.now();
+            const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
+            console.log(
+              `command:addMany ${result} took ${performance.now() - start} ms`,
+            );
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(() => addMany(1, 2, 3, 4, 5, 6));
+          }}
+        >
+          AddMany (Extension Host)
+        </button>
+        <button
+          type="button"
           onClick={() => runPromise(() => throwError('Test error'))}
         >
-          Test Edge Exception
+          Test Exception
         </button>
         <button
           type="button"

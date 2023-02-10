@@ -19,7 +19,7 @@ import {
 } from '@shared/util/PapiUtil';
 import { getErrorMessage } from '@shared/util/Util';
 import * as ConnectionService from '@shared/services/ConnectionService';
-import { isClient } from '@shared/util/InternalUtil';
+import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
 
 /** Whether this service has finished setting up */
 let initialized = false;
@@ -459,7 +459,7 @@ export const initialize = memoizeOne(async (): Promise<void> => {
   await ConnectionService.connect(handleRequestLocal, routeRequest);
 
   // Register server-only request handlers
-  if (!isClient()) {
+  if (isServer()) {
     const registrationUnsubAndPromises = Object.entries(
       serverRequestHandlers,
     ).map(([requestType, handler]) =>
@@ -475,8 +475,8 @@ export const initialize = memoizeOne(async (): Promise<void> => {
   }
 
   // On closing, try to close the connection
-  // TODO: should probably do this on the server when the connection closes
-  if (isClient())
+  // TODO: should probably do this on the server and extension host when the connection closes
+  if (isRenderer())
     window.addEventListener('beforeunload', async () => {
       ConnectionService.disconnect();
       if (unsubscribeServerRequestHandlers) unsubscribeServerRequestHandlers();

@@ -13,7 +13,7 @@ import {
   serializeRequestType,
   UnsubPromiseAsync,
 } from '@shared/util/PapiUtil';
-import { isClient } from '@shared/util/InternalUtil';
+import { isClient, isRenderer } from '@shared/util/InternalUtil';
 
 /** Whether this service has finished setting up */
 let initialized = false;
@@ -39,8 +39,8 @@ async function addThree(a: number, b: number, c: number) {
 async function squareAndConcat(a: number, b: string) {
   return a * a + b.toString();
 }
-/** Commands that this process will handle. Registered automatically at initialization */
-const commandFunctions: { [commandName: string]: CommandHandler } = {
+/** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
+const rendererCommandFunctions: { [commandName: string]: CommandHandler } = {
   addThree,
   squareAndConcat,
 };
@@ -135,9 +135,9 @@ export const initialize = memoizeOne(async (): Promise<void> => {
   // Set up subscriptions that the service needs to work
 
   // Register built-in commands
-  if (isClient()) {
+  if (isRenderer()) {
     // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
-    const unsubPromises = Object.entries(commandFunctions).map(
+    const unsubPromises = Object.entries(rendererCommandFunctions).map(
       ([commandName, handler]) => registerCommandUnsafe(commandName, handler),
     );
 
@@ -149,10 +149,11 @@ export const initialize = memoizeOne(async (): Promise<void> => {
     await Promise.all(unsubPromises.map(({ promise }) => promise));
 
     // On closing, try to remove command listeners
-    // TODO: should probably do this on the server when the connection closes
-    window.addEventListener('beforeunload', async () => {
-      await unsubscribeCommands();
-    });
+    // TODO: should probably do this on the server and extension host when the connection closes
+    if (isRenderer())
+      window.addEventListener('beforeunload', async () => {
+        await unsubscribeCommands();
+      });
   }
 
   initialized = true;

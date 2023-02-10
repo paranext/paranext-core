@@ -220,7 +220,7 @@ export const connect = (
     })
     .catch((e) => {
       connecting = false;
-      const err = `ConnectionService: Failed to creacte NetworkConnection object: ${e}`;
+      const err = `ConnectionService: Failed to create NetworkConnection object: ${e}`;
       if (connectReject) connectReject(err);
       throw new Error(err);
     });

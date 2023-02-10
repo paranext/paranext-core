@@ -9,15 +9,16 @@
     "sourceMap": true,
     "baseUrl": "./src",
     "paths": {
+      "@assets/*": ["../assets/*"],
+      "@extension-host/*": ["./extension-host/*"],
+      "@main/*": ["./main/*"],
+      "@mainServices/*": ["./main/services/*"],
+      "@renderer/*": ["./renderer/*"],
       "@rendererComponents/*": ["./renderer/components/*"],
       "@rendererServices/*": ["./renderer/services/*"],
       "@rendererUtil/*": ["./renderer/util/*"],
-      "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
-      "@main/*": ["./main/*"],
-      "@node_modules/*": ["../node_modules/*"],
-      "@assets/*": ["../assets/*"],
-      "@mainServices/*": ["./main/services/*"]
+      "@node_modules/*": ["../node_modules/*"]
     },
     "noUnusedLocals": true,
     "noUnusedParameters": true,

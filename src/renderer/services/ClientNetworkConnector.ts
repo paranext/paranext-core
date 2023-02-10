@@ -14,6 +14,7 @@ import {
   WebsocketRequest,
   WebsocketResponse,
 } from '@shared/data/NetworkConnectorTypes';
+import { createWebSocket } from './WebSocketFactory';
 
 // TODO: implement request timeout logic
 /** Holds promises for a request */
@@ -226,7 +227,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     );
 
     // Connect the websocket
-    this.websocket = new WebSocket('ws://localhost:8876');
+    this.websocket = await createWebSocket('ws://localhost:8876');
 
     // Attach event listeners
     this.websocket.addEventListener('message', this.onMessage);
