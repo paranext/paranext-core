@@ -5,7 +5,7 @@ import icon from '@assets/icon.png';
 import './App.css';
 import papi from '@shared/services/papi';
 import { getErrorMessage } from '@shared/util/Util';
-import usePromise from './hooks/usePromise';
+import usePromise from '@renderer/hooks/usePromise';
 
 const getVar: (envVar: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.getVar');
