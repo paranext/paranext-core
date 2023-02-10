@@ -12,10 +12,11 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import windowStateKeeper from 'electron-window-state';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
-import windowStateKeeper from 'electron-window-state';
+import dotnetDataProvider from './services/dotnet-data-provider.service';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 
@@ -94,6 +95,9 @@ const createWindow = async () => {
     },
   });
 
+  // Start the dotnet data provider early so its ready when needed.
+  dotnetDataProvider.start();
+
   // Register listeners on the window, so the state is updated automatically
   // (the listeners will be removed when the window is closed)
   // and restore the maximized or full screen state
@@ -113,6 +117,7 @@ const createWindow = async () => {
   });
 
   mainWindow.on('closed', () => {
+    dotnetDataProvider.stop();
     mainWindow = null;
   });
 

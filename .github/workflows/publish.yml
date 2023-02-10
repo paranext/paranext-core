@@ -13,18 +13,34 @@ on:
 
 jobs:
   publish:
-    name: Build on node ${{ matrix.node_version }} and ${{ matrix.os }}
+    name: Publish on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, and node ${{ matrix.node_version }}
 
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        node_version: [16.x]
         os: [macos-latest, ubuntu-latest]
+        dotnet_version: [7.0.x]
+        node_version: [16.x]
 
     steps:
       - name: Checkout git repo
         uses: actions/checkout@v3
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{matrix.dotnet_version}}
+
+      - name: dotnet build - MacOS and Windows
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          npm run build:data-release:windows
+          npm run build:data-release:macos
+
+      - name: dotnet build - Linux
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: npm run build:data-release:linux
 
       - name: Install Node and NPM
         uses: actions/setup-node@v3

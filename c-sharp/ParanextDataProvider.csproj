@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Paranext.DataProvider</RootNamespace>
+    <SelfContained>true</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>

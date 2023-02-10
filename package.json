@@ -46,7 +46,7 @@
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",
     "build:data": "dotnet build c-sharp/ParanextDataProvider.sln",
     "build:data-release": "run-script-os",
-    "build:data-release:windows": "dotnet publish c-sharp/ParanextDataProvider.csproj -p:PublishProfile=FolderProfile",
+    "build:data-release:windows": "dotnet publish c-sharp/ParanextDataProvider.csproj -p:PublishProfile=FolderProfile -r win-x64 -o ./c-sharp/bin/Release/net7.0/publish/win-x64/",
     "build:data-release:linux": "dotnet publish c-sharp/ParanextDataProvider.csproj -p:PublishProfile=FolderProfile -r linux-x64 -o ./c-sharp/bin/Release/net7.0/publish/linux-x64/",
     "build:data-release:macos": "dotnet publish c-sharp/ParanextDataProvider.csproj -p:PublishProfile=FolderProfile -r osx-x64 -o ./c-sharp/bin/Release/net7.0/publish/osx-x64/ && dotnet publish c-sharp/ParanextDataProvider.csproj -p:PublishProfile=FolderProfile -r osx-arm64 -o ./c-sharp/bin/Release/net7.0/publish/osx-arm64/",
     "postinstall": "ts-node .erb/scripts/check-native-dep.js && electron-builder install-app-deps && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
@@ -178,6 +178,12 @@
           "x64"
         ]
       },
+      "extraResources": [
+        {
+          "from": "./c-sharp/bin/Release/net7.0/publish/osx-${arch}/",
+          "to": "./dotnet/"
+        }
+      ],
       "type": "distribution",
       "hardenedRuntime": true,
       "entitlements": "assets/entitlements.mac.plist",
@@ -203,11 +209,24 @@
         "nsis",
         "nsis-web",
         "portable"
+      ],
+      "extraResources": [
+        {
+          "from": "./c-sharp/bin/Release/net7.0/publish/win-x64/",
+          "to": "./dotnet/"
+        }
       ]
     },
     "linux": {
       "target": [
         "AppImage"
+      ],
+      "category": "Development",
+      "extraResources": [
+        {
+          "from": "./c-sharp/bin/Release/net7.0/publish/linux-x64/",
+          "to": "./dotnet/"
+        }
       ],
       "extraFiles": [
         {
@@ -466,8 +485,7 @@
           "from": "/usr/lib/x86_64-linux-gnu/libgio-2.0.so.0",
           "to": "usr/lib/libgio-2.0.so.0"
         }
-      ],
-      "category": "Development"
+      ]
     },
     "directories": {
       "app": "release/app",
