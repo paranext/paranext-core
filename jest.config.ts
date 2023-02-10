@@ -23,6 +23,7 @@ const config: Config = {
   transform: {
     '\\.(ts|tsx|js|jsx)$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
   },
+  verbose: true,
 };
 
 export default config;
