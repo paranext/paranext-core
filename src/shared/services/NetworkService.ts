@@ -361,14 +361,16 @@ let unsubscribeServerRequestHandlers: UnsubscriberAsync | undefined;
  * @param request the request to handle
  * @returns promise of response to the request
  */
-const handleLocalRequest: RequestHandler = async <TParam, TReturn>(
+const handleRequestLocal: RequestHandler = async <TParam, TReturn>(
   requestType: string,
   incomingRequest: ComplexRequest<TParam>,
 ): Promise<ComplexResponse<TReturn>> => {
   const registration = requestRegistrations.get(requestType);
 
-  // Result can be undefined if there is an error, so we initialize it here to undefined. But it should always be of type TReturn if there is a success
-  let result: TReturn = undefined as TReturn;
+  // Result should always be defined if success is true (and not defined if success is false), which seems to be the case in this function.
+  // However, for some reason, TypeScript can't seem to tell that result is defined if success is true.
+  // So we will just coerce it to start undefined but pretend it's TReturn.
+  let result: TReturn = undefined as unknown as TReturn;
   let success = false;
   let errorMessage = '';
 
@@ -383,7 +385,7 @@ const handleLocalRequest: RequestHandler = async <TParam, TReturn>(
         try {
           result = await (incomingRequest.contents
             ? (registration.handler as ArgsRequestHandler)(
-                ...(incomingRequest.contents as unknown[]),
+                ...(incomingRequest.contents as unknown as unknown[]),
               )
             : (registration.handler as ArgsRequestHandler)());
           success = true;
@@ -454,7 +456,7 @@ export const initialize = memoizeOne(async (): Promise<void> => {
   if (initialized) return;
 
   // Wait to connect to the server
-  await ConnectionService.connect(handleLocalRequest, routeRequest);
+  await ConnectionService.connect(handleRequestLocal, routeRequest);
 
   // Register server-only request handlers
   if (!isClient()) {

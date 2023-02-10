@@ -179,7 +179,7 @@ app
 const commandHandlers: { [commandName: string]: CommandHandler } = {
   echo: async (message: string) => {
     /* const start = performance.now(); */
-    const result = await papi.commands.sendCommand('addThree', 1, 4, 9);
+    /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
     /* console.log(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */

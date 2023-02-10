@@ -17,14 +17,14 @@ export default (promiseFactoryCallback: () => Promise<string | undefined>) => {
         // If there are no styles, we don't need to do anything
         if (!style) return;
 
-        const start = performance.now();
+        /* const start = performance.now(); */
 
         // Add styles to document
         styleElement = document.createElement('style');
         styleElement.appendChild(document.createTextNode(style));
         document.head.appendChild(styleElement);
 
-        const end = performance.now();
+        /* const end = performance.now(); */
         /* performanceLog(
           {
             name: `useStyle`,
@@ -38,12 +38,12 @@ export default (promiseFactoryCallback: () => Promise<string | undefined>) => {
     return () => {
       // If the style was added, remove it
       if (styleElement) {
-        const start = performance.now();
+        /* const start = performance.now(); */
 
         // Remove styles
         document.head.removeChild(styleElement);
 
-        const end = performance.now();
+        /* const end = performance.now(); */
         /* performanceLog(
           {
             name: `useStyle`,
