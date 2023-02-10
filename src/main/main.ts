@@ -127,176 +127,6 @@ app.on('window-all-closed', () => {
 
 // #endregion
 
-// #region EDGE SETUP
-
-const namespace = 'EdgeLibrary';
-
-/** OS name for C# project build folder */
-let buildFolderOS: string;
-switch (process.platform) {
-  case 'win32':
-    buildFolderOS = 'win';
-    break;
-  case 'darwin':
-    buildFolderOS = 'osx';
-    break;
-  case 'linux':
-    buildFolderOS = 'linux';
-    break;
-  default:
-    buildFolderOS = 'win';
-    console.warn(
-      `Edge Setup: Operating System ${process.platform} is apparently not supported. Trying win`,
-    );
-    break;
-}
-/** Architecture name for C# project build folder */
-let buildFolderArch: string;
-if (process.platform === 'darwin' && process.arch.startsWith('arm')) {
-  if (process.arch !== 'arm64')
-    console.warn(
-      `Edge Setup: OS Architecture is ${process.arch}, but we only have x64 and arm64. Trying arm64.`,
-    );
-  buildFolderArch = 'arm64';
-} else {
-  if (process.arch !== 'x64')
-    console.warn(
-      `Edge Setup: Architecture is ${process.arch}, but we only have x64${
-        process.platform === 'darwin' ? ' and arm64' : ''
-      }. Trying x64.`,
-    );
-  buildFolderArch = 'x64';
-}
-
-const baseNetAppPath = path.join(
-  RESOURCES_PATH,
-  `/c-sharp/bin/${
-    app.isPackaged
-      ? `Release/net6.0/publish/${buildFolderOS}-${buildFolderArch}`
-      : 'Debug/net6.0'
-  }`,
-);
-process.env.EDGE_USE_CORECLR = '1';
-process.env.EDGE_APP_ROOT = baseNetAppPath;
-// TODO: try removing when we get production edge working. I don't think this is required
-if (app.isPackaged)
-  process.env.EDGE_BOOTSTRAP_DIR = path.join(
-    RESOURCES_PATH,
-    '/app.asar/node_modules/electron-edge-js/lib/bootstrap/obj/Release/netcoreapp1.1',
-  );
-let edge: typeof import('electron-edge-js');
-const edgePromise = import('electron-edge-js').then((importedEdge) => {
-  edge = importedEdge;
-});
-
-const baseDll = path.join(baseNetAppPath, `${namespace}.dll`);
-
-/** Map of generated and wrapped edge functions to call on invoking edge functions */
-const edgeFuncs = new Map<string, (args?: unknown) => Promise<unknown>>();
-
-/**
- * Give edge error information including C# stack trace if there is one.
- * Note: Edge errors have the following keys: Message,TypeName,Data,InnerException,TargetSite,StackTrace,HelpLink,Source,HResult,message,name
- * TODO: Remove this before we get to production? This is a security violation. Not supposed to give stack traces to users. But maybe it doesn't matter since we're open source
- * @param e edge error about which to get information
- * @returns error information string
- */
-const getEdgeErrorInfo = (e: Error & { StackTrace?: string }): string =>
-  `${e.toString()}${e.StackTrace ? ` Stack Trace: ${e.StackTrace}.` : e}`;
-
-/**
- * Creates an edge function that asynchronously calls C# and returns a promise
- * @param ns namespace for edge function
- * @param className class name for edge function
- * @param method method name for edge function
- * @returns promise that resolves with the results of the edge function call and rejects on exceptions
- */
-async function createEdgeFunc<TParam, TReturn>(
-  ns: string,
-  className: string,
-  method: string,
-) {
-  try {
-    // Wait for the edge dynamic import
-    await edgePromise;
-    // Load up an edge function with the specs provided
-    const edgeFunc = edge.func({
-      assemblyFile: baseDll,
-      typeName: `${ns}.${className}`,
-      methodName: method,
-    });
-    // Wrap the edge function in a promise function
-    return (args: TParam) =>
-      new Promise<TReturn>((resolve, reject) => {
-        try {
-          edgeFunc(args, (error: Error, result: unknown) => {
-            if (error) {
-              console.error(
-                'Error in callback! Under what conditions does this occur?',
-                error,
-              );
-              reject(new Error(getEdgeErrorInfo(error)));
-            }
-            resolve(result as TReturn);
-          });
-        } catch (error) {
-          // Exceptions thrown in the C# code are caught here
-          reject(
-            new Error(
-              `edge.func failed to run! ${getEdgeErrorInfo(error as Error)}`,
-            ),
-          );
-        }
-      });
-  } catch (error) {
-    // Exceptions thrown while building the edge.func are caught here
-    throw new Error(
-      `edge.func failed to build! ${getEdgeErrorInfo(error as Error)}`,
-    );
-  }
-}
-
-/**
- * Invokes an edge method
- * @param classMethod Class name and method to call in dot notation like ClassName.Method
- * @param args arguments to pass into the method
- * @returns Promise that resolves with the return from the called method
- */
-async function invoke(classMethod: string, args: unknown) {
-  if (!classMethod) throw Error('No method provided');
-
-  const addressParts = classMethod.split('.', 3);
-  if (addressParts.length < 2)
-    throw Error('Must provide class and method like Class.Method');
-
-  // Namespace has a default, but the classMethod can provide one if desired
-  let ns = namespace;
-  let className = '';
-  let method = '';
-  // Namespace provided
-  if (addressParts.length === 3) {
-    [ns, className, method] = addressParts;
-  } else {
-    [className, method] = addressParts;
-  }
-
-  // fully specified namespace, class, and method
-  const fullClassMethod = `${ns}.${className}.${method}`;
-
-  // See if we can find an existing edgefunc for this Namespace.Class.Method
-  let edgeFunc = edgeFuncs.get(fullClassMethod);
-
-  if (!edgeFunc) {
-    // Didn't find an edgeFunc, so create one
-    edgeFunc = await createEdgeFunc(ns, className, method);
-    edgeFuncs.set(fullClassMethod, edgeFunc);
-  }
-
-  return edgeFunc(args);
-}
-
-// #endregion
-
 // #region IPC HANDLING SETUP
 
 /** Map from ipc channel to handler function */
@@ -308,24 +138,8 @@ const ipcHandlers: {
     ...args: any[]
   ) => Promise<unknown> | unknown;
 } = {
-  'electronAPI.edge.invoke': (_event, classMethod: string, args: unknown) =>
-    invoke(classMethod, args),
   'electronAPI.env.getVar': (_event, name: string) => process.env[name],
   'electronAPI.env.test': (_event) => 'From main.ts: test',
-  'electronAPI.client.getConnectorInfo': (event) =>
-    ({ clientId: event.sender.id } as NetworkConnectorInfo),
-  /** Actions to perform when the client is finished connecting */
-  'electronAPI.client.notifyClientConnected': (
-    event,
-    connectorInfo: NetworkConnectorInfo,
-  ) => {
-    if (event.sender.id !== connectorInfo.clientId) {
-      throw new Error(
-        'connectorInfo.clientId does not match id assigned by main process',
-      );
-    }
-    console.log(`Client finished connecting: ${connectorInfo.clientId}`);
-  },
 };
 
 app
@@ -357,6 +171,9 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return message;
+  },
+  throwError: async (message: string) => {
+    throw new Error(`Test Error thrown in throwError command: ${message}`);
   },
 };
 

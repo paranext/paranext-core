@@ -4,14 +4,11 @@ import * as NetworkService from '@shared/services/NetworkService';
 import icon from '@assets/icon.png';
 import './App.css';
 import papi from '@shared/services/papi';
+import { getErrorMessage } from '@shared/util/Util';
 import usePromise from './hooks/usePromise';
 
 const getVar: (envVar: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.getVar');
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const invoke: (classMethod: string, args: unknown) => Promise<any> =
-  NetworkService.createRequestFunction('electronAPI.edge.invoke');
 
 const testBase: () => Promise<string> = NetworkService.createRequestFunction(
   'electronAPI.env.test',
@@ -24,13 +21,11 @@ const test = async () => {
   return result;
 };
 
-const echo = async (message: string) => {
-  const result = await papi.commands.sendCommand<[string], string>(
-    'echo',
-    message,
-  );
-  return result;
-};
+const echo = async (message: string) =>
+  papi.commands.sendCommand<[string], string>('echo', message);
+
+const throwError = async (message: string) =>
+  papi.commands.sendCommand<[string], string>('throwError', message);
 
 const executeMany = async <T,>(fn: () => Promise<T>) => {
   const numRequests = 10000;
@@ -71,39 +66,27 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
 };
 
 const Hello = () => {
-  const [edgeReturn, setEdgeReturn] = useState('');
+  const [promiseReturn, setPromiseReturn] = useState('');
 
-  const [EDGE_USE_CORECLR] = usePromise(
-    useCallback(() => getVar('EDGE_USE_CORECLR'), []),
+  const [NODE_ENV] = usePromise(
+    useCallback(() => getVar('NODE_ENV'), []),
     'retrieving',
   );
 
-  const [EDGE_APP_ROOT] = usePromise(
-    useCallback(() => getVar('EDGE_APP_ROOT'), []),
-    'retrieving',
-  );
-
-  const [EDGE_BOOTSTRAP_DIR] = usePromise(
-    useCallback(() => getVar('EDGE_BOOTSTRAP_DIR'), []),
-    'retrieving',
-  );
-
-  const edgeInvoke = useCallback(
-    (name: string) => {
-      return invoke(name, 'Node!')
-        .then((result) => {
-          console.log(result);
-          setEdgeReturn(result);
-          return result;
-        })
-        .catch((e) => {
-          console.error(e);
-          console.error('TEST!');
-          setEdgeReturn(e.message);
-          return undefined;
-        });
+  const runPromise = useCallback(
+    async (asyncFn: () => Promise<unknown>) => {
+      try {
+        const result = await asyncFn();
+        console.log(result);
+        setPromiseReturn(JSON.stringify(result));
+        return result;
+      } catch (e) {
+        console.error(e);
+        setPromiseReturn(`Error: ${getErrorMessage(e)}`);
+        return undefined;
+      }
     },
-    [setEdgeReturn],
+    [setPromiseReturn],
   );
 
   return (
@@ -117,47 +100,9 @@ const Hello = () => {
       <div className="Hello">
         <button
           type="button"
-          onClick={() => edgeInvoke('EdgeMethods.UseDynamicInput')}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => edgeInvoke('EdgeMethods.UseDynamicInput'));
-          }}
-        >
-          Test Edge Input
-        </button>
-        <button
-          type="button"
-          onClick={() => edgeInvoke('EdgeMethods.ThrowException')}
-        >
-          Test Edge Exception
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            test()
-              .then((result) => {
-                console.log(result);
-                setEdgeReturn(result);
-                return undefined;
-              })
-              .catch((e) => {
-                console.error(e);
-                setEdgeReturn(e.message);
-                return undefined;
-              });
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(test);
-          }}
-        >
-          Test
-        </button>
-        <button
-          type="button"
           onClick={async () => {
             const start = performance.now();
-            const result = await echo('Stuff');
+            const result = await runPromise(() => echo('Stuff'));
             console.log(
               `command:echo '${result}' took ${performance.now() - start} ms`,
             );
@@ -169,12 +114,26 @@ const Hello = () => {
         >
           Echo
         </button>
+        <button
+          type="button"
+          onClick={() => runPromise(() => throwError('Test error'))}
+        >
+          Test Edge Exception
+        </button>
+        <button
+          type="button"
+          onClick={() => runPromise(() => test())}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(test);
+          }}
+        >
+          Test
+        </button>
       </div>
       <div className="Hello">
-        <div>EDGE_USE_CORECLR: {EDGE_USE_CORECLR}</div>
-        <div>EDGE_APP_ROOT: {EDGE_APP_ROOT}</div>
-        <div>EDGE_BOOTSTRAP_DIR: {EDGE_BOOTSTRAP_DIR}</div>
-        <div>{edgeReturn}</div>
+        <div>NODE_ENV: {NODE_ENV}</div>
+        <div>{promiseReturn}</div>
       </div>
     </div>
   );

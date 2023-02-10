@@ -310,7 +310,6 @@ export default class ClientNetworkConnector implements INetworkConnector {
     this.sendMessage({
       type: MessageType.ClientConnect,
       senderId: this.connectorInfo.clientId,
-      connectorInfo: this.connectorInfo,
     });
     // In websocket land, we do not receive a response from the server when we notify client connected
     // TODO: change the clientconnected into a request that resolves properly
