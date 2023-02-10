@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "src/__tests__/testDist"
+  },
+  "exclude": ["release/build", "release/app/dist", ".erb/dll"]
+}

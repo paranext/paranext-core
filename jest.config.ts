@@ -21,7 +21,7 @@ const config: Config = {
   },
   testPathIgnorePatterns: ['release/app/dist'],
   transform: {
-    '\\.(ts|tsx|js|jsx)$': 'ts-jest',
+    '\\.(ts|tsx|js|jsx)$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
   },
 };
 
