@@ -7,6 +7,7 @@
 
 import {
   CLIENT_ID_UNASSIGNED,
+  ConnectionStatus,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
@@ -16,10 +17,8 @@ import INetworkConnector from '@shared/services/INetworkConnector';
 import * as NetworkConnectorFactory from '@shared/services/NetworkConnectorFactory';
 import { ComplexResponse } from '@shared/util/PapiUtil';
 
-/** Whether the connection is being set up or has finished connecting (does not return to false when connected is true) */
-let connecting = false;
-/** Whether this service has a connection */
-let connected = false;
+/** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
+let connectionStatus = ConnectionStatus.Disconnected;
 /** The client id for this browser as assigned by the server */
 let clientId = CLIENT_ID_UNASSIGNED;
 /** The next requestId to use for identifying requests */
@@ -86,12 +85,11 @@ export const disconnect = () => {
     networkConnector.disconnect();
     networkConnector = undefined;
   }
-  if (!connected && connectReject)
+  if (connectionStatus !== ConnectionStatus.Connected && connectReject)
     connectReject('Disconnecting - client never finished connecting');
   connectResolve = undefined;
   connectReject = undefined;
-  connecting = false;
-  connected = false;
+  connectionStatus = ConnectionStatus.Disconnected;
 };
 
 /**
@@ -145,7 +143,7 @@ export const connect = (
   if (!networkRequestRouter) throw new Error('Must provide a request router');
 
   // Start connecting
-  connecting = true;
+  connectionStatus = ConnectionStatus.Connecting;
   connectPromise = new Promise<void>((resolve, reject) => {
     connectResolve = resolve;
     connectReject = reject;
@@ -181,7 +179,7 @@ export const connect = (
         clientId = newConnectorInfo.clientId;
         console.log(`Got clientId ${clientId}`);
 
-        if (!connecting) {
+        if (connectionStatus === ConnectionStatus.Disconnected) {
           if (!connectReject)
             throw new Error('connectReject not defined and not connecting.');
           connectReject('No longer connecting');
@@ -204,13 +202,13 @@ export const connect = (
           );
 
         // Server is not able to send us requests until we are finished connecting
-        connected = true;
+        connectionStatus = ConnectionStatus.Connected;
         connectResolve();
 
         // Notify server that we are finished connecting
         networkConnector.notifyClientConnected();
       } catch (e) {
-        connecting = false;
+        connectionStatus = ConnectionStatus.Disconnected;
         const err = `ConnectionService: Connecting and getting clientId failed: ${e}`;
         if (connectReject) connectReject(err);
         throw new Error(err);
@@ -219,7 +217,7 @@ export const connect = (
       return networkConnector;
     })
     .catch((e) => {
-      connecting = false;
+      connectionStatus = ConnectionStatus.Disconnected;
       const err = `ConnectionService: Failed to create NetworkConnection object: ${e}`;
       if (connectReject) connectReject(err);
       throw new Error(err);

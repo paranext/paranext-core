@@ -12,11 +12,7 @@
       "@assets/*": ["../assets/*"],
       "@extension-host/*": ["./extension-host/*"],
       "@main/*": ["./main/*"],
-      "@mainServices/*": ["./main/services/*"],
       "@renderer/*": ["./renderer/*"],
-      "@rendererComponents/*": ["./renderer/components/*"],
-      "@rendererServices/*": ["./renderer/services/*"],
-      "@rendererUtil/*": ["./renderer/util/*"],
       "@shared/*": ["./shared/*"],
       "@node_modules/*": ["../node_modules/*"]
     },
@@ -31,5 +27,5 @@
     "allowJs": true,
     "outDir": ".erb/dll"
   },
-  "exclude": ["src/__tests__", "release/build", "release/app/dist", ".erb/dll"]
+  "exclude": ["test", "release/build", "release/app/dist", ".erb/dll"]
 }

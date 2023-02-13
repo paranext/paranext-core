@@ -1,6 +1,7 @@
 import { CloseEvent, MessageEvent, WebSocket, WebSocketServer } from 'ws';
 import {
   CLIENT_ID_SERVER,
+  ConnectionStatus,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
@@ -14,7 +15,10 @@ import {
   MessageType,
   WebsocketRequest,
   WebsocketResponse,
+  WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
+
+// #region local variables
 
 // TODO: implement request timeout logic
 /** Holds promises for a request */
@@ -34,15 +38,21 @@ type WebSocketClient = {
   connected: boolean;
 };
 
+// #endregion
+
 /**
  * Handles the endpoint and connections from the server to the clients
  */
 export default class ServerNetworkConnector implements INetworkConnector {
+  // #region INetworkConnector members
+
   connectorInfo: NetworkConnectorInfo = { clientId: CLIENT_ID_SERVER };
 
-  connecting = false;
+  connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
 
-  connected = false;
+  // #endregion
+
+  // #region private members
 
   /** The websocket connected to the server */
   private websocketServer?: WebSocketServer;
@@ -88,6 +98,136 @@ export default class ServerNetworkConnector implements INetworkConnector {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private requests = new Map<number, LiveRequest<any>>();
 
+  // #endregion
+
+  // #region INetworkConnector methods
+
+  connect = async (
+    localRequestHandler: InternalRequestHandler,
+    requestRouter: (requestType: string) => number,
+  ) => {
+    // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
+    // We don't need to run this more than once
+    if (this.connectPromise) return this.connectPromise;
+
+    this.connectionStatus = ConnectionStatus.Connecting;
+    this.localRequestHandler = localRequestHandler;
+    this.requestRouter = requestRouter;
+
+    // Set up subscriptions that the service needs to work
+    // Mark the connection fully connected and notify that a client was connected
+    this.unsubscribeHandleClientConnectMessage = this.subscribe(
+      MessageType.ClientConnect,
+      (clientConnect: ClientConnect, clientId) => {
+        // Verify that the client has the correct clientId. Otherwise nothing will work properly
+        if (clientId !== clientConnect.senderId)
+          // TODO: tell the client that they messed up, not throw an exception on the server
+          throw new Error(
+            `WebSocket with clientId ${clientId} tried to finalize connection with incorrect senderId ${clientConnect.senderId}`,
+          );
+        // Client finished connecting!
+        this.getClientSocket(clientId).connected = true;
+        // TODO: Send an event that the client is fully connected
+      },
+    );
+
+    // Listen for responses from the clients and resolve the request promise
+    this.unsubscribeHandleResponseMessage = this.subscribe(
+      MessageType.Response,
+      this.handleResponseMessage,
+    );
+
+    // Listen for requests from the clients and run the request handler
+    this.unsubscribeHandleRequestMessage = this.subscribe(
+      MessageType.Request,
+      this.handleRequestMessage,
+    );
+
+    // Start the websocket server
+    this.websocketServer = new WebSocketServer({ port: WEBSOCKET_PORT });
+    this.websocketServer.on('connection', this.onClientConnect);
+    this.websocketServer.on('close', this.disconnect);
+
+    // Finished setting up server synchronously with this implementation.
+    this.connectionStatus = ConnectionStatus.Connected;
+    this.connectPromise = Promise.resolve(this.connectorInfo);
+
+    return this.connectPromise;
+  };
+
+  // Don't need self here because there's nothing to do. This is just implementing the interface method as a placeholder for now
+  // eslint-disable-next-line class-methods-use-this
+  notifyClientConnected = async () => {
+    // Don't think we need to do anything to tell the client that the server is ready
+    return Promise.resolve();
+  };
+
+  disconnect = () => {
+    this.connectionStatus = ConnectionStatus.Disconnected;
+    this.localRequestHandler = undefined;
+    this.connectPromise = undefined;
+
+    // Disconnect all clients - this should clear clientSockets on its own
+    [...this.clientSockets.values()].forEach((clientSocket) =>
+      this.disconnectClient(clientSocket.websocket),
+    );
+
+    if (this.websocketServer) {
+      this.websocketServer.off('connection', this.onClientConnect);
+      this.websocketServer.off('close', this.disconnect);
+      this.websocketServer.close();
+      this.websocketServer = undefined;
+    }
+
+    if (this.unsubscribeHandleClientConnectMessage)
+      this.unsubscribeHandleClientConnectMessage();
+    if (this.unsubscribeHandleResponseMessage)
+      this.unsubscribeHandleResponseMessage();
+    if (this.unsubscribeHandleRequestMessage)
+      this.unsubscribeHandleRequestMessage();
+  };
+
+  request = async <TParam, TReturn>(
+    requestType: string,
+    request: InternalRequest<TParam>,
+  ) => {
+    // Set up a promise we can resolve later
+    let liveRequest: LiveRequest<TReturn> | undefined;
+    const requestPromise = new Promise<InternalResponse<TReturn>>(
+      (resolve, reject) => {
+        liveRequest = {
+          requestId: request.requestId,
+          resolve,
+          reject,
+        };
+      },
+    );
+
+    if (!liveRequest)
+      throw new Error(
+        `Live request was not created for requestId ${request.requestId}`,
+      );
+
+    // Save the live request to resolve when we get the response
+    this.requests.set(request.requestId, liveRequest);
+
+    // Send the request corresponding to the live request promise
+    this.handleRequestMessage(
+      {
+        type: MessageType.Request,
+        requestType,
+        ...request,
+      },
+      this.connectorInfo.clientId,
+    );
+
+    return requestPromise;
+  };
+
+  // #endregion
+
+  // #region private methods
+
   /** Get the client socket for a certain clientId. Throws if not found */
   private getClientSocket = (clientId: number): WebSocketClient => {
     if (!this.websocketServer)
@@ -120,7 +260,10 @@ export default class ServerNetworkConnector implements INetworkConnector {
   // Add if needed: @param unsafe whether to get the client even if we aren't connected. WARNING: SETTING THIS FLAG MEANS NOT CHECKING FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. There may be no clientId
   private sendMessage = (message: Message, recipientId: number): void => {
     // TODO: add message queueing
-    if (!this.connected || !this.websocketServer)
+    if (
+      this.connectionStatus !== ConnectionStatus.Connected ||
+      !this.websocketServer
+    )
       throw new Error(
         `Trying to send message when not connected! Message ${message}`,
       );
@@ -162,7 +305,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
       );
 
     const callbacks = this.messageSubscriptions.get(data.type);
-    if (callbacks) callbacks.forEach((callback) => callback(data, clientId));
+    callbacks?.forEach((callback) => callback(data, clientId));
   };
 
   /**
@@ -221,7 +364,6 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * Does not consider the client fully connected yet until they respond and tell us they connected with ClientConnect
    */
   private onClientConnect = (websocket: WebSocket) => {
-    console.log(`this:${this}, this.nextClientId: ${this.nextClientId}`);
     const clientId = this.nextClientId;
     this.nextClientId += 1;
 
@@ -232,7 +374,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
     websocket.addEventListener('close', this.onClientDisconnect);
 
     /** This clientSocket's connector info */
-    const connectorInfo = { clientId };
+    const connectorInfo: NetworkConnectorInfo = { clientId };
 
     // Add the client socket to the list
     this.clientSockets.set(clientId, {
@@ -260,65 +402,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
   /** Closes connection and unregisters a client websocket when it has disconnected */
   private disconnectClient = (websocket: WebSocket) => {
     const clientId = this.getClientIdFromSocket(websocket);
-    /* websocket.off('error', console.error);
-    websocket.off('message', this.onMessage);
-    websocket.off('close', this.disconnectClient); */
-    websocket.removeAllListeners();
+    websocket.removeEventListener('error', console.error);
+    websocket.removeEventListener('message', this.onMessage);
+    websocket.removeEventListener('close', this.onClientDisconnect);
     websocket.close();
     this.clientSockets.delete(clientId);
-  };
-
-  connect = async (
-    localRequestHandler: InternalRequestHandler,
-    requestRouter: (requestType: string) => number,
-  ) => {
-    // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
-    // We don't need to run this more than once
-    if (this.connectPromise) return this.connectPromise;
-
-    this.connecting = true;
-    this.localRequestHandler = localRequestHandler;
-    this.requestRouter = requestRouter;
-
-    // Set up subscriptions that the service needs to work
-    // Mark the connection fully connected and notify that a client was connected
-    this.unsubscribeHandleClientConnectMessage = this.subscribe(
-      MessageType.ClientConnect,
-      (clientConnect: ClientConnect, clientId) => {
-        // Verify that the client has the correct clientId. Otherwise nothing will work properly
-        if (clientId !== clientConnect.senderId)
-          // TODO: tell the client that they messed up, not throw an exception on the server
-          throw new Error(
-            `WebSocket with clientId ${clientId} tried to finalize connection with incorrect senderId ${clientConnect.senderId}`,
-          );
-        // Client finished connecting!
-        this.getClientSocket(clientId).connected = true;
-        // TODO: Send an event that the client is fully connected
-      },
-    );
-
-    // Listen for responses from the clients and resolve the request promise
-    this.unsubscribeHandleResponseMessage = this.subscribe(
-      MessageType.Response,
-      this.handleResponseMessage,
-    );
-
-    // Listen for requests from the clients and run the request handler
-    this.unsubscribeHandleRequestMessage = this.subscribe(
-      MessageType.Request,
-      this.handleRequestMessage,
-    );
-
-    // Start the websocket server
-    this.websocketServer = new WebSocketServer({ port: 8876 });
-    this.websocketServer.on('connection', this.onClientConnect);
-    this.websocketServer.on('close', this.disconnect);
-
-    // Finished setting up server synchronously with this implementation.
-    this.connected = true;
-    this.connectPromise = Promise.resolve(this.connectorInfo);
-
-    return this.connectPromise;
   };
 
   /**
@@ -394,73 +482,5 @@ export default class ServerNetworkConnector implements INetworkConnector {
     }
   };
 
-  // Don't need self here because there's nothing to do. This is just implementing the interface method as a placeholder for now
-  // eslint-disable-next-line class-methods-use-this
-  notifyClientConnected = async () => {
-    // Don't think we need to do anything to tell the client that the server is ready
-    return Promise.resolve();
-  };
-
-  disconnect = () => {
-    this.connecting = false;
-    this.connected = false;
-    this.localRequestHandler = undefined;
-    this.connectPromise = undefined;
-
-    // Disconnect all clients - this should clear clientSockets on its own
-    [...this.clientSockets.values()].forEach((clientSocket) =>
-      this.disconnectClient(clientSocket.websocket),
-    );
-
-    if (this.websocketServer) {
-      this.websocketServer.off('connection', this.onClientConnect);
-      this.websocketServer.off('close', this.disconnect);
-      this.websocketServer.close();
-      this.websocketServer = undefined;
-    }
-
-    if (this.unsubscribeHandleClientConnectMessage)
-      this.unsubscribeHandleClientConnectMessage();
-    if (this.unsubscribeHandleResponseMessage)
-      this.unsubscribeHandleResponseMessage();
-    if (this.unsubscribeHandleRequestMessage)
-      this.unsubscribeHandleRequestMessage();
-  };
-
-  request = async <TParam, TReturn>(
-    requestType: string,
-    request: InternalRequest<TParam>,
-  ) => {
-    // Set up a promise we can resolve later
-    let liveRequest: LiveRequest<TReturn> | undefined;
-    const requestPromise = new Promise<InternalResponse<TReturn>>(
-      (resolve, reject) => {
-        liveRequest = {
-          requestId: request.requestId,
-          resolve,
-          reject,
-        };
-      },
-    );
-
-    if (!liveRequest)
-      throw new Error(
-        `Live request was not created for requestId ${request.requestId}`,
-      );
-
-    // Save the live request to resolve when we get the response
-    this.requests.set(request.requestId, liveRequest);
-
-    // Send the request corresponding to the live request promise
-    this.handleRequestMessage(
-      {
-        type: MessageType.Request,
-        requestType,
-        ...request,
-      },
-      this.connectorInfo.clientId,
-    );
-
-    return requestPromise;
-  };
+  // #endregion
 }
