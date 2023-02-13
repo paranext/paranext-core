@@ -9,13 +9,15 @@
     "sourceMap": true,
     "baseUrl": "./src",
     "paths": {
-      "@components/*": ["./renderer/components/*"],
-      "@services/*": ["./renderer/services/*"],
-      "@util/*": ["./renderer/util/*"],
+      "@rendererComponents/*": ["./renderer/components/*"],
+      "@rendererServices/*": ["./renderer/services/*"],
+      "@rendererUtil/*": ["./renderer/util/*"],
+      "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
+      "@main/*": ["./main/*"],
       "@node_modules/*": ["../node_modules/*"],
       "@assets/*": ["../assets/*"],
-      "@mainServices/*": ["./main/services/*"],
+      "@mainServices/*": ["./main/services/*"]
     },
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -28,5 +30,5 @@
     "allowJs": true,
     "outDir": ".erb/dll"
   },
-  "exclude": ["test", "release/build", "release/app/dist", ".erb/dll"]
+  "exclude": ["src/__tests__", "release/build", "release/app/dist", ".erb/dll"]
 }

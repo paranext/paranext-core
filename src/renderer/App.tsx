@@ -1,55 +1,92 @@
 import { useCallback, useState } from 'react';
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
 import * as NetworkService from '@shared/services/NetworkService';
-import icon from '../../assets/icon.png';
+import icon from '@assets/icon.png';
 import './App.css';
-import usePromise from './hooks/usePromise';
+import papi from '@shared/services/papi';
+import { getErrorMessage } from '@shared/util/Util';
+import usePromise from '@renderer/hooks/usePromise';
 
 const getVar: (envVar: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.getVar');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const invoke: (classMethod: string, args: unknown) => Promise<any> =
-  NetworkService.createRequestFunction('electronAPI.edge.invoke');
-
-const test: () => Promise<string> = NetworkService.createRequestFunction(
+const testBase: () => Promise<string> = NetworkService.createRequestFunction(
   'electronAPI.env.test',
 );
 
+const test = async () => {
+  /* const start = performance.now(); */
+  const result = await testBase();
+  /* console.log(`Test took ${performance.now() - start} ms`); */
+  return result;
+};
+
+const echo = async (message: string) =>
+  papi.commands.sendCommand<[string], string>('echo', message);
+
+const throwError = async (message: string) =>
+  papi.commands.sendCommand<[string], string>('throwError', message);
+
+const executeMany = async <T,>(fn: () => Promise<T>) => {
+  const numRequests = 10000;
+  const requests = new Array<Promise<T | void>>(numRequests);
+  const requestTime = new Array<number>(numRequests);
+  const start = performance.now();
+  for (let i = 0; i < numRequests; i++) {
+    requestTime[i] = performance.now();
+    requests[i] = fn()
+      .then((response) => {
+        requestTime[i] = performance.now() - requestTime[i];
+        return response;
+      })
+      .catch((err) => console.error(err));
+  }
+
+  try {
+    const responses = await Promise.all(requests);
+    const finish = performance.now();
+
+    const avgResponseTime =
+      requestTime.reduce((sum, time) => sum + time, 0) / numRequests;
+    const maxTime = requestTime.reduce((max, time) => Math.max(max, time), 0);
+    const minTime = requestTime.reduce(
+      (min, time) => Math.min(min, time),
+      Number.MAX_VALUE,
+    );
+    console.log(
+      `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
+        finish - start
+      }\n\tResponse times:`,
+      requestTime,
+    );
+    console.log(responses[responses.length - 1]);
+  } catch (e) {
+    console.error(e);
+  }
+};
+
 const Hello = () => {
-  const [edgeReturn, setEdgeReturn] = useState('');
+  const [promiseReturn, setPromiseReturn] = useState('');
 
-  const [EDGE_USE_CORECLR] = usePromise(
-    useCallback(() => getVar('EDGE_USE_CORECLR'), []),
+  const [NODE_ENV] = usePromise(
+    useCallback(() => getVar('NODE_ENV'), []),
     'retrieving',
   );
 
-  const [EDGE_APP_ROOT] = usePromise(
-    useCallback(() => getVar('EDGE_APP_ROOT'), []),
-    'retrieving',
-  );
-
-  const [EDGE_BOOTSTRAP_DIR] = usePromise(
-    useCallback(() => getVar('EDGE_BOOTSTRAP_DIR'), []),
-    'retrieving',
-  );
-
-  const edgeInvoke = useCallback(
-    (name: string) => {
-      return invoke(name, 'Node!')
-        .then((result) => {
-          console.log(result);
-          setEdgeReturn(result);
-          return result;
-        })
-        .catch((e) => {
-          console.error(e);
-          console.error('TEST!');
-          setEdgeReturn(e.message);
-          return undefined;
-        });
+  const runPromise = useCallback(
+    async (asyncFn: () => Promise<unknown>) => {
+      try {
+        const result = await asyncFn();
+        console.log(result);
+        setPromiseReturn(JSON.stringify(result));
+        return result;
+      } catch (e) {
+        console.error(e);
+        setPromiseReturn(`Error: ${getErrorMessage(e)}`);
+        return undefined;
+      }
     },
-    [setEdgeReturn],
+    [setPromiseReturn],
   );
 
   return (
@@ -63,124 +100,40 @@ const Hello = () => {
       <div className="Hello">
         <button
           type="button"
-          onClick={() => edgeInvoke('EdgeMethods.UseDynamicInput')}
-          onContextMenu={(e) => {
-            const numRequests = 10000;
-            const requests = new Array<Promise<string>>(numRequests);
-            const requestTime = new Array<number>(numRequests);
+          onClick={async () => {
             const start = performance.now();
-            for (let i = 0; i < numRequests; i++) {
-              requestTime[i] = performance.now();
-              requests[i] = edgeInvoke('EdgeMethods.UseDynamicInput')
-                .then((response) => {
-                  requestTime[i] = performance.now() - requestTime[i];
-                  return response;
-                })
-                .catch((err) => console.error(err));
-            }
+            const result = await runPromise(() => echo('Stuff'));
+            console.log(
+              `command:echo '${result}' took ${performance.now() - start} ms`,
+            );
+          }}
+          onContextMenu={(e) => {
             e.preventDefault();
-
-            Promise.all(requests)
-              .then((responses) => {
-                const finish = performance.now();
-
-                const avgResponseTime =
-                  requestTime.reduce((sum, time) => sum + time, 0) /
-                  numRequests;
-                const maxTime = requestTime.reduce(
-                  (max, time) => Math.max(max, time),
-                  0,
-                );
-                const minTime = requestTime.reduce(
-                  (min, time) => Math.min(min, time),
-                  Number.MAX_VALUE,
-                );
-                console.log(
-                  `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
-                    finish - start
-                  }\n\tResponse times:`,
-                  requestTime,
-                );
-                console.log(responses[responses.length - 1]);
-                return undefined;
-              })
-              .catch((err) => console.error(err));
+            executeMany(() => echo('Stuff'));
           }}
         >
-          Test Edge Input
+          Echo
         </button>
         <button
           type="button"
-          onClick={() => edgeInvoke('EdgeMethods.ThrowException')}
+          onClick={() => runPromise(() => throwError('Test error'))}
         >
           Test Edge Exception
         </button>
         <button
           type="button"
-          onClick={() => {
-            test()
-              .then((result) => {
-                console.log(result);
-                setEdgeReturn(result);
-                return undefined;
-              })
-              .catch((e) => {
-                console.error(e);
-                setEdgeReturn(e.message);
-                return undefined;
-              });
-          }}
+          onClick={() => runPromise(() => test())}
           onContextMenu={(e) => {
-            const numRequests = 10000;
-            const requests = new Array<Promise<string | void>>(numRequests);
-            const requestTime = new Array<number>(numRequests);
-            const start = performance.now();
-            for (let i = 0; i < numRequests; i++) {
-              requestTime[i] = performance.now();
-              requests[i] = test()
-                .then((response) => {
-                  requestTime[i] = performance.now() - requestTime[i];
-                  return response;
-                })
-                .catch((err) => console.error(err));
-            }
             e.preventDefault();
-
-            Promise.all(requests)
-              .then((responses) => {
-                const finish = performance.now();
-
-                const avgResponseTime =
-                  requestTime.reduce((sum, time) => sum + time, 0) /
-                  numRequests;
-                const maxTime = requestTime.reduce(
-                  (max, time) => Math.max(max, time),
-                  0,
-                );
-                const minTime = requestTime.reduce(
-                  (min, time) => Math.min(min, time),
-                  Number.MAX_VALUE,
-                );
-                console.log(
-                  `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
-                    finish - start
-                  }\n\tResponse times:`,
-                  requestTime,
-                );
-                console.log(responses[responses.length - 1]);
-                return undefined;
-              })
-              .catch((err) => console.error(err));
+            executeMany(test);
           }}
         >
           Test
         </button>
       </div>
       <div className="Hello">
-        <div>EDGE_USE_CORECLR: {EDGE_USE_CORECLR}</div>
-        <div>EDGE_APP_ROOT: {EDGE_APP_ROOT}</div>
-        <div>EDGE_BOOTSTRAP_DIR: {EDGE_BOOTSTRAP_DIR}</div>
-        <div>{edgeReturn}</div>
+        <div>NODE_ENV: {NODE_ENV}</div>
+        <div>{promiseReturn}</div>
       </div>
     </div>
   );

@@ -32,7 +32,6 @@ export type InitClient = {
 export type ClientConnect = {
   type: MessageType.ClientConnect;
   senderId: number;
-  connectorInfo: NetworkConnectorInfo;
 };
 
 /** Request to do something and to respond */

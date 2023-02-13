@@ -4,16 +4,16 @@ import {
   InternalRequestHandler,
   InternalResponse,
   NetworkConnectorInfo,
-} from '../../shared/data/InternalConnectionTypes';
-import { Unsubscriber } from '../../shared/util/PapiUtil';
-import INetworkConnector from '../../shared/services/INetworkConnector';
+} from '@shared/data/InternalConnectionTypes';
+import { Unsubscriber } from '@shared/util/PapiUtil';
+import INetworkConnector from '@shared/services/INetworkConnector';
 import {
   InitClient,
   Message,
   MessageType,
   WebsocketRequest,
   WebsocketResponse,
-} from '../../shared/data/NetworkConnectorTypes';
+} from '@shared/data/NetworkConnectorTypes';
 
 // TODO: implement request timeout logic
 /** Holds promises for a request */
@@ -310,7 +310,6 @@ export default class ClientNetworkConnector implements INetworkConnector {
     this.sendMessage({
       type: MessageType.ClientConnect,
       senderId: this.connectorInfo.clientId,
-      connectorInfo: this.connectorInfo,
     });
     // In websocket land, we do not receive a response from the server when we notify client connected
     // TODO: change the clientconnected into a request that resolves properly

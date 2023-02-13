@@ -140,13 +140,6 @@ const configuration: webpack.Configuration = {
     new webpack.DefinePlugin({
       'process.type': '"renderer"',
     }),
-
-    new webpack.IgnorePlugin({
-      checkResource(resource, context) {
-        const isServerOnly = /^\.\/ServerNetworkConnector$/.test(resource);
-        return isServerOnly;
-      },
-    }),
   ],
 };
 

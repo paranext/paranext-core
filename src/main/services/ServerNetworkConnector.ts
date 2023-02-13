@@ -5,16 +5,16 @@ import {
   InternalRequestHandler,
   InternalResponse,
   NetworkConnectorInfo,
-} from '../../shared/data/InternalConnectionTypes';
-import INetworkConnector from '../../shared/services/INetworkConnector';
-import { Unsubscriber } from '../../shared/util/PapiUtil';
+} from '@shared/data/InternalConnectionTypes';
+import INetworkConnector from '@shared/services/INetworkConnector';
+import { Unsubscriber } from '@shared/util/PapiUtil';
 import {
   ClientConnect,
   Message,
   MessageType,
   WebsocketRequest,
   WebsocketResponse,
-} from '../../shared/data/NetworkConnectorTypes';
+} from '@shared/data/NetworkConnectorTypes';
 
 // TODO: implement request timeout logic
 /** Holds promises for a request */
@@ -284,7 +284,13 @@ export default class ServerNetworkConnector implements INetworkConnector {
     // Mark the connection fully connected and notify that a client was connected
     this.unsubscribeHandleClientConnectMessage = this.subscribe(
       MessageType.ClientConnect,
-      (_clientConnect: ClientConnect, clientId) => {
+      (clientConnect: ClientConnect, clientId) => {
+        // Verify that the client has the correct clientId. Otherwise nothing will work properly
+        if (clientId !== clientConnect.senderId)
+          // TODO: tell the client that they messed up, not throw an exception on the server
+          throw new Error(
+            `WebSocket with clientId ${clientId} tried to finalize connection with incorrect senderId ${clientConnect.senderId}`,
+          );
         // Client finished connecting!
         this.getClientSocket(clientId).connected = true;
         // TODO: Send an event that the client is fully connected
@@ -407,9 +413,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
     );
 
     if (this.websocketServer) {
-      /* this.websocketServer.off('connection', this.onClientConnect);
-      this.websocketServer.off('close', this.disconnect); */
-      this.websocketServer.removeAllListeners();
+      this.websocketServer.off('connection', this.onClientConnect);
+      this.websocketServer.off('close', this.disconnect);
       this.websocketServer.close();
       this.websocketServer = undefined;
     }
