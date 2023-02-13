@@ -14,8 +14,8 @@ export const WEBSOCKET_PORT = 8876;
 
 /** Websocket message type that indicates how to handle it */
 export enum MessageType {
-  InitClient = 'initClient',
-  ClientConnect = 'clientConnect',
+  InitClient = 'init-client',
+  ClientConnect = 'client-connect',
   Request = 'request',
   Response = 'response',
 }

@@ -1,3 +1,12 @@
+// Thanks to blubberdiblub at https://stackoverflow.com/a/68141099/217579
+export function newGuid(): string {
+  return '00-0-4-1-000'.replace(/[^-]/g, (s) =>
+    // @ts-expect-error ts(2363) this works fine
+    // eslint-disable-next-line no-bitwise
+    (((Math.random() + ~~s) * 0x10000) >> s).toString(16).padStart(4, '0'),
+  );
+}
+
 // thanks to DRAX at https://stackoverflow.com/a/9436948
 /**
  * Determine whether the object is a string
