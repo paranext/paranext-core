@@ -17,6 +17,7 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
 import { createWebSocket } from './WebSocketFactory';
+import { IWebSocket } from './IWebSocket';
 
 // #region local variables
 
@@ -47,7 +48,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
   // #region private members
 
   /** The websocket connected to the server */
-  private websocket?: WebSocket;
+  private websocket?: IWebSocket;
 
   /** All message subscriptions - arrays of functions that run each time a message with a specific message type comes in */
   private messageSubscriptions = new Map<
@@ -157,6 +158,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
   };
 
   notifyClientConnected = async () => {
+    // Check if this client is reconnecting (such as if the browser refreshed) and tell the server so it can remove all request registrations associated with the old clientId
+
     this.sendMessage({
       type: MessageType.ClientConnect,
       senderId: this.connectorInfo.clientId,

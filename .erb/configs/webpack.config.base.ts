@@ -76,14 +76,20 @@ const configuration: webpack.Configuration = {
               resource.includes('extension-host/');
             break;
           case 'extension-host':
-            // TODO: put stuff that extension-host and renderer share into a different folder and exclude renderer stuff here
+            exclude =
+              resource.startsWith('@main') ||
+              resource.includes('main/') ||
+              resource.startsWith('@renderer') ||
+              resource.includes('renderer/');
             break;
           default: // main
             exclude =
               resource.startsWith('@renderer') ||
               /renderer\//.test(resource) ||
               resource.startsWith('@extension-host') ||
-              resource.includes('extension-host/');
+              resource.includes('extension-host/') ||
+              resource.startsWith('@client') ||
+              resource.includes('client/');
             break;
         }
 
