@@ -1,4 +1,5 @@
 import {
+  ConnectionStatus,
   CONNECTOR_INFO_DISCONNECTED,
   InternalRequest,
   InternalRequestHandler,
@@ -13,7 +14,10 @@ import {
   MessageType,
   WebsocketRequest,
   WebsocketResponse,
+  WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
+
+// #region local variables
 
 // TODO: implement request timeout logic
 /** Holds promises for a request */
@@ -25,15 +29,21 @@ type LiveRequest<TReturn> = {
   reject: (reason?: unknown) => void;
 };
 
+// #endregion
+
 /**
  * Handles the connection from the client to the server
  */
 export default class ClientNetworkConnector implements INetworkConnector {
+  // #region INetworkConnector members
+
   connectorInfo: NetworkConnectorInfo = CONNECTOR_INFO_DISCONNECTED;
 
-  connecting = false;
+  connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
 
-  connected = false;
+  // #endregion
+
+  // #region private members
 
   /** The websocket connected to the server */
   private websocket?: WebSocket;
@@ -73,6 +83,152 @@ export default class ClientNetworkConnector implements INetworkConnector {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private requests = new Map<number, LiveRequest<any>>();
 
+  // #endregion
+
+  // #region INetworkConnector methods
+
+  connect = async (
+    localRequestHandler: InternalRequestHandler,
+    requestRouter: (requestType: string) => number,
+  ) => {
+    // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
+    // We don't need to run this more than once
+    if (this.connectPromise) return this.connectPromise;
+
+    this.connectionStatus = ConnectionStatus.Connecting;
+    this.localRequestHandler = localRequestHandler;
+    this.requestRouter = requestRouter;
+
+    /** Function that resolves the connection promise to be run after receiving a client id */
+    let resolveConnect: (
+      value: NetworkConnectorInfo | PromiseLike<NetworkConnectorInfo>,
+    ) => void;
+    /** Function that rejects the connection promise */
+    let rejectConnect: (reason?: string) => void;
+
+    /** The promise that resolves when the service is finished connecting */
+    this.connectPromise = new Promise<NetworkConnectorInfo>(
+      (resolve, reject) => {
+        resolveConnect = resolve;
+        rejectConnect = reject;
+      },
+    );
+
+    // Set up subscriptions that the service needs to work
+    // Get the client id from the server on new connections
+    this.unsubscribeHandleInitClientMessage = this.subscribe(
+      MessageType.InitClient,
+      ({ connectorInfo: newConnectorInfo }: InitClient) => {
+        this.connectorInfo = newConnectorInfo;
+
+        if (!this.websocket) {
+          rejectConnect('websocket is gone!');
+          return;
+        }
+
+        // Listen for responses from the server and resolve the request promise
+        this.unsubscribeHandleResponseMessage = this.subscribe(
+          MessageType.Response,
+          this.handleResponseMessage,
+        );
+
+        // Listen for requests from the server and run the request handler
+        this.unsubscribeHandleRequestMessage = this.subscribe(
+          MessageType.Request,
+          (requestMessage: WebsocketRequest) =>
+            this.handleRequestMessage(requestMessage, true),
+        );
+
+        // Finished setting up WebSocketService and connecting! Resolve the promise
+        this.connectionStatus = ConnectionStatus.Connected;
+        resolveConnect(this.connectorInfo);
+      },
+    );
+
+    // Connect the websocket
+    this.websocket = new WebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
+
+    // Attach event listeners
+    this.websocket.addEventListener('message', this.onMessage);
+    this.websocket.addEventListener('close', this.disconnect);
+
+    return this.connectPromise;
+  };
+
+  notifyClientConnected = async () => {
+    this.sendMessage({
+      type: MessageType.ClientConnect,
+      senderId: this.connectorInfo.clientId,
+    });
+    // In websocket land, we do not receive a response from the server when we notify client connected
+    // TODO: change the clientconnected into a request that resolves properly
+    return Promise.resolve();
+  };
+
+  disconnect = () => {
+    if (this.connectionStatus !== ConnectionStatus.Connected)
+      throw new Error('Web socket closed without connecting');
+
+    this.connectionStatus = ConnectionStatus.Disconnected;
+    this.localRequestHandler = undefined;
+    this.connectPromise = undefined;
+    this.connectorInfo = CONNECTOR_INFO_DISCONNECTED;
+    if (this.unsubscribeHandleInitClientMessage)
+      this.unsubscribeHandleInitClientMessage();
+    if (this.unsubscribeHandleResponseMessage)
+      this.unsubscribeHandleResponseMessage();
+    if (this.unsubscribeHandleRequestMessage)
+      this.unsubscribeHandleRequestMessage();
+
+    if (this.websocket) {
+      this.websocket.removeEventListener('message', this.onMessage);
+      this.websocket.removeEventListener('close', this.disconnect);
+      this.websocket.close();
+      this.websocket = undefined;
+    }
+  };
+
+  request = async <TParam, TReturn>(
+    requestType: string,
+    request: InternalRequest<TParam>,
+  ): Promise<InternalResponse<TReturn>> => {
+    // Set up a promise we can resolve later
+    let liveRequest: LiveRequest<TReturn> | undefined;
+    const requestPromise = new Promise<InternalResponse<TReturn>>(
+      (resolve, reject) => {
+        liveRequest = {
+          requestId: request.requestId,
+          resolve,
+          reject,
+        };
+      },
+    );
+
+    if (!liveRequest)
+      throw new Error(
+        `Live request was not created for requestId ${request.requestId}`,
+      );
+
+    // Save the live request to resolve when we get the response
+    this.requests.set(request.requestId, liveRequest);
+
+    // Send the request corresponding to the live request promise
+    this.handleRequestMessage(
+      {
+        type: MessageType.Request,
+        requestType,
+        ...request,
+      },
+      false,
+    );
+
+    return requestPromise;
+  };
+
+  // #endregion
+
+  // #region private methods
+
   /**
    * Send a message to the server via websocket. Throws if not connected
    * @param message message to send
@@ -80,7 +236,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
   // Add if needed: @param unsafe whether to get the client even if we aren't connected. WARNING: SETTING THIS FLAG MEANS NOT CHECKING FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. There may be no clientId
   private sendMessage = (message: Message): void => {
     // TODO: add message queueing
-    if (!this.connected || !this.websocket)
+    if (this.connectionStatus !== ConnectionStatus.Connected || !this.websocket)
       throw new Error(
         `Trying to send message when not connected! Message ${message}`,
       );
@@ -167,74 +323,6 @@ export default class ClientNetworkConnector implements INetworkConnector {
     return () => this.unsubscribe(messageType, callback);
   };
 
-  connect = async (
-    localRequestHandler: InternalRequestHandler,
-    requestRouter: (requestType: string) => number,
-  ) => {
-    // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
-    // We don't need to run this more than once
-    if (this.connectPromise) return this.connectPromise;
-
-    this.connecting = true;
-    this.localRequestHandler = localRequestHandler;
-    this.requestRouter = requestRouter;
-
-    /** Function that resolves the connection promise to be run after receiving a client id */
-    let resolveConnect: (
-      value: NetworkConnectorInfo | PromiseLike<NetworkConnectorInfo>,
-    ) => void;
-    /** Function that rejects the connection promise */
-    let rejectConnect: (reason?: string) => void;
-
-    /** The promise that resolves when the service is finished connecting */
-    this.connectPromise = new Promise<NetworkConnectorInfo>(
-      (resolve, reject) => {
-        resolveConnect = resolve;
-        rejectConnect = reject;
-      },
-    );
-
-    // Set up subscriptions that the service needs to work
-    // Get the client id from the server on new connections
-    this.unsubscribeHandleInitClientMessage = this.subscribe(
-      MessageType.InitClient,
-      ({ connectorInfo: newConnectorInfo }: InitClient) => {
-        this.connectorInfo = newConnectorInfo;
-
-        if (!this.websocket) {
-          rejectConnect('websocket is gone!');
-          return;
-        }
-
-        // Listen for responses from the server and resolve the request promise
-        this.unsubscribeHandleResponseMessage = this.subscribe(
-          MessageType.Response,
-          this.handleResponseMessage,
-        );
-
-        // Listen for requests from the server and run the request handler
-        this.unsubscribeHandleRequestMessage = this.subscribe(
-          MessageType.Request,
-          (requestMessage: WebsocketRequest) =>
-            this.handleRequestMessage(requestMessage, true),
-        );
-
-        // Finished setting up WebSocketService and connecting! Resolve the promise
-        this.connected = true;
-        resolveConnect(this.connectorInfo);
-      },
-    );
-
-    // Connect the websocket
-    this.websocket = new WebSocket('ws://localhost:8876');
-
-    // Attach event listeners
-    this.websocket.addEventListener('message', this.onMessage);
-    this.websocket.addEventListener('close', this.disconnect);
-
-    return this.connectPromise;
-  };
-
   /**
    * Function that handles websocket messages of type Response.
    * Resolves the request associated with the received response message
@@ -306,74 +394,5 @@ export default class ClientNetworkConnector implements INetworkConnector {
     }
   };
 
-  notifyClientConnected = async () => {
-    this.sendMessage({
-      type: MessageType.ClientConnect,
-      senderId: this.connectorInfo.clientId,
-    });
-    // In websocket land, we do not receive a response from the server when we notify client connected
-    // TODO: change the clientconnected into a request that resolves properly
-    return Promise.resolve();
-  };
-
-  disconnect = () => {
-    if (!this.connected)
-      throw new Error('Web socket closed without connecting');
-
-    this.connecting = false;
-    this.localRequestHandler = undefined;
-    this.connected = false;
-    this.connectPromise = undefined;
-    this.connectorInfo = CONNECTOR_INFO_DISCONNECTED;
-    if (this.unsubscribeHandleInitClientMessage)
-      this.unsubscribeHandleInitClientMessage();
-    if (this.unsubscribeHandleResponseMessage)
-      this.unsubscribeHandleResponseMessage();
-    if (this.unsubscribeHandleRequestMessage)
-      this.unsubscribeHandleRequestMessage();
-
-    if (this.websocket) {
-      this.websocket.removeEventListener('message', this.onMessage);
-      this.websocket.removeEventListener('close', this.disconnect);
-      this.websocket.close();
-      this.websocket = undefined;
-    }
-  };
-
-  request = async <TParam, TReturn>(
-    requestType: string,
-    request: InternalRequest<TParam>,
-  ): Promise<InternalResponse<TReturn>> => {
-    // Set up a promise we can resolve later
-    let liveRequest: LiveRequest<TReturn> | undefined;
-    const requestPromise = new Promise<InternalResponse<TReturn>>(
-      (resolve, reject) => {
-        liveRequest = {
-          requestId: request.requestId,
-          resolve,
-          reject,
-        };
-      },
-    );
-
-    if (!liveRequest)
-      throw new Error(
-        `Live request was not created for requestId ${request.requestId}`,
-      );
-
-    // Save the live request to resolve when we get the response
-    this.requests.set(request.requestId, liveRequest);
-
-    // Send the request corresponding to the live request promise
-    this.handleRequestMessage(
-      {
-        type: MessageType.Request,
-        requestType,
-        ...request,
-      },
-      false,
-    );
-
-    return requestPromise;
-  };
+  // #endregion
 }

@@ -9,15 +9,11 @@
     "sourceMap": true,
     "baseUrl": "./src",
     "paths": {
-      "@rendererComponents/*": ["./renderer/components/*"],
-      "@rendererServices/*": ["./renderer/services/*"],
-      "@rendererUtil/*": ["./renderer/util/*"],
       "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
       "@main/*": ["./main/*"],
       "@node_modules/*": ["../node_modules/*"],
-      "@assets/*": ["../assets/*"],
-      "@mainServices/*": ["./main/services/*"]
+      "@assets/*": ["../assets/*"]
     },
     "noUnusedLocals": true,
     "noUnusedParameters": true,

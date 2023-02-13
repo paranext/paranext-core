@@ -21,6 +21,16 @@ export type NetworkConnectorInfo = {
   clientId: number;
 };
 
+/** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
+export enum ConnectionStatus {
+  /** This connector is not connected to the network */
+  Disconnected,
+  /** This connector is attempting to connect to the network and retrieve connectorInfo */
+  Connecting,
+  /** This connector has finished setting up its connection - has connectorInfo and such */
+  Connected,
+}
+
 /** Request to do something and to respond */
 export type InternalRequest<TParam = unknown> = {
   senderId: number;

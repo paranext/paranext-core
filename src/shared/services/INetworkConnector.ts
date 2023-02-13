@@ -1,4 +1,5 @@
 import {
+  ConnectionStatus,
   InternalRequestHandler,
   NetworkConnectorInfo,
 } from '@shared/data/InternalConnectionTypes';
@@ -10,10 +11,9 @@ import {
 export default interface INetworkConnector {
   /** Information about the connector. Populated by the server while connecting */
   connectorInfo: NetworkConnectorInfo;
-  /** Whether the connection is being set up or has finished connecting (does not return to false when connected is true) */
-  connecting: boolean;
-  /** Whether this connector has finished setting up its connection - has connectorInfo and such */
-  connected: boolean;
+
+  /** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
+  connectionStatus: ConnectionStatus;
 
   /**
    * Sets up the NetworkConnector by populating connector info, setting up event handlers, and doing one of the following:

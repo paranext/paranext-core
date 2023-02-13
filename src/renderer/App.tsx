@@ -118,7 +118,7 @@ const Hello = () => {
           type="button"
           onClick={() => runPromise(() => throwError('Test error'))}
         >
-          Test Edge Exception
+          Test Exception
         </button>
         <button
           type="button"

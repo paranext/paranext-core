@@ -16,7 +16,7 @@ import {
 import { isClient } from '@shared/util/InternalUtil';
 
 /** Whether this service has finished setting up */
-let initialized = false;
+let isInitialized = false;
 
 /** Registration object for a command. Want an object so we can register multiple commands at once */
 // Any is probably fine because we likely never know or care about the args or return
@@ -127,7 +127,7 @@ export const registerCommandUnsafe = (
 
 /** Sets up the CommunicationService */
 export const initialize = memoizeOne(async (): Promise<void> => {
-  if (initialized) return;
+  if (isInitialized) return;
 
   // TODO: Might be best to make a singleton or something
   await NetworkService.initialize();
@@ -149,13 +149,13 @@ export const initialize = memoizeOne(async (): Promise<void> => {
     await Promise.all(unsubPromises.map(({ promise }) => promise));
 
     // On closing, try to remove command listeners
-    // TODO: should probably do this on the server when the connection closes
+    // TODO: should do this on the server when the connection closes or when the server exists as well
     window.addEventListener('beforeunload', async () => {
       await unsubscribeCommands();
     });
   }
 
-  initialized = true;
+  isInitialized = true;
 
   if (isClient()) {
     const start = performance.now();
@@ -217,7 +217,7 @@ export const registerCommand: (
   handler: CommandHandler,
 ) => UnsubPromiseAsync<void> = createSafeRegisterFn(
   registerCommandUnsafe,
-  initialized,
+  isInitialized,
   initialize,
 );
 
