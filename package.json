@@ -28,6 +28,15 @@
     {
       "name": "Ira J Hopkinson",
       "url": "https://github.com/irahopkinson"
+    },
+    {
+      "name": "Tim Steenwyk",
+      "url": "https://github.com/FoolRunning"
+    },
+    {
+      "name": "TJ Couch",
+      "email": "tj_couch@sil.org",
+      "url": "https://github.com/tjcouch-sil"
     }
   ],
   "main": "./src/main/main.ts",
@@ -38,10 +47,11 @@
     "postinstall": "ts-node .erb/scripts/check-native-dep.js && electron-builder install-app-deps && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
     "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --publish never",
+    "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "prepare": "husky install",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "start": "ts-node ./.erb/scripts/check-port-in-use.js && npm run start:renderer",
-    "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only .",
+    "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only -r tsconfig-paths/register .",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
     "test": "jest"
@@ -61,59 +71,16 @@
     ]
   },
   "browserslist": [],
-  "prettier": {
-    "singleQuote": true,
-    "overrides": [
-      {
-        "files": [
-          ".prettierrc",
-          ".eslintrc"
-        ],
-        "options": {
-          "parser": "json"
-        }
-      }
-    ]
-  },
-  "jest": {
-    "moduleDirectories": [
-      "node_modules",
-      "release/app/node_modules",
-      "src"
-    ],
-    "moduleFileExtensions": [
-      "js",
-      "jsx",
-      "ts",
-      "tsx",
-      "json"
-    ],
-    "moduleNameMapper": {
-      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/.erb/mocks/fileMock.js",
-      "\\.(css|less|sass|scss)$": "identity-obj-proxy"
-    },
-    "setupFiles": [
-      "./.erb/scripts/check-build-exists.ts"
-    ],
-    "testEnvironment": "jsdom",
-    "testEnvironmentOptions": {
-      "url": "http://localhost/"
-    },
-    "testPathIgnorePatterns": [
-      "release/app/dist"
-    ],
-    "transform": {
-      "\\.(ts|tsx|js|jsx)$": "ts-jest"
-    }
-  },
   "dependencies": {
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-updater": "^5.2.3",
     "electron-window-state": "^5.0.3",
+    "memoize-one": "^6.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.4.0"
+    "react-router-dom": "^6.4.0",
+    "ws": "^8.12.0"
   },
   "devDependencies": {
     "@electron/notarize": "^1.2.3",
@@ -130,6 +97,7 @@
     "@types/react-test-renderer": "^18.0.0",
     "@types/terser-webpack-plugin": "^5.0.4",
     "@types/webpack-bundle-analyzer": "^4.4.2",
+    "@types/ws": "^8.5.4",
     "@typescript-eslint/eslint-plugin": "^5.33.1",
     "@typescript-eslint/parser": "^5.33.1",
     "browserslist-config-erb": "^0.0.3",
@@ -140,8 +108,8 @@
     "css-loader": "^6.7.1",
     "css-minimizer-webpack-plugin": "^4.0.0",
     "detect-port": "^1.3.0",
-    "electron": "^20.0.2",
-    "electron-builder": "^23.3.3",
+    "electron": "^22.0.3",
+    "electron-builder": "^23.6.0",
     "electron-devtools-installer": "^3.2.0",
     "electronmon": "^2.0.2",
     "eslint": "^8.22.0",
@@ -168,6 +136,7 @@
     "react-refresh": "^0.14.0",
     "react-test-renderer": "^18.2.0",
     "rimraf": "^3.0.2",
+    "run-script-os": "^1.1.6",
     "sass": "^1.54.4",
     "sass-loader": "^13.0.2",
     "style-loader": "^3.3.1",
@@ -175,6 +144,7 @@
     "ts-jest": "^28.0.8",
     "ts-loader": "^9.3.1",
     "ts-node": "^10.9.1",
+    "tsconfig-paths": "^4.1.2",
     "tsconfig-paths-webpack-plugin": "^4.0.0",
     "typescript": "^4.7.4",
     "url-loader": "^4.1.1",
@@ -515,7 +485,8 @@
   "electronmon": {
     "patterns": [
       "!**/**",
-      "src/main/**"
+      "src/main/**",
+      "src/shared/**"
     ],
     "logLevel": "quiet"
   }

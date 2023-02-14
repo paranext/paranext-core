@@ -8,6 +8,17 @@
     "strict": true,
     "sourceMap": true,
     "baseUrl": "./src",
+    "paths": {
+      "@renderer/*": ["./renderer/*"],
+      "@shared/*": ["./shared/*"],
+      "@main/*": ["./main/*"],
+      "@node_modules/*": ["../node_modules/*"],
+      "@assets/*": ["../assets/*"]
+    },
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "moduleResolution": "node",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,

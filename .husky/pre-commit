@@ -1,4 +1,8 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
-npx lint-staged
+# Thanks to axmrnv for helping to fix the lint-staged output https://github.com/typicode/husky/issues/968#issuecomment-1176848345
+exec >/dev/tty 2>&1
+
+# Can enable quiet mode to show nothing unless it has an error
+npx lint-staged # -q

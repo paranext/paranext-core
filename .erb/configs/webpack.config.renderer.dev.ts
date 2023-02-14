@@ -32,8 +32,8 @@ if (
 ) {
   console.log(
     chalk.black.bgYellow.bold(
-      'The DLL files are missing. Sit back while we build them for you with "npm run build-dll"'
-    )
+      'The DLL files are missing. Sit back while we build them for you with "npm run build-dll"',
+    ),
   );
   execSync('npm run postinstall');
 }
@@ -186,15 +186,14 @@ const configuration: webpack.Configuration = {
         shell: true,
         stdio: 'inherit',
       })
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        .on('close', (code: number) => process.exit(code!))
+        .on('close', (code: number) => process.exit(code))
         .on('error', (spawnError) => console.error(spawnError));
 
       console.log('Starting Main Process...');
       let args = ['run', 'start:main'];
       if (process.env.MAIN_ARGS) {
         args = args.concat(
-          ['--', ...process.env.MAIN_ARGS.matchAll(/"[^"]+"|[^\s"]+/g)].flat()
+          ['--', ...process.env.MAIN_ARGS.matchAll(/"[^"]+"|[^\s"]+/g)].flat(),
         );
       }
       spawn('npm', args, {
@@ -203,8 +202,7 @@ const configuration: webpack.Configuration = {
       })
         .on('close', (code: number) => {
           preloadProcess.kill();
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          process.exit(code!);
+          process.exit(code);
         })
         .on('error', (spawnError) => console.error(spawnError));
       return middlewares;

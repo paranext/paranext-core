@@ -1,6 +1,6 @@
 # paranext-core
 
-Backend webserver/extension host and frontend Electron client for Paranext
+Electron client, extension host, and C# library for Paranext
 
 <div align="center">
   <img src="doc-meta/doc-icon.png" />
@@ -52,6 +52,8 @@ Start the app in the `dev` environment:
 ```bash
 npm start
 ```
+
+After you run `npm start`, you can edit the Electron and frontend files, and they will hot reload. To edit C# files, you must stop the `npm start` process (or only close Paranext), run `npm run build:c-sharp`, and restart `npm start` (or if you only closed Paranext, make a trivial edit to `src/main/main.ts`, and save it to launch Paranext again).
 
 ## Packaging for Production
 

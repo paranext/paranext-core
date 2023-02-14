@@ -7,6 +7,10 @@ import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin';
 import webpackPaths from './webpack.paths';
 import { dependencies as externals } from '../../release/app/package.json';
 
+const isRenderer =
+  process.env.npm_lifecycle_script?.includes('webpack.config.renderer') ??
+  false;
+
 const configuration: webpack.Configuration = {
   externals: [...Object.keys(externals || {})],
 
@@ -52,6 +56,26 @@ const configuration: webpack.Configuration = {
   plugins: [
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'production',
+    }),
+
+    new webpack.IgnorePlugin({
+      checkResource(resource, context) {
+        // Don't include stuff from the main folder or @main... in renderer and renderer folder in main folder
+        const exclude = isRenderer
+          ? resource.startsWith('@main') || resource.includes('main/')
+          : resource.startsWith('@renderer') || /renderer\//.test(resource);
+
+        // Log if a file is excluded just fyi
+        if (!context.includes('node_modules') && exclude)
+          console.log(
+            `${
+              isRenderer ? 'Renderer' : 'Main'
+            }: Resource ${resource}\n\tat context ${context}: ${
+              exclude ? 'excluded' : 'included'
+            }`,
+          );
+        return exclude;
+      },
     }),
   ],
 };

@@ -12,9 +12,14 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import * as NetworkService from '@shared/services/NetworkService';
+import papi from '@shared/services/papi';
+import { CommandHandler } from '@shared/util/PapiUtil';
 import windowStateKeeper from 'electron-window-state';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+
+// #region ELECTRON SETUP
 
 class AppUpdater {
   constructor() {
@@ -24,13 +29,9 @@ class AppUpdater {
   }
 }
 
+// Keep a global reference of the window object. If you don't, the window will
+// be closed automatically when the JavaScript object is garbage collected.
 let mainWindow: BrowserWindow | null = null;
-
-ipcMain.on('ipc-example', async (event, arg) => {
-  const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
-  console.log(msgTemplate(arg));
-  event.reply('ipc-example', msgTemplate('pong'));
-});
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
@@ -44,6 +45,7 @@ if (isDebug) {
   require('electron-debug')();
 }
 
+/** Install extensions into the Chromium renderer process */
 const installExtensions = async () => {
   const installer = require('electron-devtools-installer');
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS;
@@ -52,23 +54,25 @@ const installExtensions = async () => {
   return installer
     .default(
       extensions.map((name) => installer[name]),
-      forceDownload
+      forceDownload,
     )
     .catch(console.log);
 };
 
+/** The path to the app package directory */
+const RESOURCES_PATH = app.isPackaged
+  ? process.resourcesPath
+  : path.join(__dirname, '../../');
+
+const getAssetPath = (...paths: string[]): string => {
+  return path.join(RESOURCES_PATH, 'assets', ...paths);
+};
+
+/** Sets up the electron BrowserWindow renderer process */
 const createWindow = async () => {
   if (isDebug) {
     await installExtensions();
   }
-
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets')
-    : path.join(__dirname, '../../assets');
-
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
 
   // Load the previous state with fallback to defaults
   const mainWindowState = windowStateKeeper({
@@ -126,10 +130,6 @@ const createWindow = async () => {
   new AppUpdater();
 };
 
-/**
- * Add event listeners...
- */
-
 app.on('window-all-closed', () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
@@ -138,9 +138,31 @@ app.on('window-all-closed', () => {
   }
 });
 
+// #endregion
+
+// #region IPC HANDLING SETUP
+
+/** Map from ipc channel to handler function */
+const ipcHandlers: {
+  [ipcHandle: string]: (
+    event: Electron.IpcMainInvokeEvent,
+    // We don't know the exact parameter types since ipc handlers can be anything
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...args: any[]
+  ) => Promise<unknown> | unknown;
+} = {
+  'electronAPI.env.getVar': (_event, name: string) => process.env[name],
+  'electronAPI.env.test': (_event) => 'From main.ts: test',
+};
+
 app
   .whenReady()
   .then(() => {
+    // Set up ipc handlers
+    Object.keys(ipcHandlers).forEach((ipcHandle) =>
+      ipcMain.handle(ipcHandle, ipcHandlers[ipcHandle]),
+    );
+
     createWindow();
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
@@ -149,3 +171,39 @@ app
     });
   })
   .catch(console.log);
+
+// #endregion
+
+// #region Services setup
+
+const commandHandlers: { [commandName: string]: CommandHandler } = {
+  echo: async (message: string) => {
+    /* const start = performance.now(); */
+    /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
+    /* console.log(
+      `addThree(...) = ${result} took ${performance.now() - start} ms`,
+    ); */
+    return message;
+  },
+  throwError: async (message: string) => {
+    throw new Error(`Test Error thrown in throwError command: ${message}`);
+  },
+};
+
+NetworkService.initialize()
+  .then(() => {
+    // Set up test handlers
+    Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
+      NetworkService.registerRequestHandler(
+        ipcHandle,
+        async (...args: unknown[]) =>
+          handler({} as Electron.IpcMainInvokeEvent, ...args),
+      );
+    });
+    Object.entries(commandHandlers).forEach(([commandName, handler]) => {
+      papi.commands.registerCommand(commandName, handler);
+    });
+  })
+  .catch((e) => console.error(e));
+
+// #endregion
