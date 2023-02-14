@@ -9,7 +9,8 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start"],
       "env": {
-        "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223"
+        "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
+        "IN_VSCODE": "true"
       },
       "autoAttachChildProcesses": true
     },

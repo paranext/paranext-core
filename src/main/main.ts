@@ -14,7 +14,7 @@ import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
 import windowStateKeeper from 'electron-window-state';
-import { fork } from 'child_process';
+import { fork, spawn } from 'child_process';
 import { ProcessType } from '@shared/globalThis';
 import polyfillLocalStorage from '@node/polyfill/LocalStorage';
 import MenuBuilder from './menu';
@@ -235,25 +235,47 @@ console.log(localStorage.getItem('stuff'));
 
 // #region Extension Host
 
-// Fork a new process for the extension host
-const extensionHost = fork(
-  path.join(
-    __dirname,
-    `../extension-host/extension-host.${app.isPackaged ? 'js' : 'ts'}`,
-  ),
-  app.isPackaged ? ['--packaged'] : undefined,
-  {
-    execArgv: app.isPackaged
-      ? []
-      : // Enable TypeScript on the extension host in development. These args match the npm run start:main args passed to electronmon
-        ['-r', 'ts-node/register/transpile-only'],
-  },
-);
+const formatExtensionHostLog = (message: string, tag = '') => {
+  const messageNoEndLine = message.trimEnd();
+  const openTag = `{eh${tag ? ' ' : ''}${tag}}`;
+  const closeTag = `{/eh${tag ? ' ' : ''}${tag}}`;
+  if (messageNoEndLine.includes('\n'))
+    // Multi-line
+    return `${openTag}\n${messageNoEndLine}\n${closeTag}`;
+  return `${openTag} ${messageNoEndLine} ${closeTag}`;
+};
 
-// This does not pass errors to the main process. Not sure what this does
-extensionHost.on('error', (err) =>
-  console.error(`extensionHost.error: ${err.toString()}`),
-);
+// In production, fork a new process for the extension host
+// In development, spawn nodemon to watch the extension-host
+const extensionHost = app.isPackaged
+  ? fork(
+      path.join(__dirname, '../extension-host/extension-host.js'),
+      ['--packaged'],
+      {
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      },
+    )
+  : spawn(
+      process.platform.includes('win') ? 'npm.cmd' : 'npm',
+      ['run', 'start:extension-host'],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+
+if (!extensionHost.stderr || !extensionHost.stdout)
+  console.error(
+    "Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
+  );
+else if (process.env.IN_VSCODE !== 'true') {
+  // When launched from VSCode, don't re-print the console stuff because it somehow shows it already
+  extensionHost.stderr.on('data', (data) =>
+    console.error(formatExtensionHostLog(data.toString(), 'err')),
+  );
+  extensionHost.stdout.on('data', (data) =>
+    console.log(formatExtensionHostLog(data.toString())),
+  );
+}
 
 extensionHost.on('exit', () => console.warn('extensionHost just exited!'));
 

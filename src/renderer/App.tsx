@@ -44,6 +44,12 @@ const addMany = async (...nums: number[]) =>
 const throwError = async (message: string) =>
   papi.commands.sendCommand<[string], string>('throwError', message);
 
+const throwErrorExtensionHost = async (message: string) =>
+  papi.commands.sendCommand<[string], string>(
+    'throwErrorExtensionHost',
+    message,
+  );
+
 const executeMany = async <T,>(fn: () => Promise<T>) => {
   const numRequests = 10000;
   const requests = new Array<Promise<T | void>>(numRequests);
@@ -204,6 +210,14 @@ const Hello = () => {
           onClick={() => runPromise(() => throwError('Test error'))}
         >
           Test Exception
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            runPromise(() => throwErrorExtensionHost('Test error'))
+          }
+        >
+          Test Exception (Extension Host)
         </button>
         <button
           type="button"

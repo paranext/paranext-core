@@ -11,6 +11,7 @@ const polyfillLocalStorage = (isPackaged: boolean) => {
     global.localStorage = new LocalStorage(
       isPackaged
         ? path.join(
+            // TODO: find a better place to put localStorage in production so it's not in %temp%/paranext-core like https://stackoverflow.com/a/26227660
             os.tmpdir(),
             `paranext-core/local-storage/${globalThis.processType}/`,
           )

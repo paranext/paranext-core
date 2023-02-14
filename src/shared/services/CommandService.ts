@@ -3,7 +3,6 @@
  * Exposed on papi
  */
 
-import memoizeOne from 'memoize-one';
 import * as NetworkService from '@shared/services/NetworkService';
 import {
   aggregateUnsubscriberAsyncs,
@@ -17,6 +16,9 @@ import { isClient, isRenderer } from '@shared/util/InternalUtil';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
+
+/** Promise that resolves when this service is finished initializing */
+let initializePromise: Promise<void> | undefined;
 
 /** Registration object for a command. Want an object so we can register multiple commands at once */
 // Any is probably fine because we likely never know or care about the args or return
@@ -125,53 +127,59 @@ export const registerCommandUnsafe = (
   );
 };
 
-/** Sets up the CommunicationService */
-export const initialize = memoizeOne(async (): Promise<void> => {
-  if (isInitialized) return;
+/** Sets up the CommandService. Only runs once and always returns the same promise after that */
+export const initialize = () => {
+  if (initializePromise) return initializePromise;
 
-  // TODO: Might be best to make a singleton or something
-  await NetworkService.initialize();
+  initializePromise = (async (): Promise<void> => {
+    if (isInitialized) return;
 
-  // Set up subscriptions that the service needs to work
+    // TODO: Might be best to make a singleton or something
+    await NetworkService.initialize();
 
-  // Register built-in commands
-  if (isRenderer()) {
-    // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
-    const unsubPromises = Object.entries(rendererCommandFunctions).map(
-      ([commandName, handler]) => registerCommandUnsafe(commandName, handler),
-    );
+    // Set up subscriptions that the service needs to work
 
-    const unsubscribeCommands = aggregateUnsubscriberAsyncs(
-      unsubPromises.map(({ unsubscriber }) => unsubscriber),
-    );
+    // Register built-in commands
+    if (isRenderer()) {
+      // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
+      const unsubPromises = Object.entries(rendererCommandFunctions).map(
+        ([commandName, handler]) => registerCommandUnsafe(commandName, handler),
+      );
 
-    // Wait to successfully register all commands
-    await Promise.all(unsubPromises.map(({ promise }) => promise));
+      const unsubscribeCommands = aggregateUnsubscriberAsyncs(
+        unsubPromises.map(({ unsubscriber }) => unsubscriber),
+      );
 
-    // On closing, try to remove command listeners
-    // TODO: should do this on the server when the connection closes or when the server exists as well
-    if (isRenderer())
-      window.addEventListener('beforeunload', async () => {
-        await unsubscribeCommands();
-      });
-  }
+      // Wait to successfully register all commands
+      await Promise.all(unsubPromises.map(({ promise }) => promise));
 
-  isInitialized = true;
+      // On closing, try to remove command listeners
+      // TODO: should do this on the server when the connection closes or when the server exists as well
+      if (isRenderer())
+        window.addEventListener('beforeunload', async () => {
+          await unsubscribeCommands();
+        });
+    }
 
-  if (isClient()) {
-    const start = performance.now();
-    sendCommandUnsafe('echo', 'Hi server!')
-      .then((response) =>
-        console.log(
-          'command:echo Response!!!',
-          response,
-          'Response time:',
-          performance.now() - start,
-        ),
-      )
-      .catch((e) => console.error(e));
-  }
-});
+    isInitialized = true;
+
+    if (isClient()) {
+      const start = performance.now();
+      sendCommandUnsafe('echo', 'Hi server!')
+        .then((response) =>
+          console.log(
+            'command:echo Response!!!',
+            response,
+            'Response time:',
+            performance.now() - start,
+          ),
+        )
+        .catch((e) => console.error(e));
+    }
+  })();
+
+  return initializePromise;
+};
 
 /**
  * Send a command to the backend.

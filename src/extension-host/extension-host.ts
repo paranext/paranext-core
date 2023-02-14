@@ -24,6 +24,7 @@ console.log('Hello from the extension host!');
 console.log(`Extension host is${isClient() ? '' : ' not'} client`);
 console.log(`Extension host process.type = ${process.type}`);
 console.log(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
+console.warn('Extension host example warning');
 
 // #endregion
 
@@ -36,7 +37,13 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
     /* console.log(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
+    console.log(`Extension host is handling addMany!!`);
     return nums.reduce((acc, current) => acc + current, 0);
+  },
+  throwErrorExtensionHost: async (message: string) => {
+    throw new Error(
+      `Test Error thrown in throwErrorExtensionHost command: ${message}`,
+    );
   },
 };
 
@@ -53,7 +60,3 @@ NetworkService.initialize()
   .catch((e) => console.error(e));
 
 // #endregion
-
-process.on('message', () =>
-  console.log('This is just here so this file stays running'),
-);

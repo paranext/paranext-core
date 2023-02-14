@@ -3,7 +3,6 @@
  * Likely shouldn't need/want to expose on papi
  */
 
-import memoizeOne from 'memoize-one';
 import {
   CLIENT_ID_SERVER,
   RequestHandler,
@@ -23,6 +22,10 @@ import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
+
+/** Promise that resolves when this service is finished initializing */
+let initializePromise: Promise<void> | undefined;
+
 /** Map of requestType to registered handler for that request or (on server) information about which connection to send the request */
 const requestRegistrations = new Map<string, RequestRegistration>();
 
@@ -484,42 +487,49 @@ const routeRequest = (requestType: string): number => {
 };
 
 /** Sets up the NetworkService. Runs only once */
-export const initialize = memoizeOne(async (): Promise<void> => {
-  if (isInitialized) return;
+export const initialize = () => {
+  if (initializePromise) return initializePromise;
 
-  // Wait to connect to the server
-  await ConnectionService.connect(
-    handleRequestLocal,
-    routeRequest,
-    handleClientDisconnect,
-  );
+  initializePromise = (async (): Promise<void> => {
+    if (isInitialized) return;
 
-  // Register server-only request handlers
-  if (isServer()) {
-    const registrationUnsubAndPromises = Object.entries(
-      serverRequestHandlers,
-    ).map(([requestType, handler]) =>
-      registerRequestHandlerUnsafe(requestType, handler),
+    // Wait to connect to the server
+    await ConnectionService.connect(
+      handleRequestLocal,
+      routeRequest,
+      handleClientDisconnect,
     );
-    unsubscribeServerRequestHandlers = aggregateUnsubscriberAsyncs(
-      registrationUnsubAndPromises.map(({ unsubscriber }) => unsubscriber),
-    );
-    // Wait to successfully register all requests
-    await Promise.all(
-      registrationUnsubAndPromises.map(({ promise }) => promise),
-    );
-  }
 
-  // On closing, try to close the connection
-  // TODO: should do this on the server when the connection closes or when the server exists as well
-  if (isRenderer())
-    window.addEventListener('beforeunload', async () => {
-      ConnectionService.disconnect();
-      if (unsubscribeServerRequestHandlers) unsubscribeServerRequestHandlers();
-    });
+    // Register server-only request handlers
+    if (isServer()) {
+      const registrationUnsubAndPromises = Object.entries(
+        serverRequestHandlers,
+      ).map(([requestType, handler]) =>
+        registerRequestHandlerUnsafe(requestType, handler),
+      );
+      unsubscribeServerRequestHandlers = aggregateUnsubscriberAsyncs(
+        registrationUnsubAndPromises.map(({ unsubscriber }) => unsubscriber),
+      );
+      // Wait to successfully register all requests
+      await Promise.all(
+        registrationUnsubAndPromises.map(({ promise }) => promise),
+      );
+    }
 
-  isInitialized = true;
-});
+    // On closing, try to close the connection
+    // TODO: should do this on the server when the connection closes or when the server exists as well
+    if (isRenderer())
+      window.addEventListener('beforeunload', async () => {
+        ConnectionService.disconnect();
+        if (unsubscribeServerRequestHandlers)
+          unsubscribeServerRequestHandlers();
+      });
+
+    isInitialized = true;
+  })();
+
+  return initializePromise;
+};
 
 // #region Public safe functions (call these, not the private unsafe functions above)
 
