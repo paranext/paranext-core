@@ -243,7 +243,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
     if (
       message.type === MessageType.Response &&
-      this.connectorInfo.clientId === message.senderId
+      this.connectorInfo.clientId === message.requesterId
     ) {
       // This message is from us and for us. Handle the message as if we just received it
       this.onMessage(
@@ -329,16 +329,16 @@ export default class ClientNetworkConnector implements INetworkConnector {
    * @param response Response message to resolve
    */
   private handleResponseMessage = (response: WebSocketResponse<unknown>) => {
-    const { senderId, responderId, requestId } = response;
-    if (this.connectorInfo.clientId !== senderId)
+    const { requesterId, senderId, requestId } = response;
+    if (this.connectorInfo.clientId !== requesterId)
       throw new Error(
-        `Received response from responderId ${responderId} with wrong senderId ${senderId}!`,
+        `Received response from responder senderId ${senderId} with wrong requesterId ${requesterId}!`,
       );
 
     const liveRequest = this.requests.get(requestId);
     if (!liveRequest)
       throw new Error(
-        `Received response from responderId ${responderId} for nonexistent requestId ${requestId}`,
+        `Received response from responder senderId ${senderId} for nonexistent requestId ${requestId}`,
       );
 
     // Remove the request from the requests because it is receiving a response

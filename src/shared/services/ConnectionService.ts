@@ -65,12 +65,12 @@ export const request = async <TParam, TReturn>(
 
   if (requestId !== response.requestId)
     throw new Error(
-      `Received response from ${response.responderId} with wrong requestId! requestId = ${requestId}, response.requestId = ${response.requestId}`,
+      `Received response from ${response.senderId} with wrong requestId! requestId = ${requestId}, response.requestId = ${response.requestId}`,
     );
 
-  if (clientId !== response.senderId)
+  if (clientId !== response.requesterId)
     throw new Error(
-      `Received response from ${response.responderId} with wrong senderId ${response.senderId}!`,
+      `Received response from ${response.senderId} with wrong requesterId ${response.requesterId}!`,
     );
 
   return response;
@@ -112,9 +112,9 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
   );
   return {
     ...response,
-    senderId: incomingRequest.senderId,
+    senderId: clientId,
+    requesterId: incomingRequest.senderId,
     requestId: incomingRequest.requestId,
-    responderId: clientId,
   } as InternalResponse<TReturn>;
 };
 

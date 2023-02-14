@@ -294,14 +294,12 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
     // Make sure the client isn't impersonating another client
     // TODO: consider speeding up validation by passing in webSocket client id?
-    const dataSenderId =
-      data.type === MessageType.Response ? data.responderId : data.senderId;
     const clientId = fromSelf
       ? this.connectorInfo.clientId
       : this.getClientIdFromSocket(event.target);
-    if (dataSenderId !== clientId)
+    if (data.senderId !== clientId)
       throw new Error(
-        `Received message from webSocket ${clientId} but did not match indicated message sender id ${dataSenderId}`,
+        `Received message from webSocket ${clientId} but did not match indicated message sender id ${data.senderId}`,
       );
 
     const callbacks = this.messageSubscriptions.get(data.type);
@@ -419,13 +417,13 @@ export default class ServerNetworkConnector implements INetworkConnector {
     response: WebSocketResponse<unknown>,
     responderId: number,
   ) => {
-    const { senderId, requestId } = response;
-    if (this.connectorInfo.clientId === senderId) {
+    const { requesterId, requestId } = response;
+    if (this.connectorInfo.clientId === requesterId) {
       // This response is for us. Resolve the associated request
       const liveRequest = this.requests.get(requestId);
       if (!liveRequest)
         throw new Error(
-          `Received response from responderId ${responderId} for nonexistent requestId ${requestId}`,
+          `Received response from responder senderId ${responderId} for nonexistent requestId ${requestId}`,
         );
 
       // Remove the request from the requests because it is receiving a response
@@ -435,7 +433,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
       liveRequest.resolve(response);
     } else {
       // This response is for someone else. Forward the response on
-      this.sendMessage(response, senderId);
+      this.sendMessage(response, requesterId);
     }
   };
 
@@ -443,11 +441,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * Function that handles incoming webSocket messages and locally sent messages of type Request.
    * Handles the request and sends a response if we have a handler or forwards to the appropriate client
    * @param requestMessage request to handle
-   * @param senderId who sent this message
+   * @param requesterId who sent this message
    */
   private handleRequestMessage = async (
     requestMessage: WebSocketRequest<unknown>,
-    senderId: number,
+    requesterId: number,
   ) => {
     if (!this.requestRouter)
       throw new Error(
@@ -474,7 +472,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
           requestType: requestMessage.requestType,
           ...response,
         },
-        senderId,
+        requesterId,
       );
     } else {
       // This request is for someone else. Forward the request on
