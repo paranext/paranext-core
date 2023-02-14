@@ -31,6 +31,9 @@ type LiveRequest<TReturn> = {
   reject: (reason?: unknown) => void;
 };
 
+/** localStorage key to store the current clientGuid */
+const CLIENT_GUID_KEY = 'client-network-connector:clientGuid';
+
 // #endregion
 
 /**
@@ -85,6 +88,9 @@ export default class ClientNetworkConnector implements INetworkConnector {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private requests = new Map<number, LiveRequest<any>>();
 
+  /** Unique Guid associated with this connection. Used to verify certain things with server */
+  private clientGuid: string | undefined;
+
   // #endregion
 
   // #region INetworkConnector methods
@@ -120,8 +126,9 @@ export default class ClientNetworkConnector implements INetworkConnector {
     // Get the client id from the server on new connections
     this.unsubscribeHandleInitClientMessage = this.subscribe(
       MessageType.InitClient,
-      ({ connectorInfo: newConnectorInfo }: InitClient) => {
-        this.connectorInfo = newConnectorInfo;
+      ({ connectorInfo: newConnectorInfo, clientGuid }: InitClient) => {
+        this.connectorInfo = Object.freeze(newConnectorInfo);
+        this.clientGuid = clientGuid;
 
         if (!this.websocket) {
           rejectConnect('websocket is gone!');
@@ -159,13 +166,20 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
   notifyClientConnected = async () => {
     // Check if this client is reconnecting (such as if the browser refreshed) and tell the server so it can remove all request registrations associated with the old clientId
+    const reconnectingClientGuid = localStorage.getItem(CLIENT_GUID_KEY);
 
     this.sendMessage({
       type: MessageType.ClientConnect,
       senderId: this.connectorInfo.clientId,
+      reconnectingClientGuid,
     });
+
+    // Save the new clientGuid so we can check it when reconnecting
+    if (this.clientGuid) localStorage.setItem(CLIENT_GUID_KEY, this.clientGuid);
+    else localStorage.removeItem(CLIENT_GUID_KEY);
+
     // In websocket land, we do not receive a response from the server when we notify client connected
-    // TODO: change the clientconnected into a request that resolves properly
+    // TODO: change the clientconnected into a request that resolves properly. Then we can also know if we reconnected, I suppose
     return Promise.resolve();
   };
 

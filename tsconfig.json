@@ -29,5 +29,8 @@
     "allowJs": true,
     "outDir": ".erb/dll"
   },
-  "exclude": ["test", "release/build", "release/app/dist", ".erb/dll"]
+  "exclude": ["test", "release/build", "release/app/dist", ".erb/dll"],
+  "ts-node": {
+    "require": ["tsconfig-paths/register"]
+  }
 }

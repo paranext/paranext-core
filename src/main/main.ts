@@ -246,12 +246,7 @@ const extensionHost = fork(
     execArgv: app.isPackaged
       ? []
       : // Enable TypeScript on the extension host in development. These args match the npm run start:main args passed to electronmon
-        [
-          '-r',
-          'ts-node/register/transpile-only',
-          '-r',
-          'tsconfig-paths/register',
-        ],
+        ['-r', 'ts-node/register/transpile-only'],
   },
 );
 

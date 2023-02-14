@@ -345,6 +345,38 @@ const registerRemoteRequestHandler = async (
   });
 };
 
+/**
+ * Remove all requestRegistrations associated with a client.
+ * SERVER-ONLY. Probably should only be run from ServerNetworkConnector.
+ */
+const handleClientDisconnect = (clientId: number) => {
+  // TODO: there will probably be something worth doing when a client gets disconnected in the future. Do that here instead of throwing
+  if (ConnectionService.getClientId() === clientId)
+    throw new Error(
+      `NetworkService cannot disconnect itself! clientId: ${clientId}`,
+    );
+
+  // Collect which registrations are for that clientId
+  const requestTypesToRemove: string[] = [];
+  requestRegistrations.forEach((requestRegistration) => {
+    if (
+      requestRegistration.registrationType === 'remote' &&
+      requestRegistration.clientId === clientId
+    )
+      requestTypesToRemove.push(requestRegistration.requestType);
+  });
+
+  // Remove registrations for this clientId
+  console.log(
+    `Client ${clientId} disconnected! Unregistering ${requestTypesToRemove.join(
+      ', ',
+    )}`,
+  );
+  requestTypesToRemove.forEach((requestType) =>
+    unregisterRemoteRequestHandler(requestType, clientId),
+  );
+};
+
 /** Map of requestTypes to server-side handlers for those requests */
 const serverRequestHandlers = {
   'server:registerRequest': registerRemoteRequestHandler,
@@ -456,7 +488,11 @@ export const initialize = memoizeOne(async (): Promise<void> => {
   if (isInitialized) return;
 
   // Wait to connect to the server
-  await ConnectionService.connect(handleRequestLocal, routeRequest);
+  await ConnectionService.connect(
+    handleRequestLocal,
+    routeRequest,
+    handleClientDisconnect,
+  );
 
   // Register server-only request handlers
   if (isServer()) {

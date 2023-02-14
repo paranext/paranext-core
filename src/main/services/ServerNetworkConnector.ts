@@ -11,12 +11,14 @@ import INetworkConnector from '@shared/services/INetworkConnector';
 import { Unsubscriber } from '@shared/util/PapiUtil';
 import {
   ClientConnect,
+  InitClient,
   Message,
   MessageType,
   WebsocketRequest,
   WebsocketResponse,
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
+import { newGuid } from '@shared/util/Util';
 
 // #region local variables
 
@@ -31,9 +33,8 @@ type LiveRequest<TReturn> = {
 };
 
 /** A WebSocket client and information about its connection */
-type WebSocketClient = {
+type WebSocketClient = Omit<InitClient, 'type' | 'senderId'> & {
   websocket: WebSocket;
-  connectorInfo: NetworkConnectorInfo;
   /** Whether the client has responded to initClient and told us it is ready to receive messages */
   connected: boolean;
 };
@@ -93,6 +94,12 @@ export default class ServerNetworkConnector implements INetworkConnector {
    */
   private requestRouter?: (requestType: string) => number;
 
+  /**
+   * Function to call when a client disconnects.
+   * Removes request handlers associated with the specified client
+   */
+  private localClientDisconnectHandler?: (clientId: number) => void;
+
   /** All requests that are waiting for a response */
   // Disabled no-explicit-any because assigning a request with generic type to LiveRequest<unknown> gave error
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,6 +112,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
   connect = async (
     localRequestHandler: InternalRequestHandler,
     requestRouter: (requestType: string) => number,
+    localClientDisconnectHandler: (clientId: number) => void,
   ) => {
     // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
     // We don't need to run this more than once
@@ -113,22 +121,13 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.connectionStatus = ConnectionStatus.Connecting;
     this.localRequestHandler = localRequestHandler;
     this.requestRouter = requestRouter;
+    this.localClientDisconnectHandler = localClientDisconnectHandler;
 
     // Set up subscriptions that the service needs to work
     // Mark the connection fully connected and notify that a client was connected
     this.unsubscribeHandleClientConnectMessage = this.subscribe(
       MessageType.ClientConnect,
-      (clientConnect: ClientConnect, clientId) => {
-        // Verify that the client has the correct clientId. Otherwise nothing will work properly
-        if (clientId !== clientConnect.senderId)
-          // TODO: tell the client that they messed up, not throw an exception on the server
-          throw new Error(
-            `WebSocket with clientId ${clientId} tried to finalize connection with incorrect senderId ${clientConnect.senderId}`,
-          );
-        // Client finished connecting!
-        this.getClientSocket(clientId).connected = true;
-        // TODO: Send an event that the client is fully connected
-      },
+      this.handleClientConnectMessage,
     );
 
     // Listen for responses from the clients and resolve the request promise
@@ -165,6 +164,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
   disconnect = () => {
     this.connectionStatus = ConnectionStatus.Disconnected;
     this.localRequestHandler = undefined;
+    this.requestRouter = undefined;
+    this.localClientDisconnectHandler = undefined;
     this.connectPromise = undefined;
 
     // Disconnect all clients - this should clear clientSockets on its own
@@ -241,6 +242,25 @@ export default class ServerNetworkConnector implements INetworkConnector {
       );
 
     return clientSocket;
+  };
+
+  /** Attempts to get the client socket for a certain clientGuid. Returns undefined if not found.
+   * This does not throw because it will likely be very common that we do not have a clientId for a certain clientGuid
+   * as connecting clients will often supply old clientGuids.
+   */
+  private getClientSocketFromGuid = (
+    clientGuid: string | undefined | null,
+  ): WebSocketClient | undefined => {
+    if (!this.websocketServer)
+      throw new Error('Trying to get client socket when not connected!');
+    if (!clientGuid) return undefined;
+
+    // Using for...of on iterator here because it is significantly faster (not converting to array first) and cleaner this way in this case
+    // eslint-disable-next-line no-restricted-syntax
+    for (const clientSocket of this.clientSockets.values())
+      if (clientSocket.clientGuid === clientGuid) return clientSocket;
+
+    return undefined;
   };
 
   /** Get the clientId for a certain websocket. Throws if not found */
@@ -375,11 +395,13 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
     /** This clientSocket's connector info */
     const connectorInfo: NetworkConnectorInfo = { clientId };
+    const clientGuid = newGuid();
 
     // Add the client socket to the list
     this.clientSockets.set(clientId, {
       websocket,
       connectorInfo,
+      clientGuid,
       connected: false,
     });
 
@@ -389,6 +411,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
         type: MessageType.InitClient,
         senderId: this.connectorInfo.clientId,
         connectorInfo,
+        clientGuid,
       },
       clientId,
     );
@@ -407,6 +430,45 @@ export default class ServerNetworkConnector implements INetworkConnector {
     websocket.removeEventListener('close', this.onClientDisconnect);
     websocket.close();
     this.clientSockets.delete(clientId);
+
+    // TODO: Send an event that the client has disconnected and listen for the disconnect in the NetworkService instead of calling the handler here
+    if (!this.localClientDisconnectHandler)
+      throw new Error(
+        `Client disconnected but cannot disconnect it without a localClientDisconnectHandler`,
+      );
+
+    this.localClientDisconnectHandler(clientId);
+  };
+
+  /**
+   * Function that handles weboscket messages of type ClientConnect.
+   * Mark the connection fully connected and notify that a client connected or reconnected
+   * @param clientConnect message from the client about the connection
+   * @param connectorId clientId of the client who is sending this ClientConnect message
+   */
+  private handleClientConnectMessage = (
+    clientConnect: ClientConnect,
+    connectorId: number,
+  ) => {
+    // Verify that the client has the correct clientId. Otherwise nothing will work properly
+    if (connectorId !== clientConnect.senderId)
+      // TODO: tell the client that they messed up, not throw an exception on the server
+      throw new Error(
+        `WebSocket with clientId ${connectorId} tried to finalize connection with incorrect senderId ${clientConnect.senderId}`,
+      );
+
+    // Client finished connecting!
+    this.getClientSocket(connectorId).connected = true;
+
+    // Determine if this client is reconnecting so we can unregister request handlers for the old connection
+    const oldClientSocket = this.getClientSocketFromGuid(
+      clientConnect.reconnectingClientGuid,
+    );
+    if (oldClientSocket) {
+      this.disconnectClient(oldClientSocket.websocket);
+    }
+
+    // TODO: Send an event that the client is fully connected (mention that it is a reconnect?)
   };
 
   /**

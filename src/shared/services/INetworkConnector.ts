@@ -22,11 +22,13 @@ export default interface INetworkConnector {
    * MUST ALSO RUN notifyClientConnected() WHEN PROMISE RESOLVES
    * @param localRequestHandler function that handles requests from the connection. Only called when this connector can handle the request
    * @param requestRouter function that returns a clientId to which to send the request based on the requestType. If requestRouter returns this connector's clientId, localRequestHandler is used
+   * @param localClientDisconnectHandler function that runs when a client is disconnected
    * @returns Promise that resolves with connector info when finished connecting
    */
   connect: (
     localRequestHandler: InternalRequestHandler,
     requestRouter: (requestType: string) => number,
+    localClientDisconnectHandler: (clientId: number) => void,
   ) => Promise<NetworkConnectorInfo>;
   /**
    * Notify the server that this client has received its connectorInfo and is ready to go.
