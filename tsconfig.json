@@ -13,6 +13,7 @@
       "@client/*": ["./client/*"],
       "@extension-host/*": ["./extension-host/*"],
       "@main/*": ["./main/*"],
+      "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
       "@node_modules/*": ["../node_modules/*"]

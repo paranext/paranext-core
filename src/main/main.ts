@@ -16,12 +16,14 @@ import { CommandHandler } from '@shared/util/PapiUtil';
 import windowStateKeeper from 'electron-window-state';
 import { fork } from 'child_process';
 import { ProcessType } from '@shared/globalThis';
+import polyfillLocalStorage from '@node/polyfill/LocalStorage';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 
 // #region globalThis setup
 
 globalThis.processType = ProcessType.Main;
+polyfillLocalStorage(app.isPackaged);
 
 // #endregion
 
@@ -227,6 +229,8 @@ NetworkService.initialize()
   })
   .catch((e) => console.error(e));
 
+console.log(localStorage.getItem('stuff'));
+
 // #endregion
 
 // #region Extension Host
@@ -237,6 +241,7 @@ const extensionHost = fork(
     __dirname,
     `../extension-host/extension-host.${app.isPackaged ? 'js' : 'ts'}`,
   ),
+  app.isPackaged ? ['--packaged'] : undefined,
   {
     execArgv: app.isPackaged
       ? []

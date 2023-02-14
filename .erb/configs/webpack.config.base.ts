@@ -73,7 +73,9 @@ const configuration: webpack.Configuration = {
               resource.startsWith('@main') ||
               resource.includes('main/') ||
               resource.startsWith('@extension-host') ||
-              resource.includes('extension-host/');
+              resource.includes('extension-host/') ||
+              resource.startsWith('@node') ||
+              resource.includes('node/');
             break;
           case 'extension-host':
             exclude =
