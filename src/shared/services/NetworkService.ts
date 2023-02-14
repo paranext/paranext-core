@@ -488,21 +488,6 @@ export const initialize = memoizeOne(async (): Promise<void> => {
 // #region Public safe functions (call these, not the private unsafe functions above)
 
 /**
- * Send a request to the server and resolve a ComplexResponse after receiving a response.
- * Note: Unless you need access to ComplexResponse properties, you probably just want to use request
- * @param requestType the type of request
- * @param contents contents to send in the request
- * @returns promise that resolves with the response message
- */
-/* const requestRaw = async <TParam, TReturn>(
-  requestType: string,
-  contents: TParam,
-): Promise<ComplexResponse<TReturn>> => {
-  await initialize();
-  return requestRawUnsafe<TParam, TReturn>(requestType, contents);
-}; */
-
-/**
  * Send a request on the network and resolve the response contents
  * @param requestType the type of request
  * @param args arguments to send in the request (put in request.contents)

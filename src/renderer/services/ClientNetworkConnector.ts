@@ -269,7 +269,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
       : (JSON.parse(event.data as string) as Message);
 
     const callbacks = this.messageSubscriptions.get(data.type);
-    if (callbacks) callbacks.forEach((callback) => callback(data));
+    callbacks?.forEach((callback) => callback(data));
   };
 
   /**
@@ -352,12 +352,12 @@ export default class ClientNetworkConnector implements INetworkConnector {
    * Function that handles incoming websocket messages and locally sent messages of type Request.
    * Runs the requestHandler provided in connect() and sends a message with the response
    * @param requestMessage request message to handle
-   * @param incoming whether this message is coming from the server and we should definitely handle it locally
+   * @param isIncoming whether this message is coming from the server and we should definitely handle it locally
    *   or if it is a locally sent request and we should send to the server if we don't have a local handler
    */
   private handleRequestMessage = async (
     requestMessage: WebsocketRequest<unknown>,
-    incoming: boolean,
+    isIncoming: boolean,
   ) => {
     if (!this.requestRouter)
       throw new Error(
@@ -368,7 +368,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     // We should handle it here if it came from the server (which means the server thinks we have a handler for it)
     // or if we actually have a handler for it. Otherwise send the request to the server
     if (
-      incoming ||
+      isIncoming ||
       this.connectorInfo.clientId ===
         this.requestRouter(requestMessage.requestType)
     ) {
