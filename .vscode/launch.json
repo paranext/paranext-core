@@ -10,7 +10,8 @@
       "runtimeArgs": ["run", "start"],
       "env": {
         "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223"
-      }
+      },
+      "autoAttachChildProcesses": true
     },
     {
       "name": "Electron: Renderer",
