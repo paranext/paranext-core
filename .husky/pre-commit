@@ -5,3 +5,4 @@ echo "Running Lint check..."
 
 # -q enables quiet mode to show nothing unless it has an error
 npx lint-staged -q
+echo "Lint check finished"

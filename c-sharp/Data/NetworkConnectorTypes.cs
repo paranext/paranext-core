@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using PtxUtils;
 
 namespace Paranext.DataProvider.Data;
@@ -10,10 +9,23 @@ namespace Paranext.DataProvider.Data;
 #region MessageType class
 public sealed class MessageType : EnumType
 {
-    public static readonly Enum<MessageType> InitClient = new("initClient");
-    public static readonly Enum<MessageType> ClientConnect = new("clientConnect");
+    public static readonly Enum<MessageType> InitClient = new("init-client");
+    public static readonly Enum<MessageType> ClientConnect = new("client-connect");
     public static readonly Enum<MessageType> Request = new("request");
     public static readonly Enum<MessageType> Response = new("response");
+
+    private MessageType() { } // Can't create an instance
+}
+#endregion
+
+#region RequestTypes class
+public sealed class RequestTypes : EnumType
+{
+    public static readonly Enum<RequestTypes> RegisterRequest = new("server:registerRequest");
+
+    public static readonly Enum<RequestTypes> AddOne = new("command:addOne");
+
+    private RequestTypes() { } // Can't create an instance
 }
 #endregion
 
@@ -22,12 +34,19 @@ public sealed class NetworkConnectorInfo
 {
     public const int CLIENT_ID_UNSET = -1;
 
-    public NetworkConnectorInfo()
+    /// <summary>
+    /// ONLY FOR DESERIALIZATION
+    /// </summary>
+    private NetworkConnectorInfo()
     {
-        ClientId = CLIENT_ID_UNSET;
     }
 
-    public int ClientId { get; set; }
+    public NetworkConnectorInfo(int clientId)
+    {
+        ClientId = clientId;
+    }
+
+    public int ClientId { get; set; } = CLIENT_ID_UNSET;
 }
 #endregion
 
@@ -37,6 +56,11 @@ public sealed class NetworkConnectorInfo
 /// </summary>
 public abstract class Message
 {
+    protected Message(int senderId)
+    {
+        SenderId = senderId;
+    }
+
     public const int UNKNOWN_SENDER_ID = -1;
 
     public abstract Enum<MessageType> Type { get; }
@@ -51,6 +75,18 @@ public abstract class Message
 /// </summary>
 public sealed class MessageInitClient : Message
 {
+    /// <summary>
+    /// ONLY FOR DESERIALIZATION
+    /// </summary>
+    private MessageInitClient() : base(UNKNOWN_SENDER_ID)
+    {
+    }
+
+    public MessageInitClient(int senderId, NetworkConnectorInfo connectorInfo) : base(senderId)
+    {
+        ConnectorInfo = connectorInfo;
+    }
+
     public override Enum<MessageType> Type => MessageType.InitClient;
 
     public NetworkConnectorInfo? ConnectorInfo { get; set; }
@@ -63,22 +99,102 @@ public sealed class MessageInitClient : Message
 /// </summary>
 public sealed class MessageClientConnect : Message
 {
+    /// <summary>
+    /// ONLY FOR DESERIALIZATION
+    /// </summary>
+    private MessageClientConnect() : base(UNKNOWN_SENDER_ID)
+    {
+    }
+
+    public MessageClientConnect(int senderId) : base(senderId)
+    {
+    }
+
     public override Enum<MessageType> Type => MessageType.ClientConnect;
 }
 #endregion
 
 #region MessageRequest class
 /// <summary>
-/// Base class for message requests
+/// Message requests to/from the server.
 /// </summary>
-/// <typeparam name="TParam">The type of the message contents</typeparam>
-public abstract class MessageRequest<TParam> : Message
+public sealed class MessageRequest : Message
 {
+    /// <summary>
+    /// ONLY FOR DESERIALIZATION
+    /// </summary>
+    private MessageRequest() : base(UNKNOWN_SENDER_ID)
+    {
+    }
+
+    public MessageRequest(int senderId, Enum<RequestTypes> requestType, int requestId, dynamic? contents) : base(senderId)
+    {
+        RequestType = requestType;
+        RequestId = requestId;
+        Contents = contents;
+    }
+
     public override Enum<MessageType> Type => MessageType.Request;
 
-    public abstract string RequestType { get; }
+    public Enum<RequestTypes> RequestType { get; set; }
 
     public int RequestId { get; set; }
-    public TParam? Contents { get; set; }
+
+    public dynamic? Contents { get; set; }
+}
+#endregion
+
+#region MessageResponse class
+/// <summary>
+/// Message responses from/to the server - It is the result of sending/getting a request
+/// </summary>
+public sealed class MessageResponse : Message
+{
+    /// <summary>
+    /// ONLY FOR DESERIALIZATION
+    /// </summary>
+    private MessageResponse() : base(UNKNOWN_SENDER_ID)
+    {
+    }
+
+    /// <summary>
+    /// Response when there was an error - no contents
+    /// </summary>
+    public MessageResponse(int senderId, Enum<RequestTypes> requestType, int requestId,
+        int requesterId, string errorMessage) : base(senderId)
+    {
+        RequestType = requestType;
+        RequestId = requestId;
+        RequesterId = requesterId;
+        Success = false;
+        ErrorMessage = errorMessage;
+    }
+
+    /// <summary>
+    /// Response when successful
+    /// </summary>
+    public MessageResponse(int senderId, Enum<RequestTypes> requestType, int requestId,
+        int requesterId, dynamic? contents) : base(senderId)
+    {
+        RequestType = requestType;
+        RequestId = requestId;
+        RequesterId = requesterId;
+        Success = true;
+        Contents = contents;
+    }
+
+    public sealed override Enum<MessageType> Type => MessageType.Response;
+
+    public Enum<RequestTypes> RequestType { get; set; }
+
+    public bool Success { get; set; }
+
+    public string? ErrorMessage { get; set; }
+
+    public int RequestId { get; set; }
+
+    public int RequesterId { get; set; }
+
+    public dynamic? Contents { get; set; }
 }
 #endregion

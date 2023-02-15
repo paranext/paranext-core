@@ -1,5 +1,9 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Paranext.DataProvider.Data;
+using Paranext.DataProvider.Utils;
 using Paranext.DataProvider.Web;
+using PtxUtils;
 
 namespace Paranext.DataProvider;
 
@@ -20,22 +24,24 @@ public static class Program
         }
         Console.WriteLine("Connected");
 
-        // Handle any messages sent from the server
-        do
+        // Add request handlers
+        bool result = await connection.RegisterRequest(RequestTypes.AddOne, val =>
         {
-            Console.WriteLine("Waiting for a request...");
-            Task<Message?> receiveTask = connection.ReceiveMessage<Message>();
-            Message? message = await receiveTask;
-            if (receiveTask.Exception != null)
-            {
-                Console.Error.WriteLine("Error getting message:\n" + receiveTask.Exception);
-                continue;
-            }
+            if (val is not JsonElement element || element.GetArrayLength() != 1)
+                return new RequestReturn("Unexpected data in request: " + val);
 
-            // TODO: Handle the message
-            Console.WriteLine("Got request: " + message?.ToString());
+            int? intVal = ErrorUtils.IgnoreErrors("Trying to parse data from server", () => element[0].GetInt32());
+            if (intVal == null)
+                return new RequestReturn("Unexpected data in request: " + val);
 
-        } while (connection.Connected);
+            return new RequestReturn(intVal + 1);
+        });
+
+        if (!result)
+            return;
+
+        // Main loop for handling messages from the server
+        await connection.HandleMessages();
 
         Console.WriteLine("Connection closed");
     }
