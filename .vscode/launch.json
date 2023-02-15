@@ -21,6 +21,18 @@
       "port": 9223,
       "webRoot": "${workspaceFolder}",
       "timeout": 15000
+    },
+    {
+      "name": "Extension Host",
+      "type": "node",
+      "request": "launch",
+      "protocol": "inspector",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:extension-host"],
+      "env": {
+        "IN_VSCODE": "true"
+      },
+      "autoAttachChildProcesses": true
     }
   ],
   "compounds": [

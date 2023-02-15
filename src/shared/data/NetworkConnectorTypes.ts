@@ -12,6 +12,11 @@ import {
 /** Port to use for the websocket */
 export const WEBSOCKET_PORT = 8876;
 
+/** Number of attempts a client will make to connect to the WebSocket server before failing */
+export const WEBSOCKET_ATTEMPTS_MAX = 5;
+/** Time in ms for the client to wait before attempting to connect to the WebSocket server again after a failure */
+export const WEBSOCKET_ATTEMPTS_WAIT = 1000;
+
 /** Websocket message type that indicates how to handle it */
 export enum MessageType {
   InitClient = 'init-client',

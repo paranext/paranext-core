@@ -14,8 +14,11 @@ import {
   MessageType,
   WebsocketRequest,
   WebsocketResponse,
+  WEBSOCKET_ATTEMPTS_MAX,
+  WEBSOCKET_ATTEMPTS_WAIT,
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
+import { getErrorMessage } from '@shared/util/Util';
 import { createWebSocket } from './WebSocketFactory';
 import { IWebSocket } from './IWebSocket';
 
@@ -154,12 +157,53 @@ export default class ClientNetworkConnector implements INetworkConnector {
       },
     );
 
-    // Connect the websocket
-    this.websocket = await createWebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
+    // Connect the websocket - try a few times
+    let attempts = 0;
+    const tryConnectWebSocket = async () => {
+      if (attempts < WEBSOCKET_ATTEMPTS_MAX) {
+        attempts += 1;
+        this.websocket = await createWebSocket(
+          `ws://localhost:${WEBSOCKET_PORT}`,
+        );
 
-    // Attach event listeners
-    this.websocket.addEventListener('message', this.onMessage);
-    this.websocket.addEventListener('close', this.disconnect);
+        // Attach event listeners
+        this.websocket.addEventListener('message', this.onMessage);
+        this.websocket.addEventListener('close', this.disconnect);
+
+        // Remove event listeners and try connecting again
+        const retry = (e: Event) => {
+          const err = (e as Event & { error?: Error }).error;
+          console.warn(
+            `ClientNetworkConnector WebSocket did not connect on attempt ${attempts}. Trying again. Error: ${getErrorMessage(
+              err,
+            )}`,
+          );
+          if (this.websocket) {
+            this.websocket.removeEventListener('message', this.onMessage);
+            this.websocket.removeEventListener('close', this.disconnect);
+            this.websocket.removeEventListener('error', retry);
+          }
+          setTimeout(tryConnectWebSocket, WEBSOCKET_ATTEMPTS_WAIT);
+        };
+
+        this.websocket.addEventListener('error', retry);
+
+        // When we have successfully connected, remove retry-related listeners
+        const finishConnecting = () => {
+          if (this.websocket) {
+            this.websocket.removeEventListener('error', retry);
+            this.websocket.removeEventListener('open', finishConnecting);
+          }
+        };
+
+        this.websocket.addEventListener('open', finishConnecting);
+      } else {
+        throw new Error(
+          `ClientNetworkConnector WebSocket was not able to connect after ${attempts} attempts.`,
+        );
+      }
+    };
+    tryConnectWebSocket();
 
     return this.connectPromise;
   };

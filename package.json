@@ -501,7 +501,6 @@
       "src/extension-host/**",
       "src/node/**",
       "src/shared/**"
-    ],
-    "delay": 2000
+    ]
   }
 }
