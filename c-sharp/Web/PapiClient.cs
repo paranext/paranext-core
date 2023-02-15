@@ -9,13 +9,14 @@ using PtxUtils;
 namespace Paranext.DataProvider.Web;
 
 /// <summary>
-/// Class to facilitate communication to the server via the PAPI
+/// Class to facilitate communication to the Paranext server via the PAPI
 /// </summary>
 internal sealed class PapiClient
 {
-    private delegate Task RequestHandler(dynamic requestData, Enum<RequestTypes> requestType, int requestId, int requesterId);
+    #region Delegates/Constants/Member variables
+    private delegate Task RequestHandler(dynamic requestData, Enum<RequestTypes> requestType,
+        int requestId, int requesterId);
 
-    #region Constants/Member variables
     private const int CONNECT_TIMEOUT = 30000;
     private const int RECEIVE_BUFFER_LENGTH = 2048;
     private static readonly Encoding UTF8WithoutBOM = new UTF8Encoding();
@@ -88,6 +89,12 @@ internal sealed class PapiClient
         _webSocket.Dispose();
     }
 
+    /// <summary>
+    /// Registers a request handler with the server
+    /// </summary>
+    /// <param name="requestToHandle">The request to register</param>
+    /// <param name="doStuff">Method that is called when the request is recieved from the server</param>
+    /// <returns>True if the registration was successful</returns>
     public async Task<bool> RegisterRequest(Enum<RequestTypes> requestToHandle, Func<dynamic, RequestReturn> doStuff)
     {
         Console.WriteLine($"Registering request {requestToHandle}...");
@@ -123,6 +130,10 @@ internal sealed class PapiClient
         return true;
     }
 
+    /// <summary>
+    /// Gets and processes messages coming from the server.
+    /// Blocks until the connection is closed
+    /// </summary>
     public async Task HandleMessages()
     {
         // Handle any messages sent from the server
@@ -151,7 +162,9 @@ internal sealed class PapiClient
             }
         } while (Connected);
     }
+    #endregion
 
+    #region Private helper methods
     /// <summary>
     /// Sends the specified message to the server
     /// </summary>
@@ -181,7 +194,7 @@ internal sealed class PapiClient
         ValueWebSocketReceiveResult result;
         do
         {
-            result = await _webSocket.ReceiveAsync(bufferMemory, CancellationToken.None);
+            result = await _webSocket.ReceiveAsync(bufferMemory, CancellationToken.None);  // Wait forever
             if (result.MessageType == WebSocketMessageType.Binary)
                 throw new InvalidOperationException("Can't handle binary data yet.");
 

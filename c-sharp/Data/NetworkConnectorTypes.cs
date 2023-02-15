@@ -66,6 +66,11 @@ public abstract class Message
     public abstract Enum<MessageType> Type { get; }
 
     public int SenderId { get; set; } = UNKNOWN_SENDER_ID;
+
+    public override string ToString()
+    {
+        return $"Type: {Type} from {SenderId}";
+    }
 }
 #endregion
 
@@ -141,6 +146,11 @@ public sealed class MessageRequest : Message
     public int RequestId { get; set; }
 
     public dynamic? Contents { get; set; }
+
+    public override string ToString()
+    {
+        return $"Request: {RequestType} from {SenderId}";
+    }
 }
 #endregion
 
@@ -196,5 +206,10 @@ public sealed class MessageResponse : Message
     public int RequesterId { get; set; }
 
     public dynamic? Contents { get; set; }
+
+    public override string ToString()
+    {
+        return $"Response: {RequestType} from {SenderId} to {RequesterId} ({(Success ? "Successful" : "Failed")})";
+    }
 }
 #endregion

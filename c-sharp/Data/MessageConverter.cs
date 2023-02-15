@@ -44,7 +44,7 @@ internal sealed class MessageConverter : JsonConverter<Message>
 
     #region Private helper methods
     /// <summary>
-    /// Reads the message type from the message given the specified reader
+    /// Reads the string property from the message given the specified reader
     /// </summary>
     private static Enum<TReturn> ReadProperty<TReturn>(ref Utf8JsonReader reader) where TReturn : class, EnumType
     {
