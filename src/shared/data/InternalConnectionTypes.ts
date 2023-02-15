@@ -39,11 +39,11 @@ export type InternalRequest<TParam = unknown> = {
 
 /** Response to a request */
 export type InternalResponse<TReturn = unknown> = {
-  /** The process that originally sent the Request that matches to this response */
+  /** The process that sent this Response */
   senderId: number;
   requestId: number;
-  /** The process that sent this Response */
-  responderId: number;
+  /** The process that originally sent the Request that matches to this response */
+  requesterId: number;
 } & ComplexResponse<TReturn>;
 
 /** Handler for requests from the server */

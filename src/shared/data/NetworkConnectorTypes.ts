@@ -9,7 +9,7 @@ import {
   NetworkConnectorInfo,
 } from '@shared/data/InternalConnectionTypes';
 
-/** Port to use for the websocket */
+/** Port to use for the webSocket */
 export const WEBSOCKET_PORT = 8876;
 
 /** Number of attempts a client will make to connect to the WebSocket server before failing */
@@ -17,7 +17,7 @@ export const WEBSOCKET_ATTEMPTS_MAX = 5;
 /** Time in ms for the client to wait before attempting to connect to the WebSocket server again after a failure */
 export const WEBSOCKET_ATTEMPTS_WAIT = 1000;
 
-/** Websocket message type that indicates how to handle it */
+/** WebSocket message type that indicates how to handle it */
 export enum MessageType {
   InitClient = 'init-client',
   ClientConnect = 'client-connect',
@@ -46,14 +46,14 @@ export type ClientConnect = {
 };
 
 /** Request to do something and to respond */
-export type WebsocketRequest<TParam = unknown> = {
+export type WebSocketRequest<TParam = unknown> = {
   type: MessageType.Request;
   /** What kind of request this is. Certain command, event, etc */
   requestType: string;
 } & InternalRequest<TParam>;
 
 /** Response to a request */
-export type WebsocketResponse<TReturn = unknown> = {
+export type WebSocketResponse<TReturn = unknown> = {
   type: MessageType.Response;
   /** What kind of request this is. Certain command, event, etc */
   requestType: string;
@@ -63,5 +63,5 @@ export type WebsocketResponse<TReturn = unknown> = {
 export type Message =
   | InitClient
   | ClientConnect
-  | WebsocketRequest
-  | WebsocketResponse;
+  | WebSocketRequest
+  | WebSocketResponse;

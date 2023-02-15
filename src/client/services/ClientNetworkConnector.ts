@@ -12,8 +12,8 @@ import {
   InitClient,
   Message,
   MessageType,
-  WebsocketRequest,
-  WebsocketResponse,
+  WebSocketRequest,
+  WebSocketResponse,
   WEBSOCKET_ATTEMPTS_MAX,
   WEBSOCKET_ATTEMPTS_WAIT,
   WEBSOCKET_PORT,
@@ -53,8 +53,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
   // #region private members
 
-  /** The websocket connected to the server */
-  private websocket?: IWebSocket;
+  /** The webSocket connected to the server */
+  private webSocket?: IWebSocket;
 
   /** All message subscriptions - arrays of functions that run each time a message with a specific message type comes in */
   private messageSubscriptions = new Map<
@@ -133,8 +133,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
         this.connectorInfo = Object.freeze(newConnectorInfo);
         this.clientGuid = clientGuid;
 
-        if (!this.websocket) {
-          rejectConnect('websocket is gone!');
+        if (!this.webSocket) {
+          rejectConnect('webSocket is gone!');
           return;
         }
 
@@ -147,7 +147,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
         // Listen for requests from the server and run the request handler
         this.unsubscribeHandleRequestMessage = this.subscribe(
           MessageType.Request,
-          (requestMessage: WebsocketRequest) =>
+          (requestMessage: WebSocketRequest) =>
             this.handleRequestMessage(requestMessage, true),
         );
 
@@ -157,18 +157,18 @@ export default class ClientNetworkConnector implements INetworkConnector {
       },
     );
 
-    // Connect the websocket - try a few times
+    // Connect the webSocket - try a few times
     let attempts = 0;
     const tryConnectWebSocket = async () => {
       if (attempts < WEBSOCKET_ATTEMPTS_MAX) {
         attempts += 1;
-        this.websocket = await createWebSocket(
+        this.webSocket = await createWebSocket(
           `ws://localhost:${WEBSOCKET_PORT}`,
         );
 
         // Attach event listeners
-        this.websocket.addEventListener('message', this.onMessage);
-        this.websocket.addEventListener('close', this.disconnect);
+        this.webSocket.addEventListener('message', this.onMessage);
+        this.webSocket.addEventListener('close', this.disconnect);
 
         // Remove event listeners and try connecting again
         const retry = (e: Event) => {
@@ -178,25 +178,25 @@ export default class ClientNetworkConnector implements INetworkConnector {
               err,
             )}`,
           );
-          if (this.websocket) {
-            this.websocket.removeEventListener('message', this.onMessage);
-            this.websocket.removeEventListener('close', this.disconnect);
-            this.websocket.removeEventListener('error', retry);
+          if (this.webSocket) {
+            this.webSocket.removeEventListener('message', this.onMessage);
+            this.webSocket.removeEventListener('close', this.disconnect);
+            this.webSocket.removeEventListener('error', retry);
           }
           setTimeout(tryConnectWebSocket, WEBSOCKET_ATTEMPTS_WAIT);
         };
 
-        this.websocket.addEventListener('error', retry);
+        this.webSocket.addEventListener('error', retry);
 
         // When we have successfully connected, remove retry-related listeners
         const finishConnecting = () => {
-          if (this.websocket) {
-            this.websocket.removeEventListener('error', retry);
-            this.websocket.removeEventListener('open', finishConnecting);
+          if (this.webSocket) {
+            this.webSocket.removeEventListener('error', retry);
+            this.webSocket.removeEventListener('open', finishConnecting);
           }
         };
 
-        this.websocket.addEventListener('open', finishConnecting);
+        this.webSocket.addEventListener('open', finishConnecting);
       } else {
         throw new Error(
           `ClientNetworkConnector WebSocket was not able to connect after ${attempts} attempts.`,
@@ -222,7 +222,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     if (this.clientGuid) localStorage.setItem(CLIENT_GUID_KEY, this.clientGuid);
     else localStorage.removeItem(CLIENT_GUID_KEY);
 
-    // In websocket land, we do not receive a response from the server when we notify client connected
+    // In webSocket land, we do not receive a response from the server when we notify client connected
     // TODO: change the clientconnected into a request that resolves properly. Then we can also know if we reconnected, I suppose
     return Promise.resolve();
   };
@@ -242,11 +242,11 @@ export default class ClientNetworkConnector implements INetworkConnector {
     if (this.unsubscribeHandleRequestMessage)
       this.unsubscribeHandleRequestMessage();
 
-    if (this.websocket) {
-      this.websocket.removeEventListener('message', this.onMessage);
-      this.websocket.removeEventListener('close', this.disconnect);
-      this.websocket.close();
-      this.websocket = undefined;
+    if (this.webSocket) {
+      this.webSocket.removeEventListener('message', this.onMessage);
+      this.webSocket.removeEventListener('close', this.disconnect);
+      this.webSocket.close();
+      this.webSocket = undefined;
     }
   };
 
@@ -292,20 +292,20 @@ export default class ClientNetworkConnector implements INetworkConnector {
   // #region private methods
 
   /**
-   * Send a message to the server via websocket. Throws if not connected
+   * Send a message to the server via webSocket. Throws if not connected
    * @param message message to send
    */
   // Add if needed: @param unsafe whether to get the client even if we aren't connected. WARNING: SETTING THIS FLAG MEANS NOT CHECKING FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. There may be no clientId
   private sendMessage = (message: Message): void => {
     // TODO: add message queueing
-    if (this.connectionStatus !== ConnectionStatus.Connected || !this.websocket)
+    if (this.connectionStatus !== ConnectionStatus.Connected || !this.webSocket)
       throw new Error(
         `Trying to send message when not connected! Message ${message}`,
       );
 
     if (
       message.type === MessageType.Response &&
-      this.connectorInfo.clientId === message.senderId
+      this.connectorInfo.clientId === message.requesterId
     ) {
       // This message is from us and for us. Handle the message as if we just received it
       this.onMessage(
@@ -316,13 +316,13 @@ export default class ClientNetworkConnector implements INetworkConnector {
       );
     } else {
       // This message is for someone else. Send the message
-      this.websocket.send(JSON.stringify(message));
+      this.webSocket.send(JSON.stringify(message));
     }
   };
 
   /**
-   * Receives and appropriately publishes server websocket messages
-   * @param event websocket message information
+   * Receives and appropriately publishes server webSocket messages
+   * @param event webSocket message information
    * @param fromSelf whether this message is from this connector instead of from someone else
    */
   private onMessage = (event: MessageEvent<string>, fromSelf = false) => {
@@ -331,13 +331,13 @@ export default class ClientNetworkConnector implements INetworkConnector {
       : (JSON.parse(event.data as string) as Message);
 
     const callbacks = this.messageSubscriptions.get(data.type);
-    if (callbacks) callbacks.forEach((callback) => callback(data));
+    callbacks?.forEach((callback) => callback(data));
   };
 
   /**
-   * Unsubscribes a function from running on websocket messages
+   * Unsubscribes a function from running on webSocket messages
    * @param messageType the type of message from which to unsubscribe the function
-   * @param callback function to unsubscribe from being run on websocket messages.
+   * @param callback function to unsubscribe from being run on webSocket messages.
    * @returns true if successfully unsubscribed
    * Likely will never need to be exported from this file. Just use subscribe, which returns a matching unsubscriber function that runs this.
    */
@@ -363,10 +363,10 @@ export default class ClientNetworkConnector implements INetworkConnector {
   };
 
   /**
-   * Subscribes a function to run on websocket messages of a particular type
+   * Subscribes a function to run on webSocket messages of a particular type
    * @param messageType the type of message on which to subscribe the function
-   * @param callback function to run with the contents of the websocket message
-   * @returns unsubscriber function to run to stop calling the passed-in function on websocket messages
+   * @param callback function to run with the contents of the webSocket message
+   * @returns unsubscriber function to run to stop calling the passed-in function on webSocket messages
    */
   private subscribe = (
     messageType: MessageType,
@@ -386,21 +386,21 @@ export default class ClientNetworkConnector implements INetworkConnector {
   };
 
   /**
-   * Function that handles websocket messages of type Response.
+   * Function that handles webSocket messages of type Response.
    * Resolves the request associated with the received response message
    * @param response Response message to resolve
    */
-  private handleResponseMessage = (response: WebsocketResponse<unknown>) => {
-    const { senderId, responderId, requestId } = response;
-    if (this.connectorInfo.clientId !== senderId)
+  private handleResponseMessage = (response: WebSocketResponse<unknown>) => {
+    const { requesterId, senderId, requestId } = response;
+    if (this.connectorInfo.clientId !== requesterId)
       throw new Error(
-        `Received response from responderId ${responderId} with wrong senderId ${senderId}!`,
+        `Received response from responder senderId ${senderId} with wrong requesterId ${requesterId}!`,
       );
 
     const liveRequest = this.requests.get(requestId);
     if (!liveRequest)
       throw new Error(
-        `Received response from responderId ${responderId} for nonexistent requestId ${requestId}`,
+        `Received response from responder senderId ${senderId} for nonexistent requestId ${requestId}`,
       );
 
     // Remove the request from the requests because it is receiving a response
@@ -411,15 +411,15 @@ export default class ClientNetworkConnector implements INetworkConnector {
   };
 
   /**
-   * Function that handles incoming websocket messages and locally sent messages of type Request.
+   * Function that handles incoming webSocket messages and locally sent messages of type Request.
    * Runs the requestHandler provided in connect() and sends a message with the response
    * @param requestMessage request message to handle
-   * @param incoming whether this message is coming from the server and we should definitely handle it locally
+   * @param isIncoming whether this message is coming from the server and we should definitely handle it locally
    *   or if it is a locally sent request and we should send to the server if we don't have a local handler
    */
   private handleRequestMessage = async (
-    requestMessage: WebsocketRequest<unknown>,
-    incoming: boolean,
+    requestMessage: WebSocketRequest<unknown>,
+    isIncoming: boolean,
   ) => {
     if (!this.requestRouter)
       throw new Error(
@@ -430,7 +430,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     // We should handle it here if it came from the server (which means the server thinks we have a handler for it)
     // or if we actually have a handler for it. Otherwise send the request to the server
     if (
-      incoming ||
+      isIncoming ||
       this.connectorInfo.clientId ===
         this.requestRouter(requestMessage.requestType)
     ) {

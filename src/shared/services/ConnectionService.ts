@@ -67,12 +67,12 @@ export const request = async <TParam, TReturn>(
 
   if (requestId !== response.requestId)
     throw new Error(
-      `Received response from ${response.responderId} with wrong requestId! requestId = ${requestId}, response.requestId = ${response.requestId}`,
+      `Received response from ${response.senderId} with wrong requestId! requestId = ${requestId}, response.requestId = ${response.requestId}`,
     );
 
-  if (clientId !== response.senderId)
+  if (clientId !== response.requesterId)
     throw new Error(
-      `Received response from ${response.responderId} with wrong senderId ${response.senderId}!`,
+      `Received response from ${response.senderId} with wrong requesterId ${response.requesterId}!`,
     );
 
   return response;
@@ -115,9 +115,9 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
   );
   return {
     ...response,
-    senderId: incomingRequest.senderId,
+    senderId: clientId,
+    requesterId: incomingRequest.senderId,
     requestId: incomingRequest.requestId,
-    responderId: clientId,
   } as InternalResponse<TReturn>;
 };
 
@@ -128,11 +128,14 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
  * @param networkClientDisconnectHandler function that runs when a client is disconnected
  * @returns Promise that resolves when finished connecting
  */
-export const connect = (
+export const connect = async (
   networkRequestHandler: RequestHandler,
   networkRequestRouter: (requestType: string) => number,
   networkClientDisconnectHandler: (clientId: number) => void,
 ): Promise<void> => {
+  // Do not run anything asynchronous before we create and assign connectPromise below!
+  // We must assign connectPromise immediately so we do not run connect multiple times at once
+
   // We don't need to run this more than once
   if (connectPromise /* connecting || connected */) {
     if (
@@ -162,78 +165,71 @@ export const connect = (
   disconnectClient = networkClientDisconnectHandler;
 
   // Set up subscriptions that the service needs to work
-  // Get the client id from the server on new connections
-  NetworkConnectorFactory.createNetworkConnector()
-    .then(async (nC) => {
-      networkConnector = nC;
 
-      try {
-        if (!requestRouter) throw new Error('requestRouter not defined.');
-        if (!disconnectClient) throw new Error('disconnectClient not defined.');
+  // Create the network connector
+  try {
+    networkConnector = await NetworkConnectorFactory.createNetworkConnector();
+  } catch (e) {
+    connectionStatus = ConnectionStatus.Disconnected;
+    connectPromise = undefined;
+    const err = `ConnectionService: Failed to create NetworkConnector object: ${e}`;
+    if (connectReject) connectReject(err);
+    throw new Error(err);
+  }
 
-        const newConnectorInfo = await networkConnector.connect(
-          handleInternalRequest,
-          requestRouter,
-          disconnectClient,
+  // Set up the connection and get the client id from the server on new connections
+  try {
+    if (!requestRouter) throw new Error('requestRouter not defined.');
+    if (!disconnectClient) throw new Error('disconnectClient not defined.');
+
+    const newConnectorInfo = await networkConnector.connect(
+      handleInternalRequest,
+      requestRouter,
+      disconnectClient,
+    );
+
+    if (clientId !== CLIENT_ID_UNASSIGNED) {
+      if (!connectReject)
+        throw new Error(
+          'connectReject not defined. Not connecting? But we already have a clientId',
         );
+      connectReject(
+        `Received clientId when already assigned! Current clientId: ${clientId}. New clientId: ${newConnectorInfo}`,
+      );
+      return undefined;
+    }
 
-        if (clientId !== CLIENT_ID_UNASSIGNED) {
-          if (!connectReject)
-            throw new Error(
-              'connectReject not defined. Not connecting? But we already have a clientId',
-            );
-          connectReject(
-            `Received clientId when already assigned! Current clientId: ${clientId}. New clientId: ${newConnectorInfo}`,
-          );
-          return undefined;
-        }
+    clientId = newConnectorInfo.clientId;
+    console.log(`Got clientId ${clientId}`);
 
-        clientId = newConnectorInfo.clientId;
-        console.log(`Got clientId ${clientId}`);
+    if (!networkConnector) {
+      if (!connectReject)
+        throw new Error(
+          'connectReject not defined and networkConnector not defined.',
+        );
+      connectReject('networkConnector not defined');
+      return undefined;
+    }
 
-        if (connectionStatus === ConnectionStatus.Disconnected) {
-          if (!connectReject)
-            throw new Error('connectReject not defined and not connecting.');
-          connectReject('No longer connecting');
-          return undefined;
-        }
+    // Finished setting up and connecting! Resolve the promise
+    if (!connectResolve)
+      throw new Error(
+        'connectResolve not defined. Tried to connect but somehow this is undefined',
+      );
 
-        if (!networkConnector) {
-          if (!connectReject)
-            throw new Error(
-              'connectReject not defined and networkConnector not defined.',
-            );
-          connectReject('networkConnector not defined');
-          return undefined;
-        }
+    // Server is not able to send us requests until we are finished connecting
+    connectionStatus = ConnectionStatus.Connected;
+    connectResolve();
 
-        // Finished setting up and connecting! Resolve the promise
-        if (!connectResolve)
-          throw new Error(
-            'connectResolve not defined. Tried to connect but somehow this is undefined',
-          );
-
-        // Server is not able to send us requests until we are finished connecting
-        connectionStatus = ConnectionStatus.Connected;
-        connectResolve();
-
-        // Notify server that we are finished connecting
-        networkConnector.notifyClientConnected();
-      } catch (e) {
-        connectionStatus = ConnectionStatus.Disconnected;
-        const err = `ConnectionService: Connecting and getting clientId failed: ${e}`;
-        if (connectReject) connectReject(err);
-        throw new Error(err);
-      }
-
-      return networkConnector;
-    })
-    .catch((e) => {
-      connectionStatus = ConnectionStatus.Disconnected;
-      const err = `ConnectionService: Failed to create NetworkConnection object: ${e}`;
-      if (connectReject) connectReject(err);
-      throw new Error(err);
-    });
+    // Notify server that we are finished connecting
+    networkConnector.notifyClientConnected();
+  } catch (e) {
+    connectionStatus = ConnectionStatus.Disconnected;
+    connectPromise = undefined;
+    const err = `ConnectionService: Connecting and getting clientId failed: ${e}`;
+    if (connectReject) connectReject(err);
+    throw new Error(err);
+  }
 
   return connectPromise;
 };
