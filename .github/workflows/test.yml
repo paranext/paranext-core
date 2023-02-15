@@ -42,10 +42,9 @@ jobs:
           USE_HARD_LINKS: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run package
           npm run lint
-          npm exec tsc
           npm test
+          npm run package
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session

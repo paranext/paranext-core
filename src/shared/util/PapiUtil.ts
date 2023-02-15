@@ -66,20 +66,20 @@ export const aggregateUnsubscriberAsyncs = (
  * immediately, but it will also throw an exception (we can remove this if we
  * actually run into this case and it seems to work fine). You should wait to call the unsubscriber later
  * @param unsafeRegisterFn function that does some kind of async registration and returns an unsubscriber and a promise that resolves when the registration is finished
- * @param initialized whether the service associated with this safe unsubPromiseAsync function is initialized
+ * @param isInitialized whether the service associated with this safe unsubPromiseAsync function is initialized
  * @param initialize promise that resolves when the service is finished initializing
  * @param backupUnregisterFn a backup unsubscriber function that should attempt to unsubscribe whatever the unsafeRegisterFn is subscribing before unsafeRegisterFn finishes subscribing and resolves. Will be overwritten with the actual unsubscriber once the unsafeRegisterFn promise resolves. See TODO above for more info
  * @returns safe version of an unsafe function that returns an UnsubPromiseAsync (meaning it will wait to register until the service is initialized)
  */
 export const createSafeRegisterFn = <TParam extends Array<unknown>, TReturn>(
   unsafeRegisterFn: (...args: TParam) => UnsubPromiseAsync<TReturn>,
-  initialized: boolean,
+  isInitialized: boolean,
   initialize: () => Promise<void>,
   backupUnregisterFn?: (...args: TParam) => Promise<boolean>,
 ): ((...args: TParam) => UnsubPromiseAsync<TReturn>) => {
   return (...args: TParam) => {
     // If we're already initialized, run registerRequestHandler almost like normal but with an initialize check in the unsubscriber
-    if (initialized) {
+    if (isInitialized) {
       const { promise, unsubscriber: regUnsubscriber } = unsafeRegisterFn(
         ...args,
       );
@@ -98,12 +98,12 @@ export const createSafeRegisterFn = <TParam extends Array<unknown>, TReturn>(
       unsubscriber: async () => {
         // TODO: The unsubscriber we return might not actually do anything meaningful at first (it attempts to call a backup unsubscriber function, which is probably not what we want), so it throws an exception. Refactor this mess so we aren't giving a stunted unsubscriber at first and then subsequently empowering it after initialize is finished
         // TODO: Should the unsubscriber await initialize first, or should it just go ahead and run it? Also below
-        const unregistered = backupUnregisterFn
+        const didUnregister = backupUnregisterFn
           ? await backupUnregisterFn(...args)
           : false;
         throw new Error(
           `unsubscribe run from safeRegisterFn before service finished initializing! unsubscribe was${
-            unregistered ? '' : ' not'
+            didUnregister ? '' : ' not'
           } successful.`,
         );
       },

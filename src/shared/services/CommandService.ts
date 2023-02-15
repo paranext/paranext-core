@@ -16,7 +16,7 @@ import {
 import { isClient } from '@shared/util/InternalUtil';
 
 /** Whether this service has finished setting up */
-let initialized = false;
+let isInitialized = false;
 
 /** Registration object for a command. Want an object so we can register multiple commands at once */
 // Any is probably fine because we likely never know or care about the args or return
@@ -29,9 +29,6 @@ export type CommandRegistration<
   commandName: string;
   handler: CommandHandler<TParam, TReturn>;
 };
-
-/** Map of command name to unregister function for that command */
-/* const commandUnsubscribers = new Map<string, Unsubscriber>(); */
 
 async function addThree(a: number, b: number, c: number) {
   return a + b + c;
@@ -60,55 +57,6 @@ const sendCommandUnsafe = async <TParam extends Array<unknown>, TReturn>(
 };
 
 /**
- * Register commands on the papi to be handled here
- * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use registerCommands
- * @param commands list of commands and handlers to register for handling here
- * @returns promise that resolves when the command is finished registering and unsubscriber to unregister this command
- */
-/* const registerCommandsUnsafe = (
-  ...commands: CommandRegistration[]
-): Promise<ComplexResponse<void>> => {
-  const unsubPromises = commands.map(({ commandName, handler }) =>
-    NetworkService.registerRequestHandler(
-      serializeRequestType(CATEGORY_COMMAND, commandName),
-      handler,
-    ),
-  );
-
-  const unsubscribeCommands = aggregateUnsubscriberAsyncs(
-    unsubPromises.map(({ unsubscriber }) => unsubscriber),
-  );
-
-  // Wait to successfully register all commands
-  await Promise.all(unsubPromises.map(({ promise }) => promise));
-
-  commands.forEach((commandRegistration) => {
-    if (
-      commandResponse.success ||
-      !commandResponse.contents?.includes(commandRegistration.commandName)
-    ) {
-      // Command successfully registered. Register to respond to the command request
-      commandUnsubscribers.set(
-        commandRegistration.commandName,
-        NetworkService.registerRequestHandler(
-          serializeRequestType(
-            CATEGORY_COMMAND,
-            commandRegistration.commandName,
-          ),
-          commandRegistration.handler,
-        ),
-      );
-    }
-  });
-
-  if (!commandResponse.success) {
-    console.error(commandResponse.errorMessage, commandResponse);
-  }
-
-  return commandResponse;
-}; */
-
-/**
  * Register a command on the papi to be handled here.
  * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use registerCommand
  * @param commandName command name to register for handling here
@@ -127,7 +75,7 @@ export const registerCommandUnsafe = (
 
 /** Sets up the CommunicationService */
 export const initialize = memoizeOne(async (): Promise<void> => {
-  if (initialized) return;
+  if (isInitialized) return;
 
   // TODO: Might be best to make a singleton or something
   await NetworkService.initialize();
@@ -149,13 +97,13 @@ export const initialize = memoizeOne(async (): Promise<void> => {
     await Promise.all(unsubPromises.map(({ promise }) => promise));
 
     // On closing, try to remove command listeners
-    // TODO: should probably do this on the server when the connection closes
+    // TODO: should do this on the server when the connection closes or when the server exists as well
     window.addEventListener('beforeunload', async () => {
       await unsubscribeCommands();
     });
   }
 
-  initialized = true;
+  isInitialized = true;
 
   if (isClient()) {
     const start = performance.now();
@@ -184,29 +132,6 @@ export const sendCommand = async <TParam extends Array<unknown>, TReturn>(
 };
 
 /**
- * Send an epm request to the backend.
- * Internal; do not export for use on papi.
- * Not sure we need this, but it's here just in case
- */
-/* const sendEpmRequest = async <TParam extends Array<unknown>, TReturn>(
-  type: string,
-  ...args: TParam
-): Promise<ComplexResponse<TReturn>> => {
-  await initialize();
-  return sendEpmRequestUnsafe(type, ...args);
-}; */
-
-/**
- * Register commands on the papi to be handled here
- * @param commands list of commands and handlers to register for handling here
- * @returns response whose contents are a list of commands that were not successfully registered if error
- */
-/* const registerCommands = async (...commands: CommandRegistration[]) => {
-  await initialize();
-  return registerCommandsUnsafe(...commands);
-}; */
-
-/**
  * Register a command on the papi to be handled here
  * @param commandName command name to register for handling here
  * @param handler function to run when the command is invoked
@@ -217,27 +142,6 @@ export const registerCommand: (
   handler: CommandHandler,
 ) => UnsubPromiseAsync<void> = createSafeRegisterFn(
   registerCommandUnsafe,
-  initialized,
+  isInitialized,
   initialize,
 );
-
-/**
- * Unregister commands on the papi that were being handled here
- * @param commands list of command names to unregister from handling here
- * @returns response whose contents are a list of commands that were not successfully unregistered if error
- */
-/* const unregisterCommands = async (...commands: string[]) => {
-  await initialize();
-  return unregisterCommandsUnsafe(...commands);
-}; */
-
-/**
- * Unregister a command on the papi that was being handled here
- * @param commandName command name to unregister from handling here
- * @returns true if successfully unregistered, throws with error message if not
- */
-/* export const unregisterCommand = async (commandName: string) => {
-  const response = await unregisterCommands(commandName);
-  if (!response.success) throw new Error(response.errorMessage);
-  return true;
-}; */

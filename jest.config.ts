@@ -14,7 +14,6 @@ const config: Config = {
       prefix: '<rootDir>/src',
     }),
   },
-  setupFiles: ['./.erb/scripts/check-build-exists.ts'],
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {
     url: 'http://localhost/',

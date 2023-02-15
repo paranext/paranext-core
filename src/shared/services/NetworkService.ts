@@ -22,7 +22,7 @@ import * as ConnectionService from '@shared/services/ConnectionService';
 import { isClient } from '@shared/util/InternalUtil';
 
 /** Whether this service has finished setting up */
-let initialized = false;
+let isInitialized = false;
 /** Map of requestType to registered handler for that request or (on server) information about which connection to send the request */
 const requestRegistrations = new Map<string, RequestRegistration>();
 
@@ -117,7 +117,7 @@ const requestRawUnsafe = async <TParam, TReturn>(
   requestType: string,
   contents: TParam,
 ): Promise<ComplexResponse<TReturn>> => {
-  if (!initialized)
+  if (!isInitialized)
     throw new Error(
       `Cannot perform raw request ${requestType} as the NetworkService is not initialized`,
     );
@@ -135,7 +135,7 @@ const requestUnsafe = async <TParam extends Array<unknown>, TReturn>(
   requestType: string,
   ...args: TParam
 ) => {
-  if (!initialized)
+  if (!isInitialized)
     throw new Error(
       `Cannot perform request ${requestType} as the NetworkService is not initialized`,
     );
@@ -453,7 +453,7 @@ const routeRequest = (requestType: string): number => {
 
 /** Sets up the NetworkService. Runs only once */
 export const initialize = memoizeOne(async (): Promise<void> => {
-  if (initialized) return;
+  if (isInitialized) return;
 
   // Wait to connect to the server
   await ConnectionService.connect(handleRequestLocal, routeRequest);
@@ -475,32 +475,17 @@ export const initialize = memoizeOne(async (): Promise<void> => {
   }
 
   // On closing, try to close the connection
-  // TODO: should probably do this on the server when the connection closes
+  // TODO: should do this on the server when the connection closes or when the server exists as well
   if (isClient())
     window.addEventListener('beforeunload', async () => {
       ConnectionService.disconnect();
       if (unsubscribeServerRequestHandlers) unsubscribeServerRequestHandlers();
     });
 
-  initialized = true;
+  isInitialized = true;
 });
 
 // #region Public safe functions (call these, not the private unsafe functions above)
-
-/**
- * Send a request to the server and resolve a ComplexResponse after receiving a response.
- * Note: Unless you need access to ComplexResponse properties, you probably just want to use request
- * @param requestType the type of request
- * @param contents contents to send in the request
- * @returns promise that resolves with the response message
- */
-/* const requestRaw = async <TParam, TReturn>(
-  requestType: string,
-  contents: TParam,
-): Promise<ComplexResponse<TReturn>> => {
-  await initialize();
-  return requestRawUnsafe<TParam, TReturn>(requestType, contents);
-}; */
 
 /**
  * Send a request on the network and resolve the response contents
@@ -519,7 +504,7 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
 /** Helper function so we can overload registerRequestHandler */
 const registerRequestHandlerInternal = createSafeRegisterFn(
   registerRequestHandlerUnsafe,
-  initialized,
+  isInitialized,
   initialize,
   unregisterRequestHandlerUnsafe,
 );

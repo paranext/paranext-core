@@ -13,12 +13,12 @@ import INetworkConnector from '@shared/services/INetworkConnector';
 export const createNetworkConnector = async (): Promise<INetworkConnector> => {
   if (isClient()) {
     const ClientNetworkConnector = (
-      await import('@rendererServices/ClientNetworkConnector')
+      await import('@renderer/services/ClientNetworkConnector')
     ).default;
     return new ClientNetworkConnector();
   }
   const ServerNetworkConnector = (
-    await import('@mainServices/ServerNetworkConnector')
+    await import('@main/services/ServerNetworkConnector')
   ).default;
   return new ServerNetworkConnector();
 };
