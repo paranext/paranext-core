@@ -1,6 +1,6 @@
+import { getUserDir } from '@node/util/util';
 import { LocalStorage } from 'node-localstorage';
 import path from 'path';
-import os from 'os';
 
 /**
  * Polyfills LocalStorage into node so you can use localstorage just like in browser
@@ -10,11 +10,7 @@ const polyfillLocalStorage = (isPackaged: boolean) => {
   if (typeof localStorage === 'undefined' || localStorage === null) {
     global.localStorage = new LocalStorage(
       isPackaged
-        ? path.join(
-            // TODO: find a better place to put localStorage in production so it's not in %temp%/paranext-core like https://stackoverflow.com/a/26227660
-            os.tmpdir(),
-            `paranext-core/local-storage/${globalThis.processType}/`,
-          )
+        ? path.join(getUserDir(), `local-storage/${globalThis.processType}/`)
         : path.join(
             __dirname,
             `../../../local-storage/${globalThis.processType}/`,

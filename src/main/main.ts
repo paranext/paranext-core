@@ -17,8 +17,8 @@ import windowStateKeeper from 'electron-window-state';
 import { fork, spawn } from 'child_process';
 import { ProcessType } from '@shared/globalThis';
 import polyfillLocalStorage from '@node/polyfill/LocalStorage';
+import { resolveHtmlPath } from '@node/util/util';
 import MenuBuilder from './menu';
-import { resolveHtmlPath } from './util';
 
 // #region globalThis setup
 
