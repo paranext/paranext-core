@@ -7,6 +7,9 @@ import App from './App';
 // #region globalThis setup
 
 globalThis.processType = ProcessType.Renderer;
+globalThis.isPackaged = window.electronAPI.sync.isPackaged();
+
+console.log(`isPackaged: ${globalThis.isPackaged}`);
 
 // #endregion
 

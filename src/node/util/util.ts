@@ -3,6 +3,8 @@
  */
 import { URL } from 'url';
 import path from 'path';
+import { Uri } from '@shared/data/FileSystemTypes';
+import memoizeOne from 'memoize-one';
 
 export function resolveHtmlPath(htmlFileName: string) {
   if (process.env.NODE_ENV === 'development') {
@@ -15,14 +17,25 @@ export function resolveHtmlPath(htmlFileName: string) {
 }
 
 /**
- * Gets the platform-specific user folder for this application
+ * Gets the platform-specific user appdata folder for this application
  * Thanks to Luke at https://stackoverflow.com/a/26227660
  */
-export function getUserDir(): string {
-  return `${
-    process.env.APPDATA ||
-    (process.platform === 'darwin'
-      ? `${process.env.HOME}/Library/Preferences`
-      : `${process.env.HOME}/.local/share`)
-  }/paranext-core`;
+export const getAppDir = memoizeOne((): string => {
+  return globalThis.isPackaged
+    ? `${
+        process.env.APPDATA ||
+        (process.platform === 'darwin'
+          ? `${process.env.HOME}/Library/Preferences`
+          : `${process.env.HOME}/.local/share`)
+      }/paranext-core`
+    : path.join(__dirname, '../../../dev-appdata');
+});
+
+/**
+ * Resolves the uri to a path
+ * @param uri the uri to resolve
+ * @returns real path to the uri supplied
+ */
+export function getPathFromUri(uri: Uri): string {
+  return path.join(getAppDir(), uri);
 }

@@ -14,7 +14,13 @@ const isPackaged = process.argv.includes('--packaged');
 // #region globalThis setup
 
 globalThis.processType = ProcessType.ExtensionHost;
-polyfillLocalStorage(isPackaged);
+globalThis.isPackaged = isPackaged;
+
+// #endregion
+
+// #region polyfills
+
+polyfillLocalStorage();
 
 // #endregion
 

@@ -17,6 +17,15 @@ export function isString(o: unknown) {
   return typeof o === 'string' || o instanceof String;
 }
 
+/**
+ * Evaluates if the value is truthy, false, or 0
+ * @param val value to evaluate
+ * @returns whether the value is truthy, false, or 0
+ */
+export function isValidValue(val: unknown): val is NonNullable<unknown> {
+  return !!val || val === false || val === 0;
+}
+
 // From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
 type ErrorWithMessage = {
   message: string;

@@ -7,6 +7,7 @@
 
 declare global {
   var processType: ProcessType;
+  var isPackaged: boolean;
 }
 
 // eslint-disable-next-line import/prefer-default-export

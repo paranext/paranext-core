@@ -23,7 +23,13 @@ import MenuBuilder from './menu';
 // #region globalThis setup
 
 globalThis.processType = ProcessType.Main;
-polyfillLocalStorage(app.isPackaged);
+globalThis.isPackaged = app.isPackaged;
+
+// #endregion
+
+// #region polyfills
+
+polyfillLocalStorage();
 
 // #endregion
 
@@ -153,9 +159,9 @@ app.on('window-all-closed', () => {
 
 // #region IPC HANDLING SETUP
 
-/** Map from ipc channel to handler function */
+/** Map from ipc channel to handler function. Use with ipcRenderer.invoke */
 const ipcHandlers: {
-  [ipcHandle: string]: (
+  [ipcChannel: string]: (
     event: Electron.IpcMainInvokeEvent,
     // We don't know the exact parameter types since ipc handlers can be anything
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -166,12 +172,31 @@ const ipcHandlers: {
   'electronAPI.env.test': (_event) => 'From main.ts: test',
 };
 
+/** Map from ipc channel to synchronous handler function. Use with ipcRenderer.sendSync */
+const ipcSyncHandlers: {
+  [ipcSyncChannel: string]: (
+    event: Electron.IpcMainInvokeEvent,
+    // We don't know the exact parameter types since ipc handlers can be anything
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...args: any[]
+  ) => Promise<unknown> | unknown;
+} = {
+  'electronAPI.sync.isPackaged': (event) => {
+    event.returnValue = app.isPackaged;
+  },
+};
+
 app
   .whenReady()
   .then(() => {
     // Set up ipc handlers
-    Object.keys(ipcHandlers).forEach((ipcHandle) =>
-      ipcMain.handle(ipcHandle, ipcHandlers[ipcHandle]),
+    Object.entries(ipcHandlers).forEach(([ipcChannel, ipcHandler]) =>
+      ipcMain.handle(ipcChannel, ipcHandler),
+    );
+    // Set up ipc sync handlers
+    Object.entries(ipcSyncHandlers).forEach(
+      ([ipcSyncChannel, ipcSyncHandler]) =>
+        ipcMain.on(ipcSyncChannel, ipcSyncHandler),
     );
 
     createWindow();
