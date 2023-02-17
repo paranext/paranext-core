@@ -172,31 +172,12 @@ const ipcHandlers: {
   'electronAPI.env.test': (_event) => 'From main.ts: test',
 };
 
-/** Map from ipc channel to synchronous handler function. Use with ipcRenderer.sendSync */
-const ipcSyncHandlers: {
-  [ipcSyncChannel: string]: (
-    event: Electron.IpcMainInvokeEvent,
-    // We don't know the exact parameter types since ipc handlers can be anything
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...args: any[]
-  ) => Promise<unknown> | unknown;
-} = {
-  'electronAPI.sync.isPackaged': (event) => {
-    event.returnValue = app.isPackaged;
-  },
-};
-
 app
   .whenReady()
   .then(() => {
     // Set up ipc handlers
     Object.entries(ipcHandlers).forEach(([ipcChannel, ipcHandler]) =>
       ipcMain.handle(ipcChannel, ipcHandler),
-    );
-    // Set up ipc sync handlers
-    Object.entries(ipcSyncHandlers).forEach(
-      ([ipcSyncChannel, ipcSyncHandler]) =>
-        ipcMain.on(ipcSyncChannel, ipcSyncHandler),
     );
 
     createWindow();
@@ -238,9 +219,9 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 NetworkService.initialize()
   .then(() => {
     // Set up test handlers
-    Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
+    Object.entries(ipcHandlers).forEach(([ipcChannel, handler]) => {
       NetworkService.registerRequestHandler(
-        ipcHandle,
+        ipcChannel,
         async (...args: unknown[]) =>
           handler({} as Electron.IpcMainInvokeEvent, ...args),
       );

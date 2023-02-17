@@ -4,12 +4,18 @@ import * as CommandService from '@shared/services/CommandService';
 import { ProcessType } from '@shared/globalThis';
 import App from './App';
 
+// #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
+
+declare const webpackRenderer: {
+  isPackaged: boolean;
+};
+
+// #endregion
+
 // #region globalThis setup
 
 globalThis.processType = ProcessType.Renderer;
-globalThis.isPackaged = window.electronAPI.sync.isPackaged();
-
-console.log(`isPackaged: ${globalThis.isPackaged}`);
+globalThis.isPackaged = webpackRenderer.isPackaged;
 
 // #endregion
 
