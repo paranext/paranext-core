@@ -6,6 +6,7 @@ import './App.css';
 import papi from '@shared/services/papi';
 import { getErrorMessage, isString } from '@shared/util/Util';
 import usePromise from '@renderer/hooks/usePromise';
+import { WebView, WebViewProps } from './components/WebView';
 
 const getVar: (envVar: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.getVar');
@@ -21,49 +22,53 @@ const test = async () => {
   return result;
 };
 
-const echo = async (message: string) =>
-  papi.commands.sendCommand<[string], string>('echo', message);
+const echo: (message: string) => Promise<string> =
+  papi.commands.createSendCommandFunction<[string], string>('echo');
 
-const echoRenderer = async (message: string) =>
-  papi.commands.sendCommand<[string], string>('echoRenderer', message);
+const echoRenderer = papi.commands.createSendCommandFunction<[string], string>(
+  'echoRenderer',
+);
 
-const echoExtensionHost = async (message: string) =>
-  papi.commands.sendCommand<[string], string>('echoExtensionHost', message);
+const echoExtensionHost = papi.commands.createSendCommandFunction<
+  [string],
+  string
+>('echoExtensionHost');
 
-const addThree = async (a: number, b: number, c: number) =>
-  papi.commands.sendCommand<[number, number, number], number>(
-    'addThree',
-    a,
-    b,
-    c,
-  );
+const echoSomeoneRenderer = papi.commands.createSendCommandFunction<
+  [string],
+  string
+>('hello-someone.echo-someone-renderer');
 
-const addMany = async (...nums: number[]) =>
-  papi.commands.sendCommand<number[], number>('addMany', ...nums);
+const addThree = papi.commands.createSendCommandFunction<
+  [number, number, number],
+  number
+>('addThree');
 
-const helloWorld = async () =>
-  papi.commands.sendCommand<[], string>('hello-world.hello-world');
+const addMany = papi.commands.createSendCommandFunction<number[], number>(
+  'addMany',
+);
 
-const throwErrorHelloWorld = async (message: string) =>
-  papi.commands.sendCommand<[string], string>(
-    'hello-world.hello-exception',
-    message,
-  );
+const helloWorld = papi.commands.createSendCommandFunction<[], string>(
+  'hello-world.hello-world',
+);
 
-const helloSomeone = async (name: string) =>
-  papi.commands.sendCommand<[string], string>(
-    'hello-someone.hello-someone',
-    name,
-  );
+const throwErrorHelloWorld = papi.commands.createSendCommandFunction<
+  [string],
+  string
+>('hello-world.hello-exception');
 
-const throwError = async (message: string) =>
-  papi.commands.sendCommand<[string], string>('throwError', message);
+const helloSomeone = papi.commands.createSendCommandFunction<[string], string>(
+  'hello-someone.hello-someone',
+);
 
-const throwErrorExtensionHost = async (message: string) =>
-  papi.commands.sendCommand<[string], string>(
-    'throwErrorExtensionHost',
-    message,
-  );
+const throwError = papi.commands.createSendCommandFunction<[string], string>(
+  'throwError',
+);
+
+const throwErrorExtensionHost = papi.commands.createSendCommandFunction<
+  [string],
+  string
+>('throwErrorExtensionHost');
 
 const executeMany = async <T,>(fn: () => Promise<T>) => {
   const numRequests = 10000;
@@ -131,177 +136,212 @@ const Hello = () => {
     [updatePromiseReturn],
   );
 
+  const [webViews, setWebViews] = useState<WebViewProps[]>([
+    { contents: '<html><head></head><body>stuff</body></html>' },
+  ]);
+
   return (
-    <div>
-      <div className="Hello">
-        <img width="200" alt="icon" src={icon} />
+    <>
+      <div className="view">
+        <div className="Hello">
+          <img width="200" alt="icon" src={icon} />
+        </div>
+        <div className="Hello">
+          <h1>Paranext</h1>
+        </div>
+        <div className="Hello">
+          <button
+            type="button"
+            onClick={async () => {
+              const start = performance.now();
+              const result = await runPromise(() => echo('Echo Stuff'));
+              console.log(
+                `command:echo '${result}' took ${performance.now() - start} ms`,
+              );
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              executeMany(() => echo('Echo Stuff'));
+            }}
+          >
+            Echo
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const start = performance.now();
+              const result = await runPromise(() =>
+                echoRenderer('Echo Renderer Stuff'),
+              );
+              console.log(
+                `command:echoRenderer '${result}' took ${
+                  performance.now() - start
+                } ms`,
+              );
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              executeMany(() => echoRenderer('Echo Renderer Stuff'));
+            }}
+          >
+            Echo Renderer
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const start = performance.now();
+              const result = await runPromise(() =>
+                echoExtensionHost('Echo Extension Host Stuff'),
+              );
+              console.log(
+                `command:echoExtensionHost '${result}' took ${
+                  performance.now() - start
+                } ms`,
+              );
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              executeMany(() => echoExtensionHost('Echo Extension Host Stuff'));
+            }}
+          >
+            Echo Extension Host
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const start = performance.now();
+              const result = await runPromise(() =>
+                echoSomeoneRenderer('Echo Someone Renderer Stuff'),
+              );
+              console.log(
+                `command:hello-someone.echo-someone-renderer '${result}' took ${
+                  performance.now() - start
+                } ms`,
+              );
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              executeMany(() =>
+                echoSomeoneRenderer('Echo Someone Renderer Stuff'),
+              );
+            }}
+          >
+            Echo Someone Renderer
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const start = performance.now();
+              const result = await runPromise(() => addThree(1, 2, 3));
+              console.log(
+                `command:addThree ${result} took ${
+                  performance.now() - start
+                } ms`,
+              );
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              executeMany(() => addThree(1, 2, 3));
+            }}
+          >
+            AddThree (Renderer)
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const start = performance.now();
+              const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
+              console.log(
+                `command:addMany ${result} took ${
+                  performance.now() - start
+                } ms`,
+              );
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              executeMany(() => addMany(1, 2, 3, 4, 5, 6));
+            }}
+          >
+            AddMany (Extension Host)
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const start = performance.now();
+              const result = await runPromise(() => helloWorld());
+              console.log(
+                `command:hello-world.hello-world ${result} took ${
+                  performance.now() - start
+                } ms`,
+              );
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              executeMany(() => helloWorld());
+            }}
+          >
+            Hello World (Extension)
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const start = performance.now();
+              const result = await runPromise(() =>
+                helloSomeone('Paranext user'),
+              );
+              console.log(
+                `command:hello-someone.hello-someone ${result} took ${
+                  performance.now() - start
+                } ms`,
+              );
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              executeMany(() => helloSomeone('Paranext user'));
+            }}
+          >
+            Hello Someone (Extension)
+          </button>
+          <button
+            type="button"
+            onClick={() => runPromise(() => throwError('Test error'))}
+          >
+            Test Exception
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              runPromise(() => throwErrorExtensionHost('Test error'))
+            }
+          >
+            Test Exception (Extension Host)
+          </button>
+          <button
+            type="button"
+            onClick={() => runPromise(() => throwErrorHelloWorld('Test error'))}
+          >
+            Test Exception (Hello World)
+          </button>
+          <button
+            type="button"
+            onClick={() => runPromise(() => test())}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              executeMany(test);
+            }}
+          >
+            Test
+          </button>
+        </div>
+        <div className="Hello">
+          <div>NODE_ENV: {NODE_ENV}</div>
+          <div>{promiseReturn}</div>
+        </div>
       </div>
-      <div className="Hello">
-        <h1>Paranext</h1>
-      </div>
-      <div className="Hello">
-        <button
-          type="button"
-          onClick={async () => {
-            const start = performance.now();
-            const result = await runPromise(() => echo('Echo Stuff'));
-            console.log(
-              `command:echo '${result}' took ${performance.now() - start} ms`,
-            );
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => echo('Echo Stuff'));
-          }}
-        >
-          Echo
-        </button>
-        <button
-          type="button"
-          onClick={async () => {
-            const start = performance.now();
-            const result = await runPromise(() =>
-              echoRenderer('Echo Renderer Stuff'),
-            );
-            console.log(
-              `command:echoRenderer '${result}' took ${
-                performance.now() - start
-              } ms`,
-            );
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => echoRenderer('Echo Renderer Stuff'));
-          }}
-        >
-          Echo Renderer
-        </button>
-        <button
-          type="button"
-          onClick={async () => {
-            const start = performance.now();
-            const result = await runPromise(() =>
-              echoExtensionHost('Echo Extension Host Stuff'),
-            );
-            console.log(
-              `command:echoExtensionHost '${result}' took ${
-                performance.now() - start
-              } ms`,
-            );
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => echoExtensionHost('Echo Extension Host Stuff'));
-          }}
-        >
-          Echo Extension Host
-        </button>
-        <button
-          type="button"
-          onClick={async () => {
-            const start = performance.now();
-            const result = await runPromise(() => addThree(1, 2, 3));
-            console.log(
-              `command:addThree ${result} took ${performance.now() - start} ms`,
-            );
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => addThree(1, 2, 3));
-          }}
-        >
-          AddThree (Renderer)
-        </button>
-        <button
-          type="button"
-          onClick={async () => {
-            const start = performance.now();
-            const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
-            console.log(
-              `command:addMany ${result} took ${performance.now() - start} ms`,
-            );
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => addMany(1, 2, 3, 4, 5, 6));
-          }}
-        >
-          AddMany (Extension Host)
-        </button>
-        <button
-          type="button"
-          onClick={async () => {
-            const start = performance.now();
-            const result = await runPromise(() => helloWorld());
-            console.log(
-              `command:hello-world.hello-world ${result} took ${
-                performance.now() - start
-              } ms`,
-            );
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => helloWorld());
-          }}
-        >
-          Hello World (Extension)
-        </button>
-        <button
-          type="button"
-          onClick={async () => {
-            const start = performance.now();
-            const result = await runPromise(() =>
-              helloSomeone('Paranext user'),
-            );
-            console.log(
-              `command:hello-someone.hello-someone ${result} took ${
-                performance.now() - start
-              } ms`,
-            );
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => helloSomeone('Paranext user'));
-          }}
-        >
-          Hello Someone (Extension)
-        </button>
-        <button
-          type="button"
-          onClick={() => runPromise(() => throwError('Test error'))}
-        >
-          Test Exception
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            runPromise(() => throwErrorExtensionHost('Test error'))
-          }
-        >
-          Test Exception (Extension Host)
-        </button>
-        <button
-          type="button"
-          onClick={() => runPromise(() => throwErrorHelloWorld('Test error'))}
-        >
-          Test Exception (Hello World)
-        </button>
-        <button
-          type="button"
-          onClick={() => runPromise(() => test())}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(test);
-          }}
-        >
-          Test
-        </button>
-      </div>
-      <div className="Hello">
-        <div>NODE_ENV: {NODE_ENV}</div>
-        <div>{promiseReturn}</div>
-      </div>
-    </div>
+      {webViews.map((webView) => (
+        <WebView {...webView} />
+      ))}
+    </>
   );
 };
 

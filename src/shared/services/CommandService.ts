@@ -141,6 +141,22 @@ export const sendCommand = async <TParam extends Array<unknown>, TReturn>(
 };
 
 /**
+ * Creates a function that is a command function with a baked commandName.
+ * This is also nice because you get TypeScript type support using this function.
+ * @param commandName command name for command function
+ * @returns function to call with arguments of command that sends the command and resolves with the result of the command
+ */
+export const createSendCommandFunction = <
+  TParam extends Array<unknown>,
+  TReturn,
+>(
+  commandName: string,
+) => {
+  return async (...args: TParam) =>
+    sendCommand<TParam, TReturn>(commandName, ...args);
+};
+
+/**
  * Register a command on the papi to be handled here
  * @param commandName command name to register for handling here
  * @param handler function to run when the command is invoked
