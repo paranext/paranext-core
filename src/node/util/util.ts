@@ -39,3 +39,12 @@ export const getAppDir = memoizeOne((): string => {
 export function getPathFromUri(uri: Uri): string {
   return path.join(getAppDir(), uri);
 }
+
+/**
+ * Combines the uris passed in into one uri
+ * @param uris uris to join together
+ * @returns one uri that combines all the uris in left-to-right order
+ */
+export function joinUris(...uris: Uri[]): Uri {
+  return path.join(...uris);
+}

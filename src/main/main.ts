@@ -235,8 +235,6 @@ NetworkService.initialize()
   })
   .catch((e) => console.error(e));
 
-console.log(localStorage.getItem('stuff'));
-
 // #endregion
 
 // #region Extension Host

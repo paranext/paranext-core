@@ -41,6 +41,9 @@ const addThree = async (a: number, b: number, c: number) =>
 const addMany = async (...nums: number[]) =>
   papi.commands.sendCommand<number[], number>('addMany', ...nums);
 
+const helloWorld = async () =>
+  papi.commands.sendCommand<[], string>('hello-world.hello-world');
+
 const throwError = async (message: string) =>
   papi.commands.sendCommand<[string], string>('throwError', message);
 
@@ -204,6 +207,24 @@ const Hello = () => {
           }}
         >
           AddMany (Extension Host)
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            const start = performance.now();
+            const result = await runPromise(() => helloWorld());
+            console.log(
+              `command:hello-world.hello-world ${result} took ${
+                performance.now() - start
+              } ms`,
+            );
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(() => helloWorld());
+          }}
+        >
+          Hello World (Extension)
         </button>
         <button
           type="button"

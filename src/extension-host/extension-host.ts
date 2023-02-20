@@ -4,6 +4,7 @@ import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
 import { ProcessType } from '@shared/globalThis';
 import polyfillLocalStorage from '@node/polyfill/LocalStorage';
+import * as ExtensionService from '@extension-host/services/ExtensionService';
 
 // #region command-line arguments
 
@@ -64,5 +65,7 @@ NetworkService.initialize()
     return undefined;
   })
   .catch((e) => console.error(e));
+
+ExtensionService.initialize();
 
 // #endregion
