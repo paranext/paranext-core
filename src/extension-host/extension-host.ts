@@ -44,7 +44,6 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
     /* console.log(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
-    console.log(`Extension host is handling addMany!!`);
     return nums.reduce((acc, current) => acc + current, 0);
   },
   throwErrorExtensionHost: async (message: string) => {

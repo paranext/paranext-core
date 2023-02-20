@@ -13,7 +13,7 @@ export function newGuid(): string {
  * @param o object to determine if it is a string
  * @returns true if the object is a string; false otherwise
  */
-export function isString(o: unknown) {
+export function isString(o: unknown): o is string {
   return typeof o === 'string' || o instanceof String;
 }
 

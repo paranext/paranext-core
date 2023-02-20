@@ -3,5 +3,6 @@
  */
 
 import * as CommandService from '@shared/services/CommandService';
+import * as PapiUtil from '@shared/util/PapiUtil';
 
-export default { commands: CommandService };
+export default { commands: CommandService, util: PapiUtil };

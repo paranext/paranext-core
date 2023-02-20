@@ -4,7 +4,7 @@ import * as NetworkService from '@shared/services/NetworkService';
 import icon from '@assets/icon.png';
 import './App.css';
 import papi from '@shared/services/papi';
-import { getErrorMessage } from '@shared/util/Util';
+import { getErrorMessage, isString } from '@shared/util/Util';
 import usePromise from '@renderer/hooks/usePromise';
 
 const getVar: (envVar: string) => Promise<string> =
@@ -44,6 +44,18 @@ const addMany = async (...nums: number[]) =>
 const helloWorld = async () =>
   papi.commands.sendCommand<[], string>('hello-world.hello-world');
 
+const throwErrorHelloWorld = async (message: string) =>
+  papi.commands.sendCommand<[string], string>(
+    'hello-world.hello-exception',
+    message,
+  );
+
+const helloSomeone = async (name: string) =>
+  papi.commands.sendCommand<[string], string>(
+    'hello-someone.hello-someone',
+    name,
+  );
+
 const throwError = async (message: string) =>
   papi.commands.sendCommand<[string], string>('throwError', message);
 
@@ -82,8 +94,7 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
     console.log(
       `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
         finish - start
-      }\n\tResponse times:`,
-      requestTime,
+      }`,
     );
     console.log(responses[responses.length - 1]);
   } catch (e) {
@@ -93,6 +104,11 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
 
 const Hello = () => {
   const [promiseReturn, setPromiseReturn] = useState('');
+  const updatePromiseReturn = useCallback(
+    (state: unknown) =>
+      setPromiseReturn(isString(state) ? state : JSON.stringify(state)),
+    [],
+  );
 
   const [NODE_ENV] = usePromise(
     useCallback(() => getVar('NODE_ENV'), []),
@@ -104,15 +120,15 @@ const Hello = () => {
       try {
         const result = await asyncFn();
         console.log(result);
-        setPromiseReturn(JSON.stringify(result));
+        updatePromiseReturn(result);
         return result;
       } catch (e) {
         console.error(e);
-        setPromiseReturn(`Error: ${getErrorMessage(e)}`);
+        updatePromiseReturn(`Error: ${getErrorMessage(e)}`);
         return undefined;
       }
     },
-    [setPromiseReturn],
+    [updatePromiseReturn],
   );
 
   return (
@@ -128,14 +144,14 @@ const Hello = () => {
           type="button"
           onClick={async () => {
             const start = performance.now();
-            const result = await runPromise(() => echo('Stuff'));
+            const result = await runPromise(() => echo('Echo Stuff'));
             console.log(
               `command:echo '${result}' took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            executeMany(() => echo('Stuff'));
+            executeMany(() => echo('Echo Stuff'));
           }}
         >
           Echo
@@ -144,7 +160,9 @@ const Hello = () => {
           type="button"
           onClick={async () => {
             const start = performance.now();
-            const result = await runPromise(() => echoRenderer('Stuff'));
+            const result = await runPromise(() =>
+              echoRenderer('Echo Renderer Stuff'),
+            );
             console.log(
               `command:echoRenderer '${result}' took ${
                 performance.now() - start
@@ -153,7 +171,7 @@ const Hello = () => {
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            executeMany(() => echoRenderer('Stuff'));
+            executeMany(() => echoRenderer('Echo Renderer Stuff'));
           }}
         >
           Echo Renderer
@@ -162,7 +180,9 @@ const Hello = () => {
           type="button"
           onClick={async () => {
             const start = performance.now();
-            const result = await runPromise(() => echoExtensionHost('Stuff'));
+            const result = await runPromise(() =>
+              echoExtensionHost('Echo Extension Host Stuff'),
+            );
             console.log(
               `command:echoExtensionHost '${result}' took ${
                 performance.now() - start
@@ -171,7 +191,7 @@ const Hello = () => {
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            executeMany(() => echoExtensionHost('Stuff'));
+            executeMany(() => echoExtensionHost('Echo Extension Host Stuff'));
           }}
         >
           Echo Extension Host
@@ -228,6 +248,26 @@ const Hello = () => {
         </button>
         <button
           type="button"
+          onClick={async () => {
+            const start = performance.now();
+            const result = await runPromise(() =>
+              helloSomeone('Paranext user'),
+            );
+            console.log(
+              `command:hello-someone.hello-someone ${result} took ${
+                performance.now() - start
+              } ms`,
+            );
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(() => helloSomeone('Paranext user'));
+          }}
+        >
+          Hello Someone (Extension)
+        </button>
+        <button
+          type="button"
           onClick={() => runPromise(() => throwError('Test error'))}
         >
           Test Exception
@@ -239,6 +279,12 @@ const Hello = () => {
           }
         >
           Test Exception (Extension Host)
+        </button>
+        <button
+          type="button"
+          onClick={() => runPromise(() => throwErrorHelloWorld('Test error'))}
+        >
+          Test Exception (Hello World)
         </button>
         <button
           type="button"

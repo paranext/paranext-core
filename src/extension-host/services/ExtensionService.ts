@@ -12,7 +12,7 @@ import { getPathFromUri, joinUris } from '@node/util/util';
 import { Uri } from '@shared/data/FileSystemTypes';
 import { UnsubscriberAsync } from '@shared/util/PapiUtil';
 import Module from 'module';
-import * as papi from '@shared/services/papi';
+import papi from '@shared/services/papi';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -21,28 +21,34 @@ let isInitialized = false;
 let initializePromise: Promise<void> | undefined;
 
 /** Extensions that are available to us */
-let availableExtensions: ExtensionManifest[];
+let availableExtensions: ExtensionInfo[];
 
 /** Map of extension name to extension that is currently active and running */
 const activeExtensions = new Map<string, ActiveExtension>();
 
-/** Information about an extension */
+/** Information about an extension provided by the extension developer */
 type ExtensionManifest = Readonly<{
-  /** Uri to this extension's directory. Not provided in actual manifest, but added while parsing the manifest */
-  dirUri: Uri;
   name: string;
   main: string;
   activationEvents: string[];
 }>;
 
+/** Information about an extension and extra metadata about it that we generate */
+type ExtensionInfo = Readonly<
+  ExtensionManifest & {
+    /** Uri to this extension's directory. Not provided in actual manifest, but added while parsing the manifest */
+    dirUri: Uri;
+  }
+>;
+
 /** Information about an active extension */
 type ActiveExtension = {
-  name: string;
+  info: ExtensionInfo;
   deactivator: UnsubscriberAsync;
 };
 
 /** Get information for all the extensions present */
-const getExtensions = async () => {
+const getExtensions = async (): Promise<ExtensionInfo[]> => {
   const extensionFolders = (await readDir('extensions'))[EntryType.Directory];
 
   return Promise.all(
@@ -59,53 +65,101 @@ const getExtensions = async () => {
 };
 
 /**
- * Loads an extension and runs its activate function
- * @param extension extension manifest for the extension to activate
+ * Loads an extension and runs its activate function.
+ * WARNING: This does not shim functionality out of extenions! Do not run this alone. Only run wrapped in activateExtensions()
+ * @param extension extension info for the extension to activate
+ * @param extensionFilePath path to extension main file to import
  * @returns unsubscriber that deactivates the extension
  */
 const activateExtension = async (
-  extension: ExtensionManifest,
+  extension: ExtensionInfo,
+  extensionFilePath: string,
 ): Promise<ActiveExtension> => {
-  const extensionFile = getPathFromUri(
-    joinUris(extension.dirUri, extension.main),
-  );
+  // Import the extension file
+  const extensionModule = (await import(extensionFilePath)) as IExtension;
+
+  // Activate the extension
+  const extensionUnsubscriber = await extensionModule.activate();
+
+  const activeExtension: ActiveExtension = {
+    info: extension,
+    deactivator: async () => {
+      let unsubResult = await extensionUnsubscriber();
+      if (extensionModule.deactivate)
+        unsubResult = (await extensionModule.deactivate()) && unsubResult;
+      activeExtensions.delete(activeExtension.info.name);
+      return unsubResult;
+    },
+  };
+  activeExtensions.set(activeExtension.info.name, activeExtension);
+  return activeExtension;
+};
+
+/**
+ * Load extensions and runs their activate functions.
+ * @param extensions extension info for the extensions we want to activate
+ * @returns unsubscriber that deactivates the extension
+ */
+const activateExtensions = async (
+  extensions: ExtensionInfo[],
+): Promise<ActiveExtension[]> => {
+  /** The path to each extension along with whether that extension has already been imported */
+  const extensionsWithFiles = extensions.map((extension) => ({
+    extension,
+    filePath: getPathFromUri(joinUris(extension.dirUri, extension.main)),
+    hasBeenImported: false,
+  }));
 
   // Shim out require so extensions can't use it
   const requireOriginal = Module.prototype.require;
-  let hasExtensionBeenRequired = false;
   Module.prototype.require = ((fileName: string) => {
-    if (!hasExtensionBeenRequired && fileName === extensionFile) {
-      hasExtensionBeenRequired = true;
+    // Allow the extension to import papi
+    if (fileName === 'papi') return papi;
+
+    // Figure out if we are doing the import for the extension file in activateExtension
+    const extensionFile = extensionsWithFiles.find(
+      (extensionFileToCheck) =>
+        !extensionFileToCheck.hasBeenImported &&
+        extensionFileToCheck.filePath === fileName,
+    );
+
+    if (extensionFile) {
+      // The file that is being imported is the extension file, so this hopefully means
+      // we are importing the extension file in activateExtension. Allow this and mark the extension as imported.
+      // TODO: an extension can probably import another extension's file and mess this up. Maybe try to find a better way
+      extensionFile.hasBeenImported = true;
       return requireOriginal(fileName);
     }
-    if (fileName === 'papi') return papi.default;
 
+    // Disallow any imports within the extension
     const message = `Requiring other than papi is not allowed in extensions! Rejected require(${fileName})`;
     return {
       message,
     };
   }) as typeof Module.prototype.require;
 
-  // Import the extension file
-  const extensionModule = (await import(extensionFile)) as IExtension;
+  // Import the extensions and run their activate() functions
+  const extensionsActive = (
+    await Promise.all(
+      extensionsWithFiles.map((extensionWithFile) =>
+        activateExtension(
+          extensionWithFile.extension,
+          extensionWithFile.filePath,
+        ).catch((e) => {
+          console.error(
+            `Extension ${extensionWithFile.extension.name} threw while activating! ${e}`,
+          );
+          return null;
+        }),
+      ),
+    )
+  ).filter((activeExtension) => activeExtension !== null) as ActiveExtension[];
 
   // Put require back so we can use it again
   // TODO: this probably lets extensions wait and require code later. Security concern. Pls fix
   Module.prototype.require = requireOriginal;
 
-  const extensionUnsubscriber = await extensionModule.activate();
-  const activeExtension: ActiveExtension = {
-    name: extension.name,
-    deactivator: async () => {
-      let unsubResult = await extensionUnsubscriber();
-      if (extensionModule.deactivate)
-        unsubResult = (await extensionModule.deactivate()) && unsubResult;
-      activeExtensions.delete(activeExtension.name);
-      return unsubResult;
-    },
-  };
-  activeExtensions.set(activeExtension.name, activeExtension);
-  return activeExtension;
+  return extensionsActive;
 };
 
 /** Sets up the ExtensionService. Runs only once */
@@ -116,7 +170,7 @@ export const initialize = () => {
     // Get a list of extensions
     availableExtensions = await getExtensions();
 
-    availableExtensions.forEach((extension) => activateExtension(extension));
+    await activateExtensions(availableExtensions);
 
     isInitialized = true;
   })();
