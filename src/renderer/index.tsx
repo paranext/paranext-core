@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import * as NetworkService from '@shared/services/NetworkService';
 import * as CommandService from '@shared/services/CommandService';
+import * as WebViewService from '@shared/services/WebViewService';
 import { ProcessType } from '@shared/globalThis';
 import App from './App';
 
@@ -22,6 +23,7 @@ globalThis.isPackaged = webpackRenderer.isPackaged;
 // App-wide service setup
 NetworkService.initialize();
 CommandService.initialize();
+WebViewService.initialize();
 
 const container = document.getElementById('root');
 const root = createRoot(container as HTMLElement);

@@ -167,6 +167,8 @@ export const initialize = () => {
   if (initializePromise) return initializePromise;
 
   initializePromise = (async (): Promise<void> => {
+    if (isInitialized) return;
+
     // Get a list of extensions
     availableExtensions = await getExtensions();
 

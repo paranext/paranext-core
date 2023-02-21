@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
 import * as NetworkService from '@shared/services/NetworkService';
 import icon from '@assets/icon.png';
@@ -136,9 +136,20 @@ const Hello = () => {
     [updatePromiseReturn],
   );
 
-  const [webViews, setWebViews] = useState<WebViewProps[]>([
-    { contents: '<html><head></head><body>stuff</body></html>' },
-  ]);
+  const [webViews, setWebViews] = useState<WebViewProps[]>([]);
+  const addWebView = useCallback(
+    (webView: WebViewProps) => {
+      setWebViews((webViewsCurrent) => [...webViewsCurrent, webView]);
+    },
+    [setWebViews],
+  );
+
+  useEffect(() => {
+    const unsubscriber = papi.webViews.subscribeAddWebView(addWebView);
+    return () => {
+      unsubscriber();
+    };
+  }, [addWebView]);
 
   return (
     <>
@@ -338,8 +349,10 @@ const Hello = () => {
           <div>{promiseReturn}</div>
         </div>
       </div>
-      {webViews.map((webView) => (
-        <WebView {...webView} />
+      {webViews.map((webView, i) => (
+        // TODO: Make webViews trackable in some way
+        // eslint-disable-next-line react/no-array-index-key
+        <WebView key={i} {...webView} />
       ))}
     </>
   );

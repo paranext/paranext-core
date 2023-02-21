@@ -6,12 +6,6 @@ body {
   position: relative;
   color: white;
   height: 100vh;
-  background: linear-gradient(
-    200.96deg,
-    #b8d432 -29.09%,
-    #5f7333 51.77%,
-    #47314e 129.35%
-  );
   font-family: sans-serif;
   overflow-y: hidden;
   display: flex;
@@ -28,6 +22,12 @@ body {
 }
 
 .view {
+  background: linear-gradient(
+    200.96deg,
+    #b8d432 -29.09%,
+    #5f7333 51.77%,
+    #47314e 129.35%
+  );
   overflow-y: scroll;
 }
 
