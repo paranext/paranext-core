@@ -4,7 +4,7 @@
 
 import fs from 'fs';
 import { Uri } from '@shared/data/FileSystemTypes';
-import { getPathFromUri, joinUris } from '@node/util/util';
+import { getPathFromUri, joinUriPaths } from '@node/util/util';
 import { groupBy } from '@shared/util/Util';
 
 /**
@@ -55,7 +55,7 @@ export async function readDir(uri: Uri): Promise<DirectoryEntries> {
         if (dirent.isDirectory()) return EntryType.Directory;
         return EntryType.Unknown;
       },
-      (dirent) => joinUris(uri, dirent.name),
+      (dirent) => joinUriPaths(uri, dirent.name),
     ),
   ) as DirectoryEntries;
 }

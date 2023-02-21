@@ -8,7 +8,7 @@ import {
   readDir,
   readFileText,
 } from '@node/services/NodeFileSystemService';
-import { getPathFromUri, joinUris } from '@node/util/util';
+import { getPathFromUri, joinUriPaths } from '@node/util/util';
 import { Uri } from '@shared/data/FileSystemTypes';
 import { UnsubscriberAsync } from '@shared/util/PapiUtil';
 import Module from 'module';
@@ -54,7 +54,7 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
   return Promise.all(
     extensionFolders.map(async (extensionFolder) => {
       const extensionManifestJson = await readFileText(
-        joinUris(extensionFolder, 'manifest.json'),
+        joinUriPaths(extensionFolder, 'manifest.json'),
       );
       return Object.freeze({
         ...(JSON.parse(extensionManifestJson) as ExtensionManifest),
@@ -106,7 +106,7 @@ const activateExtensions = async (
   /** The path to each extension along with whether that extension has already been imported */
   const extensionsWithFiles = extensions.map((extension) => ({
     extension,
-    filePath: getPathFromUri(joinUris(extension.dirUri, extension.main)),
+    filePath: getPathFromUri(joinUriPaths(extension.dirUri, extension.main)),
     hasBeenImported: false,
   }));
 

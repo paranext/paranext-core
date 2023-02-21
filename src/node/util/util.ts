@@ -31,6 +31,10 @@ export const getAppDir = memoizeOne((): string => {
     : path.join(__dirname, '../../../dev-appdata');
 });
 
+export const getDir = memoizeOne((): string => {
+  return globalThis.isPackaged
+})
+
 /**
  * Resolves the uri to a path
  * @param uri the uri to resolve
@@ -41,10 +45,11 @@ export function getPathFromUri(uri: Uri): string {
 }
 
 /**
- * Combines the uris passed in into one uri
- * @param uris uris to join together
- * @returns one uri that combines all the uris in left-to-right order
+ * Combines the uri passed in with the paths passed in to make one uri
+ * @param uri uri to start from
+ * @param paths paths to combine into the uri
+ * @returns one uri that combines the uri and the paths in left-to-right order
  */
-export function joinUris(...uris: Uri[]): Uri {
-  return path.join(...uris);
+export function joinUriPaths(uri: Uri, ...paths: string[]): Uri {
+  return path.join(uri, ...paths);
 }
