@@ -8,7 +8,7 @@
  */
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
-import { autoUpdater } from 'electron-updater';
+/* import { autoUpdater } from 'electron-updater'; */
 import log from 'electron-log';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
@@ -20,10 +20,20 @@ import polyfillLocalStorage from '@node/polyfill/LocalStorage';
 import { resolveHtmlPath } from '@node/util/util';
 import MenuBuilder from './menu';
 
+// #region Logging setup
+
+Object.assign(console, log.functions);
+log.log('Starting main.ts');
+
+// #endregion
+
 // #region globalThis setup
 
 globalThis.processType = ProcessType.Main;
 globalThis.isPackaged = app.isPackaged;
+globalThis.resourcesPath = app.isPackaged
+  ? process.resourcesPath
+  : path.join(__dirname, '../../');
 
 // #endregion
 
@@ -35,13 +45,13 @@ polyfillLocalStorage();
 
 // #region ELECTRON SETUP
 
-class AppUpdater {
+/* class AppUpdater {
   constructor() {
     log.transports.file.level = 'info';
     autoUpdater.logger = log;
     autoUpdater.checkForUpdatesAndNotify();
   }
-}
+} */
 
 // Keep a global reference of the window object. If you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -76,13 +86,8 @@ const installExtensions = async () => {
     .catch(console.log);
 };
 
-/** The path to the app package directory */
-const RESOURCES_PATH = app.isPackaged
-  ? process.resourcesPath
-  : path.join(__dirname, '../../');
-
 const getAssetPath = (...paths: string[]): string => {
-  return path.join(RESOURCES_PATH, 'assets', ...paths);
+  return path.join(globalThis.resourcesPath, 'assets', ...paths);
 };
 
 /** Sets up the electron BrowserWindow renderer process */
@@ -144,7 +149,7 @@ const createWindow = async () => {
 
   // Remove this if your app does not use auto updates
   // eslint-disable-next-line
-  new AppUpdater();
+  /* new AppUpdater(); */
 };
 
 app.on('window-all-closed', () => {
@@ -168,8 +173,8 @@ const ipcHandlers: {
     ...args: any[]
   ) => Promise<unknown> | unknown;
 } = {
-  'electronAPI.env.getVar': (_event, name: string) => process.env[name],
-  'electronAPI.env.test': (_event) => 'From main.ts: test',
+  'electronAPI.env.test': (_event, message: string) =>
+    `From main.ts: test ${message}`,
 };
 
 app
@@ -251,17 +256,18 @@ const formatExtensionHostLog = (message: string, tag = '') => {
 
 // In production, fork a new process for the extension host
 // In development, spawn nodemon to watch the extension-host
+const sharedArgs = ['--resourcesPath', globalThis.resourcesPath];
 const extensionHost = app.isPackaged
   ? fork(
       path.join(__dirname, '../extension-host/extension-host.js'),
-      ['--packaged'],
+      ['--packaged', ...sharedArgs],
       {
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       },
     )
   : spawn(
       process.platform.includes('win') ? 'npm.cmd' : 'npm',
-      ['run', 'start:extension-host'],
+      ['run', 'start:extension-host', '--', ...sharedArgs],
       {
         stdio: ['ignore', 'pipe', 'pipe'],
       },

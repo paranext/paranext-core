@@ -17,6 +17,7 @@ declare const webpackRenderer: {
 
 globalThis.processType = ProcessType.Renderer;
 globalThis.isPackaged = webpackRenderer.isPackaged;
+globalThis.resourcesPath = 'resources://';
 
 // #endregion
 

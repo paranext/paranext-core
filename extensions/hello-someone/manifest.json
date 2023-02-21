@@ -1,0 +1,9 @@
+{
+  "name": "hello-someone",
+  "version": "0.0.1",
+  "description": "Simple hello someone extension for Paranext",
+  "author": "TJ Couch",
+  "license": "MIT",
+  "main": "hello-someone.js",
+  "activationEvents": ["onCommand:hello-someone.hello-someone"]
+}

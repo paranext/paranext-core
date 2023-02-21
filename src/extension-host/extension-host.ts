@@ -9,6 +9,11 @@ import * as ExtensionService from '@extension-host/services/ExtensionService';
 // #region command-line arguments
 
 const isPackaged = process.argv.includes('--packaged');
+const resourcesPathIndex = process.argv.indexOf('--resourcesPath');
+const resourcesPath =
+  resourcesPathIndex >= 0 && process.argv.length > resourcesPathIndex + 1
+    ? process.argv[resourcesPathIndex + 1]
+    : 'resources://';
 
 // #endregion
 
@@ -16,6 +21,7 @@ const isPackaged = process.argv.includes('--packaged');
 
 globalThis.processType = ProcessType.ExtensionHost;
 globalThis.isPackaged = isPackaged;
+globalThis.resourcesPath = resourcesPath;
 
 // #endregion
 
@@ -51,6 +57,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
       `Test Error thrown in throwErrorExtensionHost command: ${message}`,
     );
   },
+  getResourcesPath: async () => globalThis.resourcesPath,
 };
 
 NetworkService.initialize()
@@ -65,6 +72,13 @@ NetworkService.initialize()
   })
   .catch((e) => console.error(e));
 
-ExtensionService.initialize();
+// Need to wait a bit to initialize extensions in production because the extension host launches faster than the renderer.
+// TODO: Fix this so we can await renderer connecting event or something
+setTimeout(
+  () => {
+    ExtensionService.initialize();
+  },
+  globalThis.isPackaged ? 3000 : 0,
+);
 
 // #endregion

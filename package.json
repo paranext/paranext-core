@@ -475,7 +475,8 @@
       "output": "release/build"
     },
     "extraResources": [
-      "./assets/**"
+      "./assets/**",
+      "./extensions/**"
     ],
     "publish": {
       "provider": "github",

@@ -31,9 +31,33 @@ export const getAppDir = memoizeOne((): string => {
     : path.join(__dirname, '../../../dev-appdata');
 });
 
-export const getDir = memoizeOne((): string => {
-  return globalThis.isPackaged
-})
+const APP_SCHEME = 'app';
+const RESOURCES_SCHEME = 'resources';
+
+/**
+ * Get a mapping from scheme to the absolute path to that scheme.
+ * TODO: this is currently lazy-loaded because globalThis doesn't get populated until after imports are finished.
+ * Fix this to be a normal object after fixing globalThis.
+ */
+const getSchemePaths = memoizeOne((): { [scheme: string]: string } => ({
+  [APP_SCHEME]: getAppDir(),
+  [RESOURCES_SCHEME]: globalThis.resourcesPath,
+}));
+
+/**
+ * Parse a URI from a string into its original parts.
+ * TODO: Make URI an actual class. Will be challenging when passing through WebSocket
+ */
+function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
+  // Add app scheme to the uri if it doesn't have one
+  const fullUri = uri.includes('://') ? uri : `app://${uri}`;
+
+  const [scheme, uriPath] = fullUri.split('://');
+  return {
+    scheme,
+    uriPath,
+  };
+}
 
 /**
  * Resolves the uri to a path
@@ -41,7 +65,8 @@ export const getDir = memoizeOne((): string => {
  * @returns real path to the uri supplied
  */
 export function getPathFromUri(uri: Uri): string {
-  return path.join(getAppDir(), uri);
+  const { scheme, uriPath } = getPathInfoFromUri(uri);
+  return path.join(getSchemePaths()[scheme], uriPath);
 }
 
 /**
@@ -51,5 +76,6 @@ export function getPathFromUri(uri: Uri): string {
  * @returns one uri that combines the uri and the paths in left-to-right order
  */
 export function joinUriPaths(uri: Uri, ...paths: string[]): Uri {
-  return path.join(uri, ...paths);
+  const { scheme, uriPath } = getPathInfoFromUri(uri);
+  return `${scheme}://${path.join(uriPath, ...paths)}`;
 }

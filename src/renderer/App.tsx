@@ -8,16 +8,12 @@ import { getErrorMessage, isString } from '@shared/util/Util';
 import usePromise from '@renderer/hooks/usePromise';
 import { WebView, WebViewProps } from './components/WebView';
 
-const getVar: (envVar: string) => Promise<string> =
-  NetworkService.createRequestFunction('electronAPI.env.getVar');
-
-const testBase: () => Promise<string> = NetworkService.createRequestFunction(
-  'electronAPI.env.test',
-);
+const testBase: (message: string) => Promise<string> =
+  NetworkService.createRequestFunction('electronAPI.env.test');
 
 const test = async () => {
   /* const start = performance.now(); */
-  const result = await testBase();
+  const result = await testBase('stuff');
   /* console.log(`Test took ${performance.now() - start} ms`); */
   return result;
 };
@@ -46,6 +42,10 @@ const addThree = papi.commands.createSendCommandFunction<
 
 const addMany = papi.commands.createSendCommandFunction<number[], number>(
   'addMany',
+);
+
+const getResourcesPath = papi.commands.createSendCommandFunction<[], string>(
+  'getResourcesPath',
 );
 
 const helloWorld = papi.commands.createSendCommandFunction<[], string>(
@@ -115,8 +115,11 @@ const Hello = () => {
     [],
   );
 
-  const [NODE_ENV] = usePromise(
-    useCallback(() => getVar('NODE_ENV'), []),
+  const [resourcesPath] = usePromise(
+    useCallback(async () => {
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 5000));
+      return getResourcesPath();
+    }, []),
     'retrieving',
   );
 
@@ -345,7 +348,7 @@ const Hello = () => {
           </button>
         </div>
         <div className="Hello">
-          <div>NODE_ENV: {NODE_ENV}</div>
+          <div>resourcesPath: {resourcesPath}</div>
           <div>{promiseReturn}</div>
         </div>
       </div>

@@ -49,7 +49,9 @@ type ActiveExtension = {
 
 /** Get information for all the extensions present */
 const getExtensions = async (): Promise<ExtensionInfo[]> => {
-  const extensionFolders = (await readDir('extensions'))[EntryType.Directory];
+  const extensionFolders = (await readDir('resources://extensions'))[
+    EntryType.Directory
+  ];
 
   return Promise.all(
     extensionFolders.map(async (extensionFolder) => {
@@ -75,8 +77,11 @@ const activateExtension = async (
   extension: ExtensionInfo,
   extensionFilePath: string,
 ): Promise<ActiveExtension> => {
-  // Import the extension file
-  const extensionModule = (await import(extensionFilePath)) as IExtension;
+  // Import the extension file. Tell webpack to ignore it because extension files are not in the bundle and should not be looked up in the bundle
+  // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
+  const extensionModule = (await import(
+    /* webpackIgnore: true */ extensionFilePath
+  )) as IExtension;
 
   // Activate the extension
   const extensionUnsubscriber = await extensionModule.activate();
@@ -106,7 +111,10 @@ const activateExtensions = async (
   /** The path to each extension along with whether that extension has already been imported */
   const extensionsWithFiles = extensions.map((extension) => ({
     extension,
-    filePath: getPathFromUri(joinUriPaths(extension.dirUri, extension.main)),
+    // When packaged, we need to prefix absolute paths with file:// for some reason
+    filePath: `${globalThis.isPackaged ? 'file://' : ''}${getPathFromUri(
+      joinUriPaths(extension.dirUri, extension.main),
+    )}`,
     hasBeenImported: false,
   }));
 
