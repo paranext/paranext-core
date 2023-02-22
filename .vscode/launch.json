@@ -18,7 +18,10 @@
       "name": ".NET Core Attach",
       "type": "coreclr",
       "request": "attach",
-      "processName": "ParanextDataProvider.exe"
+      "processName": "ParanextDataProvider",
+      "windows": {
+        "processName": "ParanextDataProvider.exe"
+      }
     },
     {
       "name": "Electron: Main",

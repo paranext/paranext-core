@@ -29,7 +29,7 @@ internal sealed class MessageConverter : JsonConverter<Message>
 
         Utf8JsonReader readerClone = reader; // Make copy of reader state (struct copy)
 
-        Enum<MessageType> messageType = ReadProperty<MessageType>(ref readerClone);
+        Enum<MessageType> messageType = ReadType(ref readerClone);
         if (!messageTypeMap.TryGetValue(messageType, out Type? messageDataType))
             throw new ArgumentException("Unexpected message type: " + messageType);
 
@@ -44,15 +44,15 @@ internal sealed class MessageConverter : JsonConverter<Message>
 
     #region Private helper methods
     /// <summary>
-    /// Reads the string property from the message given the specified reader
+    /// Reads the type property from the message given the specified reader
     /// </summary>
-    private static Enum<TReturn> ReadProperty<TReturn>(ref Utf8JsonReader reader) where TReturn : class, EnumType
+    private static Enum<MessageType> ReadType(ref Utf8JsonReader reader)
     {
         do
         {
             bool success = reader.Read();
             if (!success)
-                return Enum<TReturn>.Null;
+                return Enum<MessageType>.Null;
 
             if (reader.TokenType != JsonTokenType.PropertyName)
                 continue;
@@ -63,12 +63,12 @@ internal sealed class MessageConverter : JsonConverter<Message>
 
             success = reader.Read();
             if (!success)
-                return Enum<TReturn>.Null;
+                return Enum<MessageType>.Null;
 
             if (reader.TokenType != JsonTokenType.String)
                 throw new JsonException($"Unexpected token {reader.TokenType} (expected String)");
 
-            return new(reader.GetString());
+            return new Enum<MessageType>(reader.GetString());
         }
         while (true);
     }
