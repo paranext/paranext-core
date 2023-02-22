@@ -6,10 +6,13 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
-      "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/ParanextDataProvider.exe",
+      "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/ParanextDataProvider",
       "args": [],
       "cwd": "${workspaceFolder}",
       "stopAtEntry": false,
+      "windows": {
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/ParanextDataProvider.exe"
+      }
     },
     {
       "name": ".NET Core Attach",

@@ -1,3 +1,4 @@
+using System.ServiceModel;
 using PtxUtils;
 
 namespace Paranext.DataProvider.Data;
@@ -85,6 +86,7 @@ public sealed class MessageInitClient : Message
     /// </summary>
     private MessageInitClient() : base(UNKNOWN_SENDER_ID)
     {
+        ConnectorInfo = new NetworkConnectorInfo(NetworkConnectorInfo.CLIENT_ID_UNSET);
     }
 
     public MessageInitClient(int senderId, NetworkConnectorInfo connectorInfo) : base(senderId)
@@ -94,7 +96,7 @@ public sealed class MessageInitClient : Message
 
     public override Enum<MessageType> Type => MessageType.InitClient;
 
-    public NetworkConnectorInfo? ConnectorInfo { get; set; }
+    public NetworkConnectorInfo ConnectorInfo { get; set; }
 }
 #endregion
 

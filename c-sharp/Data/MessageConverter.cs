@@ -48,19 +48,29 @@ internal sealed class MessageConverter : JsonConverter<Message>
     /// </summary>
     private static Enum<TReturn> ReadProperty<TReturn>(ref Utf8JsonReader reader) where TReturn : class, EnumType
     {
-        reader.Read();
-        if (reader.TokenType != JsonTokenType.PropertyName)
-            throw new JsonException($"Unexpected token {reader.TokenType} (expected PropertyName)");
+        do
+        {
+            bool success = reader.Read();
+            if (!success)
+                return Enum<TReturn>.Null;
 
-        string? propertyName = reader.GetString();
-        if (propertyName != "type")
-            throw new JsonException("Unexpected property");
+            if (reader.TokenType != JsonTokenType.PropertyName)
+                continue;
 
-        reader.Read();
-        if (reader.TokenType != JsonTokenType.String)
-            throw new JsonException($"Unexpected token {reader.TokenType} (expected String)");
+            string? propertyName = reader.GetString();
+            if (propertyName != "type")
+                continue;
 
-        return new(reader.GetString());
+            success = reader.Read();
+            if (!success)
+                return Enum<TReturn>.Null;
+
+            if (reader.TokenType != JsonTokenType.String)
+                throw new JsonException($"Unexpected token {reader.TokenType} (expected String)");
+
+            return new(reader.GetString());
+        }
+        while (true);
     }
     #endregion
 }

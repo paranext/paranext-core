@@ -24,7 +24,6 @@ public static class Program
 
         // Add request handlers
         bool result = await connection.RegisterRequest(RequestTypes.AddOne, RequestAddOne);
-
         if (!result)
             return;
 

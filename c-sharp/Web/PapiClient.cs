@@ -1,5 +1,4 @@
 using System.Net.WebSockets;
-using System.Reflection.Metadata;
 using System.Text;
 using System.Text.Json;
 using Paranext.DataProvider.Data;
@@ -93,7 +92,7 @@ internal sealed class PapiClient
     /// Registers a request handler with the server
     /// </summary>
     /// <param name="requestToHandle">The request to register</param>
-    /// <param name="doStuff">Method that is called when the request is recieved from the server</param>
+    /// <param name="doStuff">Method that is called when the request is received from the server</param>
     /// <returns>True if the registration was successful</returns>
     public async Task<bool> RegisterRequest(Enum<RequestTypes> requestToHandle, Func<dynamic, RequestReturn> doStuff)
     {
@@ -205,7 +204,7 @@ internal sealed class PapiClient
                 return null;
             }
 
-            message.Write(buffer, 0, result .Count);
+            message.Write(buffer, 0, result.Count);
         } while (!result.EndOfMessage);
 
         string jsonData = UTF8WithoutBOM.GetString(message.GetBuffer(), 0, (int)message.Position);
