@@ -13,10 +13,10 @@ import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import windowStateKeeper from 'electron-window-state';
+import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
-import dotnetDataProvider from './services/dotnet-data-provider.service';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 
@@ -117,7 +117,7 @@ const createWindow = async () => {
   });
 
   mainWindow.on('closed', () => {
-    dotnetDataProvider.stop();
+    dotnetDataProvider.kill();
     mainWindow = null;
   });
 

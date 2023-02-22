@@ -3,30 +3,28 @@ import path from 'path';
 
 let dotnet: ChildProcessWithoutNullStreams | undefined;
 
-function stopDotnetDataProvider() {
-  if (dotnet != null) {
-    if (dotnet.kill()) {
-      console.log('[dotnet data provider] was killed');
-    } else {
-      console.error(
-        '[dotnet data provider] was not stopped! Investigate other .kill() options',
-      );
-    }
-    dotnet = undefined;
+function killDotnetDataProvider() {
+  if (!dotnet) return;
+
+  if (dotnet.kill()) {
+    console.log('[dotnet data provider] was killed');
+  } else {
+    console.error(
+      '[dotnet data provider] was not stopped! Investigate other .kill() options',
+    );
   }
+  dotnet = undefined;
 }
 
 /**
- * Starts the Dotnet Data Provider. It will first kill the process if it is already running.
+ * Starts the Dotnet Data Provider if it isn't already running.
  */
 function startDotnetDataProvider() {
+  if (dotnet) return;
+
   // default values for development
-  let command = 'dotnet';
-  let args: string[] = [
-    'run',
-    '--project',
-    'c-sharp/ParanextDataProvider.csproj',
-  ];
+  let command = process.platform.includes('win') ? 'npm.cmd' : 'npm';
+  let args: string[] = ['run', 'start:data'];
 
   if (process.env.NODE_ENV === 'production') {
     if (process.platform === 'win32') {
@@ -46,7 +44,6 @@ function startDotnetDataProvider() {
     }
   }
 
-  stopDotnetDataProvider();
   dotnet = spawn(command, args);
 
   dotnet.stdout.on('data', (data) => {
@@ -58,7 +55,7 @@ function startDotnetDataProvider() {
   });
 
   dotnet.on('close', (code, signal) => {
-    if (signal != null) {
+    if (signal) {
       console.log(`[dotnet data provider] terminated with signal ${signal}`);
     } else {
       console.log(`[dotnet data provider] exited with code ${code}`);
@@ -68,6 +65,6 @@ function startDotnetDataProvider() {
 
 const dotnetDataProvider = {
   start: startDotnetDataProvider,
-  stop: stopDotnetDataProvider,
+  kill: killDotnetDataProvider,
 };
 export default dotnetDataProvider;
