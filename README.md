@@ -45,6 +45,12 @@ cd paranext-core
 npm install
 ```
 
+Build the C# code:
+
+```bash
+npm run build:data
+```
+
 ## Starting Development
 
 Start the app in the `dev` environment:

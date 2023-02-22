@@ -2,6 +2,28 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": ".NET Core Launch",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/ParanextDataProvider",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "windows": {
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/ParanextDataProvider.exe"
+      }
+    },
+    {
+      "name": ".NET Core Attach",
+      "type": "coreclr",
+      "request": "attach",
+      "processName": "ParanextDataProvider",
+      "windows": {
+        "processName": "ParanextDataProvider.exe"
+      }
+    },
+    {
       "name": "Electron: Main",
       "type": "node",
       "request": "launch",

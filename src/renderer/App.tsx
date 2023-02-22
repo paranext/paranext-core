@@ -21,6 +21,9 @@ const test = async () => {
   return result;
 };
 
+const addOne = async (message: number) =>
+  papi.commands.sendCommand<[number], number>('addOne', message);
+
 const echo = async (message: string) =>
   papi.commands.sendCommand<[string], string>('echo', message);
 
@@ -129,6 +132,15 @@ const Hello = () => {
           }}
         >
           Test
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            const result = await runPromise(() => addOne(78));
+            console.log(`added: '${result}'`);
+          }}
+        >
+          Test C#
         </button>
       </div>
       <div className="Hello">
