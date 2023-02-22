@@ -14,6 +14,7 @@ import { newGuid } from '@shared/util/Util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi';
+import React, { createElement } from 'react';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -66,9 +67,11 @@ const getWebViewPapi = (webViewId: string) => {
   throw new Error(`Cannot find papi for WebView with id ${webViewId}`);
 };
 
-// TODO: Hacking in getWebViewPapi onto window for now so webViews can access it. Make this TypeScript-y
+// TODO: Hacking in React and getWebViewPapi onto window for now so webViews can access it. Make this TypeScript-y
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).getWebViewPapi = getWebViewPapi;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).React = React;
 
 // #endregion
 
@@ -77,33 +80,53 @@ const getWebViewPapi = (webViewId: string) => {
  * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
  * @returns promise that resolves nothing if we successfully handled the webView
  */
-export const addWebView = async (webView: string) => {
+export const addWebView = async (webView: WebViewProps) => {
   if (!isRenderer()) {
-    return CommandService.sendCommand<[string], void>('addWebView', webView);
+    return CommandService.sendCommand<[WebViewProps], void>(
+      'addWebView',
+      webView,
+    );
   }
 
   // Create a papi instance for this WebView
   const webViewId = newGuid();
   setWebViewPapi(webViewId, papi);
 
-  // Build the contents of the iframe
-  // Add wrapping to turn a plain string into an iframe
-  let webViewContents = webView.includes('<html')
-    ? webView
-    : `<html><head></head><body>${webView}</body></html>`;
+  let updatedWebView: WebViewProps;
+  if (webView.hasReact) {
+    // TODO: make this work ~~woo~~
+    const reactWebViewString =
+      `var papi = window.getWebViewPapi('${webViewId}');var React = window.React;${webView.contents}` as string;
+    const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(
+      reactWebViewString,
+    )}`;
+    const reactWebViewModule = await import(/* webpackIgnore: true */ dataUrl);
+    const reactWebViewComponent = reactWebViewModule.default;
 
-  // Add some script to give access to papi
-  const headStart = webViewContents.indexOf('<head');
-  const headEnd = webViewContents.indexOf('>', headStart);
+    updatedWebView = {
+      ...webView,
+      contents: createElement(reactWebViewComponent, null),
+    };
+  } else {
+    // Build the contents of the iframe
+    // Add wrapping to turn a plain string into an iframe
+    let webViewContents = webView.contents.includes('<html')
+      ? webView.contents
+      : `<html><head></head><body>${webView.contents}</body></html>`;
 
-  // Add a connection to the papi
-  webViewContents = `${webViewContents.substring(0, headEnd + 1)}<script>
-  var papi = window.parent.getWebViewPapi('${webViewId}');
-  </script>${webViewContents.substring(headEnd + 1)}`;
+    // Add some script to give access to papi
+    const headStart = webViewContents.indexOf('<head');
+    const headEnd = webViewContents.indexOf('>', headStart);
 
-  addWebViewCallbacks.forEach((callback) =>
-    callback({ contents: webViewContents }),
-  );
+    // Add a connection to the papi
+    webViewContents = `${webViewContents.substring(0, headEnd + 1)}<script>
+    var papi = window.parent.getWebViewPapi('${webViewId}');
+    </script>${webViewContents.substring(headEnd + 1)}`;
+
+    updatedWebView = { ...webView, contents: webViewContents };
+  }
+
+  addWebViewCallbacks.forEach((callback) => callback(updatedWebView));
   return Promise.resolve();
 };
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */

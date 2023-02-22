@@ -26,8 +26,8 @@ exports.activate = async () => {
     }),
   ];
 
-  papi.webViews.addWebView(
-    `<html>
+  papi.webViews.addWebView({
+    contents: `<html>
       <head>
       </head>
       <body>
@@ -57,7 +57,34 @@ exports.activate = async () => {
         </script>
       </body>
     </html>`,
-  );
+  });
+
+  papi.webViews.addWebView({
+    hasReact: true,
+    contents: `
+    export default function HelloWorld() {
+      const test = React.useContext(papi.react.context.TestContext);
+      const [echoResult] = papi.react.hooks.usePromise(
+        React.useCallback(async () => {
+          await new Promise((resolve) => setTimeout(() => resolve(), 5000));
+          return papi.commands.sendCommand('echoRenderer', 'From Hello World React WebView');
+        }, []),
+        'retrieving',
+      );
+      return React.createElement('div', null,
+        React.createElement('div', null,
+          React.createElement(papi.react.components.PButton, { onClick: () => {console.log('Hello World PButton clicked!')}}, 'Hello World PButton ')
+        ),
+        React.createElement('div', null,
+          test
+        ),
+        React.createElement('div', null,
+          echoResult
+        )
+      );
+    }
+  `,
+  });
 
   return Promise.all(
     unsubPromises.map((unsubPromise) => unsubPromise.promise),

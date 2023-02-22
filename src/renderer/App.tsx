@@ -5,8 +5,9 @@ import icon from '@assets/icon.png';
 import './App.css';
 import papi from '@shared/services/papi';
 import { getErrorMessage, isString } from '@shared/util/Util';
-import usePromise from '@renderer/hooks/usePromise';
-import { WebView, WebViewProps } from './components/WebView';
+import usePromise from '@renderer/hooks/papi-hooks/usePromise';
+import TestContext from '@renderer/context/papi-context/TestContext';
+import { WebView, WebViewProps } from '@renderer/components/WebView';
 
 const testBase: (message: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.test');
@@ -155,7 +156,7 @@ const Hello = () => {
   }, [addWebView]);
 
   return (
-    <>
+    <TestContext.Provider value="test">
       <div className="view">
         <div className="Hello">
           <img width="200" alt="icon" src={icon} />
@@ -336,16 +337,14 @@ const Hello = () => {
           >
             Test Exception (Hello World)
           </button>
-          <button
-            type="button"
+          <papi.react.components.PButton
             onClick={() => runPromise(() => test())}
-            onContextMenu={(e) => {
-              e.preventDefault();
+            onContextMenu={() => {
               executeMany(test);
             }}
           >
             Test
-          </button>
+          </papi.react.components.PButton>
         </div>
         <div className="Hello">
           <div>resourcesPath: {resourcesPath}</div>
@@ -357,7 +356,7 @@ const Hello = () => {
         // eslint-disable-next-line react/no-array-index-key
         <WebView key={i} {...webView} />
       ))}
-    </>
+    </TestContext.Provider>
   );
 };
 
