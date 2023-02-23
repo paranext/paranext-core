@@ -95,9 +95,6 @@ const createWindow = async () => {
     },
   });
 
-  // Start the dotnet data provider early so its ready when needed.
-  dotnetDataProvider.start();
-
   // Register listeners on the window, so the state is updated automatically
   // (the listeners will be removed when the window is closed)
   // and restore the maximized or full screen state
@@ -117,7 +114,6 @@ const createWindow = async () => {
   });
 
   mainWindow.on('closed', () => {
-    dotnetDataProvider.kill();
     mainWindow = null;
   });
 
@@ -139,8 +135,15 @@ app.on('window-all-closed', () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
   if (process.platform !== 'darwin') {
+    // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
+    dotnetDataProvider.kill();
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
+  dotnetDataProvider.kill();
 });
 
 // #endregion
@@ -195,20 +198,23 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   },
 };
 
-NetworkService.initialize()
-  .then(() => {
-    // Set up test handlers
-    Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
-      NetworkService.registerRequestHandler(
-        ipcHandle,
-        async (...args: unknown[]) =>
-          handler({} as Electron.IpcMainInvokeEvent, ...args),
-      );
-    });
-    Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-      papi.commands.registerCommand(commandName, handler);
-    });
-  })
-  .catch((e) => console.error(e));
+(async () => {
+  await NetworkService.initialize();
+  // Set up test handlers
+  Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
+    NetworkService.registerRequestHandler(
+      ipcHandle,
+      async (...args: unknown[]) =>
+        handler({} as Electron.IpcMainInvokeEvent, ...args),
+    );
+  });
+  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
+    papi.commands.registerCommand(commandName, handler);
+  });
+
+  // Start the dotnet data provider early so its ready when needed once the
+  // WebSocket is up.
+  dotnetDataProvider.start();
+})().catch(console.error);
 
 // #endregion
