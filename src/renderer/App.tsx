@@ -68,8 +68,10 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
   }
 };
 
+let addResult = 0;
+
 const Hello = () => {
-  const [promiseReturn, setPromiseReturn] = useState('');
+  const [promiseReturn, setPromiseReturn] = useState('Click a button.');
 
   const [NODE_ENV] = usePromise(
     useCallback(() => getVar('NODE_ENV'), []),
@@ -136,8 +138,10 @@ const Hello = () => {
         <button
           type="button"
           onClick={async () => {
-            const result = await runPromise(() => addOne(78));
-            console.log(`added: '${result}'`);
+            await runPromise(async () => {
+              addResult = (await addOne(addResult)) as number;
+              return `C# addOne: ${addResult}`;
+            });
           }}
         >
           Test C#
