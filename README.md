@@ -83,8 +83,8 @@ npm run package
 ## Publishing
 
 1. Create a branch of the form `release/*`, e.g. `release/v1.2.3`, or `release/v1.2.3-rc1`.
-2. Update the _version_ in your project's `package.json` file (e.g. _1.2.3_).
-3. Run `npm i` to update `package-lock.json`.
+2. Update the _version_ in your project's `release/app/package.json` file (e.g. _1.2.3_).
+3. Run `npm i` in that folder to update it's `package-lock.json`.
 4. Create a new draft [GitHub **Release**](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository), ensure the following are included:
    - a _Tag version_, e.g. `v1.2.3`, choose _Create new tag on publish_.
    - set the **Target** to the release branch.
