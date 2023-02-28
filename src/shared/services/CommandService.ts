@@ -19,18 +19,6 @@ import logger from '@shared/util/logger';
 /** Whether this service has finished setting up */
 let isInitialized = false;
 
-/** Registration object for a command. Want an object so we can register multiple commands at once */
-// Any is probably fine because we likely never know or care about the args or return
-export type CommandRegistration<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  TParam extends Array<unknown> = any[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  TReturn = any,
-> = {
-  commandName: string;
-  handler: CommandHandler<TParam, TReturn>;
-};
-
 async function addThree(a: number, b: number, c: number) {
   return a + b + c;
 }
