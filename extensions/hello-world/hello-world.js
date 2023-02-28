@@ -14,6 +14,64 @@ console.log(
 
 const unsubscribers = [];
 
+/** Gets the code to make the Hello World React component. Provide a name to use to identify this component. Provide a string to modify the 'function HelloWorld()' line */
+const getReactComponent = (name, functionModifier = '') =>
+  `const { createElement, useCallback, useContext, useState } = React;
+  const {
+    react: {
+      context: { TestContext },
+      hooks: { usePromise },
+      components: { PButton }
+    }
+  } = papi;
+
+  ${functionModifier} function HelloWorld() {
+    const test = useContext(TestContext) || 'Context didnt work!! :(';
+
+    const [myState, setMyState] = useState(0);
+
+    const [echoResult] = usePromise(
+      useCallback(async () => {
+        await new Promise((resolve) => setTimeout(() => resolve(), 3000));
+        return papi.commands.sendCommand('echoRenderer', 'From ${name}');
+      }, []),
+      'retrieving',
+    );
+
+    return createElement('div', null,
+      createElement('div', null,
+        createElement(
+          PButton,
+          {
+            onClick: () => {
+              console.log('${name} PButton clicked!');
+              setMyState(myStateCurrent => myStateCurrent + 1);
+            }
+          },
+          'Hello World PButton ',
+          myState
+        )
+      ),
+      createElement('div', null,
+        test
+      ),
+      createElement('div', null,
+        echoResult
+      ),
+      createElement('div', null,
+          createElement(
+            PButton,
+            {
+              onClick: () => {
+                throw new Error('${name} test exception!');
+              }
+            },
+            'Throw test exception'
+          )
+      )
+    );
+  }`;
+
 exports.activate = async () => {
   console.log('Hello world is activating!');
 
@@ -34,7 +92,13 @@ exports.activate = async () => {
         <div>Hello World!!</div>
         <div><button id="echo-renderer" type="button">Echo Renderer</button></div>
         <div id="echo-renderer-output"></div>
+        <div><button id="hello-someone" type="button">Hello Someone</button></div>
+        <div id="hello-someone-output"></div>
+        <div id="root"></div>
         <script>
+          // React component to render in the root
+          ${getReactComponent('Hello World React HTML Webview')}
+
           function print(input) {
             console.log(input);
           }
@@ -50,9 +114,33 @@ exports.activate = async () => {
             );
             echoRendererButton.addEventListener("contextmenu", (e) => {
               e.preventDefault();
+              const promises = new Array(10000);
               for (let i = 0; i < 10000; i += 1)
-                papi.commands.sendCommand('echoRenderer', 'From Hello World WebView').then(print);
+                promises[i] = papi.commands.sendCommand('echoRenderer', 'From Hello World WebView');
+              Promise.all(promises).then(() => print('Done'))
             });
+
+            // Attach handler for hello-someone
+            const helloSomeoneButton = document.getElementById("hello-someone");
+            helloSomeoneButton.addEventListener("click", () =>
+              papi.commands.sendCommand('hello-someone.hello-someone', "'Hello World WebView'").then((message) => {
+                const helloSomeoneOutput = document.getElementById("hello-someone-output");
+                helloSomeoneOutput.innerHTML = message;
+                print(message);
+              })
+            );
+            helloSomeoneButton.addEventListener("contextmenu", (e) => {
+              e.preventDefault();
+              const promises = new Array(10000);
+              for (let i = 0; i < 10000; i += 1)
+                promises[i] = papi.commands.sendCommand('hello-someone.hello-someone', "'Hello World WebView'");
+              Promise.all(promises).then(() => print('Done'))
+            });
+
+            // Initialize React
+            const container = document.getElementById('root');
+            const root = createRoot(container);
+            root.render(React.createElement(HelloWorld, null));
           });
         </script>
       </body>
@@ -61,29 +149,7 @@ exports.activate = async () => {
 
   papi.webViews.addWebView({
     hasReact: true,
-    contents: `
-    export default function HelloWorld() {
-      const test = React.useContext(papi.react.context.TestContext);
-      const [echoResult] = papi.react.hooks.usePromise(
-        React.useCallback(async () => {
-          await new Promise((resolve) => setTimeout(() => resolve(), 5000));
-          return papi.commands.sendCommand('echoRenderer', 'From Hello World React WebView');
-        }, []),
-        'retrieving',
-      );
-      return React.createElement('div', null,
-        React.createElement('div', null,
-          React.createElement(papi.react.components.PButton, { onClick: () => {console.log('Hello World PButton clicked!')}}, 'Hello World PButton ')
-        ),
-        React.createElement('div', null,
-          test
-        ),
-        React.createElement('div', null,
-          echoResult
-        )
-      );
-    }
-  `,
+    contents: getReactComponent('Hello World React Webview', 'export default'),
   });
 
   return Promise.all(

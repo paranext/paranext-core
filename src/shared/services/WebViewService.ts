@@ -15,6 +15,7 @@ import { newGuid } from '@shared/util/Util';
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi';
 import React, { createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -67,11 +68,13 @@ const getWebViewPapi = (webViewId: string) => {
   throw new Error(`Cannot find papi for WebView with id ${webViewId}`);
 };
 
-// TODO: Hacking in React and getWebViewPapi onto window for now so webViews can access it. Make this TypeScript-y
+// TODO: Hacking in React, createRoot, and getWebViewPapi onto window for now so webViews can access it. Make this TypeScript-y
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).getWebViewPapi = getWebViewPapi;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).React = React;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).createRoot = createRoot;
 
 // #endregion
 
@@ -92,11 +95,15 @@ export const addWebView = async (webView: WebViewProps) => {
   const webViewId = newGuid();
   setWebViewPapi(webViewId, papi);
 
+  /** String that sets up 'import' statements in the webview to pull in libraries */
+  const imports = `var papi = window.parent.getWebViewPapi('${webViewId}');var React = window.parent.React;var createRoot = window.parent.createRoot;`;
+
   let updatedWebView: WebViewProps;
   if (webView.hasReact) {
-    // TODO: make this work ~~woo~~
-    const reactWebViewString =
-      `var papi = window.getWebViewPapi('${webViewId}');var React = window.React;${webView.contents}` as string;
+    // Thanks to user585776 at https://stackoverflow.com/a/67359410 for temporary solution of running code from a string using data url
+    // TODO: Fix so we are serving all webview content from the backend or something
+    // TODO: test to see if exceptions bring Paranext down or if they still occur within the iframe
+    const reactWebViewString = `${imports}${webView.contents}` as string;
     const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(
       reactWebViewString,
     )}`;
@@ -120,7 +127,7 @@ export const addWebView = async (webView: WebViewProps) => {
 
     // Add a connection to the papi
     webViewContents = `${webViewContents.substring(0, headEnd + 1)}<script>
-    var papi = window.parent.getWebViewPapi('${webViewId}');
+    ${imports}
     </script>${webViewContents.substring(headEnd + 1)}`;
 
     updatedWebView = { ...webView, contents: webViewContents };
