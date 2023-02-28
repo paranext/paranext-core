@@ -14,6 +14,7 @@ import {
   UnsubPromiseAsync,
 } from '@shared/util/PapiUtil';
 import { isClient } from '@shared/util/InternalUtil';
+import logger from '@shared/util/logger';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -109,14 +110,14 @@ export const initialize = memoizeOne(async (): Promise<void> => {
     const start = performance.now();
     sendCommandUnsafe('echo', 'Hi server!')
       .then((response) =>
-        console.log(
+        logger.log(
           'command:echo Response!!!',
           response,
           'Response time:',
           performance.now() - start,
         ),
       )
-      .catch((e) => console.error(e));
+      .catch(logger.error);
   }
 });
 

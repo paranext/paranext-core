@@ -14,6 +14,7 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import windowStateKeeper from 'electron-window-state';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
+import logger from '@shared/util/logger';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
@@ -57,7 +58,7 @@ const installExtensions = async () => {
       extensions.map((name) => installer[name]),
       forceDownload,
     )
-    .catch(console.log);
+    .catch(logger.log);
 };
 
 /** The path to the app package directory */
@@ -178,7 +179,7 @@ app
       if (mainWindow === null) createWindow();
     });
   })
-  .catch(console.log);
+  .catch(logger.log);
 
 // #endregion
 
@@ -188,7 +189,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   echo: async (message: string) => {
     /* const start = performance.now(); */
     /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
-    /* console.log(
+    /* logger.log(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return message;
@@ -215,6 +216,6 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   // Start the dotnet data provider early so its ready when needed once the
   // WebSocket is up.
   dotnetDataProvider.start();
-})().catch(console.error);
+})().catch(logger.error);
 
 // #endregion
