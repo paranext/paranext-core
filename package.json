@@ -45,9 +45,14 @@
     "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.main.prod.ts",
     "build:extension-host": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.extension-host.prod.ts",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",
+    "build:data": "dotnet build c-sharp/ParanextDataProvider.sln",
+    "build:data-release": "run-script-os",
+    "build:data-release:windows": "dotnet publish c-sharp/ParanextDataProvider.csproj -r win-x64 -o ./c-sharp/bin/Release/net7.0/publish/win-x64/",
+    "build:data-release:linux": "dotnet publish c-sharp/ParanextDataProvider.csproj -r linux-x64 -o ./c-sharp/bin/Release/net7.0/publish/linux-x64/",
+    "build:data-release:macos": "dotnet publish c-sharp/ParanextDataProvider.csproj -r osx-x64 -o ./c-sharp/bin/Release/net7.0/publish/osx-x64/ && dotnet publish c-sharp/ParanextDataProvider.csproj -p:PublishProfile=FolderProfile -r osx-arm64 -o ./c-sharp/bin/Release/net7.0/publish/osx-arm64/",
     "postinstall": "ts-node .erb/scripts/check-native-dep.js && electron-builder install-app-deps && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
-    "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && electron-builder build --publish never",
+    "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && npm run build:data-release && electron-builder build --publish never",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "prepare": "husky install",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
@@ -56,6 +61,7 @@
     "start:extension-host": "cross-env NODE_ENV=development nodemon --transpile-only ./src/extension-host/extension-host.ts",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
+    "start:data": "dotnet run --project c-sharp/ParanextDataProvider.csproj",
     "test": "jest"
   },
   "lint-staged": {
@@ -179,6 +185,12 @@
           "x64"
         ]
       },
+      "extraResources": [
+        {
+          "from": "./c-sharp/bin/Release/net7.0/publish/osx-${arch}/",
+          "to": "./dotnet/"
+        }
+      ],
       "type": "distribution",
       "hardenedRuntime": true,
       "entitlements": "assets/entitlements.mac.plist",
@@ -204,11 +216,24 @@
         "nsis",
         "nsis-web",
         "portable"
+      ],
+      "extraResources": [
+        {
+          "from": "./c-sharp/bin/Release/net7.0/publish/win-x64/",
+          "to": "./dotnet/"
+        }
       ]
     },
     "linux": {
       "target": [
         "AppImage"
+      ],
+      "category": "Development",
+      "extraResources": [
+        {
+          "from": "./c-sharp/bin/Release/net7.0/publish/linux-x64/",
+          "to": "./dotnet/"
+        }
       ],
       "extraFiles": [
         {
@@ -467,8 +492,7 @@
           "from": "/usr/lib/x86_64-linux-gnu/libgio-2.0.so.0",
           "to": "usr/lib/libgio-2.0.so.0"
         }
-      ],
-      "category": "Development"
+      ]
     },
     "directories": {
       "app": "release/app",

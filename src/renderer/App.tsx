@@ -19,6 +19,9 @@ const test = async () => {
   return result;
 };
 
+const addOne = async (num: number) =>
+  papi.commands.sendCommand<[number], number>('addOne', num);
+
 const echo: (message: string) => Promise<string> =
   papi.commands.createSendCommandFunction<[string], string>('echo');
 
@@ -109,12 +112,14 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
 };
 
 const Hello = () => {
-  const [promiseReturn, setPromiseReturn] = useState('');
+  const [promiseReturn, setPromiseReturn] = useState('Click a button.');
   const updatePromiseReturn = useCallback(
     (state: unknown) =>
       setPromiseReturn(isString(state) ? state : JSON.stringify(state)),
     [],
   );
+
+  const [addOneResult, setAddOneResult] = useState(0);
 
   const [resourcesPath] = usePromise(
     useCallback(async () => {
@@ -278,6 +283,22 @@ const Hello = () => {
             }}
           >
             AddMany (Extension Host)
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              runPromise(async () => {
+                const addResult = await addOne(addOneResult);
+                setAddOneResult(addResult);
+                return `C# addOne: ${addResult}`;
+              })
+            }
+            onContextMenu={(e) => {
+              e.preventDefault();
+              executeMany(() => addOne(3));
+            }}
+          >
+            AddOne (C#)
           </button>
           <button
             type="button"

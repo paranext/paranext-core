@@ -10,10 +10,11 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 /* import { autoUpdater } from 'electron-updater'; */
 import log from 'electron-log';
+import windowStateKeeper from 'electron-window-state';
+import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
-import windowStateKeeper from 'electron-window-state';
 import { fork, spawn } from 'child_process';
 import { ProcessType } from '@shared/globalThis';
 import polyfillLocalStorage from '@node/polyfill/LocalStorage';
@@ -156,8 +157,15 @@ app.on('window-all-closed', () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
   if (process.platform !== 'darwin') {
+    // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
+    dotnetDataProvider.kill();
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
+  dotnetDataProvider.kill();
 });
 
 // #endregion
@@ -221,24 +229,27 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   },
 };
 
-NetworkService.initialize()
-  .then(() => {
-    // Set up test handlers
-    Object.entries(ipcHandlers).forEach(([ipcChannel, handler]) => {
-      NetworkService.registerRequestHandler(
-        ipcChannel,
-        async (...args: unknown[]) =>
-          handler({} as Electron.IpcMainInvokeEvent, ...args),
-      );
-    });
-    Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-      papi.commands.registerCommand(commandName, handler);
-    });
+(async () => {
+  await NetworkService.initialize();
+  // Set up test handlers
+  Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
+    NetworkService.registerRequestHandler(
+      ipcHandle,
+      async (...args: unknown[]) =>
+        handler({} as Electron.IpcMainInvokeEvent, ...args),
+    );
+  });
+  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
+    papi.commands.registerCommand(commandName, handler);
+  });
 
-    // TODO: Probably should return Promise.all of these registrations
-    return undefined;
-  })
-  .catch((e) => console.error(e));
+  // Start the dotnet data provider early so its ready when needed once the
+  // WebSocket is up.
+  dotnetDataProvider.start();
+
+  // TODO: Probably should return Promise.all of these registrations
+  return undefined;
+})().catch(console.error);
 
 // #endregion
 

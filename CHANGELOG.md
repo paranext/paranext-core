@@ -1,3 +1,21 @@
+# 0.0.2 (2023.2.28)
+
+## What's Changed
+
+### Other Changes
+
+- Update release instructions by @irahopkinson in https://github.com/paranext/paranext-core/pull/20
+- Added websocket communication between main and renderer, improved build process and dev experience by @tjcouch-sil in https://github.com/paranext/paranext-core/pull/24
+- Add Code Spell Checker by @irahopkinson in https://github.com/paranext/paranext-core/pull/33
+- Create C# client for handling requests for existing Paratext data. by @FoolRunning in https://github.com/paranext/paranext-core/pull/28
+- Run the dotnet Data Provider from electron by @irahopkinson in https://github.com/paranext/paranext-core/pull/36
+
+## New Contributors
+
+- @FoolRunning made their first contribution in https://github.com/paranext/paranext-core/pull/28
+
+**Full Changelog**: https://github.com/paranext/paranext-core/compare/v0.0.1...v0.0.2
+
 # 0.0.1 (2023.2.4)
 
 ## What's Changed
