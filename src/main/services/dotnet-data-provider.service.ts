@@ -1,5 +1,6 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import path from 'path';
+import logger from '@shared/util/logger';
 
 let dotnet: ChildProcessWithoutNullStreams | undefined;
 
@@ -7,9 +8,9 @@ function killDotnetDataProvider() {
   if (!dotnet) return;
 
   if (dotnet.kill()) {
-    console.log('[dotnet data provider] was killed');
+    logger.log('[dotnet data provider] was killed');
   } else {
-    console.error(
+    logger.error(
       '[dotnet data provider] was not stopped! Investigate other .kill() options',
     );
   }
@@ -47,18 +48,18 @@ function startDotnetDataProvider() {
   dotnet = spawn(command, args);
 
   dotnet.stdout.on('data', (data) => {
-    console.log(`[dotnet data provider] stdout: ${data}`);
+    logger.log(`[dotnet data provider] stdout: ${data}`);
   });
 
   dotnet.stderr.on('data', (data) => {
-    console.error(`[dotnet data provider] stderr: ${data}`);
+    logger.error(`[dotnet data provider] stderr: ${data}`);
   });
 
   dotnet.on('close', (code, signal) => {
     if (signal) {
-      console.log(`[dotnet data provider] terminated with signal ${signal}`);
+      logger.log(`[dotnet data provider] terminated with signal ${signal}`);
     } else {
-      console.log(`[dotnet data provider] exited with code ${code}`);
+      logger.log(`[dotnet data provider] exited with code ${code}`);
     }
   });
 }

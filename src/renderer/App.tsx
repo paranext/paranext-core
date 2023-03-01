@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
-import * as NetworkService from '@shared/services/NetworkService';
 import icon from '@assets/icon.png';
 import './App.css';
+import logger from '@shared/util/logger';
+import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { getErrorMessage } from '@shared/util/Util';
 import usePromise from '@renderer/hooks/usePromise';
@@ -17,7 +18,7 @@ const testBase: () => Promise<string> = NetworkService.createRequestFunction(
 const test = async () => {
   /* const start = performance.now(); */
   const result = await testBase();
-  /* console.log(`Test took ${performance.now() - start} ms`); */
+  /* logger.log(`Test took ${performance.now() - start} ms`); */
   return result;
 };
 
@@ -42,7 +43,7 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
         requestTime[i] = performance.now() - requestTime[i];
         return response;
       })
-      .catch((err) => console.error(err));
+      .catch(logger.error);
   }
 
   try {
@@ -56,15 +57,15 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
       (min, time) => Math.min(min, time),
       Number.MAX_VALUE,
     );
-    console.log(
+    logger.log(
       `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
         finish - start
       }\n\tResponse times:`,
       requestTime,
     );
-    console.log(responses[responses.length - 1]);
+    logger.log(responses[responses.length - 1]);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
   }
 };
 
@@ -82,11 +83,11 @@ const Hello = () => {
     async (asyncFn: () => Promise<unknown>) => {
       try {
         const result = await asyncFn();
-        console.log(result);
+        logger.log(result);
         setPromiseReturn(JSON.stringify(result));
         return result;
       } catch (e) {
-        console.error(e);
+        logger.error(e);
         setPromiseReturn(`Error: ${getErrorMessage(e)}`);
         return undefined;
       }
@@ -108,7 +109,7 @@ const Hello = () => {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echo('Stuff'));
-            console.log(
+            logger.log(
               `command:echo '${result}' took ${performance.now() - start} ms`,
             );
           }}
