@@ -35,6 +35,17 @@ Set up pre-requisites for building:
 
 Add the system libraries needed for Electron, [Build Instructions (Linux)](https://www.electronjs.org/docs/latest/development/build-instructions-linux).
 
+### All Platforms Development Pre-requisites
+
+Install `dotnet` [.NET 7 SDK from here](https://learn.microsoft.com/en-us/dotnet/core/install/).
+
+To check if `dotnet` is installed run (ensure you have a v7 SDK):
+
+```bash
+dotnet --version
+dotnet --list-sdks
+```
+
 ### Cloning and installing dependencies (all platforms)
 
 Clone the repo and install dependencies:
@@ -59,7 +70,7 @@ Start the app in the `dev` environment:
 npm start
 ```
 
-After you run `npm start`, you can edit the Electron and frontend files, and they will hot reload. To edit C# files, you must stop the `npm start` process (or only close Paranext), run `npm run build:c-sharp`, and restart `npm start` (or if you only closed Paranext, make a trivial edit to `src/main/main.ts`, and save it to launch Paranext again).
+After you run `npm start`, you can edit the Electron and frontend files, and they will hot reload. To edit C# files, you must stop the `npm start` process (or only close Paranext), run `npm run build:data`, and restart `npm start` (or if you only closed Paranext, make a trivial edit to `src/main/main.ts`, and save it to launch Paranext again).
 
 ## Packaging for Production
 
@@ -72,8 +83,8 @@ npm run package
 ## Publishing
 
 1. Create a branch of the form `release/*`, e.g. `release/v1.2.3`, or `release/v1.2.3-rc1`.
-2. Update the _version_ in your project's `package.json` file (e.g. _1.2.3_).
-3. Run `npm i` to update `package-lock.json`.
+2. Update the _version_ in your project's `release/app/package.json` file (e.g. _1.2.3_).
+3. Run `npm i` in that folder to update its `package-lock.json`.
 4. Create a new draft [GitHub **Release**](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository), ensure the following are included:
    - a _Tag version_, e.g. `v1.2.3`, choose _Create new tag on publish_.
    - set the **Target** to the release branch.
