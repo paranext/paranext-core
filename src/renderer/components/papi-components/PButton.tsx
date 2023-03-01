@@ -1,3 +1,4 @@
+import logger from '@shared/util/logger';
 import { PropsWithChildren } from 'react';
 
 export type PButtonProps = PropsWithChildren<{
@@ -15,7 +16,7 @@ export function PButton({
       type="button"
       onClick={(e) => {
         if (onClick) {
-          console.log('PButton clicked!');
+          logger.log('PButton clicked!');
           e.preventDefault();
           onClick();
         }

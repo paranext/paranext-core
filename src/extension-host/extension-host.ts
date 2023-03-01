@@ -5,6 +5,7 @@ import { CommandHandler } from '@shared/util/PapiUtil';
 import { ProcessType } from '@shared/globalThis';
 import polyfillLocalStorage from '@node/polyfill/LocalStorage';
 import * as ExtensionService from '@extension-host/services/ExtensionService';
+import logger from '@shared/util/logger';
 
 // #region command-line arguments
 
@@ -33,11 +34,11 @@ polyfillLocalStorage();
 
 // #region Test logs
 
-console.log('Hello from the extension host!');
-console.log(`Extension host is${isClient() ? '' : ' not'} client`);
-console.log(`Extension host process.type = ${process.type}`);
-console.log(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
-console.warn('Extension host example warning');
+logger.log('Hello from the extension host!');
+logger.log(`Extension host is${isClient() ? '' : ' not'} client`);
+logger.log(`Extension host process.type = ${process.type}`);
+logger.log(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
+logger.warn('Extension host example warning');
 
 // #endregion
 
@@ -47,7 +48,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   addMany: async (...nums: number[]) => {
     /* const start = performance.now(); */
     /* const result = await papi.commands.sendCommand('addThree', 1, 4, 9); */
-    /* console.log(
+    /* logger.log(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return nums.reduce((acc, current) => acc + current, 0);
@@ -70,7 +71,7 @@ NetworkService.initialize()
     // TODO: Probably should return Promise.all of these registrations
     return undefined;
   })
-  .catch((e) => console.error(e));
+  .catch((e) => logger.error(e));
 
 // Need to wait a bit to initialize extensions in production because the extension host launches faster than the renderer.
 // TODO: Fix this so we can await renderer connecting event or something

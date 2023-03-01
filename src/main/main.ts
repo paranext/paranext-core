@@ -12,6 +12,7 @@ import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import log from 'electron-log';
 import windowStateKeeper from 'electron-window-state';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
+import logger from '@shared/util/logger';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
@@ -84,7 +85,7 @@ const installExtensions = async () => {
       extensions.map((name) => installer[name]),
       forceDownload,
     )
-    .catch(console.log);
+    .catch(logger.log);
 };
 
 const getAssetPath = (...paths: string[]): string => {
@@ -204,7 +205,7 @@ app
 
     return undefined;
   })
-  .catch(console.log);
+  .catch(logger.log);
 
 // #endregion
 
@@ -217,7 +218,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   echoRenderer: async (message: string) => {
     /* const start = performance.now(); */
     /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
-    /* console.log(
+    /* logger.log(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return message;
@@ -251,7 +252,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 
   // TODO: Probably should return Promise.all of these registrations
   return undefined;
-})().catch(console.error);
+})().catch(logger.error);
 
 // #endregion
 
@@ -260,7 +261,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 extensionHostService.start();
 
 setTimeout(async () => {
-  console.log(
+  logger.log(
     `Add Many (from EH): ${await papi.commands.sendCommand(
       'addMany',
       2,

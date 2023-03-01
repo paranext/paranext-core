@@ -13,6 +13,7 @@ import { Uri } from '@shared/data/FileSystemTypes';
 import { UnsubscriberAsync } from '@shared/util/PapiUtil';
 import Module from 'module';
 import papi from '@shared/services/papi';
+import logger from '@shared/util/logger';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -154,7 +155,7 @@ const activateExtensions = async (
           extensionWithFile.extension,
           extensionWithFile.filePath,
         ).catch((e) => {
-          console.error(
+          logger.error(
             `Extension ${extensionWithFile.extension.name} threw while activating! ${e}`,
           );
           return null;

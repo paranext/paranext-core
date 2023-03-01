@@ -1,3 +1,4 @@
+import logger from '@shared/util/logger';
 import { useEffect, useId, useRef } from 'react';
 import Frame from 'react-frame-component';
 
@@ -22,7 +23,7 @@ export function WebView({ contents, hasReact = false }: WebViewProps) {
     // TODO: This doesn't work. Probably because the browser considers it to be cross-origin since we are loading from a script. Figure out how to fix this
     const iframe = iframeRef.current;
     const errorHandler = (e: ErrorEvent) => {
-      console.error(`WebView threw an error: ${e.message}`);
+      logger.error(`WebView threw an error: ${e.message}`);
     };
     if (iframe.contentWindow === null)
       throw new Error(

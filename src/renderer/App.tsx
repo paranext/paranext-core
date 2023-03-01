@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
-import * as NetworkService from '@shared/services/NetworkService';
 import icon from '@assets/icon.png';
 import './App.css';
+import logger from '@shared/util/logger';
+import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { getErrorMessage, isString } from '@shared/util/Util';
 import usePromise from '@renderer/hooks/papi-hooks/usePromise';
@@ -15,7 +16,7 @@ const testBase: (message: string) => Promise<string> =
 const test = async () => {
   /* const start = performance.now(); */
   const result = await testBase('stuff');
-  /* console.log(`Test took ${performance.now() - start} ms`); */
+  /* logger.log(`Test took ${performance.now() - start} ms`); */
   return result;
 };
 
@@ -86,7 +87,7 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
         requestTime[i] = performance.now() - requestTime[i];
         return response;
       })
-      .catch((err) => console.error(err));
+      .catch(logger.error);
   }
 
   try {
@@ -100,14 +101,14 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
       (min, time) => Math.min(min, time),
       Number.MAX_VALUE,
     );
-    console.log(
+    logger.log(
       `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
         finish - start
       }`,
     );
-    console.log(responses[responses.length - 1]);
+    logger.log(responses[responses.length - 1]);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
   }
 };
 
@@ -133,11 +134,11 @@ const Hello = () => {
     async (asyncFn: () => Promise<unknown>) => {
       try {
         const result = await asyncFn();
-        console.log(result);
+        logger.log(result);
         updatePromiseReturn(result);
         return result;
       } catch (e) {
-        console.error(e);
+        logger.error(e);
         updatePromiseReturn(`Error: ${getErrorMessage(e)}`);
         return undefined;
       }
@@ -175,7 +176,7 @@ const Hello = () => {
             onClick={async () => {
               const start = performance.now();
               const result = await runPromise(() => echo('Echo Stuff'));
-              console.log(
+              logger.log(
                 `command:echo '${result}' took ${performance.now() - start} ms`,
               );
             }}
@@ -193,7 +194,7 @@ const Hello = () => {
               const result = await runPromise(() =>
                 echoRenderer('Echo Renderer Stuff'),
               );
-              console.log(
+              logger.log(
                 `command:echoRenderer '${result}' took ${
                   performance.now() - start
                 } ms`,
@@ -213,7 +214,7 @@ const Hello = () => {
               const result = await runPromise(() =>
                 echoExtensionHost('Echo Extension Host Stuff'),
               );
-              console.log(
+              logger.log(
                 `command:echoExtensionHost '${result}' took ${
                   performance.now() - start
                 } ms`,
@@ -233,7 +234,7 @@ const Hello = () => {
               const result = await runPromise(() =>
                 echoSomeoneRenderer('Echo Someone Renderer Stuff'),
               );
-              console.log(
+              logger.log(
                 `command:hello-someone.echo-someone-renderer '${result}' took ${
                   performance.now() - start
                 } ms`,
@@ -253,7 +254,7 @@ const Hello = () => {
             onClick={async () => {
               const start = performance.now();
               const result = await runPromise(() => addThree(1, 2, 3));
-              console.log(
+              logger.log(
                 `command:addThree ${result} took ${
                   performance.now() - start
                 } ms`,
@@ -271,7 +272,7 @@ const Hello = () => {
             onClick={async () => {
               const start = performance.now();
               const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
-              console.log(
+              logger.log(
                 `command:addMany ${result} took ${
                   performance.now() - start
                 } ms`,
@@ -305,7 +306,7 @@ const Hello = () => {
             onClick={async () => {
               const start = performance.now();
               const result = await runPromise(() => helloWorld());
-              console.log(
+              logger.log(
                 `command:hello-world.hello-world ${result} took ${
                   performance.now() - start
                 } ms`,
@@ -325,7 +326,7 @@ const Hello = () => {
               const result = await runPromise(() =>
                 helloSomeone('Paranext user'),
               );
-              console.log(
+              logger.log(
                 `command:hello-someone.hello-someone ${result} took ${
                   performance.now() - start
                 } ms`,
