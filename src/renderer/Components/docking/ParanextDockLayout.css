@@ -46,12 +46,19 @@
   padding: 0;
 }
 
-.dock-nav-operations {
-  display: none;
-}
-
 .dock-content-holder {
   border-bottom: 1px solid #5c5c5c;
   border-left: 1px solid #5c5c5c;
   border-right: 1px solid #5c5c5c;
+}
+
+/* Hide tab group overflow button space (button is hidden, but the space is still taken up).
+  TODO: Make this appear only when needed. */
+.dock-nav-operations {
+  display: none;
+}
+
+/* Hide tab group buttons (maximize). Not sure why this is needed even when the group maximizable is set to false. */
+.dock-extra-content {
+  display: none;
 }

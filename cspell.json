@@ -1,9 +1,14 @@
 {
     "version": "0.2",
-    "ignorePaths": ["package.json"],
+    "ignorePaths": [
+        "package.json"
+    ],
     "dictionaryDefinitions": [],
     "dictionaries": [],
-    "words": [],
+    "words": [
+        "dockbox",
+        "maximizable"
+    ],
     "ignoreWords": [],
     "import": []
 }

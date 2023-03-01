@@ -2,7 +2,7 @@ import 'rc-dock/dist/rc-dock.css';
 import './ParanextDockLayout.css';
 import { newGuid } from '@shared/util/Util';
 import { SavedTabInfo, TabCreator } from '@shared/data/WebviewTypes';
-import DockLayout, { LayoutData, TabBase } from 'rc-dock';
+import DockLayout, { LayoutData, TabBase, TabData, TabGroup } from 'rc-dock';
 import ParanextPanel from './ParanextPanel';
 import ParanextTabTitle from './ParanextTabTitle';
 // TODO: Remove these testing panels when we can create extensions for them
@@ -56,16 +56,15 @@ const ParanextDockLayout = ({
 }: {
   startingLayout: LayoutData;
 }) => {
-  const groups = {
+  const groups: {
+    [key: string]: TabGroup;
+  } = {
     TAB_STYLE: {
-      // the css class for this would be dock-panel-custom
-      // this is a custom panel style defined in panel-style.html
-      floatable: true,
-      newWindow: true,
-      maximizable: true,
-      animated: false,
-      moreIcon: undefined,
-      panelExtra: () => <> </>, // Get rid of buttons on tab panel (we only want buttons on each tab)
+      maximizable: false, // Don't allow groups of tabs to be maximized
+      floatable: true, // Allow tabs to be floated
+      newWindow: true, // Allow floating windows to show in a native window
+      animated: false, // Don't animate tab transitions
+      panelExtra: undefined, // Get rid of buttons on tab group panel (we only want buttons on each tab)
     },
   };
 
@@ -89,7 +88,7 @@ const ParanextDockLayout = ({
     };
   };
 
-  const loadTab = (savedTabInfo: TabBase) => {
+  const loadTab = (savedTabInfo: TabBase): TabData => {
     let { id } = savedTabInfo;
     const tabInfo = savedTabInfo as SavedTabInfo;
     if (!tabInfo.type) return createErrorTab('Tab is missing a defined type');
