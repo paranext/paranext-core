@@ -6,17 +6,13 @@ body {
   position: relative;
   color: white;
   height: 100vh;
-  background: linear-gradient(
-    200.96deg,
-    #b8d432 -29.09%,
-    #5f7333 51.77%,
-    #47314e 129.35%
-  );
+  background: #8c8c8c;
   font-family: sans-serif;
   overflow-y: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
+  margin: 0;
 }
 
 button {
