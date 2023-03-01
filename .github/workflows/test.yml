@@ -16,25 +16,37 @@ on:
 
 jobs:
   test:
+    name: Test on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, and node ${{ matrix.node_version }}
+
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
+        dotnet_version: [7.0.x]
+        node_version: [16.x]
 
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v3
 
+      - name: Install .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{matrix.dotnet_version}}
+
       - name: Install Node.js and NPM
         uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: ${{ matrix.node_version }}
           cache: npm
 
       - name: npm install
         run: |
           npm install
+
+      - name: dotnet build
+        run: npm run build:data-release
 
       - name: npm test
         env:

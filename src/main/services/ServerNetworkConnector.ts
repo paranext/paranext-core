@@ -8,6 +8,7 @@ import {
   NetworkConnectorInfo,
 } from '@shared/data/InternalConnectionTypes';
 import INetworkConnector from '@shared/services/INetworkConnector';
+import logger from '@shared/util/logger';
 import { Unsubscriber } from '@shared/util/PapiUtil';
 import {
   ClientConnect,
@@ -386,7 +387,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.nextClientId += 1;
 
     // TODO: probably do something better than just print the error
-    webSocket.addEventListener('error', console.error);
+    webSocket.addEventListener('error', logger.error);
 
     webSocket.addEventListener('message', this.onMessage);
     webSocket.addEventListener('close', this.onClientDisconnect);
@@ -423,7 +424,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
   /** Closes connection and unregisters a client webSocket when it has disconnected */
   private disconnectClient = (webSocket: WebSocket) => {
     const clientId = this.getClientIdFromSocket(webSocket);
-    webSocket.removeEventListener('error', console.error);
+    webSocket.removeEventListener('error', logger.error);
     webSocket.removeEventListener('message', this.onMessage);
     webSocket.removeEventListener('close', this.onClientDisconnect);
     webSocket.close();

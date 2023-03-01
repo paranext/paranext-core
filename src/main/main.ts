@@ -10,10 +10,12 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import windowStateKeeper from 'electron-window-state';
+import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
+import logger from '@shared/util/logger';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
-import windowStateKeeper from 'electron-window-state';
 import { fork, spawn } from 'child_process';
 import { ProcessType } from '@shared/globalThis';
 import polyfillLocalStorage from '@node/polyfill/LocalStorage';
@@ -67,7 +69,7 @@ const installExtensions = async () => {
       extensions.map((name) => installer[name]),
       forceDownload,
     )
-    .catch(console.log);
+    .catch(logger.log);
 };
 
 /** The path to the app package directory */
@@ -145,8 +147,15 @@ app.on('window-all-closed', () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
   if (process.platform !== 'darwin') {
+    // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
+    dotnetDataProvider.kill();
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
+  dotnetDataProvider.kill();
 });
 
 // #endregion
@@ -183,7 +192,7 @@ app
 
     return undefined;
   })
-  .catch(console.log);
+  .catch(logger.log);
 
 // #endregion
 
@@ -196,7 +205,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   echoRenderer: async (message: string) => {
     /* const start = performance.now(); */
     /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
-    /* console.log(
+    /* logger.log(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return message;
@@ -210,24 +219,27 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   },
 };
 
-NetworkService.initialize()
-  .then(() => {
-    // Set up test handlers
-    Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
-      NetworkService.registerRequestHandler(
-        ipcHandle,
-        async (...args: unknown[]) =>
-          handler({} as Electron.IpcMainInvokeEvent, ...args),
-      );
-    });
-    Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-      papi.commands.registerCommand(commandName, handler);
-    });
+(async () => {
+  await NetworkService.initialize();
+  // Set up test handlers
+  Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
+    NetworkService.registerRequestHandler(
+      ipcHandle,
+      async (...args: unknown[]) =>
+        handler({} as Electron.IpcMainInvokeEvent, ...args),
+    );
+  });
+  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
+    papi.commands.registerCommand(commandName, handler);
+  });
 
-    // TODO: Probably should return Promise.all of these registrations
-    return undefined;
-  })
-  .catch((e) => console.error(e));
+  // Start the dotnet data provider early so its ready when needed once the
+  // WebSocket is up.
+  dotnetDataProvider.start();
+
+  // TODO: Probably should return Promise.all of these registrations
+  return undefined;
+})().catch(logger.error);
 
 console.log(localStorage.getItem('stuff'));
 

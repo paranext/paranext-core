@@ -13,6 +13,7 @@ import {
   UnsubPromiseAsync,
 } from '@shared/util/PapiUtil';
 import { isClient, isRenderer } from '@shared/util/InternalUtil';
+import logger from '@shared/util/logger';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -122,7 +123,7 @@ export const initialize = () => {
             performance.now() - start,
           ),
         )
-        .catch((e) => console.error(e));
+        .catch(logger.error);
     }
   })();
 
