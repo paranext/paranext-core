@@ -3,6 +3,10 @@ import path from 'path';
 
 let dotnet: ChildProcessWithoutNullStreams | undefined;
 
+/**
+ * Hard kills the Dotnet Data Provider.
+ * TODO: fix this to be a more elegant shutdown
+ */
 function killDotnetDataProvider() {
   if (!dotnet) return;
 
@@ -60,6 +64,9 @@ function startDotnetDataProvider() {
     } else {
       console.log(`[dotnet data provider] exited with code ${code}`);
     }
+    // TODO: listen for 'exit' event as well?
+    // TODO: unsubscribe event listeners
+    dotnet = undefined;
   });
 }
 
