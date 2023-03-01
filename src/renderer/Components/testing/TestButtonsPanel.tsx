@@ -4,7 +4,6 @@ import papi from '@shared/services/papi';
 import * as NetworkService from '@shared/services/NetworkService';
 import { getErrorMessage } from '@shared/util/Util';
 import logger from '@shared/util/logger';
-import ParanextPanel from '../docking/ParanextPanel';
 
 const getVar: (envVar: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.getVar');
