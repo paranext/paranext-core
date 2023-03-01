@@ -1,4 +1,5 @@
 import './ParanextTabTitle.css';
+import logger from '@shared/util/logger';
 
 /**
  * Custom tab title for all tabs in Paranext
@@ -6,7 +7,7 @@ import './ParanextTabTitle.css';
  */
 const ParanextTabTitle = ({ text }: { text: string }) => {
   const toggleDropdown = () => {
-    console.log('Pretend a menu was shown!');
+    logger.log('Pretend a menu was shown!');
   };
 
   return (

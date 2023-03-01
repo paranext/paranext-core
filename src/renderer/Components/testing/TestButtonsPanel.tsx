@@ -3,6 +3,7 @@ import usePromise from '@renderer/hooks/usePromise';
 import papi from '@shared/services/papi';
 import * as NetworkService from '@shared/services/NetworkService';
 import { getErrorMessage } from '@shared/util/Util';
+import logger from '@shared/util/logger';
 import ParanextPanel from '../docking/ParanextPanel';
 
 const getVar: (envVar: string) => Promise<string> =
@@ -15,7 +16,7 @@ const testBase: () => Promise<string> = NetworkService.createRequestFunction(
 const test = async () => {
   /* const start = performance.now(); */
   const result = await testBase();
-  /* console.log(`Test took ${performance.now() - start} ms`); */
+  /* logger.log(`Test took ${performance.now() - start} ms`); */
   return result;
 };
 
@@ -40,7 +41,7 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
         requestTime[i] = performance.now() - requestTime[i];
         return response;
       })
-      .catch((err) => console.error(err));
+      .catch((err) => logger.error(err));
   }
 
   try {
@@ -54,15 +55,15 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
       (min, time) => Math.min(min, time),
       Number.MAX_VALUE,
     );
-    console.log(
+    logger.log(
       `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
         finish - start
       }\n\tResponse times:`,
       requestTime,
     );
-    console.log(responses[responses.length - 1]);
+    logger.log(responses[responses.length - 1]);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
   }
 };
 
@@ -78,11 +79,11 @@ const TestButtonsPanel = () => {
     async (asyncFn: () => Promise<unknown>) => {
       try {
         const result = await asyncFn();
-        console.log(result);
+        logger.log(result);
         setPromiseReturn(JSON.stringify(result));
         return result;
       } catch (e) {
-        console.error(e);
+        logger.error(e);
         setPromiseReturn(`Error: ${getErrorMessage(e)}`);
         return undefined;
       }
@@ -91,13 +92,13 @@ const TestButtonsPanel = () => {
   );
 
   return (
-    <ParanextPanel className="Hello">
+    <>
       <button
         type="button"
         onClick={async () => {
           const start = performance.now();
           const result = await runPromise(() => echo('Stuff'));
-          console.log(
+          logger.log(
             `command:echo '${result}' took ${performance.now() - start} ms`,
           );
         }}
@@ -128,14 +129,14 @@ const TestButtonsPanel = () => {
         type="button"
         onClick={async () => {
           const result = await runPromise(() => addOne(78));
-          console.log(`added: '${result}'`);
+          logger.log(`added: '${result}'`);
         }}
       >
         Test C#
       </button>
       <div>NODE_ENV: {NODE_ENV}</div>
       <div>{promiseReturn}</div>
-    </ParanextPanel>
+    </>
   );
 };
 
