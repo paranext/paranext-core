@@ -62,7 +62,9 @@
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
     "start:data": "dotnet run --project c-sharp/ParanextDataProvider.csproj",
-    "test": "jest"
+    "test": "jest",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
@@ -80,6 +82,9 @@
   },
   "browserslist": [],
   "dependencies": {
+    "@emotion/react": "^11.10.6",
+    "@emotion/styled": "^11.10.6",
+    "@mui/material": "^5.11.11",
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-updater": "^5.2.3",
@@ -93,9 +98,19 @@
     "ws": "^8.12.0"
   },
   "devDependencies": {
+    "@babel/preset-env": "^7.20.2",
+    "@babel/preset-react": "^7.18.6",
+    "@babel/preset-typescript": "^7.21.0",
     "@electron/notarize": "^1.2.3",
     "@electron/rebuild": "^3.2.10",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.7",
+    "@storybook/addon-essentials": "^7.0.0-beta.55",
+    "@storybook/addon-interactions": "^7.0.0-beta.55",
+    "@storybook/addon-links": "^7.0.0-beta.55",
+    "@storybook/blocks": "^7.0.0-alpha.8",
+    "@storybook/react": "^7.0.0-beta.55",
+    "@storybook/react-webpack5": "^7.0.0-beta.55",
+    "@storybook/testing-library": "^0.0.14-next.1",
     "@svgr/webpack": "^6.3.1",
     "@teamsupercell/typings-for-css-modules-loader": "^2.5.1",
     "@testing-library/jest-dom": "^5.16.5",
@@ -135,6 +150,7 @@
     "eslint-plugin-promise": "^6.0.0",
     "eslint-plugin-react": "^7.30.1",
     "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-storybook": "^0.6.11",
     "file-loader": "^6.2.0",
     "html-webpack-plugin": "^5.5.0",
     "husky": "^8.0.1",
@@ -151,6 +167,7 @@
     "run-script-os": "^1.1.6",
     "sass": "^1.54.4",
     "sass-loader": "^13.0.2",
+    "storybook": "^7.0.0-beta.55",
     "style-loader": "^3.3.1",
     "terser-webpack-plugin": "^5.3.5",
     "ts-jest": "^28.0.8",

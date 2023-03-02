@@ -1,5 +1,5 @@
 module.exports = {
-  extends: 'erb',
+  extends: ['erb', 'plugin:storybook/recommended'],
   rules: {
     // #region ERB rules
 
@@ -8,7 +8,6 @@ module.exports = {
     'import/no-unresolved': 'error',
     // Since React 17 and typescript 4.1 you can safely disable the rule
     'react/react-in-jsx-scope': 'off',
-
     // #endregion
 
     // #region Our rules
@@ -16,10 +15,21 @@ module.exports = {
     indent: 'off',
     'react/jsx-indent-props': ['warn', 2],
     'comma-dangle': ['error', 'always-multiline'],
-    'prettier/prettier': ['warn', { tabWidth: 2, trailingComma: 'all' }],
+    'prettier/prettier': [
+      'warn',
+      {
+        tabWidth: 2,
+        trailingComma: 'all',
+      },
+    ],
     'no-console': 'off',
     'react/require-default-props': 'off',
-    'no-plusplus': ['error', { allowForLoopAfterthoughts: true }],
+    'no-plusplus': [
+      'error',
+      {
+        allowForLoopAfterthoughts: true,
+      },
+    ],
     'jsx-a11y/label-has-associated-control': [
       'error',
       {
@@ -32,6 +42,7 @@ module.exports = {
 
     // #endregion
   },
+
   parserOptions: {
     ecmaVersion: 2020,
     sourceType: 'module',
