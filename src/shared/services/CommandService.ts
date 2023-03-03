@@ -123,7 +123,7 @@ export const initialize = () => {
             performance.now() - start,
           ),
         )
-        .catch((e) => logger.error(e));
+        .catch(logger.error);
     }
   })();
 
