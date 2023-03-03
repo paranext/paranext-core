@@ -20,8 +20,9 @@ import {
 } from '@shared/data/NetworkConnectorTypes';
 import { getErrorMessage } from '@shared/util/Util';
 import logger from '@shared/util/logger';
-import { createWebSocket } from './WebSocketFactory';
-import { IWebSocket } from './IWebSocket';
+import { EventEmitter } from '@shared/util/Event';
+import { createWebSocket } from '@client/services/WebSocketFactory';
+import { IWebSocket } from '@client/services/IWebSocket';
 
 // #region local variables
 
@@ -57,11 +58,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
   /** The webSocket connected to the server */
   private webSocket?: IWebSocket;
 
-  /** All message subscriptions - arrays of functions that run each time a message with a specific message type comes in */
-  private messageSubscriptions = new Map<
-    MessageType,
-    ((eventData: Message) => void)[]
-  >();
+  /** All message subscriptions - emitters that emit an event each time a message with a specific message type comes in */
+  private messageEmitters = new Map<MessageType, EventEmitter<Message>>();
 
   /** Promise that resolves when the connection is finished or rejects if disconnected before the connection finishes */
   private connectPromise?: Promise<NetworkConnectorInfo>;
@@ -331,36 +329,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
       ? (event.data as unknown as Message)
       : (JSON.parse(event.data as string) as Message);
 
-    const callbacks = this.messageSubscriptions.get(data.type);
-    callbacks?.forEach((callback) => callback(data));
-  };
-
-  /**
-   * Unsubscribes a function from running on webSocket messages
-   * @param messageType the type of message from which to unsubscribe the function
-   * @param callback function to unsubscribe from being run on webSocket messages.
-   * @returns true if successfully unsubscribed
-   * Likely will never need to be exported from this file. Just use subscribe, which returns a matching unsubscriber function that runs this.
-   */
-  private unsubscribe = (
-    messageType: MessageType,
-    callback: (eventData: Message) => void,
-  ): boolean => {
-    const callbacks = this.messageSubscriptions.get(messageType);
-
-    if (!callbacks) return false; // Did not find any callbacks for the message type
-
-    const callbackIndex = callbacks.indexOf(callback);
-    if (callbackIndex < 0) return false; // Did not find this callback for the message type
-
-    // Remove the callback
-    callbacks.splice(callbackIndex, 1);
-
-    // Remove the map entry if there are no more callbacks
-    if (callbacks.length === 0) this.messageSubscriptions.delete(messageType);
-
-    // Indicate successfully removed the callback
-    return true;
+    const emitter = this.messageEmitters.get(data.type);
+    emitter?.emit(data);
   };
 
   /**
@@ -376,14 +346,12 @@ export default class ClientNetworkConnector implements INetworkConnector {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     callback: (eventData: Message | any) => void,
   ): Unsubscriber => {
-    let callbacks = this.messageSubscriptions.get(messageType);
-    if (!callbacks) {
-      callbacks = [];
-      this.messageSubscriptions.set(messageType, callbacks);
+    let emitter = this.messageEmitters.get(messageType);
+    if (!emitter) {
+      emitter = new EventEmitter<Message>();
+      this.messageEmitters.set(messageType, emitter);
     }
-    callbacks.push(callback);
-
-    return () => this.unsubscribe(messageType, callback);
+    return emitter.subscribe(callback);
   };
 
   /**

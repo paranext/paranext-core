@@ -29,6 +29,8 @@ module.exports = {
     // This is already a Typescript rule, so we don't need it to be reported twice
     '@typescript-eslint/no-unused-vars': 'off',
     'react/jsx-props-no-spreading': 'off',
+    // TODO: Consider if we want this one. Adjust as desired
+    'no-underscore-dangle': 'off',
 
     // #endregion
   },
