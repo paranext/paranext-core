@@ -47,6 +47,7 @@ const rendererCommandFunctions: { [commandName: string]: CommandHandler } = {
 
 /**
  * Send a command to the backend.
+ *
  * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use sendCommand
  */
 const sendCommandUnsafe = async <TParam extends Array<unknown>, TReturn>(
@@ -61,6 +62,7 @@ const sendCommandUnsafe = async <TParam extends Array<unknown>, TReturn>(
 
 /**
  * Register a command on the papi to be handled here.
+ *
  * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use registerCommand
  * @param commandName command name to register for handling here
  * @param handler function to run when the command is invoked

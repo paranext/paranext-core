@@ -138,26 +138,35 @@ internal sealed class PapiClient
         // Handle any messages sent from the server
         do
         {
-            Console.WriteLine("Waiting for a request...");
-            Task<Message?> receiveTask = ReceiveMessage<Message>();
-            Message? message = await receiveTask;
-            if (receiveTask.Exception != null)
+            try
             {
-                Console.Error.WriteLine("Error getting message:\n" + receiveTask.Exception);
-                continue;
-            }
-
-            Console.WriteLine("Got request: " + message?.ToString());
-
-            if (message is MessageRequest request)
-            {
-                if (!requestFunctionMap.TryGetValue(request.RequestType, out RequestHandler? requestHandler))
+                Console.WriteLine("Waiting for a request...");
+                Task<Message?> receiveTask = ReceiveMessage<Message>();
+                Message? message = await receiveTask;
+                if (receiveTask.Exception != null)
                 {
-                    Console.Error.WriteLine("Unexpected request from server: " + request.RequestType);
+                    Console.Error.WriteLine("Error getting message:\n" + receiveTask.Exception);
                     continue;
                 }
 
-                await requestHandler(request.Contents, request.RequestType, request.RequestId, request.SenderId);
+                Console.WriteLine("Got request: " + message?.ToString());
+
+                if (message is MessageRequest request)
+                {
+                    if (!requestFunctionMap.TryGetValue(request.RequestType, out RequestHandler? requestHandler))
+                    {
+                        Console.Error.WriteLine("Unexpected request from server: " + request.RequestType);
+                        continue;
+                    }
+
+                    await requestHandler(request.Contents, request.RequestType, request.RequestId, request.SenderId);
+                }
+            }
+            catch (Exception ex)
+            {
+                // TJ added this because receiving messages of the wrong type in ReceiveMessage was crashing the program.
+                // TODO: Figure out why receiveTask.Exception doesn't seem to be working
+                Console.WriteLine("Exception while handling message: {0}", ex);
             }
         } while (Connected);
     }

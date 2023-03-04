@@ -2,6 +2,7 @@ import { CloseEvent, MessageEvent, WebSocket, WebSocketServer } from 'ws';
 import {
   CLIENT_ID_SERVER,
   ConnectionStatus,
+  InternalEvent,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
@@ -15,6 +16,7 @@ import {
   InitClient,
   Message,
   MessageType,
+  WebSocketEvent,
   WebSocketRequest,
   WebSocketResponse,
   WEBSOCKET_PORT,
@@ -90,6 +92,9 @@ export default class ServerNetworkConnector implements INetworkConnector {
   /** Function that removes this handleRequest from connections */
   private unsubscribeHandleRequestMessage?: () => boolean;
 
+  /** Function that removes this handleEvent from the connection */
+  private unsubscribeHandleEventMessage?: Unsubscriber;
+
   /**
    * Function to call when we receive a request that is registered on this connector.
    * Handles requests from connections and returns a response to send back
@@ -101,6 +106,15 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * Returns a clientId to which to send the request based on the requestType
    */
   private requestRouter?: (requestType: string) => number;
+
+  /**
+   * Function to call when we receive an event.
+   * Handles events from connections and emits the event locally
+   */
+  private localEventHandler?: <T>(
+    eventType: string,
+    incomingEvent: InternalEvent<T>,
+  ) => void;
 
   /**
    * Function to call when a client disconnects.
@@ -120,6 +134,10 @@ export default class ServerNetworkConnector implements INetworkConnector {
   connect = async (
     localRequestHandler: InternalRequestHandler,
     requestRouter: (requestType: string) => number,
+    localEventHandler: <T>(
+      eventType: string,
+      incomingEvent: InternalEvent<T>,
+    ) => void,
     localClientDisconnectHandler: (clientId: number) => void,
   ) => {
     // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
@@ -129,6 +147,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.connectionStatus = ConnectionStatus.Connecting;
     this.localRequestHandler = localRequestHandler;
     this.requestRouter = requestRouter;
+    this.localEventHandler = localEventHandler;
     this.localClientDisconnectHandler = localClientDisconnectHandler;
 
     // Set up subscriptions that the service needs to work
@@ -148,6 +167,12 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.unsubscribeHandleRequestMessage = this.subscribe(
       MessageType.Request,
       this.handleRequestMessage,
+    );
+
+    // Listen for events from the clients and run the event handler
+    this.unsubscribeHandleEventMessage = this.subscribe(
+      MessageType.Event,
+      this.handleEventMessage,
     );
 
     // Start the webSocket server
@@ -173,6 +198,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.connectionStatus = ConnectionStatus.Disconnected;
     this.localRequestHandler = undefined;
     this.requestRouter = undefined;
+    this.localEventHandler = undefined;
     this.localClientDisconnectHandler = undefined;
     this.connectPromise = undefined;
 
@@ -194,6 +220,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
       this.unsubscribeHandleResponseMessage();
     if (this.unsubscribeHandleRequestMessage)
       this.unsubscribeHandleRequestMessage();
+    if (this.unsubscribeHandleEventMessage)
+      this.unsubscribeHandleEventMessage();
   };
 
   request = async <TParam, TReturn>(
@@ -233,6 +261,23 @@ export default class ServerNetworkConnector implements INetworkConnector {
     return requestPromise;
   };
 
+  emitEventOnNetwork = async <T>(
+    eventType: string,
+    event: InternalEvent<T>,
+  ) => {
+    // Send this event to all connections
+    // Using for...of on iterator here because it is significantly faster (not converting to array first) and cleaner this way in this case
+    // eslint-disable-next-line no-restricted-syntax
+    for (const clientId of this.clientSockets.keys()) {
+      // Don't send an event back to the connection that emitted it
+      if (clientId !== event.senderId)
+        this.sendMessage(
+          { type: MessageType.Event, eventType, ...event },
+          clientId,
+        );
+    }
+  };
+
   // #endregion
 
   // #region private methods
@@ -252,7 +297,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
     return clientSocket;
   };
 
-  /** Attempts to get the client socket for a certain clientGuid. Returns undefined if not found.
+  /**
+   * Attempts to get the client socket for a certain clientGuid. Returns undefined if not found.
    * This does not throw because it will likely be very common that we do not have a clientId for a certain clientGuid
    * as connecting clients will often supply old clientGuids.
    */
@@ -285,7 +331,6 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * @param message message to send
    * @param recipientId the client to which to send the message. TODO: determine if we can intuit this instead
    */
-  // Add if needed: @param unsafe whether to get the client even if we aren't connected. WARNING: SETTING THIS FLAG MEANS NOT CHECKING FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. There may be no clientId
   private sendMessage = (message: Message, recipientId: number): void => {
     // TODO: add message queueing
     if (
@@ -518,6 +563,24 @@ export default class ServerNetworkConnector implements INetworkConnector {
       // This request is for someone else. Forward the request on
       this.sendMessage(requestMessage, responderId);
     }
+  };
+
+  /**
+   * Function that handles incoming webSocket messages of type Event.
+   * Runs the eventHandler provided in connect() and forwards the event to other clients
+   * @param eventMessage event message to handle
+   */
+  private handleEventMessage = (eventMessage: WebSocketEvent<unknown>) => {
+    if (!this.localEventHandler)
+      throw new Error(
+        `Received an event but cannot handle it without an eventHandler`,
+      );
+
+    // Send the event to connections to handle
+    this.emitEventOnNetwork(eventMessage.eventType, eventMessage);
+
+    // Handle the event locally
+    this.localEventHandler(eventMessage.eventType, eventMessage);
   };
 
   // #endregion

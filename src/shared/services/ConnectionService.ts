@@ -8,6 +8,7 @@
 import {
   CLIENT_ID_UNASSIGNED,
   ConnectionStatus,
+  InternalEvent,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
@@ -35,6 +36,8 @@ let connectReject: ((reason?: string) => void) | undefined;
 let requestHandler: RequestHandler | undefined;
 /** Function that determines the appropriate clientId to which to send requests of the given type. From connect() */
 let requestRouter: ((requestType: string) => number) | undefined;
+/** Function that accepts events from the server and emits them locally. From connect() */
+let eventHandler: (<T>(eventType: string, event: T) => void) | undefined;
 /** Function that runs when a client is disconnected. From connect() */
 let disconnectClient: ((clientId: number) => void) | undefined;
 /** The network connector this service uses to send and receive messages */
@@ -79,10 +82,27 @@ export const request = async <TParam, TReturn>(
   return response;
 };
 
+/**
+ * Sends an event to other processes. Does NOT run the local event subscriptions
+ * as they should be run by NetworkEventEmitter after sending on network.
+ * @param eventType unique network event type for coordinating between processes
+ * @param event event to emit on the network
+ */
+export const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
+  if (!networkConnector)
+    throw Error('emitEventOnNetwork without a networkConnector!');
+
+  await networkConnector.emitEventOnNetwork(eventType, {
+    senderId: clientId,
+    event,
+  });
+};
+
 /** Disconnects from the server */
 export const disconnect = () => {
   requestHandler = undefined;
   requestRouter = undefined;
+  eventHandler = undefined;
   disconnectClient = undefined;
   connectPromise = undefined;
   if (networkConnector) {
@@ -123,15 +143,31 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
 };
 
 /**
+ * Function that handles events from the network by running the event handler given in connect()
+ * @param eventType type of request to determine which handler to use
+ * @param event event message to handle
+ */
+const handleEventFromNetwork = async <T>(
+  eventType: string,
+  incomingEvent: InternalEvent<T>,
+) => {
+  if (!eventHandler) throw Error('Handling event without an eventHandler!');
+
+  eventHandler<T>(eventType, incomingEvent.event);
+};
+
+/**
  * Sets up the ConnectionService by connecting to the server and setting up event handlers
  * @param networkRequestHandler function that handles requests from the server by accepting a requestType and a ComplexRequest and returning a Promise of a Complex Response
  * @param networkRequestRouter function that determines the appropriate clientId to which to send requests of the given type
+ * @param networkEventHandler function that handles events from the server by accepting an eventType and an event and emitting the event locally
  * @param networkClientDisconnectHandler function that runs when a client is disconnected
  * @returns Promise that resolves when finished connecting
  */
 export const connect = async (
   networkRequestHandler: RequestHandler,
   networkRequestRouter: (requestType: string) => number,
+  networkEventHandler: <T>(eventType: string, event: T) => void,
   networkClientDisconnectHandler: (clientId: number) => void,
 ): Promise<void> => {
   // Do not run anything asynchronous before we create and assign connectPromise below!
@@ -142,6 +178,7 @@ export const connect = async (
     if (
       networkRequestHandler === requestHandler &&
       networkRequestRouter === requestRouter &&
+      networkEventHandler === eventHandler &&
       networkClientDisconnectHandler === disconnectClient
     )
       return connectPromise;
@@ -152,6 +189,7 @@ export const connect = async (
 
   if (!networkRequestHandler) throw new Error('Must provide a request handler');
   if (!networkRequestRouter) throw new Error('Must provide a request router');
+  if (!networkEventHandler) throw new Error('Must provide an event handler');
   if (!networkClientDisconnectHandler)
     throw new Error('Must provide a disconnect client function');
 
@@ -163,6 +201,7 @@ export const connect = async (
   });
   requestHandler = networkRequestHandler;
   requestRouter = networkRequestRouter;
+  eventHandler = networkEventHandler;
   disconnectClient = networkClientDisconnectHandler;
 
   // Set up subscriptions that the service needs to work
@@ -186,6 +225,7 @@ export const connect = async (
     const newConnectorInfo = await networkConnector.connect(
       handleInternalRequest,
       requestRouter,
+      handleEventFromNetwork,
       disconnectClient,
     );
 

@@ -270,6 +270,6 @@ setTimeout(async () => {
       7,
     )}`,
   );
-}, 3000);
+}, 5000);
 
 // #endregion

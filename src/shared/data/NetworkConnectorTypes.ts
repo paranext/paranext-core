@@ -54,14 +54,14 @@ export type ClientConnect = {
 /** Request to do something and to respond */
 export type WebSocketRequest<TParam = unknown> = {
   type: MessageType.Request;
-  /** What kind of request this is. Certain command, event, etc */
+  /** What kind of request this is. Certain command, etc */
   requestType: string;
 } & InternalRequest<TParam>;
 
 /** Response to a request */
 export type WebSocketResponse<TReturn = unknown> = {
   type: MessageType.Response;
-  /** What kind of request this is. Certain command, event, etc */
+  /** What kind of request this is. Certain command, etc */
   requestType: string;
 } & InternalResponse<TReturn>;
 

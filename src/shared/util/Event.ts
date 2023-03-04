@@ -5,7 +5,7 @@
 import { Unsubscriber } from '@shared/util/PapiUtil';
 
 /** Callback function that accepts an event and should run when an event is emitted */
-type EventSubscription<T> = (event: T) => void;
+export type EventSubscription<T> = (event: T) => void;
 
 /**
  * Function that subscribes the provided callback to run when this event is emitted.
@@ -23,7 +23,7 @@ export type Event<T> = (callback: EventSubscription<T>) => Unsubscriber;
  */
 export class EventEmitter<T> {
   /** All callback functions that will run when this event is emitted. Lazy loaded */
-  private _subscriptions?: EventSubscription<T>[];
+  protected _subscriptions?: EventSubscription<T>[];
 
   /** Event for listeners to subscribe to. Lazy loaded */
   private _event?: Event<T>;
@@ -70,8 +70,20 @@ export class EventEmitter<T> {
    */
   public subscribe = this.event;
 
-  /** Runs the subscriptions for the event */
+  /**
+   * Runs the subscriptions for the event
+   * @param event event data to provide to subscribed callbacks
+   */
   public emit = (event: T) => {
-    this._subscriptions?.forEach((callback) => callback(event));
+    // Do not do anything other than emitFn here. This emit is just binding `this` to emitFn
+    this.emitFn(event);
   };
+
+  /**
+   * Function that runs the subscriptions for the event. Added here so children
+   * can override emit and still call the base functionality. See NetworkEventEmitter.emit for example
+   */
+  protected emitFn(event: T) {
+    this._subscriptions?.forEach((callback) => callback(event));
+  }
 }

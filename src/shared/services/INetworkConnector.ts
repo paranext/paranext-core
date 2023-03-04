@@ -1,5 +1,6 @@
 import {
   ConnectionStatus,
+  InternalEvent,
   InternalRequestHandler,
   NetworkConnectorInfo,
 } from '@shared/data/InternalConnectionTypes';
@@ -22,12 +23,17 @@ export default interface INetworkConnector {
    * MUST ALSO RUN notifyClientConnected() WHEN PROMISE RESOLVES
    * @param localRequestHandler function that handles requests from the connection. Only called when this connector can handle the request
    * @param requestRouter function that returns a clientId to which to send the request based on the requestType. If requestRouter returns this connector's clientId, localRequestHandler is used
+   * @param localEventHandler function that handles events from the server by accepting an eventType and an event and emitting the event locally
    * @param localClientDisconnectHandler function that runs when a client is disconnected
    * @returns Promise that resolves with connector info when finished connecting
    */
   connect: (
     localRequestHandler: InternalRequestHandler,
     requestRouter: (requestType: string) => number,
+    localEventHandler: <T>(
+      eventType: string,
+      incomingEvent: InternalEvent<T>,
+    ) => void,
     localClientDisconnectHandler: (clientId: number) => void,
   ) => Promise<NetworkConnectorInfo>;
   /**
@@ -50,11 +56,13 @@ export default interface INetworkConnector {
    */
   request: InternalRequestHandler;
   /**
-   * Register a handler on this connection to run when it receives a request.
-   * Not needed as we are passing in the requestHandler with connect().
-   * But should we make onRequest run callbacks that want to listen for requests?
-   * @param callback handler to run with request from requestor, async returns a response to the requestor
-   * @returns unsubscriber to remove this handler from running on requests
+   * Sends an event to other processes. Does NOT run the local event subscriptions
+   * as they should be run by NetworkEventEmitter after sending on network.
+   * @param eventType unique network event type for coordinating between processes
+   * @param event event to emit on the network
    */
-  /* onRequest: (callback: InternalRequestHandler) => Unsubscriber; */
+  emitEventOnNetwork: <T>(
+    eventType: string,
+    event: InternalEvent<T>,
+  ) => Promise<void>;
 }

@@ -1,6 +1,7 @@
 import {
   ConnectionStatus,
   CONNECTOR_INFO_DISCONNECTED,
+  InternalEvent,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
@@ -12,6 +13,7 @@ import {
   InitClient,
   Message,
   MessageType,
+  WebSocketEvent,
   WebSocketRequest,
   WebSocketResponse,
   WEBSOCKET_ATTEMPTS_MAX,
@@ -73,6 +75,9 @@ export default class ClientNetworkConnector implements INetworkConnector {
   /** Function that removes this handleRequest from the connection */
   private unsubscribeHandleRequestMessage?: Unsubscriber;
 
+  /** Function that removes this handleEvent from the connection */
+  private unsubscribeHandleEventMessage?: Unsubscriber;
+
   /**
    * Function to call when we receive a request that is registered on this connector.
    * Handles requests from the connection and returns a response to send back
@@ -84,6 +89,15 @@ export default class ClientNetworkConnector implements INetworkConnector {
    * Returns a clientId to which to send the request based on the requestType
    */
   private requestRouter?: (requestType: string) => number;
+
+  /**
+   * Function to call when we receive an event.
+   * Handles events from the connection by emitting the event locally
+   */
+  private localEventHandler?: <T>(
+    eventType: string,
+    incomingEvent: InternalEvent<T>,
+  ) => void;
 
   /** All requests that are waiting for a response */
   // Disabled no-explicit-any because assigning a request with generic type to LiveRequest<unknown> gave error
@@ -100,6 +114,10 @@ export default class ClientNetworkConnector implements INetworkConnector {
   connect = async (
     localRequestHandler: InternalRequestHandler,
     requestRouter: (requestType: string) => number,
+    localEventHandler: <T>(
+      eventType: string,
+      incomingEvent: InternalEvent<T>,
+    ) => void,
   ) => {
     // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
     // We don't need to run this more than once
@@ -108,6 +126,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     this.connectionStatus = ConnectionStatus.Connecting;
     this.localRequestHandler = localRequestHandler;
     this.requestRouter = requestRouter;
+    this.localEventHandler = localEventHandler;
 
     /** Function that resolves the connection promise to be run after receiving a client id */
     let resolveConnect: (
@@ -148,6 +167,12 @@ export default class ClientNetworkConnector implements INetworkConnector {
           MessageType.Request,
           (requestMessage: WebSocketRequest) =>
             this.handleRequestMessage(requestMessage, true),
+        );
+
+        this.unsubscribeHandleEventMessage = this.subscribe(
+          MessageType.Event,
+          (eventMessage: WebSocketEvent<unknown>) =>
+            this.handleEventMessage(eventMessage),
         );
 
         // Finished setting up WebSocketService and connecting! Resolve the promise
@@ -232,6 +257,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
     this.connectionStatus = ConnectionStatus.Disconnected;
     this.localRequestHandler = undefined;
+    this.requestRouter = undefined;
+    this.localEventHandler = undefined;
     this.connectPromise = undefined;
     this.connectorInfo = CONNECTOR_INFO_DISCONNECTED;
     if (this.unsubscribeHandleInitClientMessage)
@@ -240,6 +267,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
       this.unsubscribeHandleResponseMessage();
     if (this.unsubscribeHandleRequestMessage)
       this.unsubscribeHandleRequestMessage();
+    if (this.unsubscribeHandleEventMessage)
+      this.unsubscribeHandleEventMessage();
 
     if (this.webSocket) {
       this.webSocket.removeEventListener('message', this.onMessage);
@@ -286,6 +315,18 @@ export default class ClientNetworkConnector implements INetworkConnector {
     return requestPromise;
   };
 
+  emitEventOnNetwork = async <T>(
+    eventType: string,
+    event: InternalEvent<T>,
+  ) => {
+    // TODO: implement some kind of waiting for a connection? This method is async for hopeful forward compatibility
+    this.sendMessage({
+      type: MessageType.Event,
+      eventType,
+      ...event,
+    });
+  };
+
   // #endregion
 
   // #region private methods
@@ -294,7 +335,6 @@ export default class ClientNetworkConnector implements INetworkConnector {
    * Send a message to the server via webSocket. Throws if not connected
    * @param message message to send
    */
-  // Add if needed: @param unsafe whether to get the client even if we aren't connected. WARNING: SETTING THIS FLAG MEANS NOT CHECKING FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. There may be no clientId
   private sendMessage = (message: Message): void => {
     // TODO: add message queueing
     if (this.connectionStatus !== ConnectionStatus.Connected || !this.webSocket)
@@ -423,6 +463,20 @@ export default class ClientNetworkConnector implements INetworkConnector {
       // This request is for someone else. Send the request to the server to handle/forward
       this.sendMessage(requestMessage);
     }
+  };
+
+  /**
+   * Function that handles incoming webSocket messages of type Event.
+   * Runs the eventHandler provided in connect()
+   * @param eventMessage event message to handle
+   */
+  private handleEventMessage = (eventMessage: WebSocketEvent<unknown>) => {
+    if (!this.localEventHandler)
+      throw new Error(
+        `Received an event but cannot handle it without an eventHandler`,
+      );
+
+    this.localEventHandler(eventMessage.eventType, eventMessage);
   };
 
   // #endregion
