@@ -1,5 +1,6 @@
 module.exports = {
-  extends: 'erb',
+  extends: 'erb', // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
+  // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
   rules: {
     // #region ERB rules
 
@@ -11,7 +12,7 @@ module.exports = {
 
     // #endregion
 
-    // #region Our rules
+    // #region Paranext rules
 
     indent: 'off',
     'react/jsx-indent-props': ['warn', 2],
@@ -29,8 +30,7 @@ module.exports = {
     // This is already a Typescript rule, so we don't need it to be reported twice
     '@typescript-eslint/no-unused-vars': 'off',
     'react/jsx-props-no-spreading': 'off',
-    // TODO: Consider if we want this one. Adjust as desired
-    'no-underscore-dangle': 'off',
+    '@typescript-eslint/lines-between-class-members': 'off',
 
     // #endregion
   },

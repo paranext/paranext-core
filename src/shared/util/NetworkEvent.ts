@@ -14,7 +14,7 @@ import { EventEmitter, EventSubscription } from './Event';
  */
 class NetworkEventEmitter<T> extends EventEmitter<T> {
   /** Callback that sends the event to other processes on the network when it is emitted */
-  private readonly _networkSubscriber: EventSubscription<T>;
+  private networkSubscriber?: EventSubscription<T>;
 
   /**
    * Creates a NetworkEventEmitter
@@ -24,12 +24,13 @@ class NetworkEventEmitter<T> extends EventEmitter<T> {
   constructor(networkSubscriber: EventSubscription<T>) {
     super();
 
-    // TODO: when we implement disposing, dispose of this!
-    this._networkSubscriber = networkSubscriber;
+    this.networkSubscriber = networkSubscriber;
   }
 
   public override emit = (event: T) => {
-    this._networkSubscriber(event);
+    this.assertNotDisposed();
+
+    if (this.networkSubscriber) this.networkSubscriber(event);
     this.emitLocal(event);
   };
 
@@ -38,8 +39,16 @@ class NetworkEventEmitter<T> extends EventEmitter<T> {
    * @param event event data to provide to subscribed callbacks
    */
   public emitLocal(event: T) {
+    this.assertNotDisposed();
+
     super.emitFn(event);
   }
+
+  public override dispose = () => {
+    // TODO: Do we need to set networkSubscriber to undefined? Had to remove readonly from it to do this
+    this.networkSubscriber = undefined;
+    super.disposeFn();
+  };
 }
 
 export default NetworkEventEmitter;

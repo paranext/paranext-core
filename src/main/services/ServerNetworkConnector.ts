@@ -58,7 +58,6 @@ export default class ServerNetworkConnector implements INetworkConnector {
   // #region INetworkConnector members
 
   connectorInfo: NetworkConnectorInfo = { clientId: CLIENT_ID_SERVER };
-
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
 
   // #endregion
@@ -70,7 +69,6 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   /** The next client id to use for a new connection. Starts at 1 because the server is 0 */
   private nextClientId = 1;
-
   /** The webSocket clients that are connected and information about them */
   private clientSockets = new Map<number, WebSocketClient>();
 
@@ -85,13 +83,10 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   /** Function that removes this clientConnect handler from connections */
   private unsubscribeHandleClientConnectMessage?: () => boolean;
-
   /** Function that removes this response handler from connections */
   private unsubscribeHandleResponseMessage?: () => boolean;
-
   /** Function that removes this handleRequest from connections */
   private unsubscribeHandleRequestMessage?: () => boolean;
-
   /** Function that removes this handleEvent from the connection */
   private unsubscribeHandleEventMessage?: Unsubscriber;
 
@@ -100,13 +95,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * Handles requests from connections and returns a response to send back
    */
   private localRequestHandler?: InternalRequestHandler;
-
   /**
    * Function to call when we are sending a request.
    * Returns a clientId to which to send the request based on the requestType
    */
   private requestRouter?: (requestType: string) => number;
-
   /**
    * Function to call when we receive an event.
    * Handles events from connections and emits the event locally
@@ -115,7 +108,6 @@ export default class ServerNetworkConnector implements INetworkConnector {
     eventType: string,
     incomingEvent: InternalEvent<T>,
   ) => void;
-
   /**
    * Function to call when a client disconnects.
    * Removes request handlers associated with the specified client

@@ -23,10 +23,16 @@ export type Event<T> = (callback: EventSubscription<T>) => Unsubscriber;
  */
 export class EventEmitter<T> {
   /** All callback functions that will run when this event is emitted. Lazy loaded */
-  protected _subscriptions?: EventSubscription<T>[];
-
+  protected subscriptions?: EventSubscription<T>[];
   /** Event for listeners to subscribe to. Lazy loaded */
-  private _event?: Event<T>;
+  private lazyEvent?: Event<T>;
+  /** Whether this emitter has been disposed */
+  protected isDisposed = false;
+
+  /** Check to make sure this emitter is not disposed. Throw if it is */
+  protected assertNotDisposed = () => {
+    if (this.isDisposed) throw new Error('Emitter is disposed');
+  };
 
   /**
    * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
@@ -35,31 +41,33 @@ export class EventEmitter<T> {
    * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
    */
   public get event(): Event<T> {
-    if (!this._event) {
-      this._event = (callback) => {
-        // Initialize this._subscriptions if it does not exist
-        if (!this._subscriptions) this._subscriptions = [];
+    this.assertNotDisposed();
 
-        this._subscriptions.push(callback);
+    if (!this.lazyEvent) {
+      this.lazyEvent = (callback) => {
+        // Initialize this._subscriptions if it does not exist
+        if (!this.subscriptions) this.subscriptions = [];
+
+        this.subscriptions.push(callback);
 
         return () => {
-          if (!this._subscriptions) return false; // Did not find any subscribed callbacks
+          if (!this.subscriptions) return false; // Did not find any subscribed callbacks
 
-          const callbackIndex = this._subscriptions.indexOf(callback);
+          const callbackIndex = this.subscriptions.indexOf(callback);
 
           if (callbackIndex < 0) return false; // Did not find this callback in the subscriptions
 
           // Remove the callback
-          this._subscriptions.splice(callbackIndex, 1);
+          this.subscriptions.splice(callbackIndex, 1);
 
           // Remove this._subscriptions if it does not need to exist
-          if (this._subscriptions.length === 0) this._subscriptions = undefined;
+          if (this.subscriptions.length === 0) this.subscriptions = undefined;
 
           return true;
         };
       };
     }
-    return this._event;
+    return this.lazyEvent;
   }
 
   /**
@@ -80,10 +88,27 @@ export class EventEmitter<T> {
   };
 
   /**
-   * Function that runs the subscriptions for the event. Added here so children
-   * can override emit and still call the base functionality. See NetworkEventEmitter.emit for example
+   * Function that runs the subscriptions for the event.
+   * Added here so children can override emit and still call the base functionality.
+   * See NetworkEventEmitter.emit for example
    */
   protected emitFn(event: T) {
-    this._subscriptions?.forEach((callback) => callback(event));
+    this.assertNotDisposed();
+
+    this.subscriptions?.forEach((callback) => callback(event));
+  }
+
+  /** Disposes of this event, preparing it to release from memory */
+  public dispose = () => {
+    this.disposeFn();
+  };
+  /**
+   * Disposes of this event, preparing it to release from memory.
+   * Added here so children can override emit and still call the base functionality.
+   */
+  protected disposeFn() {
+    this.isDisposed = true;
+    this.subscriptions = undefined;
+    this.lazyEvent = undefined;
   }
 }

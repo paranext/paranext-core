@@ -50,7 +50,6 @@ export default class ClientNetworkConnector implements INetworkConnector {
   // #region INetworkConnector members
 
   connectorInfo: NetworkConnectorInfo = CONNECTOR_INFO_DISCONNECTED;
-
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
 
   // #endregion
@@ -68,13 +67,10 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
   /** Function that removes this initClient handler from the connection */
   private unsubscribeHandleInitClientMessage?: Unsubscriber;
-
   /** Function that removes this response handler from the connection */
   private unsubscribeHandleResponseMessage?: Unsubscriber;
-
   /** Function that removes this handleRequest from the connection */
   private unsubscribeHandleRequestMessage?: Unsubscriber;
-
   /** Function that removes this handleEvent from the connection */
   private unsubscribeHandleEventMessage?: Unsubscriber;
 
@@ -83,13 +79,11 @@ export default class ClientNetworkConnector implements INetworkConnector {
    * Handles requests from the connection and returns a response to send back
    */
   private localRequestHandler?: InternalRequestHandler;
-
   /**
    * Function to call when we are sending a request.
    * Returns a clientId to which to send the request based on the requestType
    */
   private requestRouter?: (requestType: string) => number;
-
   /**
    * Function to call when we receive an event.
    * Handles events from the connection by emitting the event locally
