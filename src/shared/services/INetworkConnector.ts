@@ -2,6 +2,7 @@ import {
   ConnectionStatus,
   InternalEvent,
   InternalRequestHandler,
+  NetworkConnectorEventHandlers,
   NetworkConnectorInfo,
 } from '@shared/data/InternalConnectionTypes';
 
@@ -24,7 +25,7 @@ export default interface INetworkConnector {
    * @param localRequestHandler function that handles requests from the connection. Only called when this connector can handle the request
    * @param requestRouter function that returns a clientId to which to send the request based on the requestType. If requestRouter returns this connector's clientId, localRequestHandler is used
    * @param localEventHandler function that handles events from the server by accepting an eventType and an event and emitting the event locally
-   * @param localClientDisconnectHandler function that runs when a client is disconnected
+   * @param networkConnectorEventHandlers functions that run when network connector events occur like when clients are disconnected
    * @returns Promise that resolves with connector info when finished connecting
    */
   connect: (
@@ -34,7 +35,7 @@ export default interface INetworkConnector {
       eventType: string,
       incomingEvent: InternalEvent<T>,
     ) => void,
-    localClientDisconnectHandler: (clientId: number) => void,
+    networkConnectorEventHandlers: NetworkConnectorEventHandlers,
   ) => Promise<NetworkConnectorInfo>;
   /**
    * Notify the server that this client has received its connectorInfo and is ready to go.

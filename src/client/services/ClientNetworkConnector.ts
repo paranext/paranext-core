@@ -241,7 +241,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     else localStorage.removeItem(CLIENT_GUID_KEY);
 
     // In webSocket land, we do not receive a response from the server when we notify client connected
-    // TODO: change the clientconnected into a request that resolves properly. Then we can also know if we reconnected, I suppose
+    // TODO: change the clientConnected into a request that resolves properly. Then we can also know if we reconnected, I suppose
     return Promise.resolve();
   };
 

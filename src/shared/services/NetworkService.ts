@@ -5,6 +5,8 @@
  */
 
 import {
+  ClientConnectEvent,
+  ClientDisconnectEvent,
   CLIENT_ID_SERVER,
   RequestHandler,
 } from '@shared/data/InternalConnectionTypes';
@@ -414,7 +416,7 @@ const registerRemoteRequestHandler = async (
  * Remove all requestRegistrations associated with a client.
  * SERVER-ONLY. Probably should only be run from ServerNetworkConnector.
  */
-const handleClientDisconnect = (clientId: number) => {
+const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
   // TODO: there will probably be something worth doing when a client gets disconnected in the future. Do that here instead of throwing
   if (ConnectionService.getClientId() === clientId)
     throw new Error(
@@ -562,12 +564,20 @@ const handleEventFromNetwork = <T>(eventType: string, event: T) => {
 };
 
 // TODO: Why doesn't createNetworkEventEmitterUnsafe require that I specify a generic type? I can't figure it out.
+/** Emitter for when clients connect. Provides clientId */
+const onDidClientConnectEmitter =
+  createNetworkEventEmitterUnsafe<ClientConnectEvent>(
+    'network:onDidClientConnect',
+  );
+/** Event that emits with clientId when a client connects */
+export const onDidClientConnect = onDidClientConnectEmitter.event;
 /** Emitter for when clients disconnect. Provides clientId */
-const clientDisconnectEmitter = createNetworkEventEmitterUnsafe<number>(
-  'network:clientDisconnect',
-);
+const onDidClientDisconnectEmitter =
+  createNetworkEventEmitterUnsafe<ClientDisconnectEvent>(
+    'network:onDidClientDisconnect',
+  );
 /** Event that emits with clientId when a client disconnects */
-export const onClientDisconnect = clientDisconnectEmitter.event;
+export const onDidClientDisconnect = onDidClientDisconnectEmitter.event;
 
 // #endregion
 
@@ -583,12 +593,18 @@ export const initialize = () => {
       handleRequestLocal,
       routeRequest,
       handleEventFromNetwork,
-      isServer() ? clientDisconnectEmitter.emit : () => {},
+      // Only emit connector events as server because clients will get them from the server
+      isServer()
+        ? {
+            didClientConnectHandler: onDidClientConnectEmitter.emit,
+            didClientDisconnectHandler: onDidClientDisconnectEmitter.emit,
+          }
+        : {},
     );
 
     // Register server-only request handlers
     if (isServer()) {
-      onClientDisconnect(handleClientDisconnect);
+      onDidClientDisconnect(handleClientDisconnect);
 
       const registrationUnsubAndPromises = Object.entries(
         serverRequestHandlers,

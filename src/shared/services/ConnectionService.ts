@@ -12,6 +12,7 @@ import {
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
+  NetworkConnectorEventHandlers,
   RequestHandler,
 } from '@shared/data/InternalConnectionTypes';
 import INetworkConnector from '@shared/services/INetworkConnector';
@@ -39,7 +40,7 @@ let requestRouter: ((requestType: string) => number) | undefined;
 /** Function that accepts events from the server and emits them locally. From connect() */
 let eventHandler: (<T>(eventType: string, event: T) => void) | undefined;
 /** Function that runs when a client is disconnected. From connect() */
-let disconnectClient: ((clientId: number) => void) | undefined;
+let networkConnectorEventHandlers: NetworkConnectorEventHandlers | undefined;
 /** The network connector this service uses to send and receive messages */
 let networkConnector: INetworkConnector | undefined;
 
@@ -103,7 +104,7 @@ export const disconnect = () => {
   requestHandler = undefined;
   requestRouter = undefined;
   eventHandler = undefined;
-  disconnectClient = undefined;
+  networkConnectorEventHandlers = undefined;
   connectPromise = undefined;
   if (networkConnector) {
     networkConnector.disconnect();
@@ -158,17 +159,17 @@ const handleEventFromNetwork = async <T>(
 
 /**
  * Sets up the ConnectionService by connecting to the server and setting up event handlers
- * @param networkRequestHandler function that handles requests from the server by accepting a requestType and a ComplexRequest and returning a Promise of a Complex Response
+ * @param localRequestHandler function that handles requests from the server by accepting a requestType and a ComplexRequest and returning a Promise of a Complex Response
  * @param networkRequestRouter function that determines the appropriate clientId to which to send requests of the given type
- * @param networkEventHandler function that handles events from the server by accepting an eventType and an event and emitting the event locally
- * @param networkClientDisconnectHandler function that runs when a client is disconnected
+ * @param localEventHandler function that handles events from the server by accepting an eventType and an event and emitting the event locally
+ * @param connectorEventHandlers functions that run when network connector events occur like when clients are disconnected
  * @returns Promise that resolves when finished connecting
  */
 export const connect = async (
-  networkRequestHandler: RequestHandler,
+  localRequestHandler: RequestHandler,
   networkRequestRouter: (requestType: string) => number,
-  networkEventHandler: <T>(eventType: string, event: T) => void,
-  networkClientDisconnectHandler: (clientId: number) => void,
+  localEventHandler: <T>(eventType: string, event: T) => void,
+  connectorEventHandlers: NetworkConnectorEventHandlers,
 ): Promise<void> => {
   // Do not run anything asynchronous before we create and assign connectPromise below!
   // We must assign connectPromise immediately so we do not run connect multiple times at once
@@ -176,10 +177,10 @@ export const connect = async (
   // We don't need to run this more than once
   if (connectPromise /* connecting || connected */) {
     if (
-      networkRequestHandler === requestHandler &&
+      localRequestHandler === requestHandler &&
       networkRequestRouter === requestRouter &&
-      networkEventHandler === eventHandler &&
-      networkClientDisconnectHandler === disconnectClient
+      localEventHandler === eventHandler &&
+      connectorEventHandlers === networkConnectorEventHandlers
     )
       return connectPromise;
     throw new Error(
@@ -187,11 +188,13 @@ export const connect = async (
     );
   }
 
-  if (!networkRequestHandler) throw new Error('Must provide a request handler');
+  if (!localRequestHandler) throw new Error('Must provide a request handler');
   if (!networkRequestRouter) throw new Error('Must provide a request router');
-  if (!networkEventHandler) throw new Error('Must provide an event handler');
-  if (!networkClientDisconnectHandler)
-    throw new Error('Must provide a disconnect client function');
+  if (!localEventHandler) throw new Error('Must provide an event handler');
+  if (!connectorEventHandlers)
+    throw new Error(
+      'Must provide an object containing connector event handlers',
+    );
 
   // Start connecting
   connectionStatus = ConnectionStatus.Connecting;
@@ -199,10 +202,10 @@ export const connect = async (
     connectResolve = resolve;
     connectReject = reject;
   });
-  requestHandler = networkRequestHandler;
+  requestHandler = localRequestHandler;
   requestRouter = networkRequestRouter;
-  eventHandler = networkEventHandler;
-  disconnectClient = networkClientDisconnectHandler;
+  eventHandler = localEventHandler;
+  networkConnectorEventHandlers = connectorEventHandlers;
 
   // Set up subscriptions that the service needs to work
 
@@ -220,13 +223,14 @@ export const connect = async (
   // Set up the connection and get the client id from the server on new connections
   try {
     if (!requestRouter) throw new Error('requestRouter not defined.');
-    if (!disconnectClient) throw new Error('disconnectClient not defined.');
+    if (!networkConnectorEventHandlers)
+      throw new Error('networkConnectorEventHandlers not defined.');
 
     const newConnectorInfo = await networkConnector.connect(
       handleInternalRequest,
       requestRouter,
       handleEventFromNetwork,
-      disconnectClient,
+      networkConnectorEventHandlers,
     );
 
     if (clientId !== CLIENT_ID_UNASSIGNED) {

@@ -5,7 +5,7 @@
 import * as CommandService from '@shared/services/CommandService';
 import {
   createNetworkEventEmitter,
-  onClientDisconnect,
+  onDidClientDisconnect,
 } from '@shared/services/NetworkService';
 import * as PapiUtil from '@shared/util/PapiUtil';
 // We need the WebViewService here to include on the papi, but WebViewService passes papi into WebViews
@@ -30,7 +30,7 @@ export default {
     hooks: papiHooks,
   },
   network: {
-    onClientDisconnect,
+    onClientDisconnect: onDidClientDisconnect,
     createNetworkEventEmitter,
   },
 };

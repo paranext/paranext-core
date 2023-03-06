@@ -6,6 +6,7 @@ import {
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
+  NetworkConnectorEventHandlers,
   NetworkConnectorInfo,
 } from '@shared/data/InternalConnectionTypes';
 import INetworkConnector from '@shared/services/INetworkConnector';
@@ -109,10 +110,9 @@ export default class ServerNetworkConnector implements INetworkConnector {
     incomingEvent: InternalEvent<T>,
   ) => void;
   /**
-   * Function to call when a client disconnects.
-   * Removes request handlers associated with the specified client
+   * Functions to run when network connector events occur like when clients are disconnected
    */
-  private localClientDisconnectHandler?: (clientId: number) => void;
+  private networkConnectorEventHandlers?: NetworkConnectorEventHandlers;
 
   /** All requests that are waiting for a response */
   // Disabled no-explicit-any because assigning a request with generic type to LiveRequest<unknown> gave error
@@ -130,7 +130,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
       eventType: string,
       incomingEvent: InternalEvent<T>,
     ) => void,
-    localClientDisconnectHandler: (clientId: number) => void,
+    networkConnectorEventHandlers: NetworkConnectorEventHandlers,
   ) => {
     // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
     // We don't need to run this more than once
@@ -140,7 +140,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.localRequestHandler = localRequestHandler;
     this.requestRouter = requestRouter;
     this.localEventHandler = localEventHandler;
-    this.localClientDisconnectHandler = localClientDisconnectHandler;
+    this.networkConnectorEventHandlers = networkConnectorEventHandlers;
 
     // Set up subscriptions that the service needs to work
     // Mark the connection fully connected and notify that a client was connected
@@ -191,7 +191,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.localRequestHandler = undefined;
     this.requestRouter = undefined;
     this.localEventHandler = undefined;
-    this.localClientDisconnectHandler = undefined;
+    this.networkConnectorEventHandlers = undefined;
     this.connectPromise = undefined;
 
     // Disconnect all clients - this should clear clientSockets on its own
@@ -444,13 +444,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
     webSocket.close();
     this.clientSockets.delete(clientId);
 
-    // TODO: Send an event that the client has disconnected and listen for the disconnect in the NetworkService instead of calling the handler here
-    if (!this.localClientDisconnectHandler)
-      throw new Error(
-        `Client disconnected but cannot disconnect it without a localClientDisconnectHandler`,
-      );
-
-    this.localClientDisconnectHandler(clientId);
+    // Notify that a client disconnected
+    if (this.networkConnectorEventHandlers?.didClientDisconnectHandler)
+      this.networkConnectorEventHandlers.didClientDisconnectHandler({
+        clientId,
+      });
   };
 
   /**
@@ -474,14 +472,21 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.getClientSocket(connectorId).connected = true;
 
     // Determine if this client is reconnecting so we can unregister request handlers for the old connection
+    let didReconnect = false;
     const oldClientSocket = this.getClientSocketFromGuid(
       clientConnect.reconnectingClientGuid,
     );
     if (oldClientSocket) {
+      didReconnect = true;
       this.disconnectClient(oldClientSocket.webSocket);
     }
 
-    // TODO: Send an event that the client is fully connected (mention that it is a reconnect?)
+    // Notify that a client connected and whether that client reconnected
+    if (this.networkConnectorEventHandlers?.didClientConnectHandler)
+      this.networkConnectorEventHandlers.didClientConnectHandler({
+        clientId: connectorId,
+        didReconnect,
+      });
   };
 
   /**
