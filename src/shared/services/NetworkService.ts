@@ -561,7 +561,7 @@ const handleEventFromNetwork = <T>(eventType: string, event: T) => {
   emitter?.emitLocal(event);
 };
 
-// TODO: Why doesn't this require a generic type?
+// TODO: Why doesn't createNetworkEventEmitterUnsafe require that I specify a generic type? I can't figure it out.
 /** Emitter for when clients disconnect. Provides clientId */
 const clientDisconnectEmitter = createNetworkEventEmitterUnsafe<number>(
   'network:clientDisconnect',
@@ -583,13 +583,11 @@ export const initialize = () => {
       handleRequestLocal,
       routeRequest,
       handleEventFromNetwork,
-      // TODO: probably only do this if server
-      clientDisconnectEmitter.emit,
+      isServer() ? clientDisconnectEmitter.emit : () => {},
     );
 
     // Register server-only request handlers
     if (isServer()) {
-      // TODO: check if this is right
       onClientDisconnect(handleClientDisconnect);
 
       const registrationUnsubAndPromises = Object.entries(
