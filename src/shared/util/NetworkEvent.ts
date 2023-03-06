@@ -1,4 +1,4 @@
-import { EventEmitter, EventSubscription } from './Event';
+import { EventEmitter, EventHandler } from './Event';
 
 /**
  * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted.
@@ -14,14 +14,14 @@ import { EventEmitter, EventSubscription } from './Event';
  */
 class NetworkEventEmitter<T> extends EventEmitter<T> {
   /** Callback that sends the event to other processes on the network when it is emitted */
-  private networkSubscriber?: EventSubscription<T>;
+  private networkSubscriber?: EventHandler<T>;
 
   /**
    * Creates a NetworkEventEmitter
    * @param type unique type that identifies this event. Must be the same across processes
    * @param networkSubscriber callback that accepts the event and emits it to other processes
    */
-  constructor(networkSubscriber: EventSubscription<T>) {
+  constructor(networkSubscriber: EventHandler<T>) {
     super();
 
     this.networkSubscriber = networkSubscriber;

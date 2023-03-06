@@ -24,7 +24,7 @@ import * as ConnectionService from '@shared/services/ConnectionService';
 import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
 import logger from '@shared/util/logger';
 import NetworkEventEmitter from '@shared/util/NetworkEvent';
-import { EventEmitter } from '@shared/util/Event';
+import { Event, EventEmitter } from '@shared/util/Event';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -36,12 +36,16 @@ let initializePromise: Promise<void> | undefined;
 const requestRegistrations = new Map<string, RequestRegistration>();
 
 /**
- * Map from event type to the emitter for that type.
- * NetworkEventEmitter types should occur multiple times so extensions cannot emit events they
+ * Map from event type to the emitter for that type as well as if that emitter is "registered" aka one
+ * reference to that emitter has been provided somewhere such that that event can be emitted from that one place.
+ * NetworkEventEmitter types should not occur multiple times so extensions cannot emit events they
  * shouldn't, so we have a quick and easy no sharing in process rule in createNetworkEventEmitter.
  * TODO: sync these between processes
  */
-const networkEventEmitters = new Map<string, NetworkEventEmitter<unknown>>();
+const networkEventEmitters = new Map<
+  string,
+  { emitter: NetworkEventEmitter<unknown>; isRegistered: boolean }
+>();
 
 /** Request handler that is a local function and can be handled locally */
 type LocalRequestRegistration<TParam, TReturn> = {
@@ -331,23 +335,30 @@ const emitEventOnNetworkUnsafe = async <T>(eventType: string, event: T) => {
  * WARNING: DO NOT USE OUTSIDE OF INITIALIZATION. Use createNetworkEventEmitter
  * @param eventType unique network event type for coordinating between processes
  * @param emitOnNetwork the function to use to emit the event on the network. Should only need to provide this in createNetworkEventEmitter
+ * @param register whether to register the emitter aka whether one reference to the emitter has been released and therefore the emitter should not be distributed anymore
  * @returns event emitter whose event works between processes
  */
 const createNetworkEventEmitterUnsafe = <T>(
   eventType: string,
   emitOnNetwork = emitEventOnNetworkUnsafe,
+  register = true,
 ): EventEmitter<T> => {
-  if (networkEventEmitters.has(eventType))
-    throw new Error(
-      `type ${eventType} is already registered to a network event emitter`,
-    );
+  const existingEmitter = networkEventEmitters.get(eventType);
+  if (existingEmitter) {
+    if (existingEmitter.isRegistered)
+      throw new Error(
+        `type ${eventType} is already registered to a network event emitter`,
+      );
+    existingEmitter.isRegistered = register;
+    return existingEmitter.emitter as EventEmitter<T>;
+  }
   const newNetworkEventEmitter = new NetworkEventEmitter<T>((event) =>
     emitOnNetwork(eventType, event),
   );
-  networkEventEmitters.set(
-    eventType,
-    newNetworkEventEmitter as NetworkEventEmitter<unknown>,
-  );
+  networkEventEmitters.set(eventType, {
+    emitter: newNetworkEventEmitter as NetworkEventEmitter<unknown>,
+    isRegistered: register,
+  });
   return newNetworkEventEmitter;
 };
 
@@ -560,7 +571,7 @@ const routeRequest = (requestType: string): number => {
 const handleEventFromNetwork = <T>(eventType: string, event: T) => {
   const emitter = networkEventEmitters.get(eventType);
   // TODO: register events so we only receive events we are listening for, then throw here if we get an event we are not listening for
-  emitter?.emitLocal(event);
+  emitter?.emitter?.emitLocal(event);
 };
 
 // TODO: Why doesn't createNetworkEventEmitterUnsafe require that I specify a generic type? I can't figure it out.
@@ -703,6 +714,8 @@ const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
  * Creates an event emitter that works properly over the network.
  * Other connections receive this event when it is emitted.
  *
+ * WARNING: You can only create a network event emitter once per eventType to prevent hijacked event emitters.
+ *
  * WARNING: You cannot emit events with complex types on the network.
  * @param eventType unique network event type for coordinating between connections
  * @returns event emitter whose event works between connections
@@ -711,6 +724,19 @@ export const createNetworkEventEmitter = <T>(
   eventType: string,
 ): EventEmitter<T> =>
   createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork);
+
+/**
+ * Gets the network event with the specified type. Creates the emitter if it does not exist
+ * @param eventType unique network event type for coordinating between connections
+ * @returns event for the event type that runs the callback provided when the event is emitted
+ */
+export const getNetworkEvent = <T>(eventType: string): Event<T> => {
+  const existingEmitter = networkEventEmitters.get(eventType);
+  if (existingEmitter) return existingEmitter.emitter.event as Event<T>;
+  // We didn't find an existing emitter, so create one but don't mark it as registered because you can't emit the event from this function
+  return createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork, false)
+    .event as Event<T>;
+};
 
 // #endregion
 
@@ -725,4 +751,12 @@ export const createRequestFunction = <TParam extends Array<unknown>, TReturn>(
 ) => {
   return async (...args: TParam) =>
     request<TParam, TReturn>(requestType, ...args);
+};
+
+/** All the exports in this service that are to be exposed on the PAPI */
+export const papiExports = {
+  onDidClientConnect,
+  onDidClientDisconnect,
+  createNetworkEventEmitter,
+  getNetworkEvent,
 };

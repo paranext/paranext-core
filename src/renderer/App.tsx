@@ -9,6 +9,7 @@ import { getErrorMessage, isString } from '@shared/util/Util';
 import usePromise from '@renderer/hooks/papi-hooks/usePromise';
 import TestContext from '@renderer/context/papi-context/TestContext';
 import { WebView, WebViewProps } from '@renderer/components/WebView';
+import useEvent from './hooks/papi-hooks/useEvent';
 
 const testBase: (message: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.test');
@@ -160,6 +161,20 @@ const Hello = () => {
       unsubscriber();
     };
   }, [addWebView]);
+
+  useEvent(
+    papi.network.onDidClientConnect,
+    useCallback(
+      ({ clientId, didReconnect }) => {
+        const result = `Client with id ${clientId} ${
+          didReconnect ? 're' : ''
+        }connected!`;
+        logger.log(result);
+        updatePromiseReturn(result);
+      },
+      [updatePromiseReturn],
+    ),
+  );
 
   return (
     <TestContext.Provider value="test">
