@@ -1,9 +1,11 @@
+import './TestButtonsPanel.css';
 import { useCallback, useState } from 'react';
 import usePromise from '@renderer/hooks/usePromise';
 import papi from '@shared/services/papi';
 import * as NetworkService from '@shared/services/NetworkService';
 import { getErrorMessage } from '@shared/util/Util';
 import logger from '@shared/util/logger';
+import { TabInfo } from '@shared/data/WebviewTypes';
 
 const getVar: (envVar: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.getVar');
@@ -92,51 +94,67 @@ const TestButtonsPanel = () => {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={async () => {
-          const start = performance.now();
-          const result = await runPromise(() => echo('Stuff'));
-          logger.log(
-            `command:echo '${result}' took ${performance.now() - start} ms`,
-          );
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          executeMany(() => echo('Stuff'));
-        }}
-      >
-        Echo
-      </button>
-      <button
-        type="button"
-        onClick={() => runPromise(() => throwError('Test error'))}
-      >
-        Test Exception
-      </button>
-      <button
-        type="button"
-        onClick={() => runPromise(() => test())}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          executeMany(test);
-        }}
-      >
-        Test
-      </button>
-      <button
-        type="button"
-        onClick={async () => {
-          const result = await runPromise(() => addOne(78));
-          logger.log(`added: '${result}'`);
-        }}
-      >
-        Test C#
-      </button>
-      <div>NODE_ENV: {NODE_ENV}</div>
-      <div>{promiseReturn}</div>
+      <div className="Hello">
+        <button
+          className="testButton"
+          type="button"
+          onClick={async () => {
+            const start = performance.now();
+            const result = await runPromise(() => echo('Stuff'));
+            logger.log(
+              `command:echo '${result}' took ${performance.now() - start} ms`,
+            );
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(() => echo('Stuff'));
+          }}
+        >
+          Echo
+        </button>
+        <button
+          className="testButton"
+          type="button"
+          onClick={() => runPromise(() => throwError('Test error'))}
+        >
+          Test Exception
+        </button>
+        <button
+          className="testButton"
+          type="button"
+          onClick={() => runPromise(() => test())}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(test);
+          }}
+        >
+          Test
+        </button>
+        <button
+          className="testButton"
+          type="button"
+          onClick={async () => {
+            const result = await runPromise(() => addOne(78));
+            logger.log(`added: '${result}'`);
+          }}
+        >
+          Test C#
+        </button>
+      </div>
+      <div className="Hello">
+        <div>NODE_ENV: {NODE_ENV}</div>
+        <div>{promiseReturn}</div>
+      </div>
     </>
   );
 };
 
-export default TestButtonsPanel;
+const createButtonsPanel = (): TabInfo => {
+  return {
+    type: 'buttons',
+    title: 'Test Buttons',
+    content: <TestButtonsPanel />,
+  };
+};
+
+export default createButtonsPanel;

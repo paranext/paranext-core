@@ -1,4 +1,5 @@
 import icon from '@assets/icon.png';
+import { TabInfo } from '@shared/data/WebviewTypes';
 
 const HelloPanel = () => {
   return (
@@ -18,4 +19,14 @@ const HelloPanel = () => {
   );
 };
 
-export default HelloPanel;
+const createHelloPanel = (): TabInfo => {
+  return {
+    type: 'hello',
+    title: 'Hello',
+    content: <HelloPanel />,
+    minWidth: 230,
+    minHeight: 230,
+  };
+};
+
+export default createHelloPanel;

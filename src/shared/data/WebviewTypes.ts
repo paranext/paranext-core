@@ -1,3 +1,5 @@
+import { ReactNode } from 'react';
+
 /**
  * Information used to recreate a tab
  */
@@ -9,7 +11,7 @@ export type SavedTabInfo = {
   /**
    * Data needed to recreate the tab during load
    */
-  data?: string;
+  data?: unknown;
 };
 
 /**
@@ -27,11 +29,7 @@ export type TabInfo = {
   /**
    * Content to show inside the tab
    */
-  content: React.ReactNode;
-  /**
-   * (optional) Whether the tab can be closed by the user (default is true)
-   */
-  closable?: boolean;
+  content: ReactNode;
   /**
    * (optional) Minimum width that the tab can become
    */
@@ -40,12 +38,9 @@ export type TabInfo = {
    * (optional) Minimum height that the tab can become
    */
   minHeight?: number;
-  /**
-   * - when value is true: content will always reuse the react component thus allows the component to keep its internal state
-   * - when value is false: content will be destroyed when it's not visible
-   * - when value is undefined: content is rendered normally as react component
-   */
-  cached?: boolean;
 };
 
+/**
+ * For now all tab creators must do their own data type verification
+ */
 export type TabCreator = (tabData: SavedTabInfo) => TabInfo;

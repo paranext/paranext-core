@@ -26,12 +26,12 @@
   right: -1px;
 }
 
-/* tab buttons take all the space , and only apply it when it's not in float panel */
-.dock-layout > :not(.dock-fbox) .dock-panel.dock-style-paranext .dock-nav-list {
+/* tabs take all the space */
+.dock-layout .dock-panel.dock-style-paranext .dock-nav-list {
   flex-grow: 1;
 }
 
-.dock-layout > :not(.dock-fbox) .dock-panel.dock-style-paranext .dock-tab {
+.dock-layout .dock-panel.dock-style-paranext .dock-tab {
   flex: 1 0 auto;
 }
 
@@ -42,23 +42,13 @@
   background: #a6c9ff;
 }
 
-.dock-nav-more {
-  padding: 0;
-}
-
 .dock-content-holder {
   border-bottom: 1px solid #5c5c5c;
   border-left: 1px solid #5c5c5c;
   border-right: 1px solid #5c5c5c;
 }
 
-/* Hide tab group overflow button space (button is hidden, but the space is still taken up).
-  TODO: Make this appear only when needed. */
-.dock-nav-operations {
-  display: none;
-}
-
-/* Hide tab group buttons (maximize). Not sure why this is needed even when the group maximizable is set to false. */
-.dock-extra-content {
+/* Hide tab group overflow button when the button is not needed */
+.dock-nav-operations-hidden {
   display: none;
 }
