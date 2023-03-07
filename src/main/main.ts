@@ -241,7 +241,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   return undefined;
 })().catch(logger.error);
 
-console.log(localStorage.getItem('stuff'));
+logger.log(localStorage.getItem('stuff'));
 
 // #endregion
 
@@ -276,23 +276,23 @@ const extensionHost = app.isPackaged
     );
 
 if (!extensionHost.stderr || !extensionHost.stdout)
-  console.error(
-    "Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
+  logger.error(
+    "Could not connect to extension host's stderr or stdout! You will not see extension host logs here.",
   );
 else if (process.env.IN_VSCODE !== 'true') {
-  // When launched from VSCode, don't re-print the console stuff because it somehow shows it already
+  // When launched from VSCode, don't re-print the logger stuff because it somehow shows it already
   extensionHost.stderr.on('data', (data) =>
-    console.error(formatExtensionHostLog(data.toString(), 'err')),
+    logger.error(formatExtensionHostLog(data.toString(), 'err')),
   );
   extensionHost.stdout.on('data', (data) =>
-    console.log(formatExtensionHostLog(data.toString())),
+    logger.log(formatExtensionHostLog(data.toString())),
   );
 }
 
-extensionHost.on('exit', () => console.warn('extensionHost just exited!'));
+extensionHost.on('exit', () => logger.warn('extensionHost just exited!'));
 
 setTimeout(async () => {
-  console.log(
+  logger.log(
     `Add Many (from EH): ${await papi.commands.sendCommand(
       'addMany',
       2,

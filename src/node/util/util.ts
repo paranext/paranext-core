@@ -19,10 +19,14 @@ export function resolveHtmlPath(htmlFileName: string) {
  * Thanks to Luke at https://stackoverflow.com/a/26227660
  */
 export function getUserDir(): string {
-  return `${
+  return path.join(
     process.env.APPDATA ||
-    (process.platform === 'darwin'
-      ? `${process.env.HOME}/Library/Preferences`
-      : `${process.env.HOME}/.local/share`)
-  }/paranext-core`;
+      (process.platform === 'darwin'
+        ? // Since APPDATA is not defined, we are on a unix-based OS. Therefore HOME will be available
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          path.join(process.env.HOME!, '/Library/Preferences')
+        : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          path.join(process.env.HOME!, '/.local/share')),
+    '/paranext-core',
+  );
 }

@@ -19,6 +19,7 @@ import {
 import { getErrorMessage } from '@shared/util/Util';
 import * as ConnectionService from '@shared/services/ConnectionService';
 import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
+import logger from '@shared/util/logger';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -370,7 +371,7 @@ const handleClientDisconnect = (clientId: number) => {
   });
 
   // Remove registrations for this clientId
-  console.log(
+  logger.log(
     `Client ${clientId} disconnected! Unregistering ${requestTypesToRemove.join(
       ', ',
     )}`,

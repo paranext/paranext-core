@@ -2,20 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": ".NET Core Launch",
+      "name": "Debug .NET Core",
       "type": "coreclr",
       "request": "launch",
-      "preLaunchTask": "build",
+      "preLaunchTask": "npm: build:data",
       "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/ParanextDataProvider",
       "args": [],
       "cwd": "${workspaceFolder}",
       "stopAtEntry": false,
       "windows": {
-        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/ParanextDataProvider.exe"
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/win-x64/ParanextDataProvider.exe"
       }
     },
     {
-      "name": ".NET Core Attach",
+      "name": "Attach to .NET Core",
       "type": "coreclr",
       "request": "attach",
       "processName": "ParanextDataProvider",
@@ -24,7 +24,7 @@
       }
     },
     {
-      "name": "Electron: Main",
+      "name": "Debug Paranext Core Backend",
       "type": "node",
       "request": "launch",
       "protocol": "inspector",
@@ -33,11 +33,10 @@
       "env": {
         "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
         "IN_VSCODE": "true"
-      },
-      "autoAttachChildProcesses": true
+      }
     },
     {
-      "name": "Electron: Renderer",
+      "name": "Attach to Renderer",
       "type": "chrome",
       "request": "attach",
       "port": 9223,
@@ -45,7 +44,7 @@
       "timeout": 15000
     },
     {
-      "name": "Extension Host",
+      "name": "Debug Extension Host",
       "type": "node",
       "request": "launch",
       "protocol": "inspector",
@@ -53,14 +52,13 @@
       "runtimeArgs": ["run", "start:extension-host"],
       "env": {
         "IN_VSCODE": "true"
-      },
-      "autoAttachChildProcesses": true
+      }
     }
   ],
   "compounds": [
     {
-      "name": "Electron: All",
-      "configurations": ["Electron: Main", "Electron: Renderer"]
+      "name": "Debug Paranext Core",
+      "configurations": ["Debug Paranext Core Backend", "Attach to Renderer"]
     }
   ]
 }

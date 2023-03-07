@@ -116,7 +116,7 @@ export const initialize = () => {
       const start = performance.now();
       sendCommandUnsafe('echo', 'Hi server!')
         .then((response) =>
-          console.log(
+          logger.log(
             'command:echo Response!!!',
             response,
             'Response time:',

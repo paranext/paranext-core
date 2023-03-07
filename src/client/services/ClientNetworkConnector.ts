@@ -19,8 +19,9 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
 import { getErrorMessage } from '@shared/util/Util';
-import { createWebSocket } from './WebSocketFactory';
-import { IWebSocket } from './IWebSocket';
+import logger from '@shared/util/logger';
+import { createWebSocket } from '@client/services/WebSocketFactory';
+import { IWebSocket } from '@client/services/IWebSocket';
 
 // #region local variables
 
@@ -173,7 +174,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
         // Remove event listeners and try connecting again
         const retry = (e: Event) => {
           const err = (e as Event & { error?: Error }).error;
-          console.warn(
+          logger.warn(
             `ClientNetworkConnector WebSocket did not connect on attempt ${attempts}. Trying again. Error: ${getErrorMessage(
               err,
             )}`,

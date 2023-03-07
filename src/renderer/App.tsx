@@ -148,7 +148,7 @@ const Hello = () => {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echoRenderer('Stuff'));
-            console.log(
+            logger.log(
               `command:echoRenderer '${result}' took ${
                 performance.now() - start
               } ms`,
@@ -166,7 +166,7 @@ const Hello = () => {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echoExtensionHost('Stuff'));
-            console.log(
+            logger.log(
               `command:echoExtensionHost '${result}' took ${
                 performance.now() - start
               } ms`,
@@ -184,7 +184,7 @@ const Hello = () => {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addThree(1, 2, 3));
-            console.log(
+            logger.log(
               `command:addThree ${result} took ${performance.now() - start} ms`,
             );
           }}
@@ -200,7 +200,7 @@ const Hello = () => {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
-            console.log(
+            logger.log(
               `command:addMany ${result} took ${performance.now() - start} ms`,
             );
           }}
