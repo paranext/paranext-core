@@ -1,0 +1,27 @@
+{
+  "version": "0.2",
+  "ignorePaths": [],
+  "dictionaryDefinitions": [],
+  "dictionaries": [],
+  "words": [
+    "APPDATA",
+    "asyncs",
+    "electronmon",
+    "endregion",
+    "Hopkinson",
+    "localstorage",
+    "nums",
+    "papi",
+    "Papis",
+    "paranext",
+    "Steenwyk",
+    "Unregistering",
+    "unregisters",
+    "unsub",
+    "unsubs",
+    "unsubscriber",
+    "unsubscribers"
+  ],
+  "ignoreWords": [],
+  "import": []
+}

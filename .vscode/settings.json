@@ -27,24 +27,4 @@
     "package-lock.json": true,
     "*.{css,sass,scss}.d.ts": true
   },
-
-  "cSpell.words": [
-    "APPDATA",
-    "asyncs",
-    "electronmon",
-    "endregion",
-    "Hopkinson",
-    "localstorage",
-    "nums",
-    "papi",
-    "Papis",
-    "paranext",
-    "Steenwyk",
-    "Unregistering",
-    "unregisters",
-    "unsub",
-    "unsubs",
-    "unsubscriber",
-    "unsubscribers"
-  ],
 }
