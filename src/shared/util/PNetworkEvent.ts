@@ -1,4 +1,4 @@
-import { EventEmitter, EventHandler } from './Event';
+import { PEventEmitter, PEventHandler } from './PEvent';
 
 /**
  * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted.
@@ -12,16 +12,16 @@ import { EventEmitter, EventHandler } from './Event';
  *
  * WARNING: You cannot emit events with complex types on the network.
  */
-class NetworkEventEmitter<T> extends EventEmitter<T> {
+class PNetworkEventEmitter<T> extends PEventEmitter<T> {
   /** Callback that sends the event to other processes on the network when it is emitted */
-  private networkSubscriber?: EventHandler<T>;
+  private networkSubscriber?: PEventHandler<T>;
 
   /**
    * Creates a NetworkEventEmitter
    * @param type unique type that identifies this event. Must be the same across processes
    * @param networkSubscriber callback that accepts the event and emits it to other processes
    */
-  constructor(networkSubscriber: EventHandler<T>) {
+  constructor(networkSubscriber: PEventHandler<T>) {
     super();
 
     this.networkSubscriber = networkSubscriber;
@@ -51,4 +51,4 @@ class NetworkEventEmitter<T> extends EventEmitter<T> {
   };
 }
 
-export default NetworkEventEmitter;
+export default PNetworkEventEmitter;

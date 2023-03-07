@@ -5,14 +5,14 @@
 import { Unsubscriber } from '@shared/util/PapiUtil';
 
 /** Callback function that accepts an event and should run when an event is emitted */
-export type EventHandler<T> = (event: T) => void;
+export type PEventHandler<T> = (event: T) => void;
 
 /**
  * Function that subscribes the provided callback to run when this event is emitted.
  * @param callback function to run with the event when it is emitted
  * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
  */
-export type Event<T> = (callback: EventHandler<T>) => Unsubscriber;
+export type PEvent<T> = (callback: PEventHandler<T>) => Unsubscriber;
 
 /**
  * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
@@ -21,11 +21,11 @@ export type Event<T> = (callback: EventHandler<T>) => Unsubscriber;
  * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
  * but anyone can subscribe to the event.
  */
-export class EventEmitter<T> {
+export class PEventEmitter<T> {
   /** All callback functions that will run when this event is emitted. Lazy loaded */
-  protected subscriptions?: EventHandler<T>[];
+  protected subscriptions?: PEventHandler<T>[];
   /** Event for listeners to subscribe to. Lazy loaded */
-  private lazyEvent?: Event<T>;
+  private lazyEvent?: PEvent<T>;
   /** Whether this emitter has been disposed */
   protected isDisposed = false;
 
@@ -40,7 +40,7 @@ export class EventEmitter<T> {
    * @param callback function to run with the event when it is emitted
    * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
    */
-  public get event(): Event<T> {
+  public get event(): PEvent<T> {
     this.assertNotDisposed();
 
     if (!this.lazyEvent) {

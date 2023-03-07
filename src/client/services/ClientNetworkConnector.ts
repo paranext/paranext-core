@@ -22,7 +22,7 @@ import {
 } from '@shared/data/NetworkConnectorTypes';
 import { getErrorMessage } from '@shared/util/Util';
 import logger from '@shared/util/logger';
-import { EventEmitter } from '@shared/util/Event';
+import { PEventEmitter } from '@shared/util/PEvent';
 import { createWebSocket } from '@client/services/WebSocketFactory';
 import { IWebSocket } from '@client/services/IWebSocket';
 
@@ -60,7 +60,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
   private webSocket?: IWebSocket;
 
   /** All message subscriptions - emitters that emit an event each time a message with a specific message type comes in */
-  private messageEmitters = new Map<MessageType, EventEmitter<Message>>();
+  private messageEmitters = new Map<MessageType, PEventEmitter<Message>>();
 
   /** Promise that resolves when the connection is finished or rejects if disconnected before the connection finishes */
   private connectPromise?: Promise<NetworkConnectorInfo>;
@@ -382,7 +382,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
   ): Unsubscriber => {
     let emitter = this.messageEmitters.get(messageType);
     if (!emitter) {
-      emitter = new EventEmitter<Message>();
+      emitter = new PEventEmitter<Message>();
       this.messageEmitters.set(messageType, emitter);
     }
     return emitter.subscribe(callback);

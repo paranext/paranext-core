@@ -1,5 +1,5 @@
 import { getNetworkEvent } from '@shared/services/NetworkService';
-import { Event, EventHandler } from '@shared/util/Event';
+import { PEvent, PEventHandler } from '@shared/util/PEvent';
 import { isString } from '@shared/util/Util';
 import { useEffect } from 'react';
 
@@ -12,7 +12,10 @@ import { useEffect } from 'react';
  *
  *    WARNING: MUST BE WRAPPED IN A useCallback. The reference must not be updated every render
  */
-export default <T>(event: Event<T> | string, eventHandler: EventHandler<T>) => {
+export default <T>(
+  event: PEvent<T> | string,
+  eventHandler: PEventHandler<T>,
+) => {
   useEffect(() => {
     const onEvent = isString(event) ? getNetworkEvent<T>(event) : event;
     const unsubscriber = onEvent(eventHandler);

@@ -11,11 +11,11 @@ import * as WebViewService from '@shared/services/WebViewService';
 import papiComponents from '@renderer/components/papi-components/papi-components';
 import papiContext from '@renderer/context/papi-context/papi-context';
 import papiHooks from '@renderer/hooks/papi-hooks/papi-hooks';
-import { EventEmitter } from '@shared/util/Event';
+import { PEventEmitter } from '@shared/util/PEvent';
 
 export default {
   // Classes
-  EventEmitter,
+  PEventEmitter,
 
   // Services/modules
   commands: CommandService,

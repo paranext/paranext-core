@@ -23,8 +23,8 @@ import { getErrorMessage } from '@shared/util/Util';
 import * as ConnectionService from '@shared/services/ConnectionService';
 import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
 import logger from '@shared/util/logger';
-import NetworkEventEmitter from '@shared/util/NetworkEvent';
-import { Event, EventEmitter } from '@shared/util/Event';
+import PNetworkEventEmitter from '@shared/util/PNetworkEvent';
+import { PEvent, PEventEmitter } from '@shared/util/PEvent';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -44,7 +44,7 @@ const requestRegistrations = new Map<string, RequestRegistration>();
  */
 const networkEventEmitters = new Map<
   string,
-  { emitter: NetworkEventEmitter<unknown>; isRegistered: boolean }
+  { emitter: PNetworkEventEmitter<unknown>; isRegistered: boolean }
 >();
 
 /** Request handler that is a local function and can be handled locally */
@@ -342,7 +342,7 @@ const createNetworkEventEmitterUnsafe = <T>(
   eventType: string,
   emitOnNetwork = emitEventOnNetworkUnsafe,
   register = true,
-): EventEmitter<T> => {
+): PEventEmitter<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
   if (existingEmitter) {
     if (existingEmitter.isRegistered)
@@ -350,13 +350,13 @@ const createNetworkEventEmitterUnsafe = <T>(
         `type ${eventType} is already registered to a network event emitter`,
       );
     existingEmitter.isRegistered = register;
-    return existingEmitter.emitter as EventEmitter<T>;
+    return existingEmitter.emitter as PEventEmitter<T>;
   }
-  const newNetworkEventEmitter = new NetworkEventEmitter<T>((event) =>
+  const newNetworkEventEmitter = new PNetworkEventEmitter<T>((event) =>
     emitOnNetwork(eventType, event),
   );
   networkEventEmitters.set(eventType, {
-    emitter: newNetworkEventEmitter as NetworkEventEmitter<unknown>,
+    emitter: newNetworkEventEmitter as PNetworkEventEmitter<unknown>,
     isRegistered: register,
   });
   return newNetworkEventEmitter;
@@ -722,7 +722,7 @@ const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
  */
 export const createNetworkEventEmitter = <T>(
   eventType: string,
-): EventEmitter<T> =>
+): PEventEmitter<T> =>
   createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork);
 
 /**
@@ -730,12 +730,12 @@ export const createNetworkEventEmitter = <T>(
  * @param eventType unique network event type for coordinating between connections
  * @returns event for the event type that runs the callback provided when the event is emitted
  */
-export const getNetworkEvent = <T>(eventType: string): Event<T> => {
+export const getNetworkEvent = <T>(eventType: string): PEvent<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
-  if (existingEmitter) return existingEmitter.emitter.event as Event<T>;
+  if (existingEmitter) return existingEmitter.emitter.event as PEvent<T>;
   // We didn't find an existing emitter, so create one but don't mark it as registered because you can't emit the event from this function
   return createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork, false)
-    .event as Event<T>;
+    .event as PEvent<T>;
 };
 
 // #endregion
