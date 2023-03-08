@@ -40,8 +40,8 @@ const RESOURCES_SCHEME = 'resources';
 
 /**
  * Get a mapping from scheme to the absolute path to that scheme.
- * TODO: this is currently lazy-loaded because globalThis doesn't get populated until after imports are finished.
- * Fix this to be a normal object after fixing globalThis.
+ * TODO: this is currently lazy-loaded because globalThis doesn't get populated until after this file is imported.
+ * Fix this to be a normal object after fixing globalThis import dependencies.
  */
 const getSchemePaths = memoizeOne((): { [scheme: string]: string } => ({
   [APP_SCHEME]: getAppDir(),
