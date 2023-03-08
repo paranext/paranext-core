@@ -17,7 +17,6 @@ module.exports = {
     'react/jsx-indent-props': ['warn', 2],
     'comma-dangle': ['error', 'always-multiline'],
     'prettier/prettier': ['warn', { tabWidth: 2, trailingComma: 'all' }],
-    'no-console': 'off',
     'react/require-default-props': 'off',
     'no-plusplus': ['error', { allowForLoopAfterthoughts: true }],
     'jsx-a11y/label-has-associated-control': [
