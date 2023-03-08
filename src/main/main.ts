@@ -9,7 +9,6 @@
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import log from 'electron-log';
 import windowStateKeeper from 'electron-window-state';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import logger from '@shared/util/logger';
@@ -33,8 +32,7 @@ polyfillLocalStorage(app.isPackaged);
 
 class AppUpdater {
   constructor() {
-    log.transports.file.level = 'info';
-    autoUpdater.logger = log;
+    autoUpdater.logger = logger;
     autoUpdater.checkForUpdatesAndNotify();
   }
 }
@@ -177,6 +175,7 @@ const ipcHandlers: {
 
 app
   .whenReady()
+  // eslint-disable-next-line promise/always-return
   .then(() => {
     // Set up ipc handlers
     Object.keys(ipcHandlers).forEach((ipcHandle) =>

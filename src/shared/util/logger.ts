@@ -1,13 +1,19 @@
-// We want to be able to use console in this logger file as desired.
-// Other things should call this logger, but this logger can use console if we want
-/* eslint-disable no-console */
+import log from 'electron-log';
 import { isClient } from './InternalUtil';
 
 /**
- * Abstract the logger
- * For now just use the console logger
+ * Abstract and shim the logger
  */
-const logger = isClient()
-  ? console
-  : new console.Console(process.stdout, process.stderr);
+
+const isProduction = process.env.NODE_ENV === 'production';
+const level = isProduction ? 'error' : 'info';
+if (isClient()) {
+  log.transports.console.level = level;
+} else {
+  log.initialize();
+  log.transports.console.level = level;
+  log.transports.file.level = level;
+}
+
+const logger = log;
 export default logger;
