@@ -1,14 +1,8 @@
+import '@renderer/globalThis';
 import { createRoot } from 'react-dom/client';
 import * as NetworkService from '@shared/services/NetworkService';
 import * as CommandService from '@shared/services/CommandService';
-import { ProcessType } from '@shared/globalThis';
 import App from './App';
-
-// #region globalThis setup
-
-globalThis.processType = ProcessType.Renderer;
-
-// #endregion
 
 // App-wide service setup
 NetworkService.initialize();

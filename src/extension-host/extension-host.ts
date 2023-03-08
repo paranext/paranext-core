@@ -1,23 +1,9 @@
+import '@extension-host/globalThis';
 import { isClient } from '@shared/util/InternalUtil';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
-import { ProcessType } from '@shared/globalThis';
-import polyfillLocalStorage from '@node/polyfill/LocalStorage';
 import logger from '@shared/util/logger';
-
-// #region command-line arguments
-
-const isPackaged = process.argv.includes('--packaged');
-
-// #endregion
-
-// #region globalThis setup
-
-globalThis.processType = ProcessType.ExtensionHost;
-polyfillLocalStorage(isPackaged);
-
-// #endregion
 
 // #region Test logs
 

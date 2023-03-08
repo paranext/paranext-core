@@ -10,23 +10,15 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import windowStateKeeper from 'electron-window-state';
+import '@main/globalThis';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import logger from '@shared/util/logger';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
 import { fork, spawn } from 'child_process';
-import { ProcessType } from '@shared/globalThis';
-import polyfillLocalStorage from '@node/polyfill/LocalStorage';
 import { resolveHtmlPath } from '@node/util/util';
 import MenuBuilder from './menu';
-
-// #region globalThis setup
-
-globalThis.processType = ProcessType.Main;
-polyfillLocalStorage(app.isPackaged);
-
-// #endregion
 
 // #region ELECTRON SETUP
 
