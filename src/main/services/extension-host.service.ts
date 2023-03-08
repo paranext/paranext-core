@@ -13,7 +13,18 @@ let extensionHost: ChildProcess | undefined;
  * Hard kills the extension host process.
  * TODO: fix this to be a more elegant shutdown
  */
-function killExtensionHost() {}
+function killExtensionHost() {
+  if (!extensionHost) return;
+
+  if (extensionHost.kill()) {
+    logger.log('[extension host] was killed');
+  } else {
+    logger.error(
+      '[extension host] was not stopped! Investigate other .kill() options',
+    );
+  }
+  extensionHost = undefined;
+}
 
 const formatExtensionHostLog = (message: string, tag = '') => {
   const messageNoEndLine = message.trimEnd();

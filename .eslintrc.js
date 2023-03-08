@@ -17,8 +17,8 @@ module.exports = {
     'react/jsx-indent-props': ['warn', 2],
     'comma-dangle': ['error', 'always-multiline'],
     'prettier/prettier': ['warn', { tabWidth: 2, trailingComma: 'all' }],
-    // Should always use our logger
-    'no-console': 'error',
+    // Should use our logger anytime you want logs that persist. Otherwise use console only in testing
+    'no-console': 'warn',
     'react/require-default-props': 'off',
     'no-plusplus': ['error', { allowForLoopAfterthoughts: true }],
     'jsx-a11y/label-has-associated-control': [
