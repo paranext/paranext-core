@@ -12,6 +12,12 @@
       "stopAtEntry": false,
       "windows": {
         "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/win-x64/ParanextDataProvider.exe"
+      },
+      "linux": {
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/linux-x64/ParanextDataProvider"
+      },
+      "osx": {
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/osx-x64/ParanextDataProvider"
       }
     },
     {

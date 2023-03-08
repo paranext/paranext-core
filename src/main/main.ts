@@ -241,8 +241,6 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   return undefined;
 })().catch(logger.error);
 
-logger.log(localStorage.getItem('stuff'));
-
 // #endregion
 
 // #region Extension Host
