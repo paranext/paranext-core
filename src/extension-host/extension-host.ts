@@ -1,40 +1,14 @@
+import '@extension-host/globalThis';
 import { isClient } from '@shared/util/InternalUtil';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
-import { ProcessType } from '@shared/globalThis';
-import polyfillLocalStorage from '@node/polyfill/LocalStorage';
 import * as ExtensionService from '@extension-host/services/ExtensionService';
 import logger from '@shared/util/logger';
 
-// #region command-line arguments
-
-const isPackaged = process.argv.includes('--packaged');
-const resourcesPathIndex = process.argv.indexOf('--resourcesPath');
-const resourcesPath =
-  resourcesPathIndex >= 0 && process.argv.length > resourcesPathIndex + 1
-    ? process.argv[resourcesPathIndex + 1]
-    : 'resources://';
-
-// #endregion
-
-// #region globalThis setup
-
-globalThis.processType = ProcessType.ExtensionHost;
-globalThis.isPackaged = isPackaged;
-globalThis.resourcesPath = resourcesPath;
-
-// #endregion
-
-// #region polyfills
-
-polyfillLocalStorage();
-
-// #endregion
-
 // #region Test logs
 
-logger.log('Hello from the extension host!');
+logger.log('Starting extension-host');
 logger.log(`Extension host is${isClient() ? '' : ' not'} client`);
 logger.log(`Extension host process.type = ${process.type}`);
 logger.log(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
@@ -71,7 +45,7 @@ NetworkService.initialize()
     // TODO: Probably should return Promise.all of these registrations
     return undefined;
   })
-  .catch((e) => logger.error(e));
+  .catch(logger.error);
 
 // Need to wait a bit to initialize extensions in production because the extension host launches faster than the renderer.
 // TODO: Fix this so we can await renderer connecting event or something

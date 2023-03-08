@@ -22,12 +22,16 @@ export function resolveHtmlPath(htmlFileName: string) {
  */
 export const getAppDir = memoizeOne((): string => {
   return globalThis.isPackaged
-    ? `${
+    ? path.join(
         process.env.APPDATA ||
-        (process.platform === 'darwin'
-          ? `${process.env.HOME}/Library/Preferences`
-          : `${process.env.HOME}/.local/share`)
-      }/paranext-core`
+          (process.platform === 'darwin'
+            ? // Since APPDATA is not defined, we are on a unix-based OS. Therefore HOME will be available
+              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+              path.join(process.env.HOME!, '/Library/Preferences')
+            : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+              path.join(process.env.HOME!, '/.local/share')),
+        '/paranext-core',
+      )
     : path.join(__dirname, '../../../dev-appdata');
 });
 
