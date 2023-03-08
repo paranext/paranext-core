@@ -10,13 +10,15 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import windowStateKeeper from 'electron-window-state';
+import '@main/globalThis';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import logger from '@shared/util/logger';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
+import { fork, spawn } from 'child_process';
+import { resolveHtmlPath } from '@node/util/util';
 import MenuBuilder from './menu';
-import { resolveHtmlPath } from './util';
 
 // #region ELECTRON SETUP
 
@@ -178,6 +180,8 @@ app
       // dock icon is clicked and there are no other windows open.
       if (mainWindow === null) createWindow();
     });
+
+    return undefined;
   })
   .catch(logger.log);
 
@@ -187,11 +191,18 @@ app
 
 const commandHandlers: { [commandName: string]: CommandHandler } = {
   echo: async (message: string) => {
+    return message;
+  },
+  echoRenderer: async (message: string) => {
     /* const start = performance.now(); */
     /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
     /* logger.log(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
+    return message;
+  },
+  echoExtensionHost: async (message: string) => {
+    await papi.commands.sendCommand('addMany', 3, 5, 7, 1, 4);
     return message;
   },
   throwError: async (message: string) => {
@@ -216,6 +227,69 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   // Start the dotnet data provider early so its ready when needed once the
   // WebSocket is up.
   dotnetDataProvider.start();
+
+  // TODO: Probably should return Promise.all of these registrations
+  return undefined;
 })().catch(logger.error);
+
+// #endregion
+
+// #region Extension Host
+
+const formatExtensionHostLog = (message: string, tag = '') => {
+  const messageNoEndLine = message.trimEnd();
+  const openTag = `{eh${tag ? ' ' : ''}${tag}}`;
+  const closeTag = `{/eh${tag ? ' ' : ''}${tag}}`;
+  if (messageNoEndLine.includes('\n'))
+    // Multi-line
+    return `${openTag}\n${messageNoEndLine}\n${closeTag}`;
+  return `${openTag} ${messageNoEndLine} ${closeTag}`;
+};
+
+// In production, fork a new process for the extension host
+// In development, spawn nodemon to watch the extension-host
+const extensionHost = app.isPackaged
+  ? fork(
+      path.join(__dirname, '../extension-host/extension-host.js'),
+      ['--packaged'],
+      {
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      },
+    )
+  : spawn(
+      process.platform.includes('win') ? 'npm.cmd' : 'npm',
+      ['run', 'start:extension-host'],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+
+if (!extensionHost.stderr || !extensionHost.stdout)
+  logger.error(
+    "Could not connect to extension host's stderr or stdout! You will not see extension host logs here.",
+  );
+else if (process.env.IN_VSCODE !== 'true') {
+  // When launched from VSCode, don't re-print the logger stuff because it somehow shows it already
+  extensionHost.stderr.on('data', (data) =>
+    logger.error(formatExtensionHostLog(data.toString(), 'err')),
+  );
+  extensionHost.stdout.on('data', (data) =>
+    logger.log(formatExtensionHostLog(data.toString())),
+  );
+}
+
+extensionHost.on('exit', () => logger.warn('extensionHost just exited!'));
+
+setTimeout(async () => {
+  logger.log(
+    `Add Many (from EH): ${await papi.commands.sendCommand(
+      'addMany',
+      2,
+      5,
+      9,
+      7,
+    )}`,
+  );
+}, 3000);
 
 // #endregion

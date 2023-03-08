@@ -2,20 +2,26 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": ".NET Core Launch",
+      "name": "Debug .NET Core",
       "type": "coreclr",
       "request": "launch",
-      "preLaunchTask": "build",
+      "preLaunchTask": "npm: build:data",
       "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/ParanextDataProvider",
       "args": [],
       "cwd": "${workspaceFolder}",
       "stopAtEntry": false,
       "windows": {
-        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/ParanextDataProvider.exe"
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/win-x64/ParanextDataProvider.exe"
+      },
+      "linux": {
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/linux-x64/ParanextDataProvider"
+      },
+      "osx": {
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/osx-x64/ParanextDataProvider"
       }
     },
     {
-      "name": ".NET Core Attach",
+      "name": "Attach to .NET Core",
       "type": "coreclr",
       "request": "attach",
       "processName": "ParanextDataProvider",
@@ -24,29 +30,41 @@
       }
     },
     {
-      "name": "Electron: Main",
+      "name": "Debug Paranext Core Backend",
       "type": "node",
       "request": "launch",
       "protocol": "inspector",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start"],
       "env": {
-        "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223"
+        "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
+        "IN_VSCODE": "true"
       }
     },
     {
-      "name": "Electron: Renderer",
+      "name": "Attach to Renderer",
       "type": "chrome",
       "request": "attach",
       "port": 9223,
       "webRoot": "${workspaceFolder}",
       "timeout": 15000
+    },
+    {
+      "name": "Debug Extension Host",
+      "type": "node",
+      "request": "launch",
+      "protocol": "inspector",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:extension-host"],
+      "env": {
+        "IN_VSCODE": "true"
+      }
     }
   ],
   "compounds": [
     {
-      "name": "Electron: All",
-      "configurations": ["Electron: Main", "Electron: Renderer"]
+      "name": "Debug Paranext Core",
+      "configurations": ["Debug Paranext Core Backend", "Attach to Renderer"]
     }
   ]
 }

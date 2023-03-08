@@ -6,6 +6,7 @@ const dllPath = path.join(__dirname, '../dll');
 
 const srcPath = path.join(rootPath, 'src');
 const srcMainPath = path.join(srcPath, 'main');
+const srcExtensionHostPath = path.join(srcPath, 'extension-host');
 const srcRendererPath = path.join(srcPath, 'renderer');
 const srcSharedPath = path.join(srcPath, 'shared');
 
@@ -17,6 +18,7 @@ const srcNodeModulesPath = path.join(srcPath, 'node_modules');
 
 const distPath = path.join(appPath, 'dist');
 const distMainPath = path.join(distPath, 'main');
+const distExtensionHostPath = path.join(distPath, 'extension-host');
 const distRendererPath = path.join(distPath, 'renderer');
 
 const buildPath = path.join(releasePath, 'build');
@@ -26,6 +28,7 @@ export default {
   dllPath,
   srcPath,
   srcMainPath,
+  srcExtensionHostPath,
   srcRendererPath,
   srcSharedPath,
   releasePath,
@@ -35,6 +38,7 @@ export default {
   srcNodeModulesPath,
   distPath,
   distMainPath,
+  distExtensionHostPath,
   distRendererPath,
   buildPath,
 };

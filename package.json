@@ -41,8 +41,9 @@
   ],
   "main": "./src/main/main.ts",
   "scripts": {
-    "build": "concurrently \"npm run build:main\" \"npm run build:renderer\"",
+    "build": "concurrently \"npm run build:main\" \"npm run build:extension-host\" \"npm run build:renderer\"",
     "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.main.prod.ts",
+    "build:extension-host": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.extension-host.prod.ts",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",
     "build:data": "dotnet build c-sharp/ParanextDataProvider.sln",
     "build:data-release": "run-script-os",
@@ -56,10 +57,11 @@
     "prepare": "husky install",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "start": "ts-node ./.erb/scripts/check-port-in-use.js && npm run start:renderer",
-    "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only -r tsconfig-paths/register .",
+    "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only .",
+    "start:extension-host": "cross-env NODE_ENV=development nodemon --transpile-only ./src/extension-host/extension-host.ts",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
-    "start:data": "dotnet run --project c-sharp/ParanextDataProvider.csproj",
+    "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
     "test": "jest"
   },
   "lint-staged": {
@@ -82,7 +84,7 @@
     "electron-log": "^5.0.0-beta.19",
     "electron-updater": "^5.2.3",
     "electron-window-state": "^5.0.3",
-    "memoize-one": "^6.0.0",
+    "node-localstorage": "^2.2.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.4.0",
@@ -98,6 +100,7 @@
     "@testing-library/react": "^13.3.0",
     "@types/jest": "^28.1.7",
     "@types/node": "18.7.6",
+    "@types/node-localstorage": "^1.3.0",
     "@types/react": "^18.0.17",
     "@types/react-dom": "^18.0.6",
     "@types/react-test-renderer": "^18.0.0",
@@ -138,6 +141,7 @@
     "jest-environment-jsdom": "^28.1.3",
     "lint-staged": "^13.0.3",
     "mini-css-extract-plugin": "^2.6.1",
+    "nodemon": "^2.0.20",
     "prettier": "^2.7.1",
     "react-refresh": "^0.14.0",
     "react-test-renderer": "^18.2.0",
@@ -510,8 +514,17 @@
     "patterns": [
       "!**/**",
       "src/main/**",
+      "src/node/**",
       "src/shared/**"
     ],
     "logLevel": "quiet"
+  },
+  "nodemonConfig": {
+    "watch": [
+      "src/client/**",
+      "src/extension-host/**",
+      "src/node/**",
+      "src/shared/**"
+    ]
   }
 }
