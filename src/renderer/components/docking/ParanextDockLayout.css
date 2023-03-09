@@ -1,0 +1,54 @@
+.dock-panel.dock-style-paranext {
+  border: 0;
+}
+
+.dock-panel.dock-style-paranext .dock-tab {
+  margin-right: 0;
+  border: 1px solid #5c5c5c;
+  background: #bfbfbf;
+  color: #191919;
+}
+
+.dock-panel.dock-style-paranext .dock-tab.dock-tab-active {
+  background: #a6c9ff;
+  color: #191919;
+}
+
+.dock-panel.dock-style-paranext .dock-bar {
+  background: #8c8c8c;
+  border-bottom: 1px solid #5c5c5c;
+  padding: 0;
+}
+
+.dock-panel.dock-style-paranext .dock-tab-hit-area {
+  /* cover the border area */
+  left: -1px;
+  right: -1px;
+}
+
+/* tabs take all the space */
+.dock-layout .dock-panel.dock-style-paranext .dock-nav-list {
+  flex-grow: 1;
+}
+
+.dock-layout .dock-panel.dock-style-paranext .dock-tab {
+  flex: 1 0 auto;
+}
+
+/* global dock layout styles */
+.dock-layout > .dock-drop-indicator {
+  border: solid 1px #a6c9ff;
+  /* box-shadow: inset 0 0 10px #a6c9ff; */
+  background: #a6c9ff;
+}
+
+.dock-content-holder {
+  border-bottom: 1px solid #5c5c5c;
+  border-left: 1px solid #5c5c5c;
+  border-right: 1px solid #5c5c5c;
+}
+
+/* Hide tab group overflow button when the button is not needed */
+.dock-nav-operations-hidden {
+  display: none;
+}
