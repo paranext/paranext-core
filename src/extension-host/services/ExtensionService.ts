@@ -141,7 +141,7 @@ const activateExtensions = async (
     }
 
     // Disallow any imports within the extension
-    const message = `Requiring other than papi is not allowed in extensions! Rejected require(${fileName})`;
+    const message = `Requiring other than papi is not allowed in extensions! Rejected require('${fileName}')`;
     return {
       message,
     };

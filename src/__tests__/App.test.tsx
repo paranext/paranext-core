@@ -1,6 +1,15 @@
 import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
+import { ProcessType } from '@shared/globalThis';
 import App from '../renderer/App';
+
+// #region globalThis setup
+
+globalThis.processType = ProcessType.Renderer;
+globalThis.isPackaged = false;
+globalThis.resourcesPath = 'resources://';
+
+// #endregion
 
 jest.mock('@shared/services/NetworkService', () => ({
   createRequestFunction:
@@ -8,7 +17,7 @@ jest.mock('@shared/services/NetworkService', () => ({
     async (...args: unknown[]) =>
       `Mocked ${requestType} request with args ${args.join(', ')}`,
 }));
-jest.mock('@renderer/hooks/usePromise', () => ({
+jest.mock('@renderer/hooks/papi-hooks/usePromise', () => ({
   __esModule: true,
   default: /** usePromise Mock */ () => ['mock', false],
 }));

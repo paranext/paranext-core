@@ -10,6 +10,7 @@ import * as WebViewService from '@shared/services/WebViewService';
 import papiComponents from '@renderer/components/papi-components/papi-components';
 import papiContext from '@renderer/context/papi-context/papi-context';
 import papiHooks from '@renderer/hooks/papi-hooks/papi-hooks';
+import logger from '@shared/util/logger';
 
 export default {
   commands: CommandService,
@@ -20,4 +21,5 @@ export default {
     context: papiContext,
     hooks: papiHooks,
   },
+  logger,
 };
