@@ -6,36 +6,13 @@ body {
   position: relative;
   color: white;
   height: 100vh;
-  background: linear-gradient(
-    200.96deg,
-    #b8d432 -29.09%,
-    #5f7333 51.77%,
-    #47314e 129.35%
-  );
+  background: #8c8c8c;
   font-family: sans-serif;
   overflow-y: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-button {
-  background-color: white;
-  padding: 10px 20px;
-  border-radius: 10px;
-  border: none;
-  appearance: none;
-  font-size: 1.3rem;
-  box-shadow: 0px 8px 28px -6px rgba(24, 39, 75, 0.12),
-    0px 18px 88px -4px rgba(24, 39, 75, 0.14);
-  transition: all ease-in 0.1s;
-  cursor: pointer;
-  opacity: 0.9;
-}
-
-button:hover {
-  transform: scale(1.05);
-  opacity: 1;
+  margin: 0;
 }
 
 li {

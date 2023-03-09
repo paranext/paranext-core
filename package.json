@@ -85,6 +85,7 @@
     "electron-updater": "^5.2.3",
     "electron-window-state": "^5.0.3",
     "node-localstorage": "^2.2.1",
+    "rc-dock": "^3.2.17",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.4.0",
