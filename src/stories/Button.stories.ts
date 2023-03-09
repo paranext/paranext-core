@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import path from 'path';
 
 import Button from './Button';
+
+const getAssetPath = (...paths: string[]): string => {
+  return path.join('resources://', 'assets', ...paths);
+};
 
 // More on how to set up stories at: https://storybook.js.org/docs/react/writing-stories/introduction#default-export
 const meta: Meta<typeof Button> = {
@@ -8,10 +13,6 @@ const meta: Meta<typeof Button> = {
   component: Button,
   // This component will have an automatically generated Autodocs entry: https://storybook.js.org/docs/7.0/react/writing-docs/docs-page
   tags: ['autodocs'],
-  // More on argTypes: https://storybook.js.org/docs/react/api/argtypes
-  argTypes: {
-    backgroundColor: { control: 'color' },
-  },
 };
 
 export default meta;
@@ -22,26 +23,34 @@ export const Primary: Story = {
   // More on args: https://storybook.js.org/docs/react/writing-stories/args
   args: {
     primary: true,
-    label: 'Button',
+    label: 'Primary Button',
+    disabled: false,
   },
 };
 
-export const Secondary: Story = {
+export const ButtonWithStartingIcon: Story = {
   args: {
-    label: 'Button',
+    primary: false,
+    startIcon: getAssetPath('icon.png'),
+    label: ' Button',
+    disabled: false,
   },
 };
 
-export const Large: Story = {
+export const ButtonWithEndingIcon: Story = {
   args: {
-    size: 'large',
-    label: 'Button',
+    primary: false,
+    label: ' Button',
+    endIcon: getAssetPath('icon.png'),
+    disabled: false,
   },
 };
 
-export const Small: Story = {
+export const Paratext: Story = {
   args: {
-    size: 'small',
-    label: 'Button',
+    startIcon: getAssetPath('icon.png'),
+    label: 'Paratext Button',
+    disabled: false,
+    additionalCssClasses: 'paratext',
   },
 };

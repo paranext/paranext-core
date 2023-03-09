@@ -16,11 +16,23 @@ const config: StorybookConfig = {
   docs: {
     autodocs: 'tag',
   },
+  typescript: {
+    check: false,
+    checkOptions: {},
+    reactDocgen: 'react-docgen-typescript',
+    reactDocgenTypescriptOptions: {
+      // speeds up storybook build time
+      // @ts-expect-error The following line is interpreted as an error even though it isn't
+      allowSyntheticDefaultImports: false,
+      // speeds up storybook build time
+      esModuleInterop: false,
+    },
+  },
 
   // Merge StorybookWebpackConfig with our WebpackRendererConfig
   // See the current webpack configuration using npm run storybook -- --debug-webpack
   // TODO: Make this work in production mode
-   webpackFinal: async (webpackConfig, { configType }) => {
+  webpackFinal: async (webpackConfig, { configType }) => {
     const rendererConfig =
       configType === 'PRODUCTION'
         ? // Storybook is a build tool so this will not affect anything

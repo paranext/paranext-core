@@ -1,4 +1,5 @@
 import './button.css';
+import { Button as MuiButton } from '@mui/material';
 
 interface ButtonProps {
   /**
@@ -6,21 +7,33 @@ interface ButtonProps {
    */
   primary?: boolean;
   /**
-   * What background color to use
+   * Icon placed before the label on the button
    */
-  backgroundColor?: string;
-  /**
-   * How large should the button be?
-   */
-  size?: 'small' | 'medium' | 'large';
+  startIcon?: string | undefined;
   /**
    * Button contents
    */
   label: string;
   /**
+   * Icon placed after the label on the button
+   */
+  endIcon?: string | undefined;
+  /**
+   * Enabled status of button
+   */
+  disabled?: boolean;
+  /**
+   * Additional css classes to help with unique styling of the button
+   */
+  additionalCssClasses?: string;
+  /**
    * Optional click handler
    */
   onClick?: () => void;
+  /**
+   * Optional context menu handler
+   */
+  onContextMenu?: () => void;
 }
 
 /**
@@ -28,25 +41,50 @@ interface ButtonProps {
  */
 const Button = ({
   primary = false,
-  size = 'medium',
-  backgroundColor,
+  startIcon,
   label,
-  ...props
+  endIcon,
+  disabled,
+  additionalCssClasses,
+  onClick,
+  onContextMenu,
 }: ButtonProps) => {
-  const mode = primary
-    ? 'storybook-button--primary'
-    : 'storybook-button--secondary';
+  const mode = primary ? 'primary' : 'secondary';
+  const disabledStatus = disabled ? 'enabled' : 'disabled';
+  const additionalClasses = additionalCssClasses ?? '';
   return (
-    <button
-      type="button"
-      className={['storybook-button', `storybook-button--${size}`, mode].join(
-        ' ',
-      )}
-      style={{ backgroundColor }}
-      {...props}
+    <MuiButton
+      className={[
+        'storybook-button',
+        mode,
+        disabledStatus,
+        additionalClasses,
+      ].join(' ')}
+      onClick={(e) => {
+        if (onClick) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      onContextMenu={(e) => {
+        if (onContextMenu) {
+          e.preventDefault();
+          onContextMenu();
+        }
+      }}
     >
+      {startIcon && (
+        <div>
+          <img alt="startIcon" src={startIcon} />
+        </div>
+      )}
       {label}
-    </button>
+      {endIcon && (
+        <div>
+          <img alt="endIcon" src={endIcon} />
+        </div>
+      )}
+    </MuiButton>
   );
 };
 
