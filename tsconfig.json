@@ -9,11 +9,14 @@
     "sourceMap": true,
     "baseUrl": "./src",
     "paths": {
+      "@assets/*": ["../assets/*"],
+      "@client/*": ["./client/*"],
+      "@extension-host/*": ["./extension-host/*"],
+      "@main/*": ["./main/*"],
+      "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
-      "@main/*": ["./main/*"],
-      "@node_modules/*": ["../node_modules/*"],
-      "@assets/*": ["../assets/*"]
+      "@node_modules/*": ["../node_modules/*"]
     },
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -26,5 +29,8 @@
     "allowJs": true,
     "outDir": ".erb/dll"
   },
-  "exclude": ["test", "release/build", "release/app/dist", ".erb/dll"]
+  "exclude": ["test", "release/build", "release/app/dist", ".erb/dll"],
+  "ts-node": {
+    "require": ["tsconfig-paths/register"]
+  }
 }

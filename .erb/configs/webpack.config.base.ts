@@ -7,9 +7,14 @@ import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin';
 import webpackPaths from './webpack.paths';
 import { dependencies as externals } from '../../release/app/package.json';
 
-const isRenderer =
-  process.env.npm_lifecycle_script?.includes('webpack.config.renderer') ??
-  false;
+let processType: string;
+if (process.env.npm_lifecycle_script?.includes('webpack.config.renderer'))
+  processType = 'renderer';
+else if (
+  process.env.npm_lifecycle_script?.includes('webpack.config.extension-host')
+)
+  processType = 'extension-host';
+else processType = 'main';
 
 const configuration: webpack.Configuration = {
   externals: [...Object.keys(externals || {})],
@@ -61,16 +66,39 @@ const configuration: webpack.Configuration = {
     new webpack.IgnorePlugin({
       checkResource(resource, context) {
         // Don't include stuff from the main folder or @main... in renderer and renderer folder in main folder
-        const exclude = isRenderer
-          ? resource.startsWith('@main') || resource.includes('main/')
-          : resource.startsWith('@renderer') || /renderer\//.test(resource);
+        let exclude = false;
+        switch (processType) {
+          case 'renderer':
+            exclude =
+              resource.startsWith('@main') ||
+              resource.includes('main/') ||
+              resource.startsWith('@extension-host') ||
+              resource.includes('extension-host/') ||
+              resource.startsWith('@node') ||
+              resource.includes('node/');
+            break;
+          case 'extension-host':
+            exclude =
+              resource.startsWith('@main') ||
+              resource.includes('main/') ||
+              resource.startsWith('@renderer') ||
+              resource.includes('renderer/');
+            break;
+          default: // main
+            exclude =
+              resource.startsWith('@renderer') ||
+              /renderer\//.test(resource) ||
+              resource.startsWith('@extension-host') ||
+              resource.includes('extension-host/') ||
+              resource.startsWith('@client') ||
+              resource.includes('client/');
+            break;
+        }
 
         // Log if a file is excluded just fyi
         if (!context.includes('node_modules') && exclude)
           console.log(
-            `${
-              isRenderer ? 'Renderer' : 'Main'
-            }: Resource ${resource}\n\tat context ${context}: ${
+            `${processType}: Resource ${resource}\n\tat context ${context}: ${
               exclude ? 'excluded' : 'included'
             }`,
           );

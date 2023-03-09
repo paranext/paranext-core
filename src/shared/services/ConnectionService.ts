@@ -35,6 +35,8 @@ let connectReject: ((reason?: string) => void) | undefined;
 let requestHandler: RequestHandler | undefined;
 /** Function that determines the appropriate clientId to which to send requests of the given type. From connect() */
 let requestRouter: ((requestType: string) => number) | undefined;
+/** Function that runs when a client is disconnected. From connect() */
+let disconnectClient: ((clientId: number) => void) | undefined;
 /** The network connector this service uses to send and receive messages */
 let networkConnector: INetworkConnector | undefined;
 
@@ -81,6 +83,7 @@ export const request = async <TParam, TReturn>(
 export const disconnect = () => {
   requestHandler = undefined;
   requestRouter = undefined;
+  disconnectClient = undefined;
   connectPromise = undefined;
   if (networkConnector) {
     networkConnector.disconnect();
@@ -122,11 +125,14 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
 /**
  * Sets up the ConnectionService by connecting to the server and setting up event handlers
  * @param networkRequestHandler function that handles requests from the server by accepting a requestType and a ComplexRequest and returning a Promise of a Complex Response
+ * @param networkRequestRouter function that determines the appropriate clientId to which to send requests of the given type
+ * @param networkClientDisconnectHandler function that runs when a client is disconnected
  * @returns Promise that resolves when finished connecting
  */
 export const connect = async (
   networkRequestHandler: RequestHandler,
   networkRequestRouter: (requestType: string) => number,
+  networkClientDisconnectHandler: (clientId: number) => void,
 ): Promise<void> => {
   // Do not run anything asynchronous before we create and assign connectPromise below!
   // We must assign connectPromise immediately so we do not run connect multiple times at once
@@ -135,7 +141,8 @@ export const connect = async (
   if (connectPromise /* connecting || connected */) {
     if (
       networkRequestHandler === requestHandler &&
-      networkRequestRouter === requestRouter
+      networkRequestRouter === requestRouter &&
+      networkClientDisconnectHandler === disconnectClient
     )
       return connectPromise;
     throw new Error(
@@ -145,6 +152,8 @@ export const connect = async (
 
   if (!networkRequestHandler) throw new Error('Must provide a request handler');
   if (!networkRequestRouter) throw new Error('Must provide a request router');
+  if (!networkClientDisconnectHandler)
+    throw new Error('Must provide a disconnect client function');
 
   // Start connecting
   connectionStatus = ConnectionStatus.Connecting;
@@ -154,6 +163,7 @@ export const connect = async (
   });
   requestHandler = networkRequestHandler;
   requestRouter = networkRequestRouter;
+  disconnectClient = networkClientDisconnectHandler;
 
   // Set up subscriptions that the service needs to work
 
@@ -163,7 +173,7 @@ export const connect = async (
   } catch (e) {
     connectionStatus = ConnectionStatus.Disconnected;
     connectPromise = undefined;
-    const err = `ConnectionService: Failed to creacte NetworkConnection object: ${e}`;
+    const err = `ConnectionService: Failed to create NetworkConnector object: ${e}`;
     if (connectReject) connectReject(err);
     throw new Error(err);
   }
@@ -171,10 +181,12 @@ export const connect = async (
   // Set up the connection and get the client id from the server on new connections
   try {
     if (!requestRouter) throw new Error('requestRouter not defined.');
+    if (!disconnectClient) throw new Error('disconnectClient not defined.');
 
     const newConnectorInfo = await networkConnector.connect(
       handleInternalRequest,
       requestRouter,
+      disconnectClient,
     );
 
     if (clientId !== CLIENT_ID_UNASSIGNED) {

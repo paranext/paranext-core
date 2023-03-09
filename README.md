@@ -56,12 +56,6 @@ cd paranext-core
 npm install
 ```
 
-Build the C# code:
-
-```bash
-npm run build:data
-```
-
 ## Starting Development
 
 Start the app in the `dev` environment:
@@ -70,7 +64,7 @@ Start the app in the `dev` environment:
 npm start
 ```
 
-After you run `npm start`, you can edit the Electron and frontend files, and they will hot reload. To edit C# files, you must stop the `npm start` process (or only close Paranext), run `npm run build:data`, and restart `npm start` (or if you only closed Paranext, make a trivial edit to `src/main/main.ts`, and save it to launch Paranext again).
+After you run `npm start` (or, in VSCode, launch `Debug Paranext Core`), you can edit the code, and the relevant processes will hot reload.
 
 ## Packaging for Production
 

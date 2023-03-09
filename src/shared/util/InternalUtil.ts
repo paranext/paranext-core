@@ -2,11 +2,28 @@
  * Utility functions specific to the internal technologies we are using.
  */
 
+import { ProcessType } from '@shared/globalThis';
+
 /**
- * Determine if running on the client or on the server.
- * Thanks to Marshal at https://stackoverflow.com/a/71388839/8535752
- * @returns Returns true if running on the client, false otherwise
+ * Determine if running on a client process (renderer, extension-host) or on the server.
+ * @returns Returns true if running on a client, false otherwise
  */
-// eslint-disable-next-line import/prefer-default-export
-export const isClient = () =>
-  typeof process === 'undefined' || !process || process.type === 'renderer';
+export const isClient = () => globalThis.processType !== ProcessType.Main;
+
+/**
+ * Determine if running on the server process (main)
+ * @returns Returns true if running on the server, false otherwise
+ */
+export const isServer = () => !isClient();
+
+/**
+ * Determine if running on the renderer process
+ * @returns Returns true if running on the renderer, false otherwise
+ */
+export const isRenderer = () => globalThis.processType === ProcessType.Renderer;
+
+/**
+ * Gets which kind of process this is (main, renderer, extension-host)
+ * @returns ProcessType for this process
+ */
+export const getProcessType = (): ProcessType => globalThis.processType;

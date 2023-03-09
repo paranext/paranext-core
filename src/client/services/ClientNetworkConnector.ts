@@ -14,8 +14,14 @@ import {
   MessageType,
   WebSocketRequest,
   WebSocketResponse,
+  WEBSOCKET_ATTEMPTS_MAX,
+  WEBSOCKET_ATTEMPTS_WAIT,
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
+import { getErrorMessage } from '@shared/util/Util';
+import logger from '@shared/util/logger';
+import { createWebSocket } from '@client/services/WebSocketFactory';
+import { IWebSocket } from '@client/services/IWebSocket';
 
 // #region local variables
 
@@ -28,6 +34,9 @@ type LiveRequest<TReturn> = {
   ) => void;
   reject: (reason?: unknown) => void;
 };
+
+/** localStorage key to store the current clientGuid */
+const CLIENT_GUID_KEY = 'client-network-connector:clientGuid';
 
 // #endregion
 
@@ -46,7 +55,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
   // #region private members
 
   /** The webSocket connected to the server */
-  private webSocket?: WebSocket;
+  private webSocket?: IWebSocket;
 
   /** All message subscriptions - arrays of functions that run each time a message with a specific message type comes in */
   private messageSubscriptions = new Map<
@@ -83,6 +92,9 @@ export default class ClientNetworkConnector implements INetworkConnector {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private requests = new Map<number, LiveRequest<any>>();
 
+  /** Unique Guid associated with this connection. Used to verify certain things with server */
+  private clientGuid: string | undefined;
+
   // #endregion
 
   // #region INetworkConnector methods
@@ -118,8 +130,9 @@ export default class ClientNetworkConnector implements INetworkConnector {
     // Get the client id from the server on new connections
     this.unsubscribeHandleInitClientMessage = this.subscribe(
       MessageType.InitClient,
-      ({ connectorInfo: newConnectorInfo }: InitClient) => {
-        this.connectorInfo = newConnectorInfo;
+      ({ connectorInfo: newConnectorInfo, clientGuid }: InitClient) => {
+        this.connectorInfo = Object.freeze(newConnectorInfo);
+        this.clientGuid = clientGuid;
 
         if (!this.webSocket) {
           rejectConnect('webSocket is gone!');
@@ -145,23 +158,73 @@ export default class ClientNetworkConnector implements INetworkConnector {
       },
     );
 
-    // Connect the webSocket
-    this.webSocket = new WebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
+    // Connect the webSocket - try a few times
+    let attempts = 0;
+    const tryConnectWebSocket = async () => {
+      if (attempts < WEBSOCKET_ATTEMPTS_MAX) {
+        attempts += 1;
+        this.webSocket = await createWebSocket(
+          `ws://localhost:${WEBSOCKET_PORT}`,
+        );
 
-    // Attach event listeners
-    this.webSocket.addEventListener('message', this.onMessage);
-    this.webSocket.addEventListener('close', this.disconnect);
+        // Attach event listeners
+        this.webSocket.addEventListener('message', this.onMessage);
+        this.webSocket.addEventListener('close', this.disconnect);
+
+        // Remove event listeners and try connecting again
+        const retry = (e: Event) => {
+          const err = (e as Event & { error?: Error }).error;
+          logger.warn(
+            `ClientNetworkConnector WebSocket did not connect on attempt ${attempts}. Trying again. Error: ${getErrorMessage(
+              err,
+            )}`,
+          );
+          if (this.webSocket) {
+            this.webSocket.removeEventListener('message', this.onMessage);
+            this.webSocket.removeEventListener('close', this.disconnect);
+            this.webSocket.removeEventListener('error', retry);
+          }
+          setTimeout(tryConnectWebSocket, WEBSOCKET_ATTEMPTS_WAIT);
+        };
+
+        this.webSocket.addEventListener('error', retry);
+
+        // When we have successfully connected, remove retry-related listeners
+        const finishConnecting = () => {
+          if (this.webSocket) {
+            this.webSocket.removeEventListener('error', retry);
+            this.webSocket.removeEventListener('open', finishConnecting);
+          }
+        };
+
+        this.webSocket.addEventListener('open', finishConnecting);
+      } else {
+        throw new Error(
+          `ClientNetworkConnector WebSocket was not able to connect after ${attempts} attempts.`,
+        );
+      }
+    };
+    tryConnectWebSocket();
 
     return this.connectPromise;
   };
 
   notifyClientConnected = async () => {
+    // Check if this client is reconnecting (such as if the browser refreshed) and tell the server so it can remove all request registrations associated with the old clientId
+    const reconnectingClientGuid = localStorage.getItem(CLIENT_GUID_KEY);
+
     this.sendMessage({
       type: MessageType.ClientConnect,
       senderId: this.connectorInfo.clientId,
+      reconnectingClientGuid,
     });
+
+    // Save the new clientGuid so we can check it when reconnecting
+    if (this.clientGuid) localStorage.setItem(CLIENT_GUID_KEY, this.clientGuid);
+    else localStorage.removeItem(CLIENT_GUID_KEY);
+
     // In webSocket land, we do not receive a response from the server when we notify client connected
-    // TODO: change the clientconnected into a request that resolves properly
+    // TODO: change the clientconnected into a request that resolves properly. Then we can also know if we reconnected, I suppose
     return Promise.resolve();
   };
 
