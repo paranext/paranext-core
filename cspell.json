@@ -1,6 +1,14 @@
 {
   "version": "0.2",
-  "ignorePaths": [],
+  "ignorePaths": [
+    "package-lock.json",
+    "node_modules",
+    "vscode-extension",
+    ".git/objects",
+    ".vscode",
+    ".vscode-insiders",
+    "package.json"
+  ],
   "dictionaryDefinitions": [],
   "dictionaries": [],
   "words": [
@@ -20,7 +28,9 @@
     "unsub",
     "unsubs",
     "unsubscriber",
-    "unsubscribers"
+    "unsubscribers",
+    "dockbox",
+    "maximizable"
   ],
   "ignoreWords": [],
   "import": []

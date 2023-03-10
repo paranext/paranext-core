@@ -1,12 +1,16 @@
-console.log('Hello World is importing!');
+'use strict';
 
 // eslint-disable-next-line import/no-unresolved
 const papi = require('papi');
 
+const { logger } = papi;
+
+logger.log('Hello world is importing!');
+
 // This will be blocked
 const fs = require('fs');
 
-console.log(
+logger.log(
   fs.message
     ? fs.message
     : `Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`,
@@ -22,7 +26,8 @@ const getReactComponent = (name, functionModifier = '') =>
       context: { TestContext },
       hooks: { usePromise },
       components: { PButton }
-    }
+    },
+    logger
   } = papi;
 
   ${functionModifier} function HelloWorld() {
@@ -44,7 +49,7 @@ const getReactComponent = (name, functionModifier = '') =>
           PButton,
           {
             onClick: () => {
-              console.log('${name} PButton clicked!');
+              logger.log('${name} PButton clicked!');
               setMyState(myStateCurrent => myStateCurrent + 1);
             }
           },
@@ -73,7 +78,7 @@ const getReactComponent = (name, functionModifier = '') =>
   }`;
 
 exports.activate = async () => {
-  console.log('Hello world is activating!');
+  logger.log('Hello world is activating!');
 
   const unsubPromises = [
     papi.commands.registerCommand('hello-world.hello-world', () => {
@@ -100,7 +105,7 @@ exports.activate = async () => {
           ${getReactComponent('Hello World React HTML Webview')}
 
           function print(input) {
-            console.log(input);
+            papi.logger.log(input);
           }
           document.addEventListener("DOMContentLoaded", function () {
             // Attach handler for echo-renderer
@@ -155,7 +160,7 @@ exports.activate = async () => {
   return Promise.all(
     unsubPromises.map((unsubPromise) => unsubPromise.promise),
   ).then(() => {
-    console.log('Hello World is finished activating!');
+    logger.log('Hello World is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
     );

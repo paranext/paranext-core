@@ -8,52 +8,28 @@
  */
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
-/* import { autoUpdater } from 'electron-updater'; */
-import log from 'electron-log';
+import { autoUpdater } from 'electron-updater';
 import windowStateKeeper from 'electron-window-state';
+import '@main/globalThis';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import logger from '@shared/util/logger';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
-import { ProcessType } from '@shared/globalThis';
-import polyfillLocalStorage from '@node/polyfill/LocalStorage';
 import { resolveHtmlPath } from '@node/util/util';
 import MenuBuilder from './menu';
 import extensionHostService from './services/extension-host.service';
 
-// #region Logging setup
-
-Object.assign(console, log.functions);
-log.log('Starting main.ts');
-
-// #endregion
-
-// #region globalThis setup
-
-globalThis.processType = ProcessType.Main;
-globalThis.isPackaged = app.isPackaged;
-globalThis.resourcesPath = app.isPackaged
-  ? process.resourcesPath
-  : path.join(__dirname, '../../');
-
-// #endregion
-
-// #region polyfills
-
-polyfillLocalStorage();
-
-// #endregion
+logger.log('Starting main');
 
 // #region ELECTRON SETUP
 
-/* class AppUpdater {
+class AppUpdater {
   constructor() {
-    log.transports.file.level = 'info';
-    autoUpdater.logger = log;
+    autoUpdater.logger = logger;
     autoUpdater.checkForUpdatesAndNotify();
   }
-} */
+}
 
 // Keep a global reference of the window object. If you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -149,9 +125,9 @@ const createWindow = async () => {
     return { action: 'deny' };
   });
 
-  // Removed because it was clogging up the logs. Add this back in if our app ends up using auto updates
+  // Remove this if your app does not use auto updates
   // eslint-disable-next-line
-  /* new AppUpdater(); */
+  new AppUpdater();
 };
 
 app.on('window-all-closed', () => {
@@ -190,6 +166,7 @@ const ipcHandlers: {
 
 app
   .whenReady()
+  // eslint-disable-next-line promise/always-return
   .then(() => {
     // Set up ipc handlers
     Object.entries(ipcHandlers).forEach(([ipcChannel, ipcHandler]) =>

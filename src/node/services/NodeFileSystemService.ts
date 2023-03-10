@@ -44,15 +44,15 @@ export type DirectoryEntries = Readonly<{
  * @returns map of entry type to list of uris for each entry in the directory with that type
  */
 export async function readDir(uri: Uri): Promise<DirectoryEntries> {
-  const dirents = await fs.promises.readdir(getPathFromUri(uri), {
+  const dirEntries = await fs.promises.readdir(getPathFromUri(uri), {
     withFileTypes: true,
   });
   return Object.fromEntries(
     groupBy(
-      dirents,
-      (dirent): EntryType => {
-        if (dirent.isFile()) return EntryType.File;
-        if (dirent.isDirectory()) return EntryType.Directory;
+      dirEntries,
+      (dirEntry): EntryType => {
+        if (dirEntry.isFile()) return EntryType.File;
+        if (dirEntry.isDirectory()) return EntryType.Directory;
         return EntryType.Unknown;
       },
       (dirent) => joinUriPaths(uri, dirent.name),

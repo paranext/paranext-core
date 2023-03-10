@@ -14,23 +14,24 @@ module.exports = {
 
     // #region Paranext rules
 
-    indent: 'off',
-    'react/jsx-indent-props': ['warn', 2],
+    '@typescript-eslint/lines-between-class-members': 'off',
+    // This is already a Typescript rule, so we don't need it to be reported twice
+    '@typescript-eslint/no-unused-vars': 'off',
     'comma-dangle': ['error', 'always-multiline'],
-    'prettier/prettier': ['warn', { tabWidth: 2, trailingComma: 'all' }],
-    'no-console': 'off',
-    'react/require-default-props': 'off',
-    'no-plusplus': ['error', { allowForLoopAfterthoughts: true }],
+    indent: 'off',
     'jsx-a11y/label-has-associated-control': [
       'error',
       {
         assert: 'either',
       },
     ],
-    // This is already a Typescript rule, so we don't need it to be reported twice
-    '@typescript-eslint/no-unused-vars': 'off',
-    'react/jsx-props-no-spreading': 'off',
-    '@typescript-eslint/lines-between-class-members': 'off',
+    // Should use our logger anytime you want logs that persist. Otherwise use console only in testing
+    'no-console': 'warn',
+    'no-plusplus': ['error', { allowForLoopAfterthoughts: true }],
+    'prettier/prettier': ['warn', { tabWidth: 2, trailingComma: 'all' }],
+    'react/jsx-indent-props': ['warn', 2],
+    'react/jsx-props-no-spreading': ['error', { custom: 'ignore' }],
+    'react/require-default-props': 'off',
 
     // #endregion
   },

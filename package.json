@@ -61,7 +61,7 @@
     "start:extension-host": "cross-env NODE_ENV=development nodemon --transpile-only ./src/extension-host/extension-host.ts",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
-    "start:data": "dotnet run --project c-sharp/ParanextDataProvider.csproj",
+    "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
     "test": "jest"
   },
   "lint-staged": {
@@ -81,11 +81,12 @@
   "browserslist": [],
   "dependencies": {
     "electron-debug": "^3.2.0",
-    "electron-log": "^4.4.8",
+    "electron-log": "^5.0.0-beta.19",
     "electron-updater": "^5.2.3",
     "electron-window-state": "^5.0.3",
     "memoize-one": "^6.0.0",
     "node-localstorage": "^2.2.1",
+    "rc-dock": "^3.2.17",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-frame-component": "^5.2.6",

@@ -1,5 +1,5 @@
 import logger from '@shared/util/logger';
-import { useEffect, useId, useRef } from 'react';
+import { ReactNode, useEffect, useId, useRef } from 'react';
 import Frame from 'react-frame-component';
 
 export type WebViewProps =
@@ -9,7 +9,7 @@ export type WebViewProps =
     }
   | {
       hasReact: true;
-      contents: React.ReactNode;
+      contents: ReactNode;
     };
 
 export function WebView({ contents, hasReact = false }: WebViewProps) {
@@ -25,17 +25,22 @@ export function WebView({ contents, hasReact = false }: WebViewProps) {
     const errorHandler = (e: ErrorEvent) => {
       logger.error(`WebView threw an error: ${e.message}`);
     };
-    if (iframe.contentWindow === null)
-      throw new Error(
-        "Somehow the webview's contentWindow is null while setting up error handler! Investigate",
-      );
-    iframe.contentWindow.addEventListener('error', errorHandler);
-    return () => {
+    const getIframeContentWindowSafe = (stage: string) => {
       if (iframe.contentWindow === null)
         throw new Error(
-          "Somehow the webview's contentWindow is null while removing error handler! Investigate",
+          `Somehow the webview's contentWindow is null while ${stage} error handler! Investigate`,
         );
-      iframe.contentWindow.removeEventListener('error', errorHandler);
+      return iframe.contentWindow;
+    };
+    getIframeContentWindowSafe('setting up').addEventListener(
+      'error',
+      errorHandler,
+    );
+    return () => {
+      getIframeContentWindowSafe('removing').removeEventListener(
+        'error',
+        errorHandler,
+      );
     };
   }, []);
 

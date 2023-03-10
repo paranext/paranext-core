@@ -1,12 +1,16 @@
-console.log('Hello Someone is importing!');
+'use strict';
 
 // eslint-disable-next-line import/no-unresolved
 const papi = require('papi');
 
+const { logger } = papi;
+
+logger.log('Hello Someone is importing!');
+
 // This will be blocked
 const fs = require('fs');
 
-console.log(
+logger.log(
   fs.message
     ? fs.message
     : `Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`,
@@ -15,7 +19,7 @@ console.log(
 const unsubscribers = [];
 
 exports.activate = async () => {
-  console.log('Hello Someone is activating!');
+  logger.log('Hello Someone is activating!');
 
   const unsubPromises = [
     papi.commands.registerCommand('hello-someone.hello-someone', (someone) => {
@@ -37,7 +41,7 @@ exports.activate = async () => {
   return Promise.all(
     unsubPromises.map((unsubPromise) => unsubPromise.promise),
   ).then(() => {
-    console.log('Hello Someone is finished activating!');
+    logger.log('Hello Someone is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
     );
