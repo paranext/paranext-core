@@ -1,4 +1,4 @@
-.storybook-button {
+.papi-button {
   font-family: 'Nunito Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-weight: 700;
   border: 0;
@@ -7,7 +7,7 @@
   display: inline-block;
   line-height: 1;
 }
-.storybook-button.primary.enabled {
+.papi-button.primary.enabled {
   color: white;
   background-color: #1ea7fd;
 }
@@ -15,12 +15,29 @@
   color: darkslategray;
   background-color: gray;
 }
-.storybook-button.secondary.enabled {
+.papi-button.secondary.enabled {
   color: #333;
   background-color: transparent;
   box-shadow: rgba(0, 0, 0, 0.15) 0px 0px 0px 1px inset;
 }
-.storybook-button.paratext {
+.papi-button.paratext.enabled {
   background-color: darkgreen;
   color: greenyellow;
+}
+.papi-button.paratext.bright.enabled {
+  background-color: greenyellow;
+  color: darkgreen;
+}
+.papi-button.video.enabled {
+  background-color: red;
+  color: white;
+}
+.papi-button.video a,
+.papi-button.video a:visited {
+  text-decoration: none;
+  color: white;
+}
+.papi-button.video a:hover {
+  text-decoration: underline;
+  color: white;
 }

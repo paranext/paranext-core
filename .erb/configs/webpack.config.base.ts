@@ -8,7 +8,10 @@ import webpackPaths from './webpack.paths';
 import { dependencies as externals } from '../../release/app/package.json';
 
 let processType: string;
-if (process.env.npm_lifecycle_script?.includes('webpack.config.renderer'))
+if (
+  process.env.npm_lifecycle_script?.includes('webpack.config.renderer') ||
+  process.env.npm_lifecycle_script?.includes('storybook')
+)
   processType = 'renderer';
 else if (
   process.env.npm_lifecycle_script?.includes('webpack.config.extension-host')

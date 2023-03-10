@@ -1,11 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import path from 'path';
 
-import Button from './Button';
-
-const getAssetPath = (...paths: string[]): string => {
-  return path.join('resources://', 'assets', ...paths);
-};
+import Button from '@renderer/components/papi-components/Button';
 
 // More on how to set up stories at: https://storybook.js.org/docs/react/writing-stories/introduction#default-export
 const meta: Meta<typeof Button> = {
@@ -23,34 +18,35 @@ export const Primary: Story = {
   // More on args: https://storybook.js.org/docs/react/writing-stories/args
   args: {
     primary: true,
-    label: 'Primary Button',
     disabled: false,
+    children: 'Primary Button',
   },
 };
 
-export const ButtonWithStartingIcon: Story = {
+export const CustomJSXContents: Story = {
   args: {
-    primary: false,
-    startIcon: getAssetPath('icon.png'),
-    label: ' Button',
     disabled: false,
-  },
-};
-
-export const ButtonWithEndingIcon: Story = {
-  args: {
-    primary: false,
-    label: ' Button',
-    endIcon: getAssetPath('icon.png'),
-    disabled: false,
+    className: ['video'],
+    children: (
+      <a href="https://www.youtube.com/watch?v=z_lgjFAxP6c">
+        Funny Meeting Video
+      </a>
+    ),
   },
 };
 
 export const Paratext: Story = {
   args: {
-    startIcon: getAssetPath('icon.png'),
-    label: 'Paratext Button',
     disabled: false,
-    additionalCssClasses: 'paratext',
+    className: ['paratext'],
+    children: 'Paratext Button',
+  },
+};
+
+export const ParatextBright: Story = {
+  args: {
+    disabled: false,
+    className: ['paratext', 'bright'],
+    children: 'Paratext Button',
   },
 };

@@ -1,23 +1,12 @@
-import './button.css';
 import { Button as MuiButton } from '@mui/material';
+import { PropsWithChildren } from 'react';
+import classes from './button.module.css';
 
-interface ButtonProps {
+type ButtonProps = PropsWithChildren<{
   /**
    * Is this the principal call to action on the page?
    */
   primary?: boolean;
-  /**
-   * Icon placed before the label on the button
-   */
-  startIcon?: string | undefined;
-  /**
-   * Button contents
-   */
-  label: string;
-  /**
-   * Icon placed after the label on the button
-   */
-  endIcon?: string | undefined;
   /**
    * Enabled status of button
    */
@@ -25,7 +14,7 @@ interface ButtonProps {
   /**
    * Additional css classes to help with unique styling of the button
    */
-  additionalCssClasses?: string;
+  className?: string[];
   /**
    * Optional click handler
    */
@@ -34,28 +23,32 @@ interface ButtonProps {
    * Optional context menu handler
    */
   onContextMenu?: () => void;
-}
+}>;
 
 /**
  * Primary UI component for user interaction
  */
 const Button = ({
   primary = false,
-  startIcon,
-  label,
-  endIcon,
   disabled,
-  additionalCssClasses,
+  className,
   onClick,
   onContextMenu,
+  children,
 }: ButtonProps) => {
-  const mode = primary ? 'primary' : 'secondary';
-  const disabledStatus = disabled ? 'enabled' : 'disabled';
-  const additionalClasses = additionalCssClasses ?? '';
+  const mode = `${primary ? classes.primary : classes.secondary}`;
+  const disabledStatus = `${disabled ? classes.disabled : classes.enabled}`;
+  const additionalClasses =
+    className &&
+    className
+      .map((cssClass) => {
+        return `${classes[cssClass]}`;
+      })
+      .join(' ');
   return (
     <MuiButton
       className={[
-        'storybook-button',
+        classes['papi-button'],
         mode,
         disabledStatus,
         additionalClasses,
@@ -73,17 +66,7 @@ const Button = ({
         }
       }}
     >
-      {startIcon && (
-        <div>
-          <img alt="startIcon" src={startIcon} />
-        </div>
-      )}
-      {label}
-      {endIcon && (
-        <div>
-          <img alt="endIcon" src={endIcon} />
-        </div>
-      )}
+      {children}
     </MuiButton>
   );
 };
