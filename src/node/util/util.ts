@@ -54,7 +54,7 @@ const getSchemePaths = memoizeOne((): { [scheme: string]: string } => ({
  */
 function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
   // Add app scheme to the uri if it doesn't have one
-  const fullUri = uri.includes('://') ? uri : `app://${uri}`;
+  const fullUri = uri.includes('://') ? uri : `${APP_SCHEME}://${uri}`;
 
   const [scheme, uriPath] = fullUri.split('://');
   return {

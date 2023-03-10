@@ -6,7 +6,7 @@ let dotnet: ChildProcessWithoutNullStreams | undefined;
 
 /**
  * Hard kills the Dotnet Data Provider.
- * TODO: fix this to be a more elegant shutdown
+ * TODO: add a more elegant shutdown to avoid this if we possibly can
  */
 function killDotnetDataProvider() {
   if (!dotnet) return;

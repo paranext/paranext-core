@@ -38,9 +38,14 @@ export const subscribeAddWebView = (
   if (!eventHandler || typeof eventHandler !== 'function')
     throw new Error(`eventHandler must be a function!`);
   addWebViewCallbacks.push(eventHandler);
-  return () =>
-    addWebViewCallbacks.splice(addWebViewCallbacks.indexOf(eventHandler), 1)
-      .length === 1;
+  return () => {
+    const eventHandlerIndex = addWebViewCallbacks.indexOf(eventHandler);
+    if (eventHandlerIndex < 0) return false; // Did not find this callback
+
+    // Remove the callback
+    addWebViewCallbacks.splice(eventHandlerIndex, 1);
+    return true;
+  };
 };
 
 // #region Renderer-only stuff
@@ -61,11 +66,11 @@ const setWebViewPapi = (webViewId: string, webViewPapi: typeof papi) =>
  */
 const getWebViewPapi = (webViewId: string) => {
   const webViewPapi = webViewPapis.get(webViewId);
-  if (webViewPapi) {
-    webViewPapis.delete(webViewId);
-    return webViewPapi;
-  }
-  throw new Error(`Cannot find papi for WebView with id ${webViewId}`);
+  if (!webViewPapi)
+    throw new Error(`Cannot find papi for WebView with id ${webViewId}`);
+
+  webViewPapis.delete(webViewId);
+  return webViewPapi;
 };
 
 // TODO: Hacking in React, createRoot, and getWebViewPapi onto window for now so webViews can access it. Make this TypeScript-y
@@ -133,9 +138,13 @@ export const addWebView = async (webView: WebViewProps) => {
     updatedWebView = { ...webView, contents: webViewContents };
   }
 
+  // Inform web view consumers we added a web view
   addWebViewCallbacks.forEach((callback) => callback(updatedWebView));
-  return Promise.resolve();
+
+  // Resolve this promise
+  return undefined;
 };
+
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
 const rendererCommandFunctions: { [commandName: string]: CommandHandler } = {
   addWebView,

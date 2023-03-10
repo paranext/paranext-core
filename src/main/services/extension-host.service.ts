@@ -3,15 +3,19 @@
  */
 
 import logger from '@shared/util/logger';
-import { ChildProcess, fork, spawn } from 'child_process';
+import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
+import { Readable } from 'stream';
 
-let extensionHost: ChildProcess | undefined;
+let extensionHost:
+  | ChildProcess
+  | ChildProcessByStdio<null, Readable, Readable>
+  | undefined;
 
 /**
  * Hard kills the extension host process.
- * TODO: fix this to be a more elegant shutdown
+ * TODO: add a more elegant shutdown to avoid this if we possibly can
  */
 function killExtensionHost() {
   if (!extensionHost) return;
@@ -63,7 +67,7 @@ function startExtensionHost() {
 
   if (!extensionHost.stderr || !extensionHost.stdout)
     logger.error(
-      "Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
+      "[extension host] Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
     );
   else if (process.env.IN_VSCODE !== 'true') {
     // When launched from VSCode, don't re-print the console stuff because it somehow shows it already
