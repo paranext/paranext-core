@@ -83,7 +83,6 @@ const ParanextDockLayout = () => {
       defaultLayout={testLayout as LayoutData}
       dropMode="edge"
       loadTab={loadTab}
-      style={{ position: 'absolute', left: 3, top: 3, right: 3, bottom: 3 }}
     />
   );
 };

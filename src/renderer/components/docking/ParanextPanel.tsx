@@ -6,7 +6,7 @@ import './ParanextPanel.css';
  * @param children The children of the panel (usually supplied from an extension)
  */
 const ParanextPanel = ({ children }: { children: ReactNode }) => {
-  return <div className="paranextPanel">{children}</div>;
+  return <div className="paranext-panel">{children}</div>;
 };
 
 export default ParanextPanel;

@@ -176,7 +176,7 @@ const TestButtonsPanel = () => {
 
   return (
     <>
-      <div className="Hello">
+      <div className="hello">
         <button
           className="testButton"
           type="button"
@@ -383,7 +383,7 @@ const TestButtonsPanel = () => {
           Test
         </papi.react.components.PButton>
       </div>
-      <div className="Hello">
+      <div className="hello">
         <div>resourcesPath: {resourcesPath}</div>
         <div>{promiseReturn}</div>
       </div>
