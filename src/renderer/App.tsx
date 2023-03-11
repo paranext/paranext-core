@@ -1,12 +1,15 @@
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
-import ParanextDockLayout from './components/docking/ParanextDockLayout';
+import ParanextDockLayout from '@renderer/components/docking/ParanextDockLayout';
+import TestContext from '@renderer/context/papi-context/TestContext';
 
 const Hello = () => {
   return (
-    <div>
-      <ParanextDockLayout />
-    </div>
+    <TestContext.Provider value="test">
+      <div>
+        <ParanextDockLayout />
+      </div>
+    </TestContext.Provider>
   );
 };
 

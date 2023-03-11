@@ -4,6 +4,10 @@ import logger from '@shared/util/logger';
 
 let dotnet: ChildProcessWithoutNullStreams | undefined;
 
+/**
+ * Hard kills the Dotnet Data Provider.
+ * TODO: add a more elegant shutdown to avoid this if we possibly can
+ */
 function killDotnetDataProvider() {
   if (!dotnet) return;
 
@@ -61,6 +65,9 @@ function startDotnetDataProvider() {
     } else {
       logger.log(`[dotnet data provider] exited with code ${code}`);
     }
+    // TODO: listen for 'exit' event as well?
+    // TODO: unsubscribe event listeners
+    dotnet = undefined;
   });
 }
 

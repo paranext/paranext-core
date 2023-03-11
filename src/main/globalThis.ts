@@ -7,9 +7,23 @@
  * See https://webpack.js.org/plugins/normal-module-replacement-plugin/
  */
 
+import path from 'path';
 import polyfillLocalStorage from '@node/polyfill/LocalStorage';
 import { ProcessType } from '@shared/globalThis';
 import { app } from 'electron';
 
+// #region globalThis setup
+
 globalThis.processType = ProcessType.Main;
-polyfillLocalStorage(app.isPackaged);
+globalThis.isPackaged = app.isPackaged;
+globalThis.resourcesPath = app.isPackaged
+  ? process.resourcesPath
+  : path.join(__dirname, '../../');
+
+// #endregion
+
+// #region polyfills
+
+polyfillLocalStorage();
+
+// #endregion

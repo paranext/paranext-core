@@ -13,8 +13,40 @@ export function newGuid(): string {
  * @param o object to determine if it is a string
  * @returns true if the object is a string; false otherwise
  */
-export function isString(o: unknown) {
+export function isString(o: unknown): o is string {
   return typeof o === 'string' || o instanceof String;
+}
+
+/**
+ * Groups each item in the array of items into a map according to the keySelector
+ * @param items array of items to group by
+ * @param keySelector function to run on each item to get the key for the group to which it belongs
+ * @param valueSelector function to run on each item to get the value it should have in the group (like map function). If not provided, uses the item itself
+ * @returns map of keys to groups of values corresponding to each item
+ */
+export function groupBy<T, K, V>(
+  items: T[],
+  keySelector: (item: T) => K,
+): Map<K, Array<T>>;
+export function groupBy<T, K, V>(
+  items: T[],
+  keySelector: (item: T) => K,
+  valueSelector: (item: T) => V,
+): Map<K, Array<V>>;
+export function groupBy<T, K, V = T>(
+  items: T[],
+  keySelector: (item: T) => K,
+  valueSelector?: (item: T) => V,
+): Map<K, Array<V | T>> {
+  const map = new Map<K, Array<V | T>>();
+  items.forEach((item) => {
+    const key = keySelector(item);
+    const group = map.get(key);
+    const value = valueSelector ? valueSelector(item) : item;
+    if (group) group.push(value);
+    else map.set(key, [value]);
+  });
+  return map;
 }
 
 // From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript

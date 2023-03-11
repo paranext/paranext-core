@@ -17,9 +17,9 @@ export const CONNECTOR_INFO_DISCONNECTED = Object.freeze({
 });
 
 /** Information about the network connector */
-export type NetworkConnectorInfo = {
+export type NetworkConnectorInfo = Readonly<{
   clientId: number;
-};
+}>;
 
 /** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
 export enum ConnectionStatus {

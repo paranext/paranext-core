@@ -16,9 +16,11 @@ import logger from '@shared/util/logger';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
-import { fork, spawn } from 'child_process';
 import { resolveHtmlPath } from '@node/util/util';
 import MenuBuilder from './menu';
+import extensionHostService from './services/extension-host.service';
+
+logger.log('Starting main');
 
 // #region ELECTRON SETUP
 
@@ -62,13 +64,8 @@ const installExtensions = async () => {
     .catch(logger.log);
 };
 
-/** The path to the app package directory */
-const RESOURCES_PATH = app.isPackaged
-  ? process.resourcesPath
-  : path.join(__dirname, '../../');
-
 const getAssetPath = (...paths: string[]): string => {
-  return path.join(RESOURCES_PATH, 'assets', ...paths);
+  return path.join(globalThis.resourcesPath, 'assets', ...paths);
 };
 
 /** Sets up the electron BrowserWindow renderer process */
@@ -139,6 +136,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
     dotnetDataProvider.kill();
+    extensionHostService.kill();
     app.quit();
   }
 });
@@ -146,23 +144,24 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
   dotnetDataProvider.kill();
+  extensionHostService.kill();
 });
 
 // #endregion
 
 // #region IPC HANDLING SETUP
 
-/** Map from ipc channel to handler function */
+/** Map from ipc channel to handler function. Use with ipcRenderer.invoke */
 const ipcHandlers: {
-  [ipcHandle: string]: (
+  [ipcChannel: string]: (
     event: Electron.IpcMainInvokeEvent,
     // We don't know the exact parameter types since ipc handlers can be anything
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...args: any[]
   ) => Promise<unknown> | unknown;
 } = {
-  'electronAPI.env.getVar': (_event, name: string) => process.env[name],
-  'electronAPI.env.test': (_event) => 'From main.ts: test',
+  'electronAPI.env.test': (_event, message: string) =>
+    `From main.ts: test ${message}`,
 };
 
 app
@@ -170,8 +169,8 @@ app
   // eslint-disable-next-line promise/always-return
   .then(() => {
     // Set up ipc handlers
-    Object.keys(ipcHandlers).forEach((ipcHandle) =>
-      ipcMain.handle(ipcHandle, ipcHandlers[ipcHandle]),
+    Object.entries(ipcHandlers).forEach(([ipcChannel, ipcHandler]) =>
+      ipcMain.handle(ipcChannel, ipcHandler),
     );
 
     createWindow();
@@ -236,49 +235,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 
 // #region Extension Host
 
-const formatExtensionHostLog = (message: string, tag = '') => {
-  const messageNoEndLine = message.trimEnd();
-  const openTag = `{eh${tag ? ' ' : ''}${tag}}`;
-  const closeTag = `{/eh${tag ? ' ' : ''}${tag}}`;
-  if (messageNoEndLine.includes('\n'))
-    // Multi-line
-    return `${openTag}\n${messageNoEndLine}\n${closeTag}`;
-  return `${openTag} ${messageNoEndLine} ${closeTag}`;
-};
-
-// In production, fork a new process for the extension host
-// In development, spawn nodemon to watch the extension-host
-const extensionHost = app.isPackaged
-  ? fork(
-      path.join(__dirname, '../extension-host/extension-host.js'),
-      ['--packaged'],
-      {
-        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      },
-    )
-  : spawn(
-      process.platform.includes('win') ? 'npm.cmd' : 'npm',
-      ['run', 'start:extension-host'],
-      {
-        stdio: ['ignore', 'pipe', 'pipe'],
-      },
-    );
-
-if (!extensionHost.stderr || !extensionHost.stdout)
-  logger.error(
-    "Could not connect to extension host's stderr or stdout! You will not see extension host logs here.",
-  );
-else if (process.env.IN_VSCODE !== 'true') {
-  // When launched from VSCode, don't re-print the logger stuff because it somehow shows it already
-  extensionHost.stderr.on('data', (data) =>
-    logger.error(formatExtensionHostLog(data.toString(), 'err')),
-  );
-  extensionHost.stdout.on('data', (data) =>
-    logger.log(formatExtensionHostLog(data.toString())),
-  );
-}
-
-extensionHost.on('exit', () => logger.warn('extensionHost just exited!'));
+extensionHostService.start();
 
 setTimeout(async () => {
   logger.log(

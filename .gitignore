@@ -31,5 +31,5 @@ npm-debug.log.*
 # Extra VS Code workspaces
 *.code-workspace
 
-# Test node localStorage files
-local-storage
+# Test development user appdata files
+dev-appdata/

@@ -3,11 +3,12 @@ import { isClient } from '@shared/util/InternalUtil';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
+import * as ExtensionService from '@extension-host/services/ExtensionService';
 import logger from '@shared/util/logger';
 
 // #region Test logs
 
-logger.log('Hello from the extension host!');
+logger.log('Starting extension-host');
 logger.log(`Extension host is${isClient() ? '' : ' not'} client`);
 logger.log(`Extension host process.type = ${process.type}`);
 logger.log(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
@@ -24,7 +25,6 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
     /* logger.log(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
-    logger.log(`Extension host is handling addMany!!`);
     return nums.reduce((acc, current) => acc + current, 0);
   },
   throwErrorExtensionHost: async (message: string) => {
@@ -32,6 +32,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
       `Test Error thrown in throwErrorExtensionHost command: ${message}`,
     );
   },
+  getResourcesPath: async () => globalThis.resourcesPath,
 };
 
 NetworkService.initialize()
@@ -45,5 +46,14 @@ NetworkService.initialize()
     return undefined;
   })
   .catch(logger.error);
+
+// Need to wait a bit to initialize extensions in production because the extension host launches faster than the renderer.
+// TODO: Fix this so we can await renderer connecting event or something
+setTimeout(
+  () => {
+    ExtensionService.initialize();
+  },
+  globalThis.isPackaged ? 3000 : 0,
+);
 
 // #endregion

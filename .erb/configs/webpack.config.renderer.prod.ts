@@ -139,6 +139,7 @@ const configuration: webpack.Configuration = {
 
     new webpack.DefinePlugin({
       'process.type': '"renderer"',
+      'webpackRenderer.isPackaged': 'true',
     }),
   ],
 };
