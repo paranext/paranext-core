@@ -18,7 +18,7 @@ const config: Config = {
   testEnvironmentOptions: {
     url: 'http://localhost/',
   },
-  testPathIgnorePatterns: ['release/app/dist'],
+  testPathIgnorePatterns: ['release/app/dist', '.erb/dll'],
   transform: {
     '\\.(ts|tsx|js|jsx)$': 'ts-jest',
   },
