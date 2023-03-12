@@ -3,10 +3,12 @@ module.exports = {
   rules: {
     // #region ERB rules
 
+    'import/extensions': 'off',
     // A temporary hack related to IDE not resolving correct package.json
     'import/no-extraneous-dependencies': 'off',
+    'import/no-import-module-exports': 'off',
     'import/no-unresolved': 'error',
-    // Since React 17 and typescript 4.1 you can safely disable the rule
+    'react/jsx-filename-extension': 'off',
     'react/react-in-jsx-scope': 'off',
 
     // #endregion
