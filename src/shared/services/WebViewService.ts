@@ -91,7 +91,8 @@ export const addWebView = async (webView: WebViewProps) => {
   const imports = `var papi = window.parent.getWebViewPapi('${webViewId}');var React = window.parent.React;var createRoot = window.parent.createRoot;`;
 
   let updatedWebView: WebViewProps;
-  if (webView.hasReact) {
+  // hasReact is true by default. Extensions can specify false
+  if (webView.hasReact === undefined || webView.hasReact) {
     // Thanks to user585776 at https://stackoverflow.com/a/67359410 for temporary solution of running code from a string using data url
     // TODO: Fix so we are serving all webview content from the backend or something
     // TODO: test to see if exceptions bring Paranext down or if they still occur within the iframe
