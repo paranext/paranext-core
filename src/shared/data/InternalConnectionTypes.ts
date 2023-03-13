@@ -21,13 +21,13 @@ export type NetworkConnectorInfo = Readonly<{
   clientId: number;
 }>;
 
-/** Event fired when client connections are established */
+/** Event emitted when client connections are established */
 export type ClientConnectEvent = {
   clientId: number;
   didReconnect: boolean;
 };
 
-/** Event fired when client connections are lost */
+/** Event emitted when client connections are lost */
 export type ClientDisconnectEvent = { clientId: number };
 
 /**

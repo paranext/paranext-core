@@ -45,6 +45,9 @@ export class PEventEmitter<T> {
 
     if (!this.lazyEvent) {
       this.lazyEvent = (callback) => {
+        if (!callback || typeof callback !== 'function')
+          throw new Error(`Event handler callback must be a function!`);
+
         // Initialize this.subscriptions if it does not exist
         if (!this.subscriptions) this.subscriptions = [];
 

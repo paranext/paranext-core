@@ -1,5 +1,5 @@
 import './TestButtonsPanel.css';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import usePromise from '@renderer/hooks/papi-hooks/usePromise';
 import papi from '@shared/services/papi';
 import * as NetworkService from '@shared/services/NetworkService';
@@ -8,6 +8,7 @@ import logger from '@shared/util/logger';
 import { TabInfo } from '@shared/data/WebviewTypes';
 import { WebView, WebViewProps } from '@renderer/components/WebView';
 import useEvent from '@renderer/hooks/papi-hooks/useEvent';
+import { AddWebViewEvent } from '@shared/services/WebViewService';
 
 const testBase: (message: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.test');
@@ -146,19 +147,16 @@ const TestButtonsPanel = () => {
   );
 
   const [webViews, setWebViews] = useState<WebViewProps[]>([]);
-  const addWebView = useCallback(
-    (webView: WebViewProps) => {
-      setWebViews((webViewsCurrent) => [...webViewsCurrent, webView]);
-    },
-    [setWebViews],
-  );
 
-  useEffect(() => {
-    const unsubscriber = papi.webViews.subscribeAddWebView(addWebView);
-    return () => {
-      unsubscriber();
-    };
-  }, [addWebView]);
+  useEvent(
+    papi.webViews.onDidAddWebView,
+    useCallback(
+      ({ webView }: AddWebViewEvent) => {
+        setWebViews((webViewsCurrent) => [...webViewsCurrent, webView]);
+      },
+      [setWebViews],
+    ),
+  );
 
   useEvent(
     papi.network.onDidClientConnect,
