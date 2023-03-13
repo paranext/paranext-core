@@ -78,6 +78,7 @@ export type RequestHandler = <TParam, TReturn>(
   request: ComplexRequest<TParam>,
 ) => Promise<ComplexResponse<TReturn>>;
 
+/** Event to be sent out throughout all processes */
 export type InternalEvent<T> = {
   /** The process that emitted this Event */
   senderId: number;
