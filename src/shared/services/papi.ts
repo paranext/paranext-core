@@ -11,6 +11,7 @@ import * as WebViewService from '@shared/services/WebViewService';
 import { PEventEmitter } from '@shared/util/PEvent';
 import logger from '@shared/util/logger';
 import { isRenderer } from '@shared/util/InternalUtil';
+import InternetService from '@shared/services/InternetService';
 
 // TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
 const papiComponents = isRenderer()
@@ -27,6 +28,9 @@ export default {
   // Classes
   PEventEmitter,
 
+  // Functions
+  fetch: InternetService.fetch, // Alias for internet.fetch for easy access
+
   // Services/modules
   commands: CommandService,
   util: PapiUtil,
@@ -38,4 +42,16 @@ export default {
   },
   network: papiExports,
   logger,
+  internet: InternetService,
 };
+
+/**
+ * Modules that someone might try to require in their extensions that we have similar apis for.
+ * When an extension requires these modules, an error throws that lets them know about our similar api.
+ */
+export const MODULE_SIMILAR_APIS: Readonly<{
+  [moduleName: string]: string | undefined;
+}> = Object.freeze({
+  http: 'fetch',
+  https: 'fetch',
+});

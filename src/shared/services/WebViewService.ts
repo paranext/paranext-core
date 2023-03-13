@@ -87,8 +87,20 @@ export const addWebView = async (webView: WebViewProps) => {
   const webViewId = newGuid();
   setWebViewPapi(webViewId, papi);
 
-  /** String that sets up 'import' statements in the webview to pull in libraries */
-  const imports = `var papi = window.parent.getWebViewPapi('${webViewId}');var React = window.parent.React;var createRoot = window.parent.createRoot;`;
+  // TODO: Fix problems with React frame and deleting window stuff. And figure out how to delete the right amount of DOM creation stuff
+  /** String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such */
+  const imports = `
+  var papi = window.parent.getWebViewPapi('${webViewId}');
+  var React = window.parent.React;
+  var createRoot = window.parent.createRoot;
+  delete window.parent;
+  // delete window.top;
+  // delete window.frameElement;
+  delete window.fetch;
+  delete window.XMLHttpRequest;
+  delete window.WebSocket;
+  delete window.Image;
+  `;
 
   let updatedWebView: WebViewProps;
   // hasReact is true by default. Extensions can specify false

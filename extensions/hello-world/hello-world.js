@@ -16,6 +16,29 @@ logger.log(
     : `Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`,
 );
 
+// This will be blocked and will suggest the papi.fetch api
+const https = require('https');
+
+logger.log(https.message ? https.message : `Successfully imported https!`);
+
+try {
+  fetch('test');
+} catch (e) {
+  logger.log(`Hello World: Error on fetch! ${e}`);
+}
+
+try {
+  const xhr = new XMLHttpRequest();
+} catch (e) {
+  logger.log(`Hello World: Error on XMLHttpRequest! ${e}`);
+}
+
+try {
+  const webSocket = new WebSocket();
+} catch (e) {
+  logger.log(`Hello World: Error on WebSocket! ${e}`);
+}
+
 const unsubscribers = [];
 
 /** Gets the code to make the Hello World React component. Provide a name to use to identify this component. Provide a string to modify the 'function HelloWorld()' line */
@@ -89,6 +112,14 @@ exports.activate = async () => {
     }),
   ];
 
+  papi
+    .fetch('https://bible-api.com/matthew+24:14')
+    .then((res) => res.json())
+    .then((scr) => logger.log(scr.text.replace(/\n/g, '')))
+    .catch((e) =>
+      logger.error(`Could not get Scripture from bible-api! Reason: ${e}`),
+    );
+
   papi.webViews.addWebView({
     hasReact: false,
     contents: `<html>
@@ -147,6 +178,15 @@ exports.activate = async () => {
             const container = document.getElementById('root');
             const root = createRoot(container);
             root.render(React.createElement(HelloWorld, null));
+
+            // Test fetching
+            papi
+              .fetch('https://bible-api.com/matthew+24:14')
+              .then((res) => res.json())
+              .then((scr) => logger.log(scr.text.replace(/\\n/g, '')))
+              .catch((e) =>
+                logger.error(\`Could not get Scripture from bible-api! Reason: \${e}\`),
+              );
           });
         </script>
       </body>

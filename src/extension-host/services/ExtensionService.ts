@@ -12,7 +12,7 @@ import { getPathFromUri, joinUriPaths } from '@node/util/util';
 import { Uri } from '@shared/data/FileSystemTypes';
 import { UnsubscriberAsync } from '@shared/util/PapiUtil';
 import Module from 'module';
-import papi from '@shared/services/papi';
+import papi, { MODULE_SIMILAR_APIS } from '@shared/services/papi';
 import logger from '@shared/util/logger';
 
 /** Whether this service has finished setting up */
@@ -142,11 +142,39 @@ const activateExtensions = async (
     }
 
     // Disallow any imports within the extension
-    const message = `Requiring other than papi is not allowed in extensions! Rejected require('${fileName}')`;
+    // TODO: make this throw so the extension knows what's going on
+    // Tell the extension dev if there is an api similar to what they want to import
+    const similarApi =
+      MODULE_SIMILAR_APIS[fileName] || MODULE_SIMILAR_APIS[`node:${fileName}`];
+    const message = `Requiring other than papi is not allowed in extensions! Rejected require('${fileName}').${
+      similarApi ? ` Try using papi.${similarApi}` : ''
+    }`;
     return {
       message,
     };
   }) as typeof Module.prototype.require;
+
+  // Shim out internet access options in environments where they are defined so extensions can't use them
+  const fetchOriginal: typeof fetch | undefined = globalThis.fetch;
+  // eslint-disable-next-line no-global-assign
+  globalThis.fetch = () => {
+    throw Error('Cannot use fetch! Try using papi.fetch');
+  };
+
+  const xmlHttpRequestOriginal: typeof XMLHttpRequest | undefined =
+    globalThis.XMLHttpRequest;
+  // @ts-expect-error we want to remove XMLHttpRequest
+  // eslint-disable-next-line no-global-assign
+  globalThis.XMLHttpRequest = function XMLHttpRequestForbidden() {
+    throw Error('Cannot use XMLHttpRequest! Try using papi.fetch');
+  };
+
+  const webSocketOriginal: typeof WebSocket | undefined = globalThis.WebSocket;
+  // @ts-expect-error we want to remove WebSocket
+  // eslint-disable-next-line no-global-assign
+  globalThis.WebSocket = function WebSocketForbidden() {
+    throw Error('Cannot use WebSocket!');
+  };
 
   // Import the extensions and run their activate() functions
   const extensionsActive = (
@@ -165,9 +193,15 @@ const activateExtensions = async (
     )
   ).filter((activeExtension) => activeExtension !== null) as ActiveExtension[];
 
-  // Put require back so we can use it again
-  // TODO: this probably lets extensions wait and require code later. Security concern. Pls fix
+  // Put shimmed out modules and globals back so we can use them again
+  // TODO: replacing the original modules and globals almost confidently lets extensions wait and use them later. Serious security concern. Pls fix
   Module.prototype.require = requireOriginal;
+  // eslint-disable-next-line no-global-assign
+  globalThis.fetch = fetchOriginal;
+  // eslint-disable-next-line no-global-assign
+  globalThis.XMLHttpRequest = xmlHttpRequestOriginal;
+  // eslint-disable-next-line no-global-assign
+  globalThis.WebSocket = webSocketOriginal;
 
   return extensionsActive;
 };
