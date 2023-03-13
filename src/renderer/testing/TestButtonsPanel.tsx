@@ -175,7 +175,7 @@ const TestButtonsPanel = () => {
   );
 
   return (
-    <>
+    <div className="buttons-panel">
       <div className="hello">
         <button
           className="testButton"
@@ -392,7 +392,7 @@ const TestButtonsPanel = () => {
         // eslint-disable-next-line react/no-array-index-key
         <WebView key={i} {...webView} />
       ))}
-    </>
+    </div>
   );
 };
 

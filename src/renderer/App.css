@@ -53,6 +53,7 @@ a:hover {
     #5f7333 51.77%,
     #47314e 129.35%
   );
+  overflow-y: auto;
 }
 
 .hello-panel .hello {
