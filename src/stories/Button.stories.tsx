@@ -8,6 +8,10 @@ const meta: Meta<typeof Button> = {
   component: Button,
   // This component will have an automatically generated Autodocs entry: https://storybook.js.org/docs/7.0/react/writing-docs/docs-page
   tags: ['autodocs'],
+  argTypes: {
+    primary: { control: 'boolean' },
+    disabled: { control: 'boolean' },
+  },
 };
 
 export default meta;
