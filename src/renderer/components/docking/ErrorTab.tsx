@@ -1,6 +1,6 @@
 import { TabInfo } from '@shared/data/WebviewTypes';
 
-const ErrorTab = ({ errorMessage }: { errorMessage: string }) => {
+function ErrorTab({ errorMessage }: { errorMessage: string }) {
   return (
     <>
       <div>
@@ -10,7 +10,7 @@ const ErrorTab = ({ errorMessage }: { errorMessage: string }) => {
       <div>Message: {errorMessage}</div>
     </>
   );
-};
+}
 
 /**
  * Creates a new error message tab with the specified error message
