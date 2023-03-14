@@ -1,0 +1,21 @@
+.papi-slider {
+  background-color: transparent;
+}
+
+.papi-slider.disabled {
+  color: gray;
+}
+.papi-slider.primary.enabled {
+  color: #1e47fd;
+}
+.papi-slider.secondary.enabled {
+  color: #1ea7fd;
+}
+.papi-slider.paratext.enabled {
+  color: greenyellow;
+  background-color: darkgreen;
+}
+.papi-slider.paratext.bright.enabled {
+  color: darkgreen;
+  background-color: greenyellow;
+}
