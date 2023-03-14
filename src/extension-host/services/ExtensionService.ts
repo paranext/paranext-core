@@ -69,6 +69,7 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
 
 /**
  * Loads an extension and runs its activate function.
+ *
  * WARNING: This does not shim functionality out of extensions! Do not run this alone. Only run wrapped in activateExtensions()
  * @param extension extension info for the extension to activate
  * @param extensionFilePath path to extension main file to import

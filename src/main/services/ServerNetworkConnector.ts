@@ -2,9 +2,11 @@ import { CloseEvent, MessageEvent, WebSocket, WebSocketServer } from 'ws';
 import {
   CLIENT_ID_SERVER,
   ConnectionStatus,
+  InternalEvent,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
+  NetworkConnectorEventHandlers,
   NetworkConnectorInfo,
 } from '@shared/data/InternalConnectionTypes';
 import INetworkConnector from '@shared/services/INetworkConnector';
@@ -15,11 +17,13 @@ import {
   InitClient,
   Message,
   MessageType,
+  WebSocketEvent,
   WebSocketRequest,
   WebSocketResponse,
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
 import { newGuid } from '@shared/util/Util';
+import { PEventEmitter } from '@shared/util/PEvent';
 
 // #region local variables
 
@@ -40,6 +44,12 @@ type WebSocketClient = Omit<InitClient, 'type' | 'senderId'> & {
   connected: boolean;
 };
 
+/** Event type for events emitted by the network connector when it receives WebSocket messages */
+// Any is here because I dunno how to narrow Message type to a specific message type in parameters of a function
+// TODO: investigate this further another time
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type WebSocketMessageEvent = { data: Message | any; clientId: number };
+
 // #endregion
 
 /**
@@ -49,7 +59,6 @@ export default class ServerNetworkConnector implements INetworkConnector {
   // #region INetworkConnector members
 
   connectorInfo: NetworkConnectorInfo = { clientId: CLIENT_ID_SERVER };
-
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
 
   // #endregion
@@ -61,14 +70,13 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   /** The next client id to use for a new connection. Starts at 1 because the server is 0 */
   private nextClientId = 1;
-
   /** The webSocket clients that are connected and information about them */
   private clientSockets = new Map<number, WebSocketClient>();
 
-  /** All message subscriptions - arrays of functions that run each time a message with a specific message type comes in */
-  private messageSubscriptions = new Map<
+  /** All message subscriptions - emitters that emit an event each time a message with a specific message type comes in */
+  private messageEmitters = new Map<
     MessageType,
-    ((eventData: Message, clientId: number) => void)[]
+    PEventEmitter<WebSocketMessageEvent>
   >();
 
   /** Promise that resolves when finished starting the server or rejects if disconnected before the server finishes */
@@ -76,30 +84,35 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   /** Function that removes this clientConnect handler from connections */
   private unsubscribeHandleClientConnectMessage?: () => boolean;
-
   /** Function that removes this response handler from connections */
   private unsubscribeHandleResponseMessage?: () => boolean;
-
   /** Function that removes this handleRequest from connections */
   private unsubscribeHandleRequestMessage?: () => boolean;
+  /** Function that removes this handleEvent from the connection */
+  private unsubscribeHandleEventMessage?: Unsubscriber;
 
   /**
    * Function to call when we receive a request that is registered on this connector.
    * Handles requests from connections and returns a response to send back
    */
   private localRequestHandler?: InternalRequestHandler;
-
   /**
    * Function to call when we are sending a request.
    * Returns a clientId to which to send the request based on the requestType
    */
   private requestRouter?: (requestType: string) => number;
-
   /**
-   * Function to call when a client disconnects.
-   * Removes request handlers associated with the specified client
+   * Function to call when we receive an event.
+   * Handles events from connections and emits the event locally
    */
-  private localClientDisconnectHandler?: (clientId: number) => void;
+  private localEventHandler?: <T>(
+    eventType: string,
+    incomingEvent: InternalEvent<T>,
+  ) => void;
+  /**
+   * Functions to run when network connector events occur like when clients are disconnected
+   */
+  private networkConnectorEventHandlers?: NetworkConnectorEventHandlers;
 
   /** All requests that are waiting for a response */
   // Disabled no-explicit-any because assigning a request with generic type to LiveRequest<unknown> gave error
@@ -113,7 +126,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
   connect = async (
     localRequestHandler: InternalRequestHandler,
     requestRouter: (requestType: string) => number,
-    localClientDisconnectHandler: (clientId: number) => void,
+    localEventHandler: <T>(
+      eventType: string,
+      incomingEvent: InternalEvent<T>,
+    ) => void,
+    networkConnectorEventHandlers: NetworkConnectorEventHandlers,
   ) => {
     // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
     // We don't need to run this more than once
@@ -122,7 +139,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.connectionStatus = ConnectionStatus.Connecting;
     this.localRequestHandler = localRequestHandler;
     this.requestRouter = requestRouter;
-    this.localClientDisconnectHandler = localClientDisconnectHandler;
+    this.localEventHandler = localEventHandler;
+    this.networkConnectorEventHandlers = networkConnectorEventHandlers;
 
     // Set up subscriptions that the service needs to work
     // Mark the connection fully connected and notify that a client was connected
@@ -141,6 +159,12 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.unsubscribeHandleRequestMessage = this.subscribe(
       MessageType.Request,
       this.handleRequestMessage,
+    );
+
+    // Listen for events from the clients and run the event handler
+    this.unsubscribeHandleEventMessage = this.subscribe(
+      MessageType.Event,
+      this.handleEventMessage,
     );
 
     // Start the webSocket server
@@ -166,7 +190,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.connectionStatus = ConnectionStatus.Disconnected;
     this.localRequestHandler = undefined;
     this.requestRouter = undefined;
-    this.localClientDisconnectHandler = undefined;
+    this.localEventHandler = undefined;
+    this.networkConnectorEventHandlers = undefined;
     this.connectPromise = undefined;
 
     // Disconnect all clients - this should clear clientSockets on its own
@@ -187,6 +212,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
       this.unsubscribeHandleResponseMessage();
     if (this.unsubscribeHandleRequestMessage)
       this.unsubscribeHandleRequestMessage();
+    if (this.unsubscribeHandleEventMessage)
+      this.unsubscribeHandleEventMessage();
   };
 
   request = async <TParam, TReturn>(
@@ -226,6 +253,23 @@ export default class ServerNetworkConnector implements INetworkConnector {
     return requestPromise;
   };
 
+  emitEventOnNetwork = async <T>(
+    eventType: string,
+    event: InternalEvent<T>,
+  ) => {
+    // Send this event to all connections
+    // Using for...of on iterator here because it is significantly faster (not converting to array first) and cleaner this way in this case
+    // eslint-disable-next-line no-restricted-syntax
+    for (const clientId of this.clientSockets.keys()) {
+      // Don't send an event back to the connection that emitted it
+      if (clientId !== event.senderId)
+        this.sendMessage(
+          { type: MessageType.Event, eventType, ...event },
+          clientId,
+        );
+    }
+  };
+
   // #endregion
 
   // #region private methods
@@ -245,7 +289,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
     return clientSocket;
   };
 
-  /** Attempts to get the client socket for a certain clientGuid. Returns undefined if not found.
+  /**
+   * Attempts to get the client socket for a certain clientGuid. Returns undefined if not found.
    * This does not throw because it will likely be very common that we do not have a clientId for a certain clientGuid
    * as connecting clients will often supply old clientGuids.
    */
@@ -278,7 +323,6 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * @param message message to send
    * @param recipientId the client to which to send the message. TODO: determine if we can intuit this instead
    */
-  // Add if needed: @param unsafe whether to get the client even if we aren't connected. WARNING: SETTING THIS FLAG MEANS NOT CHECKING FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. There may be no clientId
   private sendMessage = (message: Message, recipientId: number): void => {
     // TODO: add message queueing
     if (
@@ -323,36 +367,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
         `Received message from webSocket ${clientId} but did not match indicated message sender id ${data.senderId}`,
       );
 
-    const callbacks = this.messageSubscriptions.get(data.type);
-    callbacks?.forEach((callback) => callback(data, clientId));
-  };
-
-  /**
-   * Unsubscribes a function from running on webSocket messages
-   * @param messageType the type of message from which to unsubscribe the function
-   * @param callback function to unsubscribe from being run on webSocket messages.
-   * @returns true if successfully unsubscribed
-   * Likely will never need to be exported from this file. Just use subscribe, which returns a matching unsubscriber function that runs this.
-   */
-  private unsubscribe = (
-    messageType: MessageType,
-    callback: (eventData: Message, clientId: number) => void,
-  ): boolean => {
-    const callbacks = this.messageSubscriptions.get(messageType);
-
-    if (!callbacks) return false; // Did not find any callbacks for the message type
-
-    const callbackIndex = callbacks.indexOf(callback);
-    if (callbackIndex < 0) return false; // Did not find this callback for the message type
-
-    // Remove the callback
-    callbacks.splice(callbackIndex, 1);
-
-    // Remove the map entry if there are no more callbacks
-    if (callbacks.length === 0) this.messageSubscriptions.delete(messageType);
-
-    // Indicate successfully removed the callback
-    return true;
+    const emitter = this.messageEmitters.get(data.type);
+    emitter?.emit({ data, clientId });
   };
 
   /**
@@ -368,14 +384,12 @@ export default class ServerNetworkConnector implements INetworkConnector {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     callback: (eventData: Message | any, clientId: number) => void,
   ): Unsubscriber => {
-    let callbacks = this.messageSubscriptions.get(messageType);
-    if (!callbacks) {
-      callbacks = [];
-      this.messageSubscriptions.set(messageType, callbacks);
+    let emitter = this.messageEmitters.get(messageType);
+    if (!emitter) {
+      emitter = new PEventEmitter<WebSocketMessageEvent>();
+      this.messageEmitters.set(messageType, emitter);
     }
-    callbacks.push(callback);
-
-    return () => this.unsubscribe(messageType, callback);
+    return emitter.subscribe(({ data, clientId }) => callback(data, clientId));
   };
 
   /**
@@ -430,13 +444,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
     webSocket.close();
     this.clientSockets.delete(clientId);
 
-    // TODO: Send an event that the client has disconnected and listen for the disconnect in the NetworkService instead of calling the handler here
-    if (!this.localClientDisconnectHandler)
-      throw new Error(
-        `Client disconnected but cannot disconnect it without a localClientDisconnectHandler`,
-      );
-
-    this.localClientDisconnectHandler(clientId);
+    // Notify that a client disconnected
+    if (this.networkConnectorEventHandlers?.didClientDisconnectHandler)
+      this.networkConnectorEventHandlers.didClientDisconnectHandler({
+        clientId,
+      });
   };
 
   /**
@@ -460,14 +472,21 @@ export default class ServerNetworkConnector implements INetworkConnector {
     this.getClientSocket(connectorId).connected = true;
 
     // Determine if this client is reconnecting so we can unregister request handlers for the old connection
+    let didReconnect = false;
     const oldClientSocket = this.getClientSocketFromGuid(
       clientConnect.reconnectingClientGuid,
     );
     if (oldClientSocket) {
+      didReconnect = true;
       this.disconnectClient(oldClientSocket.webSocket);
     }
 
-    // TODO: Send an event that the client is fully connected (mention that it is a reconnect?)
+    // Notify that a client connected and whether that client reconnected
+    if (this.networkConnectorEventHandlers?.didClientConnectHandler)
+      this.networkConnectorEventHandlers.didClientConnectHandler({
+        clientId: connectorId,
+        didReconnect,
+      });
   };
 
   /**
@@ -541,6 +560,24 @@ export default class ServerNetworkConnector implements INetworkConnector {
       // This request is for someone else. Forward the request on
       this.sendMessage(requestMessage, responderId);
     }
+  };
+
+  /**
+   * Function that handles incoming webSocket messages of type Event.
+   * Runs the eventHandler provided in connect() and forwards the event to other clients
+   * @param eventMessage event message to handle
+   */
+  private handleEventMessage = (eventMessage: WebSocketEvent<unknown>) => {
+    if (!this.localEventHandler)
+      throw new Error(
+        `Received an event but cannot handle it without an eventHandler`,
+      );
+
+    // Send the event to connections to handle
+    this.emitEventOnNetwork(eventMessage.eventType, eventMessage);
+
+    // Handle the event locally
+    this.localEventHandler(eventMessage.eventType, eventMessage);
   };
 
   // #endregion

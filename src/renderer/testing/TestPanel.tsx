@@ -6,7 +6,7 @@ export type TabData = {
 };
 
 const TestPanel = ({ content }: { content: string }) => {
-  return <div>{content}</div>;
+  return <div className="test-panel">{content}</div>;
 };
 
 const createTabPanel = (tabInfo: SavedTabInfo): TabInfo => {

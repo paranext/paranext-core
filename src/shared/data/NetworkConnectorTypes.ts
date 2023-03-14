@@ -8,6 +8,7 @@
  */
 
 import {
+  InternalEvent,
   InternalRequest,
   InternalResponse,
   NetworkConnectorInfo,
@@ -27,6 +28,7 @@ export enum MessageType {
   ClientConnect = 'client-connect',
   Request = 'request',
   Response = 'response',
+  Event = 'event',
 }
 
 /** Message sent to the client to give it NetworkConnectorInfo */
@@ -52,20 +54,28 @@ export type ClientConnect = {
 /** Request to do something and to respond */
 export type WebSocketRequest<TParam = unknown> = {
   type: MessageType.Request;
-  /** What kind of request this is. Certain command, event, etc */
+  /** What kind of request this is. Certain command, etc */
   requestType: string;
 } & InternalRequest<TParam>;
 
 /** Response to a request */
 export type WebSocketResponse<TReturn = unknown> = {
   type: MessageType.Response;
-  /** What kind of request this is. Certain command, event, etc */
+  /** What kind of request this is. Certain command, etc */
   requestType: string;
 } & InternalResponse<TReturn>;
+
+/** Event to be sent out throughout all processes */
+export type WebSocketEvent<T> = {
+  type: MessageType.Event;
+  /** What kind of event this is */
+  eventType: string;
+} & InternalEvent<T>;
 
 /** Messages send by the WebSocket */
 export type Message =
   | InitClient
   | ClientConnect
   | WebSocketRequest
-  | WebSocketResponse;
+  | WebSocketResponse
+  | WebSocketEvent<unknown>;

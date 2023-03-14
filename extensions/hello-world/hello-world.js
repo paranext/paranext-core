@@ -90,6 +90,7 @@ exports.activate = async () => {
   ];
 
   papi.webViews.addWebView({
+    hasReact: false,
     contents: `<html>
       <head>
       </head>
@@ -153,7 +154,6 @@ exports.activate = async () => {
   });
 
   papi.webViews.addWebView({
-    hasReact: true,
     contents: getReactComponent('Hello World React Webview', 'export default'),
   });
 

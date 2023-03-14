@@ -12,7 +12,7 @@ export type WebViewProps =
       contents: ReactNode;
     };
 
-export function WebView({ contents, hasReact = false }: WebViewProps) {
+export function WebView({ contents, hasReact = true }: WebViewProps) {
   const title = useId();
 
   // This ref will always be defined

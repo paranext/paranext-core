@@ -21,6 +21,26 @@ export type NetworkConnectorInfo = Readonly<{
   clientId: number;
 }>;
 
+/** Event emitted when client connections are established */
+export type ClientConnectEvent = {
+  clientId: number;
+  didReconnect: boolean;
+};
+
+/** Event emitted when client connections are lost */
+export type ClientDisconnectEvent = { clientId: number };
+
+/**
+ * Functions that run when network connector events occur.
+ * These should likely be emit functions from NetworkEventEmitters so the events inform all interested connections
+ */
+export type NetworkConnectorEventHandlers = {
+  /** Handles when a new connection is established */
+  didClientConnectHandler?: (event: ClientConnectEvent) => void;
+  /** Handles when a client disconnects */
+  didClientDisconnectHandler?: (event: ClientDisconnectEvent) => void;
+};
+
 /** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
 export enum ConnectionStatus {
   /** This connector is not connected to the network */
@@ -57,3 +77,11 @@ export type RequestHandler = <TParam, TReturn>(
   requestType: string,
   request: ComplexRequest<TParam>,
 ) => Promise<ComplexResponse<TReturn>>;
+
+/** Event to be sent out throughout all processes */
+export type InternalEvent<T> = {
+  /** The process that emitted this Event */
+  senderId: number;
+  /** Contents of the event */
+  event: T;
+};

@@ -1,5 +1,6 @@
 module.exports = {
-  extends: 'erb',
+  extends: 'erb', // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
+  // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
   rules: {
     // #region ERB rules
 
@@ -11,8 +12,9 @@ module.exports = {
 
     // #endregion
 
-    // #region Our rules
+    // #region Paranext rules
 
+    '@typescript-eslint/lines-between-class-members': 'off',
     // This is already a Typescript rule, so we don't need it to be reported twice
     '@typescript-eslint/no-unused-vars': 'off',
     'comma-dangle': ['error', 'always-multiline'],
