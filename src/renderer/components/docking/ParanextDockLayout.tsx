@@ -76,7 +76,7 @@ const groups: {
   },
 };
 
-const ParanextDockLayout = () => {
+function ParanextDockLayout() {
   return (
     <DockLayout
       groups={groups}
@@ -86,6 +86,6 @@ const ParanextDockLayout = () => {
       style={{ position: 'absolute', left: 3, top: 3, right: 3, bottom: 3 }}
     />
   );
-};
+}
 
 export default ParanextDockLayout;
