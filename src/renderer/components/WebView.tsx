@@ -1,18 +1,13 @@
+import { WebViewContents } from '@shared/data/WebViewTypes';
 import logger from '@shared/util/logger';
-import { ReactNode, useEffect, useId, useRef } from 'react';
-import Frame from 'react-frame-component';
+import { useEffect, useId, useRef } from 'react';
 
-export type WebViewProps =
-  | {
-      hasReact: false;
-      contents: string;
-    }
-  | {
-      hasReact: true;
-      contents: ReactNode;
-    };
+export type WebViewProps = Omit<
+  WebViewContents,
+  'componentName' | 'contentType'
+>;
 
-export function WebView({ contents, hasReact = true }: WebViewProps) {
+export function WebView({ contents }: WebViewProps) {
   const title = useId();
 
   // This ref will always be defined
@@ -44,9 +39,7 @@ export function WebView({ contents, hasReact = true }: WebViewProps) {
     };
   }, []);
 
-  return hasReact ? (
-    <Frame ref={iframeRef}>{contents}</Frame>
-  ) : (
+  return (
     <iframe
       ref={iframeRef}
       title={`web-view-${title}`}

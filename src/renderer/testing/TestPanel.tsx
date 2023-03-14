@@ -1,4 +1,4 @@
-import { SavedTabInfo, TabInfo } from '@shared/data/WebviewTypes';
+import { SavedTabInfo, TabInfo } from '@shared/data/WebViewTypes';
 
 export type TabData = {
   title: string;

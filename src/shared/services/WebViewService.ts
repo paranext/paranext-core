@@ -13,9 +13,14 @@ import { newGuid } from '@shared/util/Util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi';
-import React, { createElement } from 'react';
+import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { createNetworkEventEmitter } from './NetworkService';
+import { createNetworkEventEmitter } from '@shared/services/NetworkService';
+import {
+  WebViewContents,
+  WebViewContentsReact,
+  WebViewContentType,
+} from '@shared/data/WebViewTypes';
 
 /** Event emitted when webViews are added */
 export type AddWebViewEvent = {
@@ -75,9 +80,9 @@ const getWebViewPapi = (webViewId: string) => {
  * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
  * @returns promise that resolves nothing if we successfully handled the webView
  */
-export const addWebView = async (webView: WebViewProps) => {
+export const addWebView = async (webView: WebViewContents) => {
   if (!isRenderer()) {
-    return CommandService.sendCommand<[WebViewProps], void>(
+    return CommandService.sendCommand<[WebViewContents], void>(
       'addWebView',
       webView,
     );
@@ -87,57 +92,76 @@ export const addWebView = async (webView: WebViewProps) => {
   const webViewId = newGuid();
   setWebViewPapi(webViewId, papi);
 
-  // TODO: Fix problems with React frame and deleting window stuff. And figure out how to delete the right amount of DOM creation stuff
+  // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
+  const contentType = webView.contentType
+    ? webView.contentType
+    : WebViewContentType.React;
+
   /** String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such */
   const imports = `
   var papi = window.parent.getWebViewPapi('${webViewId}');
   var React = window.parent.React;
   var createRoot = window.parent.createRoot;
   delete window.parent;
-  // delete window.top;
-  // delete window.frameElement;
+  delete window.top;
+  delete window.frameElement;
   delete window.fetch;
   delete window.XMLHttpRequest;
   delete window.WebSocket;
   delete window.Image;
   `;
 
-  let updatedWebView: WebViewProps;
-  // hasReact is true by default. Extensions can specify false
-  if (webView.hasReact === undefined || webView.hasReact) {
-    // Thanks to user585776 at https://stackoverflow.com/a/67359410 for temporary solution of running code from a string using data url
-    // TODO: Fix so we are serving all webview content from the backend or something
-    // TODO: test to see if exceptions bring Paranext down or if they still occur within the iframe
-    const reactWebViewString = `${imports}${webView.contents}` as string;
-    const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(
-      reactWebViewString,
-    )}`;
-    const reactWebViewModule = await import(/* webpackIgnore: true */ dataUrl);
-    const reactWebViewComponent = reactWebViewModule.default;
+  // Build the contents of the iframe
+  let webViewContents: string;
+  switch (contentType) {
+    case WebViewContentType.HTML:
+      // Add wrapping to turn a plain string into an iframe
+      webViewContents = webView.contents.includes('<html')
+        ? webView.contents
+        : `<html><head></head><body>${webView.contents}</body></html>`;
+      break;
+    default: {
+      const reactWebView = webView as WebViewContentsReact;
+      // Add the component as a script
+      webViewContents = `
+        <html>
+          <head>
+          </head>
+          <body>
+            <div id="root">
+            </div>
+            <script>
+              ${reactWebView.contents}
 
-    updatedWebView = {
-      ...webView,
-      contents: createElement(reactWebViewComponent, null),
-    };
-  } else {
-    // Build the contents of the iframe
-    // Add wrapping to turn a plain string into an iframe
-    let webViewContents = webView.contents.includes('<html')
-      ? webView.contents
-      : `<html><head></head><body>${webView.contents}</body></html>`;
+              function initializeReact() {
+                const container = document.getElementById('root');
+                const root = createRoot(container);
+                root.render(React.createElement(${reactWebView.componentName}, null));
+              }
 
-    // Add some script to give access to papi
-    const headStart = webViewContents.indexOf('<head');
-    const headEnd = webViewContents.indexOf('>', headStart);
+              if (document.readyState === 'loading')
+                document.addEventListener('DOMContentLoaded', initializeReact);
+              else initializeReact();
+            </script>
+          </body>
+        </html>`;
+      break;
+    }
+  }
 
-    // Add a connection to the papi
-    webViewContents = `${webViewContents.substring(0, headEnd + 1)}<script>
+  // Add a script at the start of the head to give access to papi
+  const headStart = webViewContents.indexOf('<head');
+  const headEnd = webViewContents.indexOf('>', headStart);
+
+  // Inject the import scripts into the html
+  webViewContents = `${webViewContents.substring(0, headEnd + 1)}<script>
     ${imports}
     </script>${webViewContents.substring(headEnd + 1)}`;
 
-    updatedWebView = { ...webView, contents: webViewContents };
-  }
-
+  const updatedWebView: WebViewProps = {
+    ...webView,
+    contents: webViewContents,
+  };
   // Inform web view consumers we added a web view
   onDidAddWebViewEmitter.emit({ webView: updatedWebView });
 

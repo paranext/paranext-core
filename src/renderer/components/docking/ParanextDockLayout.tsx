@@ -1,7 +1,7 @@
 import 'rc-dock/dist/rc-dock.css';
 import './ParanextDockLayout.css';
 import { newGuid } from '@shared/util/Util';
-import { SavedTabInfo, TabCreator, TabInfo } from '@shared/data/WebviewTypes';
+import { SavedTabInfo, TabCreator, TabInfo } from '@shared/data/WebViewTypes';
 import DockLayout, { LayoutData, TabBase, TabData, TabGroup } from 'rc-dock';
 import testLayout from '@renderer/testing/testLayout';
 import createHelloPanel from '@renderer/testing/HelloPanel';
