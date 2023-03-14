@@ -4,6 +4,7 @@
 /**
  * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts (renderer), and extension-host.ts (extension host)
  */
+
 declare global {
   /** Type of process this is. Helps with running specific code based on which process you're in */
   var processType: ProcessType;
