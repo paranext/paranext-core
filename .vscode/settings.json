@@ -28,6 +28,16 @@
     "*.{css,sass,scss}.d.ts": true
   },
 
+  "cSpell.ignorePaths": [
+    "package-lock.json",
+    "node_modules",
+    "vscode-extension",
+    ".git/objects",
+    ".vscode",
+    ".vscode-insiders",
+    "package.json"
+  ],
+
   "cSpell.words": [
     "APPDATA",
     "asyncs",
@@ -46,6 +56,8 @@
     "unsub",
     "unsubs",
     "unsubscriber",
-    "unsubscribers"
+    "unsubscribers",
+    "dockbox",
+    "maximizable"
   ],
 }

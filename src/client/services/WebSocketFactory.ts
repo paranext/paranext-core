@@ -1,13 +1,13 @@
 /**
- * Creates a ServerNetworkConnector or a ClientNetworkConnector depending on if we're in main or renderer
+ * Creates a WebSocket from the node ws library or from the browser WebSocket depending on if we're in node or browser
  */
 
 import { isRenderer } from '@shared/util/InternalUtil';
 import { IWebSocket } from './IWebSocket';
 
 /**
- * Creates a NetworkConnector for the client or the server depending on where you're running
- * @returns NetworkConnector
+ * Creates a WebSocket for the renderer or extension host depending on where you're running
+ * @returns WebSocket
  */
 // eslint-disable-next-line import/prefer-default-export
 export const createWebSocket = async (url: string): Promise<IWebSocket> => {

@@ -69,7 +69,7 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
 
 /**
  * Loads an extension and runs its activate function.
- * WARNING: This does not shim functionality out of extenions! Do not run this alone. Only run wrapped in activateExtensions()
+ * WARNING: This does not shim functionality out of extensions! Do not run this alone. Only run wrapped in activateExtensions()
  * @param extension extension info for the extension to activate
  * @param extensionFilePath path to extension main file to import
  * @returns unsubscriber that deactivates the extension
@@ -141,7 +141,7 @@ const activateExtensions = async (
     }
 
     // Disallow any imports within the extension
-    const message = `Requiring other than papi is not allowed in extensions! Rejected require(${fileName})`;
+    const message = `Requiring other than papi is not allowed in extensions! Rejected require('${fileName}')`;
     return {
       message,
     };

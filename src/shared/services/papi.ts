@@ -7,9 +7,19 @@ import * as PapiUtil from '@shared/util/PapiUtil';
 // We need the WebViewService here to include on the papi, but WebViewService passes papi into WebViews
 // eslint-disable-next-line import/no-cycle
 import * as WebViewService from '@shared/services/WebViewService';
-import papiComponents from '@renderer/components/papi-components/papi-components';
-import papiContext from '@renderer/context/papi-context/papi-context';
-import papiHooks from '@renderer/hooks/papi-hooks/papi-hooks';
+import logger from '@shared/util/logger';
+import { isRenderer } from '@shared/util/InternalUtil';
+
+// TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
+const papiComponents = isRenderer()
+  ? require('@renderer/components/papi-components/papi-components').default
+  : {};
+const papiContext = isRenderer()
+  ? require('@renderer/context/papi-context/papi-context').default
+  : {};
+const papiHooks = isRenderer()
+  ? require('@renderer/hooks/papi-hooks/papi-hooks').default
+  : {};
 
 export default {
   commands: CommandService,
@@ -20,4 +30,5 @@ export default {
     context: papiContext,
     hooks: papiHooks,
   },
+  logger,
 };

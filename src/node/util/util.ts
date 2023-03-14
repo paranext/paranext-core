@@ -22,12 +22,16 @@ export function resolveHtmlPath(htmlFileName: string) {
  */
 export const getAppDir = memoizeOne((): string => {
   return globalThis.isPackaged
-    ? `${
+    ? path.join(
         process.env.APPDATA ||
-        (process.platform === 'darwin'
-          ? `${process.env.HOME}/Library/Preferences`
-          : `${process.env.HOME}/.local/share`)
-      }/paranext-core`
+          (process.platform === 'darwin'
+            ? // Since APPDATA is not defined, we are on a unix-based OS. Therefore HOME will be available
+              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+              path.join(process.env.HOME!, '/Library/Preferences')
+            : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+              path.join(process.env.HOME!, '/.local/share')),
+        '/paranext-core',
+      )
     : path.join(__dirname, '../../../dev-appdata');
 });
 
@@ -36,8 +40,8 @@ const RESOURCES_SCHEME = 'resources';
 
 /**
  * Get a mapping from scheme to the absolute path to that scheme.
- * TODO: this is currently lazy-loaded because globalThis doesn't get populated until after imports are finished.
- * Fix this to be a normal object after fixing globalThis.
+ * TODO: this is currently lazy-loaded because globalThis doesn't get populated until after this file is imported.
+ * Fix this to be a normal object after fixing globalThis import dependencies.
  */
 const getSchemePaths = memoizeOne((): { [scheme: string]: string } => ({
   [APP_SCHEME]: getAppDir(),
@@ -50,7 +54,7 @@ const getSchemePaths = memoizeOne((): { [scheme: string]: string } => ({
  */
 function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
   // Add app scheme to the uri if it doesn't have one
-  const fullUri = uri.includes('://') ? uri : `app://${uri}`;
+  const fullUri = uri.includes('://') ? uri : `${APP_SCHEME}://${uri}`;
 
   const [scheme, uriPath] = fullUri.split('://');
   return {
