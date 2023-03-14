@@ -13,6 +13,7 @@ import {
   ComplexRequest,
   ComplexResponse,
   createSafeRegisterFn,
+  RequestHandlerType,
   UnsubPromiseAsync,
   UnsubscriberAsync,
 } from '@shared/util/PapiUtil';
@@ -99,13 +100,6 @@ type RoutedRequestHandler<TParam = any, TReturn = any> =
   | ArgsRequestHandler<TParam[], TReturn>
   | ContentsRequestHandler<TParam, TReturn>
   | ComplexRequestHandler<TParam, TReturn>;
-
-/** Type of request handler - indicates what type of parameters and what return type the handler has */
-enum RequestHandlerType {
-  Args = 'args',
-  Contents = 'contents',
-  Complex = 'complex',
-}
 
 // #region Private unsafe functions (do not call manually outside of initialization)
 

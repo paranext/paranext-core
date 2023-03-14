@@ -1,4 +1,3 @@
-// eslint-disable-next-line jest/no-jest-import
 import type { Config } from 'jest';
 import { pathsToModuleNameMapper } from 'ts-jest';
 import { compilerOptions } from './tsconfig.json';
@@ -18,7 +17,7 @@ const config: Config = {
   testEnvironmentOptions: {
     url: 'http://localhost/',
   },
-  testPathIgnorePatterns: ['release/app/dist'],
+  testPathIgnorePatterns: ['release/app/dist', '.erb/dll'],
   transform: {
     '\\.(ts|tsx|js|jsx)$': 'ts-jest',
   },

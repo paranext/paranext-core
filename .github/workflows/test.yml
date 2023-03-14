@@ -42,8 +42,11 @@ jobs:
           cache: npm
 
       - name: npm install
-        run: |
-          npm install
+        run: npm install
+
+      - name: Install DMG license
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: npm install dmg-license
 
       - name: dotnet build
         run: npm run build:data-release

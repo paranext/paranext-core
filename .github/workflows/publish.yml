@@ -43,6 +43,10 @@ jobs:
           npm install
           npm run build
 
+      - name: Install DMG license
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: npm install dmg-license
+
       - name: dotnet build - MacOS and Windows
         if: ${{ matrix.os == 'macos-latest' }}
         run: |

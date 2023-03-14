@@ -3,7 +3,7 @@ import './App.css';
 import ParanextDockLayout from '@renderer/components/docking/ParanextDockLayout';
 import TestContext from '@renderer/context/papi-context/TestContext';
 
-const Hello = () => {
+function Hello() {
   return (
     <TestContext.Provider value="test">
       <div>
@@ -11,7 +11,7 @@ const Hello = () => {
       </div>
     </TestContext.Provider>
   );
-};
+}
 
 export default function App() {
   return (
