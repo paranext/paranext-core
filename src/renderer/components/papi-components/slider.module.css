@@ -6,11 +6,11 @@
 .papi-slider.vertical {
   min-height: 200px;
 }
-.papi-slider.paratext.enabled {
+.papi-slider.paratext {
   color: greenyellow;
   background-color: darkgreen;
 }
-.papi-slider.paratext.bright.enabled {
+.papi-slider.paratext.bright {
   color: darkgreen;
   background-color: greenyellow;
 }
