@@ -2,22 +2,19 @@ import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import path from 'path';
 import logger, { formatLog } from '@shared/util/logger';
 
-let dotnet: ChildProcessWithoutNullStreams | undefined;
+/** Pretty name for the process this service manages. Used in logs */
+const DOTNET_DATA_PROVIDER_NAME = 'dotnet data provider';
 
-// log functions for in the service but not in the spawned process
-function logServiceError(message: string) {
-  logger.error(formatLog(message, 'ddp-service', 'err'));
-}
-function logServiceInfo(message: string) {
-  logger.log(formatLog(message, 'ddp-service'));
-}
+let dotnet: ChildProcessWithoutNullStreams | undefined;
 
 // log functions for inside the data provider process
 function logProcessError(message: unknown) {
-  logger.error(formatLog(message?.toString() || '', 'ddp', 'err'));
+  logger.error(
+    formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME, 'error'),
+  );
 }
 function logProcessInfo(message: unknown) {
-  logger.log(formatLog(message?.toString() || '', 'ddp'));
+  logger.log(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME));
 }
 
 /**
@@ -28,9 +25,9 @@ function killDotnetDataProvider() {
   if (!dotnet) return;
 
   if (dotnet.kill()) {
-    logServiceInfo('killed dotnet data provider');
+    logger.info('killed dotnet data provider');
   } else {
-    logServiceError(
+    logger.error(
       'dotnet data provider was not stopped! Investigate other .kill() options',
     );
   }
@@ -72,9 +69,13 @@ function startDotnetDataProvider() {
 
   dotnet.on('close', (code, signal) => {
     if (signal) {
-      logServiceInfo(`['close' event] terminated with signal ${signal}`);
+      logger.info(
+        `'close' event: dotnet data provider terminated with signal ${signal}`,
+      );
     } else {
-      logServiceInfo(`['close' event] exited with code ${code}`);
+      logger.info(
+        `'close' event: dotnet data provider exited with code ${code}`,
+      );
     }
     // TODO: listen for 'exit' event as well?
     // TODO: unsubscribe event listeners

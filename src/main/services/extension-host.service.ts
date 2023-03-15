@@ -8,25 +8,22 @@ import { app } from 'electron';
 import path from 'path';
 import { Readable } from 'stream';
 
+/** Pretty name for the process this service manages. Used in logs */
+const EXTENSION_HOST_NAME = 'extension host';
+
 let extensionHost:
   | ChildProcess
   | ChildProcessByStdio<null, Readable, Readable>
   | undefined;
 
-// log functions for in the service but not in the spawned process
-function logServiceError(message: string) {
-  logger.error(formatLog(message, 'eh-service', 'err'));
-}
-function logServiceInfo(message: string) {
-  logger.log(formatLog(message, 'eh-service'));
-}
-
 // log functions for inside the extension host process
 function logProcessError(message: unknown) {
-  logger.error(formatLog(message?.toString() || '', 'eh', 'err'));
+  logger.error(
+    formatLog(message?.toString() || '', EXTENSION_HOST_NAME, 'error'),
+  );
 }
 function logProcessInfo(message: unknown) {
-  logger.log(formatLog(message?.toString() || '', 'eh'));
+  logger.log(formatLog(message?.toString() || '', EXTENSION_HOST_NAME));
 }
 
 /**
@@ -37,9 +34,9 @@ function killExtensionHost() {
   if (!extensionHost) return;
 
   if (extensionHost.kill()) {
-    logServiceInfo('killed extension host process');
+    logger.info('killed extension host process');
   } else {
-    logServiceError(
+    logger.error(
       'extension host process was not stopped! Investigate other .kill() options',
     );
   }
@@ -72,7 +69,7 @@ function startExtensionHost() {
       );
 
   if (!extensionHost.stderr || !extensionHost.stdout)
-    logServiceError(
+    logger.error(
       "Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
     );
   else {
@@ -82,9 +79,13 @@ function startExtensionHost() {
 
   extensionHost.on('close', (code, signal) => {
     if (signal) {
-      logServiceInfo(`['close' event] terminated with signal ${signal}`);
+      logger.info(
+        `'close' event: extension host process terminated with signal ${signal}`,
+      );
     } else {
-      logServiceInfo(`['close' event] exited with code ${code}`);
+      logger.info(
+        `'close' event: extension host process exited with code ${code}`,
+      );
     }
     // TODO: listen for 'exit' event as well?
     // TODO: unsubscribe event listeners

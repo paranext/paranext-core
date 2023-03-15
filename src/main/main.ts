@@ -14,7 +14,7 @@ import {
   ipcMain,
   IpcMainInvokeEvent,
 } from 'electron';
-import { autoUpdater } from 'electron-updater';
+/* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
 import '@main/globalThis';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
@@ -30,12 +30,12 @@ logger.log('Starting main');
 
 // #region ELECTRON SETUP
 
-class AppUpdater {
+/* class AppUpdater {
   constructor() {
     autoUpdater.logger = logger;
     autoUpdater.checkForUpdatesAndNotify();
   }
-}
+} */
 
 // Keep a global reference of the window object. If you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -133,7 +133,7 @@ const createWindow = async () => {
 
   // Remove this if your app does not use auto updates
   // eslint-disable-next-line
-  new AppUpdater();
+  // new AppUpdater();
 };
 
 app.on('window-all-closed', () => {

@@ -16,12 +16,13 @@ import {
 // eslint-disable-next-line import/prefer-default-export
 export function formatLog(message: string, serviceName: string, tag = '') {
   const messageNoEndLine = message.trimEnd();
-  const openTag = `{${serviceName}${tag ? ' ' : ''}${tag}}`;
-  const closeTag = `{/${serviceName}${tag ? ' ' : ''}${tag}}`;
-  if (messageNoEndLine.includes('\n'))
+  const openTag = `[${serviceName}${tag ? ' ' : ''}${tag}]`;
+  if (messageNoEndLine.includes('\n')) {
+    const closeTag = `[/${serviceName}${tag ? ' ' : ''}${tag}]`;
     // Multi-line
     return `\n${openTag}\n${messageNoEndLine}\n${closeTag}`;
-  return `${openTag} ${messageNoEndLine} ${closeTag}`;
+  }
+  return `${openTag} ${messageNoEndLine}`;
 }
 
 /**
