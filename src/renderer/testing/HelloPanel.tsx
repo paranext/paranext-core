@@ -1,7 +1,7 @@
 import icon from '@assets/icon.png';
 import { TabInfo } from '@shared/data/WebviewTypes';
 
-const HelloPanel = () => {
+function HelloPanel() {
   return (
     <div className="hello-panel">
       <div className="hello">
@@ -12,7 +12,7 @@ const HelloPanel = () => {
       </div>
     </div>
   );
-};
+}
 
 const createHelloPanel = (): TabInfo => {
   return {

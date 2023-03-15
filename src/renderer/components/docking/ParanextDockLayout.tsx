@@ -76,7 +76,7 @@ const groups: {
   },
 };
 
-const ParanextDockLayout = () => {
+function ParanextDockLayout() {
   return (
     <DockLayout
       groups={groups}
@@ -85,6 +85,6 @@ const ParanextDockLayout = () => {
       loadTab={loadTab}
     />
   );
-};
+}
 
 export default ParanextDockLayout;
