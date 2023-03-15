@@ -1,15 +1,10 @@
 .papi-slider {
+  color: #1ea7fd;
   background-color: transparent;
 }
 
-.papi-slider.disabled {
-  color: gray;
-}
-.papi-slider.primary.enabled {
-  color: #1e47fd;
-}
-.papi-slider.secondary.enabled {
-  color: #1ea7fd;
+.papi-slider.vertical {
+  min-height: 200px;
 }
 .papi-slider.paratext.enabled {
   color: greenyellow;
