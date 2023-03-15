@@ -5,9 +5,9 @@ export type TabData = {
   content: string;
 };
 
-const TestPanel = ({ content }: { content: string }) => {
+function TestPanel({ content }: { content: string }) {
   return <div>{content}</div>;
-};
+}
 
 const createTabPanel = (tabInfo: SavedTabInfo): TabInfo => {
   if (!tabInfo.data) throw Error('Tab creation data is missing');
