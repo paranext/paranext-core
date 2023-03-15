@@ -16,7 +16,12 @@ module.exports = {
 
     // #region Paranext rules
 
-    '@typescript-eslint/lines-between-class-members': 'off',
+    'lines-between-class-members': 'off',
+    '@typescript-eslint/lines-between-class-members': [
+      'error',
+      'always',
+      { exceptAfterSingleLine: true, exceptAfterOverload: true },
+    ],
     '@typescript-eslint/no-explicit-any': 'error',
     '@typescript-eslint/no-non-null-assertion': 'error',
     'no-redeclare': 'off',
