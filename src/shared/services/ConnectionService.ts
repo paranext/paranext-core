@@ -9,11 +9,14 @@ import {
   CLIENT_ID_UNASSIGNED,
   ConnectionStatus,
   InternalEvent,
+  InternalNetworkEventHandler,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
   NetworkConnectorEventHandlers,
+  NetworkEventHandler,
   RequestHandler,
+  RequestRouter,
 } from '@shared/data/InternalConnectionTypes';
 import INetworkConnector from '@shared/services/INetworkConnector';
 import * as NetworkConnectorFactory from '@shared/services/NetworkConnectorFactory';
@@ -36,9 +39,9 @@ let connectReject: ((reason?: string) => void) | undefined;
 /** Function that accepts requests from the server and responds accordingly. From connect() */
 let requestHandler: RequestHandler | undefined;
 /** Function that determines the appropriate clientId to which to send requests of the given type. From connect() */
-let requestRouter: ((requestType: string) => number) | undefined;
+let requestRouter: RequestRouter | undefined;
 /** Function that accepts events from the server and emits them locally. From connect() */
-let eventHandler: (<T>(eventType: string, event: T) => void) | undefined;
+let eventHandler: NetworkEventHandler | undefined;
 /** Function that runs when a client is disconnected. From connect() */
 let networkConnectorEventHandlers: NetworkConnectorEventHandlers | undefined;
 /** The network connector this service uses to send and receive messages */
@@ -148,7 +151,7 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
  * @param eventType type of request to determine which handler to use
  * @param event event message to handle
  */
-const handleEventFromNetwork = async <T>(
+const handleEventFromNetwork: InternalNetworkEventHandler = async <T>(
   eventType: string,
   incomingEvent: InternalEvent<T>,
 ) => {
@@ -167,8 +170,8 @@ const handleEventFromNetwork = async <T>(
  */
 export const connect = async (
   localRequestHandler: RequestHandler,
-  networkRequestRouter: (requestType: string) => number,
-  localEventHandler: <T>(eventType: string, event: T) => void,
+  networkRequestRouter: RequestRouter,
+  localEventHandler: NetworkEventHandler,
   connectorEventHandlers: NetworkConnectorEventHandlers,
 ): Promise<void> => {
   // Do not run anything asynchronous before we create and assign connectPromise below!

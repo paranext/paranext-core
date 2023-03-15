@@ -63,9 +63,6 @@ export class PEventEmitter<T> {
           // Remove the callback
           this.subscriptions.splice(callbackIndex, 1);
 
-          // Remove this._subscriptions if it does not need to exist
-          if (this.subscriptions.length === 0) this.subscriptions = undefined;
-
           return true;
         };
       };
