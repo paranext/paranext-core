@@ -2,7 +2,7 @@
  * Service that runs the extension-host process from the main file
  */
 
-import logger from '@shared/util/logger';
+import logger, { formatLog } from '@shared/util/logger';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
@@ -13,6 +13,22 @@ let extensionHost:
   | ChildProcessByStdio<null, Readable, Readable>
   | undefined;
 
+// log functions for in the service but not in the spawned process
+function logServiceError(message: string) {
+  logger.error(formatLog(message, 'eh-service', 'err'));
+}
+function logServiceInfo(message: string) {
+  logger.log(formatLog(message, 'eh-service'));
+}
+
+// log functions for inside the extension host process
+function logProcessError(message: unknown) {
+  logger.error(formatLog(message?.toString() || '', 'eh', 'err'));
+}
+function logProcessInfo(message: unknown) {
+  logger.log(formatLog(message?.toString() || '', 'eh'));
+}
+
 /**
  * Hard kills the extension host process.
  * TODO: add a more elegant shutdown to avoid this if we possibly can
@@ -21,24 +37,14 @@ function killExtensionHost() {
   if (!extensionHost) return;
 
   if (extensionHost.kill()) {
-    logger.log('[extension host] was killed');
+    logServiceInfo('killed extension host process');
   } else {
-    logger.error(
-      '[extension host] was not stopped! Investigate other .kill() options',
+    logServiceError(
+      'extension host process was not stopped! Investigate other .kill() options',
     );
   }
   extensionHost = undefined;
 }
-
-const formatExtensionHostLog = (message: string, tag = '') => {
-  const messageNoEndLine = message.trimEnd();
-  const openTag = `{eh${tag ? ' ' : ''}${tag}}`;
-  const closeTag = `{/eh${tag ? ' ' : ''}${tag}}`;
-  if (messageNoEndLine.includes('\n'))
-    // Multi-line
-    return `${openTag}\n${messageNoEndLine}\n${closeTag}`;
-  return `${openTag} ${messageNoEndLine} ${closeTag}`;
-};
 
 /**
  * Starts the extension host process if it isn't already running.
@@ -66,24 +72,19 @@ function startExtensionHost() {
       );
 
   if (!extensionHost.stderr || !extensionHost.stdout)
-    logger.error(
-      "[extension host] Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
+    logServiceError(
+      "Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
     );
-  else if (process.env.IN_VSCODE !== 'true') {
-    // When launched from VSCode, don't re-print the console stuff because it somehow shows it already
-    extensionHost.stderr.on('data', (data) =>
-      logger.error(formatExtensionHostLog(data.toString(), 'err')),
-    );
-    extensionHost.stdout.on('data', (data) =>
-      logger.log(formatExtensionHostLog(data.toString())),
-    );
+  else {
+    extensionHost.stderr.on('data', logProcessError);
+    extensionHost.stdout.on('data', logProcessInfo);
   }
 
   extensionHost.on('close', (code, signal) => {
     if (signal) {
-      logger.log(`[extension host 'close'] terminated with signal ${signal}`);
+      logServiceInfo(`['close' event] terminated with signal ${signal}`);
     } else {
-      logger.log(`[extension host 'close'] exited with code ${code}`);
+      logServiceInfo(`['close' event] exited with code ${code}`);
     }
     // TODO: listen for 'exit' event as well?
     // TODO: unsubscribe event listeners

@@ -1,8 +1,24 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import path from 'path';
-import logger from '@shared/util/logger';
+import logger, { formatLog } from '@shared/util/logger';
 
 let dotnet: ChildProcessWithoutNullStreams | undefined;
+
+// log functions for in the service but not in the spawned process
+function logServiceError(message: string) {
+  logger.error(formatLog(message, 'ddp-service', 'err'));
+}
+function logServiceInfo(message: string) {
+  logger.log(formatLog(message, 'ddp-service'));
+}
+
+// log functions for inside the data provider process
+function logProcessError(message: unknown) {
+  logger.error(formatLog(message?.toString() || '', 'ddp', 'err'));
+}
+function logProcessInfo(message: unknown) {
+  logger.log(formatLog(message?.toString() || '', 'ddp'));
+}
 
 /**
  * Hard kills the Dotnet Data Provider.
@@ -12,10 +28,10 @@ function killDotnetDataProvider() {
   if (!dotnet) return;
 
   if (dotnet.kill()) {
-    logger.log('[dotnet data provider] was killed');
+    logServiceInfo('killed dotnet data provider');
   } else {
-    logger.error(
-      '[dotnet data provider] was not stopped! Investigate other .kill() options',
+    logServiceError(
+      'dotnet data provider was not stopped! Investigate other .kill() options',
     );
   }
   dotnet = undefined;
@@ -51,19 +67,14 @@ function startDotnetDataProvider() {
 
   dotnet = spawn(command, args);
 
-  dotnet.stdout.on('data', (data) => {
-    logger.log(`[dotnet data provider] stdout: ${data}`);
-  });
-
-  dotnet.stderr.on('data', (data) => {
-    logger.error(`[dotnet data provider] stderr: ${data}`);
-  });
+  dotnet.stdout.on('data', logProcessInfo);
+  dotnet.stderr.on('data', logProcessError);
 
   dotnet.on('close', (code, signal) => {
     if (signal) {
-      logger.log(`[dotnet data provider] terminated with signal ${signal}`);
+      logServiceInfo(`['close' event] terminated with signal ${signal}`);
     } else {
-      logger.log(`[dotnet data provider] exited with code ${code}`);
+      logServiceInfo(`['close' event] exited with code ${code}`);
     }
     // TODO: listen for 'exit' event as well?
     // TODO: unsubscribe event listeners

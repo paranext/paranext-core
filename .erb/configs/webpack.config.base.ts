@@ -82,7 +82,8 @@ const configuration: webpack.Configuration = {
               resource.startsWith('@main') ||
               resource.includes('main/') ||
               resource.startsWith('@renderer') ||
-              resource.includes('renderer/');
+              (/renderer\//.test(resource) &&
+                !resource.includes('electron-log-preload'));
             break;
           default: // main
             exclude =
