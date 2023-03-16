@@ -6,9 +6,7 @@ import TestContext from '@renderer/context/papi-context/TestContext';
 function Hello() {
   return (
     <TestContext.Provider value="test">
-      <div>
-        <ParanextDockLayout />
-      </div>
+      <ParanextDockLayout />
     </TestContext.Provider>
   );
 }

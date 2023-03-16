@@ -3,10 +3,12 @@
  */
 
 import * as CommandService from '@shared/services/CommandService';
+import { papiExports } from '@shared/services/NetworkService';
 import * as PapiUtil from '@shared/util/PapiUtil';
 // We need the WebViewService here to include on the papi, but WebViewService passes papi into WebViews
 // eslint-disable-next-line import/no-cycle
 import * as WebViewService from '@shared/services/WebViewService';
+import { PEventEmitter } from '@shared/models/PEvent';
 import logger from '@shared/util/logger';
 import { isRenderer } from '@shared/util/InternalUtil';
 
@@ -22,6 +24,10 @@ const papiHooks = isRenderer()
   : {};
 
 export default {
+  // Classes
+  PEventEmitter,
+
+  // Services/modules
   commands: CommandService,
   util: PapiUtil,
   webViews: WebViewService,
@@ -30,5 +36,6 @@ export default {
     context: papiContext,
     hooks: papiHooks,
   },
+  network: papiExports,
   logger,
 };

@@ -100,11 +100,27 @@ internal sealed class PapiClient
         await SendMessage(new MessageRequest(_clientId, RequestTypes.RegisterRequest, requestId++,
             new dynamic[] {requestToHandle.ToString(), _clientId}));
 
-        Task<MessageResponse?> responseTask = ReceiveMessage<MessageResponse>();
-        MessageResponse? response = await responseTask;
-        if (responseTask.Exception != null)
+        Task<MessageResponse?>? responseTask = null;
+        MessageResponse? response = null;
+        do
         {
-            Console.Error.WriteLine("Error registering request: " + responseTask.Exception);
+            try
+            {
+                responseTask = ReceiveMessage<MessageResponse>();
+                response = await responseTask;
+            }
+            catch (Exception ex)
+            {
+                // TJ added this try/catch temporarily because receiving messages of the wrong type in ReceiveMessage was crashing the program.
+                // TODO: #61 pair up requests and responses on general ReceiveMessage instead of assuming the next message is the response to the current request
+                Console.WriteLine("Exception while handling response message: {0}", ex);
+            }
+        }
+        while (response == null);
+
+        if (responseTask == null || responseTask.Exception != null)
+        {
+            Console.Error.WriteLine("Error registering request: " + responseTask == null ? "" : responseTask!.Exception);
             return false;
         }
 
@@ -138,26 +154,35 @@ internal sealed class PapiClient
         // Handle any messages sent from the server
         do
         {
-            Console.WriteLine("Waiting for a request...");
-            Task<Message?> receiveTask = ReceiveMessage<Message>();
-            Message? message = await receiveTask;
-            if (receiveTask.Exception != null)
+            try
             {
-                Console.Error.WriteLine("Error getting message:\n" + receiveTask.Exception);
-                continue;
-            }
-
-            Console.WriteLine("Got request: " + message?.ToString());
-
-            if (message is MessageRequest request)
-            {
-                if (!requestFunctionMap.TryGetValue(request.RequestType, out RequestHandler? requestHandler))
+                Console.WriteLine("Waiting for a request...");
+                Task<Message?> receiveTask = ReceiveMessage<Message>();
+                Message? message = await receiveTask;
+                if (receiveTask.Exception != null)
                 {
-                    Console.Error.WriteLine("Unexpected request from server: " + request.RequestType);
+                    Console.Error.WriteLine("Error getting message:\n" + receiveTask.Exception);
                     continue;
                 }
 
-                await requestHandler(request.Contents, request.RequestType, request.RequestId, request.SenderId);
+                Console.WriteLine("Got request: " + message?.ToString());
+
+                if (message is MessageRequest request)
+                {
+                    if (!requestFunctionMap.TryGetValue(request.RequestType, out RequestHandler? requestHandler))
+                    {
+                        Console.Error.WriteLine("Unexpected request from server: " + request.RequestType);
+                        continue;
+                    }
+
+                    await requestHandler(request.Contents, request.RequestType, request.RequestId, request.SenderId);
+                }
+            }
+            catch (Exception ex)
+            {
+                // TJ added this try/catch temporarily because receiving messages of the wrong type in ReceiveMessage was crashing the program.
+                // TODO: Figure out why receiveTask.Exception doesn't seem to be working
+                Console.WriteLine("Exception while handling message: {0}", ex);
             }
         } while (Connected);
     }
