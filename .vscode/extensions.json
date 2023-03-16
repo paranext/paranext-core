@@ -1,3 +1,10 @@
 {
-  "recommendations": ["dbaeumer.vscode-eslint", "dzannotti.vscode-babel-coloring", "EditorConfig.EditorConfig", "ms-vscode-remote.vscode-remote-extensionpack", "streetsidesoftware.code-spell-checker"]
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "dzannotti.vscode-babel-coloring",
+    "EditorConfig.EditorConfig",
+    "mrmlnc.vscode-json5",
+    "ms-vscode-remote.vscode-remote-extensionpack",
+    "streetsidesoftware.code-spell-checker"
+  ]
 }

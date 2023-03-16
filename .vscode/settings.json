@@ -29,6 +29,7 @@
   },
 
   "cSpell.ignorePaths": [
+    "electron-builder.json5",
     "package-lock.json",
     "node_modules",
     "vscode-extension",
@@ -57,5 +58,5 @@
     "unsubscribers",
     "dockbox",
     "maximizable"
-  ],
+  ]
 }
