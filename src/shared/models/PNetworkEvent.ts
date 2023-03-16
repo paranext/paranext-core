@@ -25,8 +25,6 @@ class PNetworkEventEmitter<T> extends PEventEmitter<T> {
     private networkDisposer: () => void,
   ) {
     super();
-
-    this.networkSubscriber = networkSubscriber;
   }
 
   public override emit = (event: T) => {
