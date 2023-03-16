@@ -15,14 +15,15 @@ import {
 // We can assume we will have more utility functions at some point. This is not the only thing this module will do
 // eslint-disable-next-line import/prefer-default-export
 export function formatLog(message: string, serviceName: string, tag = '') {
-  const messageNoEndLine = message.trimEnd();
+  // Remove the new line at the end of every message coming from stdout from other processes
+  const messageTrimmed = message.trimEnd();
   const openTag = `[${serviceName}${tag ? ' ' : ''}${tag}]`;
-  if (messageNoEndLine.includes('\n')) {
+  if (messageTrimmed.includes('\n')) {
     const closeTag = `[/${serviceName}${tag ? ' ' : ''}${tag}]`;
     // Multi-line
-    return `\n${openTag}\n${messageNoEndLine}\n${closeTag}`;
+    return `\n${openTag}\n${messageTrimmed}\n${closeTag}`;
   }
-  return `${openTag} ${messageNoEndLine}`;
+  return `${openTag} ${messageTrimmed}`;
 }
 
 /**

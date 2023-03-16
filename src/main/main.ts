@@ -14,6 +14,7 @@ import {
   ipcMain,
   IpcMainInvokeEvent,
 } from 'electron';
+// Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
 import '@main/globalThis';
@@ -30,6 +31,7 @@ logger.log('Starting main');
 
 // #region ELECTRON SETUP
 
+// Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* class AppUpdater {
   constructor() {
     autoUpdater.logger = logger;
@@ -133,6 +135,7 @@ const createWindow = async () => {
 
   // Remove this if your app does not use auto updates
   // eslint-disable-next-line
+  // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
   // new AppUpdater();
 };
 

@@ -65,35 +65,39 @@ const configuration: webpack.Configuration = {
 
     new webpack.IgnorePlugin({
       checkResource(resource, context) {
-        // Don't include stuff from the main folder or @main... in renderer and renderer folder in main folder
+        // Don't include stuff from process folders in each others' packages.
+        // Ex: Don't include stuff from the main folder or @main... in renderer and renderer folder in main folder
+
+        const isInMain = (res: string) =>
+          res.startsWith('@main') || res.includes('main/');
+        const isInExtensionHost = (res: string) =>
+          res.startsWith('@extension-host') || res.includes('extension-host/');
+        const isInRenderer = (res: string) =>
+          res.startsWith('@renderer') ||
+          (res.includes('renderer/') && !res.includes('electron-log-preload'));
+        // Group of processes running in node: main, extension-host
+        const isInNode = (res: string) =>
+          res.startsWith('@node') || res.includes('node/');
+        // Group of processes running as network clients: renderer, extension-host
+        const isInClient = (res: string) =>
+          res.startsWith('@client') || res.includes('client/');
+
         let exclude = false;
         switch (processType) {
           case 'renderer':
             exclude =
-              resource.startsWith('@main') ||
-              resource.includes('main/') ||
-              resource.startsWith('@extension-host') ||
-              resource.includes('extension-host/') ||
-              resource.startsWith('@node') ||
-              resource.includes('node/');
+              isInMain(resource) ||
+              isInExtensionHost(resource) ||
+              isInNode(resource);
             break;
           case 'extension-host':
-            exclude =
-              resource.startsWith('@main') ||
-              resource.includes('main/') ||
-              resource.startsWith('@renderer') ||
-              (/renderer\//.test(resource) &&
-                !resource.includes('electron-log-preload'));
+            exclude = isInMain(resource) || isInRenderer(resource);
             break;
           default: // main
             exclude =
-              resource.startsWith('@renderer') ||
-              (/renderer\//.test(resource) &&
-                !resource.includes('electron-log-preload')) ||
-              resource.startsWith('@extension-host') ||
-              resource.includes('extension-host/') ||
-              resource.startsWith('@client') ||
-              resource.includes('client/');
+              isInRenderer(resource) ||
+              isInExtensionHost(resource) ||
+              isInClient(resource);
             break;
         }
 
