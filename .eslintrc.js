@@ -1,5 +1,6 @@
 module.exports = {
-  extends: 'erb',
+  extends: 'erb', // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
+  // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
   rules: {
     // #region ERB rules
 
@@ -13,8 +14,14 @@ module.exports = {
 
     // #endregion
 
-    // #region Our rules
+    // #region Paranext rules
 
+    'lines-between-class-members': 'off',
+    '@typescript-eslint/lines-between-class-members': [
+      'error',
+      'always',
+      { exceptAfterSingleLine: true, exceptAfterOverload: true },
+    ],
     '@typescript-eslint/no-explicit-any': 'error',
     '@typescript-eslint/no-non-null-assertion': 'error',
     'no-redeclare': 'off',

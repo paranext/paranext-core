@@ -1,0 +1,38 @@
+{
+  "version": "0.2",
+  "ignorePaths": [
+    "package-lock.json",
+    "node_modules",
+    "vscode-extension",
+    ".git/objects",
+    ".vscode",
+    ".vscode-insiders",
+    "package.json"
+  ],
+  "dictionaryDefinitions": [],
+  "dictionaries": [],
+  "words": [
+    "APPDATA",
+    "asyncs",
+    "dockbox",
+    "electronmon",
+    "endregion",
+    "guids",
+    "Hopkinson",
+    "localstorage",
+    "maximizable",
+    "nums",
+    "papi",
+    "Papis",
+    "paranext",
+    "Steenwyk",
+    "Unregistering",
+    "unregisters",
+    "unsub",
+    "unsubs",
+    "unsubscriber",
+    "unsubscribers"
+  ],
+  "ignoreWords": [],
+  "import": []
+}

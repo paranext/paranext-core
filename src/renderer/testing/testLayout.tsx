@@ -25,6 +25,7 @@ const testLayout: LayoutBase = {
           },
           {
             tabs: [
+              createTab({ type: 'hello' }),
               createTab({
                 type: 'tab',
                 data: { title: 'two', content: 'Content for tab two' },
@@ -38,7 +39,7 @@ const testLayout: LayoutBase = {
         ],
       },
       {
-        tabs: [createTab({ type: 'hello' }), createTab({ type: 'buttons' })],
+        tabs: [createTab({ type: 'buttons' })],
       },
     ],
   },
@@ -52,7 +53,7 @@ const testLayout: LayoutBase = {
             data: { title: 'Floating', content: 'Floating content!' },
           }),
         ],
-        x: 60,
+        x: 30,
         y: 60,
         w: 320,
         h: 300,

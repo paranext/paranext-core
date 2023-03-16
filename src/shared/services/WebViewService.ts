@@ -7,7 +7,6 @@ import { isRenderer } from '@shared/util/InternalUtil';
 import {
   aggregateUnsubscriberAsyncs,
   CommandHandler,
-  Unsubscriber,
 } from '@shared/util/PapiUtil';
 import * as CommandService from '@shared/services/CommandService';
 import { newGuid } from '@shared/util/Util';
@@ -16,6 +15,12 @@ import { newGuid } from '@shared/util/Util';
 import papi from '@shared/services/papi';
 import React, { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createNetworkEventEmitter } from './NetworkService';
+
+/** Event emitted when webViews are added */
+export type AddWebViewEvent = {
+  webView: WebViewProps;
+};
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -23,30 +28,12 @@ let isInitialized = false;
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
 
-/** functions to run when adding a WebView */
-const addWebViewCallbacks: ((webView: WebViewProps) => void)[] = [];
-
-/**
- * Subscribe to run an event handler when a WebView is added
- * @param eventHandler function that takes a WebView that runs when a WebView is added
- * @returns unsubscriber that stops the function from running when a WebView is added
- */
-export const subscribeAddWebView = (
-  eventHandler: (webView: WebViewProps) => void,
-): Unsubscriber => {
-  if (!isRenderer()) throw new Error('Events are not yet implemented!');
-  if (!eventHandler || typeof eventHandler !== 'function')
-    throw new Error(`eventHandler must be a function!`);
-  addWebViewCallbacks.push(eventHandler);
-  return () => {
-    const eventHandlerIndex = addWebViewCallbacks.indexOf(eventHandler);
-    if (eventHandlerIndex < 0) return false; // Did not find this callback
-
-    // Remove the callback
-    addWebViewCallbacks.splice(eventHandlerIndex, 1);
-    return true;
-  };
-};
+/** Emitter for when a webview is added */
+const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
+  'webView:onDidAddWebView',
+);
+/** Event that emits with webView info when a webView is added */
+export const onDidAddWebView = onDidAddWebViewEmitter.event;
 
 // #region Renderer-only stuff
 
@@ -104,7 +91,8 @@ export const addWebView = async (webView: WebViewProps) => {
   const imports = `var papi = window.parent.getWebViewPapi('${webViewId}');var React = window.parent.React;var createRoot = window.parent.createRoot;`;
 
   let updatedWebView: WebViewProps;
-  if (webView.hasReact) {
+  // hasReact is true by default. Extensions can specify false
+  if (webView.hasReact === undefined || webView.hasReact) {
     // Thanks to user585776 at https://stackoverflow.com/a/67359410 for temporary solution of running code from a string using data url
     // TODO: Fix so we are serving all webview content from the backend or something
     // TODO: test to see if exceptions bring Paranext down or if they still occur within the iframe
@@ -139,7 +127,7 @@ export const addWebView = async (webView: WebViewProps) => {
   }
 
   // Inform web view consumers we added a web view
-  addWebViewCallbacks.forEach((callback) => callback(updatedWebView));
+  onDidAddWebViewEmitter.emit({ webView: updatedWebView });
 
   // Resolve this promise
   return undefined;
