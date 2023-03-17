@@ -2,9 +2,47 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <!--
+      Content-Security-Policy controls what resources the renderer can access.
+
+      DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+
+      default-src 'none' so things can't happen unless we allow them
+      script-src-elem so in-line attribute scripts like event handlers don't run
+        'self' so scripts can be loaded from us
+      style-src allows them to use style/link tags and style attributes on tags
+        'self' so styles can be loaded from us
+        'unsafe-inline' because that's how our styles are currently loaded in for some reason
+          TODO: PLEASE FIX THIS
+      frame-src 'self' so frame contents can be loaded from us
+      worker-src 'self' so web workers can be loaded from us
+      manifest-src 'self' so we can load our manifest
+        TODO: What exactly does this do?
+      connect-src only communicate over the network as we allow
+        'self' communicate with us
+        https: communicate with secure networks
+        ws: communicate with webSockets
+          TODO: try to template the specific url from ClientNetworkConnector in
+      img-src 'self' and https: so they can load images from us and over secure connections
+      media-src 'self' and https: so they can load audio, video, etc from us and over secure connections
+      font-src 'self' and https: so they can load fonts from us and over secure connections
+      form-action 'self' lets the form submit to us
+        TODO: not sure if this is needed. If we can attach handlers to forms, we might be able to remove this
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="script-src 'self' 'unsafe-inline' data:"
+      content="
+        default-src 'none';
+        script-src-elem 'self';
+        style-src 'self' 'unsafe-inline';
+        frame-src 'self';
+        worker-src 'self';
+        manifest-src 'self';
+        connect-src 'self' https: ws:;
+        img-src 'self' https:;
+        media-src 'self' https:;
+        font-src 'self' https:;
+        form-action 'self';"
     />
     <title>Hello Paranext!</title>
   </head>
