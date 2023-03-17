@@ -9,7 +9,7 @@ import {
   CommandHandler,
 } from '@shared/util/PapiUtil';
 import * as CommandService from '@shared/services/CommandService';
-import { newGuid } from '@shared/util/Util';
+import { newGuid, newNonce } from '@shared/util/Util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi';
@@ -108,35 +108,51 @@ export const addWebView = async (webView: WebViewContents) => {
   delete window.fetch;
   delete window.XMLHttpRequest;
   delete window.WebSocket;
-  delete window.Image;
   `;
+
+  /** Nonce used to allow scripts and styles to run */
+  const srcNonce = newNonce();
 
   // Build the contents of the iframe
   let webViewContents: string;
+  /** CSP for allowing only certain scripts and styles */
+  let specificSrcPolicy: string;
   switch (contentType) {
     case WebViewContentType.HTML:
       // Add wrapping to turn a plain string into an iframe
       webViewContents = webView.contents.includes('<html')
         ? webView.contents
         : `<html><head></head><body>${webView.contents}</body></html>`;
+      // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
+      specificSrcPolicy = "'unsafe-inline'";
       break;
     default: {
       const reactWebView = webView as WebViewContentsReact;
+
       // Add the component as a script
       webViewContents = `
         <html>
           <head>
+            ${
+              reactWebView.styles
+                ? `<style nonce="${srcNonce}">
+              ${reactWebView.styles}
+            </style>`
+                : ''
+            }
           </head>
           <body>
             <div id="root">
             </div>
-            <script>
+            <script nonce="${srcNonce}">
               ${reactWebView.contents}
 
               function initializeReact() {
                 const container = document.getElementById('root');
                 const root = createRoot(container);
-                root.render(React.createElement(${reactWebView.componentName}, null));
+                root.render(React.createElement(${
+                  reactWebView.componentName
+                }, null));
               }
 
               if (document.readyState === 'loading')
@@ -145,21 +161,60 @@ export const addWebView = async (webView: WebViewContents) => {
             </script>
           </body>
         </html>`;
+      specificSrcPolicy = `'nonce-${srcNonce}'`;
       break;
     }
   }
+
+  /**
+   * Content security policy header for the webview - controls what resources scripts and other things can access.
+   *
+   * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+   */
+  // default-src 'none' so things can't happen unless we allow them
+  // script-src-elem so in-line attribute scripts like event handlers don't run
+  //    'self' so scripts can be loaded from us
+  //    ${specificSrcPolicy} so we can load the specific styles needed from the iframe
+  // style-src allows them to use style/link tags and style attributes on tags
+  //    'self' so styles can be loaded from us
+  //    ${specificSrcPolicy} so we can load the specific styles needed from the iframe
+  // connect-src 'self' so the iframe can only communicate over the internet with us and not outside the iframe
+  //    Note: they can still use things that are imported to their script via the imports string above.
+  //    Objects passed through from the parent window still have full internet access. We must be very careful
+  //    to control their access to the parent windows's stuff like papi
+  // img-src 'self' so they can load images from us
+  // media-src 'self' so they can load audio, video, etc from us
+  // font-src 'self' so they can load fonts from us
+  // form-action 'self' lets the form submit to us
+  //    TODO: not sure if this is needed. If we can attach handlers to forms, we can probably remove this
+  // navigate-to 'none' prevents them from redirecting this iframe somewhere else
+  const contentSecurityPolicy = `<meta http-equiv="Content-Security-Policy"
+    content="
+      default-src 'none';
+      script-src-elem 'self' ${specificSrcPolicy};
+      style-src 'self' ${specificSrcPolicy};
+      connect-src 'self';
+      img-src 'self';
+      media-src 'self';
+      font-src 'self';
+      form-action 'self';
+      navigate-to 'none';
+    ">`;
 
   // Add a script at the start of the head to give access to papi
   const headStart = webViewContents.indexOf('<head');
   const headEnd = webViewContents.indexOf('>', headStart);
 
   // Inject the import scripts into the html
-  webViewContents = `${webViewContents.substring(0, headEnd + 1)}<script>
+  webViewContents = `${webViewContents.substring(0, headEnd + 1)}
+    ${contentSecurityPolicy}
+    <script nonce="${srcNonce}">
     ${imports}
     </script>${webViewContents.substring(headEnd + 1)}`;
 
   const updatedWebView: WebViewProps = {
     ...webView,
+    contentType,
     contents: webViewContents,
   };
   // Inform web view consumers we added a web view
