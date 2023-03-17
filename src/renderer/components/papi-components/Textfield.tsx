@@ -1,8 +1,7 @@
-import { PropsWithChildren } from 'react';
 import { TextField as MuiTextfield } from '@mui/material';
 import classes from './textfield.module.css';
 
-type TextfieldProps = PropsWithChildren<{
+type TextfieldProps = {
   /**
    * The variant to use.
    * @default 'outlined'
@@ -56,7 +55,7 @@ type TextfieldProps = PropsWithChildren<{
    * Triggers when textfield loses focus
    */
   onBlur?: () => void;
-}>;
+};
 
 function Textfield({
   variant = 'outlined',
@@ -71,7 +70,6 @@ function Textfield({
   onChange,
   onFocus,
   onBlur,
-  children,
 }: TextfieldProps) {
   const errorClass = error ? 'error' : '';
   const fullWidthClass = fullWidth ? 'full-width' : '';
@@ -117,9 +115,7 @@ function Textfield({
           onBlur();
         }
       }}
-    >
-      {children}
-    </MuiTextfield>
+    />
   );
 }
 
