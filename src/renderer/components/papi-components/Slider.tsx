@@ -55,11 +55,11 @@ type ButtonProps = {
    */
   className?: string[];
   /**
-   * Optional click handler
+   * Click handler
    */
   onChange?: () => void;
   /**
-   * Optional click release handler
+   * Click release handler
    */
   onChangeCommitted?: () => void;
 };

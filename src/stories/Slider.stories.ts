@@ -1,18 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import Slider from '../renderer/components/papi-components/Slider';
 
-// More on how to set up stories at: https://storybook.js.org/docs/react/writing-stories/introduction#default-export
 const meta: Meta<typeof Slider> = {
   title: 'MUI/Slider',
   component: Slider,
-  // This component will have an automatically generated Autodocs entry: https://storybook.js.org/docs/7.0/react/writing-docs/docs-page
   tags: ['autodocs'],
-  // More on argTypes: https://storybook.js.org/docs/react/api/argtypes
   argTypes: {
     disabled: { control: 'boolean' },
     orientation: {
-      options: [0, 1], // iterator
-      mapping: ['horizontal', 'vertical'], // values
+      options: [0, 1],
+      mapping: ['horizontal', 'vertical'],
       control: {
         type: 'select',
         labels: ['Horizontal', 'Vertical'],
@@ -24,22 +21,21 @@ const meta: Meta<typeof Slider> = {
     marks: { control: 'boolean' },
     defaultValue: { control: 'number' },
     valueLabelDisplay: {
-      options: [0, 1, 2], // iterator
-      mapping: ['on', 'auto', 'off'], // values
+      options: [0, 1, 2],
+      mapping: ['on', 'auto', 'off'],
       control: {
         type: 'select',
         labels: ['On', 'Auto', 'Off'],
       },
     },
+    className: { control: 'text' },
   },
 };
 
 export default meta;
 type Story = StoryObj<typeof Slider>;
 
-// More on component templates: https://storybook.js.org/docs/react/writing-stories/introduction#using-args
-export const Basic: Story = {
-  // More on args: https://storybook.js.org/docs/react/writing-stories/args
+export const Default: Story = {
   args: {},
 };
 
