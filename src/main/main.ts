@@ -252,17 +252,38 @@ setTimeout(async () => {
 
 // #endregion
 
-networkObjectService.set('test-main', {
-  doStuff: async (stuff: string) => {
-    const result = `test-main did stuff: ${stuff}!`;
-    logger.log(result);
-    return result;
-  },
-  getVerse: async () => {
-    logger.log(
-      `test-main got verse: ${(
-        await (await fetch('https://bible-api.com/matthew+24:14')).json()
-      ).text.replace(/\\n/g, '')}`,
-    );
-  },
-});
+// #region network object test
+
+(async () => {
+  const unsubTestMain = await networkObjectService.set('test-main', {
+    doStuff: async (stuff: string) => {
+      const result = `test-main did stuff: ${stuff}!`;
+      logger.log(result);
+      return result;
+    },
+  });
+
+  // TODO: Was whatever was passed into set modified? I don't like having to get this over again. Maybe we should return something else from set or modify the object in place?
+  const testMain = await networkObjectService.get('test-main');
+  testMain?.onDidDispose(() => logger.log('Disposed of test-main!'));
+
+  setTimeout(async () => {
+    await unsubTestMain();
+
+    setTimeout(async () => {
+      let testExtensionHost = await networkObjectService.get<{
+        getVerse: () => Promise<string>;
+      }>('test-extension-host');
+      testExtensionHost?.onDidDispose(() => {
+        logger.log('Disposed of test-extension-host!');
+        testExtensionHost = undefined;
+      });
+
+      logger.log(
+        `get verse: ${await Promise.resolve(testExtensionHost?.getVerse())}`,
+      );
+    }, 1000);
+  }, 10000);
+})();
+
+// #endregion

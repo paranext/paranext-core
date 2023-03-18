@@ -67,15 +67,6 @@ const onDidDisposeNetworkObject = onDidDisposeNetworkObjectEmitter.event;
 onDidDisposeNetworkObject((id: string) => {
   const networkObjectRegistration = networkObjectRegistrations.get(id);
 
-  // TODO: remove this debug log
-  logger.log(
-    `${networkObjectRegistration?.registrationType} Network object ${id} ${
-      networkObjectRegistrations.delete(id)
-        ? 'disposed'
-        : 'did not exist to be disposed'
-    }`,
-  );
-
   if (networkObjectRegistration) {
     // Alert users of this specific network object that it was disposed
     networkObjectRegistration.onDidDisposeEmitter.emit();
