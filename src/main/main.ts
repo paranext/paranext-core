@@ -17,8 +17,9 @@ import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
 import { resolveHtmlPath } from '@node/util/util';
-import MenuBuilder from './menu';
-import extensionHostService from './services/extension-host.service';
+import MenuBuilder from '@main/menu';
+import extensionHostService from '@main/services/extension-host.service';
+import networkObjectService from '@shared/services/NetworkObjectService';
 
 logger.log('Starting main');
 
@@ -250,3 +251,18 @@ setTimeout(async () => {
 }, 5000);
 
 // #endregion
+
+networkObjectService.set('test-main', {
+  doStuff: async (stuff: string) => {
+    const result = `test-main did stuff: ${stuff}!`;
+    logger.log(result);
+    return result;
+  },
+  getVerse: async () => {
+    logger.log(
+      `test-main got verse: ${(
+        await (await fetch('https://bible-api.com/matthew+24:14')).json()
+      ).text.replace(/\\n/g, '')}`,
+    );
+  },
+});

@@ -1,4 +1,5 @@
-import { PEventEmitter, PEventHandler } from './PEvent';
+import { PEventHandler } from '@shared/util/PapiUtil';
+import PEventEmitter from '@shared/util/PEvent';
 
 /**
  * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted.

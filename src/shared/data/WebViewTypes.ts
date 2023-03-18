@@ -51,7 +51,7 @@ export enum WebViewContentType {
 }
 
 /** Base WebView properties that all WebViews share */
-type WebViewContentsBase = { contents: string, title?: string };
+type WebViewContentsBase = { contents: string; title?: string };
 
 /** WebView representation using React */
 export type WebViewContentsReact = WebViewContentsBase & {

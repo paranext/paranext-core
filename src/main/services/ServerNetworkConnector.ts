@@ -23,7 +23,7 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
 import { newGuid } from '@shared/util/Util';
-import { PEventEmitter } from '@shared/util/PEvent';
+import PEventEmitter from '@shared/util/PEvent';
 
 // #region local variables
 

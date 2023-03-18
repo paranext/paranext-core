@@ -5,6 +5,7 @@ import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
 import * as ExtensionService from '@extension-host/services/ExtensionService';
 import logger from '@shared/util/logger';
+import networkObjectService from '@shared/services/NetworkObjectService';
 
 // #region Test logs
 
@@ -57,3 +58,12 @@ setTimeout(
 );
 
 // #endregion
+
+(async () => {
+  const testMain = await networkObjectService.get<{
+    doStuff: (stuff: string) => Promise<string>;
+    getVerse: () => Promise<void>;
+  }>('test-main');
+
+  logger.log(await Promise.resolve(testMain?.doStuff('extension host things')));
+})();

@@ -63,7 +63,7 @@ const getReactComponent = (name, functionModifier = '') =>
     );
 
   ${functionModifier} function HelloWorld() {
-    const test = useContext(TestContext) || 'Context didnt work!! :(';
+    const test = useContext(TestContext) || "Context didn't work!! :(";
 
     const [myState, setMyState] = useState(0);
 

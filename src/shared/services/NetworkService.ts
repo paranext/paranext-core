@@ -16,6 +16,7 @@ import {
   ComplexRequest,
   ComplexResponse,
   createSafeRegisterFn,
+  PEvent,
   UnsubPromiseAsync,
   UnsubscriberAsync,
 } from '@shared/util/PapiUtil';
@@ -24,7 +25,7 @@ import * as ConnectionService from '@shared/services/ConnectionService';
 import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
 import logger from '@shared/util/logger';
 import PNetworkEventEmitter from '@shared/util/PNetworkEvent';
-import { PEvent, PEventEmitter } from '@shared/util/PEvent';
+import PEventEmitter from '@shared/util/PEvent';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;

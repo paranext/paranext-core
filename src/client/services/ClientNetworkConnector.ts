@@ -22,7 +22,7 @@ import {
 } from '@shared/data/NetworkConnectorTypes';
 import { getErrorMessage } from '@shared/util/Util';
 import logger from '@shared/util/logger';
-import { PEventEmitter } from '@shared/util/PEvent';
+import PEventEmitter from '@shared/util/PEvent';
 import { createWebSocket } from '@client/services/WebSocketFactory';
 import { IWebSocket } from '@client/services/IWebSocket';
 

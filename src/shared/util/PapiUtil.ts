@@ -126,6 +126,16 @@ export const createSafeRegisterFn = <TParam extends Array<unknown>, TReturn>(
 
 // #endregion
 
+/** Callback function that accepts an event and should run when an event is emitted */
+export type PEventHandler<T> = (event: T) => void;
+
+/**
+ * Function that subscribes the provided callback to run when this event is emitted.
+ * @param callback function to run with the event when it is emitted
+ * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+ */
+export type PEvent<T> = (callback: PEventHandler<T>) => Unsubscriber;
+
 /**
  * Type of object passed to a complex request handler that provides information about the request.
  * This type is used as the public-facing interface for requests
@@ -181,8 +191,34 @@ export type CommandHandler<
   TReturn = any,
 > = (...args: TParam) => Promise<TReturn>;
 
-/** Prefix on requests that indicates that the request is a command */
-export const CATEGORY_COMMAND = 'command';
+/**
+ * Object that is able to be shared on the network.
+ * Shared functions must be called asynchronously on other processes whether
+ * or not they are asynchronous, so it is best to make them all asynchronous.
+ * All shared functions' arguments and returns must be serializable in order
+ * to be called across processes.
+ *
+ * WARNING: If the object has an 'onDidDispose' property, it will be overwritten.
+ * See NetworkObject type for more information.
+ */
+export type NetworkableObject = Record<
+  string,
+  // Need to be able to have any args because the only thing we can control here is the return being async
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (...args: any) => Promise<unknown>
+>;
+
+/**
+ * Object shared on the network. Created by modifying an object.
+ *
+ * WARNING: If the object has an 'onDidDispose' property, it will be overwritten.
+ */
+// TODO: Because NetworkableObject is a record, its type is overwriting
+// onDidDispose and causing problems. Figure out how to type this better
+export type NetworkObject<T extends NetworkableObject = NetworkableObject> = {
+  /** Event that emits when this network object is being disposed */
+  onDidDispose: PEvent<void>;
+} & T;
 
 /** Information about a request that tells us what to do with it */
 export type RequestType = {
@@ -195,7 +231,7 @@ export type RequestType = {
 /**
  * Create a request message requestType string from a category and a directive
  * @param category the general category of request
- * @param directive specific idenitifer for this type of request
+ * @param directive specific identifier for this type of request
  * @returns full requestType for use in network calls
  */
 export const serializeRequestType = (

@@ -14,10 +14,13 @@
   "words": [
     "APPDATA",
     "asyncs",
+    "dockbox",
     "electronmon",
     "endregion",
     "Hopkinson",
     "localstorage",
+    "maximizable",
+    "Networkable",
     "nums",
     "papi",
     "Papis",
@@ -28,9 +31,7 @@
     "unsub",
     "unsubs",
     "unsubscriber",
-    "unsubscribers",
-    "dockbox",
-    "maximizable"
+    "unsubscribers"
   ],
   "ignoreWords": [],
   "import": []
