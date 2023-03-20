@@ -1,7 +1,7 @@
 import { Slider as MuiSlider } from '@mui/material';
 import classes from './slider.module.css';
 
-type ButtonProps = {
+type SliderProps = {
   /**
    * If `true`, the component is disabled.
    * @default false
@@ -76,7 +76,7 @@ function Slider({
   className,
   onChange,
   onChangeCommitted,
-}: ButtonProps) {
+}: SliderProps) {
   const orientationClass = `${
     orientation === 'vertical' ? classes.vertical : ''
   }`;

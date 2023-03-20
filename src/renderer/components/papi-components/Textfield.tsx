@@ -6,7 +6,7 @@ type TextfieldProps = {
    * The variant to use.
    * @default 'outlined'
    */
-  variant: 'outlined' | 'filled';
+  variant?: 'outlined' | 'filled';
   /**
    * If `true`, the component is disabled.
    * @default false
@@ -44,7 +44,7 @@ type TextfieldProps = {
    */
   className?: string[];
   /**
-   * Triggers when content of textfield is changed by user
+   * Triggers when content of textfield is changed
    */
   onChange?: () => void;
   /**
