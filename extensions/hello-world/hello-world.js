@@ -22,18 +22,23 @@ const https = require('https');
 logger.log(https.message ? https.message : `Successfully imported https!`);
 
 try {
+  // This is just for testing and will throw an exception
   fetch('test');
 } catch (e) {
   logger.log(`Hello World: Error on fetch! ${e}`);
 }
 
 try {
+  // This is just for testing and will throw an exception
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const xhr = new XMLHttpRequest();
 } catch (e) {
   logger.log(`Hello World: Error on XMLHttpRequest! ${e}`);
 }
 
 try {
+  // This is just for testing and will throw an exception
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const webSocket = new WebSocket();
 } catch (e) {
   logger.log(`Hello World: Error on WebSocket! ${e}`);
