@@ -7,43 +7,6 @@ const { logger } = papi;
 
 logger.log('Hello world is importing!');
 
-// This will be blocked
-const fs = require('fs');
-
-logger.log(
-  fs.message
-    ? fs.message
-    : `Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`,
-);
-
-// This will be blocked and will suggest the papi.fetch api
-const https = require('https');
-
-logger.log(https.message ? https.message : `Successfully imported https!`);
-
-try {
-  // This is just for testing and will throw an exception
-  fetch('test');
-} catch (e) {
-  logger.log(`Hello World: Error on fetch! ${e}`);
-}
-
-try {
-  // This is just for testing and will throw an exception
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const xhr = new XMLHttpRequest();
-} catch (e) {
-  logger.log(`Hello World: Error on XMLHttpRequest! ${e}`);
-}
-
-try {
-  // This is just for testing and will throw an exception
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const webSocket = new WebSocket();
-} catch (e) {
-  logger.log(`Hello World: Error on WebSocket! ${e}`);
-}
-
 const unsubscribers = [];
 
 /** Gets the code to make the Hello World React component. Provide a name to use to identify this component. Provide a string to modify the 'function HelloWorld()' line */
