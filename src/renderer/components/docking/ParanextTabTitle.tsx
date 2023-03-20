@@ -5,7 +5,7 @@ import logger from '@shared/util/logger';
  * Custom tab title for all tabs in Paranext
  * @param text The text to show on the tab title
  */
-const ParanextTabTitle = ({ text }: { text: string }) => {
+function ParanextTabTitle({ text }: { text: string }) {
   const toggleDropdown = () => {
     logger.log('Pretend a menu was shown!');
   };
@@ -21,6 +21,6 @@ const ParanextTabTitle = ({ text }: { text: string }) => {
       <span>{text}</span>
     </div>
   );
-};
+}
 
 export default ParanextTabTitle;

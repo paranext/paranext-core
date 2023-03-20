@@ -7,8 +7,15 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
-import { autoUpdater } from 'electron-updater';
+import {
+  app,
+  BrowserWindow,
+  shell,
+  ipcMain,
+  IpcMainInvokeEvent,
+} from 'electron';
+// Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
+/* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
 import '@main/globalThis';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
@@ -24,12 +31,13 @@ logger.log('Starting main');
 
 // #region ELECTRON SETUP
 
-class AppUpdater {
+// Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
+/* class AppUpdater {
   constructor() {
     autoUpdater.logger = logger;
     autoUpdater.checkForUpdatesAndNotify();
   }
-}
+} */
 
 // Keep a global reference of the window object. If you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -127,7 +135,8 @@ const createWindow = async () => {
 
   // Remove this if your app does not use auto updates
   // eslint-disable-next-line
-  new AppUpdater();
+  // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
+  // new AppUpdater();
 };
 
 app.on('window-all-closed', () => {
@@ -154,7 +163,7 @@ app.on('will-quit', () => {
 /** Map from ipc channel to handler function. Use with ipcRenderer.invoke */
 const ipcHandlers: {
   [ipcChannel: string]: (
-    event: Electron.IpcMainInvokeEvent,
+    event: IpcMainInvokeEvent,
     // We don't know the exact parameter types since ipc handlers can be anything
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...args: any[]
@@ -215,8 +224,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
     NetworkService.registerRequestHandler(
       ipcHandle,
-      async (...args: unknown[]) =>
-        handler({} as Electron.IpcMainInvokeEvent, ...args),
+      async (...args: unknown[]) => handler({} as IpcMainInvokeEvent, ...args),
     );
   });
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {

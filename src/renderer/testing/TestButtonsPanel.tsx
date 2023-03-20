@@ -112,7 +112,7 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
   }
 };
 
-const TestButtonsPanel = () => {
+function TestButtonsPanel() {
   const [promiseReturn, setPromiseReturn] = useState('Click a button.');
   const updatePromiseReturn = useCallback(
     (state: unknown) =>
@@ -124,7 +124,9 @@ const TestButtonsPanel = () => {
 
   const [resourcesPath] = usePromise(
     useCallback(async () => {
-      await new Promise<void>((resolve) => setTimeout(() => resolve(), 5000));
+      await new Promise<void>((resolve) => {
+        setTimeout(() => resolve(), 5000);
+      });
       return getResourcesPath();
     }, []),
     'retrieving',
@@ -392,7 +394,7 @@ const TestButtonsPanel = () => {
       ))}
     </div>
   );
-};
+}
 
 const createButtonsPanel = (): TabInfo => {
   return {

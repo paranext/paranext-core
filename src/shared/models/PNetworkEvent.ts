@@ -13,18 +13,18 @@ import { PEventEmitter, PEventHandler } from './PEvent';
  * WARNING: You cannot emit events with complex types on the network.
  */
 class PNetworkEventEmitter<T> extends PEventEmitter<T> {
-  /** Callback that sends the event to other processes on the network when it is emitted */
-  private networkSubscriber?: PEventHandler<T>;
-
   /**
    * Creates a NetworkEventEmitter
-   * @param type unique type that identifies this event. Must be the same across processes
    * @param networkSubscriber callback that accepts the event and emits it to other processes
+   * @param networkDisposer callback that unlinks this emitter from the network
    */
-  constructor(networkSubscriber: PEventHandler<T>) {
+  constructor(
+    /** Callback that sends the event to other processes on the network when it is emitted */
+    private networkSubscriber: PEventHandler<T>,
+    /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
+    private networkDisposer: () => void,
+  ) {
     super();
-
-    this.networkSubscriber = networkSubscriber;
   }
 
   public override emit = (event: T) => {
@@ -45,9 +45,10 @@ class PNetworkEventEmitter<T> extends PEventEmitter<T> {
   }
 
   public override dispose = () => {
-    // TODO: Do we need to set networkSubscriber to undefined? Had to remove readonly from it to do this
-    this.networkSubscriber = undefined;
     super.disposeFn();
+    // TODO: Do we need to set networkSubscriber to undefined? Had to remove readonly from it to do this
+    this.networkSubscriber = undefined as unknown as PEventHandler<T>;
+    this.networkDisposer();
   };
 }
 

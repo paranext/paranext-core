@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
 import { ProcessType } from '@shared/globalThis';
-import { PEventEmitter } from '@shared/util/PEvent';
+import { PEventEmitter } from '@shared/models/PEvent';
 import App from '../renderer/App';
 
 // #region globalThis setup
@@ -37,7 +37,7 @@ jest.mock('@renderer/hooks/papi-hooks/useEvent', () => ({
 }));
 jest.mock('@renderer/components/docking/ParanextDockLayout', () => ({
   __esModule: true,
-  default: /** ParanextDockLayout Mock */ () => <></>,
+  default: /** ParanextDockLayout Mock */ () => undefined,
 }));
 
 describe('App', () => {

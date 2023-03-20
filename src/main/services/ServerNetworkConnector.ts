@@ -3,11 +3,13 @@ import {
   CLIENT_ID_SERVER,
   ConnectionStatus,
   InternalEvent,
+  InternalNetworkEventHandler,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
   NetworkConnectorEventHandlers,
   NetworkConnectorInfo,
+  RequestRouter,
 } from '@shared/data/InternalConnectionTypes';
 import INetworkConnector from '@shared/services/INetworkConnector';
 import logger from '@shared/util/logger';
@@ -23,7 +25,7 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
 import { newGuid } from '@shared/util/Util';
-import { PEventEmitter } from '@shared/util/PEvent';
+import { PEventEmitter } from '@shared/models/PEvent';
 
 // #region local variables
 
@@ -100,15 +102,12 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * Function to call when we are sending a request.
    * Returns a clientId to which to send the request based on the requestType
    */
-  private requestRouter?: (requestType: string) => number;
+  private requestRouter?: RequestRouter;
   /**
    * Function to call when we receive an event.
    * Handles events from connections and emits the event locally
    */
-  private localEventHandler?: <T>(
-    eventType: string,
-    incomingEvent: InternalEvent<T>,
-  ) => void;
+  private localEventHandler?: InternalNetworkEventHandler;
   /**
    * Functions to run when network connector events occur like when clients are disconnected
    */
@@ -125,11 +124,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   connect = async (
     localRequestHandler: InternalRequestHandler,
-    requestRouter: (requestType: string) => number,
-    localEventHandler: <T>(
-      eventType: string,
-      incomingEvent: InternalEvent<T>,
-    ) => void,
+    requestRouter: RequestRouter,
+    localEventHandler: InternalNetworkEventHandler,
     networkConnectorEventHandlers: NetworkConnectorEventHandlers,
   ) => {
     // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
@@ -418,7 +414,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
       connected: false,
     });
 
-    // Send initclient to let the client know its connectorInfo
+    // Send initClient to let the client know its connectorInfo
     this.sendMessage(
       {
         type: MessageType.InitClient,
@@ -452,7 +448,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
   };
 
   /**
-   * Function that handles weboscket messages of type ClientConnect.
+   * Function that handles webSocket messages of type ClientConnect.
    * Mark the connection fully connected and notify that a client connected or reconnected
    * @param clientConnect message from the client about the connection
    * @param connectorId clientId of the client who is sending this ClientConnect message

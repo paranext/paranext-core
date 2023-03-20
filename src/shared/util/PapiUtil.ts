@@ -195,7 +195,7 @@ export type RequestType = {
 /**
  * Create a request message requestType string from a category and a directive
  * @param category the general category of request
- * @param directive specific idenitifer for this type of request
+ * @param directive specific identifier for this type of request
  * @returns full requestType for use in network calls
  */
 export const serializeRequestType = (

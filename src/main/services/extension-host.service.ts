@@ -2,16 +2,29 @@
  * Service that runs the extension-host process from the main file
  */
 
-import logger from '@shared/util/logger';
+import logger, { formatLog } from '@shared/util/logger';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
 import { Readable } from 'stream';
 
+/** Pretty name for the process this service manages. Used in logs */
+const EXTENSION_HOST_NAME = 'extension host';
+
 let extensionHost:
   | ChildProcess
   | ChildProcessByStdio<null, Readable, Readable>
   | undefined;
+
+// log functions for inside the extension host process
+function logProcessError(message: unknown) {
+  logger.error(
+    formatLog(message?.toString() || '', EXTENSION_HOST_NAME, 'error'),
+  );
+}
+function logProcessInfo(message: unknown) {
+  logger.log(formatLog(message?.toString() || '', EXTENSION_HOST_NAME));
+}
 
 /**
  * Hard kills the extension host process.
@@ -21,24 +34,14 @@ function killExtensionHost() {
   if (!extensionHost) return;
 
   if (extensionHost.kill()) {
-    logger.log('[extension host] was killed');
+    logger.info('killed extension host process');
   } else {
     logger.error(
-      '[extension host] was not stopped! Investigate other .kill() options',
+      'extension host process was not stopped! Investigate other .kill() options',
     );
   }
   extensionHost = undefined;
 }
-
-const formatExtensionHostLog = (message: string, tag = '') => {
-  const messageNoEndLine = message.trimEnd();
-  const openTag = `{eh${tag ? ' ' : ''}${tag}}`;
-  const closeTag = `{/eh${tag ? ' ' : ''}${tag}}`;
-  if (messageNoEndLine.includes('\n'))
-    // Multi-line
-    return `${openTag}\n${messageNoEndLine}\n${closeTag}`;
-  return `${openTag} ${messageNoEndLine} ${closeTag}`;
-};
 
 /**
  * Starts the extension host process if it isn't already running.
@@ -67,23 +70,22 @@ function startExtensionHost() {
 
   if (!extensionHost.stderr || !extensionHost.stdout)
     logger.error(
-      "[extension host] Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
+      "Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
     );
-  else if (process.env.IN_VSCODE !== 'true') {
-    // When launched from VSCode, don't re-print the console stuff because it somehow shows it already
-    extensionHost.stderr.on('data', (data) =>
-      logger.error(formatExtensionHostLog(data.toString(), 'err')),
-    );
-    extensionHost.stdout.on('data', (data) =>
-      logger.log(formatExtensionHostLog(data.toString())),
-    );
+  else {
+    extensionHost.stderr.on('data', logProcessError);
+    extensionHost.stdout.on('data', logProcessInfo);
   }
 
   extensionHost.on('close', (code, signal) => {
     if (signal) {
-      logger.log(`[extension host 'close'] terminated with signal ${signal}`);
+      logger.info(
+        `'close' event: extension host process terminated with signal ${signal}`,
+      );
     } else {
-      logger.log(`[extension host 'close'] exited with code ${code}`);
+      logger.info(
+        `'close' event: extension host process exited with code ${code}`,
+      );
     }
     // TODO: listen for 'exit' event as well?
     // TODO: unsubscribe event listeners

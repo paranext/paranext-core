@@ -1,9 +1,11 @@
 import {
   ConnectionStatus,
   InternalEvent,
+  InternalNetworkEventHandler,
   InternalRequestHandler,
   NetworkConnectorEventHandlers,
   NetworkConnectorInfo,
+  RequestRouter,
 } from '@shared/data/InternalConnectionTypes';
 
 /**
@@ -30,11 +32,8 @@ export default interface INetworkConnector {
    */
   connect: (
     localRequestHandler: InternalRequestHandler,
-    requestRouter: (requestType: string) => number,
-    localEventHandler: <T>(
-      eventType: string,
-      incomingEvent: InternalEvent<T>,
-    ) => void,
+    requestRouter: RequestRouter,
+    localEventHandler: InternalNetworkEventHandler,
     networkConnectorEventHandlers: NetworkConnectorEventHandlers,
   ) => Promise<NetworkConnectorInfo>;
   /**
