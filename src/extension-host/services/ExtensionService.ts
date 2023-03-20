@@ -142,22 +142,19 @@ const activateExtensions = async (
     }
 
     // Disallow any imports within the extension
-    // TODO: make this throw so the extension knows what's going on
     // Tell the extension dev if there is an api similar to what they want to import
     const similarApi =
       MODULE_SIMILAR_APIS[fileName] || MODULE_SIMILAR_APIS[`node:${fileName}`];
     const message = `Requiring other than papi is not allowed in extensions! Rejected require('${fileName}').${
       similarApi ? ` Try using papi.${similarApi}` : ''
     }`;
-    return {
-      message,
-    };
+    throw new Error(message);
   }) as typeof Module.prototype.require;
 
   // Shim out internet access options in environments where they are defined so extensions can't use them
   const fetchOriginal: typeof fetch | undefined = globalThis.fetch;
   // eslint-disable-next-line no-global-assign
-  globalThis.fetch = () => {
+  globalThis.fetch = function fetchForbidden() {
     throw Error('Cannot use fetch! Try using papi.fetch');
   };
 
