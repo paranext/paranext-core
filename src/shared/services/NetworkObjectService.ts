@@ -24,9 +24,11 @@ enum NetworkObjectRegistrationType {
   Remote = 'remote',
 }
 
-/** Information about the network object and how to use it */
+/** Information about the network object and how to use it in this service */
 type NetworkObjectRegistration<T extends NetworkableObject> = {
+  /** The actual network object stuff returned by get */
   networkObjectInfo: NetworkObjectInfo<T>;
+  /** Emitter that indicates locally when the network object was disposed. Run when the network disposal emitter runs for this registration's id */
   onDidDisposeEmitter: PEventEmitter<void>;
 } & (
   | {
@@ -52,7 +54,7 @@ let isInitialized = false;
 let initializePromise: Promise<void> | undefined;
 
 /**
- * Emitter for when a network object is disposed.
+ * Emitter for when a network object is disposed. Provides the id so that the local emitter specific to that object can be run.
  *
  * Only run on local network object registration! Processes should only dispose their own network objects
  */
@@ -118,8 +120,8 @@ const buildNetworkObjectRequestType = (
 /**
  * Determine if a network object with the specified id exists remotely (does not check locally)
  * @param id id of the network object - all processes must use this id to look up this network object
- * @returns empty array if there is a remote network object with this id, undefined otherwise
- * // TODO: return array of all eligible functions
+ * @returns empty array if there is a remote network object with this id, undefined otherwise.
+ * TODO: return array of all eligible functions
  */
 const getRemoteNetworkObjectFunctions = async (
   id: string,
@@ -208,6 +210,7 @@ const set = async <T extends NetworkableObject>(
     onDidDisposeEmitter: networkObjectOnDidDisposeEmitter,
   });
 
+  // Return the dispose method to the place that set up this network object. Not given out or used anywhere else
   return { dispose, ...networkObjectInfo };
 };
 
@@ -247,7 +250,8 @@ const get = async <T extends NetworkableObject>(
     ? createLocalObjectToProxy(id)
     : {};
 
-  // Create a proxy that, for all unknown properties (function calls that the local object creator didn't set), returns a function that sends a request to the remote network object
+  // Create a proxy that, for all unknown properties (function calls that the local object creator didn't set),
+  // returns a function that sends a request to the remote network object
   // TODO: use returned networkObjectFunctions to limit the functions available instead of sending a request for anything
   const {
     // The full 'remote' network object which accesses local properties and sends requests for remote functions
@@ -285,7 +289,7 @@ const get = async <T extends NetworkableObject>(
     onDidDispose: networkObjectOnDidDisposeEmitter.event,
   };
 
-  // Save out the network object locally
+  // Save the network object locally
   networkObjectRegistrations.set(id, {
     registrationType: NetworkObjectRegistrationType.Remote,
     networkObjectInfo,
