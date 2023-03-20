@@ -8,7 +8,9 @@ import {
   ClientConnectEvent,
   ClientDisconnectEvent,
   CLIENT_ID_SERVER,
+  NetworkEventHandler,
   RequestHandler,
+  RequestRouter,
 } from '@shared/data/InternalConnectionTypes';
 import {
   aggregateUnsubscriberAsyncs,
@@ -17,6 +19,7 @@ import {
   ComplexResponse,
   createSafeRegisterFn,
   PEvent,
+  RequestHandlerType,
   UnsubPromiseAsync,
   UnsubscriberAsync,
 } from '@shared/util/PapiUtil';
@@ -24,8 +27,8 @@ import { getErrorMessage } from '@shared/util/Util';
 import * as ConnectionService from '@shared/services/ConnectionService';
 import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
 import logger from '@shared/util/logger';
-import PNetworkEventEmitter from '@shared/util/PNetworkEvent';
-import PEventEmitter from '@shared/util/PEvent';
+import PNetworkEventEmitter from '@shared/models/PNetworkEvent';
+import PEventEmitter from '@shared/models/PEvent';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -117,13 +120,6 @@ type RoutedRequestHandler<TParam = any, TReturn = any> =
   | ArgsRequestHandler<TParam[], TReturn>
   | ContentsRequestHandler<TParam, TReturn>
   | ComplexRequestHandler<TParam, TReturn>;
-
-/** Type of request handler - indicates what type of parameters and what return type the handler has */
-enum RequestHandlerType {
-  Args = 'args',
-  Contents = 'contents',
-  Complex = 'complex',
-}
 
 // #region Private unsafe functions (do not call manually outside of initialization)
 
@@ -328,6 +324,18 @@ const emitEventOnNetworkUnsafe = async <T>(eventType: string, event: T) => {
 };
 
 /**
+ * Removes a network event emitter.
+ *
+ * WARNING: DO NOT USE OUTSIDE OF createNetworkEventEmitterUnsafe.
+ * This is internal only as it does not actually dispose of the emitter.
+ * Use the emitter's dispose method, and it will automatically run this.
+ * @param eventType type of network event emitter to remove
+ * @returns true if successfully removed an emitter with the specified type, false otherwise
+ */
+const removeNetworkEventEmitterInternal = (eventType: string): boolean =>
+  networkEventEmitters.delete(eventType);
+
+/**
  * Creates an event emitter that works properly over the network.
  * Other processes receive this event when it is emitted.
  *
@@ -335,8 +343,10 @@ const emitEventOnNetworkUnsafe = async <T>(eventType: string, event: T) => {
  *
  * WARNING: DO NOT USE OUTSIDE OF INITIALIZATION. Use createNetworkEventEmitter
  * @param eventType unique network event type for coordinating between processes
- * @param emitOnNetwork the function to use to emit the event on the network. Should only need to provide this in createNetworkEventEmitter
- * @param register whether to register the emitter aka whether one reference to the emitter has been released and therefore the emitter should not be distributed anymore
+ * @param emitOnNetwork the function to use to emit the event on the network. Defaults to emitEventOnNetworkUnsafe.
+ *   Should only need to provide this in createNetworkEventEmitter to make this function safe.
+ * @param register whether to register the emitter aka whether one reference to the emitter has been released
+ *   and therefore the emitter should not be distributed anymore
  * @returns event emitter whose event works between processes
  */
 const createNetworkEventEmitterUnsafe = <T>(
@@ -353,8 +363,9 @@ const createNetworkEventEmitterUnsafe = <T>(
     existingEmitter.isRegistered = register;
     return existingEmitter.emitter as PEventEmitter<T>;
   }
-  const newNetworkEventEmitter = new PNetworkEventEmitter<T>((event) =>
-    emitOnNetwork(eventType, event),
+  const newNetworkEventEmitter = new PNetworkEventEmitter<T>(
+    (event) => emitOnNetwork(eventType, event),
+    () => removeNetworkEventEmitterInternal(eventType),
   );
   networkEventEmitters.set(eventType, {
     emitter: newNetworkEventEmitter as PNetworkEventEmitter<unknown>,
@@ -552,7 +563,7 @@ const handleRequestLocal: RequestHandler = async <TParam, TReturn>(
  * @param requestType type of request to determine which clientId will handle the request
  * @returns clientId that handles requests of the given type
  */
-const routeRequest = (requestType: string): number => {
+const routeRequest: RequestRouter = (requestType: string): number => {
   const registration = requestRegistrations.get(requestType);
   if (!registration)
     // We are the client and we need to send the request to the server or we are the server and we need to return an error
@@ -569,7 +580,10 @@ const routeRequest = (requestType: string): number => {
  * @param eventType type of event to handle
  * @param event the event data to emit
  */
-const handleEventFromNetwork = <T>(eventType: string, event: T) => {
+const handleEventFromNetwork: NetworkEventHandler = <T>(
+  eventType: string,
+  event: T,
+) => {
   const emitter = networkEventEmitters.get(eventType);
   // TODO: register events so we only receive events we are listening for, then throw here if we get an event we are not listening for
   emitter?.emitter?.emitLocal(event);
@@ -724,6 +738,9 @@ const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
 export const createNetworkEventEmitter = <T>(
   eventType: string,
 ): PEventEmitter<T> =>
+  // Note: running createNetworkEventEmitterUnsafe without initializing is not technically an initialization
+  // problem. However, emitting a network event before initializing is. As such, we create an emitter here
+  // without awaiting initialization, but we pass in emitEventOnNetwork, which does wait for initialization.
   createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork);
 
 /**

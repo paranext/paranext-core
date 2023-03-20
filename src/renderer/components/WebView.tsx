@@ -42,6 +42,14 @@ export function WebView({ contents, title, contentType }: WebViewProps) {
       // TODO: csp?
       // TODO: credentialless?
       // TODO: referrerpolicy?
+      /**
+       * Sandbox attribute for the webview - controls what resources scripts and other things can access.
+       *
+       * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+       */
+      // allow-same-origin so the iframe can get papi and communicate and such
+      // allow-scripts so the iframe can actually do things
+      // allow-pointer-lock so the iframe can lock the pointer as desired
       // Note: Mozilla's iframe page 'allow-same-origin' and 'allow-scripts' warns that listing both of these
       // allows the child scripts to remove this sandbox attribute from the iframe. However, it seems that this
       // is done by accessing window.parent or window.top, which is removed from the iframe with the injected

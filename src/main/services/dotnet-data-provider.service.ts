@@ -1,8 +1,21 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import path from 'path';
-import logger from '@shared/util/logger';
+import logger, { formatLog } from '@shared/util/logger';
+
+/** Pretty name for the process this service manages. Used in logs */
+const DOTNET_DATA_PROVIDER_NAME = 'dotnet data provider';
 
 let dotnet: ChildProcessWithoutNullStreams | undefined;
+
+// log functions for inside the data provider process
+function logProcessError(message: unknown) {
+  logger.error(
+    formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME, 'error'),
+  );
+}
+function logProcessInfo(message: unknown) {
+  logger.log(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME));
+}
 
 /**
  * Hard kills the Dotnet Data Provider.
@@ -12,10 +25,10 @@ function killDotnetDataProvider() {
   if (!dotnet) return;
 
   if (dotnet.kill()) {
-    logger.log('[dotnet data provider] was killed');
+    logger.info('killed dotnet data provider');
   } else {
     logger.error(
-      '[dotnet data provider] was not stopped! Investigate other .kill() options',
+      'dotnet data provider was not stopped! Investigate other .kill() options',
     );
   }
   dotnet = undefined;
@@ -51,19 +64,18 @@ function startDotnetDataProvider() {
 
   dotnet = spawn(command, args);
 
-  dotnet.stdout.on('data', (data) => {
-    logger.log(`[dotnet data provider] stdout: ${data}`);
-  });
-
-  dotnet.stderr.on('data', (data) => {
-    logger.error(`[dotnet data provider] stderr: ${data}`);
-  });
+  dotnet.stdout.on('data', logProcessInfo);
+  dotnet.stderr.on('data', logProcessError);
 
   dotnet.on('close', (code, signal) => {
     if (signal) {
-      logger.log(`[dotnet data provider] terminated with signal ${signal}`);
+      logger.info(
+        `'close' event: dotnet data provider terminated with signal ${signal}`,
+      );
     } else {
-      logger.log(`[dotnet data provider] exited with code ${code}`);
+      logger.info(
+        `'close' event: dotnet data provider exited with code ${code}`,
+      );
     }
     // TODO: listen for 'exit' event as well?
     // TODO: unsubscribe event listeners

@@ -13,7 +13,7 @@ import {
   serializeRequestType,
   UnsubscriberAsync,
 } from '@shared/util/PapiUtil';
-import PEventEmitter from '@shared/util/PEvent';
+import PEventEmitter from '@shared/models/PEvent';
 import { isString } from '@shared/util/Util';
 
 /** Prefix on requests that indicates that the request is related to a network object */

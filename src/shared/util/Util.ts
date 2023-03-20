@@ -42,7 +42,7 @@ export function isString(o: unknown): o is string {
  * @param valueSelector function to run on each item to get the value it should have in the group (like map function). If not provided, uses the item itself
  * @returns map of keys to groups of values corresponding to each item
  */
-export function groupBy<T, K, V>(
+export function groupBy<T, K>(
   items: T[],
   keySelector: (item: T) => K,
 ): Map<K, Array<T>>;

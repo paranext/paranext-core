@@ -66,7 +66,7 @@ export type InternalResponse<TReturn = unknown> = {
   requesterId: number;
 } & ComplexResponse<TReturn>;
 
-/** Handler for requests from the server */
+/** Handler for requests from the server. Used internally between network connector and Connection Service */
 export type InternalRequestHandler = <TParam, TReturn>(
   requestType: string,
   request: InternalRequest<TParam>,
@@ -78,6 +78,9 @@ export type RequestHandler = <TParam, TReturn>(
   request: ComplexRequest<TParam>,
 ) => Promise<ComplexResponse<TReturn>>;
 
+/** Function that returns a clientId to which to send the request based on the requestType */
+export type RequestRouter = (requestType: string) => number;
+
 /** Event to be sent out throughout all processes */
 export type InternalEvent<T> = {
   /** The process that emitted this Event */
@@ -85,3 +88,12 @@ export type InternalEvent<T> = {
   /** Contents of the event */
   event: T;
 };
+
+/** Handler for events from on the network. Used internally between network connector and Connection Service */
+export type InternalNetworkEventHandler = <T>(
+  eventType: string,
+  incomingEvent: InternalEvent<T>,
+) => void;
+
+/** Handler for events from on the network */
+export type NetworkEventHandler = <T>(eventType: string, event: T) => void;

@@ -13,11 +13,11 @@ import { PEvent, PEventHandler } from '@shared/util/PapiUtil';
  */
 class PEventEmitter<T> {
   /** All callback functions that will run when this event is emitted. Lazy loaded */
-  protected subscriptions?: PEventHandler<T>[];
+  private subscriptions?: PEventHandler<T>[];
   /** Event for listeners to subscribe to. Lazy loaded */
   private lazyEvent?: PEvent<T>;
   /** Whether this emitter has been disposed */
-  protected isDisposed = false;
+  private isDisposed = false;
 
   /** Check to make sure this emitter is not disposed. Throw if it is */
   protected assertNotDisposed = () => {
@@ -52,9 +52,6 @@ class PEventEmitter<T> {
 
           // Remove the callback
           this.subscriptions.splice(callbackIndex, 1);
-
-          // Remove this._subscriptions if it does not need to exist
-          if (this.subscriptions.length === 0) this.subscriptions = undefined;
 
           return true;
         };
@@ -95,11 +92,14 @@ class PEventEmitter<T> {
   public dispose = () => {
     this.disposeFn();
   };
+
   /**
    * Disposes of this event, preparing it to release from memory.
    * Added here so children can override emit and still call the base functionality.
    */
   protected disposeFn() {
+    this.assertNotDisposed();
+
     this.isDisposed = true;
     this.subscriptions = undefined;
     this.lazyEvent = undefined;

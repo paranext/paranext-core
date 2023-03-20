@@ -2,10 +2,12 @@ import {
   ConnectionStatus,
   CONNECTOR_INFO_DISCONNECTED,
   InternalEvent,
+  InternalNetworkEventHandler,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
   NetworkConnectorInfo,
+  RequestRouter,
 } from '@shared/data/InternalConnectionTypes';
 import { Unsubscriber } from '@shared/util/PapiUtil';
 import INetworkConnector from '@shared/services/INetworkConnector';
@@ -22,7 +24,7 @@ import {
 } from '@shared/data/NetworkConnectorTypes';
 import { getErrorMessage } from '@shared/util/Util';
 import logger from '@shared/util/logger';
-import PEventEmitter from '@shared/util/PEvent';
+import PEventEmitter from '@shared/models/PEvent';
 import { createWebSocket } from '@client/services/WebSocketFactory';
 import { IWebSocket } from '@client/services/IWebSocket';
 
@@ -83,15 +85,12 @@ export default class ClientNetworkConnector implements INetworkConnector {
    * Function to call when we are sending a request.
    * Returns a clientId to which to send the request based on the requestType
    */
-  private requestRouter?: (requestType: string) => number;
+  private requestRouter?: RequestRouter;
   /**
    * Function to call when we receive an event.
    * Handles events from the connection by emitting the event locally
    */
-  private localEventHandler?: <T>(
-    eventType: string,
-    incomingEvent: InternalEvent<T>,
-  ) => void;
+  private localEventHandler?: InternalNetworkEventHandler;
 
   /** All requests that are waiting for a response */
   // Disabled no-explicit-any because assigning a request with generic type to LiveRequest<unknown> gave error
@@ -107,11 +106,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
   connect = async (
     localRequestHandler: InternalRequestHandler,
-    requestRouter: (requestType: string) => number,
-    localEventHandler: <T>(
-      eventType: string,
-      incomingEvent: InternalEvent<T>,
-    ) => void,
+    requestRouter: RequestRouter,
+    localEventHandler: InternalNetworkEventHandler,
   ) => {
     // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
     // We don't need to run this more than once
