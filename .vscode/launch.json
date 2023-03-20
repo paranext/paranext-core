@@ -74,7 +74,12 @@
   "compounds": [
     {
       "name": "Debug Paranext Core",
-      "configurations": ["Debug Paranext Core Backend", "Attach to Renderer"]
+      "configurations": ["Debug Paranext Core Backend", "Attach to Renderer"],
+      "presentation": {
+        "hidden": false,
+        "group": "",
+        "order": 1
+      }
     }
   ]
 }

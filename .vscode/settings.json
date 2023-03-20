@@ -26,38 +26,5 @@
     "test/**/__snapshots__": true,
     "package-lock.json": true,
     "*.{css,sass,scss}.d.ts": true
-  },
-
-  "cSpell.ignorePaths": [
-    "package-lock.json",
-    "node_modules",
-    "vscode-extension",
-    ".git/objects",
-    ".vscode",
-    ".vscode-insiders",
-    "package.json"
-  ],
-
-  "cSpell.words": [
-    "APPDATA",
-    "asyncs",
-    "autodocs",
-    "electronmon",
-    "endregion",
-    "Hopkinson",
-    "localstorage",
-    "nums",
-    "papi",
-    "Papis",
-    "paranext",
-    "paratext",
-    "Steenwyk",
-    "unregisters",
-    "unsub",
-    "unsubs",
-    "unsubscriber",
-    "unsubscribers",
-    "dockbox",
-    "maximizable"
-  ],
+  }
 }

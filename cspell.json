@@ -1,0 +1,39 @@
+{
+  "version": "0.2",
+  "ignorePaths": [
+    ".git/objects",
+    ".vscode",
+    ".vscode-insiders",
+    "electron-builder.json5",
+    "node_modules",
+    "package.json",
+    "package-lock.json",
+    "vscode-extension"
+  ],
+  "dictionaryDefinitions": [],
+  "dictionaries": [],
+  "words": [
+    "APPDATA",
+    "asyncs",
+    "dockbox",
+    "electronmon",
+    "endregion",
+    "guids",
+    "Hopkinson",
+    "localstorage",
+    "maximizable",
+    "nums",
+    "papi",
+    "Papis",
+    "paranext",
+    "Steenwyk",
+    "Unregistering",
+    "unregisters",
+    "unsub",
+    "unsubs",
+    "unsubscriber",
+    "unsubscribers"
+  ],
+  "ignoreWords": [],
+  "import": []
+}

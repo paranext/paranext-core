@@ -21,6 +21,26 @@ export type NetworkConnectorInfo = Readonly<{
   clientId: number;
 }>;
 
+/** Event emitted when client connections are established */
+export type ClientConnectEvent = {
+  clientId: number;
+  didReconnect: boolean;
+};
+
+/** Event emitted when client connections are lost */
+export type ClientDisconnectEvent = { clientId: number };
+
+/**
+ * Functions that run when network connector events occur.
+ * These should likely be emit functions from NetworkEventEmitters so the events inform all interested connections
+ */
+export type NetworkConnectorEventHandlers = {
+  /** Handles when a new connection is established */
+  didClientConnectHandler?: (event: ClientConnectEvent) => void;
+  /** Handles when a client disconnects */
+  didClientDisconnectHandler?: (event: ClientDisconnectEvent) => void;
+};
+
 /** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
 export enum ConnectionStatus {
   /** This connector is not connected to the network */
@@ -46,7 +66,7 @@ export type InternalResponse<TReturn = unknown> = {
   requesterId: number;
 } & ComplexResponse<TReturn>;
 
-/** Handler for requests from the server */
+/** Handler for requests from the server. Used internally between network connector and Connection Service */
 export type InternalRequestHandler = <TParam, TReturn>(
   requestType: string,
   request: InternalRequest<TParam>,
@@ -57,3 +77,23 @@ export type RequestHandler = <TParam, TReturn>(
   requestType: string,
   request: ComplexRequest<TParam>,
 ) => Promise<ComplexResponse<TReturn>>;
+
+/** Function that returns a clientId to which to send the request based on the requestType */
+export type RequestRouter = (requestType: string) => number;
+
+/** Event to be sent out throughout all processes */
+export type InternalEvent<T> = {
+  /** The process that emitted this Event */
+  senderId: number;
+  /** Contents of the event */
+  event: T;
+};
+
+/** Handler for events from on the network. Used internally between network connector and Connection Service */
+export type InternalNetworkEventHandler = <T>(
+  eventType: string,
+  incomingEvent: InternalEvent<T>,
+) => void;
+
+/** Handler for events from on the network */
+export type NetworkEventHandler = <T>(eventType: string, event: T) => void;

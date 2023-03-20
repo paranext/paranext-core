@@ -1,10 +1,13 @@
 import {
   ConnectionStatus,
   CONNECTOR_INFO_DISCONNECTED,
+  InternalEvent,
+  InternalNetworkEventHandler,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
   NetworkConnectorInfo,
+  RequestRouter,
 } from '@shared/data/InternalConnectionTypes';
 import { Unsubscriber } from '@shared/util/PapiUtil';
 import INetworkConnector from '@shared/services/INetworkConnector';
@@ -12,6 +15,7 @@ import {
   InitClient,
   Message,
   MessageType,
+  WebSocketEvent,
   WebSocketRequest,
   WebSocketResponse,
   WEBSOCKET_ATTEMPTS_MAX,
@@ -20,6 +24,7 @@ import {
 } from '@shared/data/NetworkConnectorTypes';
 import { getErrorMessage } from '@shared/util/Util';
 import logger from '@shared/util/logger';
+import { PEventEmitter } from '@shared/models/PEvent';
 import { createWebSocket } from '@client/services/WebSocketFactory';
 import { IWebSocket } from '@client/services/IWebSocket';
 
@@ -47,7 +52,6 @@ export default class ClientNetworkConnector implements INetworkConnector {
   // #region INetworkConnector members
 
   connectorInfo: NetworkConnectorInfo = CONNECTOR_INFO_DISCONNECTED;
-
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
 
   // #endregion
@@ -57,35 +61,36 @@ export default class ClientNetworkConnector implements INetworkConnector {
   /** The webSocket connected to the server */
   private webSocket?: IWebSocket;
 
-  /** All message subscriptions - arrays of functions that run each time a message with a specific message type comes in */
-  private messageSubscriptions = new Map<
-    MessageType,
-    ((eventData: Message) => void)[]
-  >();
+  /** All message subscriptions - emitters that emit an event each time a message with a specific message type comes in */
+  private messageEmitters = new Map<MessageType, PEventEmitter<Message>>();
 
   /** Promise that resolves when the connection is finished or rejects if disconnected before the connection finishes */
   private connectPromise?: Promise<NetworkConnectorInfo>;
 
   /** Function that removes this initClient handler from the connection */
   private unsubscribeHandleInitClientMessage?: Unsubscriber;
-
   /** Function that removes this response handler from the connection */
   private unsubscribeHandleResponseMessage?: Unsubscriber;
-
   /** Function that removes this handleRequest from the connection */
   private unsubscribeHandleRequestMessage?: Unsubscriber;
+  /** Function that removes this handleEvent from the connection */
+  private unsubscribeHandleEventMessage?: Unsubscriber;
 
   /**
    * Function to call when we receive a request that is registered on this connector.
    * Handles requests from the connection and returns a response to send back
    */
   private localRequestHandler?: InternalRequestHandler;
-
   /**
    * Function to call when we are sending a request.
    * Returns a clientId to which to send the request based on the requestType
    */
-  private requestRouter?: (requestType: string) => number;
+  private requestRouter?: RequestRouter;
+  /**
+   * Function to call when we receive an event.
+   * Handles events from the connection by emitting the event locally
+   */
+  private localEventHandler?: InternalNetworkEventHandler;
 
   /** All requests that are waiting for a response */
   // Disabled no-explicit-any because assigning a request with generic type to LiveRequest<unknown> gave error
@@ -101,7 +106,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
   connect = async (
     localRequestHandler: InternalRequestHandler,
-    requestRouter: (requestType: string) => number,
+    requestRouter: RequestRouter,
+    localEventHandler: InternalNetworkEventHandler,
   ) => {
     // NOTE: This does not protect against sending two different request handlers. See ConnectionService for that
     // We don't need to run this more than once
@@ -110,6 +116,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     this.connectionStatus = ConnectionStatus.Connecting;
     this.localRequestHandler = localRequestHandler;
     this.requestRouter = requestRouter;
+    this.localEventHandler = localEventHandler;
 
     /** Function that resolves the connection promise to be run after receiving a client id */
     let resolveConnect: (
@@ -150,6 +157,12 @@ export default class ClientNetworkConnector implements INetworkConnector {
           MessageType.Request,
           (requestMessage: WebSocketRequest) =>
             this.handleRequestMessage(requestMessage, true),
+        );
+
+        this.unsubscribeHandleEventMessage = this.subscribe(
+          MessageType.Event,
+          (eventMessage: WebSocketEvent<unknown>) =>
+            this.handleEventMessage(eventMessage),
         );
 
         // Finished setting up WebSocketService and connecting! Resolve the promise
@@ -224,7 +237,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     else localStorage.removeItem(CLIENT_GUID_KEY);
 
     // In webSocket land, we do not receive a response from the server when we notify client connected
-    // TODO: change the clientconnected into a request that resolves properly. Then we can also know if we reconnected, I suppose
+    // TODO: change the clientConnected into a request that resolves properly. Then we can also know if we reconnected, I suppose
     return Promise.resolve();
   };
 
@@ -234,6 +247,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
     this.connectionStatus = ConnectionStatus.Disconnected;
     this.localRequestHandler = undefined;
+    this.requestRouter = undefined;
+    this.localEventHandler = undefined;
     this.connectPromise = undefined;
     this.connectorInfo = CONNECTOR_INFO_DISCONNECTED;
     if (this.unsubscribeHandleInitClientMessage)
@@ -242,6 +257,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
       this.unsubscribeHandleResponseMessage();
     if (this.unsubscribeHandleRequestMessage)
       this.unsubscribeHandleRequestMessage();
+    if (this.unsubscribeHandleEventMessage)
+      this.unsubscribeHandleEventMessage();
 
     if (this.webSocket) {
       this.webSocket.removeEventListener('message', this.onMessage);
@@ -288,6 +305,18 @@ export default class ClientNetworkConnector implements INetworkConnector {
     return requestPromise;
   };
 
+  emitEventOnNetwork = async <T>(
+    eventType: string,
+    event: InternalEvent<T>,
+  ) => {
+    // TODO: implement some kind of waiting for a connection? This method is async for hopeful forward compatibility
+    this.sendMessage({
+      type: MessageType.Event,
+      eventType,
+      ...event,
+    });
+  };
+
   // #endregion
 
   // #region private methods
@@ -296,7 +325,6 @@ export default class ClientNetworkConnector implements INetworkConnector {
    * Send a message to the server via webSocket. Throws if not connected
    * @param message message to send
    */
-  // Add if needed: @param unsafe whether to get the client even if we aren't connected. WARNING: SETTING THIS FLAG MEANS NOT CHECKING FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. There may be no clientId
   private sendMessage = (message: Message): void => {
     // TODO: add message queueing
     if (this.connectionStatus !== ConnectionStatus.Connected || !this.webSocket)
@@ -331,36 +359,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
       ? (event.data as unknown as Message)
       : (JSON.parse(event.data as string) as Message);
 
-    const callbacks = this.messageSubscriptions.get(data.type);
-    callbacks?.forEach((callback) => callback(data));
-  };
-
-  /**
-   * Unsubscribes a function from running on webSocket messages
-   * @param messageType the type of message from which to unsubscribe the function
-   * @param callback function to unsubscribe from being run on webSocket messages.
-   * @returns true if successfully unsubscribed
-   * Likely will never need to be exported from this file. Just use subscribe, which returns a matching unsubscriber function that runs this.
-   */
-  private unsubscribe = (
-    messageType: MessageType,
-    callback: (eventData: Message) => void,
-  ): boolean => {
-    const callbacks = this.messageSubscriptions.get(messageType);
-
-    if (!callbacks) return false; // Did not find any callbacks for the message type
-
-    const callbackIndex = callbacks.indexOf(callback);
-    if (callbackIndex < 0) return false; // Did not find this callback for the message type
-
-    // Remove the callback
-    callbacks.splice(callbackIndex, 1);
-
-    // Remove the map entry if there are no more callbacks
-    if (callbacks.length === 0) this.messageSubscriptions.delete(messageType);
-
-    // Indicate successfully removed the callback
-    return true;
+    const emitter = this.messageEmitters.get(data.type);
+    emitter?.emit(data);
   };
 
   /**
@@ -376,14 +376,12 @@ export default class ClientNetworkConnector implements INetworkConnector {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     callback: (eventData: Message | any) => void,
   ): Unsubscriber => {
-    let callbacks = this.messageSubscriptions.get(messageType);
-    if (!callbacks) {
-      callbacks = [];
-      this.messageSubscriptions.set(messageType, callbacks);
+    let emitter = this.messageEmitters.get(messageType);
+    if (!emitter) {
+      emitter = new PEventEmitter<Message>();
+      this.messageEmitters.set(messageType, emitter);
     }
-    callbacks.push(callback);
-
-    return () => this.unsubscribe(messageType, callback);
+    return emitter.subscribe(callback);
   };
 
   /**
@@ -455,6 +453,20 @@ export default class ClientNetworkConnector implements INetworkConnector {
       // This request is for someone else. Send the request to the server to handle/forward
       this.sendMessage(requestMessage);
     }
+  };
+
+  /**
+   * Function that handles incoming webSocket messages of type Event.
+   * Runs the eventHandler provided in connect()
+   * @param eventMessage event message to handle
+   */
+  private handleEventMessage = (eventMessage: WebSocketEvent<unknown>) => {
+    if (!this.localEventHandler)
+      throw new Error(
+        `Received an event but cannot handle it without an eventHandler`,
+      );
+
+    this.localEventHandler(eventMessage.eventType, eventMessage);
   };
 
   // #endregion

@@ -1,5 +1,5 @@
 import './TestButtonsPanel.css';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import usePromise from '@renderer/hooks/papi-hooks/usePromise';
 import papi from '@shared/services/papi';
 import * as NetworkService from '@shared/services/NetworkService';
@@ -7,6 +7,8 @@ import { getErrorMessage, isString } from '@shared/util/Util';
 import logger from '@shared/util/logger';
 import { TabInfo } from '@shared/data/WebviewTypes';
 import { WebView, WebViewProps } from '@renderer/components/WebView';
+import useEvent from '@renderer/hooks/papi-hooks/useEvent';
+import { AddWebViewEvent } from '@shared/services/WebViewService';
 
 const testBase: (message: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.test');
@@ -147,23 +149,34 @@ function TestButtonsPanel() {
   );
 
   const [webViews, setWebViews] = useState<WebViewProps[]>([]);
-  const addWebView = useCallback(
-    (webView: WebViewProps) => {
-      setWebViews((webViewsCurrent) => [...webViewsCurrent, webView]);
-    },
-    [setWebViews],
+
+  useEvent(
+    papi.webViews.onDidAddWebView,
+    useCallback(
+      ({ webView }: AddWebViewEvent) => {
+        setWebViews((webViewsCurrent) => [...webViewsCurrent, webView]);
+      },
+      [setWebViews],
+    ),
   );
 
-  useEffect(() => {
-    const unsubscriber = papi.webViews.subscribeAddWebView(addWebView);
-    return () => {
-      unsubscriber();
-    };
-  }, [addWebView]);
+  useEvent(
+    papi.network.onDidClientConnect,
+    useCallback(
+      ({ clientId, didReconnect }) => {
+        const result = `Client with id ${clientId} ${
+          didReconnect ? 're' : ''
+        }connected!`;
+        logger.log(result);
+        updatePromiseReturn(result);
+      },
+      [updatePromiseReturn],
+    ),
+  );
 
   return (
-    <>
-      <div className="Hello">
+    <div className="buttons-panel">
+      <div className="hello">
         <button
           className="testButton"
           type="button"
@@ -370,7 +383,7 @@ function TestButtonsPanel() {
           Test
         </papi.react.components.PButton>
       </div>
-      <div className="Hello">
+      <div className="hello">
         <div>resourcesPath: {resourcesPath}</div>
         <div>{promiseReturn}</div>
       </div>
@@ -379,7 +392,7 @@ function TestButtonsPanel() {
         // eslint-disable-next-line react/no-array-index-key
         <WebView key={i} {...webView} />
       ))}
-    </>
+    </div>
   );
 }
 
