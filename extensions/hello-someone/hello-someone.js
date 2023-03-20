@@ -7,15 +7,6 @@ const { logger } = papi;
 
 logger.log('Hello Someone is importing!');
 
-// This will be blocked
-const fs = require('fs');
-
-logger.log(
-  fs.message
-    ? fs.message
-    : `Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`,
-);
-
 const unsubscribers = [];
 
 exports.activate = async () => {

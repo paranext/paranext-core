@@ -5,7 +5,7 @@ import papi from '@shared/services/papi';
 import * as NetworkService from '@shared/services/NetworkService';
 import { getErrorMessage, isString } from '@shared/util/Util';
 import logger from '@shared/util/logger';
-import { TabInfo } from '@shared/data/WebviewTypes';
+import { TabInfo } from '@shared/data/WebViewTypes';
 import { WebView, WebViewProps } from '@renderer/components/WebView';
 import useEvent from '@renderer/hooks/papi-hooks/useEvent';
 import { AddWebViewEvent } from '@shared/services/WebViewService';

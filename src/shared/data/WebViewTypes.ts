@@ -44,3 +44,26 @@ export type TabInfo = {
  * For now all tab creators must do their own data type verification
  */
 export type TabCreator = (tabData: SavedTabInfo) => TabInfo;
+
+export enum WebViewContentType {
+  React = 'react',
+  HTML = 'html',
+}
+
+/** Base WebView properties that all WebViews share */
+type WebViewContentsBase = { contents: string; title?: string };
+
+/** WebView representation using React */
+export type WebViewContentsReact = WebViewContentsBase & {
+  contentType: WebViewContentType.React;
+  componentName: string;
+  styles?: string;
+};
+
+/** WebView representation using HTML */
+export type WebViewContentsHtml = WebViewContentsBase & {
+  contentType: WebViewContentType.HTML;
+};
+
+/** WebView definition created by extensions to show web content */
+export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;

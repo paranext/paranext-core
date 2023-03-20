@@ -1,4 +1,4 @@
-import { SavedTabInfo } from '@shared/data/WebviewTypes';
+import { SavedTabInfo } from '@shared/data/WebViewTypes';
 import { LayoutBase, TabBase } from 'rc-dock';
 
 const createTab = (tabInfo: SavedTabInfo): TabBase => {
