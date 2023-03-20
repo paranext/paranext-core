@@ -1,6 +1,6 @@
 import { Button as MuiButton } from '@mui/material';
 import { PropsWithChildren } from 'react';
-import classes from './button.module.css';
+import './button.css';
 
 type ButtonProps = PropsWithChildren<{
   /**
@@ -36,23 +36,14 @@ const Button = ({
   onContextMenu,
   children,
 }: ButtonProps) => {
-  const mode = `${primary ? classes.primary : classes.secondary}`;
-  const disabledStatus = `${disabled ? classes.disabled : classes.enabled}`;
-  const additionalClasses =
-    className &&
-    className
-      .map((cssClass) => {
-        return `${classes[cssClass]}`;
-      })
-      .join(' ');
+  const mode = primary ? 'primary' : 'secondary';
+  const disabledStatus = disabled ? 'disabled' : 'enabled';
+  const additionalClasses = className?.join(' ') ?? '';
   return (
     <MuiButton
-      className={[
-        classes['papi-button'],
-        mode,
-        disabledStatus,
-        additionalClasses,
-      ].join(' ')}
+      className={['papi-button', mode, disabledStatus, additionalClasses].join(
+        ' ',
+      )}
       onClick={(e) => {
         if (onClick) {
           e.preventDefault();
