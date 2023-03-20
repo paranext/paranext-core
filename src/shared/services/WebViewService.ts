@@ -172,9 +172,10 @@ export const addWebView = async (webView: WebViewContents) => {
    * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
    */
   // default-src 'none' so things can't happen unless we allow them
-  // script-src-elem so in-line attribute scripts like event handlers don't run
+  // script-src allows them to use script tags and in-line attribute scripts
   //    'self' so scripts can be loaded from us
   //    ${specificSrcPolicy} so we can load the specific styles needed from the iframe
+  //    TODO: change to script-src-elem so in-line attribute scripts like event handlers don't run? If this is actually more secure
   // style-src allows them to use style/link tags and style attributes on tags
   //    'self' so styles can be loaded from us
   //    ${specificSrcPolicy} so we can load the specific styles needed from the iframe
@@ -191,7 +192,7 @@ export const addWebView = async (webView: WebViewContents) => {
   const contentSecurityPolicy = `<meta http-equiv="Content-Security-Policy"
     content="
       default-src 'none';
-      script-src-elem 'self' ${specificSrcPolicy};
+      script-src 'self' ${specificSrcPolicy};
       style-src 'self' ${specificSrcPolicy};
       connect-src 'self';
       img-src 'self';
