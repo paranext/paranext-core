@@ -62,33 +62,38 @@ setTimeout(
 // #region network object test
 
 (async () => {
-  let testMain = await networkObjectService.get<{
+  let testMainInfo = await networkObjectService.get<{
     doStuff: (stuff: string) => Promise<string>;
   }>('test-main');
-  testMain?.onDidDispose(async () => {
-    logger.log('Disposed of test-main!');
-    testMain = undefined;
+  if (testMainInfo) {
+    const unsub = testMainInfo?.onDidDispose(async () => {
+      logger.log('Disposed of test-main!');
+      testMainInfo = undefined;
+      unsub();
 
-    const unsubTestEH = await networkObjectService.set('test-extension-host', {
-      getVerse: async () => {
-        const results = `test-extension-host got verse: ${(
-          await (await fetch('https://bible-api.com/matthew+24:14')).json()
-        ).text.replace(/\\n/g, '')}`;
-        logger.log(results);
-        return results;
-      },
+      const testEHInfo = await networkObjectService.set('test-extension-host', {
+        getVerse: async () => {
+          const results = `test-extension-host got verse: ${(
+            await (await fetch('https://bible-api.com/matthew+24:14')).json()
+          ).text.replace(/\\n/g, '')}`;
+          logger.log(results);
+          return results;
+        },
+      });
+
+      if (testEHInfo) {
+        const unsub2 = testEHInfo.onDidDispose(() => {
+          logger.log('Disposed of test-extension-host!');
+          unsub2();
+        });
+      }
+
+      setTimeout(testEHInfo.dispose, 10000);
     });
-
-    const testEH = await networkObjectService.get('test-extension-host');
-    testEH?.onDidDispose(() => logger.log('Disposed of test-extension-host!'));
-
-    setTimeout(unsubTestEH, 10000);
-  });
+  }
 
   logger.log(
-    await Promise.resolve(
-      `do stuff: ${testMain?.doStuff('extension host things')}`,
-    ),
+    `do stuff: ${await testMainInfo?.object.doStuff('extension host things')}`,
   );
 })();
 

@@ -197,9 +197,6 @@ export type CommandHandler<
  * or not they are asynchronous, so it is best to make them all asynchronous.
  * All shared functions' arguments and returns must be serializable in order
  * to be called across processes.
- *
- * WARNING: If the object has an 'onDidDispose' property, it will be overwritten.
- * See NetworkObject type for more information.
  */
 export type NetworkableObject = Record<
   string,
@@ -209,16 +206,25 @@ export type NetworkableObject = Record<
 >;
 
 /**
- * Object shared on the network. Created by modifying an object.
- *
- * WARNING: If the object has an 'onDidDispose' property, it will be overwritten.
+ * Information about an object shared on the network.
+ * Returned from getting a network object.
  */
-// TODO: Because NetworkableObject is a record, its type is overwriting
-// onDidDispose and causing problems. Figure out how to type this better
-export type NetworkObject<T extends NetworkableObject = NetworkableObject> = {
+export type NetworkObjectInfo<T extends NetworkableObject> = {
+  /** Object that is shared on the network */
+  object: T;
   /** Event that emits when this network object is being disposed */
   onDidDispose: PEvent<void>;
-} & T;
+};
+
+/**
+ * Information about an object shared on the network including control over disposing of the object.
+ * Returned from setting up a network object (only the process that set up the network object should dispose of it)
+ */
+export type DisposableNetworkObjectInfo<T extends NetworkableObject> =
+  NetworkObjectInfo<T> & {
+    /** Unsubscriber to call to remove this object from the network */
+    dispose: UnsubscriberAsync;
+  };
 
 /** Information about a request that tells us what to do with it */
 export type RequestType = {

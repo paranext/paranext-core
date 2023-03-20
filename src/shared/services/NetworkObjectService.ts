@@ -5,11 +5,11 @@
  */
 
 import * as NetworkService from '@shared/services/NetworkService';
-import logger from '@shared/util/logger';
 import {
   aggregateUnsubscriberAsyncs,
+  DisposableNetworkObjectInfo,
   NetworkableObject,
-  NetworkObject,
+  NetworkObjectInfo,
   serializeRequestType,
   UnsubscriberAsync,
 } from '@shared/util/PapiUtil';
@@ -25,8 +25,8 @@ enum NetworkObjectRegistrationType {
 }
 
 /** Information about the network object and how to use it */
-type NetworkObjectRegistration<T extends NetworkObject> = {
-  object: T;
+type NetworkObjectRegistration<T extends NetworkableObject> = {
+  networkObjectInfo: NetworkObjectInfo<T>;
   onDidDisposeEmitter: PEventEmitter<void>;
 } & (
   | {
@@ -42,7 +42,7 @@ type NetworkObjectRegistration<T extends NetworkObject> = {
 /** Map of id to network object */
 const networkObjectRegistrations = new Map<
   string,
-  NetworkObjectRegistration<NetworkObject>
+  NetworkObjectRegistration<NetworkableObject>
 >();
 
 /** Whether this service has finished setting up */
@@ -151,34 +151,17 @@ const has = async (id: string): Promise<boolean> => {
  * Set up a NetworkableObject as a NetworkObject to be shared on the network.
  * @param id id of the network object - all processes must use this id to look up this network object
  * @param object the object to set up as a network object. This object must conform to the constraints for a NetworkableObject
- * @returns unsubscriber to call to remove this object from the network
+ * @returns information about an object shared on the network including control over disposing of the object
  */
 const set = async <T extends NetworkableObject>(
   id: string,
   object: T,
-): Promise<UnsubscriberAsync> => {
+): Promise<DisposableNetworkObjectInfo<T>> => {
   await initialize();
   if (await has(id))
     throw new Error(`Network object with id ${id} is already registered`);
 
   const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
-
-  if (object.onDidDispose)
-    logger.warn(
-      `Network object with id ${id} already has an onDidDispose method. It will be overwritten.`,
-    );
-
-  const networkObject: NetworkObject = {
-    ...object,
-    onDidDispose: networkObjectOnDidDisposeEmitter.event,
-  };
-
-  // Set the network object locally
-  networkObjectRegistrations.set(id, {
-    registrationType: NetworkObjectRegistrationType.Local,
-    object: networkObject,
-    onDidDisposeEmitter: networkObjectOnDidDisposeEmitter,
-  });
 
   // Set up request handlers for this network object
   const unsubPromises = [
@@ -192,12 +175,12 @@ const set = async <T extends NetworkableObject>(
     NetworkService.registerRequestHandler(
       buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
       (functionName: string, ...args: unknown[]) =>
-        Promise.resolve(networkObject[functionName](...args)),
+        Promise.resolve(object[functionName](...args)),
     ),
   ];
   await Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise));
 
-  return async () => {
+  const dispose: UnsubscriberAsync = async () => {
     // Unsubscribe all requests for this network object
     if (
       !(await aggregateUnsubscriberAsyncs(
@@ -212,6 +195,20 @@ const set = async <T extends NetworkableObject>(
     onDidDisposeNetworkObjectEmitter.emit(id);
     return true;
   };
+
+  const networkObjectInfo: NetworkObjectInfo<T> = {
+    object,
+    onDidDispose: networkObjectOnDidDisposeEmitter.event,
+  };
+
+  // Set the network object locally
+  networkObjectRegistrations.set(id, {
+    registrationType: NetworkObjectRegistrationType.Local,
+    networkObjectInfo,
+    onDidDisposeEmitter: networkObjectOnDidDisposeEmitter,
+  });
+
+  return { dispose, ...networkObjectInfo };
 };
 
 /**
@@ -220,18 +217,18 @@ const set = async <T extends NetworkableObject>(
  * @param createLocalObjectToProxy if a network object with the provided id exists remotely but has not been set up
  * to be used on this process, this function is run, and the returned object is used as a base on which to set up a
  * NetworkObject for use on this process. This is useful for setting up network events on a network object.
- * @returns NetworkObject with specified id if one exists, undefined otherwise.
+ * @returns information about the object shared on the network with specified id if one exists, undefined otherwise.
  */
 const get = async <T extends NetworkableObject>(
   id: string,
   createLocalObjectToProxy?: (id: string) => Record<string, unknown>,
-): Promise<NetworkObject<T> | undefined> => {
+): Promise<NetworkObjectInfo<T> | undefined> => {
   await initialize();
 
   // If we already have this network object, return it
   const networkObjectRegistration = networkObjectRegistrations.get(id);
   if (networkObjectRegistration)
-    return networkObjectRegistration.object as NetworkObject<T>;
+    return networkObjectRegistration.networkObjectInfo as NetworkObjectInfo<T>;
 
   // We don't already have this network object. See if other process have it
   const networkObjectFunctions = await getRemoteNetworkObjectFunctions(id);
@@ -239,34 +236,25 @@ const get = async <T extends NetworkableObject>(
   // This network object does not exist
   if (!networkObjectFunctions) return undefined;
 
+  // This object exists remotely but does not yet exist locally. Set up its local proxy so its functions send requests to the remote object
+
   // Create an individual emitter that indicates when this object is disposed.
   // Called by the event handler that handles general network object disposal
   const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
 
-  // This object exists remotely but does not yet exist locally. Create it and proxy it so all unknown properties send a request
+  // Create the local object to be proxied
   const localObject = createLocalObjectToProxy
     ? createLocalObjectToProxy(id)
     : {};
 
-  if (localObject.onDidDispose)
-    logger.warn(
-      `Local object to proxy with id ${id} already has an onDidDispose method. It will be overwritten.`,
-    );
-
-  // TODO: Type this better - see NetworkObject
-  const object: NetworkObject<T> = {
-    ...localObject,
-    onDidDispose: networkObjectOnDidDisposeEmitter.event,
-  } as NetworkObject<T>;
-
-  // Create a proxy that, for all unknown properties, returns a function that sends a request to the remote network object
+  // Create a proxy that, for all unknown properties (function calls that the local object creator didn't set), returns a function that sends a request to the remote network object
   // TODO: use returned networkObjectFunctions to limit the functions available instead of sending a request for anything
   const {
     // The full 'remote' network object which accesses local properties and sends requests for remote functions
-    proxy: networkObject,
+    proxy: remoteObject,
     // Function to revoke the proxy aka make the proxy stop working. Should use on disposing the network object
     revoke: revokeProxy,
-  } = Proxy.revocable(object, {
+  } = Proxy.revocable(localObject, {
     get(obj, prop) {
       // If the local network object has the property, return it
       if (prop === 'then' || prop in obj) return obj[prop as keyof typeof obj];
@@ -287,20 +275,25 @@ const get = async <T extends NetworkableObject>(
 
       // Save the new request function as the actual function on the object so we don't have to create this function multiple times
       // TODO: Try making a separate array of lazy loaded request functions instead of putting them on the object and thereby reducing the usefulness of revokeProxy
-      (obj as NetworkObject)[prop] = requestFunction;
+      (obj as NetworkableObject)[prop] = requestFunction;
       return requestFunction;
     },
   });
 
+  const networkObjectInfo: NetworkObjectInfo<T> = {
+    object: remoteObject as T,
+    onDidDispose: networkObjectOnDidDisposeEmitter.event,
+  };
+
   // Save out the network object locally
   networkObjectRegistrations.set(id, {
     registrationType: NetworkObjectRegistrationType.Remote,
-    object: networkObject,
+    networkObjectInfo,
     onDidDisposeEmitter: networkObjectOnDidDisposeEmitter,
     revokeProxy,
   });
 
-  return networkObject;
+  return networkObjectInfo;
 };
 
 const networkObjectService = {
