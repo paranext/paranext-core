@@ -101,6 +101,15 @@ On Windows, you can install [WSL](https://learn.microsoft.com/en-us/windows/wsl/
 
 You'll be running a copy of the repo in both Windows and WSL so make sure they are both up-to-date.
 
+You can use VS Code from your host to access code in your WSL repo clone using the Microsoft [Remote Development](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack) VS Code extension.
+
+## VS Code Extension Options
+
+Extensions highly recommended for this repo are already displayed in VS Code through the [Extensions Recommendations settings](https://github.com/paranext/paranext-core/blob/main/.vscode/extensions.json). These are optional extensions that our developers enjoy using:
+
+- [TODO Highlight](https://marketplace.visualstudio.com/items?itemName=wayou.vscode-todo-highlight)
+- [Version Lens](https://marketplace.visualstudio.com/items?itemName=pflannery.vscode-versionlens)
+
 ## License
 
 MIT © [SIL International](https://www.sil.org/)
