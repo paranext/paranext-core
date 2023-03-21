@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
 import { ProcessType } from '@shared/globalThis';
-import PEventEmitter from '@shared/models/PEvent';
+import PEventEmitter from '@shared/models/PEventEmitter';
 import App from '../renderer/App';
 
 // #region globalThis setup

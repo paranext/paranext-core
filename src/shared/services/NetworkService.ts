@@ -27,8 +27,8 @@ import { getErrorMessage } from '@shared/util/Util';
 import * as ConnectionService from '@shared/services/ConnectionService';
 import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
 import logger from '@shared/util/logger';
-import PNetworkEventEmitter from '@shared/models/PNetworkEvent';
-import PEventEmitter from '@shared/models/PEvent';
+import PNetworkEventEmitter from '@shared/models/PNetworkEventEmitter';
+import PEventEmitter from '@shared/models/PEventEmitter';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;

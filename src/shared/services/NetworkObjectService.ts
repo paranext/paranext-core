@@ -10,7 +10,7 @@ import {
   serializeRequestType,
   UnsubscriberAsync,
 } from '@shared/util/PapiUtil';
-import PEventEmitter from '@shared/models/PEvent';
+import PEventEmitter from '@shared/models/PEventEmitter';
 import { isString } from '@shared/util/Util';
 import {
   DisposableNetworkObjectInfo,

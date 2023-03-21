@@ -24,7 +24,7 @@ import {
 } from '@shared/data/NetworkConnectorTypes';
 import { getErrorMessage } from '@shared/util/Util';
 import logger from '@shared/util/logger';
-import PEventEmitter from '@shared/models/PEvent';
+import PEventEmitter from '@shared/models/PEventEmitter';
 import { createWebSocket } from '@client/services/WebSocketFactory';
 import { IWebSocket } from '@client/services/IWebSocket';
 
