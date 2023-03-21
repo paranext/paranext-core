@@ -1,0 +1,10 @@
+{
+  "name": "evil",
+  "version": "0.0.1",
+  "description": "Paranext extension that tries to break things!!1!!",
+  "author": "TJ Couch",
+  "license": "MIT",
+  "main": "evil.js",
+  "activationEvents": [
+  ]
+}

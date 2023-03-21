@@ -7,6 +7,24 @@ export function newGuid(): string {
   );
 }
 
+const NONCE_CHARS =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const NONCE_CHARS_LENGTH = NONCE_CHARS.length;
+/**
+ * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically random.
+ * See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
+ *
+ * WARNING: THIS IS NOT CURRENTLY CRYPTOGRAPHICALLY SECURE!
+ * TODO: Make this cryptographically random! Use some polymorphic library that works in all contexts?
+ * https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues only works in browser
+ */
+export function newNonce(): string {
+  let nonce = '';
+  for (let i = 0; i < 32; i++)
+    nonce += NONCE_CHARS.charAt(Math.floor(Math.random() * NONCE_CHARS_LENGTH));
+  return nonce;
+}
+
 // thanks to DRAX at https://stackoverflow.com/a/9436948
 /**
  * Determine whether the object is a string

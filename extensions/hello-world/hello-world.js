@@ -7,15 +7,6 @@ const { logger } = papi;
 
 logger.log('Hello world is importing!');
 
-// This will be blocked
-const fs = require('fs');
-
-logger.log(
-  fs.message
-    ? fs.message
-    : `Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`,
-);
-
 const unsubscribers = [];
 
 /** Gets the code to make the Hello World React component. Provide a name to use to identify this component. Provide a string to modify the 'function HelloWorld()' line */
@@ -29,6 +20,15 @@ const getReactComponent = (name, functionModifier = '') =>
     },
     logger
   } = papi;
+
+  // Test fetching
+  papi
+    .fetch('https://bible-api.com/matthew+24:14')
+    .then((res) => res.json())
+    .then((scr) => logger.log(scr.text.replace(/\\n/g, '')))
+    .catch((e) =>
+      logger.error(\`Could not get Scripture from bible-api! Reason: \${e}\`),
+    );
 
   ${functionModifier} function HelloWorld() {
     const test = useContext(TestContext) || 'Context didnt work!! :(';
@@ -51,6 +51,12 @@ const getReactComponent = (name, functionModifier = '') =>
             onClick: () => {
               logger.log('${name} PButton clicked!');
               setMyState(myStateCurrent => myStateCurrent + 1);
+              papi.fetch('https://bible-api.com/matthew+24:14')
+    .then((res) => res.json())
+    .then((scr) => logger.log('Got it! ' + scr.text.replace(/\\n/g, '')))
+    .catch((e) =>
+      logger.error(\`Could not get Scripture from bible-api! Reason: \${e}\`),
+    );
             }
           },
           'Hello World PButton ',
@@ -89,8 +95,16 @@ exports.activate = async () => {
     }),
   ];
 
+  papi
+    .fetch('https://bible-api.com/matthew+24:14')
+    .then((res) => res.json())
+    .then((scr) => logger.log(scr.text.replace(/\n/g, '')))
+    .catch((e) =>
+      logger.error(`Could not get Scripture from bible-api! Reason: ${e}`),
+    );
+
   papi.webViews.addWebView({
-    hasReact: false,
+    contentType: 'html',
     contents: `<html>
       <head>
       </head>
@@ -147,6 +161,15 @@ exports.activate = async () => {
             const container = document.getElementById('root');
             const root = createRoot(container);
             root.render(React.createElement(HelloWorld, null));
+
+            // Test fetching
+            papi
+              .fetch('https://bible-api.com/matthew+24:14')
+              .then((res) => res.json())
+              .then((scr) => logger.log(scr.text.replace(/\\n/g, '')))
+              .catch((e) =>
+                logger.error(\`Could not get Scripture from bible-api! Reason: \${e}\`),
+              );
           });
         </script>
       </body>
@@ -154,7 +177,8 @@ exports.activate = async () => {
   });
 
   papi.webViews.addWebView({
-    contents: getReactComponent('Hello World React Webview', 'export default'),
+    componentName: 'HelloWorld',
+    contents: getReactComponent('Hello World React Webview'),
   });
 
   return Promise.all(

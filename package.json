@@ -94,7 +94,6 @@
     "rc-dock": "^3.2.17",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-frame-component": "^5.2.6",
     "react-router-dom": "^6.9.0",
     "ws": "^8.13.0"
   },
