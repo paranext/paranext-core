@@ -1,4 +1,5 @@
-import { PEventEmitter, PEventHandler } from './PEvent';
+import { PEventHandler } from '@shared/models/PEvent';
+import PEventEmitter from '@shared/models/PEventEmitter';
 
 /**
  * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted.

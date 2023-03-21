@@ -181,9 +181,6 @@ export type CommandHandler<
   TReturn = any,
 > = (...args: TParam) => Promise<TReturn>;
 
-/** Prefix on requests that indicates that the request is a command */
-export const CATEGORY_COMMAND = 'command';
-
 /** Information about a request that tells us what to do with it */
 export type RequestType = {
   /** the general category of request */
