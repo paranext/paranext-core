@@ -1,4 +1,4 @@
-import { PEventHandler } from '@shared/util/PapiUtil';
+import { PEventHandler } from '@shared/models/PEvent';
 import PEventEmitter from '@shared/models/PEventEmitter';
 
 /**

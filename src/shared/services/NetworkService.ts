@@ -18,7 +18,6 @@ import {
   ComplexRequest,
   ComplexResponse,
   createSafeRegisterFn,
-  PEvent,
   RequestHandlerType,
   UnsubPromiseAsync,
   UnsubscriberAsync,
@@ -29,6 +28,7 @@ import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
 import logger from '@shared/util/logger';
 import PNetworkEventEmitter from '@shared/models/PNetworkEventEmitter';
 import PEventEmitter from '@shared/models/PEventEmitter';
+import { PEvent } from '@shared/models/PEvent';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
