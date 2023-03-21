@@ -1,7 +1,7 @@
 /**
  * Handles registering and serving objects over the papi.
  * Not sure if this should be exposed on papi.
- * Might layer over it to prevent name collisions?
+ * Might only layer over it to prevent name collisions? See DataProviderService for example.
  */
 
 import * as NetworkService from '@shared/services/NetworkService';
@@ -130,6 +130,7 @@ const getRemoteNetworkObjectFunctions = async (
     );
   } catch (e) {
     // No processes are registered to handle this get request, meaning a network object with this id does not exist
+    // TODO: check the message and throw the error if it is not the right message?
     return undefined;
   }
 };
@@ -150,7 +151,7 @@ const has = async (id: string): Promise<boolean> => {
 /**
  * Set up a NetworkableObject as a NetworkObject to be shared on the network.
  * @param id id of the network object - all processes must use this id to look up this network object
- * @param networkObject the object to set up as a network object. This object must conform to the constraints for a NetworkableObject
+ * @param networkObject the object to set up as a network object. This object must conform to the constraints for a NetworkableObject. It is passed through and returned without modification.
  * @returns information about an object shared on the network including control over disposing of the object
  */
 const set = async <T extends NetworkableObject>(
@@ -175,7 +176,11 @@ const set = async <T extends NetworkableObject>(
     NetworkService.registerRequestHandler(
       buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
       (functionName: string, ...args: unknown[]) =>
-        Promise.resolve(networkObject[functionName](...args)),
+        // Took the indexing off of NetworkableObject so normal objects could be used,
+        // but now members can't be accessed by indexing in NetworkObjectService
+        // TODO: fix it so it is indexable but can have specific members
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        Promise.resolve((networkObject as any)[functionName](...args)),
     ),
   ];
   await Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise));
@@ -257,7 +262,7 @@ const get = async <T extends NetworkableObject>(
     // Function to revoke the proxy aka make the proxy stop working. Should use on disposing the network object
     revoke: revokeProxy,
   } = Proxy.revocable(localObject, {
-    get(obj, prop) {
+    get(obj: NetworkableObject, prop) {
       // If the local network object has the property, return it
       if (prop === 'then' || prop in obj) return obj[prop as keyof typeof obj];
 
@@ -277,7 +282,11 @@ const get = async <T extends NetworkableObject>(
 
       // Save the new request function as the actual function on the object so we don't have to create this function multiple times
       // TODO: Try making a separate array of lazy loaded request functions instead of putting them on the object and thereby reducing the usefulness of revokeProxy
-      (obj as NetworkableObject)[prop] = requestFunction;
+      // Took the indexing off of NetworkableObject so normal objects could be used,
+      // but now members can't be accessed by indexing in NetworkObjectService
+      // TODO: fix it so it is indexable but can have specific members
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (obj as any)[prop] = requestFunction;
       return requestFunction;
     },
   });

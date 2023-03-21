@@ -8,12 +8,10 @@ import { UnsubscriberAsync } from '@shared/util/PapiUtil';
  * All shared functions' arguments and returns must be serializable in order
  * to be called across processes.
  */
-export type NetworkableObject = Record<
-  string,
-  // Need to be able to have any args because the only thing we can control here is the return being async
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (...args: any) => Promise<unknown>
->;
+// Took the indexing off of NetworkableObject so normal objects could be used,
+// but now members can't be accessed by indexing in NetworkObjectService
+// TODO: fix it so it is indexable but can have specific members
+export type NetworkableObject = {};
 
 /**
  * Information about an object shared on the network.

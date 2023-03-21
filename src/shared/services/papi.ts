@@ -12,6 +12,7 @@ import PEventEmitter from '@shared/models/PEventEmitter';
 import logger from '@shared/util/logger';
 import { isRenderer } from '@shared/util/InternalUtil';
 import InternetService from '@shared/services/InternetService';
+import dataProviderService from './DataProviderService';
 
 // TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
 const papiComponents = isRenderer()
@@ -43,6 +44,7 @@ export default {
   network: papiExports,
   logger,
   internet: InternetService,
+  dataProvider: dataProviderService,
 };
 
 /**
