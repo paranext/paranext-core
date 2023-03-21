@@ -64,3 +64,17 @@ export const Required: Story = {
     required: true,
   },
 };
+
+export const Events: Story = {
+  args: {
+    onChange() {
+      console.log('Changed');
+    },
+    onBlur() {
+      console.log('Lost focus');
+    },
+    onFocus() {
+      console.log('Got focus');
+    },
+  },
+};

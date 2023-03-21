@@ -7,28 +7,24 @@
   display: inline-block;
   line-height: 1;
 }
-.papi-button.primary.enabled {
+.papi-button.primary {
   color: white;
   background-color: #1ea7fd;
 }
-.papi-button.disabled {
-  color: darkslategray;
-  background-color: gray;
-}
-.papi-button.secondary.enabled {
+.papi-button.secondary {
   color: #333;
   background-color: transparent;
   box-shadow: rgba(0, 0, 0, 0.15) 0px 0px 0px 1px inset;
 }
-.papi-button.paratext.enabled {
+.papi-button.paratext {
   background-color: darkgreen;
   color: greenyellow;
 }
-.papi-button.paratext.bright.enabled {
+.papi-button.paratext.bright {
   background-color: greenyellow;
   color: darkgreen;
 }
-.papi-button.video.enabled {
+.papi-button.video {
   background-color: red;
   color: white;
 }

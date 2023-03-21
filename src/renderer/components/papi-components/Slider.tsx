@@ -1,5 +1,6 @@
 import { Slider as MuiSlider } from '@mui/material';
-import classes from './slider.module.css';
+import { SyntheticEvent } from 'react';
+import './slider.css';
 
 type SliderProps = {
   /**
@@ -57,11 +58,18 @@ type SliderProps = {
   /**
    * Click handler
    */
-  onChange?: () => void;
+  onChange?: (
+    event: Event,
+    value: number | number[],
+    activeThumb: number,
+  ) => void;
   /**
    * Click release handler
    */
-  onChangeCommitted?: () => void;
+  onChangeCommitted?: (
+    event: Event | SyntheticEvent<Element, Event>,
+    value: number | number[],
+  ) => void;
 };
 
 function Slider({
@@ -77,16 +85,7 @@ function Slider({
   onChange,
   onChangeCommitted,
 }: SliderProps) {
-  const orientationClass = `${
-    orientation === 'vertical' ? classes.vertical : ''
-  }`;
-  const additionalClasses =
-    className &&
-    className
-      .map((cssClass) => {
-        return `${classes[cssClass]}`;
-      })
-      .join(' ');
+  const classNameString = className?.join(' ') ?? '';
 
   return (
     <MuiSlider
@@ -98,23 +97,9 @@ function Slider({
       marks={marks}
       defaultValue={defaultValue}
       valueLabelDisplay={valueLabelDisplay}
-      className={[
-        classes['papi-slider'],
-        orientationClass,
-        additionalClasses,
-      ].join(' ')}
-      onChange={(e) => {
-        if (onChange) {
-          e.preventDefault();
-          onChange();
-        }
-      }}
-      onChangeCommitted={(e) => {
-        if (onChangeCommitted) {
-          e.preventDefault();
-          onChangeCommitted();
-        }
-      }}
+      className={['papi-slider', orientation, classNameString].join(' ')}
+      onChange={onChange}
+      onChangeCommitted={onChangeCommitted}
     />
   );
 }

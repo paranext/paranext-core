@@ -1,5 +1,5 @@
 import { TextField as MuiTextfield } from '@mui/material';
-import classes from './textfield.module.css';
+import './textfield.css';
 
 type TextfieldProps = {
   /**
@@ -71,50 +71,22 @@ function Textfield({
   onFocus,
   onBlur,
 }: TextfieldProps) {
-  const errorClass = error ? 'error' : '';
-  const fullWidthClass = fullWidth ? 'full-width' : '';
-  const additionalClasses =
-    className &&
-    className
-      .map((cssClass: string) => {
-        return `${classes[cssClass]}`;
-      })
-      .join(' ');
+  const classNameString = className?.join(' ') ?? '';
 
   return (
     <MuiTextfield
       variant={variant}
       disabled={disabled}
-      error={error} // Do we want to do this or just use CSS?
-      fullWidth={fullWidth} // Do we want to do this or just use CSS?
+      error={error}
+      fullWidth={fullWidth}
       helperText={helperText}
       label={label}
       placeholder={placeholder}
       required={required}
-      className={[
-        classes['papi-textfield'],
-        errorClass,
-        fullWidthClass,
-        additionalClasses,
-      ].join(' ')}
-      onChange={(e) => {
-        if (onChange) {
-          e.preventDefault();
-          onChange();
-        }
-      }}
-      onFocus={(e) => {
-        if (onFocus) {
-          e.preventDefault();
-          onFocus();
-        }
-      }}
-      onBlur={(e) => {
-        if (onBlur) {
-          e.preventDefault();
-          onBlur();
-        }
-      }}
+      className={['papi-textfield', classNameString].join(' ')}
+      onChange={onChange}
+      onFocus={onFocus}
+      onBlur={onBlur}
     />
   );
 }

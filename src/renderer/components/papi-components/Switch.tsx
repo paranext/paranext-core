@@ -1,7 +1,12 @@
 import { Switch as MuiSwitch } from '@mui/material';
-import classes from './switch.module.css';
+import { ChangeEvent, MouseEventHandler } from 'react';
+import './switch.css';
 
 type SwitchProps = {
+  /**
+   * If `true`, the component is checked.
+   */
+  checked?: boolean;
   /**
    * Is this the principal call to action on the page?
    * @default false
@@ -22,60 +27,45 @@ type SwitchProps = {
    */
   className?: string[];
   /**
+   * Optional change handler
+   */
+  onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
+  /**
    * Optional click handler
    */
-  onClick?: () => {};
-  /**
-   * Optional context menu handler
-   */
-  onContextMenu?: () => {};
+  onClick?: MouseEventHandler<HTMLButtonElement>;
 };
 
 /**
  * Primary UI component for user interaction
  */
-function Button({
+function Switch({
+  checked,
   primary = false,
   disabled = false,
   error = false,
   className,
+  onChange,
   onClick,
-  onContextMenu,
 }: SwitchProps) {
-  const mode = `${primary ? classes.primary : classes.secondary}`;
-  const enabledClass = `${disabled ? classes.disabled : classes.enabled}`;
-  const errorClass = `${error ? classes.error : ''}`;
-  const additionalClasses =
-    className &&
-    className
-      .map((cssClass) => {
-        return `${classes[cssClass]}`;
-      })
-      .join(' ');
+  const primaryClass = primary ? 'primary' : 'secondary';
+  const errorClass = error ? 'error' : '';
+  const classNameString = className?.join(' ') ?? '';
+
   return (
     <MuiSwitch
+      checked={checked}
       disabled={disabled}
       className={[
-        classes['papi-switch'],
-        mode,
-        enabledClass,
+        'papi-switch',
+        primaryClass,
         errorClass,
-        additionalClasses,
+        classNameString,
       ].join(' ')}
-      onClick={(e) => {
-        if (onClick && onClick.length !== 0) {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      onContextMenu={(e) => {
-        if (onContextMenu && onContextMenu.length !== 0) {
-          e.preventDefault();
-          onContextMenu();
-        }
-      }}
+      onChange={onChange}
+      onClick={onClick}
     />
   );
 }
 
-export default Button;
+export default Switch;

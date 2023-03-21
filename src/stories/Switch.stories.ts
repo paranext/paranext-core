@@ -42,3 +42,11 @@ export const ParatextBright: Story = {
     className: ['paratext', 'bright'],
   },
 };
+
+export const OnChange: Story = {
+  args: {
+    onChange(event) {
+      console.log(event.target.checked);
+    },
+  },
+};

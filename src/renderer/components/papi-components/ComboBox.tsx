@@ -1,5 +1,6 @@
 import { Autocomplete as MuiComboBox } from '@mui/material';
-import classes from './combobox.module.css';
+import { FocusEventHandler } from 'react';
+import './combobox.css';
 
 import Textfield from './Textfield';
 
@@ -31,18 +32,19 @@ type ComboBoxProps = {
    * Additional css classes to help with unique styling of the button
    */
   className?: string[];
-  // /**
-  //  * Triggers when content of textfield is changed
-  //  */
-  // onChange?: () => void;
-  // /**
-  //  * Triggers when textfield gets focus
-  //  */
-  // onFocus?: () => void;
-  // /**
-  //  * Triggers when textfield loses focus
-  //  */
-  // onBlur?: () => void;
+  /**
+   * Triggers when content of textfield is changed
+   */
+  onChange?: () => void; // This event handler does not have the suggested signature,
+  // but using the suggested one leads to additional MUI import, and I'm not sure if that's a great idea
+  /**
+   * Triggers when textfield gets focus
+   */
+  onFocus?: FocusEventHandler<HTMLDivElement>; // Storybook crashes when giving the combo box focus
+  /**
+   * Triggers when textfield loses focus
+   */
+  onBlur?: FocusEventHandler<HTMLDivElement>;
 };
 
 function ComboBox({
@@ -52,20 +54,12 @@ function ComboBox({
   fullWidth = false,
   options = [],
   className,
-}: // onChange,
-// onFocus,
-// onBlur,
-ComboBoxProps) {
-  const enabledClass = `${disabled ? classes.disabled : classes.enabled}`;
-  const errorClass = `${error ? classes.error : ''}`;
-  const fullWidthClass = `${fullWidth ? classes.fullwidth : ''}`;
-  const additionalClasses =
-    className &&
-    className
-      .map((cssClass) => {
-        return `${classes[cssClass]}`;
-      })
-      .join(' ');
+  onChange,
+  onFocus,
+  onBlur,
+}: ComboBoxProps) {
+  const errorClass = error ? 'error' : '';
+  const classNameString = className?.join(' ') ?? '';
 
   return (
     <MuiComboBox
@@ -73,32 +67,11 @@ ComboBoxProps) {
       disabled={disabled}
       fullWidth={fullWidth}
       options={options}
-      className={[
-        classes['papi-combo-box'],
-        enabledClass,
-        errorClass,
-        fullWidthClass,
-        additionalClasses,
-      ].join(' ')}
-      // onChange={(e) => {
-      //   if (onChange && onChange.length !== 0) {
-      //     e.preventDefault();
-      //     onChange();
-      //   }
-      // }}
-      // onFocus={(e) => {
-      //   if (onFocus && onFocus.length !== 0) {
-      //     e.preventDefault();
-      //     onFocus();
-      //   }
-      // }}
-      // onBlur={(e) => {
-      //   if (onBlur && onBlur.length !== 0) {
-      //     e.preventDefault();
-      //     onBlur();
-      //   }
-      // }}
-      renderInput={(params) => <Textfield {...params} label={title} />}
+      className={['papi-combo-box', errorClass, classNameString].join(' ')}
+      onChange={onChange}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      renderInput={(props) => <Textfield {...props} label={title} />}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { Button as MuiButton } from '@mui/material';
-import { PropsWithChildren } from 'react';
+import { MouseEventHandler, PropsWithChildren } from 'react';
 import './button.css';
 
 type ButtonProps = PropsWithChildren<{
@@ -18,48 +18,36 @@ type ButtonProps = PropsWithChildren<{
   /**
    * Optional click handler
    */
-  onClick?: () => void;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
   /**
    * Optional context menu handler
    */
-  onContextMenu?: () => void;
+  onContextMenu?: MouseEventHandler<HTMLButtonElement>;
 }>;
 
 /**
  * Primary UI component for user interaction
  */
-const Button = ({
+function Button({
   primary = false,
   disabled,
   className,
   onClick,
   onContextMenu,
   children,
-}: ButtonProps) => {
+}: ButtonProps) {
   const mode = primary ? 'primary' : 'secondary';
-  const disabledStatus = disabled ? 'disabled' : 'enabled';
-  const additionalClasses = className?.join(' ') ?? '';
+  const classNameString = className?.join(' ') ?? '';
   return (
     <MuiButton
-      className={['papi-button', mode, disabledStatus, additionalClasses].join(
-        ' ',
-      )}
-      onClick={(e) => {
-        if (onClick) {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      onContextMenu={(e) => {
-        if (onContextMenu) {
-          e.preventDefault();
-          onContextMenu();
-        }
-      }}
+      disabled={disabled}
+      className={['papi-button', mode, classNameString].join(' ')}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
     >
       {children}
     </MuiButton>
   );
-};
+}
 
 export default Button;
