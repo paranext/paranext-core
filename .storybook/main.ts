@@ -1,6 +1,6 @@
 import type { StorybookConfig } from '@storybook/react-webpack5';
-import { merge, mergeWithCustomize } from 'webpack-merge';
-import webpack, { RuleSetRule } from 'webpack';
+import { mergeWithCustomize } from 'webpack-merge';
+import { RuleSetRule } from 'webpack';
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.mdx', '../src/**/*.stories.@(js|jsx|ts|tsx)'],
@@ -41,8 +41,7 @@ const config: StorybookConfig = {
         : // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.dev').default;
     // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
-    const { devServer, entry, output, ...rendererConfigSanitized } =
-      rendererConfig;
+    const { ...rendererConfigSanitized } = rendererConfig;
 
     // Remove the Storybook Webpack rules that we already have our own rules for
     return mergeWithCustomize({

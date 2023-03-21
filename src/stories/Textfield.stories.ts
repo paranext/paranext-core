@@ -68,12 +68,15 @@ export const Required: Story = {
 export const Events: Story = {
   args: {
     onChange() {
+      // eslint-disable-next-line no-console
       console.log('Changed');
     },
     onBlur() {
+      // eslint-disable-next-line no-console
       console.log('Lost focus');
     },
     onFocus() {
+      // eslint-disable-next-line no-console
       console.log('Got focus');
     },
   },
