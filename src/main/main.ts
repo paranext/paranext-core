@@ -264,7 +264,7 @@ setTimeout(async () => {
 
 (async () => {
   const {
-    object: testMain,
+    networkObject: testMain,
     dispose: unsubTestMain,
     onDidDispose: testMainOnDidDispose,
   } = await networkObjectService.set('test-main', {
@@ -298,7 +298,7 @@ setTimeout(async () => {
 
         logger.log(
           `get verse: ${await Promise.resolve(
-            testExtensionHostInfo?.object.getVerse(),
+            testExtensionHostInfo?.networkObject.getVerse(),
           )}`,
         );
       }

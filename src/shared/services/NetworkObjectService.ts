@@ -7,14 +7,16 @@
 import * as NetworkService from '@shared/services/NetworkService';
 import {
   aggregateUnsubscriberAsyncs,
-  DisposableNetworkObjectInfo,
-  NetworkableObject,
-  NetworkObjectInfo,
   serializeRequestType,
   UnsubscriberAsync,
 } from '@shared/util/PapiUtil';
 import PEventEmitter from '@shared/models/PEvent';
 import { isString } from '@shared/util/Util';
+import {
+  DisposableNetworkObjectInfo,
+  NetworkableObject,
+  NetworkObjectInfo,
+} from '@shared/models/NetworkObjectInfo';
 
 /** Prefix on requests that indicates that the request is related to a network object */
 const CATEGORY_NETWORK_OBJECT = 'object';
@@ -93,10 +95,6 @@ const initialize = () => {
     // TODO: Might be best to make a singleton or something
     await NetworkService.initialize();
 
-    // Set up subscriptions that the service needs to work
-
-    // Register built-in commands
-
     isInitialized = true;
   })();
 
@@ -152,12 +150,12 @@ const has = async (id: string): Promise<boolean> => {
 /**
  * Set up a NetworkableObject as a NetworkObject to be shared on the network.
  * @param id id of the network object - all processes must use this id to look up this network object
- * @param object the object to set up as a network object. This object must conform to the constraints for a NetworkableObject
+ * @param networkObject the object to set up as a network object. This object must conform to the constraints for a NetworkableObject
  * @returns information about an object shared on the network including control over disposing of the object
  */
 const set = async <T extends NetworkableObject>(
   id: string,
-  object: T,
+  networkObject: T,
 ): Promise<DisposableNetworkObjectInfo<T>> => {
   await initialize();
   if (await has(id))
@@ -177,7 +175,7 @@ const set = async <T extends NetworkableObject>(
     NetworkService.registerRequestHandler(
       buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
       (functionName: string, ...args: unknown[]) =>
-        Promise.resolve(object[functionName](...args)),
+        Promise.resolve(networkObject[functionName](...args)),
     ),
   ];
   await Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise));
@@ -199,7 +197,7 @@ const set = async <T extends NetworkableObject>(
   };
 
   const networkObjectInfo: NetworkObjectInfo<T> = {
-    object,
+    networkObject,
     onDidDispose: networkObjectOnDidDisposeEmitter.event,
   };
 
@@ -285,7 +283,7 @@ const get = async <T extends NetworkableObject>(
   });
 
   const networkObjectInfo: NetworkObjectInfo<T> = {
-    object: remoteObject as T,
+    networkObject: remoteObject as T,
     onDidDispose: networkObjectOnDidDisposeEmitter.event,
   };
 

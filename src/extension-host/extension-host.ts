@@ -73,9 +73,12 @@ setTimeout(
 
       const testEHInfo = await networkObjectService.set('test-extension-host', {
         getVerse: async () => {
-          const results = `test-extension-host got verse: ${(
-            await (await fetch('https://bible-api.com/matthew+24:14')).json()
-          ).text.replace(/\\n/g, '')}`;
+          const verse = await fetch('https://bible-api.com/matthew+24:14');
+          const verseJson = await verse.json();
+          const results = `test-extension-host got verse: ${verseJson.text.replace(
+            /\\n/g,
+            '',
+          )}`;
           logger.log(results);
           return results;
         },
@@ -93,7 +96,9 @@ setTimeout(
   }
 
   logger.log(
-    `do stuff: ${await testMainInfo?.object.doStuff('extension host things')}`,
+    `do stuff: ${await testMainInfo?.networkObject.doStuff(
+      'extension host things',
+    )}`,
   );
 })();
 
