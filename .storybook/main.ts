@@ -41,7 +41,8 @@ const config: StorybookConfig = {
         : // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.dev').default;
     // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
-    const { ...rendererConfigSanitized } = rendererConfig;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { entry, output, ...rendererConfigSanitized } = rendererConfig;
 
     // Remove the Storybook Webpack rules that we already have our own rules for
     return mergeWithCustomize({
