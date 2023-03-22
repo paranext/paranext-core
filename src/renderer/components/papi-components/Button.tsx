@@ -37,7 +37,8 @@ function Button({
   children,
 }: ButtonProps) {
   const mode = isPrimary ? 'primary' : 'secondary';
-  const classNameString = className?.join(' ') ?? '';
+  const classNameString =
+    (className && className.length > 0 && className.join(' ')) ?? '';
   return (
     <MuiButton
       disabled={disabled}
