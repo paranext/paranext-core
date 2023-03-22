@@ -6,21 +6,21 @@ const meta: Meta<typeof Switch> = {
   component: Switch,
   tags: ['autodocs'],
   argTypes: {
-    primary: { control: 'boolean' },
+    isPrimary: { control: 'boolean' },
     disabled: { control: 'boolean' },
-    error: { control: 'boolean' },
+    hasError: { control: 'boolean' },
     className: { control: 'text' },
   },
 };
-
 export default meta;
+
 type Story = StoryObj<typeof Switch>;
 
 export const Default: Story = {
   args: {},
 };
 export const Primary: Story = {
-  args: { primary: true },
+  args: { isPrimary: true },
 };
 
 export const Disabled: Story = {
@@ -28,7 +28,7 @@ export const Disabled: Story = {
 };
 
 export const ErrorState: Story = {
-  args: { error: true },
+  args: { hasError: true },
 };
 
 export const Paratext: Story = {
@@ -46,6 +46,7 @@ export const ParatextBright: Story = {
 export const OnChange: Story = {
   args: {
     onChange(event) {
+      // eslint-disable-next-line no-console
       console.log(event.target.checked);
     },
   },

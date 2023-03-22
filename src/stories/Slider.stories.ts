@@ -31,8 +31,8 @@ const meta: Meta<typeof Slider> = {
     className: { control: 'text' },
   },
 };
-
 export default meta;
+
 type Story = StoryObj<typeof Slider>;
 
 export const Default: Story = {

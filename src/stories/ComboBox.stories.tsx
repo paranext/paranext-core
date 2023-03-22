@@ -8,14 +8,14 @@ const meta: Meta<typeof ComboBox> = {
   argTypes: {
     title: { control: 'text' },
     disabled: { control: 'boolean' },
-    error: { control: 'boolean' },
+    hasError: { control: 'boolean' },
     fullWidth: { control: 'boolean' },
     options: { control: 'text' },
     className: { control: 'text' },
   },
 };
-
 export default meta;
+
 type Story = StoryObj<typeof ComboBox>;
 
 export const Default: Story = {
@@ -27,7 +27,7 @@ export const Disabled: Story = {
 };
 
 export const ErrorState: Story = {
-  args: { error: true },
+  args: { hasError: true },
 };
 
 export const FullWidth: Story = {

@@ -24,8 +24,8 @@ const meta: Meta<typeof Textfield> = {
     className: { control: 'text' },
   },
 };
-
 export default meta;
+
 type Story = StoryObj<typeof Textfield>;
 
 export const Default: Story = {

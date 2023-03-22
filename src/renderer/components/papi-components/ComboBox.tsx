@@ -1,5 +1,9 @@
-import { Autocomplete as MuiComboBox } from '@mui/material';
-import { FocusEventHandler } from 'react';
+import {
+  Autocomplete as MuiComboBox,
+  AutocompleteChangeDetails,
+  AutocompleteChangeReason,
+} from '@mui/material';
+import { FocusEventHandler, SyntheticEvent } from 'react';
 import './combobox.css';
 
 import Textfield from './Textfield';
@@ -18,7 +22,7 @@ type ComboBoxProps = {
    * True when (input related to) switch is erroneous
    * @default false
    */
-  error?: boolean;
+  hasError?: boolean;
   /**
    * If `true`, the input will take up the full width of its container.
    * @default false
@@ -35,8 +39,12 @@ type ComboBoxProps = {
   /**
    * Triggers when content of textfield is changed
    */
-  onChange?: () => void; // This event handler does not have the suggested signature,
-  // but using the suggested one leads to additional MUI import, and I'm not sure if that's a great idea
+  onChange?: (
+    event: SyntheticEvent<Element, Event>,
+    value: unknown,
+    reason: AutocompleteChangeReason,
+    details?: AutocompleteChangeDetails<unknown> | undefined,
+  ) => void;
   /**
    * Triggers when textfield gets focus
    */
@@ -50,7 +58,7 @@ type ComboBoxProps = {
 function ComboBox({
   title,
   disabled = false,
-  error = false,
+  hasError = false,
   fullWidth = false,
   options = [],
   className,
@@ -58,7 +66,7 @@ function ComboBox({
   onFocus,
   onBlur,
 }: ComboBoxProps) {
-  const errorClass = error ? 'error' : '';
+  const errorClass = hasError ? 'error' : '';
   const classNameString = className?.join(' ') ?? '';
 
   return (

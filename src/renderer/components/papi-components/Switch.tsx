@@ -11,7 +11,7 @@ type SwitchProps = {
    * Is this the principal call to action on the page?
    * @default false
    */
-  primary?: boolean;
+  isPrimary?: boolean;
   /**
    * Enabled status of switch
    * @default false
@@ -21,7 +21,7 @@ type SwitchProps = {
    * True when (input related to) switch is erroneous
    * @default false
    */
-  error?: boolean;
+  hasError?: boolean;
   /**
    * Additional css classes to help with unique styling of the switch
    */
@@ -41,15 +41,15 @@ type SwitchProps = {
  */
 function Switch({
   checked,
-  primary = false,
+  isPrimary = false,
   disabled = false,
-  error = false,
+  hasError = false,
   className,
   onChange,
   onClick,
 }: SwitchProps) {
-  const primaryClass = primary ? 'primary' : 'secondary';
-  const errorClass = error ? 'error' : '';
+  const primaryClass = isPrimary ? 'primary' : 'secondary';
+  const errorClass = hasError ? 'error' : '';
   const classNameString = className?.join(' ') ?? '';
 
   return (

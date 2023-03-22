@@ -6,7 +6,7 @@ type ButtonProps = PropsWithChildren<{
   /**
    * Is this the principal call to action on the page?
    */
-  primary?: boolean;
+  isPrimary?: boolean;
   /**
    * Enabled status of button
    */
@@ -29,14 +29,14 @@ type ButtonProps = PropsWithChildren<{
  * Primary UI component for user interaction
  */
 function Button({
-  primary = false,
+  isPrimary = false,
   disabled,
   className,
   onClick,
   onContextMenu,
   children,
 }: ButtonProps) {
-  const mode = primary ? 'primary' : 'secondary';
+  const mode = isPrimary ? 'primary' : 'secondary';
   const classNameString = className?.join(' ') ?? '';
   return (
     <MuiButton

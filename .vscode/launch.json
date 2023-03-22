@@ -60,7 +60,6 @@
         "IN_VSCODE": "true"
       }
     },
-      },
     {
       "name": "Storybook",
       "type": "node",
@@ -68,7 +67,7 @@
       "protocol": "inspector",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "storybook", "--", "--debug-webpack"],
-      "env": {    "autoAttachChildProcesses": true
+      "env": { "autoAttachChildProcesses": true }
     }
   ],
   "compounds": [
