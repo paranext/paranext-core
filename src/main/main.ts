@@ -24,8 +24,9 @@ import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
 import { resolveHtmlPath } from '@node/util/util';
-import MenuBuilder from './menu';
-import extensionHostService from './services/extension-host.service';
+import MenuBuilder from '@main/menu';
+import extensionHostService from '@main/services/extension-host.service';
+import networkObjectService from '@shared/services/NetworkObjectService';
 
 logger.log('Starting main');
 
@@ -256,5 +257,53 @@ setTimeout(async () => {
     )}`,
   );
 }, 5000);
+
+// #endregion
+
+// #region network object test
+
+(async () => {
+  const {
+    networkObject: testMain,
+    dispose: unsubTestMain,
+    onDidDispose: testMainOnDidDispose,
+  } = await networkObjectService.set('test-main', {
+    doStuff: async (stuff: string) => {
+      const result = `test-main did stuff: ${stuff}!`;
+      logger.log(result);
+      return result;
+    },
+  });
+
+  const unsub = testMainOnDidDispose(() => {
+    logger.log('Disposed of test-main!');
+    unsub();
+  });
+
+  await testMain.doStuff('main things');
+
+  setTimeout(async () => {
+    await unsubTestMain();
+
+    setTimeout(async () => {
+      let testExtensionHostInfo = await networkObjectService.get<{
+        getVerse: () => Promise<string>;
+      }>('test-extension-host');
+      if (testExtensionHostInfo) {
+        const unsub2 = testExtensionHostInfo?.onDidDispose(() => {
+          logger.log('Disposed of test-extension-host!');
+          testExtensionHostInfo = undefined;
+          unsub2();
+        });
+
+        logger.log(
+          `get verse: ${await Promise.resolve(
+            testExtensionHostInfo?.networkObject.getVerse(),
+          )}`,
+        );
+      }
+    }, 1000);
+  }, 10000);
+})();
 
 // #endregion

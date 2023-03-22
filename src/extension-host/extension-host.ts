@@ -5,6 +5,7 @@ import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
 import * as ExtensionService from '@extension-host/services/ExtensionService';
 import logger from '@shared/util/logger';
+import networkObjectService from '@shared/services/NetworkObjectService';
 
 // #region Test logs
 
@@ -55,5 +56,50 @@ setTimeout(
   },
   globalThis.isPackaged ? 3000 : 0,
 );
+
+// #endregion
+
+// #region network object test
+
+(async () => {
+  let testMainInfo = await networkObjectService.get<{
+    doStuff: (stuff: string) => Promise<string>;
+  }>('test-main');
+  if (testMainInfo) {
+    const unsub = testMainInfo?.onDidDispose(async () => {
+      logger.log('Disposed of test-main!');
+      testMainInfo = undefined;
+      unsub();
+
+      const testEHInfo = await networkObjectService.set('test-extension-host', {
+        getVerse: async () => {
+          const verse = await fetch('https://bible-api.com/matthew+24:14');
+          const verseJson = await verse.json();
+          const results = `test-extension-host got verse: ${verseJson.text.replace(
+            /\\n/g,
+            '',
+          )}`;
+          logger.log(results);
+          return results;
+        },
+      });
+
+      if (testEHInfo) {
+        const unsub2 = testEHInfo.onDidDispose(() => {
+          logger.log('Disposed of test-extension-host!');
+          unsub2();
+        });
+      }
+
+      setTimeout(testEHInfo.dispose, 10000);
+    });
+  }
+
+  logger.log(
+    `do stuff: ${await testMainInfo?.networkObject.doStuff(
+      'extension host things',
+    )}`,
+  );
+})();
 
 // #endregion
