@@ -9,6 +9,7 @@ Electron client, extension host, and C# library for Paranext
 <div align="center">
 
 [![Build Status][github-actions-status]][github-actions-url]
+[![CodeQL][gitghub-codeql-status]][gitghub-codeql-url]
 [![Github Tag][github-tag-image]][github-tag-url]
 
 </div>
@@ -118,5 +119,7 @@ MIT © [SIL International](https://www.sil.org/)
 
 [github-actions-status]: https://github.com/paranext/paranext-core/workflows/Test/badge.svg
 [github-actions-url]: https://github.com/paranext/paranext-core/actions
+[gitghub-codeql-status]: https://github.com/paranext/paranext-core/actions/workflows/codeql-analysis.yml/badge.svg
+[gitghub-codeql-url]: https://github.com/paranext/paranext-core/actions/workflows/codeql-analysis.yml
 [github-tag-image]: https://img.shields.io/github/tag/paranext/paranext-core.svg?label=version
 [github-tag-url]: https://github.com/paranext/paranext-core/releases/latest
