@@ -4,10 +4,7 @@
 
 import { WebViewProps } from '@renderer/components/WebView';
 import { isRenderer } from '@shared/util/InternalUtil';
-import {
-  aggregateUnsubscriberAsyncs,
-  CommandHandler,
-} from '@shared/util/PapiUtil';
+import { aggregateUnsubscriberAsyncs, CommandHandler } from '@shared/util/PapiUtil';
 import * as CommandService from '@shared/services/CommandService';
 import { newGuid, newNonce } from '@shared/util/Util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
@@ -34,9 +31,8 @@ let isInitialized = false;
 let initializePromise: Promise<void> | undefined;
 
 /** Emitter for when a webview is added */
-const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
-  'webView:onDidAddWebView',
-);
+const onDidAddWebViewEmitter =
+  createNetworkEventEmitter<AddWebViewEvent>('webView:onDidAddWebView');
 /** Event that emits with webView info when a webView is added */
 export const onDidAddWebView = onDidAddWebViewEmitter.event;
 
@@ -58,8 +54,7 @@ const setWebViewPapi = (webViewId: string, webViewPapi: typeof papi) =>
  */
 const getWebViewPapi = (webViewId: string) => {
   const webViewPapi = webViewPapis.get(webViewId);
-  if (!webViewPapi)
-    throw new Error(`Cannot find papi for WebView with id ${webViewId}`);
+  if (!webViewPapi) throw new Error(`Cannot find papi for WebView with id ${webViewId}`);
 
   webViewPapis.delete(webViewId);
   return webViewPapi;
@@ -82,10 +77,7 @@ const getWebViewPapi = (webViewId: string) => {
  */
 export const addWebView = async (webView: WebViewContents) => {
   if (!isRenderer()) {
-    return CommandService.sendCommand<[WebViewContents], void>(
-      'addWebView',
-      webView,
-    );
+    return CommandService.sendCommand<[WebViewContents], void>('addWebView', webView);
   }
 
   // Create a papi instance for this WebView
@@ -93,9 +85,7 @@ export const addWebView = async (webView: WebViewContents) => {
   setWebViewPapi(webViewId, papi);
 
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
-  const contentType = webView.contentType
-    ? webView.contentType
-    : WebViewContentType.React;
+  const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
 
   /** String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such */
   const imports = `
@@ -150,9 +140,7 @@ export const addWebView = async (webView: WebViewContents) => {
               function initializeReact() {
                 const container = document.getElementById('root');
                 const root = createRoot(container);
-                root.render(React.createElement(${
-                  reactWebView.componentName
-                }, null));
+                root.render(React.createElement(${reactWebView.componentName}, null));
               }
 
               if (document.readyState === 'loading')
@@ -242,9 +230,8 @@ export const initialize = () => {
     // Register built-in commands
     if (isRenderer()) {
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
-      const unsubPromises = Object.entries(rendererCommandFunctions).map(
-        ([commandName, handler]) =>
-          CommandService.registerCommand(commandName, handler),
+      const unsubPromises = Object.entries(rendererCommandFunctions).map(([commandName, handler]) =>
+        CommandService.registerCommand(commandName, handler),
       );
 
       const unsubscribeCommands = aggregateUnsubscriberAsyncs(

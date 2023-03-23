@@ -33,9 +33,7 @@ import PEventEmitter from '@shared/models/PEventEmitter';
 /** Holds promises for a request */
 type LiveRequest<TReturn> = {
   requestId: number;
-  resolve: (
-    value: InternalResponse<TReturn> | PromiseLike<InternalResponse<TReturn>>,
-  ) => void;
+  resolve: (value: InternalResponse<TReturn> | PromiseLike<InternalResponse<TReturn>>) => void;
   reject: (reason?: unknown) => void;
 };
 
@@ -76,10 +74,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
   private clientSockets = new Map<number, WebSocketClient>();
 
   /** All message subscriptions - emitters that emit an event each time a message with a specific message type comes in */
-  private messageEmitters = new Map<
-    MessageType,
-    PEventEmitter<WebSocketMessageEvent>
-  >();
+  private messageEmitters = new Map<MessageType, PEventEmitter<WebSocketMessageEvent>>();
 
   /** Promise that resolves when finished starting the server or rejects if disconnected before the server finishes */
   private connectPromise?: Promise<NetworkConnectorInfo>;
@@ -158,10 +153,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
     );
 
     // Listen for events from the clients and run the event handler
-    this.unsubscribeHandleEventMessage = this.subscribe(
-      MessageType.Event,
-      this.handleEventMessage,
-    );
+    this.unsubscribeHandleEventMessage = this.subscribe(MessageType.Event, this.handleEventMessage);
 
     // Start the webSocket server
     this.webSocketServer = new WebSocketServer({ port: WEBSOCKET_PORT });
@@ -202,36 +194,25 @@ export default class ServerNetworkConnector implements INetworkConnector {
       this.webSocketServer = undefined;
     }
 
-    if (this.unsubscribeHandleClientConnectMessage)
-      this.unsubscribeHandleClientConnectMessage();
-    if (this.unsubscribeHandleResponseMessage)
-      this.unsubscribeHandleResponseMessage();
-    if (this.unsubscribeHandleRequestMessage)
-      this.unsubscribeHandleRequestMessage();
-    if (this.unsubscribeHandleEventMessage)
-      this.unsubscribeHandleEventMessage();
+    if (this.unsubscribeHandleClientConnectMessage) this.unsubscribeHandleClientConnectMessage();
+    if (this.unsubscribeHandleResponseMessage) this.unsubscribeHandleResponseMessage();
+    if (this.unsubscribeHandleRequestMessage) this.unsubscribeHandleRequestMessage();
+    if (this.unsubscribeHandleEventMessage) this.unsubscribeHandleEventMessage();
   };
 
-  request = async <TParam, TReturn>(
-    requestType: string,
-    request: InternalRequest<TParam>,
-  ) => {
+  request = async <TParam, TReturn>(requestType: string, request: InternalRequest<TParam>) => {
     // Set up a promise we can resolve later
     let liveRequest: LiveRequest<TReturn> | undefined;
-    const requestPromise = new Promise<InternalResponse<TReturn>>(
-      (resolve, reject) => {
-        liveRequest = {
-          requestId: request.requestId,
-          resolve,
-          reject,
-        };
-      },
-    );
+    const requestPromise = new Promise<InternalResponse<TReturn>>((resolve, reject) => {
+      liveRequest = {
+        requestId: request.requestId,
+        resolve,
+        reject,
+      };
+    });
 
     if (!liveRequest)
-      throw new Error(
-        `Live request was not created for requestId ${request.requestId}`,
-      );
+      throw new Error(`Live request was not created for requestId ${request.requestId}`);
 
     // Save the live request to resolve when we get the response
     this.requests.set(request.requestId, liveRequest);
@@ -249,20 +230,14 @@ export default class ServerNetworkConnector implements INetworkConnector {
     return requestPromise;
   };
 
-  emitEventOnNetwork = async <T>(
-    eventType: string,
-    event: InternalEvent<T>,
-  ) => {
+  emitEventOnNetwork = async <T>(eventType: string, event: InternalEvent<T>) => {
     // Send this event to all connections
     // Using for...of on iterator here because it is significantly faster (not converting to array first) and cleaner this way in this case
     // eslint-disable-next-line no-restricted-syntax
     for (const clientId of this.clientSockets.keys()) {
       // Don't send an event back to the connection that emitted it
       if (clientId !== event.senderId)
-        this.sendMessage(
-          { type: MessageType.Event, eventType, ...event },
-          clientId,
-        );
+        this.sendMessage({ type: MessageType.Event, eventType, ...event }, clientId);
     }
   };
 
@@ -272,15 +247,12 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   /** Get the client socket for a certain clientId. Throws if not found */
   private getClientSocket = (clientId: number): WebSocketClient => {
-    if (!this.webSocketServer)
-      throw new Error('Trying to get client socket when not connected!');
+    if (!this.webSocketServer) throw new Error('Trying to get client socket when not connected!');
 
     const clientSocket = this.clientSockets.get(clientId);
 
     if (!clientSocket)
-      throw new Error(
-        `Trying to get client socket ${clientId} but it does not exist!`,
-      );
+      throw new Error(`Trying to get client socket ${clientId} but it does not exist!`);
 
     return clientSocket;
   };
@@ -293,8 +265,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
   private getClientSocketFromGuid = (
     clientGuid: string | undefined | null,
   ): WebSocketClient | undefined => {
-    if (!this.webSocketServer)
-      throw new Error('Trying to get client socket when not connected!');
+    if (!this.webSocketServer) throw new Error('Trying to get client socket when not connected!');
     if (!clientGuid) return undefined;
 
     // Using for...of on iterator here because it is significantly faster (not converting to array first) and cleaner this way in this case
@@ -321,13 +292,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
    */
   private sendMessage = (message: Message, recipientId: number): void => {
     // TODO: add message queueing
-    if (
-      this.connectionStatus !== ConnectionStatus.Connected ||
-      !this.webSocketServer
-    )
-      throw new Error(
-        `Trying to send message when not connected! Message ${message}`,
-      );
+    if (this.connectionStatus !== ConnectionStatus.Connected || !this.webSocketServer)
+      throw new Error(`Trying to send message when not connected! Message ${message}`);
 
     if (this.connectorInfo.clientId === recipientId) {
       // This message is from us and for us. Handle the message as if we just received it
@@ -453,10 +419,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * @param clientConnect message from the client about the connection
    * @param connectorId clientId of the client who is sending this ClientConnect message
    */
-  private handleClientConnectMessage = (
-    clientConnect: ClientConnect,
-    connectorId: number,
-  ) => {
+  private handleClientConnectMessage = (clientConnect: ClientConnect, connectorId: number) => {
     // Verify that the client has the correct clientId. Otherwise nothing will work properly
     if (connectorId !== clientConnect.senderId)
       // TODO: tell the client that they messed up, not throw an exception on the server
@@ -469,9 +432,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
     // Determine if this client is reconnecting so we can unregister request handlers for the old connection
     let didReconnect = false;
-    const oldClientSocket = this.getClientSocketFromGuid(
-      clientConnect.reconnectingClientGuid,
-    );
+    const oldClientSocket = this.getClientSocketFromGuid(clientConnect.reconnectingClientGuid);
     if (oldClientSocket) {
       didReconnect = true;
       this.disconnectClient(oldClientSocket.webSocket);
@@ -491,10 +452,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * @param response Response message to resolve
    * @param responderId responding client
    */
-  private handleResponseMessage = (
-    response: WebSocketResponse<unknown>,
-    responderId: number,
-  ) => {
+  private handleResponseMessage = (response: WebSocketResponse<unknown>, responderId: number) => {
     const { requesterId, requestId } = response;
     if (this.connectorInfo.clientId === requesterId) {
       // This response is for us. Resolve the associated request
@@ -526,22 +484,16 @@ export default class ServerNetworkConnector implements INetworkConnector {
     requesterId: number,
   ) => {
     if (!this.requestRouter)
-      throw new Error(
-        `Received a request but cannot route it without a requestRouter`,
-      );
+      throw new Error(`Received a request but cannot route it without a requestRouter`);
 
     // Figure out if we can handle this request or if we need to send it
     const responderId = this.requestRouter(requestMessage.requestType);
     if (this.connectorInfo.clientId === responderId) {
       // This request is ours. Handle the request
-      if (!this.localRequestHandler)
-        throw Error('Handling request without a requestHandler!');
+      if (!this.localRequestHandler) throw Error('Handling request without a requestHandler!');
 
       // Run the request handler for this request
-      const response = await this.localRequestHandler(
-        requestMessage.requestType,
-        requestMessage,
-      );
+      const response = await this.localRequestHandler(requestMessage.requestType, requestMessage);
 
       // Send the response to this request
       this.sendMessage(
@@ -565,9 +517,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
    */
   private handleEventMessage = (eventMessage: WebSocketEvent<unknown>) => {
     if (!this.localEventHandler)
-      throw new Error(
-        `Received an event but cannot handle it without an eventHandler`,
-      );
+      throw new Error(`Received an event but cannot handle it without an eventHandler`);
 
     // Send the event to connections to handle
     this.emitEventOnNetwork(eventMessage.eventType, eventMessage);

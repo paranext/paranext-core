@@ -11,16 +11,11 @@ import { Readable } from 'stream';
 /** Pretty name for the process this service manages. Used in logs */
 const EXTENSION_HOST_NAME = 'extension host';
 
-let extensionHost:
-  | ChildProcess
-  | ChildProcessByStdio<null, Readable, Readable>
-  | undefined;
+let extensionHost: ChildProcess | ChildProcessByStdio<null, Readable, Readable> | undefined;
 
 // log functions for inside the extension host process
 function logProcessError(message: unknown) {
-  logger.error(
-    formatLog(message?.toString() || '', EXTENSION_HOST_NAME, 'error'),
-  );
+  logger.error(formatLog(message?.toString() || '', EXTENSION_HOST_NAME, 'error'));
 }
 function logProcessInfo(message: unknown) {
   logger.log(formatLog(message?.toString() || '', EXTENSION_HOST_NAME));
@@ -36,9 +31,7 @@ function killExtensionHost() {
   if (extensionHost.kill()) {
     logger.info('killed extension host process');
   } else {
-    logger.error(
-      'extension host process was not stopped! Investigate other .kill() options',
-    );
+    logger.error('extension host process was not stopped! Investigate other .kill() options');
   }
   extensionHost = undefined;
 }
@@ -79,13 +72,9 @@ function startExtensionHost() {
 
   extensionHost.on('close', (code, signal) => {
     if (signal) {
-      logger.info(
-        `'close' event: extension host process terminated with signal ${signal}`,
-      );
+      logger.info(`'close' event: extension host process terminated with signal ${signal}`);
     } else {
-      logger.info(
-        `'close' event: extension host process exited with code ${code}`,
-      );
+      logger.info(`'close' event: extension host process exited with code ${code}`);
     }
     // TODO: listen for 'exit' event as well?
     // TODO: unsubscribe event listeners

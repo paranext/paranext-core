@@ -1,9 +1,5 @@
 import log, { LogLevel } from 'electron-log';
-import {
-  getProcessType,
-  isClient,
-  isRenderer,
-} from '@shared/util/InternalUtil';
+import { getProcessType, isClient, isRenderer } from '@shared/util/InternalUtil';
 
 /**
  * Format a string of a service message
@@ -46,9 +42,7 @@ if (isClient()) {
             logLine,
             getProcessType(),
             // Renderer sends back with log level of log. Not sure why it's not in the type
-            (message.level as LogLevel | 'log') === 'log'
-              ? undefined
-              : message.level,
+            (message.level as LogLevel | 'log') === 'log' ? undefined : message.level,
           ),
         ),
       };

@@ -30,8 +30,7 @@ export type NetworkObjectInfo<T extends NetworkableObject> = {
  * Information about an object shared on the network including control over disposing of the object.
  * Returned from setting up a network object (only the process that set up the network object should dispose of it)
  */
-export type DisposableNetworkObjectInfo<T extends NetworkableObject> =
-  NetworkObjectInfo<T> & {
-    /** Unsubscriber to call to remove this object from the network */
-    dispose: UnsubscriberAsync;
-  };
+export type DisposableNetworkObjectInfo<T extends NetworkableObject> = NetworkObjectInfo<T> & {
+  /** Unsubscriber to call to remove this object from the network */
+  dispose: UnsubscriberAsync;
+};

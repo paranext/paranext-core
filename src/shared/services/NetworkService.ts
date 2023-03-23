@@ -56,9 +56,7 @@ type LocalRequestRegistration<TParam, TReturn> = {
   registrationType: 'local';
   requestType: string;
   handlerType: RequestHandlerType;
-  handler:
-    | RoutedRequestHandler<TParam, TReturn>
-    | RoutedRequestHandler<TParam[], TReturn>;
+  handler: RoutedRequestHandler<TParam, TReturn> | RoutedRequestHandler<TParam[], TReturn>;
 };
 
 /** Request handler that is not on this network service and must be requested on the network. Server-only as clients will all just send to the server */
@@ -97,9 +95,7 @@ type ArgsRequestHandler<
  */
 // Any is probably fine because we likely never know or care about the args or return
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ContentsRequestHandler<TParam = any, TReturn = any> = (
-  contents: TParam,
-) => Promise<TReturn>;
+type ContentsRequestHandler<TParam = any, TReturn = any> = (contents: TParam) => Promise<TReturn>;
 
 /**
  * Complex handler function for a request. Called when a request is handled.
@@ -193,17 +189,11 @@ async function unregisterRequestHandlerUnsafe(
 
   if (requestRegistration.handler !== handler)
     // Somehow the handlers do not match. Probably can't happen unless you call this function directly which shouldn't happen. Is this egregious enough that we should throw? I guess...?
-    throw new Error(
-      `Handler to unsubscribe from ${requestType} does not match registered handler`,
-    );
+    throw new Error(`Handler to unsubscribe from ${requestType} does not match registered handler`);
 
   // Check with the server to make sure we can unregister this registration
   const remoteUnregisterSuccessful = isClient()
-    ? await requestUnsafe(
-        'server:unregisterRequest',
-        requestType,
-        ConnectionService.getClientId(),
-      )
+    ? await requestUnsafe('server:unregisterRequest', requestType, ConnectionService.getClientId())
     : true;
 
   if (!remoteUnregisterSuccessful)
@@ -244,9 +234,7 @@ function registerRequestHandlerUnsafe(
   handler: RoutedRequestHandler,
   handlerType = RequestHandlerType.Args,
 ): UnsubPromiseAsync<void> {
-  let resolveRegistration:
-    | ((value: void | PromiseLike<void>) => void)
-    | undefined;
+  let resolveRegistration: ((value: void | PromiseLike<void>) => void) | undefined;
   let rejectRegistration: ((reason: string) => void) | undefined;
   /** Promise that resolves when this request successfully finishes registering */
   const promise = new Promise<void>((resolve, reject) => {
@@ -264,20 +252,14 @@ function registerRequestHandlerUnsafe(
     // the complication of holding promise resolve and reject and all this. Consider just
     // throwing an exception. That would mean you would have to check for registerRequestHandler
     // to throw exceptions in addition to .catch-ing its promise, but maybe it's worth it. Dunno
-    rejectRegistration(
-      `requestType ${requestType} already has a local handler registered`,
-    );
+    rejectRegistration(`requestType ${requestType} already has a local handler registered`);
     return { promise, unsubscriber: async () => false };
   }
 
   // Check with the server if it already has a handler for this requestType
   const remoteRequest: Promise<void> = isClient()
     ? // If we are the client, try to register with the server because server has all registrations
-      requestUnsafe(
-        'server:registerRequest',
-        requestType,
-        ConnectionService.getClientId(),
-      )
+      requestUnsafe('server:registerRequest', requestType, ConnectionService.getClientId())
     : // If we are the server, we just checked if there was already a registration
       Promise.resolve();
 
@@ -290,14 +272,12 @@ function registerRequestHandlerUnsafe(
         handler,
         handlerType,
       });
-      if (!resolveRegistration)
-        throw new Error(`Somehow resolveRegistration is not defined`);
+      if (!resolveRegistration) throw new Error(`Somehow resolveRegistration is not defined`);
       resolveRegistration();
       return undefined;
     })
     .catch((e) => {
-      if (!rejectRegistration)
-        throw new Error(`Somehow rejectRegistration is not defined`);
+      if (!rejectRegistration) throw new Error(`Somehow rejectRegistration is not defined`);
       rejectRegistration(e);
     });
 
@@ -357,9 +337,7 @@ const createNetworkEventEmitterUnsafe = <T>(
   const existingEmitter = networkEventEmitters.get(eventType);
   if (existingEmitter) {
     if (existingEmitter.isRegistered)
-      throw new Error(
-        `type ${eventType} is already registered to a network event emitter`,
-      );
+      throw new Error(`type ${eventType} is already registered to a network event emitter`);
     existingEmitter.isRegistered = register;
     return existingEmitter.emitter as PEventEmitter<T>;
   }
@@ -395,10 +373,7 @@ const unregisterRemoteRequestHandler = async (
     // The request isn't registered
     return false;
 
-  if (
-    requestRegistration.registrationType === 'local' ||
-    requestRegistration.clientId !== clientId
-  )
+  if (requestRegistration.registrationType === 'local' || requestRegistration.clientId !== clientId)
     // The request handler is not theirs to unregister. Is this egregious enough that we should throw here?
     return false;
 
@@ -422,9 +397,7 @@ const registerRemoteRequestHandler = async (
 
   // Check to see if there is already a handler for this requestType
   if (requestRegistrations.has(requestType)) {
-    throw new Error(
-      `requestType ${requestType} already has a remote handler registered`,
-    );
+    throw new Error(`requestType ${requestType} already has a remote handler registered`);
   }
 
   // Once we have checked that this is the first registration for this requestType, set up the handler
@@ -442,9 +415,7 @@ const registerRemoteRequestHandler = async (
 const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
   // TODO: there will probably be something worth doing when a client gets disconnected in the future. Do that here instead of throwing
   if (ConnectionService.getClientId() === clientId)
-    throw new Error(
-      `NetworkService cannot disconnect itself! clientId: ${clientId}`,
-    );
+    throw new Error(`NetworkService cannot disconnect itself! clientId: ${clientId}`);
 
   // Collect which registrations are for that clientId
   const requestTypesToRemove: string[] = [];
@@ -457,11 +428,7 @@ const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
   });
 
   // Remove registrations for this clientId
-  logger.log(
-    `Client ${clientId} disconnected! Unregistering ${requestTypesToRemove.join(
-      ', ',
-    )}`,
-  );
+  logger.log(`Client ${clientId} disconnected! Unregistering ${requestTypesToRemove.join(', ')}`);
   requestTypesToRemove.forEach((requestType) =>
     unregisterRemoteRequestHandler(requestType, clientId),
   );
@@ -519,9 +486,7 @@ const handleRequestLocal: RequestHandler = async <TParam, TReturn>(
         break;
       case RequestHandlerType.Contents:
         try {
-          result = await (registration.handler as ContentsRequestHandler)(
-            incomingRequest.contents,
-          );
+          result = await (registration.handler as ContentsRequestHandler)(incomingRequest.contents);
           success = true;
         } catch (e) {
           errorMessage = getErrorMessage(e);
@@ -529,9 +494,7 @@ const handleRequestLocal: RequestHandler = async <TParam, TReturn>(
         break;
       case RequestHandlerType.Complex: {
         try {
-          const response = await (
-            registration.handler as ComplexRequestHandler
-          )(incomingRequest);
+          const response = await (registration.handler as ComplexRequestHandler)(incomingRequest);
           // Break out the contents of the ComplexResponse to use existing variables. Should we destructure instead to future-proof for other fields? It was not playing well with Typescript
           success = response.success;
           if (response.success) result = response.contents;
@@ -580,10 +543,7 @@ const routeRequest: RequestRouter = (requestType: string): number => {
  * @param eventType type of event to handle
  * @param event the event data to emit
  */
-const handleEventFromNetwork: NetworkEventHandler = <T>(
-  eventType: string,
-  event: T,
-) => {
+const handleEventFromNetwork: NetworkEventHandler = <T>(eventType: string, event: T) => {
   const emitter = networkEventEmitters.get(eventType);
   // TODO: register events so we only receive events we are listening for, then throw here if we get an event we are not listening for
   emitter?.emitter?.emitLocal(event);
@@ -591,17 +551,15 @@ const handleEventFromNetwork: NetworkEventHandler = <T>(
 
 // TODO: Why doesn't createNetworkEventEmitterUnsafe require that I specify a generic type? I can't figure it out.
 /** Emitter for when clients connect. Provides clientId */
-const onDidClientConnectEmitter =
-  createNetworkEventEmitterUnsafe<ClientConnectEvent>(
-    'network:onDidClientConnect',
-  );
+const onDidClientConnectEmitter = createNetworkEventEmitterUnsafe<ClientConnectEvent>(
+  'network:onDidClientConnect',
+);
 /** Event that emits with clientId when a client connects */
 export const onDidClientConnect = onDidClientConnectEmitter.event;
 /** Emitter for when clients disconnect. Provides clientId */
-const onDidClientDisconnectEmitter =
-  createNetworkEventEmitterUnsafe<ClientDisconnectEvent>(
-    'network:onDidClientDisconnect',
-  );
+const onDidClientDisconnectEmitter = createNetworkEventEmitterUnsafe<ClientDisconnectEvent>(
+  'network:onDidClientDisconnect',
+);
 /** Event that emits with clientId when a client disconnects */
 export const onDidClientDisconnect = onDidClientDisconnectEmitter.event;
 
@@ -632,18 +590,14 @@ export const initialize = () => {
     if (isServer()) {
       onDidClientDisconnect(handleClientDisconnect);
 
-      const registrationUnsubAndPromises = Object.entries(
-        serverRequestHandlers,
-      ).map(([requestType, handler]) =>
-        registerRequestHandlerUnsafe(requestType, handler),
+      const registrationUnsubAndPromises = Object.entries(serverRequestHandlers).map(
+        ([requestType, handler]) => registerRequestHandlerUnsafe(requestType, handler),
       );
       unsubscribeServerRequestHandlers = aggregateUnsubscriberAsyncs(
         registrationUnsubAndPromises.map(({ unsubscriber }) => unsubscriber),
       );
       // Wait to successfully register all requests
-      await Promise.all(
-        registrationUnsubAndPromises.map(({ promise }) => promise),
-      );
+      await Promise.all(registrationUnsubAndPromises.map(({ promise }) => promise));
     }
 
     // On closing, try to close the connection
@@ -651,8 +605,7 @@ export const initialize = () => {
     if (isRenderer())
       window.addEventListener('beforeunload', async () => {
         ConnectionService.disconnect();
-        if (unsubscribeServerRequestHandlers)
-          unsubscribeServerRequestHandlers();
+        if (unsubscribeServerRequestHandlers) unsubscribeServerRequestHandlers();
       });
 
     isInitialized = true;
@@ -735,9 +688,7 @@ const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
  * @param eventType unique network event type for coordinating between connections
  * @returns event emitter whose event works between connections
  */
-export const createNetworkEventEmitter = <T>(
-  eventType: string,
-): PEventEmitter<T> =>
+export const createNetworkEventEmitter = <T>(eventType: string): PEventEmitter<T> =>
   // Note: running createNetworkEventEmitterUnsafe without initializing is not technically an initialization
   // problem. However, emitting a network event before initializing is. As such, we create an emitter here
   // without awaiting initialization, but we pass in emitEventOnNetwork, which does wait for initialization.
@@ -752,8 +703,7 @@ export const getNetworkEvent = <T>(eventType: string): PEvent<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
   if (existingEmitter) return existingEmitter.emitter.event as PEvent<T>;
   // We didn't find an existing emitter, so create one but don't mark it as registered because you can't emit the event from this function
-  return createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork, false)
-    .event as PEvent<T>;
+  return createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork, false).event as PEvent<T>;
 };
 
 // #endregion
@@ -767,8 +717,7 @@ export const getNetworkEvent = <T>(eventType: string): PEvent<T> => {
 export const createRequestFunction = <TParam extends Array<unknown>, TReturn>(
   requestType: string,
 ) => {
-  return async (...args: TParam) =>
-    request<TParam, TReturn>(requestType, ...args);
+  return async (...args: TParam) => request<TParam, TReturn>(requestType, ...args);
 };
 
 /** All the exports in this service that are to be exposed on the PAPI */

@@ -99,9 +99,7 @@ exports.activate = async () => {
     .fetch('https://bible-api.com/matthew+24:14')
     .then((res) => res.json())
     .then((scr) => logger.log(scr.text.replace(/\n/g, '')))
-    .catch((e) =>
-      logger.error(`Could not get Scripture from bible-api! Reason: ${e}`),
-    );
+    .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
 
   papi.webViews.addWebView({
     contentType: 'html',
@@ -181,9 +179,7 @@ exports.activate = async () => {
     contents: getReactComponent('Hello World React Webview'),
   });
 
-  return Promise.all(
-    unsubPromises.map((unsubPromise) => unsubPromise.promise),
-  ).then(() => {
+  return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
     logger.log('Hello World is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
