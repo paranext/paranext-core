@@ -1,4 +1,4 @@
-import { TextField as MuiTextfield } from '@mui/material';
+import { TextField as MuiTextField } from '@mui/material';
 
 type TextFieldProps = {
   /**
@@ -22,7 +22,7 @@ type TextFieldProps = {
    */
   isFullWidth?: boolean;
   /**
-   * Text that gives the user instructions on what contents the Textfield expects
+   * Text that gives the user instructions on what contents the TextField expects
    */
   helperText?: string;
   /**
@@ -73,7 +73,7 @@ function TextField({
   const classNameString = className?.join(' ') ?? '';
 
   return (
-    <MuiTextfield
+    <MuiTextField
       variant={variant}
       disabled={isDisabled}
       error={hasError}
