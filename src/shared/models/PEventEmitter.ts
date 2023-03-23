@@ -12,17 +12,20 @@ import { PEvent, PEventHandler } from '@shared/models/PEvent';
  * but anyone can subscribe to the event.
  */
 class PEventEmitter<T> {
+  /**
+   * Subscribes a function to run when this event is emitted.
+   * @alias event
+   * @param callback function to run with the event when it is emitted
+   * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+   */
+  public subscribe = this.event;
+
   /** All callback functions that will run when this event is emitted. Lazy loaded */
   private subscriptions?: PEventHandler<T>[];
   /** Event for listeners to subscribe to. Lazy loaded */
   private lazyEvent?: PEvent<T>;
   /** Whether this emitter has been disposed */
   private isDisposed = false;
-
-  /** Check to make sure this emitter is not disposed. Throw if it is */
-  protected assertNotDisposed = () => {
-    if (this.isDisposed) throw new Error('Emitter is disposed');
-  };
 
   /**
    * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
@@ -61,20 +64,22 @@ class PEventEmitter<T> {
   }
 
   /**
-   * Subscribes a function to run when this event is emitted.
-   * @alias event
-   * @param callback function to run with the event when it is emitted
-   * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-   */
-  public subscribe = this.event;
-
-  /**
    * Runs the subscriptions for the event
    * @param event event data to provide to subscribed callbacks
    */
   public emit = (event: T) => {
     // Do not do anything other than emitFn here. This emit is just binding `this` to emitFn
     this.emitFn(event);
+  };
+
+  /** Disposes of this event, preparing it to release from memory */
+  public dispose = () => {
+    this.disposeFn();
+  };
+
+  /** Check to make sure this emitter is not disposed. Throw if it is */
+  protected assertNotDisposed = () => {
+    if (this.isDisposed) throw new Error('Emitter is disposed');
   };
 
   /**
@@ -87,11 +92,6 @@ class PEventEmitter<T> {
 
     this.subscriptions?.forEach((callback) => callback(event));
   }
-
-  /** Disposes of this event, preparing it to release from memory */
-  public dispose = () => {
-    this.disposeFn();
-  };
 
   /**
    * Disposes of this event, preparing it to release from memory.
