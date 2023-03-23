@@ -28,6 +28,7 @@ module.exports = {
       'always',
       { exceptAfterSingleLine: true, exceptAfterOverload: true },
     ],
+    '@typescript-eslint/member-ordering': 'error',
     '@typescript-eslint/no-explicit-any': 'error',
     '@typescript-eslint/no-non-null-assertion': 'error',
     'no-redeclare': 'off',
