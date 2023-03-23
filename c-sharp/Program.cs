@@ -7,7 +7,8 @@ namespace Paranext.DataProvider;
 
 public static class Program
 {
-    public static async Task Main( /* string[] args */
+    public static async Task Main(
+    /* string[] args */
     )
     {
         PapiClient connection = new();
