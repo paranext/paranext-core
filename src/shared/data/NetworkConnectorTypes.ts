@@ -23,6 +23,7 @@ export const WEBSOCKET_ATTEMPTS_MAX = 5;
 export const WEBSOCKET_ATTEMPTS_WAIT = 1000;
 
 /** WebSocket message type that indicates how to handle it */
+/** NOTE: The MessageTypes defined here should match what is defined in MessageTypes.cs */
 export enum MessageType {
   InitClient = 'init-client',
   ClientConnect = 'client-connect',

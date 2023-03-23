@@ -1,25 +1,23 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Paranext.DataProvider.Utils;
+using Paranext.DataProvider.Messages;
 using PtxUtils;
 
-namespace Paranext.DataProvider.Data;
+namespace Paranext.DataProvider.JsonUtils;
 /// <summary>
 /// Handles serialization and deserialization of Messages
 /// </summary>
 internal sealed class MessageConverter : JsonConverter<Message>
 {
-    #region Member variables
-    private static readonly JsonSerializerOptions recursiveSafeOptions = JsonUtils.CreateSerializationOptions();
+    private static readonly JsonSerializerOptions recursiveSafeOptions = SerializationOptions.CreateSerializationOptions();
     private static readonly Dictionary<Enum<MessageType>, Type> messageTypeMap = new() {
         { MessageType.InitClient, typeof(MessageInitClient) },
         { MessageType.ClientConnect, typeof(MessageClientConnect) },
         { MessageType.Request, typeof(MessageRequest) },
         { MessageType.Response, typeof(MessageResponse) },
+        { MessageType.Event, typeof(MessageEvent) },
     };
-    #endregion
 
-    #region Implementation of JsonConverter
     public override bool CanConvert(Type typeToConvert) => typeof(Message).IsAssignableFrom(typeToConvert);
 
     public override Message Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -40,9 +38,7 @@ internal sealed class MessageConverter : JsonConverter<Message>
     {
         JsonSerializer.Serialize(writer, message, message.GetType(), recursiveSafeOptions);
     }
-    #endregion
 
-    #region Private helper methods
     /// <summary>
     /// Reads the type property from the message given the specified reader
     /// </summary>
@@ -72,5 +68,4 @@ internal sealed class MessageConverter : JsonConverter<Message>
         }
         while (true);
     }
-    #endregion
 }
