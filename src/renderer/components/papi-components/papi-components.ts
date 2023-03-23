@@ -1,9 +1,9 @@
-import { PButton } from './PButton';
-import Button from './Button';
-import ComboBox from './ComboBox';
-import Slider from './Slider';
-import Switch from './Switch';
-import Textfield from './Textfield';
+import { PButton } from '@renderer/components/papi-components/PButton';
+import Button from '@renderer/components/papi-components/Button';
+import ComboBox from '@renderer/components/papi-components/ComboBox';
+import Slider from '@renderer/components/papi-components/Slider';
+import Switch from '@renderer/components/papi-components/Switch';
+import TextField from '@renderer/components/papi-components/TextField';
 
 /** All React components to be exposed on the papi */
 export default {
@@ -12,5 +12,5 @@ export default {
   ComboBox,
   Slider,
   Switch,
-  Textfield,
+  TextField,
 };

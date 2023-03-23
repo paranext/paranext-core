@@ -1,12 +1,12 @@
 import { Switch as MuiSwitch } from '@mui/material';
-import { ChangeEvent, MouseEventHandler } from 'react';
-import './switch.css';
+import { ChangeEvent } from 'react';
+import '@renderer/components/papi-components/switch.css';
 
 type SwitchProps = {
   /**
    * If `true`, the component is checked.
    */
-  checked?: boolean;
+  isChecked?: boolean;
   /**
    * Is this the principal call to action on the page?
    * @default false
@@ -16,7 +16,7 @@ type SwitchProps = {
    * Enabled status of switch
    * @default false
    */
-  disabled?: boolean;
+  isDisabled?: boolean;
   /**
    * True when (input related to) switch is erroneous
    * @default false
@@ -27,26 +27,23 @@ type SwitchProps = {
    */
   className?: string[];
   /**
-   * Optional change handler
+   * Callback fired when the state is changed.
+   * @param event The event source of the callback. You can pull out the new value by accessing event.target.value (string).
+   * You can pull out the new checked state by accessing event.target.checked (boolean).
    */
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
-  /**
-   * Optional click handler
-   */
-  onClick?: MouseEventHandler<HTMLButtonElement>;
 };
 
 /**
  * Primary UI component for user interaction
  */
 function Switch({
-  checked,
+  isChecked: checked,
   isPrimary = false,
-  disabled = false,
+  isDisabled = false,
   hasError = false,
   className,
   onChange,
-  onClick,
 }: SwitchProps) {
   const primaryClass = isPrimary ? 'primary' : 'secondary';
   const errorClass = hasError ? 'error' : '';
@@ -55,7 +52,7 @@ function Switch({
   return (
     <MuiSwitch
       checked={checked}
-      disabled={disabled}
+      disabled={isDisabled}
       className={[
         'papi-switch',
         primaryClass,
@@ -63,7 +60,6 @@ function Switch({
         classNameString,
       ].join(' ')}
       onChange={onChange}
-      onClick={onClick}
     />
   );
 }

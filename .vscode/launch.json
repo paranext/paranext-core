@@ -66,7 +66,7 @@
       "request": "launch",
       "protocol": "inspector",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "storybook", "--", "--debug-webpack"],
+      "runtimeArgs": ["run", "storybook"],
       "env": { "autoAttachChildProcesses": true }
     }
   ],

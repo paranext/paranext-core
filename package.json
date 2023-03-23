@@ -65,7 +65,7 @@
     "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
     "test": "jest",
     "storybook": "storybook dev -p 6006",
-    "build:storybook": "storybook build"
+    "storybook:build": "storybook build"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [

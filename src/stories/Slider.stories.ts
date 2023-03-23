@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import Slider from '../renderer/components/papi-components/Slider';
+import Slider from '@renderer/components/papi-components/Slider';
 
 const meta: Meta<typeof Slider> = {
-  title: 'MUI/Slider',
+  title: 'Basics/Slider',
   component: Slider,
   tags: ['autodocs'],
   argTypes: {
-    disabled: { control: 'boolean' },
+    isDisabled: { control: 'boolean' },
     orientation: {
       options: [0, 1],
       mapping: ['horizontal', 'vertical'],
@@ -18,7 +18,7 @@ const meta: Meta<typeof Slider> = {
     min: { control: 'number' },
     max: { control: 'number' },
     step: { control: 'number' },
-    marks: { control: 'boolean' },
+    showMarks: { control: 'boolean' },
     defaultValue: { control: 'number' },
     valueLabelDisplay: {
       options: [0, 1, 2],
@@ -40,7 +40,7 @@ export const Default: Story = {
 };
 
 export const Disabled: Story = {
-  args: { disabled: true },
+  args: { isDisabled: true },
 };
 
 export const DiscreteValues: Story = {
@@ -48,7 +48,7 @@ export const DiscreteValues: Story = {
     min: -10,
     max: 10,
     step: 2,
-    marks: true,
+    showMarks: true,
     defaultValue: 0,
     valueLabelDisplay: 'on',
   },

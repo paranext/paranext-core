@@ -1,15 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import ComboBox from '../renderer/components/papi-components/ComboBox';
+import ComboBox from '@renderer/components/papi-components/ComboBox';
 
 const meta: Meta<typeof ComboBox> = {
-  title: 'MUI/ComboBox',
+  title: 'Basics/ComboBox',
   component: ComboBox,
   tags: ['autodocs'],
   argTypes: {
     title: { control: 'text' },
-    disabled: { control: 'boolean' },
+    isDisabled: { control: 'boolean' },
     hasError: { control: 'boolean' },
-    fullWidth: { control: 'boolean' },
+    isFullWidth: { control: 'boolean' },
     options: { control: 'text' },
     className: { control: 'text' },
   },
@@ -23,7 +23,7 @@ export const Default: Story = {
 };
 
 export const Disabled: Story = {
-  args: { disabled: true },
+  args: { isDisabled: true },
 };
 
 export const ErrorState: Story = {
@@ -31,7 +31,7 @@ export const ErrorState: Story = {
 };
 
 export const FullWidth: Story = {
-  args: { fullWidth: true },
+  args: { isFullWidth: true },
 };
 
 export const Title: Story = {

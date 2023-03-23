@@ -1,13 +1,13 @@
 import { Slider as MuiSlider } from '@mui/material';
 import { SyntheticEvent } from 'react';
-import './slider.css';
+import '@renderer/components/papi-components/slider.css';
 
 type SliderProps = {
   /**
    * If `true`, the component is disabled.
    * @default false
    */
-  disabled?: boolean;
+  isDisabled?: boolean;
   /**
    * The component orientation.
    * @default 'horizontal'
@@ -37,7 +37,7 @@ type SliderProps = {
    * If `true` the marks are spaced according the value of the `step` prop.
    * @default false
    */
-  marks?: boolean;
+  showMarks?: boolean;
   /**
    * The default value. Use when the component is not controlled.
    */
@@ -56,7 +56,11 @@ type SliderProps = {
    */
   className?: string[];
   /**
-   * Click handler
+   * Callback function that is fired when the slider's value changed.
+   * @param event The event source of the callback. You can pull out the new value by accessing event.target.value (any).
+   * Warning: This is a generic event not a change event.
+   * @param value The new value.
+   * @param activeThumb Index of the currently moved thumb.
    */
   onChange?: (
     event: Event,
@@ -64,7 +68,9 @@ type SliderProps = {
     activeThumb: number,
   ) => void;
   /**
-   * Click release handler
+   * Callback function that is fired when the mouseup is triggered.
+   * @param event The event source of the callback. Warning: This is a generic event not a change event.
+   * @param value The new value.
    */
   onChangeCommitted?: (
     event: Event | SyntheticEvent<Element, Event>,
@@ -73,12 +79,12 @@ type SliderProps = {
 };
 
 function Slider({
-  disabled = false,
+  isDisabled = false,
   orientation = 'horizontal',
   min = 0,
   max = 100,
   step = 1,
-  marks = false,
+  showMarks = false,
   defaultValue,
   valueLabelDisplay = 'off',
   className,
@@ -89,12 +95,12 @@ function Slider({
 
   return (
     <MuiSlider
-      disabled={disabled}
+      disabled={isDisabled}
       orientation={orientation}
       min={min}
       max={max}
       step={step}
-      marks={marks}
+      marks={showMarks}
       defaultValue={defaultValue}
       valueLabelDisplay={valueLabelDisplay}
       className={['papi-slider', orientation, classNameString].join(' ')}

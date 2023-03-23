@@ -1,12 +1,11 @@
 import {
   Autocomplete as MuiComboBox,
-  AutocompleteChangeDetails,
-  AutocompleteChangeReason,
+  AutocompleteChangeDetails as MuiComboBoxChangeDetails,
+  AutocompleteChangeReason as MuiComboBoxChangeReason,
+  TextField as MuiTextField,
 } from '@mui/material';
 import { FocusEventHandler, SyntheticEvent } from 'react';
-import './combobox.css';
-
-import Textfield from './Textfield';
+import '@renderer/components/papi-components/combobox.css';
 
 type ComboBoxProps = {
   /**
@@ -17,7 +16,7 @@ type ComboBoxProps = {
    * If `true`, the component is disabled.
    * @default false
    */
-  disabled?: boolean;
+  isDisabled?: boolean;
   /**
    * True when (input related to) switch is erroneous
    * @default false
@@ -27,7 +26,7 @@ type ComboBoxProps = {
    * If `true`, the input will take up the full width of its container.
    * @default false
    */
-  fullWidth?: boolean;
+  isFullWidth?: boolean;
   /**
    * List of available options for the dropdown menu
    */
@@ -42,8 +41,8 @@ type ComboBoxProps = {
   onChange?: (
     event: SyntheticEvent<Element, Event>,
     value: unknown,
-    reason: AutocompleteChangeReason,
-    details?: AutocompleteChangeDetails<unknown> | undefined,
+    reason: MuiComboBoxChangeReason,
+    details?: MuiComboBoxChangeDetails<unknown> | undefined,
   ) => void;
   /**
    * Triggers when textfield gets focus
@@ -57,9 +56,9 @@ type ComboBoxProps = {
 
 function ComboBox({
   title,
-  disabled = false,
+  isDisabled = false,
   hasError = false,
-  fullWidth = false,
+  isFullWidth = false,
   options = [],
   className,
   onChange,
@@ -72,14 +71,22 @@ function ComboBox({
   return (
     <MuiComboBox
       disablePortal
-      disabled={disabled}
-      fullWidth={fullWidth}
+      disabled={isDisabled}
+      fullWidth={isFullWidth}
       options={options}
       className={['papi-combo-box', errorClass, classNameString].join(' ')}
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}
-      renderInput={(props) => <Textfield {...props} label={title} />}
+      renderInput={(props) => (
+        <MuiTextField
+          {...props}
+          error={hasError}
+          fullWidth={isFullWidth}
+          disabled={isDisabled}
+          label={title}
+        />
+      )}
     />
   );
 }

@@ -1,7 +1,6 @@
 import { TextField as MuiTextfield } from '@mui/material';
-import './textfield.css';
 
-type TextfieldProps = {
+type TextFieldProps = {
   /**
    * The variant to use.
    * @default 'outlined'
@@ -11,23 +10,23 @@ type TextfieldProps = {
    * If `true`, the component is disabled.
    * @default false
    */
-  disabled?: boolean;
+  isDisabled?: boolean;
   /**
    * If `true`, the label is displayed in an error state.
    * @default false
    */
-  error?: boolean;
+  hasError?: boolean;
   /**
    * If `true`, the input will take up the full width of its container.
    * @default false
    */
-  fullWidth?: boolean;
+  isFullWidth?: boolean;
   /**
-   * The helper text content.
+   * Text that gives the user instructions on what contents the Textfield expects
    */
   helperText?: string;
   /**
-   * The label content.
+   * The title of the TextField
    */
   label?: string;
   /**
@@ -38,7 +37,7 @@ type TextfieldProps = {
    * If `true`, the label is displayed as required and the `input` element is required.
    * @default false
    */
-  required?: boolean;
+  isRequired?: boolean;
   /**
    * Additional css classes to help with unique styling of the button
    */
@@ -57,32 +56,32 @@ type TextfieldProps = {
   onBlur?: () => void;
 };
 
-function Textfield({
+function TextField({
   variant = 'outlined',
-  disabled = false,
-  error = false,
-  fullWidth = false,
+  isDisabled = false,
+  hasError = false,
+  isFullWidth = false,
   helperText,
   label,
   placeholder,
-  required = false,
+  isRequired = false,
   className,
   onChange,
   onFocus,
   onBlur,
-}: TextfieldProps) {
+}: TextFieldProps) {
   const classNameString = className?.join(' ') ?? '';
 
   return (
     <MuiTextfield
       variant={variant}
-      disabled={disabled}
-      error={error}
-      fullWidth={fullWidth}
+      disabled={isDisabled}
+      error={hasError}
+      fullWidth={isFullWidth}
       helperText={helperText}
       label={label}
       placeholder={placeholder}
-      required={required}
+      required={isRequired}
       className={['papi-textfield', classNameString].join(' ')}
       onChange={onChange}
       onFocus={onFocus}
@@ -91,4 +90,4 @@ function Textfield({
   );
 }
 
-export default Textfield;
+export default TextField;

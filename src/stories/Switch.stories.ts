@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import Switch from '../renderer/components/papi-components/Switch';
+import Switch from '@renderer/components/papi-components/Switch';
 
 const meta: Meta<typeof Switch> = {
-  title: 'MUI/Switch',
+  title: 'Basics/Switch',
   component: Switch,
   tags: ['autodocs'],
   argTypes: {
     isPrimary: { control: 'boolean' },
-    disabled: { control: 'boolean' },
+    isDisabled: { control: 'boolean' },
     hasError: { control: 'boolean' },
     className: { control: 'text' },
   },
@@ -24,7 +24,7 @@ export const Primary: Story = {
 };
 
 export const Disabled: Story = {
-  args: { disabled: true },
+  args: { isDisabled: true },
 };
 
 export const ErrorState: Story = {

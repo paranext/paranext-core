@@ -1,16 +1,17 @@
 import { Button as MuiButton } from '@mui/material';
 import { MouseEventHandler, PropsWithChildren } from 'react';
-import './button.css';
+import '@renderer/components/papi-components/button.css';
 
 type ButtonProps = PropsWithChildren<{
   /**
-   * Is this the principal call to action on the page?
+   * Indicates if this is the principal call to action on the page
+   * @default false
    */
   isPrimary?: boolean;
   /**
    * Enabled status of button
    */
-  disabled?: boolean;
+  isDisabled?: boolean;
   /**
    * Additional css classes to help with unique styling of the button
    */
@@ -30,7 +31,7 @@ type ButtonProps = PropsWithChildren<{
  */
 function Button({
   isPrimary = false,
-  disabled,
+  isDisabled: disabled,
   className,
   onClick,
   onContextMenu,

@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import Textfield from '../renderer/components/papi-components/Textfield';
+import TextField from '@renderer/components/papi-components/TextField';
 
-const meta: Meta<typeof Textfield> = {
-  title: 'MUI/Textfield',
-  component: Textfield,
+const meta: Meta<typeof TextField> = {
+  title: 'Basics/TextField',
+  component: TextField,
   tags: ['autodocs'],
   argTypes: {
     variant: {
@@ -17,31 +17,31 @@ const meta: Meta<typeof Textfield> = {
     helperText: { control: 'text' },
     label: { control: 'text' },
     placeholder: { control: 'text' },
-    disabled: { control: 'boolean' },
-    error: { control: 'boolean' },
-    fullWidth: { control: 'boolean' },
-    required: { control: 'boolean' },
+    isDisabled: { control: 'boolean' },
+    hasError: { control: 'boolean' },
+    isFullWidth: { control: 'boolean' },
+    isRequired: { control: 'boolean' },
     className: { control: 'text' },
   },
 };
 export default meta;
 
-type Story = StoryObj<typeof Textfield>;
+type Story = StoryObj<typeof TextField>;
 
 export const Default: Story = {
   args: {},
 };
 
 export const Disabled: Story = {
-  args: { disabled: true },
+  args: { isDisabled: true },
 };
 
 export const ErrorState: Story = {
-  args: { error: true, helperText: 'Something is wrong with your input' },
+  args: { hasError: true, helperText: 'Something is wrong with your input' },
 };
 
 export const FullWidth: Story = {
-  args: { fullWidth: true },
+  args: { isFullWidth: true },
 };
 
 export const HelperText: Story = {
@@ -61,7 +61,7 @@ export const Label: Story = {
 export const Required: Story = {
   args: {
     label: 'This field is required',
-    required: true,
+    isRequired: true,
   },
 };
 

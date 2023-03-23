@@ -1,5 +1,6 @@
 module.exports = {
   extends: ['erb', 'plugin:storybook/recommended'], // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
+  // https://github.com/storybookjs/eslint-plugin-storybook/blob/main/lib/configs/recommended.ts
   // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
   rules: {
     // #region ERB rules
@@ -11,6 +12,7 @@ module.exports = {
     'import/no-unresolved': 'error',
     'react/jsx-filename-extension': 'off',
     'react/react-in-jsx-scope': 'off',
+
     // #endregion
 
     // #region Paranext rules
