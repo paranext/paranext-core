@@ -1,5 +1,6 @@
 // **********************************************************************************************
-// NOTE: The types defined in this file should match what is defined in NetworkConnectorTypes.cs
+// NOTE: Types defined in this file should match C# code in "/c-sharp/Messages" in this repo.
+// If new messaging types are added here, add them to the C# code (and vice versa).
 // **********************************************************************************************
 
 /**
