@@ -55,9 +55,9 @@ export const DiscreteValues: Story = {
 };
 
 export const Paratext: Story = {
-  args: { className: ['paratext'], min: 0, max: 10 },
+  args: { className: 'paratext', min: 0, max: 10 },
 };
 
 export const ParatextBright: Story = {
-  args: { className: ['paratext', 'bright'], orientation: 'vertical' },
+  args: { className: 'paratext bright', orientation: 'vertical' },
 };

@@ -34,7 +34,7 @@ type ComboBoxProps = {
   /**
    * Additional css classes to help with unique styling of the button
    */
-  className?: string[];
+  className?: string;
   /**
    * Triggers when content of textfield is changed
    */
@@ -65,16 +65,13 @@ function ComboBox({
   onFocus,
   onBlur,
 }: ComboBoxProps) {
-  const errorClass = hasError ? 'error' : '';
-  const classNameString = className?.join(' ') ?? '';
-
   return (
     <MuiComboBox
       disablePortal
       disabled={isDisabled}
       fullWidth={isFullWidth}
       options={options}
-      className={['papi-combo-box', errorClass, classNameString].join(' ')}
+      className={`papi-combo-box ${hasError ? 'error' : ''} ${className ?? ''}`}
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}

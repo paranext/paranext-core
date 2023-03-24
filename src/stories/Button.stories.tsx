@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+﻿import type { Meta, StoryObj } from '@storybook/react';
 
 import Button from '@renderer/components/papi-components/Button';
 
@@ -26,7 +26,7 @@ export const Primary: Story = {
 export const CustomJSXContents: Story = {
   args: {
     isDisabled: false,
-    className: ['video'],
+    className: 'video',
     children: (
       <a href="https://www.youtube.com/watch?v=z_lgjFAxP6c">
         Funny Meeting Video
@@ -38,7 +38,7 @@ export const CustomJSXContents: Story = {
 export const Paratext: Story = {
   args: {
     isDisabled: false,
-    className: ['paratext'],
+    className: 'paratext',
     children: 'Paratext Button',
   },
 };
@@ -46,7 +46,7 @@ export const Paratext: Story = {
 export const ParatextBright: Story = {
   args: {
     isDisabled: false,
-    className: ['paratext', 'bright'],
+    className: 'paratext bright',
     children: 'Paratext Button',
   },
 };

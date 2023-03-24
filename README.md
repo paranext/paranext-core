@@ -75,6 +75,26 @@ To package apps for the local platform:
 npm run package
 ```
 
+## Storybook
+
+To build storybook:
+
+```bash
+npm run package:storybook
+```
+
+To run storybook locally:
+
+```bash
+npm run storybook
+```
+
+To run storybook as a web app:
+
+```bash
+npm run package:storybook {path to storybook-static folder}
+```
+
 ## Publishing
 
 1. Create a branch of the form `release/*`, e.g. `release/v1.2.3`, or `release/v1.2.3-rc1`.

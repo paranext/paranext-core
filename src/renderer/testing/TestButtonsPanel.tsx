@@ -374,7 +374,7 @@ function TestButtonsPanel() {
           Test Exception (Hello World)
         </button>
         <papi.react.components.Button
-          className={['testButton']}
+          className="testButton"
           onClick={() => runPromise(() => test())}
           onContextMenu={() => {
             executeMany(test);
