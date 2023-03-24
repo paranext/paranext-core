@@ -20,9 +20,7 @@ const papiComponents = isRenderer()
 const papiContext = isRenderer()
   ? require('@renderer/context/papi-context/papi-context').default
   : {};
-const papiHooks = isRenderer()
-  ? require('@renderer/hooks/papi-hooks/papi-hooks').default
-  : {};
+const papiHooks = isRenderer() ? require('@renderer/hooks/papi-hooks/papi-hooks').default : {};
 
 export default {
   // Classes

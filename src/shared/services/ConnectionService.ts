@@ -64,14 +64,11 @@ export const request = async <TParam, TReturn>(
   nextRequestId += 1;
 
   // TODO: implement request timeout logic?
-  const response = await networkConnector.request<TParam, TReturn>(
-    requestType,
-    {
-      requestId,
-      senderId: clientId,
-      contents,
-    },
-  );
+  const response = await networkConnector.request<TParam, TReturn>(requestType, {
+    requestId,
+    senderId: clientId,
+    contents,
+  });
 
   if (requestId !== response.requestId)
     throw new Error(
@@ -93,8 +90,7 @@ export const request = async <TParam, TReturn>(
  * @param event event to emit on the network
  */
 export const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
-  if (!networkConnector)
-    throw Error('emitEventOnNetwork without a networkConnector!');
+  if (!networkConnector) throw Error('emitEventOnNetwork without a networkConnector!');
 
   await networkConnector.emitEventOnNetwork(eventType, {
     senderId: clientId,
@@ -130,14 +126,10 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
   requestType: string,
   incomingRequest: InternalRequest<TParam>,
 ) => {
-  if (!requestHandler)
-    throw Error('Handling request without a requestHandler!');
+  if (!requestHandler) throw Error('Handling request without a requestHandler!');
 
   // Not sure if it's really responsible to put the whole incomingRequest in. Might want to destructure and just pass ComplexRequest members
-  const response = await requestHandler<TParam, TReturn>(
-    requestType,
-    incomingRequest,
-  );
+  const response = await requestHandler<TParam, TReturn>(requestType, incomingRequest);
   return {
     ...response,
     senderId: clientId,
@@ -186,18 +178,14 @@ export const connect = async (
       connectorEventHandlers === networkConnectorEventHandlers
     )
       return connectPromise;
-    throw new Error(
-      'Cannot connect with two different request handlers or request routers',
-    );
+    throw new Error('Cannot connect with two different request handlers or request routers');
   }
 
   if (!localRequestHandler) throw new Error('Must provide a request handler');
   if (!networkRequestRouter) throw new Error('Must provide a request router');
   if (!localEventHandler) throw new Error('Must provide an event handler');
   if (!connectorEventHandlers)
-    throw new Error(
-      'Must provide an object containing connector event handlers',
-    );
+    throw new Error('Must provide an object containing connector event handlers');
 
   // Start connecting
   connectionStatus = ConnectionStatus.Connecting;
@@ -252,18 +240,14 @@ export const connect = async (
 
     if (!networkConnector) {
       if (!connectReject)
-        throw new Error(
-          'connectReject not defined and networkConnector not defined.',
-        );
+        throw new Error('connectReject not defined and networkConnector not defined.');
       connectReject('networkConnector not defined');
       return undefined;
     }
 
     // Finished setting up and connecting! Resolve the promise
     if (!connectResolve)
-      throw new Error(
-        'connectResolve not defined. Tried to connect but somehow this is undefined',
-      );
+      throw new Error('connectResolve not defined. Tried to connect but somehow this is undefined');
 
     // Server is not able to send us requests until we are finished connecting
     connectionStatus = ConnectionStatus.Connected;

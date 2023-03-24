@@ -16,9 +16,7 @@ import { app } from 'electron';
 
 globalThis.processType = ProcessType.Main;
 globalThis.isPackaged = app.isPackaged;
-globalThis.resourcesPath = app.isPackaged
-  ? process.resourcesPath
-  : path.join(__dirname, '../../');
+globalThis.resourcesPath = app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../');
 
 // #endregion
 

@@ -16,9 +16,7 @@ export type UnsubPromise<T = unknown> = {
  * @param unsubscribers all unsubscribers to aggregate into one unsubscriber
  * @returns function that unsubscribes from all passed in unsubscribers when run
  */
-export const aggregateUnsubscribers = (
-  unsubscribers: Unsubscriber[],
-): Unsubscriber => {
+export const aggregateUnsubscribers = (unsubscribers: Unsubscriber[]): Unsubscriber => {
   return () => {
     // Run the unsubscriber for each handler
     const unsubs = unsubscribers.map((unsubscriber) => unsubscriber());
@@ -80,9 +78,7 @@ export const createSafeRegisterFn = <TParam extends Array<unknown>, TReturn>(
   return (...args: TParam) => {
     // If we're already initialized, run registerRequestHandler almost like normal but with an initialize check in the unsubscriber
     if (isInitialized) {
-      const { promise, unsubscriber: regUnsubscriber } = unsafeRegisterFn(
-        ...args,
-      );
+      const { promise, unsubscriber: regUnsubscriber } = unsafeRegisterFn(...args);
       // Use the returned unsubPromise's unsubscriber to make a safe unregisterRequestHandler
       return {
         promise,
@@ -98,9 +94,7 @@ export const createSafeRegisterFn = <TParam extends Array<unknown>, TReturn>(
       unsubscriber: async () => {
         // TODO: The unsubscriber we return might not actually do anything meaningful at first (it attempts to call a backup unsubscriber function, which is probably not what we want), so it throws an exception. Refactor this mess so we aren't giving a stunted unsubscriber at first and then subsequently empowering it after initialize is finished
         // TODO: Should the unsubscriber await initialize first, or should it just go ahead and run it? Also below
-        const didUnregister = backupUnregisterFn
-          ? await backupUnregisterFn(...args)
-          : false;
+        const didUnregister = backupUnregisterFn ? await backupUnregisterFn(...args) : false;
         throw new Error(
           `unsubscribe run from safeRegisterFn before service finished initializing! unsubscribe was${
             didUnregister ? '' : ' not'
@@ -195,10 +189,8 @@ export type RequestType = {
  * @param directive specific identifier for this type of request
  * @returns full requestType for use in network calls
  */
-export const serializeRequestType = (
-  category: string,
-  directive: string,
-): string => `${category}:${directive}`;
+export const serializeRequestType = (category: string, directive: string): string =>
+  `${category}:${directive}`;
 
 /** Split a request message requestType string into its parts */
 export const deserializeRequestType = (requestType: string): RequestType => {

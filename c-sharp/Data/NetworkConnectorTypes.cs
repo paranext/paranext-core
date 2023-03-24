@@ -38,9 +38,7 @@ public sealed class NetworkConnectorInfo
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private NetworkConnectorInfo()
-    {
-    }
+    private NetworkConnectorInfo() { }
 
     public NetworkConnectorInfo(int clientId)
     {
@@ -84,12 +82,14 @@ public sealed class MessageInitClient : Message
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageInitClient() : base(UNKNOWN_SENDER_ID)
+    private MessageInitClient()
+        : base(UNKNOWN_SENDER_ID)
     {
         ConnectorInfo = new NetworkConnectorInfo(NetworkConnectorInfo.CLIENT_ID_UNSET);
     }
 
-    public MessageInitClient(int senderId, NetworkConnectorInfo connectorInfo) : base(senderId)
+    public MessageInitClient(int senderId, NetworkConnectorInfo connectorInfo)
+        : base(senderId)
     {
         ConnectorInfo = connectorInfo;
     }
@@ -109,13 +109,11 @@ public sealed class MessageClientConnect : Message
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageClientConnect() : base(UNKNOWN_SENDER_ID)
-    {
-    }
+    private MessageClientConnect()
+        : base(UNKNOWN_SENDER_ID) { }
 
-    public MessageClientConnect(int senderId) : base(senderId)
-    {
-    }
+    public MessageClientConnect(int senderId)
+        : base(senderId) { }
 
     public override Enum<MessageType> Type => MessageType.ClientConnect;
 }
@@ -130,11 +128,16 @@ public sealed class MessageRequest : Message
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageRequest() : base(UNKNOWN_SENDER_ID)
-    {
-    }
+    private MessageRequest()
+        : base(UNKNOWN_SENDER_ID) { }
 
-    public MessageRequest(int senderId, Enum<RequestTypes> requestType, int requestId, dynamic? contents) : base(senderId)
+    public MessageRequest(
+        int senderId,
+        Enum<RequestTypes> requestType,
+        int requestId,
+        dynamic? contents
+    )
+        : base(senderId)
     {
         RequestType = requestType;
         RequestId = requestId;
@@ -165,15 +168,20 @@ public sealed class MessageResponse : Message
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageResponse() : base(UNKNOWN_SENDER_ID)
-    {
-    }
+    private MessageResponse()
+        : base(UNKNOWN_SENDER_ID) { }
 
     /// <summary>
     /// Response when there was an error - no contents
     /// </summary>
-    public MessageResponse(int senderId, Enum<RequestTypes> requestType, int requestId,
-        int requesterId, string errorMessage) : base(senderId)
+    public MessageResponse(
+        int senderId,
+        Enum<RequestTypes> requestType,
+        int requestId,
+        int requesterId,
+        string errorMessage
+    )
+        : base(senderId)
     {
         RequestType = requestType;
         RequestId = requestId;
@@ -185,8 +193,14 @@ public sealed class MessageResponse : Message
     /// <summary>
     /// Response when successful
     /// </summary>
-    public MessageResponse(int senderId, Enum<RequestTypes> requestType, int requestId,
-        int requesterId, dynamic? contents) : base(senderId)
+    public MessageResponse(
+        int senderId,
+        Enum<RequestTypes> requestType,
+        int requestId,
+        int requesterId,
+        dynamic? contents
+    )
+        : base(senderId)
     {
         RequestType = requestType;
         RequestId = requestId;

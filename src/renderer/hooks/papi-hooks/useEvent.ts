@@ -12,10 +12,7 @@ import { useEffect } from 'react';
  *
  *    WARNING: MUST BE WRAPPED IN A useCallback. The reference must not be updated every render
  */
-export default <T>(
-  event: PEvent<T> | string,
-  eventHandler: PEventHandler<T>,
-) => {
+export default <T>(event: PEvent<T> | string, eventHandler: PEventHandler<T>) => {
   useEffect(() => {
     const onEvent = isString(event) ? getNetworkEvent<T>(event) : event;
     const unsubscriber = onEvent(eventHandler);

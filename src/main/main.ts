@@ -7,13 +7,7 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import {
-  app,
-  BrowserWindow,
-  shell,
-  ipcMain,
-  IpcMainInvokeEvent,
-} from 'electron';
+import { app, BrowserWindow, shell, ipcMain, IpcMainInvokeEvent } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
@@ -50,8 +44,7 @@ if (process.env.NODE_ENV === 'production') {
   sourceMapSupport.install();
 }
 
-const isDebug =
-  process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
+const isDebug = process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
 
 if (isDebug) {
   // eslint-disable-next-line global-require
@@ -170,8 +163,7 @@ const ipcHandlers: {
     ...args: any[]
   ) => Promise<unknown> | unknown;
 } = {
-  'electronAPI.env.test': (_event, message: string) =>
-    `From main.ts: test ${message}`,
+  'electronAPI.env.test': (_event, message: string) => `From main.ts: test ${message}`,
 };
 
 app
@@ -223,9 +215,8 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   await NetworkService.initialize();
   // Set up test handlers
   Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
-    NetworkService.registerRequestHandler(
-      ipcHandle,
-      async (...args: unknown[]) => handler({} as IpcMainInvokeEvent, ...args),
+    NetworkService.registerRequestHandler(ipcHandle, async (...args: unknown[]) =>
+      handler({} as IpcMainInvokeEvent, ...args),
     );
   });
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
@@ -247,15 +238,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 extensionHostService.start();
 
 setTimeout(async () => {
-  logger.log(
-    `Add Many (from EH): ${await papi.commands.sendCommand(
-      'addMany',
-      2,
-      5,
-      9,
-      7,
-    )}`,
-  );
+  logger.log(`Add Many (from EH): ${await papi.commands.sendCommand('addMany', 2, 5, 9, 7)}`);
 }, 5000);
 
 // #endregion
@@ -297,9 +280,7 @@ setTimeout(async () => {
         });
 
         logger.log(
-          `get verse: ${await Promise.resolve(
-            testExtensionHostInfo?.networkObject.getVerse(),
-          )}`,
+          `get verse: ${await Promise.resolve(testExtensionHostInfo?.networkObject.getVerse())}`,
         );
       }
     }, 1000);

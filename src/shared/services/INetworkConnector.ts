@@ -61,8 +61,5 @@ export default interface INetworkConnector {
    * @param eventType unique network event type for coordinating between processes
    * @param event event to emit on the network
    */
-  emitEventOnNetwork: <T>(
-    eventType: string,
-    event: InternalEvent<T>,
-  ) => Promise<void>;
+  emitEventOnNetwork: <T>(eventType: string, event: InternalEvent<T>) => Promise<void>;
 }

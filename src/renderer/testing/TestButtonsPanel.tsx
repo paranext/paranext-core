@@ -20,60 +20,46 @@ const test = async () => {
   return result;
 };
 
-const addOne = async (num: number) =>
-  papi.commands.sendCommand<[number], number>('addOne', num);
+const addOne = async (num: number) => papi.commands.sendCommand<[number], number>('addOne', num);
 
-const echo: (message: string) => Promise<string> =
-  papi.commands.createSendCommandFunction<[string], string>('echo');
-
-const echoRenderer = papi.commands.createSendCommandFunction<[string], string>(
-  'echoRenderer',
-);
-
-const echoExtensionHost = papi.commands.createSendCommandFunction<
+const echo: (message: string) => Promise<string> = papi.commands.createSendCommandFunction<
   [string],
   string
->('echoExtensionHost');
+>('echo');
 
-const echoSomeoneRenderer = papi.commands.createSendCommandFunction<
-  [string],
-  string
->('hello-someone.echo-someone-renderer');
+const echoRenderer = papi.commands.createSendCommandFunction<[string], string>('echoRenderer');
 
-const addThree = papi.commands.createSendCommandFunction<
-  [number, number, number],
-  number
->('addThree');
-
-const addMany = papi.commands.createSendCommandFunction<number[], number>(
-  'addMany',
+const echoExtensionHost = papi.commands.createSendCommandFunction<[string], string>(
+  'echoExtensionHost',
 );
 
-const getResourcesPath = papi.commands.createSendCommandFunction<[], string>(
-  'getResourcesPath',
+const echoSomeoneRenderer = papi.commands.createSendCommandFunction<[string], string>(
+  'hello-someone.echo-someone-renderer',
 );
 
-const helloWorld = papi.commands.createSendCommandFunction<[], string>(
-  'hello-world.hello-world',
+const addThree = papi.commands.createSendCommandFunction<[number, number, number], number>(
+  'addThree',
 );
 
-const throwErrorHelloWorld = papi.commands.createSendCommandFunction<
-  [string],
-  string
->('hello-world.hello-exception');
+const addMany = papi.commands.createSendCommandFunction<number[], number>('addMany');
+
+const getResourcesPath = papi.commands.createSendCommandFunction<[], string>('getResourcesPath');
+
+const helloWorld = papi.commands.createSendCommandFunction<[], string>('hello-world.hello-world');
+
+const throwErrorHelloWorld = papi.commands.createSendCommandFunction<[string], string>(
+  'hello-world.hello-exception',
+);
 
 const helloSomeone = papi.commands.createSendCommandFunction<[string], string>(
   'hello-someone.hello-someone',
 );
 
-const throwError = papi.commands.createSendCommandFunction<[string], string>(
-  'throwError',
-);
+const throwError = papi.commands.createSendCommandFunction<[string], string>('throwError');
 
-const throwErrorExtensionHost = papi.commands.createSendCommandFunction<
-  [string],
-  string
->('throwErrorExtensionHost');
+const throwErrorExtensionHost = papi.commands.createSendCommandFunction<[string], string>(
+  'throwErrorExtensionHost',
+);
 
 const executeMany = async <T,>(fn: () => Promise<T>) => {
   const numRequests = 10000;
@@ -94,13 +80,9 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
     const responses = await Promise.all(requests);
     const finish = performance.now();
 
-    const avgResponseTime =
-      requestTime.reduce((sum, time) => sum + time, 0) / numRequests;
+    const avgResponseTime = requestTime.reduce((sum, time) => sum + time, 0) / numRequests;
     const maxTime = requestTime.reduce((max, time) => Math.max(max, time), 0);
-    const minTime = requestTime.reduce(
-      (min, time) => Math.min(min, time),
-      Number.MAX_VALUE,
-    );
+    const minTime = requestTime.reduce((min, time) => Math.min(min, time), Number.MAX_VALUE);
     logger.log(
       `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
         finish - start
@@ -115,8 +97,7 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
 function TestButtonsPanel() {
   const [promiseReturn, setPromiseReturn] = useState('Click a button.');
   const updatePromiseReturn = useCallback(
-    (state: unknown) =>
-      setPromiseReturn(isString(state) ? state : JSON.stringify(state)),
+    (state: unknown) => setPromiseReturn(isString(state) ? state : JSON.stringify(state)),
     [],
   );
 
@@ -164,9 +145,7 @@ function TestButtonsPanel() {
     papi.network.onDidClientConnect,
     useCallback(
       ({ clientId, didReconnect }) => {
-        const result = `Client with id ${clientId} ${
-          didReconnect ? 're' : ''
-        }connected!`;
+        const result = `Client with id ${clientId} ${didReconnect ? 're' : ''}connected!`;
         logger.log(result);
         updatePromiseReturn(result);
       },
@@ -183,9 +162,7 @@ function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echo('Echo Stuff'));
-            logger.log(
-              `command:echo '${result}' took ${performance.now() - start} ms`,
-            );
+            logger.log(`command:echo '${result}' took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -199,14 +176,8 @@ function TestButtonsPanel() {
           type="button"
           onClick={async () => {
             const start = performance.now();
-            const result = await runPromise(() =>
-              echoRenderer('Echo Renderer Stuff'),
-            );
-            logger.log(
-              `command:echoRenderer '${result}' took ${
-                performance.now() - start
-              } ms`,
-            );
+            const result = await runPromise(() => echoRenderer('Echo Renderer Stuff'));
+            logger.log(`command:echoRenderer '${result}' took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -220,13 +191,9 @@ function TestButtonsPanel() {
           type="button"
           onClick={async () => {
             const start = performance.now();
-            const result = await runPromise(() =>
-              echoExtensionHost('Echo Extension Host Stuff'),
-            );
+            const result = await runPromise(() => echoExtensionHost('Echo Extension Host Stuff'));
             logger.log(
-              `command:echoExtensionHost '${result}' took ${
-                performance.now() - start
-              } ms`,
+              `command:echoExtensionHost '${result}' took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {
@@ -252,9 +219,7 @@ function TestButtonsPanel() {
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            executeMany(() =>
-              echoSomeoneRenderer('Echo Someone Renderer Stuff'),
-            );
+            executeMany(() => echoSomeoneRenderer('Echo Someone Renderer Stuff'));
           }}
         >
           Echo Someone Renderer
@@ -265,9 +230,7 @@ function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addThree(1, 2, 3));
-            logger.log(
-              `command:addThree ${result} took ${performance.now() - start} ms`,
-            );
+            logger.log(`command:addThree ${result} took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -282,9 +245,7 @@ function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
-            logger.log(
-              `command:addMany ${result} took ${performance.now() - start} ms`,
-            );
+            logger.log(`command:addMany ${result} took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -317,9 +278,7 @@ function TestButtonsPanel() {
             const start = performance.now();
             const result = await runPromise(() => helloWorld());
             logger.log(
-              `command:hello-world.hello-world ${result} took ${
-                performance.now() - start
-              } ms`,
+              `command:hello-world.hello-world ${result} took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {
@@ -334,13 +293,9 @@ function TestButtonsPanel() {
           type="button"
           onClick={async () => {
             const start = performance.now();
-            const result = await runPromise(() =>
-              helloSomeone('Paranext user'),
-            );
+            const result = await runPromise(() => helloSomeone('Paranext user'));
             logger.log(
-              `command:hello-someone.hello-someone ${result} took ${
-                performance.now() - start
-              } ms`,
+              `command:hello-someone.hello-someone ${result} took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {
@@ -360,9 +315,7 @@ function TestButtonsPanel() {
         <button
           className="testButton"
           type="button"
-          onClick={() =>
-            runPromise(() => throwErrorExtensionHost('Test error'))
-          }
+          onClick={() => runPromise(() => throwErrorExtensionHost('Test error'))}
         >
           Test Exception (Extension Host)
         </button>

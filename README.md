@@ -111,6 +111,25 @@ Extensions highly recommended for this repo are already displayed in VS Code thr
 - [TODO Highlight](https://marketplace.visualstudio.com/items?itemName=wayou.vscode-todo-highlight)
 - [Version Lens](https://marketplace.visualstudio.com/items?itemName=pflannery.vscode-versionlens)
 
+## Formatting and Linting
+
+Formatting happens automatically when you commit. If you use VS Code with this repo's recommended extensions it will format when you save.
+
+To check TypeScript for readability, maintainability, and functionality errors, and to check a few other files for proper formatting, run the following from the repo root (or just use VS Code with this repo's recommended extensions)
+
+```bash
+npm run prettier
+npm run lint
+```
+
+To check C# for readability, maintainability, and functionality errors, run the following from the repo root (or just use VS Code with this repo's recommended extensions)
+
+```bash
+cd c-sharp
+dotnet tool restore
+dotnet csharpier .
+```
+
 ## License
 
 MIT © [SIL International](https://www.sil.org/)

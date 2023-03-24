@@ -29,9 +29,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
     return nums.reduce((acc, current) => acc + current, 0);
   },
   throwErrorExtensionHost: async (message: string) => {
-    throw new Error(
-      `Test Error thrown in throwErrorExtensionHost command: ${message}`,
-    );
+    throw new Error(`Test Error thrown in throwErrorExtensionHost command: ${message}`);
   },
   getResourcesPath: async () => globalThis.resourcesPath,
 };
@@ -75,10 +73,7 @@ setTimeout(
         getVerse: async () => {
           const verse = await fetch('https://bible-api.com/matthew+24:14');
           const verseJson = await verse.json();
-          const results = `test-extension-host got verse: ${verseJson.text.replace(
-            /\\n/g,
-            '',
-          )}`;
+          const results = `test-extension-host got verse: ${verseJson.text.replace(/\\n/g, '')}`;
           logger.log(results);
           return results;
         },
@@ -95,11 +90,7 @@ setTimeout(
     });
   }
 
-  logger.log(
-    `do stuff: ${await testMainInfo?.networkObject.doStuff(
-      'extension host things',
-    )}`,
-  );
+  logger.log(`do stuff: ${await testMainInfo?.networkObject.doStuff('extension host things')}`);
 })();
 
 // #endregion

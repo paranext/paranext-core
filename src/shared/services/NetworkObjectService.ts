@@ -44,10 +44,7 @@ type NetworkObjectRegistration<T extends NetworkableObject> = {
 );
 
 /** Map of id to network object */
-const networkObjectRegistrations = new Map<
-  string,
-  NetworkObjectRegistration<NetworkableObject>
->();
+const networkObjectRegistrations = new Map<string, NetworkObjectRegistration<NetworkableObject>>();
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -60,10 +57,9 @@ let initializePromise: Promise<void> | undefined;
  *
  * Only run on local network object registration! Processes should only dispose their own network objects
  */
-const onDidDisposeNetworkObjectEmitter =
-  NetworkService.createNetworkEventEmitter<string>(
-    'object:onDidDisposeNetworkObject',
-  );
+const onDidDisposeNetworkObjectEmitter = NetworkService.createNetworkEventEmitter<string>(
+  'object:onDidDisposeNetworkObject',
+);
 /** Event that emits with network object id when that object is disposed */
 const onDidDisposeNetworkObject = onDidDisposeNetworkObjectEmitter.event;
 
@@ -77,10 +73,7 @@ onDidDisposeNetworkObject((id: string) => {
 
     // Dispose of the network object registration itself
     networkObjectRegistration.onDidDisposeEmitter.dispose();
-    if (
-      networkObjectRegistration.registrationType ===
-      NetworkObjectRegistrationType.Remote
-    )
+    if (networkObjectRegistration.registrationType === NetworkObjectRegistrationType.Remote)
       networkObjectRegistration.revokeProxy();
   }
 });
@@ -110,10 +103,8 @@ enum NetworkObjectRequestSubtype {
 }
 
 /** Builds a request type for network requests for the specified network object id and request subtype */
-const buildNetworkObjectRequestType = (
-  id: string,
-  subtype: NetworkObjectRequestSubtype,
-) => serializeRequestType(CATEGORY_NETWORK_OBJECT, `${id}.${subtype}`);
+const buildNetworkObjectRequestType = (id: string, subtype: NetworkObjectRequestSubtype) =>
+  serializeRequestType(CATEGORY_NETWORK_OBJECT, `${id}.${subtype}`);
 
 /**
  * Determine if a network object with the specified id exists remotely (does not check locally)
@@ -121,9 +112,7 @@ const buildNetworkObjectRequestType = (
  * @returns empty array if there is a remote network object with this id, undefined otherwise.
  * TODO: return array of all eligible functions
  */
-const getRemoteNetworkObjectFunctions = async (
-  id: string,
-): Promise<string[] | undefined> => {
+const getRemoteNetworkObjectFunctions = async (id: string): Promise<string[] | undefined> => {
   try {
     return await NetworkService.request<[], string[]>(
       buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
@@ -158,8 +147,7 @@ const set = async <T extends NetworkableObject>(
   networkObject: T,
 ): Promise<DisposableNetworkObjectInfo<T>> => {
   await initialize();
-  if (await has(id))
-    throw new Error(`Network object with id ${id} is already registered`);
+  if (await has(id)) throw new Error(`Network object with id ${id} is already registered`);
 
   const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
 
@@ -244,9 +232,7 @@ const get = async <T extends NetworkableObject>(
   const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
 
   // Create the local object to be proxied
-  const localObject = createLocalObjectToProxy
-    ? createLocalObjectToProxy(id)
-    : {};
+  const localObject = createLocalObjectToProxy ? createLocalObjectToProxy(id) : {};
 
   // Create a proxy that, for all unknown properties (function calls that the local object creator didn't set),
   // returns a function that sends a request to the remote network object
@@ -267,10 +253,7 @@ const get = async <T extends NetworkableObject>(
       // If the local network object doesn't have the property, build a request for it
       const requestFunction = (...args: unknown[]) =>
         NetworkService.request(
-          buildNetworkObjectRequestType(
-            id,
-            NetworkObjectRequestSubtype.Function,
-          ),
+          buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
           prop, // Name of function to run
           ...args, // Arguments to put into the function
         );
