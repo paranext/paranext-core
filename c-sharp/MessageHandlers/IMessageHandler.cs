@@ -4,5 +4,5 @@ namespace Paranext.DataProvider.MessageHandlers;
 
 internal interface IMessageHandler
 {
-    public void HandleMessage(Message message);
+    public Message? HandleMessage(Message message);
 }

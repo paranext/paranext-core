@@ -20,7 +20,7 @@ namespace Paranext.DataProvider.MessageHandlers
 
         private static void DoNothing(bool success, dynamic? message) { }
 
-        public void HandleMessage(Message message)
+        public Message? HandleMessage(Message message)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
@@ -33,6 +33,7 @@ namespace Paranext.DataProvider.MessageHandlers
                 Console.Error.WriteLine("Request failed: \"{0}\" with error message \"{1}\"", _originalRequest, response.ErrorMessage ?? "<none>");
 
             _messageProcessingCallback(response.Success, response.Contents);
+            return null;
         }
     }
 }

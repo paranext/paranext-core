@@ -10,11 +10,11 @@ public sealed partial class MessageRequest : Message
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageRequest() : base(UNKNOWN_SENDER_ID)
+    private MessageRequest()
     {
     }
 
-    public MessageRequest(int senderId, Enum<RequestType> requestType, int requestId, dynamic? contents) : base(senderId)
+    public MessageRequest(Enum<RequestType> requestType, int requestId, dynamic? contents)
     {
         RequestType = requestType;
         RequestId = requestId;

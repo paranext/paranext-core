@@ -7,34 +7,15 @@ namespace Paranext.DataProvider.Messages;
 /// </summary>
 public sealed class MessageInitClient : Message
 {
-    public sealed class NetworkConnectorInfo
-    {
-        public const int CLIENT_ID_UNSET = -1;
-
-        /// <summary>
-        /// ONLY FOR DESERIALIZATION
-        /// </summary>
-        private NetworkConnectorInfo()
-        {
-        }
-
-        public NetworkConnectorInfo(int clientId)
-        {
-            ClientId = clientId;
-        }
-
-        public int ClientId { get; set; } = CLIENT_ID_UNSET;
-    }
-
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageInitClient() : base(UNKNOWN_SENDER_ID)
+    private MessageInitClient()
     {
         ConnectorInfo = new NetworkConnectorInfo(NetworkConnectorInfo.CLIENT_ID_UNSET);
     }
 
-    public MessageInitClient(int senderId, NetworkConnectorInfo connectorInfo) : base(senderId)
+    public MessageInitClient(NetworkConnectorInfo connectorInfo)
     {
         ConnectorInfo = connectorInfo;
     }

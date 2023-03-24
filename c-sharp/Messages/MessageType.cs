@@ -2,9 +2,6 @@ using PtxUtils;
 
 namespace Paranext.DataProvider.Messages;
 
-// **********************************************************************************************
-// NOTE: The types defined in this file should match what is defined in NetworkConnectorTypes.ts
-// **********************************************************************************************
 public sealed class MessageType : EnumType
 {
     public static readonly Enum<MessageType> InitClient = new("init-client");

@@ -10,7 +10,7 @@ public sealed class MessageClientConnect : Message
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageClientConnect() : base(UNKNOWN_SENDER_ID)
+    private MessageClientConnect()
     {
     }
 

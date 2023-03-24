@@ -12,7 +12,7 @@ namespace Paranext.DataProvider.MessageTransports;
 /// <summary>
 /// Class to facilitate communication to the Paranext server via the PAPI
 /// </summary>
-internal sealed class PapiClient : IMessageSink
+internal sealed class PapiClient
 {
     #region Delegates/Constants/Member variables
     private const int CONNECT_TIMEOUT = 30000;
@@ -24,7 +24,7 @@ internal sealed class PapiClient : IMessageSink
     private readonly Dictionary<Enum<MessageType>, IMessageHandler> _messageHandlersByMessageType = new ();
     private readonly ConcurrentDictionary<int, IMessageHandler> _messageHandlersForMyRequests = new ();
     private readonly ClientWebSocket _webSocket;
-    private int _clientId = MessageInitClient.NetworkConnectorInfo.CLIENT_ID_UNSET;
+    private int _clientId = NetworkConnectorInfo.CLIENT_ID_UNSET;
     private int _nextRequestId = 1;
     #endregion
 
@@ -39,7 +39,7 @@ internal sealed class PapiClient : IMessageSink
     {
         _webSocket = new ClientWebSocket();
         _messageHandlersByMessageType[MessageType.Event] = new MessageHandlerEvent();
-        _messageHandlersByMessageType[MessageType.Request] = new MessageHandlerRequestByRequestType(this);
+        _messageHandlersByMessageType[MessageType.Request] = new MessageHandlerRequestByRequestType();
     }
     #endregion
 
@@ -106,7 +106,6 @@ internal sealed class PapiClient : IMessageSink
         ManualResetEventSlim registrationComplete = new(false);
 
         var registerRequest = new MessageRequest(
-            _clientId,
             RequestType.RegisterRequest,
             Interlocked.Increment(ref _nextRequestId),
             new dynamic[] { requestToHandle.ToString(), _clientId });
@@ -120,21 +119,10 @@ internal sealed class PapiClient : IMessageSink
                 }
                 else
                 {
-                    var responder = _messageHandlersByMessageType[MessageType.Request];
-                    if (responder == null)
-                    {
-                        Console.Error.WriteLine("No message handler registered for MessageType.Request");
-                    }
-                    else if (responder is MessageHandlerRequestByRequestType responderToUpdate)
-                    {
-                        responderToUpdate.SetHandlerForRequestType(requestToHandle, doStuff);
-                        Console.WriteLine("Request type for \"{0}\" successfully registered", requestToHandle);
-                        registrationSucceeded = true;
-                    }
-                    else
-                    {
-                        Console.Error.WriteLine("Unexpected message handler registered for MessageType.Request");
-                    }
+                    var responder = (MessageHandlerRequestByRequestType)_messageHandlersByMessageType[MessageType.Request];
+                    responder.SetHandlerForRequestType(requestToHandle, doStuff);
+                    Console.WriteLine("Request type \"{0}\" successfully registered with the server", requestToHandle);
+                    registrationSucceeded = true;
                 }
 
                 registrationComplete.Set();
@@ -173,7 +161,6 @@ internal sealed class PapiClient : IMessageSink
                     continue;
                 }
 
-                Console.WriteLine("Received message of type: {0}", message.Type);
                 if (message is MessageResponse response)
                 {
                     // Remove, don't just get, the response handler since the request is complete
@@ -191,7 +178,11 @@ internal sealed class PapiClient : IMessageSink
                 {
                     if (_messageHandlersByMessageType.TryGetValue(message.Type, out IMessageHandler? messageHandler))
                     {
-                        messageHandler.HandleMessage(message);
+                        Message? messageToSend = messageHandler.HandleMessage(message);
+                        if (messageToSend != null)
+                        {
+                            await SendMessage(messageToSend);
+                        }
                     }
                     else
                     {
@@ -212,7 +203,7 @@ internal sealed class PapiClient : IMessageSink
     /// <summary>
     /// Sends the specified message to the server
     /// </summary>
-    public async Task SendMessage(Message message)
+    private async Task SendMessage(Message message)
     {
         if (_webSocket.State != WebSocketState.Open)
             throw new InvalidOperationException("Can not send data when the socket is closed");

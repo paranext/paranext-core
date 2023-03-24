@@ -10,21 +10,21 @@ public sealed class MessageEvent : Message
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageEvent() : base(UNKNOWN_SENDER_ID)
+    private MessageEvent()
     {
     }
 
-    public MessageEvent(int senderId, dynamic? contents) : base(senderId)
+    public MessageEvent(string? eventType)
     {
-        Contents = contents;
+        EventType = eventType;
     }
 
     public override Enum<MessageType> Type => MessageType.Event;
 
-    public dynamic? Contents { get; set; }
+    public string? EventType { get; set; }
 
     public override string ToString()
     {
-        return $"Event: {Contents} from {SenderId}";
+        return $"Event: {EventType} from {SenderId}";
     }
 }

@@ -7,19 +7,13 @@ namespace Paranext.DataProvider.MessageHandlers
     internal class MessageHandlerRequestByRequestType : IMessageHandler
     {
         private readonly ConcurrentDictionary<Enum<RequestType>, Func<dynamic, ResponseToRequest>> _handlersByRequestType = new();
-        private readonly IMessageSink _messageSink;
-
-        public MessageHandlerRequestByRequestType(IMessageSink messageSink)
-        {
-            _messageSink = messageSink;
-        }
 
         public void SetHandlerForRequestType(Enum<RequestType> requestType, Func<dynamic, ResponseToRequest> handler)
         {
             _handlersByRequestType[requestType] = handler;
         }
 
-        public void HandleMessage(Message message)
+        public Message? HandleMessage(Message message)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
@@ -32,9 +26,14 @@ namespace Paranext.DataProvider.MessageHandlers
             {
                 var response = handler(request.Contents);
                 if (response.Success)
-                    _messageSink.SendMessage(new MessageResponse(0, request.RequestType, request.RequestId, request.SenderId, response.Contents));
+                    return new MessageResponse(request.RequestType, request.RequestId, request.SenderId, response.Contents);
                 else
-                    _messageSink.SendMessage(new MessageResponse(0, request.RequestType, request.RequestId, request.SenderId, response.ErrorMessage));
+                    return new MessageResponse(request.RequestType, request.RequestId, request.SenderId, response.ErrorMessage);
+            }
+            else
+            {
+                Console.Error.WriteLine("Unable to process unexpected request type: {0}", request.RequestType);
+                return null;
             }
         }
     }

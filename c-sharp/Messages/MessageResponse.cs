@@ -10,7 +10,7 @@ public sealed class MessageResponse : Message
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageResponse() : base(UNKNOWN_SENDER_ID)
+    private MessageResponse()
     {
     }
 
@@ -18,11 +18,10 @@ public sealed class MessageResponse : Message
     /// Response when there was an error - no contents
     /// </summary>
     public MessageResponse(
-        int senderId,
         Enum<RequestType> requestType,
         int requestId,
         int requesterId,
-        string errorMessage) : base(senderId)
+        string errorMessage)
     {
         RequestType = requestType;
         RequestId = requestId;
@@ -35,11 +34,10 @@ public sealed class MessageResponse : Message
     /// Response when successful
     /// </summary>
     public MessageResponse(
-        int senderId,
         Enum<RequestType> requestType,
         int requestId,
         int requesterId,
-        dynamic? contents) : base(senderId)
+        dynamic? contents)
     {
         RequestType = requestType;
         RequestId = requestId;

@@ -12,11 +12,16 @@ public abstract class Message
         SenderId = senderId;
     }
 
+    protected Message()
+    {
+        SenderId = UNKNOWN_SENDER_ID;
+    }
+
     public const int UNKNOWN_SENDER_ID = -1;
 
     public abstract Enum<MessageType> Type { get; }
 
-    public int SenderId { get; set; } = UNKNOWN_SENDER_ID;
+    public int SenderId { get; set; }
 
     public override string ToString()
     {

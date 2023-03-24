@@ -4,7 +4,7 @@ namespace Paranext.DataProvider.MessageHandlers
 {
     internal class MessageHandlerEvent : IMessageHandler
     {
-        public void HandleMessage(Message message)
+        public Message? HandleMessage(Message message)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
@@ -13,6 +13,8 @@ namespace Paranext.DataProvider.MessageHandlers
                 throw new ArgumentException("Incorrect message type", nameof(message));
 
             Console.WriteLine("Event received: {0}", message);
+
+            return null;
         }
     }
 }
