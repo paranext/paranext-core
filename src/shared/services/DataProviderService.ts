@@ -7,7 +7,7 @@ import {
   DataProviderInfo,
   DisposableDataProviderInfo,
 } from '@shared/models/DataProviderInfo';
-import IDataProvider from '@shared/models/IDataProvider';
+import IDataProviderEngine from '@shared/models/IDataProvider';
 import * as NetworkService from '@shared/services/NetworkService';
 import networkObjectService from './NetworkObjectService';
 
@@ -48,15 +48,20 @@ async function has(dataType: string): Promise<boolean> {
 }
 
 /**
- * Register a data provider to be shared on the network
- * @param dataType type of data that this provider will serve
- * @param dataProvider the object to set up as a data provider
- * @returns information about the data provider including control over disposing of it
+ * Creates a data provider to be shared on the network layering over the provided data provider engine.
+ * @param dataType type of data that this provider serves
+ * @param dataProviderEngine the object to layer over with a new data provider object
+ * @returns information about the data provider including control over disposing of it.
+ *  Note that this data provider is a new object distinct from the data provider engine passed in.
+ * @type `TSelector` - the type of selector used to get some data from this provider.
+ *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
+ *  Note: A selector must be stringifiable.
+ * @type `TData` - the type of data provided by this data provider based on a provided selector
  */
-async function register<TData, TSelector>(
+async function registerEngine<TSelector, TData>(
   dataType: string,
-  dataProvider: IDataProvider<TData, TSelector>,
-): Promise<DisposableDataProviderInfo<TData, TSelector>> {
+  dataProviderEngine: IDataProviderEngine<TSelector, TData>,
+): Promise<DisposableDataProviderInfo<TSelector, TData>> {
   await initialize();
   if (await has(dataType))
     throw new Error(
@@ -67,7 +72,7 @@ async function register<TData, TSelector>(
 
   const networkObjectInfo = await networkObjectService.set(
     buildDataProviderObjectId(dataType),
-    dataProvider,
+    dataProviderEngine,
   );
 
   return {
@@ -79,16 +84,20 @@ async function register<TData, TSelector>(
 
 /**
  * Get a data provider that has previously been set up
- * @param dataType type of data that this provider will serve
+ * @param dataType type of data that this provider serves
  * @returns information about the data provider with the specified type if one exists, undefined otherwise
+ * @type `TSelector` - the type of selector used to get some data from this provider.
+ *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
+ *  Note: A selector must be stringifiable.
+ * @type `TData` - the type of data provided by this data provider based on a provided selector
  */
-async function get<TData, TSelector>(
+async function get<TSelector, TData>(
   dataType: string,
-): Promise<DataProviderInfo<TData, TSelector> | undefined> {
+): Promise<DataProviderInfo<TSelector, TData> | undefined> {
   await initialize();
 
   const networkObjectInfo = await networkObjectService.get<
-    IDataProvider<TData, TSelector>
+    IDataProviderEngine<TSelector, TData>
   >(buildDataProviderObjectId(dataType));
 
   if (!networkObjectInfo) return undefined;
@@ -101,7 +110,7 @@ async function get<TData, TSelector>(
 
 const dataProviderService = {
   has,
-  register,
+  registerEngine,
   get,
 };
 

@@ -9,29 +9,39 @@ logger.log('Hello Someone is importing!');
 
 const unsubscribers = [];
 
-class GreetingsDataProvider {
+class GreetingsDataProviderEngine {
   people = {
     bill: 'Hi, my name is Bill!',
     kathy: 'Hello. My name is Kathy.',
   };
 
+  /**
+   * @param {string} selector
+   * @param {string} data
+   */
   async set(selector, data) {
     // Don't change someone's greeting, you heathen!
-    if (this.people[selector]) return false;
+    if (await this.get(selector)) return false;
 
     this.people[selector] = data;
     return true;
   }
 
+  /**
+   * @param {string} selector
+   */
   async get(selector) {
     return this.people[selector];
   }
 
-  // Placeholder - will implement and fix these warnings soon
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars, class-methods-use-this
-  async subscribe(selector, callback) {
-    throw new Error(
-      'Greetings Data Provider has not yet implemented subscribe!',
+  /**
+   * @param {string} setSelector
+   * @param {string[]} listenerSelectors
+   */
+  async generateUpdates(setSelector, listenerSelectors) {
+    const data = await this.get(setSelector);
+    return listenerSelectors.map(
+      (sel) => setSelector === sel && { shouldUpdate: true, data },
     );
   }
 }
@@ -39,9 +49,9 @@ class GreetingsDataProvider {
 exports.activate = async () => {
   logger.log('Hello Someone is activating!');
 
-  const greetingsDataProviderInfo = papi.dataProvider.register(
+  const greetingsDataProviderInfo = papi.dataProvider.registerEngine(
     'greetings',
-    new GreetingsDataProvider(),
+    new GreetingsDataProviderEngine(),
   );
 
   papi.webViews.addWebView({
