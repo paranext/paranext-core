@@ -15,23 +15,25 @@ class GreetingsDataProvider {
     kathy: 'Hello. My name is Kathy.',
   };
 
-  set = async (selector, data) => {
+  async set(selector, data) {
     // Don't change someone's greeting, you heathen!
     if (this.people[selector]) return false;
 
     this.people[selector] = data;
     return true;
-  };
+  }
 
-  get = async (selector) => this.people[selector];
+  async get(selector) {
+    return this.people[selector];
+  }
 
   // Placeholder - will implement and fix these warnings soon
   // eslint-disable-next-line @typescript-eslint/no-unused-vars, class-methods-use-this
-  subscribe = async (selector, callback) => {
+  async subscribe(selector, callback) {
     throw new Error(
       'Greetings Data Provider has not yet implemented subscribe!',
     );
-  };
+  }
 }
 
 exports.activate = async () => {
