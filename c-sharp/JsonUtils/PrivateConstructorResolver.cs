@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
-namespace Paranext.DataProvider.Data;
+namespace Paranext.DataProvider.JsonUtils;
 
 /// <summary>
 /// Type resolver for creation objects that have a private default constructor

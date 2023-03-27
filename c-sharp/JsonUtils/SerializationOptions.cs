@@ -1,11 +1,11 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
-using Paranext.DataProvider.Data;
+using Paranext.DataProvider.Messages;
 
-namespace Paranext.DataProvider.Utils;
+namespace Paranext.DataProvider.JsonUtils;
 
-internal static class JsonUtils
+internal static class SerializationOptions
 {
     /// <summary>
     /// Creates new serialization options used for communicating with the PAPI.
@@ -23,7 +23,7 @@ internal static class JsonUtils
             };
 
         options.Converters.Add(new EnumConverter<MessageType>());
-        options.Converters.Add(new EnumConverter<RequestTypes>());
+        options.Converters.Add(new EnumConverter<RequestType>());
         return options;
     }
 }
