@@ -1,7 +1,7 @@
 import {
   Autocomplete as MuiComboBox,
-  AutocompleteChangeDetails as MuiComboBoxChangeDetails,
-  AutocompleteChangeReason as MuiComboBoxChangeReason,
+  AutocompleteChangeDetails as ComboBoxChangeDetails,
+  AutocompleteChangeReason as ComboBoxChangeReason,
   TextField as MuiTextField,
 } from '@mui/material';
 import { FocusEventHandler, SyntheticEvent } from 'react';
@@ -34,15 +34,15 @@ type ComboBoxProps = {
   /**
    * Additional css classes to help with unique styling of the button
    */
-  className?: string[];
+  className?: string;
   /**
    * Triggers when content of textfield is changed
    */
   onChange?: (
     event: SyntheticEvent<Element, Event>,
     value: unknown,
-    reason: MuiComboBoxChangeReason,
-    details?: MuiComboBoxChangeDetails<unknown> | undefined,
+    reason: ComboBoxChangeReason,
+    details?: ComboBoxChangeDetails<unknown> | undefined,
   ) => void;
   /**
    * Triggers when textfield gets focus
@@ -65,16 +65,13 @@ function ComboBox({
   onFocus,
   onBlur,
 }: ComboBoxProps) {
-  const errorClass = hasError ? 'error' : '';
-  const classNameString = className?.join(' ') ?? '';
-
   return (
     <MuiComboBox
       disablePortal
       disabled={isDisabled}
       fullWidth={isFullWidth}
       options={options}
-      className={['papi-combo-box', errorClass, classNameString].join(' ')}
+      className={`papi-combo-box ${hasError ? 'error' : ''} ${className ?? ''}`}
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}

@@ -1,4 +1,4 @@
-import { Switch as MuiSwitch } from '@mui/material';
+﻿import { Switch as MuiSwitch } from '@mui/material';
 import { ChangeEvent } from 'react';
 import '@renderer/components/papi-components/switch.css';
 
@@ -25,7 +25,7 @@ type SwitchProps = {
   /**
    * Additional css classes to help with unique styling of the switch
    */
-  className?: string[];
+  className?: string;
   /**
    * Callback fired when the state is changed.
    * @param event The event source of the callback. You can pull out the new value by accessing event.target.value (string).
@@ -45,20 +45,13 @@ function Switch({
   className,
   onChange,
 }: SwitchProps) {
-  const primaryClass = isPrimary ? 'primary' : 'secondary';
-  const errorClass = hasError ? 'error' : '';
-  const classNameString = className?.join(' ') ?? '';
-
   return (
     <MuiSwitch
       checked={checked}
       disabled={isDisabled}
-      className={[
-        'papi-switch',
-        primaryClass,
-        errorClass,
-        classNameString,
-      ].join(' ')}
+      className={`papi-switch ${isPrimary ? 'primary' : 'secondary'} ${
+        hasError ? 'error' : ''
+      } ${className ?? ''}`}
       onChange={onChange}
     />
   );

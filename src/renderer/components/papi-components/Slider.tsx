@@ -54,7 +54,7 @@ type SliderProps = {
   /**
    * Additional css classes to help with unique styling of the button
    */
-  className?: string[];
+  className?: string;
   /**
    * Callback function that is fired when the slider's value changed.
    * @param event The event source of the callback. You can pull out the new value by accessing event.target.value (any).
@@ -91,8 +91,6 @@ function Slider({
   onChange,
   onChangeCommitted,
 }: SliderProps) {
-  const classNameString = className?.join(' ') ?? '';
-
   return (
     <MuiSlider
       disabled={isDisabled}
@@ -103,7 +101,7 @@ function Slider({
       marks={showMarks}
       defaultValue={defaultValue}
       valueLabelDisplay={valueLabelDisplay}
-      className={['papi-slider', orientation, classNameString].join(' ')}
+      className={`papi-slider ${orientation} ${className ?? ''}`}
       onChange={onChange}
       onChangeCommitted={onChangeCommitted}
     />

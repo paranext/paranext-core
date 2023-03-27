@@ -15,7 +15,7 @@ type ButtonProps = PropsWithChildren<{
   /**
    * Additional css classes to help with unique styling of the button
    */
-  className?: string[];
+  className?: string;
   /**
    * Optional click handler
    */
@@ -31,19 +31,18 @@ type ButtonProps = PropsWithChildren<{
  */
 function Button({
   isPrimary = false,
-  isDisabled: disabled,
+  isDisabled,
   className,
   onClick,
   onContextMenu,
   children,
 }: ButtonProps) {
-  const mode = isPrimary ? 'primary' : 'secondary';
-  const classNameString =
-    (className && className.length > 0 && className.join(' ')) ?? '';
   return (
     <MuiButton
-      disabled={disabled}
-      className={['papi-button', mode, classNameString].join(' ')}
+      disabled={isDisabled}
+      className={`papi-button ${isPrimary ? 'primary' : 'secondary'} ${
+        className ?? ''
+      }`}
       onClick={onClick}
       onContextMenu={onContextMenu}
     >

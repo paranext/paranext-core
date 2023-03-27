@@ -91,6 +91,26 @@ npm run package
 8. Publish the release on GitHub.
 9. Merge the release branch back into **main** with a merge commit.
 
+## Storybook
+
+To run Storybook locally:
+
+```bash
+npm run storybook
+```
+
+To build Storybook:
+
+```bash
+npm run storybook:build
+```
+
+To run Storybook as a web app:
+
+```bash
+npm run storybook:build {path to storybook-static folder}
+```
+
 ## Windows Development with WSL2
 
 On Windows, you can install [WSL](https://learn.microsoft.com/en-us/windows/wsl/) (Windows Subsystem for Linux) so you can test cross-platform compatibility on Linux (as well as Windows). You'll need to use a Linux distribution with WSL2 (rather than WSL1) so the X-Server windows can be opened for Electron.

@@ -46,12 +46,12 @@ export const Placeholder: Story = {
 
 export const Paratext: Story = {
   args: {
-    className: ['paratext'],
+    className: 'paratext',
   },
 };
 
 export const ParatextBright: Story = {
   args: {
-    className: ['paratext', 'bright'],
+    className: 'paratext bright',
   },
 };

@@ -1,4 +1,4 @@
-import { TextField as MuiTextField } from '@mui/material';
+﻿import { TextField as MuiTextField } from '@mui/material';
 
 type TextFieldProps = {
   /**
@@ -41,7 +41,7 @@ type TextFieldProps = {
   /**
    * Additional css classes to help with unique styling of the button
    */
-  className?: string[];
+  className?: string;
   /**
    * Triggers when content of textfield is changed
    */
@@ -70,8 +70,6 @@ function TextField({
   onFocus,
   onBlur,
 }: TextFieldProps) {
-  const classNameString = className?.join(' ') ?? '';
-
   return (
     <MuiTextField
       variant={variant}
@@ -82,7 +80,7 @@ function TextField({
       label={label}
       placeholder={placeholder}
       required={isRequired}
-      className={['papi-textfield', classNameString].join(' ')}
+      className={`papi-textfield ${className ?? ''}`}
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}
