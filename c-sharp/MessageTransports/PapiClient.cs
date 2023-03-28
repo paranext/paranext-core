@@ -29,7 +29,7 @@ internal sealed class PapiClient : IDisposable
     private readonly Thread _messageHandlingThread;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly ManualResetEventSlim _messageHandlingComplete = new(false);
-    private int _clientId = NetworkConnectorInfo.CLIENT_ID_UNSET;
+    private int _clientId = MessageInitClientConnectorInfo.CLIENT_ID_UNSET;
     private int _nextRequestId = 1;
     private bool _isDisposed = false;
     #endregion
@@ -210,6 +210,40 @@ internal sealed class PapiClient : IDisposable
         }
         return registrationSucceeded;
     }
+
+    /// <summary>
+    /// Configure PapiClient to call <paramref name="func"/> whenever an event of type <paramref name="eventType"/> is received.
+    /// </summary>
+    /// <param name="eventType">Event type to monitor</param>
+    /// <param name="func">Function that optionally returns messages to send when an event is received</param>
+    public void RegisterEventHandler(Enum<EventType> eventType, Func<dynamic?, Message?> func)
+    {
+        var msgHandler = (MessageHandlerEvent)_messageHandlersByMessageType[MessageType.Event];
+        msgHandler.RegisterEventHandler(eventType, func);
+        Console.WriteLine($"Handler for event type \"{eventType}\" successfully registered");
+    }
+
+    /// <summary>
+    /// Configure PapiClient to no longer call <paramref name="func"/> whenever an event of type <paramref name="eventType"/> is received.
+    /// </summary>
+    /// <param name="eventType">Event type to monitor</param>
+    /// <param name="func">Same function reference previously passed to RegisterEventHandler</param>
+    public void UnregisterEventHandler(Enum<EventType> eventType, Func<dynamic?, Message?> func)
+    {
+        var msgHandler = (MessageHandlerEvent)_messageHandlersByMessageType[MessageType.Event];
+        msgHandler.UnregisterEventHandler(eventType, func);
+        Console.WriteLine($"Handler for event type \"{eventType}\" successfully unregistered");
+    }
+
+    /// <summary>
+    /// Send an event message to the server/>.
+    /// </summary>
+    /// <param name="message">Event message to send</param>
+    /// <returns></returns>
+    public async Task SendEvent(MessageEvent message)
+    {
+        await SendMessageAsync(message, CancellationToken.None);
+    }
     #endregion
 
     #region Private helper methods
@@ -274,75 +308,103 @@ internal sealed class PapiClient : IDisposable
     /// </summary>
     private async void HandleMessages()
     {
-        do
+        try
         {
-            try
+            do
             {
-                Console.WriteLine("PapiClient waiting for the next incoming message");
-                var receiveTask = ReceiveMessageAsync<Message>(_cancellationTokenSource.Token);
-                Message? message = await receiveTask;
-                if (message is null)
+                try
                 {
-                    Console.Error.WriteLine("Received null message!");
-                    continue;
-                }
-
-                if (message is MessageResponse response)
-                {
-                    // Remove, don't just get, the response handler since the request is complete
-                    if (
-                        _messageHandlersForMyRequests.TryRemove(
-                            response.RequestId,
-                            out IMessageHandler? messageHandler
-                        )
-                    )
+                    Console.WriteLine("PapiClient waiting for the next incoming message");
+                    var receiveTask = ReceiveMessageAsync<Message>(_cancellationTokenSource.Token);
+                    Message? message = await receiveTask;
+                    if (message is null)
                     {
-                        messageHandler.HandleMessage(message);
+                        Console.Error.WriteLine("Received null message!");
                     }
                     else
                     {
-                        Console.Error.WriteLine(
-                            $"No handler registered for response from request ID: {response.RequestId}"
-                        );
-                        continue;
-                    }
-                }
-                else
-                {
-                    if (
-                        _messageHandlersByMessageType.TryGetValue(
-                            message.Type,
-                            out IMessageHandler? messageHandler
-                        )
-                    )
-                    {
-                        Message? messageToSend = messageHandler.HandleMessage(message);
-                        if (messageToSend != null)
+                        // Handle each message asynchronously so we can keep receiving more messages
+                        _ = Task.Run(() =>
                         {
-                            await SendMessageAsync(messageToSend, _cancellationTokenSource.Token);
-                        }
+                            HandleMessage(message);
+                        });
                     }
-                    else
+                }
+                catch (OperationCanceledException) // Thrown by the websocket when cancelling
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Exception while handling messages: {ex}");
+                }
+            } while (!_cancellationTokenSource.IsCancellationRequested && Connected);
+
+            _messageHandlingComplete.Set();
+            Console.WriteLine("PapiClient HandleMessages exiting");
+        }
+        // Don't take down the process if Dispose() ran faster than some of the code here
+        catch (ObjectDisposedException) { }
+    }
+
+    /// <summary>
+    /// Message handler for any kind of message
+    /// </summary>
+    private async void HandleMessage(Message message)
+    {
+        try
+        {
+            if (message is MessageResponse messageResponse)
+            {
+                HandleMessageResponse(messageResponse);
+                return;
+            }
+
+            if (_messageHandlersByMessageType.TryGetValue(message.Type, out var messageHandler))
+            {
+                var messagesToSend = messageHandler.HandleMessage(message);
+                if (messagesToSend != null)
+                {
+                    foreach (var m in messagesToSend)
                     {
-                        Console.Error.WriteLine(
-                            $"No handler registered for message type: {message.Type}"
-                        );
-                        continue;
+                        await SendMessageAsync(m, _cancellationTokenSource.Token);
                     }
                 }
             }
-            catch (OperationCanceledException) // Thrown by the websocket when cancelling
+            else
             {
-                break;
+                Console.Error.WriteLine($"No handler registered for message type: {message.Type}");
             }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Exception while handling message: {ex}");
-            }
-        } while (!_cancellationTokenSource.IsCancellationRequested && Connected);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Exception while handling message: {ex}");
+        }
+    }
 
-        _messageHandlingComplete.Set();
-        Console.WriteLine("PapiClient HandleMessages exiting");
+    /// <summary>
+    /// Message handler for a response to a request we previously sent
+    /// </summary>
+    private async void HandleMessageResponse(MessageResponse response)
+    {
+        // Remove, don't just get, the response handler since the request is complete
+        if (_messageHandlersForMyRequests.TryRemove(response.RequestId, out var messageHandler))
+        {
+            var messagesToSend = messageHandler.HandleMessage(response);
+            if (messagesToSend != null)
+            {
+                foreach (var m in messagesToSend)
+                {
+                    await SendMessageAsync(m, _cancellationTokenSource.Token);
+                }
+            }
+        }
+        else
+        {
+            Console.Error.WriteLine(
+                $"No handler registered for response from request ID: {response.RequestId}"
+            );
+        }
     }
     #endregion
 }
