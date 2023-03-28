@@ -1,11 +1,13 @@
+using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
-using Paranext.DataProvider.Data;
-using Paranext.DataProvider.Utils;
+using Paranext.DataProvider.JsonUtils;
+using Paranext.DataProvider.MessageHandlers;
+using Paranext.DataProvider.Messages;
 using PtxUtils;
 
-namespace Paranext.DataProvider.Web;
+namespace Paranext.DataProvider.MessageTransports;
 
 /// <summary>
 /// Class to facilitate communication to the Paranext server via the PAPI
@@ -13,35 +15,34 @@ namespace Paranext.DataProvider.Web;
 internal sealed class PapiClient
 {
     #region Delegates/Constants/Member variables
-    private delegate Task RequestHandler(
-        dynamic requestData,
-        Enum<RequestTypes> requestType,
-        int requestId,
-        int requesterId
-    );
-
     private const int CONNECT_TIMEOUT = 30000;
     private const int RECEIVE_BUFFER_LENGTH = 2048;
-    private static readonly Encoding UTF8WithoutBOM = new UTF8Encoding();
-    private static readonly Uri ConnectionUri = new("ws://localhost:8876");
-    private static readonly JsonSerializerOptions serializationOptions;
+    private static readonly Encoding s_utf8WithoutBOM = new UTF8Encoding();
+    private static readonly Uri s_connectionUri = new("ws://localhost:8876");
+    private static readonly JsonSerializerOptions s_serializationOptions;
 
-    private readonly Dictionary<Enum<RequestTypes>, RequestHandler> requestFunctionMap = new();
+    private readonly Dictionary<Enum<MessageType>, IMessageHandler> _messageHandlersByMessageType =
+        new();
+    private readonly ConcurrentDictionary<int, IMessageHandler> _messageHandlersForMyRequests =
+        new();
     private readonly ClientWebSocket _webSocket;
     private int _clientId = NetworkConnectorInfo.CLIENT_ID_UNSET;
-    private int requestId;
+    private int _nextRequestId = 1;
     #endregion
 
     #region Constructors
     static PapiClient()
     {
-        serializationOptions = JsonUtils.CreateSerializationOptions();
-        serializationOptions.Converters.Add(new MessageConverter());
+        s_serializationOptions = SerializationOptions.CreateSerializationOptions();
+        s_serializationOptions.Converters.Add(new MessageConverter());
     }
 
     public PapiClient()
     {
         _webSocket = new ClientWebSocket();
+        _messageHandlersByMessageType[MessageType.Event] = new MessageHandlerEvent();
+        _messageHandlersByMessageType[MessageType.Request] =
+            new MessageHandlerRequestByRequestType();
     }
     #endregion
 
@@ -61,7 +62,7 @@ internal sealed class PapiClient
         CancellationTokenSource cancelTokenSource = new(CONNECT_TIMEOUT);
         try
         {
-            await _webSocket.ConnectAsync(ConnectionUri, cancelTokenSource.Token);
+            await _webSocket.ConnectAsync(s_connectionUri, cancelTokenSource.Token);
 
             MessageInitClient? message = await ReceiveMessage<MessageInitClient>();
             if (message == null || message.ConnectorInfo == null)
@@ -73,7 +74,6 @@ internal sealed class PapiClient
             }
 
             _clientId = message.ConnectorInfo.ClientId;
-
             await SendMessage(new MessageClientConnect(_clientId));
         }
         catch (Exception ex)
@@ -101,88 +101,57 @@ internal sealed class PapiClient
     /// </summary>
     /// <param name="requestToHandle">The request to register</param>
     /// <param name="doStuff">Method that is called when the request is received from the server</param>
+    /// <param name="responseTimeoutInMS">Number of milliseconds to wait for the registration response to be received</param>
     /// <returns>True if the registration was successful</returns>
-    public async Task<bool> RegisterRequest(
-        Enum<RequestTypes> requestToHandle,
-        Func<dynamic, RequestReturn> doStuff
+    public async Task<bool> RegisterRequestHandler(
+        Enum<RequestType> requestToHandle,
+        Func<dynamic, ResponseToRequest> doStuff,
+        int responseTimeoutInMS = 1000
     )
     {
-        Console.WriteLine($"Registering request {requestToHandle}...");
-        await SendMessage(
-            new MessageRequest(
-                _clientId,
-                RequestTypes.RegisterRequest,
-                requestId++,
-                new dynamic[] { requestToHandle.ToString(), _clientId }
-            )
+        Console.WriteLine($"Registering handler for request type {requestToHandle}...");
+        bool registrationSucceeded = false;
+        ManualResetEventSlim registrationComplete = new(false);
+
+        var registerRequest = new MessageRequest(
+            RequestType.RegisterRequest,
+            Interlocked.Increment(ref _nextRequestId),
+            new dynamic[] { requestToHandle.ToString(), _clientId }
         );
 
-        Task<MessageResponse?>? responseTask = null;
-        MessageResponse? response = null;
-        do
-        {
-            try
+        _messageHandlersForMyRequests[registerRequest.RequestId] = new MessageHandlerResponse(
+            registerRequest,
+            (bool success, dynamic? data) =>
             {
-                responseTask = ReceiveMessage<MessageResponse>();
-                response = await responseTask;
-            }
-            catch (Exception ex)
-            {
-                // TJ added this try/catch temporarily because receiving messages of the wrong type in ReceiveMessage was crashing the program.
-                // TODO: #61 pair up requests and responses on general ReceiveMessage instead of assuming the next message is the response to the current request
-                Console.WriteLine("Exception while handling response message: {0}", ex);
-            }
-        } while (response == null);
+                if (!success)
+                {
+                    Console.Error.WriteLine(
+                        $"Failed to register request type \"{requestToHandle}\" with the server"
+                    );
+                }
+                else
+                {
+                    var responder = (MessageHandlerRequestByRequestType)
+                        _messageHandlersByMessageType[MessageType.Request];
+                    responder.SetHandlerForRequestType(requestToHandle, doStuff);
+                    Console.WriteLine(
+                        $"Request type \"{requestToHandle}\" successfully registered with the server"
+                    );
+                    registrationSucceeded = true;
+                }
 
-        if (responseTask == null || responseTask.Exception != null)
+                registrationComplete.Set();
+            }
+        );
+
+        await SendMessage(registerRequest);
+        if (!registrationComplete.Wait(responseTimeoutInMS))
         {
             Console.Error.WriteLine(
-                "Error registering request: " + responseTask == null ? "" : responseTask!.Exception
+                $"No response came back when registering request type \"{requestToHandle}\""
             );
-            return false;
         }
-
-        if (response == null || !response.Success)
-        {
-            Console.Error.WriteLine("Failed to register request with the server");
-            if (response?.ErrorMessage != null)
-                Console.Error.WriteLine("Message: " + response.ErrorMessage);
-            return false;
-        }
-
-        async Task HandleRequest(
-            dynamic requestData,
-            Enum<RequestTypes> requestType,
-            int requestId,
-            int requesterId
-        )
-        {
-            RequestReturn result = doStuff(requestData);
-            if (result.Success)
-                await SendMessage(
-                    new MessageResponse(
-                        _clientId,
-                        requestType,
-                        requestId,
-                        requesterId,
-                        result.Contents
-                    )
-                );
-            else
-                await SendMessage(
-                    new MessageResponse(
-                        _clientId,
-                        requestType,
-                        requestId,
-                        requesterId,
-                        result.ErrorMessage!
-                    )
-                );
-        }
-
-        Console.WriteLine("Request successfully registered");
-        requestFunctionMap.Add(requestToHandle, HandleRequest);
-        return true;
+        return registrationSucceeded;
     }
 
     /// <summary>
@@ -204,37 +173,59 @@ internal sealed class PapiClient
                     Console.Error.WriteLine("Error getting message:\n" + receiveTask.Exception);
                     continue;
                 }
-
-                Console.WriteLine("Got request: " + message?.ToString());
-
-                if (message is MessageRequest request)
+                if (message is null)
                 {
+                    Console.Error.WriteLine("Received null message!");
+                    continue;
+                }
+
+                if (message is MessageResponse response)
+                {
+                    // Remove, don't just get, the response handler since the request is complete
                     if (
-                        !requestFunctionMap.TryGetValue(
-                            request.RequestType,
-                            out RequestHandler? requestHandler
+                        _messageHandlersForMyRequests.TryRemove(
+                            response.RequestId,
+                            out IMessageHandler? messageHandler
                         )
                     )
                     {
+                        messageHandler.HandleMessage(message);
+                    }
+                    else
+                    {
                         Console.Error.WriteLine(
-                            "Unexpected request from server: " + request.RequestType
+                            $"No handler registered for response from request ID: {response.RequestId}"
                         );
                         continue;
                     }
-
-                    await requestHandler(
-                        request.Contents,
-                        request.RequestType,
-                        request.RequestId,
-                        request.SenderId
-                    );
+                }
+                else
+                {
+                    if (
+                        _messageHandlersByMessageType.TryGetValue(
+                            message.Type,
+                            out IMessageHandler? messageHandler
+                        )
+                    )
+                    {
+                        Message? messageToSend = messageHandler.HandleMessage(message);
+                        if (messageToSend != null)
+                        {
+                            await SendMessage(messageToSend);
+                        }
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine(
+                            $"No handler registered for message type: {message.Type}"
+                        );
+                        continue;
+                    }
                 }
             }
             catch (Exception ex)
             {
-                // TJ added this try/catch temporarily because receiving messages of the wrong type in ReceiveMessage was crashing the program.
-                // TODO: Figure out why receiveTask.Exception doesn't seem to be working
-                Console.WriteLine("Exception while handling message: {0}", ex);
+                Console.WriteLine($"Exception while handling message: {ex}");
             }
         } while (Connected);
     }
@@ -249,8 +240,10 @@ internal sealed class PapiClient
         if (_webSocket.State != WebSocketState.Open)
             throw new InvalidOperationException("Can not send data when the socket is closed");
 
-        string jsonData = JsonSerializer.Serialize(message, serializationOptions);
-        byte[] data = UTF8WithoutBOM.GetBytes(jsonData);
+        message.SenderId = _clientId;
+        string jsonData = JsonSerializer.Serialize(message, s_serializationOptions);
+        Console.WriteLine("Sending message over websocket: {0}", jsonData);
+        byte[] data = s_utf8WithoutBOM.GetBytes(jsonData);
         await _webSocket.SendAsync(data, WebSocketMessageType.Text, true, CancellationToken.None);
     }
 
@@ -285,8 +278,9 @@ internal sealed class PapiClient
             message.Write(buffer, 0, result.Count);
         } while (!result.EndOfMessage);
 
-        string jsonData = UTF8WithoutBOM.GetString(message.GetBuffer(), 0, (int)message.Position);
-        return JsonSerializer.Deserialize<TReturn>(jsonData, serializationOptions);
+        string jsonData = s_utf8WithoutBOM.GetString(message.GetBuffer(), 0, (int)message.Position);
+        Console.WriteLine("Received message over websocket: {0}", jsonData);
+        return JsonSerializer.Deserialize<TReturn>(jsonData, s_serializationOptions);
     }
     #endregion
 }

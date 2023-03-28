@@ -1,11 +1,14 @@
-namespace Paranext.DataProvider.Data;
+namespace Paranext.DataProvider.MessageHandlers;
 
-public sealed record class RequestReturn
+/// <summary>
+/// Internally represents a response we generated to an incoming request
+/// </summary>
+public sealed record class ResponseToRequest
 {
     /// <summary>
     /// Response when there was an error - no contents
     /// </summary>
-    public RequestReturn(string errorMessage)
+    public ResponseToRequest(string errorMessage)
     {
         Success = false;
         ErrorMessage = errorMessage;
@@ -14,7 +17,7 @@ public sealed record class RequestReturn
     /// <summary>
     /// Response when successful
     /// </summary>
-    public RequestReturn(dynamic? contents)
+    public ResponseToRequest(dynamic? contents)
     {
         Success = true;
         Contents = contents;

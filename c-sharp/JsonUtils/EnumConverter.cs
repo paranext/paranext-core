@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using PtxUtils;
 
-namespace Paranext.DataProvider.Data;
+namespace Paranext.DataProvider.JsonUtils;
 
 /// <summary>
 /// Handles serialization and deserialization of string enums
