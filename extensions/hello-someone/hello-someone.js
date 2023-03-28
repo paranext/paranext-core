@@ -40,9 +40,8 @@ class GreetingsDataProviderEngine {
    */
   async generateUpdates(setSelector, listenerSelectors) {
     const data = await this.get(setSelector);
-    return listenerSelectors.map(
-      (sel) => setSelector === sel && { shouldUpdate: true, data },
-    );
+    const update = { shouldUpdate: true, event: data };
+    return listenerSelectors.map((sel) => setSelector === sel && update);
   }
 }
 

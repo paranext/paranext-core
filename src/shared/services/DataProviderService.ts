@@ -7,7 +7,8 @@ import {
   DataProviderInfo,
   DisposableDataProviderInfo,
 } from '@shared/models/DataProviderInfo';
-import IDataProviderEngine from '@shared/models/IDataProvider';
+import IDataProvider from '@shared/models/IDataProvider';
+import IDataProviderEngine from '@shared/models/IDataProviderEngine';
 import * as NetworkService from '@shared/services/NetworkService';
 import networkObjectService from './NetworkObjectService';
 
@@ -48,6 +49,23 @@ async function has(dataType: string): Promise<boolean> {
 }
 
 /**
+ * Wrap a data provider engine to create a data provider that handles subscriptions for it
+ * @param dataProviderEngine provider engine that handles setting and getting data as well as informing which listeners should get what updates
+ * @returns data provider layering over the provided data provider engine
+ */
+function buildDataProvider<TSelector, TData>(
+  dataProviderEngine: IDataProviderEngine<TSelector, TData>,
+): IDataProvider<TSelector, TData> {
+  return {
+    set: dataProviderEngine.set.bind(dataProviderEngine),
+    get: dataProviderEngine.get.bind(dataProviderEngine),
+    subscribe: async (selector, callback) => {
+      return async () => false;
+    },
+  };
+}
+
+/**
  * Creates a data provider to be shared on the network layering over the provided data provider engine.
  * @param dataType type of data that this provider serves
  * @param dataProviderEngine the object to layer over with a new data provider object
@@ -68,11 +86,25 @@ async function registerEngine<TSelector, TData>(
       `Data provider with type ${dataType} is already registered`,
     );
 
-  // TODO: validate that the dataProvider actually has the things it needs
+  // Validate that the data provider engine has what it needs
+  // TODO: maybe we can require fewer of these functions and let people implement IDataProviderEngine with a smaller footprint?
+  if (!dataProviderEngine.get || typeof dataProviderEngine.get !== 'function')
+    throw new Error('Data provider engine does not have a get function');
+  if (!dataProviderEngine.set || typeof dataProviderEngine.set !== 'function')
+    throw new Error('Data provider engine does not have a set function');
+  if (
+    !dataProviderEngine.generateUpdates ||
+    typeof dataProviderEngine.generateUpdates !== 'function'
+  )
+    throw new Error(
+      'Data provider engine does not have a generateUpdates function',
+    );
+
+  const dataProvider = buildDataProvider(dataProviderEngine);
 
   const networkObjectInfo = await networkObjectService.set(
     buildDataProviderObjectId(dataType),
-    dataProviderEngine,
+    dataProvider,
   );
 
   return {
@@ -97,7 +129,7 @@ async function get<TSelector, TData>(
   await initialize();
 
   const networkObjectInfo = await networkObjectService.get<
-    IDataProviderEngine<TSelector, TData>
+    IDataProvider<TSelector, TData>
   >(buildDataProviderObjectId(dataType));
 
   if (!networkObjectInfo) return undefined;
