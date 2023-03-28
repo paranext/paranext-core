@@ -105,10 +105,10 @@ To build Storybook:
 npm run storybook:build
 ```
 
-To run Storybook as a web app:
+To run Storybook as a web app, after it was built successfully:
 
 ```bash
-npm run storybook:build {path to storybook-static folder}
+npx http-server ./storybook-static
 ```
 
 ## Windows Development with WSL2
