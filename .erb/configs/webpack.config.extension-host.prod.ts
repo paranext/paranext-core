@@ -15,10 +15,7 @@ deleteSourceMaps();
 
 const configuration: webpack.Configuration = {
   entry: {
-    'extension-host': path.join(
-      webpackPaths.srcExtensionHostPath,
-      'extension-host.ts',
-    ),
+    'extension-host': path.join(webpackPaths.srcExtensionHostPath, 'extension-host.ts'),
   },
 
   output: {

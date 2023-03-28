@@ -44,10 +44,7 @@ const sendCommandUnsafe = async <TParam extends Array<unknown>, TReturn>(
   commandName: string,
   ...args: TParam
 ): Promise<TReturn> => {
-  return NetworkService.request(
-    serializeRequestType(CATEGORY_COMMAND, commandName),
-    ...args,
-  );
+  return NetworkService.request(serializeRequestType(CATEGORY_COMMAND, commandName), ...args);
 };
 
 /**
@@ -83,8 +80,8 @@ export const initialize = () => {
     // Register built-in commands
     if (isRenderer()) {
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
-      const unsubPromises = Object.entries(rendererCommandFunctions).map(
-        ([commandName, handler]) => registerCommandUnsafe(commandName, handler),
+      const unsubPromises = Object.entries(rendererCommandFunctions).map(([commandName, handler]) =>
+        registerCommandUnsafe(commandName, handler),
       );
 
       const unsubscribeCommands = aggregateUnsubscriberAsyncs(
@@ -139,14 +136,10 @@ export const sendCommand = async <TParam extends Array<unknown>, TReturn>(
  * @param commandName command name for command function
  * @returns function to call with arguments of command that sends the command and resolves with the result of the command
  */
-export const createSendCommandFunction = <
-  TParam extends Array<unknown>,
-  TReturn,
->(
+export const createSendCommandFunction = <TParam extends Array<unknown>, TReturn>(
   commandName: string,
 ) => {
-  return async (...args: TParam) =>
-    sendCommand<TParam, TReturn>(commandName, ...args);
+  return async (...args: TParam) => sendCommand<TParam, TReturn>(commandName, ...args);
 };
 
 /**

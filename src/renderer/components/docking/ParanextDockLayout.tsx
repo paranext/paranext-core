@@ -23,12 +23,10 @@ const tabTypeCreationMap = new Map<string, TabCreator>([
 ]);
 
 const getTabDataFromSavedInfo = (tabInfo: SavedTabInfo): TabInfo => {
-  if (!tabInfo.type)
-    return createErrorTab(`No handler for the tab type '${tabInfo.type}'`);
+  if (!tabInfo.type) return createErrorTab(`No handler for the tab type '${tabInfo.type}'`);
 
   const tabCreator = tabTypeCreationMap.get(tabInfo.type);
-  if (!tabCreator)
-    return createErrorTab(`No handler for the tab type '${tabInfo.type}'`);
+  if (!tabCreator) return createErrorTab(`No handler for the tab type '${tabInfo.type}'`);
 
   // Call the creation method to let the extension method create the tab
   try {

@@ -5,8 +5,5 @@
   "author": "TJ Couch",
   "license": "MIT",
   "main": "hello-world.js",
-  "activationEvents": [
-    "onCommand:hello-world.hello-world",
-    "onCommand:hello-world.hello-exception"
-  ]
+  "activationEvents": ["onCommand:hello-world.hello-world", "onCommand:hello-world.hello-exception"]
 }

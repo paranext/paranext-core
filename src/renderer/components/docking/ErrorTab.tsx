@@ -4,8 +4,7 @@ function ErrorTab({ errorMessage }: { errorMessage: string }) {
   return (
     <>
       <div>
-        Content could not be loaded. Please make sure you have the correct
-        extension loaded.
+        Content could not be loaded. Please make sure you have the correct extension loaded.
       </div>
       <div>Message: {errorMessage}</div>
     </>

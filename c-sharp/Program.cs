@@ -7,7 +7,9 @@ namespace Paranext.DataProvider;
 
 public static class Program
 {
-    public static async Task Main(/* string[] args */)
+    public static async Task Main(
+    /* string[] args */
+    )
     {
         PapiClient connection = new();
 
@@ -39,7 +41,10 @@ public static class Program
         if (val is not JsonElement element || element.GetArrayLength() != 1)
             return new RequestReturn("Unexpected data in request: " + val);
 
-        int? intVal = ErrorUtils.IgnoreErrors("Trying to parse data from server", () => element[0].GetInt32());
+        int? intVal = ErrorUtils.IgnoreErrors(
+            "Trying to parse data from server",
+            () => element[0].GetInt32()
+        );
         if (intVal == null)
             return new RequestReturn("Unexpected data in request: " + val);
 

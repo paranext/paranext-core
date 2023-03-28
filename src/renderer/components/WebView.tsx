@@ -22,15 +22,9 @@ export function WebView({ contents, title, contentType }: WebViewProps) {
         );
       return iframe.contentWindow;
     };
-    getIframeContentWindowSafe('setting up').addEventListener(
-      'error',
-      errorHandler,
-    );
+    getIframeContentWindowSafe('setting up').addEventListener('error', errorHandler);
     return () => {
-      getIframeContentWindowSafe('removing').removeEventListener(
-        'error',
-        errorHandler,
-      );
+      getIframeContentWindowSafe('removing').removeEventListener('error', errorHandler);
     };
   }, []);
 

@@ -3,11 +3,7 @@
  */
 
 import { IExtension } from '@extension-host/extension-types/IExtension';
-import {
-  EntryType,
-  readDir,
-  readFileText,
-} from '@node/services/NodeFileSystemService';
+import { EntryType, readDir, readFileText } from '@node/services/NodeFileSystemService';
 import { getPathFromUri, joinUriPaths } from '@node/util/util';
 import { Uri } from '@shared/data/FileSystemTypes';
 import { UnsubscriberAsync } from '@shared/util/PapiUtil';
@@ -50,9 +46,7 @@ type ActiveExtension = {
 
 /** Get information for all the extensions present */
 const getExtensions = async (): Promise<ExtensionInfo[]> => {
-  const extensionFolders = (await readDir('resources://extensions'))[
-    EntryType.Directory
-  ];
+  const extensionFolders = (await readDir('resources://extensions'))[EntryType.Directory];
 
   return Promise.all(
     extensionFolders.map(async (extensionFolder) => {
@@ -81,9 +75,7 @@ const activateExtension = async (
 ): Promise<ActiveExtension> => {
   // Import the extension file. Tell webpack to ignore it because extension files are not in the bundle and should not be looked up in the bundle
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
-  const extensionModule = (await import(
-    /* webpackIgnore: true */ extensionFilePath
-  )) as IExtension;
+  const extensionModule = (await import(/* webpackIgnore: true */ extensionFilePath)) as IExtension;
 
   // Activate the extension
   const extensionUnsubscriber = await extensionModule.activate();
@@ -107,9 +99,7 @@ const activateExtension = async (
  * @param extensions extension info for the extensions we want to activate
  * @returns unsubscriber that deactivates the extension
  */
-const activateExtensions = async (
-  extensions: ExtensionInfo[],
-): Promise<ActiveExtension[]> => {
+const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveExtension[]> => {
   /** The path to each extension along with whether that extension has already been imported */
   const extensionsWithFiles = extensions.map((extension) => ({
     extension,
@@ -129,8 +119,7 @@ const activateExtensions = async (
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithFiles.find(
       (extensionFileToCheck) =>
-        !extensionFileToCheck.hasBeenImported &&
-        extensionFileToCheck.filePath === fileName,
+        !extensionFileToCheck.hasBeenImported && extensionFileToCheck.filePath === fileName,
     );
 
     if (extensionFile) {
@@ -143,8 +132,7 @@ const activateExtensions = async (
 
     // Disallow any imports within the extension
     // Tell the extension dev if there is an api similar to what they want to import
-    const similarApi =
-      MODULE_SIMILAR_APIS[fileName] || MODULE_SIMILAR_APIS[`node:${fileName}`];
+    const similarApi = MODULE_SIMILAR_APIS[fileName] || MODULE_SIMILAR_APIS[`node:${fileName}`];
     const message = `Requiring other than papi is not allowed in extensions! Rejected require('${fileName}').${
       similarApi ? ` Try using papi.${similarApi}` : ''
     }`;
@@ -158,8 +146,7 @@ const activateExtensions = async (
     throw Error('Cannot use fetch! Try using papi.fetch');
   };
 
-  const xmlHttpRequestOriginal: typeof XMLHttpRequest | undefined =
-    globalThis.XMLHttpRequest;
+  const xmlHttpRequestOriginal: typeof XMLHttpRequest | undefined = globalThis.XMLHttpRequest;
   // @ts-expect-error we want to remove XMLHttpRequest
   // eslint-disable-next-line no-global-assign
   globalThis.XMLHttpRequest = function XMLHttpRequestForbidden() {
@@ -177,10 +164,7 @@ const activateExtensions = async (
   const extensionsActive = (
     await Promise.all(
       extensionsWithFiles.map((extensionWithFile) =>
-        activateExtension(
-          extensionWithFile.extension,
-          extensionWithFile.filePath,
-        ).catch((e) => {
+        activateExtension(extensionWithFile.extension, extensionWithFile.filePath).catch((e) => {
           logger.error(
             `Extension ${extensionWithFile.extension.name} threw while activating! ${e}`,
           );

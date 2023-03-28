@@ -16,22 +16,17 @@ exports.activate = async () => {
     papi.commands.registerCommand('hello-someone.hello-someone', (someone) => {
       return `Hello ${someone}!`;
     }),
-    papi.commands.registerCommand(
-      'hello-someone.echo-someone-renderer',
-      async (message) => {
-        return `echo-someone-renderer: ${await papi.commands.sendCommand(
-          'addThree',
-          2,
-          4,
-          6,
-        )}! ${message}`;
-      },
-    ),
+    papi.commands.registerCommand('hello-someone.echo-someone-renderer', async (message) => {
+      return `echo-someone-renderer: ${await papi.commands.sendCommand(
+        'addThree',
+        2,
+        4,
+        6,
+      )}! ${message}`;
+    }),
   ];
 
-  return Promise.all(
-    unsubPromises.map((unsubPromise) => unsubPromise.promise),
-  ).then(() => {
+  return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
     logger.log('Hello Someone is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
