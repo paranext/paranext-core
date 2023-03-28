@@ -2,7 +2,7 @@ import { Button as MuiButton } from '@mui/material';
 import { MouseEventHandler, PropsWithChildren } from 'react';
 import '@renderer/components/papi-components/button.css';
 
-type ButtonProps = PropsWithChildren<{
+export type ButtonProps = PropsWithChildren<{
   /**
    * Enabled status of button
    */

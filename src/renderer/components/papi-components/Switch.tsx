@@ -2,7 +2,7 @@
 import { ChangeEvent } from 'react';
 import '@renderer/components/papi-components/switch.css';
 
-type SwitchProps = {
+export type SwitchProps = {
   /**
    * If `true`, the component is checked.
    */

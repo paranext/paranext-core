@@ -10,7 +10,7 @@ const meta: Meta<typeof ComboBox> = {
     isDisabled: { control: 'boolean' },
     hasError: { control: 'boolean' },
     isFullWidth: { control: 'boolean' },
-    options: { control: 'text' },
+    options: { control: 'object' },
     className: { control: 'text' },
   },
 };

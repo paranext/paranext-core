@@ -2,7 +2,7 @@ import { Slider as MuiSlider } from '@mui/material';
 import { SyntheticEvent } from 'react';
 import '@renderer/components/papi-components/slider.css';
 
-type SliderProps = {
+export type SliderProps = {
   /**
    * If `true`, the component is disabled.
    * @default false

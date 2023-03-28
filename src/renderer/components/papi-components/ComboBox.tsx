@@ -1,13 +1,16 @@
 import {
   Autocomplete as MuiComboBox,
-  AutocompleteChangeDetails as ComboBoxChangeDetails,
-  AutocompleteChangeReason as ComboBoxChangeReason,
+  AutocompleteChangeDetails,
+  AutocompleteChangeReason,
   TextField as MuiTextField,
 } from '@mui/material';
 import { FocusEventHandler, SyntheticEvent } from 'react';
 import '@renderer/components/papi-components/combobox.css';
 
-type ComboBoxProps = {
+export type ComboBoxChangeDetails<T = string> = AutocompleteChangeDetails<T>;
+export type ComboBoxChangeReason = AutocompleteChangeReason;
+
+export type ComboBoxProps = {
   /**
    * Text label title for combobox
    */
@@ -30,7 +33,7 @@ type ComboBoxProps = {
   /**
    * List of available options for the dropdown menu
    */
-  options?: readonly unknown[];
+  options?: readonly (string | { label: string })[];
   /**
    * Additional css classes to help with unique styling of the button
    */

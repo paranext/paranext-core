@@ -1,6 +1,7 @@
 ﻿import { TextField as MuiTextField } from '@mui/material';
+import { ChangeEventHandler, FocusEventHandler } from 'react';
 
-type TextFieldProps = {
+export type TextFieldProps = {
   /**
    * The variant to use.
    * @default 'outlined'
@@ -45,15 +46,15 @@ type TextFieldProps = {
   /**
    * Triggers when content of textfield is changed
    */
-  onChange?: () => void;
+  onChange?: ChangeEventHandler<HTMLInputElement>;
   /**
    * Triggers when textfield gets focus
    */
-  onFocus?: () => void;
+  onFocus?: FocusEventHandler<HTMLInputElement>;
   /**
    * Triggers when textfield loses focus
    */
-  onBlur?: () => void;
+  onBlur?: FocusEventHandler<HTMLInputElement>;
 };
 
 function TextField({
