@@ -8,11 +8,6 @@ type SwitchProps = {
    */
   isChecked?: boolean;
   /**
-   * Is this the principal call to action on the page?
-   * @default false
-   */
-  isPrimary?: boolean;
-  /**
    * Enabled status of switch
    * @default false
    */
@@ -39,7 +34,6 @@ type SwitchProps = {
  */
 function Switch({
   isChecked: checked,
-  isPrimary = false,
   isDisabled = false,
   hasError = false,
   className,
@@ -49,9 +43,7 @@ function Switch({
     <MuiSwitch
       checked={checked}
       disabled={isDisabled}
-      className={`papi-switch ${isPrimary ? 'primary' : 'secondary'} ${
-        hasError ? 'error' : ''
-      } ${className ?? ''}`}
+      className={`papi-switch ${hasError ? 'error' : ''} ${className ?? ''}`}
       onChange={onChange}
     />
   );

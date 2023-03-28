@@ -1,13 +1,8 @@
 .papi-switch {
+  background-color: #1ea7fd;
   background-color: transparent;
 }
 
-.papi-switch.primary {
-  background-color: #1ea7fd;
-}
-.papi-switch.secondary {
-  background-color: #6fc8ff;
-}
 .papi-switch.error {
   background-color: #ff0000;
 }

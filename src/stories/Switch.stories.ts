@@ -6,7 +6,6 @@ const meta: Meta<typeof Switch> = {
   component: Switch,
   tags: ['autodocs'],
   argTypes: {
-    isPrimary: { control: 'boolean' },
     isDisabled: { control: 'boolean' },
     hasError: { control: 'boolean' },
     className: { control: 'text' },
@@ -18,9 +17,6 @@ type Story = StoryObj<typeof Switch>;
 
 export const Default: Story = {
   args: {},
-};
-export const Primary: Story = {
-  args: { isPrimary: true },
 };
 
 export const Disabled: Story = {

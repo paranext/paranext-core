@@ -4,11 +4,6 @@ import '@renderer/components/papi-components/button.css';
 
 type ButtonProps = PropsWithChildren<{
   /**
-   * Indicates if this is the principal call to action on the page
-   * @default false
-   */
-  isPrimary?: boolean;
-  /**
    * Enabled status of button
    */
   isDisabled?: boolean;
@@ -30,7 +25,6 @@ type ButtonProps = PropsWithChildren<{
  * Primary UI component for user interaction
  */
 function Button({
-  isPrimary = false,
   isDisabled,
   className,
   onClick,
@@ -40,9 +34,7 @@ function Button({
   return (
     <MuiButton
       disabled={isDisabled}
-      className={`papi-button ${isPrimary ? 'primary' : 'secondary'} ${
-        className ?? ''
-      }`}
+      className={`papi-button ${className ?? ''}`}
       onClick={onClick}
       onContextMenu={onContextMenu}
     >

@@ -7,7 +7,6 @@ const meta: Meta<typeof Button> = {
   component: Button,
   tags: ['autodocs'],
   argTypes: {
-    isPrimary: { control: 'boolean' },
     isDisabled: { control: 'boolean' },
   },
 };
@@ -17,7 +16,6 @@ type Story = StoryObj<typeof Button>;
 
 export const Primary: Story = {
   args: {
-    isPrimary: true,
     isDisabled: false,
     children: 'Primary Button',
   },
