@@ -8,40 +8,33 @@ namespace Paranext.DataProvider;
 
 public static class Program
 {
-    public static async Task Main( /* string[] args */
-    )
+    public static async Task Main()
     {
-        PapiClient connection = new();
-
-        // Connect to the server
-        Console.WriteLine("Connecting...");
-        Task connectTask = connection.Connect();
-        await connectTask;
-        if (connectTask.Exception != null)
+        using (PapiClient papi = new())
         {
-            Console.Error.WriteLine("Error connecting:\n" + connectTask.Exception);
-            return;
+            Console.WriteLine("Connecting Paranext data provider...");
+            var connectTask = papi.ConnectAsync();
+            if (!await connectTask)
+            {
+                Console.Error.WriteLine("Paranext data provider could not connect");
+                if (connectTask.Exception != null)
+                    Console.Error.WriteLine(connectTask.Exception);
+                return;
+            }
+            Console.WriteLine("Paranext data provider connected");
+
+            var registerTask = papi.RegisterRequestHandlerAsync(RequestType.AddOne, RequestAddOne);
+            if (!await registerTask)
+            {
+                Console.Error.WriteLine("Could not register request handler");
+                if (registerTask.Exception != null)
+                    Console.Error.WriteLine(registerTask.Exception);
+                return;
+            }
+
+            papi.BlockUntilMessageHandlingComplete();
         }
-        Console.WriteLine("Paranext .NET connected");
-
-        ManualResetEventSlim messageHandlingIsComplete = new(false);
-        Thread messageHandlingThread =
-            new(
-                new ThreadStart(async () =>
-                {
-                    await connection.HandleMessages();
-                    messageHandlingIsComplete.Set();
-                })
-            );
-        messageHandlingThread.Start();
-
-        // Add request handlers
-        bool result = await connection.RegisterRequestHandler(RequestType.AddOne, RequestAddOne);
-        if (!result)
-            return;
-
-        messageHandlingIsComplete.Wait();
-        Console.WriteLine("Paranext .NET connection closed");
+        Console.WriteLine("Paranext data provider disconnected");
     }
 
     #region Request handlers
