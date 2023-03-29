@@ -2,7 +2,7 @@
  * Service that runs the extension-host process from the main file
  */
 
-import logger, { formatLog } from '@shared/util/logger';
+import logger, { formatLog } from '@shared/services/logger.service';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
@@ -18,7 +18,7 @@ function logProcessError(message: unknown) {
   logger.error(formatLog(message?.toString() || '', EXTENSION_HOST_NAME, 'error'));
 }
 function logProcessInfo(message: unknown) {
-  logger.log(formatLog(message?.toString() || '', EXTENSION_HOST_NAME));
+  logger.info(formatLog(message?.toString() || '', EXTENSION_HOST_NAME));
 }
 
 /**

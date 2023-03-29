@@ -9,7 +9,7 @@ import { Uri } from '@shared/data/FileSystemTypes';
 import { UnsubscriberAsync } from '@shared/util/PapiUtil';
 import Module from 'module';
 import papi, { MODULE_SIMILAR_APIS } from '@shared/services/papi';
-import logger from '@shared/util/logger';
+import logger from '@shared/services/logger.service';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;

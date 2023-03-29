@@ -5,7 +5,7 @@ const papi = require('papi');
 
 const { logger } = papi;
 
-logger.log('Hello world is importing!');
+logger.info('Hello world is importing!');
 
 const unsubscribers = [];
 
@@ -25,7 +25,7 @@ const getReactComponent = (name, functionModifier = '') =>
   papi
     .fetch('https://bible-api.com/matthew+24:14')
     .then((res) => res.json())
-    .then((scr) => logger.log(scr.text.replace(/\\n/g, '')))
+    .then((scr) => logger.info(scr.text.replace(/\\n/g, '')))
     .catch((e) =>
       logger.error(\`Could not get Scripture from bible-api! Reason: \${e}\`),
     );
@@ -49,11 +49,11 @@ const getReactComponent = (name, functionModifier = '') =>
           PButton,
           {
             onClick: () => {
-              logger.log('${name} PButton clicked!');
+              logger.info('${name} PButton clicked!');
               setMyState(myStateCurrent => myStateCurrent + 1);
               papi.fetch('https://bible-api.com/matthew+24:14')
     .then((res) => res.json())
-    .then((scr) => logger.log('Got it! ' + scr.text.replace(/\\n/g, '')))
+    .then((scr) => logger.info('Got it! ' + scr.text.replace(/\\n/g, '')))
     .catch((e) =>
       logger.error(\`Could not get Scripture from bible-api! Reason: \${e}\`),
     );
@@ -84,7 +84,7 @@ const getReactComponent = (name, functionModifier = '') =>
   }`;
 
 exports.activate = async () => {
-  logger.log('Hello world is activating!');
+  logger.info('Hello world is activating!');
 
   const unsubPromises = [
     papi.commands.registerCommand('hello-world.hello-world', () => {
@@ -98,7 +98,7 @@ exports.activate = async () => {
   papi
     .fetch('https://bible-api.com/matthew+24:14')
     .then((res) => res.json())
-    .then((scr) => logger.log(scr.text.replace(/\n/g, '')))
+    .then((scr) => logger.info(scr.text.replace(/\n/g, '')))
     .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
 
   papi.webViews.addWebView({
@@ -118,7 +118,7 @@ exports.activate = async () => {
           ${getReactComponent('Hello World React HTML Webview')}
 
           function print(input) {
-            papi.logger.log(input);
+            papi.logger.info(input);
           }
           document.addEventListener("DOMContentLoaded", function () {
             // Attach handler for echo-renderer
@@ -164,7 +164,7 @@ exports.activate = async () => {
             papi
               .fetch('https://bible-api.com/matthew+24:14')
               .then((res) => res.json())
-              .then((scr) => logger.log(scr.text.replace(/\\n/g, '')))
+              .then((scr) => logger.info(scr.text.replace(/\\n/g, '')))
               .catch((e) =>
                 logger.error(\`Could not get Scripture from bible-api! Reason: \${e}\`),
               );
@@ -180,7 +180,7 @@ exports.activate = async () => {
   });
 
   return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
-    logger.log('Hello World is finished activating!');
+    logger.info('Hello World is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
     );

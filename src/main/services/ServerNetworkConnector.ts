@@ -12,7 +12,7 @@ import {
   RequestRouter,
 } from '@shared/data/InternalConnectionTypes';
 import INetworkConnector from '@shared/services/INetworkConnector';
-import logger from '@shared/util/logger';
+import logger from '@shared/services/logger.service';
 import { Unsubscriber } from '@shared/util/PapiUtil';
 import {
   ClientConnect,
