@@ -1,17 +1,17 @@
 import './TestButtonsPanel.css';
 import { useCallback, useState } from 'react';
 import usePromise from '@renderer/hooks/papi-hooks/usePromise';
-import papi from '@shared/services/papi';
-import * as NetworkService from '@shared/services/NetworkService';
-import { getErrorMessage, isString } from '@shared/util/Util';
+import papi from '@shared/services/papi.service';
+import * as networkService from '@shared/services/network.service';
+import { getErrorMessage, isString } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
-import { TabInfo } from '@shared/data/WebViewTypes';
+import { TabInfo } from '@shared/data/web-view.model';
 import { WebView, WebViewProps } from '@renderer/components/WebView';
 import useEvent from '@renderer/hooks/papi-hooks/useEvent';
-import { AddWebViewEvent } from '@shared/services/WebViewService';
+import { AddWebViewEvent } from '@shared/services/web-view.service';
 
 const testBase: (message: string) => Promise<string> =
-  NetworkService.createRequestFunction('electronAPI.env.test');
+  networkService.createRequestFunction('electronAPI.env.test');
 
 const test = async () => {
   /* const start = performance.now(); */

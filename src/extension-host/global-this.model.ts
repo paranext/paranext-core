@@ -3,7 +3,7 @@
  */
 
 import polyfillLocalStorage from '@node/polyfill/LocalStorage';
-import { ProcessType } from '@shared/globalThis';
+import { ProcessType } from '@shared/global-this.model';
 
 // #region command-line arguments
 

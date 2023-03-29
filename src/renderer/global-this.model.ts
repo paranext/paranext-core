@@ -2,7 +2,7 @@
  * Module to set up globalThis and polyfills in the renderer
  */
 
-import { ProcessType } from '@shared/globalThis';
+import { ProcessType } from '@shared/global-this.model';
 
 // #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
 

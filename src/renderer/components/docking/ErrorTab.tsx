@@ -1,4 +1,4 @@
-import { TabInfo } from '@shared/data/WebViewTypes';
+import { TabInfo } from '@shared/data/web-view.model';
 
 function ErrorTab({ errorMessage }: { errorMessage: string }) {
   return (

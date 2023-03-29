@@ -11,7 +11,7 @@ import {
   NetworkEventHandler,
   RequestHandler,
   RequestRouter,
-} from '@shared/data/InternalConnectionTypes';
+} from '@shared/data/internal-connection.model';
 import {
   aggregateUnsubscriberAsyncs,
   CommandHandler,
@@ -21,14 +21,14 @@ import {
   RequestHandlerType,
   UnsubPromiseAsync,
   UnsubscriberAsync,
-} from '@shared/util/PapiUtil';
-import { getErrorMessage } from '@shared/util/Util';
-import * as ConnectionService from '@shared/services/ConnectionService';
-import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
+} from '@shared/utils/papi-util';
+import { getErrorMessage } from '@shared/utils/util';
+import * as connectionService from '@shared/services/connection.service';
+import { isClient, isRenderer, isServer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
-import PNetworkEventEmitter from '@shared/models/PNetworkEventEmitter';
-import PEventEmitter from '@shared/models/PEventEmitter';
-import { PEvent } from '@shared/models/PEvent';
+import PNetworkEventEmitter from '@shared/models/p-network-event-emitter.model';
+import PEventEmitter from '@shared/models/p-event-emitter.model';
+import { PEvent } from '@shared/models/p-event.model';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -137,7 +137,7 @@ const requestRawUnsafe = async <TParam, TReturn>(
     throw new Error(
       `Cannot perform raw request ${requestType} as the NetworkService is not initialized`,
     );
-  return ConnectionService.request<TParam, TReturn>(requestType, contents);
+  return connectionService.request<TParam, TReturn>(requestType, contents);
 };
 
 /**
@@ -193,7 +193,7 @@ async function unregisterRequestHandlerUnsafe(
 
   // Check with the server to make sure we can unregister this registration
   const remoteUnregisterSuccessful = isClient()
-    ? await requestUnsafe('server:unregisterRequest', requestType, ConnectionService.getClientId())
+    ? await requestUnsafe('server:unregisterRequest', requestType, connectionService.getClientId())
     : true;
 
   if (!remoteUnregisterSuccessful)
@@ -259,7 +259,7 @@ function registerRequestHandlerUnsafe(
   // Check with the server if it already has a handler for this requestType
   const remoteRequest: Promise<void> = isClient()
     ? // If we are the client, try to register with the server because server has all registrations
-      requestUnsafe('server:registerRequest', requestType, ConnectionService.getClientId())
+      requestUnsafe('server:registerRequest', requestType, connectionService.getClientId())
     : // If we are the server, we just checked if there was already a registration
       Promise.resolve();
 
@@ -300,7 +300,7 @@ const emitEventOnNetworkUnsafe = async <T>(eventType: string, event: T) => {
     throw new Error(
       `Cannot emit event ${eventType} on network as the NetworkService is not initialized`,
     );
-  await ConnectionService.emitEventOnNetwork(eventType, event);
+  await connectionService.emitEventOnNetwork(eventType, event);
 };
 
 /**
@@ -414,7 +414,7 @@ const registerRemoteRequestHandler = async (
  */
 const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
   // TODO: there will probably be something worth doing when a client gets disconnected in the future. Do that here instead of throwing
-  if (ConnectionService.getClientId() === clientId)
+  if (connectionService.getClientId() === clientId)
     throw new Error(`NetworkService cannot disconnect itself! clientId: ${clientId}`);
 
   // Collect which registrations are for that clientId
@@ -533,7 +533,7 @@ const routeRequest: RequestRouter = (requestType: string): number => {
     return CLIENT_ID_SERVER;
   if (registration.registrationType === 'local')
     // We will handle this request here
-    return ConnectionService.getClientId();
+    return connectionService.getClientId();
   // This registration is for another connection
   return registration.clientId;
 };
@@ -573,7 +573,7 @@ export const initialize = () => {
     if (isInitialized) return;
 
     // Wait to connect to the server
-    await ConnectionService.connect(
+    await connectionService.connect(
       handleRequestLocal,
       routeRequest,
       handleEventFromNetwork,
@@ -604,7 +604,7 @@ export const initialize = () => {
     // TODO: should do this on the server when the connection closes or when the server exists as well
     if (isRenderer())
       window.addEventListener('beforeunload', async () => {
-        ConnectionService.disconnect();
+        connectionService.disconnect();
         if (unsubscribeServerRequestHandlers) unsubscribeServerRequestHandlers();
       });
 

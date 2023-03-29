@@ -1,5 +1,5 @@
 import log, { LogLevel } from 'electron-log';
-import { getProcessType, isClient, isRenderer } from '@shared/util/InternalUtil';
+import { getProcessType, isClient, isRenderer } from '@shared/utils/internal-util';
 
 /**
  * Format a string of a service message

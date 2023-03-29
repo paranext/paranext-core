@@ -2,16 +2,16 @@
  * Unified module for accessing API features in extensions
  */
 
-import * as CommandService from '@shared/services/CommandService';
-import { papiExports } from '@shared/services/NetworkService';
-import * as PapiUtil from '@shared/util/PapiUtil';
+import * as commandService from '@shared/services/command.service';
+import { papiExports } from '@shared/services/network.service';
+import * as papiUtil from '@shared/utils/papi-util';
 // We need the WebViewService here to include on the papi, but WebViewService passes papi into WebViews
 // eslint-disable-next-line import/no-cycle
-import * as WebViewService from '@shared/services/WebViewService';
-import PEventEmitter from '@shared/models/PEventEmitter';
+import * as webViewService from '@shared/services/web-view.service';
+import PEventEmitter from '@shared/models/p-event-emitter.model';
 import logger from '@shared/services/logger.service';
-import { isRenderer } from '@shared/util/InternalUtil';
-import InternetService from '@shared/services/InternetService';
+import { isRenderer } from '@shared/utils/internal-util';
+import internetService from '@shared/services/internet.service';
 
 // TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
 const papiComponents = isRenderer()
@@ -27,12 +27,12 @@ export default {
   PEventEmitter,
 
   // Functions
-  fetch: InternetService.fetch, // Alias for internet.fetch for easy access
+  fetch: internetService.fetch, // Alias for internet.fetch for easy access
 
   // Services/modules
-  commands: CommandService,
-  util: PapiUtil,
-  webViews: WebViewService,
+  commands: commandService,
+  util: papiUtil,
+  webViews: webViewService,
   react: {
     components: papiComponents,
     context: papiContext,
@@ -40,7 +40,7 @@ export default {
   },
   network: papiExports,
   logger,
-  internet: InternetService,
+  internet: internetService,
 };
 
 /**

@@ -1,6 +1,6 @@
-import { getNetworkEvent } from '@shared/services/NetworkService';
-import { PEvent, PEventHandler } from '@shared/models/PEvent';
-import { isString } from '@shared/util/Util';
+import { getNetworkEvent } from '@shared/services/network.service';
+import { PEvent, PEventHandler } from '@shared/models/p-event.model';
+import { isString } from '@shared/utils/util';
 import { useEffect } from 'react';
 
 /**
