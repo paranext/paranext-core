@@ -31,7 +31,7 @@ internal sealed class PapiClient : IDisposable
     private readonly ManualResetEventSlim _messageHandlingComplete = new(false);
     private int _clientId = NetworkConnectorInfo.CLIENT_ID_UNSET;
     private int _nextRequestId = 1;
-    private bool _disposedValue = false;
+    private bool _isDisposed = false;
     #endregion
 
     #region Constructors
@@ -56,24 +56,24 @@ internal sealed class PapiClient : IDisposable
 
     public void Dispose()
     {
-        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        Dispose(disposing: true);
+        // Do not change this code. Put cleanup code in 'Dispose(bool isDisposing)' method
+        Dispose(isDisposing: true);
         GC.SuppressFinalize(this);
     }
 
-    // Override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+    // Override finalizer only if 'Dispose(bool isDisposing)' has code to free unmanaged resources
     // https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/implementing-dispose
     // ~PapiClient()
     // {
-    //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-    //     Dispose(disposing: false);
+    //     // Do not change this code. Put cleanup code in 'Dispose(bool isDisposing)' method
+    //     Dispose(isDisposing: false);
     // }
 
-    private void Dispose(bool disposing)
+    private void Dispose(bool isDisposing)
     {
-        if (!_disposedValue)
+        if (!_isDisposed)
         {
-            if (disposing)
+            if (isDisposing)
             {
                 _webSocket.Dispose();
                 _cancellationTokenSource.Dispose();
@@ -82,7 +82,7 @@ internal sealed class PapiClient : IDisposable
 
             _messageHandlersForMyRequests.Clear();
 
-            _disposedValue = true;
+            _isDisposed = true;
         }
     }
 
@@ -92,7 +92,7 @@ internal sealed class PapiClient : IDisposable
     /// <summary>
     /// Gets whether connection is open to the server
     /// </summary>
-    public bool Connected => !_disposedValue && _webSocket.State == WebSocketState.Open;
+    public bool Connected => !_isDisposed && _webSocket.State == WebSocketState.Open;
     #endregion
 
     #region Public methods
@@ -101,30 +101,25 @@ internal sealed class PapiClient : IDisposable
     /// </summary>
     public async Task<bool> ConnectAsync()
     {
+        Console.WriteLine("PapiClient connecting");
+
         CancellationTokenSource cancelTokenSource = new(CONNECT_TIMEOUT);
-        try
+        await _webSocket.ConnectAsync(s_connectionUri, cancelTokenSource.Token);
+
+        var message = await ReceiveMessageAsync<MessageInitClient>(CancellationToken.None);
+        if (message == null || message.ConnectorInfo == null)
         {
-            await _webSocket.ConnectAsync(s_connectionUri, cancelTokenSource.Token);
-
-            var message = await ReceiveMessageAsync<MessageInitClient>(CancellationToken.None);
-            if (message == null || message.ConnectorInfo == null)
-            {
-                // Something went wrong with our connection and we didn't get a response we expected.
-                await DisconnectAsync();
-                return false;
-            }
-
-            _clientId = message.ConnectorInfo.ClientId;
-            await SendMessageAsync(new MessageClientConnect(_clientId), CancellationToken.None);
-
-            _messageHandlingThread.Start();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Exception while connecting: {ex}");
+            Console.Error.WriteLine($"Unexpected message while connecting: {message}");
+            await DisconnectAsync();
             return false;
         }
 
+        _clientId = message.ConnectorInfo.ClientId;
+        await SendMessageAsync(new MessageClientConnect(_clientId), CancellationToken.None);
+
+        _messageHandlingThread.Start();
+
+        Console.WriteLine("PapiClient connected successfully");
         return true;
     }
 
@@ -134,7 +129,9 @@ internal sealed class PapiClient : IDisposable
     /// </summary>
     public async Task DisconnectAsync()
     {
-        // Start a graceful disconnection process before disposing
+        Console.WriteLine("PapiClient disconnecting");
+
+        // Start a graceful disconnection process before isDisposing
         _cancellationTokenSource.Cancel();
         _messageHandlingComplete.Set();
         await _webSocket.CloseAsync(
@@ -281,20 +278,9 @@ internal sealed class PapiClient : IDisposable
         {
             try
             {
-                Console.WriteLine("Waiting for a request...");
+                Console.WriteLine("PapiClient waiting for the next incoming message");
                 var receiveTask = ReceiveMessageAsync<Message>(_cancellationTokenSource.Token);
-                if (_cancellationTokenSource.IsCancellationRequested)
-                {
-                    Console.WriteLine("HandleMessages cancelled");
-                    break;
-                }
-
                 Message? message = await receiveTask;
-                if (receiveTask.Exception != null)
-                {
-                    Console.Error.WriteLine("Error getting message:\n" + receiveTask.Exception);
-                    continue;
-                }
                 if (message is null)
                 {
                     Console.Error.WriteLine("Received null message!");
@@ -345,13 +331,18 @@ internal sealed class PapiClient : IDisposable
                     }
                 }
             }
+            catch (OperationCanceledException)  // Thrown by the websocket when cancelling
+            {
+                break;
+            }
             catch (Exception ex)
             {
-                Console.WriteLine($"Exception while handling message: {ex}");
+                Console.Error.WriteLine($"Exception while handling message: {ex}");
             }
         } while (!_cancellationTokenSource.IsCancellationRequested && Connected);
 
         _messageHandlingComplete.Set();
+        Console.WriteLine("PapiClient HandleMessages exiting");
     }
     #endregion
 }
