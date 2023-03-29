@@ -25,7 +25,7 @@ import {
 import { getErrorMessage } from '@shared/util/Util';
 import * as ConnectionService from '@shared/services/ConnectionService';
 import { isClient, isRenderer, isServer } from '@shared/util/InternalUtil';
-import logger from '@shared/util/logger';
+import logger from '@shared/services/logger.service';
 import PNetworkEventEmitter from '@shared/models/PNetworkEventEmitter';
 import PEventEmitter from '@shared/models/PEventEmitter';
 import { PEvent } from '@shared/models/PEvent';
@@ -428,7 +428,7 @@ const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
   });
 
   // Remove registrations for this clientId
-  logger.log(`Client ${clientId} disconnected! Unregistering ${requestTypesToRemove.join(', ')}`);
+  logger.info(`Client ${clientId} disconnected! Unregistering ${requestTypesToRemove.join(', ')}`);
   requestTypesToRemove.forEach((requestType) =>
     unregisterRemoteRequestHandler(requestType, clientId),
   );

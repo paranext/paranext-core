@@ -5,12 +5,12 @@ const papi = require('papi');
 
 const { logger } = papi;
 
-logger.log('Hello Someone is importing!');
+logger.info('Hello Someone is importing!');
 
 const unsubscribers = [];
 
 exports.activate = async () => {
-  logger.log('Hello Someone is activating!');
+  logger.info('Hello Someone is activating!');
 
   const unsubPromises = [
     papi.commands.registerCommand('hello-someone.hello-someone', (someone) => {
@@ -27,7 +27,7 @@ exports.activate = async () => {
   ];
 
   return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
-    logger.log('Hello Someone is finished activating!');
+    logger.info('Hello Someone is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
     );

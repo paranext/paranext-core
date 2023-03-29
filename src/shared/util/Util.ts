@@ -101,7 +101,7 @@ function toErrorWithMessage(maybeError: unknown): ErrorWithMessage {
  * @returns message of the error - if object has message, returns message. Otherwise tries to stringify
  * @example
  *  try {...}
- *  catch (e) { logger.log(getErrorMessage(e)) }
+ *  catch (e) { logger.info(getErrorMessage(e)) }
  */
 export function getErrorMessage(error: unknown) {
   return toErrorWithMessage(error).message;

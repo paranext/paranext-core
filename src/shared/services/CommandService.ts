@@ -12,7 +12,7 @@ import {
   UnsubPromiseAsync,
 } from '@shared/util/PapiUtil';
 import { isClient, isRenderer } from '@shared/util/InternalUtil';
-import logger from '@shared/util/logger';
+import logger from '@shared/services/logger.service';
 
 /** Prefix on requests that indicates that the request is a command */
 const CATEGORY_COMMAND = 'command';
@@ -105,7 +105,7 @@ export const initialize = () => {
       const start = performance.now();
       sendCommandUnsafe('echo', 'Hi server!')
         .then((response) =>
-          logger.log(
+          logger.info(
             'command:echo Response!!!',
             response,
             'Response time:',
