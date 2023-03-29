@@ -2,8 +2,8 @@
  * Creates a ServerNetworkConnector or a ClientNetworkConnector depending on if we're in main or renderer
  */
 
-import { isClient } from '@shared/util/InternalUtil';
-import INetworkConnector from '@shared/services/INetworkConnector';
+import { isClient } from '@shared/utils/internal-util';
+import INetworkConnector from '@shared/services/network-connector.model';
 
 /**
  * Creates a NetworkConnector for the client or the server depending on where you're running

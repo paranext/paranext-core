@@ -5,10 +5,10 @@
 import { IExtension } from '@extension-host/extension-types/IExtension';
 import { EntryType, readDir, readFileText } from '@node/services/NodeFileSystemService';
 import { getPathFromUri, joinUriPaths } from '@node/util/util';
-import { Uri } from '@shared/data/FileSystemTypes';
-import { UnsubscriberAsync } from '@shared/util/PapiUtil';
+import { Uri } from '@shared/data/file-system.model';
+import { UnsubscriberAsync } from '@shared/utils/papi-util';
 import Module from 'module';
-import papi, { MODULE_SIMILAR_APIS } from '@shared/services/papi';
+import papi, { MODULE_SIMILAR_APIS } from '@shared/services/papi.service';
 import logger from '@shared/services/logger.service';
 
 /** Whether this service has finished setting up */

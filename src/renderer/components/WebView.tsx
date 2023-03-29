@@ -1,4 +1,4 @@
-import { WebViewContents } from '@shared/data/WebViewTypes';
+import { WebViewContents } from '@shared/data/web-view.model';
 import logger from '@shared/services/logger.service';
 import { useEffect, useRef } from 'react';
 

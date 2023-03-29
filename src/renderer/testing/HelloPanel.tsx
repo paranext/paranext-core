@@ -1,5 +1,5 @@
 import icon from '@assets/icon.png';
-import { TabInfo } from '@shared/data/WebViewTypes';
+import { TabInfo } from '@shared/data/web-view.model';
 
 function HelloPanel() {
   return (

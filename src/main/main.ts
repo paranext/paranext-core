@@ -11,16 +11,16 @@ import { app, BrowserWindow, shell, ipcMain, IpcMainInvokeEvent } from 'electron
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
-import '@main/globalThis';
+import '@main/global-this.model';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import logger from '@shared/services/logger.service';
-import * as NetworkService from '@shared/services/NetworkService';
-import papi from '@shared/services/papi';
-import { CommandHandler } from '@shared/util/PapiUtil';
+import * as networkService from '@shared/services/network.service';
+import papi from '@shared/services/papi.service';
+import { CommandHandler } from '@shared/utils/papi-util';
 import { resolveHtmlPath } from '@node/util/util';
 import MenuBuilder from '@main/menu';
 import extensionHostService from '@main/services/extension-host.service';
-import networkObjectService from '@shared/services/NetworkObjectService';
+import networkObjectService from '@shared/services/network-object.service';
 
 logger.info('Starting main');
 
@@ -212,10 +212,10 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 };
 
 (async () => {
-  await NetworkService.initialize();
+  await networkService.initialize();
   // Set up test handlers
   Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
-    NetworkService.registerRequestHandler(ipcHandle, async (...args: unknown[]) =>
+    networkService.registerRequestHandler(ipcHandle, async (...args: unknown[]) =>
       handler({} as IpcMainInvokeEvent, ...args),
     );
   });

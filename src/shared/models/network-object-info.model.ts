@@ -1,5 +1,5 @@
-import { PEvent } from '@shared/models/PEvent';
-import { UnsubscriberAsync } from '@shared/util/PapiUtil';
+import { PEvent } from '@shared/models/p-event.model';
+import { UnsubscriberAsync } from '@shared/utils/papi-util';
 
 /**
  * Object that is able to be shared on the network.
