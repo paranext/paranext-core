@@ -2,7 +2,7 @@
  * Interfaces, classes, and functions related to events and event emitters
  */
 
-import { PEvent, PEventHandler } from '@shared/models/PEvent';
+import { PEvent, PEventHandler } from '@shared/models/p-event.model';
 
 /**
  * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted

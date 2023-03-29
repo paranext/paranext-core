@@ -3,7 +3,7 @@
  */
 import { URL } from 'url';
 import path from 'path';
-import { Uri } from '@shared/data/FileSystemTypes';
+import { Uri } from '@shared/data/file-system.model';
 import memoizeOne from 'memoize-one';
 
 export function resolveHtmlPath(htmlFileName: string) {

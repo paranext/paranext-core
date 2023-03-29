@@ -12,7 +12,7 @@ import {
   InternalRequest,
   InternalResponse,
   NetworkConnectorInfo,
-} from '@shared/data/InternalConnectionTypes';
+} from '@shared/data/internal-connection.model';
 
 /** Port to use for the webSocket */
 export const WEBSOCKET_PORT = 8876;

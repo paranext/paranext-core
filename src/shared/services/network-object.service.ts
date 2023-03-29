@@ -4,19 +4,19 @@
  * Might layer over it to prevent name collisions?
  */
 
-import * as NetworkService from '@shared/services/NetworkService';
+import * as networkService from '@shared/services/network.service';
 import {
   aggregateUnsubscriberAsyncs,
   serializeRequestType,
   UnsubscriberAsync,
-} from '@shared/util/PapiUtil';
-import PEventEmitter from '@shared/models/PEventEmitter';
-import { isString } from '@shared/util/Util';
+} from '@shared/utils/papi-util';
+import PEventEmitter from '@shared/models/p-event-emitter.model';
+import { isString } from '@shared/utils/util';
 import {
   DisposableNetworkObjectInfo,
   NetworkableObject,
   NetworkObjectInfo,
-} from '@shared/models/NetworkObjectInfo';
+} from '@shared/models/network-object-info.model';
 
 /** Prefix on requests that indicates that the request is related to a network object */
 const CATEGORY_NETWORK_OBJECT = 'object';
@@ -57,7 +57,7 @@ let initializePromise: Promise<void> | undefined;
  *
  * Only run on local network object registration! Processes should only dispose their own network objects
  */
-const onDidDisposeNetworkObjectEmitter = NetworkService.createNetworkEventEmitter<string>(
+const onDidDisposeNetworkObjectEmitter = networkService.createNetworkEventEmitter<string>(
   'object:onDidDisposeNetworkObject',
 );
 /** Event that emits with network object id when that object is disposed */
@@ -86,7 +86,7 @@ const initialize = () => {
     if (isInitialized) return;
 
     // TODO: Might be best to make a singleton or something
-    await NetworkService.initialize();
+    await networkService.initialize();
 
     isInitialized = true;
   })();
@@ -114,7 +114,7 @@ const buildNetworkObjectRequestType = (id: string, subtype: NetworkObjectRequest
  */
 const getRemoteNetworkObjectFunctions = async (id: string): Promise<string[] | undefined> => {
   try {
-    return await NetworkService.request<[], string[]>(
+    return await networkService.request<[], string[]>(
       buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
     );
   } catch (e) {
@@ -153,14 +153,14 @@ const set = async <T extends NetworkableObject>(
 
   // Set up request handlers for this network object
   const unsubPromises = [
-    NetworkService.registerRequestHandler(
+    networkService.registerRequestHandler(
       buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
       () =>
         Promise.resolve([
           // TODO: send the eligible functions over so we can reject function calls locally instead of asking the owning process if the function exists
         ]),
     ),
-    NetworkService.registerRequestHandler(
+    networkService.registerRequestHandler(
       buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
       (functionName: string, ...args: unknown[]) =>
         Promise.resolve(networkObject[functionName](...args)),
@@ -252,7 +252,7 @@ const get = async <T extends NetworkableObject>(
 
       // If the local network object doesn't have the property, build a request for it
       const requestFunction = (...args: unknown[]) =>
-        NetworkService.request(
+        networkService.request(
           buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
           prop, // Name of function to run
           ...args, // Arguments to put into the function

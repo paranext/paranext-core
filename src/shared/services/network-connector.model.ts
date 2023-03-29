@@ -6,7 +6,7 @@ import {
   NetworkConnectorEventHandlers,
   NetworkConnectorInfo,
   RequestRouter,
-} from '@shared/data/InternalConnectionTypes';
+} from '@shared/data/internal-connection.model';
 
 /**
  * Interface that defines the network connection functionality the server and the client must implement.

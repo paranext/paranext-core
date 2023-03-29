@@ -10,10 +10,10 @@ import {
   NetworkConnectorEventHandlers,
   NetworkConnectorInfo,
   RequestRouter,
-} from '@shared/data/InternalConnectionTypes';
-import INetworkConnector from '@shared/services/INetworkConnector';
+} from '@shared/data/internal-connection.model';
+import INetworkConnector from '@shared/services/network-connector.model';
 import logger from '@shared/services/logger.service';
-import { Unsubscriber } from '@shared/util/PapiUtil';
+import { Unsubscriber } from '@shared/utils/papi-util';
 import {
   ClientConnect,
   InitClient,
@@ -23,9 +23,9 @@ import {
   WebSocketRequest,
   WebSocketResponse,
   WEBSOCKET_PORT,
-} from '@shared/data/NetworkConnectorTypes';
-import { newGuid } from '@shared/util/Util';
-import PEventEmitter from '@shared/models/PEventEmitter';
+} from '@shared/data/network-connector.model';
+import { newGuid } from '@shared/utils/util';
+import PEventEmitter from '@shared/models/p-event-emitter.model';
 
 // #region local variables
 
