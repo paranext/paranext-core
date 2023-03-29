@@ -19,6 +19,14 @@ export const Default: Story = {
   args: {},
 };
 
+export const Primary: Story = {
+  args: { className: 'primary' },
+};
+
+export const Secondary: Story = {
+  args: { className: 'secondary' },
+};
+
 export const Disabled: Story = {
   args: { isDisabled: true },
 };

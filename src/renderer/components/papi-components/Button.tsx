@@ -5,6 +5,7 @@ import '@renderer/components/papi-components/button.css';
 export type ButtonProps = PropsWithChildren<{
   /**
    * Enabled status of button
+   * @default false
    */
   isDisabled?: boolean;
   /**
@@ -24,13 +25,7 @@ export type ButtonProps = PropsWithChildren<{
 /**
  * Primary UI component for user interaction
  */
-function Button({
-  isDisabled,
-  className,
-  onClick,
-  onContextMenu,
-  children,
-}: ButtonProps) {
+function Button({ isDisabled = false, className, onClick, onContextMenu, children }: ButtonProps) {
   return (
     <MuiButton
       disabled={isDisabled}

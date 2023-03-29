@@ -16,26 +16,34 @@ type Story = StoryObj<typeof Button>;
 
 export const Primary: Story = {
   args: {
-    isDisabled: false,
+    className: 'primary',
     children: 'Primary Button',
+  },
+};
+
+export const Secondary: Story = {
+  args: {
+    className: 'secondary',
+    children: 'Secondary Button',
+  },
+};
+
+export const Disabled: Story = {
+  args: {
+    isDisabled: true,
+    children: 'Disabled Button',
   },
 };
 
 export const CustomJSXContents: Story = {
   args: {
-    isDisabled: false,
     className: 'video',
-    children: (
-      <a href="https://www.youtube.com/watch?v=z_lgjFAxP6c">
-        Funny Meeting Video
-      </a>
-    ),
+    children: <a href="https://www.youtube.com/watch?v=z_lgjFAxP6c">Funny Meeting Video</a>,
   },
 };
 
 export const Paratext: Story = {
   args: {
-    isDisabled: false,
     className: 'paratext',
     children: 'Paratext Button',
   },
@@ -43,7 +51,6 @@ export const Paratext: Story = {
 
 export const ParatextBright: Story = {
   args: {
-    isDisabled: false,
     className: 'paratext bright',
     children: 'Paratext Button',
   },
