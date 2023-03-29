@@ -10,31 +10,27 @@ public static class Program
 {
     public static async Task Main()
     {
+        Console.WriteLine("Paranext data provider starting up");
+
         using (PapiClient papi = new())
         {
-            Console.WriteLine("Connecting Paranext data provider...");
-            var connectTask = papi.ConnectAsync();
-            if (!await connectTask)
+            if (!await papi.ConnectAsync())
             {
-                Console.Error.WriteLine("Paranext data provider could not connect");
-                if (connectTask.Exception != null)
-                    Console.Error.WriteLine(connectTask.Exception);
-                return;
-            }
-            Console.WriteLine("Paranext data provider connected");
-
-            var registerTask = papi.RegisterRequestHandlerAsync(RequestType.AddOne, RequestAddOne);
-            if (!await registerTask)
-            {
-                Console.Error.WriteLine("Could not register request handler");
-                if (registerTask.Exception != null)
-                    Console.Error.WriteLine(registerTask.Exception);
+                Console.WriteLine("Paranext data provider could not connect");
                 return;
             }
 
+            if (!await papi.RegisterRequestHandlerAsync(RequestType.AddOne, RequestAddOne))
+            {
+                Console.WriteLine("Paranext data provider could not register request handler");
+                return;
+            }
+
+            Console.WriteLine("Paranext data provider ready!");
             papi.BlockUntilMessageHandlingComplete();
         }
-        Console.WriteLine("Paranext data provider disconnected");
+
+        Console.WriteLine("Paranext data provider shutting down");
     }
 
     #region Request handlers
