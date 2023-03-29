@@ -247,8 +247,6 @@ internal sealed class PapiClient : IDisposable
         do
         {
             result = await _webSocket.ReceiveAsync(bufferMemory, cancellationToken); // Wait forever
-            if (cancellationToken.IsCancellationRequested)
-                return null;
 
             if (result.MessageType == WebSocketMessageType.Binary)
                 throw new InvalidOperationException("Can't handle binary data yet.");
