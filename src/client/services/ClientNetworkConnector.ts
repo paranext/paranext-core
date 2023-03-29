@@ -9,8 +9,8 @@ import {
   NetworkConnectorInfo,
   RequestRouter,
 } from '@shared/data/InternalConnectionTypes';
-import { Unsubscriber } from '@shared/util/PapiUtil';
-import INetworkConnector from '@shared/services/INetworkConnector';
+import { Unsubscriber } from '@shared/utils/papi-util';
+import INetworkConnector from '@shared/services/network-connector.model';
 import {
   InitClient,
   Message,
@@ -22,7 +22,7 @@ import {
   WEBSOCKET_ATTEMPTS_WAIT,
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
-import { getErrorMessage } from '@shared/util/Util';
+import { getErrorMessage } from '@shared/utils/util';
 import logger from '@shared/util/logger';
 import PEventEmitter from '@shared/models/PEventEmitter';
 import { createWebSocket } from '@client/services/WebSocketFactory';

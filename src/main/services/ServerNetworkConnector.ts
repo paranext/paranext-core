@@ -11,9 +11,9 @@ import {
   NetworkConnectorInfo,
   RequestRouter,
 } from '@shared/data/InternalConnectionTypes';
-import INetworkConnector from '@shared/services/INetworkConnector';
+import INetworkConnector from '@shared/services/network-connector.model';
 import logger from '@shared/util/logger';
-import { Unsubscriber } from '@shared/util/PapiUtil';
+import { Unsubscriber } from '@shared/utils/papi-util';
 import {
   ClientConnect,
   InitClient,
@@ -24,7 +24,7 @@ import {
   WebSocketResponse,
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
-import { newGuid } from '@shared/util/Util';
+import { newGuid } from '@shared/utils/util';
 import PEventEmitter from '@shared/models/PEventEmitter';
 
 // #region local variables

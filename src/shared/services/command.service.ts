@@ -3,15 +3,15 @@
  * Exposed on papi
  */
 
-import * as NetworkService from '@shared/services/NetworkService';
+import * as networkService from '@shared/services/network.service';
 import {
   aggregateUnsubscriberAsyncs,
   CommandHandler,
   createSafeRegisterFn,
   serializeRequestType,
   UnsubPromiseAsync,
-} from '@shared/util/PapiUtil';
-import { isClient, isRenderer } from '@shared/util/InternalUtil';
+} from '@shared/utils/papi-util';
+import { isClient, isRenderer } from '@shared/utils/internal-util';
 import logger from '@shared/util/logger';
 
 /** Prefix on requests that indicates that the request is a command */
@@ -44,7 +44,7 @@ const sendCommandUnsafe = async <TParam extends Array<unknown>, TReturn>(
   commandName: string,
   ...args: TParam
 ): Promise<TReturn> => {
-  return NetworkService.request(serializeRequestType(CATEGORY_COMMAND, commandName), ...args);
+  return networkService.request(serializeRequestType(CATEGORY_COMMAND, commandName), ...args);
 };
 
 /**
@@ -59,7 +59,7 @@ export const registerCommandUnsafe = (
   commandName: string,
   handler: CommandHandler,
 ): UnsubPromiseAsync<void> => {
-  return NetworkService.registerRequestHandler(
+  return networkService.registerRequestHandler(
     serializeRequestType(CATEGORY_COMMAND, commandName),
     handler,
   );
@@ -73,7 +73,7 @@ export const initialize = () => {
     if (isInitialized) return;
 
     // TODO: Might be best to make a singleton or something
-    await NetworkService.initialize();
+    await networkService.initialize();
 
     // Set up subscriptions that the service needs to work
 

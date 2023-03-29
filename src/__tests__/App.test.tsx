@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
-import { ProcessType } from '@shared/globalThis';
+import { ProcessType } from '@shared/global-this.model';
 import PEventEmitter from '@shared/models/PEventEmitter';
-import App from '../renderer/App';
+import App from '@renderer/App';
 
 // #region globalThis setup
 
@@ -12,7 +12,7 @@ globalThis.resourcesPath = 'resources://';
 
 // #endregion
 
-jest.mock('@shared/services/NetworkService', () => ({
+jest.mock('@shared/services/network.service', () => ({
   createRequestFunction:
     (requestType: string) =>
     async (...args: unknown[]) =>

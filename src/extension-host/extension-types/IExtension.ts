@@ -1,4 +1,4 @@
-import { UnsubscriberAsync } from '@shared/util/PapiUtil';
+import { UnsubscriberAsync } from '@shared/utils/papi-util';
 
 /** Interface for all extensions to implement */
 export interface IExtension {

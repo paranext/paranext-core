@@ -3,16 +3,16 @@
  */
 
 import { WebViewProps } from '@renderer/components/WebView';
-import { isRenderer } from '@shared/util/InternalUtil';
-import { aggregateUnsubscriberAsyncs, CommandHandler } from '@shared/util/PapiUtil';
-import * as CommandService from '@shared/services/CommandService';
-import { newGuid, newNonce } from '@shared/util/Util';
+import { isRenderer } from '@shared/utils/internal-util';
+import { aggregateUnsubscriberAsyncs, CommandHandler } from '@shared/utils/papi-util';
+import * as commandService from '@shared/services/command.service';
+import { newGuid, newNonce } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
-import papi from '@shared/services/papi';
+import papi from '@shared/services/papi.service';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { createNetworkEventEmitter } from '@shared/services/NetworkService';
+import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   WebViewContents,
   WebViewContentsReact,
@@ -77,7 +77,7 @@ const getWebViewPapi = (webViewId: string) => {
  */
 export const addWebView = async (webView: WebViewContents) => {
   if (!isRenderer()) {
-    return CommandService.sendCommand<[WebViewContents], void>('addWebView', webView);
+    return commandService.sendCommand<[WebViewContents], void>('addWebView', webView);
   }
 
   // Create a papi instance for this WebView
@@ -231,7 +231,7 @@ export const initialize = () => {
     if (isRenderer()) {
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
       const unsubPromises = Object.entries(rendererCommandFunctions).map(([commandName, handler]) =>
-        CommandService.registerCommand(commandName, handler),
+        commandService.registerCommand(commandName, handler),
       );
 
       const unsubscribeCommands = aggregateUnsubscriberAsyncs(

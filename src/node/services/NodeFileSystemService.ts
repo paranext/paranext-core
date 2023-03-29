@@ -5,7 +5,7 @@
 import fs from 'fs';
 import { Uri } from '@shared/data/FileSystemTypes';
 import { getPathFromUri, joinUriPaths } from '@node/util/util';
-import { groupBy } from '@shared/util/Util';
+import { groupBy } from '@shared/utils/util';
 
 /**
  * Reads a text file asynchronously

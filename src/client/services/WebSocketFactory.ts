@@ -2,7 +2,7 @@
  * Creates a WebSocket from the node ws library or from the browser WebSocket depending on if we're in node or browser
  */
 
-import { isRenderer } from '@shared/util/InternalUtil';
+import { isRenderer } from '@shared/utils/internal-util';
 import { IWebSocket } from './IWebSocket';
 
 /**

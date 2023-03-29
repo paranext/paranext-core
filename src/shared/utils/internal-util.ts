@@ -2,7 +2,7 @@
  * Utility functions specific to the internal technologies we are using.
  */
 
-import { ProcessType } from '@shared/globalThis';
+import { ProcessType } from '@shared/global-this.model';
 
 /**
  * Determine if running on a client process (renderer, extension-host) or on the server.

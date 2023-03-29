@@ -18,10 +18,10 @@ import {
   RequestHandler,
   RequestRouter,
 } from '@shared/data/InternalConnectionTypes';
-import INetworkConnector from '@shared/services/INetworkConnector';
-import * as NetworkConnectorFactory from '@shared/services/NetworkConnectorFactory';
+import INetworkConnector from '@shared/services/network-connector.model';
+import { createNetworkConnector } from '@shared/services/network-connector.factory';
 import logger from '@shared/util/logger';
-import { ComplexResponse } from '@shared/util/PapiUtil';
+import { ComplexResponse } from '@shared/utils/papi-util';
 
 /** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
 let connectionStatus = ConnectionStatus.Disconnected;
@@ -202,7 +202,7 @@ export const connect = async (
 
   // Create the network connector
   try {
-    networkConnector = await NetworkConnectorFactory.createNetworkConnector();
+    networkConnector = await createNetworkConnector();
   } catch (e) {
     connectionStatus = ConnectionStatus.Disconnected;
     connectPromise = undefined;

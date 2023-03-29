@@ -3,7 +3,7 @@
  * These types should not need to be used outside of NetworkConnectors and ConnectionService.ts
  */
 
-import { ComplexRequest, ComplexResponse } from '@shared/util/PapiUtil';
+import { ComplexRequest, ComplexResponse } from '@shared/utils/papi-util';
 
 /** Represents when the client id has not been assigned by the server */
 export const CLIENT_ID_UNASSIGNED = -1;

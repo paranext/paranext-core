@@ -9,7 +9,7 @@
 
 import path from 'path';
 import polyfillLocalStorage from '@node/polyfill/LocalStorage';
-import { ProcessType } from '@shared/globalThis';
+import { ProcessType } from '@shared/global-this.model';
 import { app } from 'electron';
 
 // #region globalThis setup
