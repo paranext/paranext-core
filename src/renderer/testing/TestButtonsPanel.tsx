@@ -326,7 +326,7 @@ function TestButtonsPanel() {
         >
           Test Exception (Hello World)
         </button>
-        <papi.react.components.PButton
+        <papi.react.components.Button
           className="testButton"
           onClick={() => runPromise(() => test())}
           onContextMenu={() => {
@@ -334,7 +334,7 @@ function TestButtonsPanel() {
           }}
         >
           Test
-        </papi.react.components.PButton>
+        </papi.react.components.Button>
       </div>
       <div className="hello">
         <div>resourcesPath: {resourcesPath}</div>

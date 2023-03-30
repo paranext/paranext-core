@@ -24,6 +24,7 @@ node_modules
 release/app/dist
 release/build
 .erb/dll
+storybook-static
 
 .idea
 npm-debug.log.*

@@ -59,6 +59,15 @@
       "env": {
         "IN_VSCODE": "true"
       }
+    },
+    {
+      "name": "Storybook",
+      "type": "node",
+      "request": "launch",
+      "protocol": "inspector",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "storybook"],
+      "env": { "autoAttachChildProcesses": true }
     }
   ],
   "compounds": [

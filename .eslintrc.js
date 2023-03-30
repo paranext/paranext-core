@@ -1,6 +1,12 @@
 module.exports = {
-  extends: 'erb', // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
-  // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
+  extends: [
+    // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
+    // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
+    'erb',
+    // https://github.com/storybookjs/eslint-plugin-storybook/blob/main/lib/configs/recommended.ts
+    'plugin:storybook/recommended',
+  ],
+
   rules: {
     // #region ERB rules
 

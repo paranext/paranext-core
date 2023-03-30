@@ -16,7 +16,7 @@ const getReactComponent = (name, functionModifier = '') =>
     react: {
       context: { TestContext },
       hooks: { usePromise },
-      components: { PButton }
+      components: { Button }
     },
     logger
   } = papi;
@@ -46,10 +46,10 @@ const getReactComponent = (name, functionModifier = '') =>
     return createElement('div', null,
       createElement('div', null,
         createElement(
-          PButton,
+          Button,
           {
             onClick: () => {
-              logger.log('${name} PButton clicked!');
+              logger.log('${name} Button clicked!');
               setMyState(myStateCurrent => myStateCurrent + 1);
               papi.fetch('https://bible-api.com/matthew+24:14')
     .then((res) => res.json())
@@ -59,7 +59,7 @@ const getReactComponent = (name, functionModifier = '') =>
     );
             }
           },
-          'Hello World PButton ',
+          'Hello World Button ',
           myState
         )
       ),
@@ -71,7 +71,7 @@ const getReactComponent = (name, functionModifier = '') =>
       ),
       createElement('div', null,
           createElement(
-            PButton,
+            Button,
             {
               onClick: () => {
                 throw new Error('${name} test exception!');
