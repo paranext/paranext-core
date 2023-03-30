@@ -1,6 +1,17 @@
 import { UnsubscriberAsync } from '@shared/util/PapiUtil';
 
 /**
+ * Subscribe to receive updates from this data provider that are relevant to the provided selector
+ * @param selector tells the provider what data this listener is listening for
+ * @param callback function to run with the updated data for this selector
+ * @returns unsubscriber to stop listening for updates
+ */
+export type DataProviderSubscriber<TSelector, TData> = (
+  selector: TSelector,
+  callback: (data: TData) => void,
+) => Promise<UnsubscriberAsync>;
+
+/**
  * An object on the papi that manages data and has methods for interacting with that data.
  * Created by the papi and layers over an IDataProviderEngine provided by an extension.
  * @type `TSelector` - the type of selector used to get some data from this provider.
@@ -28,10 +39,7 @@ interface IDataProvider<TSelector, TData> {
    * @param callback function to run with the updated data for this selector
    * @returns unsubscriber to stop listening for updates
    */
-  subscribe: (
-    selector: TSelector,
-    callback: (data: TData) => void,
-  ) => Promise<UnsubscriberAsync>;
+  subscribe: DataProviderSubscriber<TSelector, TData>;
 }
 
 export default IDataProvider;

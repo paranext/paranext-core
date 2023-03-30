@@ -18,10 +18,13 @@ export type DataProviderListenerUpdate<TData> =
 /**
  * The object to register with the DataProviderService to create a data provider.
  * The DataProviderService creates a IDataProvider on the papi that layers over this engine, providing special functionality
+ *
+ * Note: methods on objects that implement this interface must be unbound functions, not arrow functions.
  * @type `TSelector` - the type of selector used to get some data from this provider.
  *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
  * @type `TData` - the type of data provided by this data provider based on a provided selector
  */
+// TODO: fix this interface's usage in DataProviderService so you can use arrow functions? https://stackoverflow.com/questions/35686850/determine-if-a-javascript-function-is-a-bound-function
 interface IDataProviderEngine<TSelector, TData> {
   /**
    * Set a subset of data according to the selector.

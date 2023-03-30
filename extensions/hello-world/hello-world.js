@@ -176,10 +176,22 @@ exports.activate = async () => {
     </html>`,
   });
 
-  papi.webViews.addWebView({
+  await papi.webViews.addWebView({
     componentName: 'HelloWorld',
     contents: getReactComponent('Hello World React Webview'),
   });
+
+  const { dataProvider: greetingsDataProvider } = await papi.dataProvider.get(
+    'hello-someone.greetings',
+  );
+
+  // Test subscribing to a data provider
+  const unsubGreetings = await greetingsDataProvider.subscribe(
+    'Bill',
+    (billGreeting) => logger.log(`Bill's greeting: ${billGreeting}`),
+  );
+
+  unsubPromises.push(unsubGreetings);
 
   return Promise.all(
     unsubPromises.map((unsubPromise) => unsubPromise.promise),

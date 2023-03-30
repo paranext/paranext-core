@@ -7,6 +7,7 @@ import { isRenderer } from '@shared/util/InternalUtil';
 import {
   aggregateUnsubscriberAsyncs,
   CommandHandler,
+  serializeRequestType,
 } from '@shared/util/PapiUtil';
 import * as CommandService from '@shared/services/CommandService';
 import { newGuid, newNonce } from '@shared/util/Util';
@@ -22,6 +23,9 @@ import {
   WebViewContentType,
 } from '@shared/data/WebViewTypes';
 
+/** Prefix on requests that indicates that the request is related to webView operations */
+const CATEGORY_WEB_VIEW = 'webView';
+
 /** Event emitted when webViews are added */
 export type AddWebViewEvent = {
   webView: WebViewProps;
@@ -35,7 +39,7 @@ let initializePromise: Promise<void> | undefined;
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
-  'webView:onDidAddWebView',
+  serializeRequestType(CATEGORY_WEB_VIEW, 'onDidAddWebView'),
 );
 /** Event that emits with webView info when a webView is added */
 export const onDidAddWebView = onDidAddWebViewEmitter.event;
@@ -145,6 +149,9 @@ export const addWebView = async (webView: WebViewContents) => {
             <div id="root">
             </div>
             <script nonce="${srcNonce}">
+              // Enable webview debugging
+              console.debug('Debug ${reactWebView.componentName} Webview')
+
               ${reactWebView.contents}
 
               function initializeReact() {

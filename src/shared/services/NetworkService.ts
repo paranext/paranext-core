@@ -19,6 +19,7 @@ import {
   ComplexResponse,
   createSafeRegisterFn,
   RequestHandlerType,
+  serializeRequestType,
   UnsubPromiseAsync,
   UnsubscriberAsync,
 } from '@shared/util/PapiUtil';
@@ -29,6 +30,11 @@ import logger from '@shared/util/logger';
 import PNetworkEventEmitter from '@shared/models/PNetworkEventEmitter';
 import PEventEmitter from '@shared/models/PEventEmitter';
 import { PEvent } from '@shared/models/PEvent';
+
+/** Prefix on requests that indicates that the request is related to server operations */
+const CATEGORY_SERVER = 'server';
+/** Prefix on events that indicates that the event is related to the network */
+const CATEGORY_NETWORK = 'network';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -200,7 +206,7 @@ async function unregisterRequestHandlerUnsafe(
   // Check with the server to make sure we can unregister this registration
   const remoteUnregisterSuccessful = isClient()
     ? await requestUnsafe(
-        'server:unregisterRequest',
+        serializeRequestType(CATEGORY_SERVER, 'unregisterRequest'),
         requestType,
         ConnectionService.getClientId(),
       )
@@ -593,14 +599,14 @@ const handleEventFromNetwork: NetworkEventHandler = <T>(
 /** Emitter for when clients connect. Provides clientId */
 const onDidClientConnectEmitter =
   createNetworkEventEmitterUnsafe<ClientConnectEvent>(
-    'network:onDidClientConnect',
+    serializeRequestType(CATEGORY_NETWORK, 'onDidClientConnect'),
   );
 /** Event that emits with clientId when a client connects */
 export const onDidClientConnect = onDidClientConnectEmitter.event;
 /** Emitter for when clients disconnect. Provides clientId */
 const onDidClientDisconnectEmitter =
   createNetworkEventEmitterUnsafe<ClientDisconnectEvent>(
-    'network:onDidClientDisconnect',
+    serializeRequestType(CATEGORY_NETWORK, 'onDidClientDisconnect'),
   );
 /** Event that emits with clientId when a client disconnects */
 export const onDidClientDisconnect = onDidClientDisconnectEmitter.event;

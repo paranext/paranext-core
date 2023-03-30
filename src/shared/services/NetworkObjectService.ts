@@ -15,6 +15,7 @@ import { isString } from '@shared/util/Util';
 import {
   DisposableNetworkObjectInfo,
   NetworkableObject,
+  NetworkObjectContainer,
   NetworkObjectInfo,
 } from '@shared/models/NetworkObjectInfo';
 
@@ -62,7 +63,7 @@ let initializePromise: Promise<void> | undefined;
  */
 const onDidDisposeNetworkObjectEmitter =
   NetworkService.createNetworkEventEmitter<string>(
-    'object:onDidDisposeNetworkObject',
+    serializeRequestType(CATEGORY_NETWORK_OBJECT, 'onDidDisposeNetworkObject'),
   );
 /** Event that emits with network object id when that object is disposed */
 const onDidDisposeNetworkObject = onDidDisposeNetworkObjectEmitter.event;
@@ -176,6 +177,7 @@ const set = async <T extends NetworkableObject>(
     NetworkService.registerRequestHandler(
       buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
       (functionName: string, ...args: unknown[]) =>
+        // TODO: try to figure out binding the function to the object if the function is not already bound so you can use class methods? https://stackoverflow.com/questions/35686850/determine-if-a-javascript-function-is-a-bound-function
         // Took the indexing off of NetworkableObject so normal objects could be used,
         // but now members can't be accessed by indexing in NetworkObjectService
         // TODO: fix it so it is indexable but can have specific members
@@ -223,11 +225,24 @@ const set = async <T extends NetworkableObject>(
  * @param createLocalObjectToProxy if a network object with the provided id exists remotely but has not been set up
  * to be used on this process, this function is run, and the returned object is used as a base on which to set up a
  * NetworkObject for use on this process. This is useful for setting up network events on a network object.
+ *
+ * - param id - id of the network object to get
+ *
+ * - param networkObjectContainer - holds a reference to the final proxied network object that is created (yes, this is self-referencing).
+ * Passed in to allow the local object to call network object methods.
+ * Note: networkObjectContainer.networkObject is undefined on running createLocalObjectToProxy and is populated after createLocalObjectToProxy is run,
+ * so please use networkObjectContainer.networkObject to reference the network object and do not destructure it in order to preserve the reference.
+ *
+ * -returns the local object to proxy into a network object.
+ *
  * @returns information about the object shared on the network with specified id if one exists, undefined otherwise.
  */
 const get = async <T extends NetworkableObject>(
   id: string,
-  createLocalObjectToProxy?: (id: string) => Record<string, unknown>,
+  createLocalObjectToProxy?: (
+    id: string,
+    networkObjectContainer: NetworkObjectContainer<T>,
+  ) => Record<string, unknown>,
 ): Promise<NetworkObjectInfo<T> | undefined> => {
   await initialize();
 
@@ -248,9 +263,14 @@ const get = async <T extends NetworkableObject>(
   // Called by the event handler that handles general network object disposal
   const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
 
+  /** Container to hold a reference to the network object so the local object can reference the network object in its functions */
+  const networkObjectContainer: NetworkObjectContainer<T> = {
+    networkObject: undefined,
+  };
+
   // Create the local object to be proxied
   const localObject = createLocalObjectToProxy
-    ? createLocalObjectToProxy(id)
+    ? createLocalObjectToProxy(id, networkObjectContainer)
     : {};
 
   // Create a proxy that, for all unknown properties (function calls that the local object creator didn't set),
@@ -295,6 +315,9 @@ const get = async <T extends NetworkableObject>(
     networkObject: remoteObject as T,
     onDidDispose: networkObjectOnDidDisposeEmitter.event,
   };
+
+  // Update the networkObjectContainer so the local object can access the networkObject appropriately
+  networkObjectContainer.networkObject = networkObjectInfo.networkObject;
 
   // Save the network object locally
   networkObjectRegistrations.set(id, {

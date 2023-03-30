@@ -20,10 +20,10 @@ class GreetingsDataProviderEngine {
    * @param {string} data
    */
   async set(selector, data) {
-    // Don't change someone's greeting, you heathen!
-    if (await this.get(selector)) return false;
+    // Don't change everyone's greeting, you heathen!
+    if (selector === '*') return false;
 
-    this.people[selector] = data;
+    this.people[selector.toLowerCase()] = data;
     return true;
   }
 
@@ -31,18 +31,8 @@ class GreetingsDataProviderEngine {
    * @param {string} selector
    */
   async get(selector) {
-    return this.people[selector];
-  }
-
-  /**
-   * @param {string} setSelector
-   * @param {string[]} listenerSelectors
-   */
-  async generateUpdates(setSelector, listenerSelectors) {
-    const data = await this.get(setSelector);
-    return listenerSelectors.map(
-      (sel) => setSelector === sel && { shouldUpdate: true, data },
-    );
+    if (selector === '*') return this.people;
+    return this.people[selector.toLowerCase()];
   }
 }
 
@@ -50,7 +40,7 @@ exports.activate = async () => {
   logger.log('Hello Someone is activating!');
 
   const greetingsDataProviderInfo = papi.dataProvider.registerEngine(
-    'greetings',
+    'hello-someone.greetings',
     new GreetingsDataProviderEngine(),
   );
 
@@ -64,12 +54,16 @@ exports.activate = async () => {
         <div><input id="greetings-input" value="Bill" /><button id="greetings-button" type="button">Greet</button></div>
         <div id="greetings-button-output"></div>
         <div><input id="set-greetings-input" value="Hey, my name is Bill. I got set by the webview!" /><button id="set-greetings-button" type="button">Set Greeting</button></div>
+        <div id="all-greetings"></div>
         <script>
+          // Enable webview debugging
+          console.debug('Debug Hello Someone WebView');
+
           function print(input) {
             papi.logger.log(input);
           }
 
-          const dataProviderInfoPromise = papi.dataProvider.get('greetings');
+          const dataProviderInfoPromise = papi.dataProvider.get('hello-someone.greetings');
 
           async function setupWebView() {
             const { dataProvider: greetingsDataProvider } = await dataProviderInfoPromise;
@@ -104,6 +98,13 @@ exports.activate = async () => {
                 const helloSomeoneOutput = document.getElementById("greetings-button-output");
                 helloSomeoneOutput.innerHTML = \`\${success ? 'Successfully' : 'Unsuccessfully'} set \${name}'s greeting!\`;
               })
+            });
+
+            greetingsDataProvider.subscribe('*', (greetings) => {
+              const helloSomeoneOutput = document.getElementById("all-greetings");
+                const greetingsString = JSON.stringify(greetings, null, 2);
+                helloSomeoneOutput.innerHTML = greetingsString;
+                print(greetingsString);
             });
           }
 

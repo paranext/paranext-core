@@ -33,3 +33,11 @@ export type DisposableNetworkObjectInfo<T extends NetworkableObject> =
     /** Unsubscriber to call to remove this object from the network */
     dispose: UnsubscriberAsync;
   };
+
+/**
+ * Holds a reference to the final proxied network object that is created (yes, this is self-referencing).
+ * Passed into createLocalObjectToProxy on NetworkObjectService.get to allow the local object to call network object methods.
+ * Note: networkObjectContainer.networkObject is undefined on first running createLocalObjectToProxy and is populated after createLocalObjectToProxy is run,
+ * so please use networkObjectContainer.networkObject to reference the network object inside createLocalObjectToProxy and do not destructure it in order to preserve the reference.
+ */
+export type NetworkObjectContainer<T> = { networkObject: T | undefined };

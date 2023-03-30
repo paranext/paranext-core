@@ -1,5 +1,7 @@
 /**
- * Unified module for accessing API features in extensions
+ * Unified module for accessing API features in extensions.
+ *
+ * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
  */
 
 import * as CommandService from '@shared/services/CommandService';
@@ -12,7 +14,7 @@ import PEventEmitter from '@shared/models/PEventEmitter';
 import logger from '@shared/util/logger';
 import { isRenderer } from '@shared/util/InternalUtil';
 import InternetService from '@shared/services/InternetService';
-import dataProviderService from './DataProviderService';
+import dataProviderService from '@shared/services/DataProviderService';
 
 // TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
 const papiComponents = isRenderer()
