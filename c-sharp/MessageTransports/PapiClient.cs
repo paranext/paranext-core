@@ -329,7 +329,7 @@ internal sealed class PapiClient : IDisposable
                     }
                 }
             }
-            catch (OperationCanceledException)  // Thrown by the websocket when cancelling
+            catch (OperationCanceledException) // Thrown by the websocket when cancelling
             {
                 break;
             }
