@@ -63,6 +63,11 @@ class PEventEmitter<T> {
     return this.lazyEvent;
   }
 
+  /** Disposes of this event, preparing it to release from memory */
+  public dispose = () => {
+    this.disposeFn();
+  };
+
   /**
    * Runs the subscriptions for the event
    * @param event event data to provide to subscribed callbacks
@@ -70,16 +75,6 @@ class PEventEmitter<T> {
   public emit = (event: T) => {
     // Do not do anything other than emitFn here. This emit is just binding `this` to emitFn
     this.emitFn(event);
-  };
-
-  /** Disposes of this event, preparing it to release from memory */
-  public dispose = () => {
-    this.disposeFn();
-  };
-
-  /** Check to make sure this emitter is not disposed. Throw if it is */
-  protected assertNotDisposed = () => {
-    if (this.isDisposed) throw new Error('Emitter is disposed');
   };
 
   /**
@@ -92,6 +87,11 @@ class PEventEmitter<T> {
 
     this.subscriptions?.forEach((callback) => callback(event));
   }
+
+  /** Check to make sure this emitter is not disposed. Throw if it is */
+  protected assertNotDisposed = () => {
+    if (this.isDisposed) throw new Error('Emitter is disposed');
+  };
 
   /**
    * Disposes of this event, preparing it to release from memory.
