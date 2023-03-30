@@ -131,7 +131,7 @@ internal sealed class PapiClient : IDisposable
     {
         Console.WriteLine("PapiClient disconnecting");
 
-        // Start a graceful disconnection process before isDisposing
+        // Start a graceful disconnection process before disposing
         _cancellationTokenSource.Cancel();
         _messageHandlingComplete.Set();
         await _webSocket.CloseAsync(
