@@ -13,7 +13,7 @@ import { app, BrowserWindow, shell, ipcMain, IpcMainInvokeEvent } from 'electron
 import windowStateKeeper from 'electron-window-state';
 import '@main/globalThis';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
-import logger from '@shared/util/logger';
+import logger from '@shared/services/logger.service';
 import * as NetworkService from '@shared/services/NetworkService';
 import papi from '@shared/services/papi';
 import { CommandHandler } from '@shared/util/PapiUtil';
@@ -22,7 +22,7 @@ import MenuBuilder from '@main/menu';
 import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/NetworkObjectService';
 
-logger.log('Starting main');
+logger.info('Starting main');
 
 // #region ELECTRON SETUP
 
@@ -63,7 +63,7 @@ const installExtensions = async () => {
       extensions.map((name) => installer[name]),
       forceDownload,
     )
-    .catch(logger.log);
+    .catch(logger.info);
 };
 
 const getAssetPath = (...paths: string[]): string => {
@@ -184,7 +184,7 @@ app
 
     return undefined;
   })
-  .catch(logger.log);
+  .catch(logger.info);
 
 // #endregion
 
@@ -197,7 +197,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   echoRenderer: async (message: string) => {
     /* const start = performance.now(); */
     /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
-    /* logger.log(
+    /* logger.info(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return message;
@@ -238,7 +238,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 extensionHostService.start();
 
 setTimeout(async () => {
-  logger.log(`Add Many (from EH): ${await papi.commands.sendCommand('addMany', 2, 5, 9, 7)}`);
+  logger.info(`Add Many (from EH): ${await papi.commands.sendCommand('addMany', 2, 5, 9, 7)}`);
 }, 5000);
 
 // #endregion
@@ -253,13 +253,13 @@ setTimeout(async () => {
   } = await networkObjectService.set('test-main', {
     doStuff: async (stuff: string) => {
       const result = `test-main did stuff: ${stuff}!`;
-      logger.log(result);
+      logger.info(result);
       return result;
     },
   });
 
   const unsub = testMainOnDidDispose(() => {
-    logger.log('Disposed of test-main!');
+    logger.info('Disposed of test-main!');
     unsub();
   });
 
@@ -274,12 +274,12 @@ setTimeout(async () => {
       }>('test-extension-host');
       if (testExtensionHostInfo) {
         const unsub2 = testExtensionHostInfo?.onDidDispose(() => {
-          logger.log('Disposed of test-extension-host!');
+          logger.info('Disposed of test-extension-host!');
           testExtensionHostInfo = undefined;
           unsub2();
         });
 
-        logger.log(
+        logger.info(
           `get verse: ${await Promise.resolve(testExtensionHostInfo?.networkObject.getVerse())}`,
         );
       }

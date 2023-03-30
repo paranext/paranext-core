@@ -1,5 +1,5 @@
 import { WebViewContents } from '@shared/data/WebViewTypes';
-import logger from '@shared/util/logger';
+import logger from '@shared/services/logger.service';
 import { useEffect, useRef } from 'react';
 
 export type WebViewProps = Omit<WebViewContents, 'componentName'>;

@@ -20,7 +20,7 @@ import {
 } from '@shared/data/InternalConnectionTypes';
 import INetworkConnector from '@shared/services/INetworkConnector';
 import * as NetworkConnectorFactory from '@shared/services/NetworkConnectorFactory';
-import logger from '@shared/util/logger';
+import logger from '@shared/services/logger.service';
 import { ComplexResponse } from '@shared/util/PapiUtil';
 
 /** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
@@ -236,7 +236,7 @@ export const connect = async (
     }
 
     clientId = newConnectorInfo.clientId;
-    logger.log(`Got clientId ${clientId}`);
+    logger.info(`Got clientId ${clientId}`);
 
     if (!networkConnector) {
       if (!connectReject)
