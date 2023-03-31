@@ -163,7 +163,6 @@ exports.activate = async () => {
         )}! ${message}`;
       },
     ),
-    greetingsDataProviderInfo.dispose,
   ];
 
   return Promise.all(
@@ -171,7 +170,9 @@ exports.activate = async () => {
   ).then(() => {
     logger.log('Hello Someone is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
-      unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
+      unsubPromises
+        .map((unsubPromise) => unsubPromise.unsubscriber)
+        .concat([greetingsDataProviderInfo.dispose]),
     );
   });
 };

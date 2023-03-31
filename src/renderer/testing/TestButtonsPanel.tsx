@@ -1,5 +1,5 @@
 import './TestButtonsPanel.css';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import usePromise from '@renderer/hooks/papi-hooks/usePromise';
 import papi from '@shared/services/papi';
 import * as NetworkService from '@shared/services/NetworkService';
@@ -123,8 +123,6 @@ function TestButtonsPanel() {
 
   const [addOneResult, setAddOneResult] = useState(0);
 
-  const [verseText, setVerseText] = useState('Verse text goes here');
-
   const [resourcesPath] = usePromise(
     useCallback(async () => {
       await new Promise<void>((resolve) => {
@@ -177,16 +175,35 @@ function TestButtonsPanel() {
     ),
   );
 
-  useData<string, string>(
-    'quick-verse.quick-verse',
-    'Romans 1:16',
-    useCallback((newVerseText) => setVerseText(newVerseText), []),
-  );
+  const [verseRef, setVerseRef] = useState<string>('John 11:35');
+  // TODO: add two generic data types, one for set and one for get?
+  const [verseTextBadType, setVerseText] = useData<
+    string,
+    string | { text: string; heresy: boolean }
+  >('quick-verse.quick-verse', verseRef, 'Verse text goes here');
+  const verseText = verseTextBadType as string;
+
+  // This ref will always be defined
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const verseInputRef = useRef<HTMLInputElement>(null!);
 
   return (
     <div className="buttons-panel">
       <div className="hello">
-        {verseText}
+        <input
+          ref={verseInputRef}
+          value={verseRef}
+          onChange={(e) => {
+            setVerseRef(e.target.value);
+          }}
+        />
+        <textarea
+          value={verseText}
+          onChange={(e) => {
+            if (setVerseText)
+              setVerseText({ text: e.target.value, heresy: true });
+          }}
+        />
         <button
           className="testButton"
           type="button"

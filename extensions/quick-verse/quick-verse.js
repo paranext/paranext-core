@@ -58,7 +58,7 @@ class QuickVerseDataProviderEngine {
           `https://bible-api.com/${encodeURIComponent(selector)}`,
         );
         const verseData = await verseResponse.json();
-        const text = verseData.text.replace(/\\n/g, '');
+        const text = verseData.text.replace(/\n/g, '');
         responseVerse = { text };
         this.verses[selector.toLowerCase()] = responseVerse;
       } catch (e) {
@@ -80,14 +80,16 @@ exports.activate = async () => {
     new QuickVerseDataProviderEngine(),
   );
 
-  const unsubPromises = [quickVerseDataProviderInfo.dispose];
+  const unsubPromises = [];
 
   return Promise.all(
     unsubPromises.map((unsubPromise) => unsubPromise.promise),
   ).then(() => {
     logger.log('Quick Verse is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
-      unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
+      unsubPromises
+        .map((unsubPromise) => unsubPromise.unsubscriber)
+        .concat([quickVerseDataProviderInfo.dispose]),
     );
   });
 };
