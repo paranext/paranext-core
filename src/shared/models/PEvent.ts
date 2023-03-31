@@ -1,4 +1,4 @@
-import { Unsubscriber } from '@shared/util/PapiUtil';
+import { Unsubscriber, UnsubscriberAsync } from '@shared/util/PapiUtil';
 
 /** Callback function that accepts an event and should run when an event is emitted */
 export type PEventHandler<T> = (event: T) => void;
@@ -9,3 +9,12 @@ export type PEventHandler<T> = (event: T) => void;
  * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
  */
 export type PEvent<T> = (callback: PEventHandler<T>) => Unsubscriber;
+
+/**
+ * A PEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
+ *
+ * Note: The callback itself is not asynchronous.
+ */
+export type PEventAsync<T> = (
+  callback: PEventHandler<T>,
+) => Promise<UnsubscriberAsync>;
