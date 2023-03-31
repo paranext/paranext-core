@@ -9,7 +9,7 @@ import * as PapiUtil from '@shared/util/PapiUtil';
 // eslint-disable-next-line import/no-cycle
 import * as WebViewService from '@shared/services/WebViewService';
 import PEventEmitter from '@shared/models/PEventEmitter';
-import logger from '@shared/util/logger';
+import logger from '@shared/services/logger.service';
 import { isRenderer } from '@shared/util/InternalUtil';
 import InternetService from '@shared/services/InternetService';
 

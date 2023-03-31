@@ -23,7 +23,7 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/NetworkConnectorTypes';
 import { getErrorMessage } from '@shared/util/Util';
-import logger from '@shared/util/logger';
+import logger from '@shared/services/logger.service';
 import PEventEmitter from '@shared/models/PEventEmitter';
 import { createWebSocket } from '@client/services/WebSocketFactory';
 import { IWebSocket } from '@client/services/IWebSocket';

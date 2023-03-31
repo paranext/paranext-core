@@ -1,6 +1,6 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import path from 'path';
-import logger, { formatLog } from '@shared/util/logger';
+import logger, { formatLog } from '@shared/services/logger.service';
 
 /** Pretty name for the process this service manages. Used in logs */
 const DOTNET_DATA_PROVIDER_NAME = 'dotnet data provider';
@@ -12,7 +12,7 @@ function logProcessError(message: unknown) {
   logger.error(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME, 'error'));
 }
 function logProcessInfo(message: unknown) {
-  logger.log(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME));
+  logger.info(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME));
 }
 
 /**
