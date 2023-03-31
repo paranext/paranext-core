@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.4.33213.308
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParanextDataProvider", "ParanextDataProvider.csproj", "{EE68E4D7-DBB2-40F7-96B5-CF5C70BAEA40}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ParanextDataProvider", "ParanextDataProvider.csproj", "{EE68E4D7-DBB2-40F7-96B5-CF5C70BAEA40}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "c-sharp-tests", "..\c-sharp-tests\c-sharp-tests.csproj", "{47318C23-C03D-4FE1-9900-9C78CA7E4894}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{EE68E4D7-DBB2-40F7-96B5-CF5C70BAEA40}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EE68E4D7-DBB2-40F7-96B5-CF5C70BAEA40}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EE68E4D7-DBB2-40F7-96B5-CF5C70BAEA40}.Release|Any CPU.Build.0 = Release|Any CPU
+		{47318C23-C03D-4FE1-9900-9C78CA7E4894}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{47318C23-C03D-4FE1-9900-9C78CA7E4894}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{47318C23-C03D-4FE1-9900-9C78CA7E4894}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{47318C23-C03D-4FE1-9900-9C78CA7E4894}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

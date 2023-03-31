@@ -5,7 +5,7 @@ namespace Paranext.DataProvider.Messages;
 /// <summary>
 /// Message requests to/from the server.
 /// </summary>
-public sealed partial class MessageRequest : Message
+public sealed class MessageRequest : Message
 {
     /// <summary>
     /// ONLY FOR DESERIALIZATION

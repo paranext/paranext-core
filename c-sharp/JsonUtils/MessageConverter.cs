@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Paranext.DataProvider.Messages;
@@ -10,17 +11,62 @@ namespace Paranext.DataProvider.JsonUtils;
 /// </summary>
 internal sealed class MessageConverter : JsonConverter<Message>
 {
-    private static readonly JsonSerializerOptions recursiveSafeOptions =
+    private static readonly JsonSerializerOptions s_recursiveSafeOptions =
         SerializationOptions.CreateSerializationOptions();
-    private static readonly Dictionary<Enum<MessageType>, Type> messageTypeMap =
-        new()
+    private static readonly Dictionary<Enum<MessageType>, Type> s_messageTypeMap = new();
+    private static readonly Dictionary<Enum<EventType>, Type> s_eventTypeMap = new();
+
+    static MessageConverter()
+    {
+        foreach (var msg in GetObjectsOfClosestSubclasses<Message>())
         {
-            { MessageType.InitClient, typeof(MessageInitClient) },
-            { MessageType.ClientConnect, typeof(MessageClientConnect) },
-            { MessageType.Request, typeof(MessageRequest) },
-            { MessageType.Response, typeof(MessageResponse) },
-            { MessageType.Event, typeof(MessageEvent) },
-        };
+            s_messageTypeMap.Add(msg.Type, msg.GetType());
+        }
+
+        foreach (var evt in GetObjectsOfClosestSubclasses<MessageEvent>())
+        {
+            s_eventTypeMap.Add(evt.EventType, evt.GetType());
+        }
+    }
+
+    /// <summary>
+    /// "Closest" means there isn't a subclass in the hierarchy that can be created.  For example:
+    ///   C is a subclass of B which is a subclass of A.
+    ///   When calling this for A, if B is abstract, then an object of type C will be returned.
+    ///   When calling this for A, if B is not abstract, then an object of type B will be returned.
+    /// </summary>
+    private static IEnumerable<BaseClass> GetObjectsOfClosestSubclasses<BaseClass>()
+        where BaseClass : class
+    {
+        var possibilities = Assembly
+            .GetExecutingAssembly()
+            .GetTypes()
+            .Where(t => t.IsClass && !t.IsAbstract && t.IsSubclassOf(typeof(BaseClass)))
+            .Select(type => Activator.CreateInstance(type, true) as BaseClass)
+            .Where(obj => obj is not null);
+
+        foreach (var obj in possibilities)
+        {
+            var baseType = obj!.GetType().BaseType;
+            while (baseType != null)
+            {
+                if (baseType == typeof(BaseClass))
+                {
+                    yield return obj;
+                    break;
+                }
+
+                if (baseType.IsAbstract)
+                {
+                    baseType = baseType.BaseType;
+                    continue;
+                }
+
+                // At this point, a closer, creatable subclass was found
+                break;
+            }
+        }
+    }
 
     public override bool CanConvert(Type typeToConvert) =>
         typeof(Message).IsAssignableFrom(typeToConvert);
@@ -36,12 +82,27 @@ internal sealed class MessageConverter : JsonConverter<Message>
 
         Utf8JsonReader readerClone = reader; // Make copy of reader state (struct copy)
 
-        Enum<MessageType> messageType = ReadType(ref readerClone);
-        if (!messageTypeMap.TryGetValue(messageType, out Type? messageDataType))
+        // Find the right message type to deserialize
+        var messageType = ReadValue<MessageType>(ref readerClone, "type");
+        if (!s_messageTypeMap.TryGetValue(messageType, out Type? messageDataType))
             throw new ArgumentException("Unexpected message type: " + messageType);
 
-        return (Message)
-            JsonSerializer.Deserialize(ref reader, messageDataType!, recursiveSafeOptions)!;
+        // Provide a more specific type for event messages if we know about it
+        if (messageDataType == typeof(MessageEvent))
+        {
+            readerClone = reader; // Ordering of items in JSON isn't guaranteed
+            var eventType = ReadValue<EventType>(ref readerClone, "eventType");
+            if (s_eventTypeMap.TryGetValue(eventType, out Type? eventMessageDataType))
+                messageDataType = eventMessageDataType;
+
+            readerClone = reader; // We'll need it again below
+        }
+
+        var msg = (Message)
+            JsonSerializer.Deserialize(ref reader, messageDataType!, s_recursiveSafeOptions)!;
+        if (msg is MessageEvent msgEvent)
+            msgEvent.Event = GetEventData(ref readerClone, msgEvent.EventContentsType);
+        return msg;
     }
 
     public override void Write(
@@ -50,35 +111,60 @@ internal sealed class MessageConverter : JsonConverter<Message>
         JsonSerializerOptions options
     )
     {
-        JsonSerializer.Serialize(writer, message, message.GetType(), recursiveSafeOptions);
+        JsonSerializer.Serialize(writer, message, message.GetType(), s_recursiveSafeOptions);
     }
 
     /// <summary>
-    /// Reads the type property from the message given the specified reader
+    /// Reads the property from the message given the specified reader
     /// </summary>
-    private static Enum<MessageType> ReadType(ref Utf8JsonReader reader)
+    private static Enum<T> ReadValue<T>(ref Utf8JsonReader reader, string property)
+        where T : class, EnumType
     {
         do
         {
             bool success = reader.Read();
             if (!success)
-                return Enum<MessageType>.Null;
+                return Enum<T>.Null;
 
             if (reader.TokenType != JsonTokenType.PropertyName)
                 continue;
 
             string? propertyName = reader.GetString();
-            if (propertyName != "type")
+            if (propertyName != property)
                 continue;
 
             success = reader.Read();
             if (!success)
-                return Enum<MessageType>.Null;
+                return Enum<T>.Null;
 
             if (reader.TokenType != JsonTokenType.String)
                 throw new JsonException($"Unexpected token {reader.TokenType} (expected String)");
 
-            return new Enum<MessageType>(reader.GetString());
+            return new Enum<T>(reader.GetString());
         } while (true);
+    }
+
+    /// <summary>
+    /// Deserializes the specific type for the "event" property from the given reader
+    /// </summary>
+    private static dynamic? GetEventData(ref Utf8JsonReader reader, Type type)
+    {
+        do
+        {
+            if (!reader.Read())
+                break;
+
+            if (reader.TokenType != JsonTokenType.PropertyName)
+                continue;
+
+            string? propertyName = reader.GetString();
+            if (propertyName != "event")
+                continue;
+
+            reader.Read();
+            return JsonSerializer.Deserialize(ref reader, type, s_recursiveSafeOptions);
+        } while (true);
+
+        throw new JsonException("Could not find event data within event message");
     }
 }
