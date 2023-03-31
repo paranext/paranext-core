@@ -16,7 +16,7 @@ export default <T>(
   defaultValue: T,
   preserveValue = true,
 ): [value: T, isLoading: boolean] => {
-  const [value, setValue] = useState<T>(defaultValue);
+  const [value, setValue] = useState<T>(() => defaultValue);
   const [loading, setLoading] = useState<boolean>(true);
   useEffect(() => {
     let promiseIsCurrent = true;
@@ -25,7 +25,7 @@ export default <T>(
       const result = await promiseFactoryCallback();
       if (promiseIsCurrent) {
         // If the promise returned null, it purposely did this to do nothing. Maybe its dependencies are not set up
-        if (result != null) setValue(result);
+        if (result != null) setValue(() => result);
         setLoading(false);
       }
     })();
@@ -33,7 +33,7 @@ export default <T>(
     return () => {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
-      if (!preserveValue) setValue(defaultValue);
+      if (!preserveValue) setValue(() => defaultValue);
     };
   }, [promiseFactoryCallback, defaultValue, preserveValue]);
 
