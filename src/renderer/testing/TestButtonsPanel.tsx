@@ -177,7 +177,7 @@ function TestButtonsPanel() {
 
   const [verseRef, setVerseRef] = useState<string>('John 11:35');
   // TODO: add two generic data types, one for set and one for get?
-  const [verseTextBadType, setVerseText] = useData<
+  const [verseTextBadType, setVerseText, verseTextIsLoading] = useData<
     string,
     string | { text: string; heresy: boolean }
   >('quick-verse.quick-verse', verseRef, 'Verse text goes here');
@@ -197,6 +197,7 @@ function TestButtonsPanel() {
             setVerseRef(e.target.value);
           }}
         />
+        {verseTextIsLoading ? 'Loading verse' : 'Finished loading verse'}
         <textarea
           value={verseText}
           onChange={(e) => {

@@ -16,17 +16,18 @@ import { PEventAsync, PEventHandler } from '@shared/models/PEvent';
  * @param subscriberOptions various options to adjust how the subscriber emits updates
  *
  *    WARNING: MUST BE WRAPPED IN A useState, useMemo, etc. The reference must not be updated every render
- * @returns [data, setData]
+ * @returns [data, setData, isLoading]
  *  - `data`: the current value for the data from the data provider with the specified selector, either the defaultValue or the resolved data
  *  - `setData`: asynchronous function to request that the data provider update the data at this selector. Returns true if successful.
  *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
+ *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
  */
 function useData<TSelector, TData>(
   dataType: string,
   selector: TSelector,
   defaultValue: TData,
   subscriberOptions?: DataProviderSubscriberOptions,
-): [TData, ((newData: TData) => Promise<boolean>) | undefined] {
+): [TData, ((newData: TData) => Promise<boolean>) | undefined, boolean] {
   // The data from the data provider at this selector
   const [data, setDataInternal] = useState<TData>(defaultValue);
 
@@ -46,16 +47,29 @@ function useData<TSelector, TData>(
     useCallback(() => setIsDisposed(true), []),
   );
 
+  // Indicates if the data with the selector is awaiting retrieval from the data provider
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
   // Wrap subscribe so we can call it as a normal PEvent in useEvent
   const wrappedSubscribeEvent: PEventAsync<TData> | undefined = useMemo(
     () =>
       dataProviderInfo && !isDisposed
-        ? (eventCallback: PEventHandler<TData>) => {
-            return dataProviderInfo.dataProvider.subscribe(
+        ? async (eventCallback: PEventHandler<TData>) => {
+            const unsub = await dataProviderInfo.dataProvider.subscribe(
               selector,
-              eventCallback,
+              (subscriptionData) => {
+                eventCallback(subscriptionData);
+                // When we receive updated data, mark that we are not loading
+                setIsLoading(false);
+              },
               subscriberOptions,
             );
+
+            return async () => {
+              // When we change data type or selector, mark that we are loading
+              setIsLoading(true);
+              return unsub();
+            };
           }
         : undefined,
     [dataProviderInfo, selector, subscriberOptions, isDisposed],
@@ -75,7 +89,7 @@ function useData<TSelector, TData>(
     [dataProviderInfo, selector, isDisposed],
   );
 
-  return [data, setData];
+  return [data, setData, isLoading];
 }
 
 export default useData;
