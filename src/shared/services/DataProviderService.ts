@@ -15,7 +15,7 @@ import { NetworkObjectContainer } from '@shared/models/NetworkObjectInfo';
 import { PEvent } from '@shared/models/PEvent';
 import PEventEmitter from '@shared/models/PEventEmitter';
 import * as NetworkService from '@shared/services/NetworkService';
-import { serializeRequestType } from '@shared/util/PapiUtil';
+import { deepEqual, serializeRequestType } from '@shared/util/PapiUtil';
 import networkObjectService from './NetworkObjectService';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
@@ -67,6 +67,9 @@ function createDataProviderSubscriber<TSelector, TData>(
     if (!dataProviderContainer.networkObject)
       throw new Error("Somehow the data provider doesn't exist! Investigate");
 
+    /** The most recent data before the newest update. Used for deep comparison checks to prevent useless updates */
+    let dataPrevious: TData | undefined;
+
     // Create a layer that lets us know if we received an update so we don't run the callback with old data
     let receivedUpdate = false;
     const callbackWithUpdate = async () => {
@@ -76,7 +79,12 @@ function createDataProviderSubscriber<TSelector, TData>(
       // TODO: Implement selector events so we can receive the new data with the update instead of reaching back out for it
       const data = await dataProviderContainer.networkObject.get(selector);
       receivedUpdate = true;
-      callback(data);
+
+      // Only update if the data is not deeply equal
+      if (!deepEqual(dataPrevious, data)) {
+        dataPrevious = data;
+        callback(data);
+      }
     };
 
     const unsubscribe = onDidUpdate(callbackWithUpdate);
