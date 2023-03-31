@@ -9,6 +9,7 @@ import {
 } from '@shared/models/DataProviderInfo';
 import IDataProvider, {
   DataProviderSubscriber,
+  DataProviderSubscriberOptions,
 } from '@shared/models/IDataProvider';
 import IDataProviderEngine from '@shared/models/IDataProviderEngine';
 import { NetworkObjectContainer } from '@shared/models/NetworkObjectInfo';
@@ -63,9 +64,22 @@ function createDataProviderSubscriber<TSelector, TData>(
   >,
   onDidUpdate: PEvent<boolean>,
 ): DataProviderSubscriber<TSelector, TData> {
-  return async (selector, callback) => {
+  return async (
+    selector,
+    callback,
+    options?: DataProviderSubscriberOptions,
+  ) => {
     if (!dataProviderContainer.networkObject)
       throw new Error("Somehow the data provider doesn't exist! Investigate");
+
+    // Default options
+    const subscriberOptions = {
+      getDataImmediately: true,
+      skipEqualUpdates: true,
+      ...options,
+    };
+
+    const { getDataImmediately, skipEqualUpdates } = subscriberOptions;
 
     /** The most recent data before the newest update. Used for deep comparison checks to prevent useless updates */
     let dataPrevious: TData | undefined;
@@ -81,7 +95,7 @@ function createDataProviderSubscriber<TSelector, TData>(
       receivedUpdate = true;
 
       // Only update if the data is not deeply equal
-      if (!deepEqual(dataPrevious, data)) {
+      if (!skipEqualUpdates || !deepEqual(dataPrevious, data)) {
         dataPrevious = data;
         callback(data);
       }
@@ -89,12 +103,14 @@ function createDataProviderSubscriber<TSelector, TData>(
 
     const unsubscribe = onDidUpdate(callbackWithUpdate);
 
-    // Get the data to run the callback immediately so it has the data
-    const data = await dataProviderContainer.networkObject.get(selector);
-    // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
-    if (!receivedUpdate) {
-      receivedUpdate = true;
-      callback(data);
+    if (getDataImmediately) {
+      // Get the data to run the callback immediately so it has the data
+      const data = await dataProviderContainer.networkObject.get(selector);
+      // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
+      if (!receivedUpdate) {
+        receivedUpdate = true;
+        callback(data);
+      }
     }
 
     // Forcing the unsubscribe to be asynchronous to support selector events in the future

@@ -1,14 +1,30 @@
 import { UnsubscriberAsync } from '@shared/util/PapiUtil';
 
+/** Various options to adjust how the data provider subscriber emits updates */
+export type DataProviderSubscriberOptions = {
+  /**
+   * Whether to immediately retrieve the data for this subscriber and run the callback as soon as possible
+   * @default true
+   */
+  getDataImmediately?: boolean;
+  /**
+   * Whether to skip updates to the data that result in deeply equal data for this subscriber's selector
+   * @default true
+   */
+  skipEqualUpdates?: boolean;
+};
+
 /**
  * Subscribe to receive updates from this data provider that are relevant to the provided selector
  * @param selector tells the provider what data this listener is listening for
  * @param callback function to run with the updated data for this selector
+ * @param options various options to adjust how the subscriber emits updates
  * @returns unsubscriber to stop listening for updates
  */
 export type DataProviderSubscriber<TSelector, TData> = (
   selector: TSelector,
   callback: (data: TData) => void,
+  options?: DataProviderSubscriberOptions,
 ) => Promise<UnsubscriberAsync>;
 
 /**

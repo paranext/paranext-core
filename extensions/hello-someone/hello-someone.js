@@ -23,8 +23,12 @@ class GreetingsDataProviderEngine {
     // Don't change everyone's greeting, you heathen!
     if (selector === '*') return false;
 
-    this.people[selector.toLowerCase()] = data;
-    return true;
+    if (data !== this.people[selector.toLowerCase()]) {
+      this.people[selector.toLowerCase()] = data;
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -55,6 +59,9 @@ exports.activate = async () => {
         <div id="greetings-button-output"></div>
         <div><input id="set-greetings-input" value="Hey, my name is Bill. I got set by the webview!" /><button id="set-greetings-button" type="button">Set Greeting</button></div>
         <div id="all-greetings"></div>
+        <div id="any-greetings-update-count">Any Greetings Updates: 0</div>
+        <div id="bill-any-greetings-update-count">Any Greetings Updates (via Bill): 0</div>
+        <div id="bill-greetings-update-count">Bill Greetings Updates: 0</div>
         <script>
           // Enable webview debugging
           console.debug('Debug Hello Someone WebView');
@@ -100,11 +107,36 @@ exports.activate = async () => {
               })
             });
 
+            // Update the 'all greetings' display on load and on greetings updates
             greetingsDataProvider.subscribe('*', (greetings) => {
-              const helloSomeoneOutput = document.getElementById("all-greetings");
-                const greetingsString = JSON.stringify(greetings, null, 2);
-                helloSomeoneOutput.innerHTML = greetingsString;
-                print(greetingsString);
+              const allGreetings = document.getElementById("all-greetings");
+              const greetingsString = JSON.stringify(greetings, null, 2);
+              allGreetings.innerHTML = greetingsString;
+              print(greetingsString);
+            });
+
+            // Update the greetings count on any greeting update
+            let anyGreetingsUpdateCount = 0;
+            greetingsDataProvider.subscribe('*', () => {
+              anyGreetingsUpdateCount += 1;
+              const anyGreetingsUpdateCountDiv = document.getElementById("any-greetings-update-count");
+              anyGreetingsUpdateCountDiv.innerHTML = \`Any Greetings Updates: \${anyGreetingsUpdateCount}\`;
+            }, { getDataImmediately: false });
+
+            // Update the greetings count on greetings updates
+            let billAnyGreetingsUpdateCount = 0;
+            greetingsDataProvider.subscribe('BiLl', () => {
+              billAnyGreetingsUpdateCount += 1;
+              const billAnyGreetingsUpdateCountDiv = document.getElementById("bill-any-greetings-update-count");
+              billAnyGreetingsUpdateCountDiv.innerHTML = \`Any Greetings Updates (via Bill): \${billAnyGreetingsUpdateCount}\`;
+            }, { getDataImmediately: false, skipEqualUpdates: false });
+
+            // Update the greetings count on greetings updates
+            let billGreetingsUpdateCount = -1;
+            greetingsDataProvider.subscribe('bIlL', () => {
+              billGreetingsUpdateCount += 1;
+              const billGreetingsUpdateCountDiv = document.getElementById("bill-greetings-update-count");
+              billGreetingsUpdateCountDiv.innerHTML = \`Bill Greetings Updates: \${billGreetingsUpdateCount}\`;
             });
           }
 
