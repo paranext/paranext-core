@@ -9,6 +9,7 @@ import { TabInfo } from '@shared/data/WebViewTypes';
 import { WebView, WebViewProps } from '@renderer/components/WebView';
 import useEvent from '@renderer/hooks/papi-hooks/useEvent';
 import { AddWebViewEvent } from '@shared/services/WebViewService';
+import useData from '@renderer/hooks/papi-hooks/useData';
 
 const testBase: (message: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.test');
@@ -122,6 +123,8 @@ function TestButtonsPanel() {
 
   const [addOneResult, setAddOneResult] = useState(0);
 
+  const [verseText, setVerseText] = useState('Verse text goes here');
+
   const [resourcesPath] = usePromise(
     useCallback(async () => {
       await new Promise<void>((resolve) => {
@@ -174,9 +177,16 @@ function TestButtonsPanel() {
     ),
   );
 
+  useData<string, string>(
+    'quick-verse.quick-verse',
+    'Romans 1:16',
+    useCallback((newVerseText) => setVerseText(newVerseText), []),
+  );
+
   return (
     <div className="buttons-panel">
       <div className="hello">
+        {verseText}
         <button
           className="testButton"
           type="button"
