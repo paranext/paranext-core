@@ -12,17 +12,20 @@ public sealed class MessageEvent : Message
     /// </summary>
     private MessageEvent() { }
 
-    public MessageEvent(string? eventType)
+    public MessageEvent(Enum<EventType> eventType, dynamic? eventContents)
     {
         EventType = eventType;
+        Event = eventContents;
     }
 
     public override Enum<MessageType> Type => MessageType.Event;
 
-    public string? EventType { get; set; }
+    public Enum<EventType> EventType { get; set; }
+
+    public dynamic? Event { get; set; }
 
     public override string ToString()
     {
-        return $"Event: {EventType} from {SenderId}";
+        return $"Event: {EventType} from {SenderId} is {Event}";
     }
 }

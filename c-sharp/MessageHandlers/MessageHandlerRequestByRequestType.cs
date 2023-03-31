@@ -21,7 +21,7 @@ internal class MessageHandlerRequestByRequestType : IMessageHandler
         _handlersByRequestType[requestType] = handler;
     }
 
-    public Message? HandleMessage(Message message)
+    public IEnumerable<Message>? HandleMessage(Message message)
     {
         if (message == null)
             throw new ArgumentNullException(nameof(message));
@@ -36,20 +36,30 @@ internal class MessageHandlerRequestByRequestType : IMessageHandler
             return null;
         }
 
+        List<Message> messageList = new();
         var response = handler(request.Contents);
         if (response.Success)
-            return new MessageResponse(
-                request.RequestType,
-                request.RequestId,
-                request.SenderId,
-                response.Contents
+        {
+            messageList.Add(
+                new MessageResponse(
+                    request.RequestType,
+                    request.RequestId,
+                    request.SenderId,
+                    response.Contents
+                )
             );
+        }
         else
-            return new MessageResponse(
-                request.RequestType,
-                request.RequestId,
-                request.SenderId,
-                response.ErrorMessage
+        {
+            messageList.Add(
+                new MessageResponse(
+                    request.RequestType,
+                    request.RequestId,
+                    request.SenderId,
+                    response.ErrorMessage
+                )
             );
+        }
+        return messageList;
     }
 }
