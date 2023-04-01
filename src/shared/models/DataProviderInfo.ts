@@ -8,8 +8,8 @@ import { UnsubscriberAsync } from '@shared/util/PapiUtil';
  */
 
 // Basically a layer over NetworkObjectInfo
-export type DataProviderInfo<TData, TSelector> = {
-  dataProvider: IDataProvider<TData, TSelector>;
+export type DataProviderInfo<TSelector, TGetData, TSetData> = {
+  dataProvider: IDataProvider<TSelector, TGetData, TSetData>;
   /** Event that emits when this data provider is being disposed */
   onDidDispose: PEvent<void>;
 };
@@ -19,10 +19,8 @@ export type DataProviderInfo<TData, TSelector> = {
  * Returned from registering a data provider (only the process that set it up should dispose of it)
  */
 // Basically a layer over DisposableDataProviderInfo
-export type DisposableDataProviderInfo<TData, TSelector> = DataProviderInfo<
-  TData,
-  TSelector
-> & {
-  /** Unsubscriber to call to remove this data provider from the network */
-  dispose: UnsubscriberAsync;
-};
+export type DisposableDataProviderInfo<TSelector, TGetData, TSetData> =
+  DataProviderInfo<TSelector, TGetData, TSetData> & {
+    /** Unsubscriber to call to remove this data provider from the network */
+    dispose: UnsubscriberAsync;
+  };

@@ -22,10 +22,11 @@ export type DataProviderListenerUpdate<TData> =
  * Note: methods on objects that implement this interface must be unbound functions, not arrow functions.
  * @type `TSelector` - the type of selector used to get some data from this provider.
  *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
- * @type `TData` - the type of data provided by this data provider based on a provided selector
+ * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
+ * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
  */
 // TODO: fix this interface's usage in DataProviderService so you can use arrow functions? https://stackoverflow.com/questions/35686850/determine-if-a-javascript-function-is-a-bound-function
-interface IDataProviderEngine<TSelector, TData> {
+interface IDataProviderEngine<TSelector, TGetData, TSetData> {
   /**
    * Method to run to send clients updates outside of the `set` method.
    * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `forceUpdate` method in the DataProviderEngine.
@@ -37,17 +38,17 @@ interface IDataProviderEngine<TSelector, TData> {
    * Set a subset of data according to the selector.
    * Run by the data provider on set
    * @param selector tells the provider what subset of data is being set
-   * @param data the data to set at the selector
+   * @param data the data that determines what to set at the selector
    * @returns true if successfully set (will send updates), false otherwise (will not send updates)
    */
-  set: (selector: TSelector, data: TData) => Promise<boolean>;
+  set: (selector: TSelector, data: TSetData) => Promise<boolean>;
   /**
    * Get a subset of data from the provider according to the selector.
    * Run by the data provider on get
    * @param selector tells the provider what subset of data to get
    * @returns the subset of data represented by the selector
    */
-  get: (selector: TSelector) => Promise<TData>;
+  get: (selector: TSelector) => Promise<TGetData>;
   /**
    * Generates data updates for each listener based on what was updated and what listeners are listening for.
    * Run by the data provider on set if the data was updated
@@ -59,7 +60,7 @@ interface IDataProviderEngine<TSelector, TData> {
   generateUpdates: (
     setSelector: TSelector,
     listenerSelectors: TSelector[],
-  ) => Promise<DataProviderListenerUpdate<TData>[]>;
+  ) => Promise<DataProviderListenerUpdate<TGetData>[]>;
 }
 
 export default IDataProviderEngine;

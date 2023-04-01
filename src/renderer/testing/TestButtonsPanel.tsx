@@ -194,12 +194,12 @@ function TestButtonsPanel() {
     },
     [setVerseRefDebounced],
   );
-  // TODO: add two generic data types, one for set and one for get?
-  const [verseTextBadType, setVerseText, verseTextIsLoading] = useData<
+
+  const [verseText, setVerseText, verseTextIsLoading] = useData<
+    string,
     string,
     string | { text: string; heresy: boolean }
   >('quick-verse.quick-verse', verseRef, 'Verse text goes here');
-  const verseText = verseTextBadType as string;
 
   return (
     <div className="buttons-panel">

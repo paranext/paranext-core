@@ -22,19 +22,20 @@ import { PEventAsync, PEventHandler } from '@shared/models/PEvent';
  *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
  *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
  */
-function useData<TSelector, TData>(
+function useData<TSelector, TGetData, TSetData>(
   dataType: string,
   selector: TSelector,
-  defaultValue: TData,
+  defaultValue: TGetData,
   subscriberOptions?: DataProviderSubscriberOptions,
-): [TData, ((newData: TData) => Promise<boolean>) | undefined, boolean] {
+): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean] {
   // The data from the data provider at this selector
-  const [data, setDataInternal] = useState<TData>(defaultValue);
+  const [data, setDataInternal] = useState<TGetData>(defaultValue);
 
   // Get the data provider info for this data type
   const [dataProviderInfo] = usePromise(
     useCallback(
-      async () => dataProviderService.get<TSelector, TData>(dataType),
+      async () =>
+        dataProviderService.get<TSelector, TGetData, TSetData>(dataType),
       [dataType],
     ),
     undefined,
@@ -51,10 +52,10 @@ function useData<TSelector, TData>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Wrap subscribe so we can call it as a normal PEvent in useEvent
-  const wrappedSubscribeEvent: PEventAsync<TData> | undefined = useMemo(
+  const wrappedSubscribeEvent: PEventAsync<TGetData> | undefined = useMemo(
     () =>
       dataProviderInfo && !isDisposed
-        ? async (eventCallback: PEventHandler<TData>) => {
+        ? async (eventCallback: PEventHandler<TGetData>) => {
             const unsub = await dataProviderInfo.dataProvider.subscribe(
               selector,
               (subscriptionData) => {
@@ -83,7 +84,7 @@ function useData<TSelector, TData>(
   const setData = useMemo(
     () =>
       dataProviderInfo && !isDisposed
-        ? async (newData: TData) =>
+        ? async (newData: TSetData) =>
             dataProviderInfo.dataProvider.set(selector, newData)
         : undefined,
     [dataProviderInfo, selector, isDisposed],

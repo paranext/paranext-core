@@ -58,12 +58,12 @@ async function has(dataType: string): Promise<boolean> {
   return networkObjectService.has(buildDataProviderObjectId(dataType));
 }
 
-function createDataProviderSubscriber<TSelector, TData>(
+function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
   dataProviderContainer: NetworkObjectContainer<
-    IDataProvider<TSelector, TData>
+    IDataProvider<TSelector, TGetData, TSetData>
   >,
   onDidUpdate: PEvent<boolean>,
-): DataProviderSubscriber<TSelector, TData> {
+): DataProviderSubscriber<TSelector, TGetData> {
   return async (
     selector,
     callback,
@@ -82,7 +82,7 @@ function createDataProviderSubscriber<TSelector, TData>(
     const { getDataImmediately, skipEqualUpdates } = subscriberOptions;
 
     /** The most recent data before the newest update. Used for deep comparison checks to prevent useless updates */
-    let dataPrevious: TData | undefined;
+    let dataPrevious: TGetData | undefined;
 
     // Create a layer that lets us know if we received an update so we don't run the callback with old data
     let receivedUpdate = false;
@@ -126,22 +126,22 @@ function createDataProviderSubscriber<TSelector, TData>(
  * @param onDidUpdateEmitter event emitter to use for informing subscribers of updates. The event just returns what set returns (should be true according to IDataProvider)
  * @returns data provider layering over the provided data provider engine
  */
-function buildDataProvider<TSelector, TData>(
-  dataProviderEngine: IDataProviderEngine<TSelector, TData>,
+function buildDataProvider<TSelector, TGetData, TSetData>(
+  dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
   onDidUpdateEmitter: PEventEmitter<boolean>,
-): IDataProvider<TSelector, TData> {
+): IDataProvider<TSelector, TGetData, TSetData> {
   /** Container to hold a reference to the data provider so the local object can reference the network object in its functions */
   const dataProviderContainer: NetworkObjectContainer<
-    IDataProvider<TSelector, TData>
+    IDataProvider<TSelector, TGetData, TSetData>
   > = {
     networkObject: undefined,
   };
 
   // Object whose methods to run first when the data provider's method is called if they exist here
   // before falling back to the dataProviderEngine's methods
-  const dataProviderInternal: IDataProvider<TSelector, TData> = {
+  const dataProviderInternal: IDataProvider<TSelector, TGetData, TSetData> = {
     /** Layered set that emits an update event after running the engine's set */
-    set: async (selector: TSelector, data: TData) => {
+    set: async (selector, data) => {
       const dpeSetResult = await dataProviderEngine.set.bind(
         dataProviderEngine,
       )(selector, data);
@@ -162,7 +162,7 @@ function buildDataProvider<TSelector, TData>(
 
   // Create a proxy that runs the data provider method if it exists or runs the engine method otherwise
   const dataProvider = new Proxy(dataProviderEngine, {
-    get(obj: IDataProviderEngine<TSelector, TData>, prop) {
+    get(obj: IDataProviderEngine<TSelector, TGetData, TSetData>, prop) {
       // Pass promises through
       if (prop === 'then') return obj[prop as keyof typeof obj];
 
@@ -188,7 +188,7 @@ function buildDataProvider<TSelector, TData>(
     },
     // Type cast the data provider engine proxy because it is an IDataProvider although
     // Typescript can't figure it out
-  }) as unknown as IDataProvider<TSelector, TData>;
+  }) as unknown as IDataProvider<TSelector, TGetData, TSetData>;
 
   return dataProvider;
 }
@@ -206,10 +206,10 @@ function buildDataProvider<TSelector, TData>(
  *  Note: A selector must be stringifiable.
  * @type `TData` - the type of data provided by this data provider based on a provided selector
  */
-async function registerEngine<TSelector, TData>(
+async function registerEngine<TSelector, TGetData, TSetData>(
   dataType: string,
-  dataProviderEngine: IDataProviderEngine<TSelector, TData>,
-): Promise<DisposableDataProviderInfo<TSelector, TData>> {
+  dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
+): Promise<DisposableDataProviderInfo<TSelector, TGetData, TSetData>> {
   await initialize();
   if (await has(dataType))
     throw new Error(
@@ -269,9 +269,9 @@ async function registerEngine<TSelector, TData>(
  *  Note: A selector must be stringifiable.
  * @type `TData` - the type of data provided by this data provider based on a provided selector
  */
-async function get<TSelector, TData>(
+async function get<TSelector, TGetData, TSetData>(
   dataType: string,
-): Promise<DataProviderInfo<TSelector, TData> | undefined> {
+): Promise<DataProviderInfo<TSelector, TGetData, TSetData> | undefined> {
   await initialize();
 
   // Get the object id for this data type
@@ -279,7 +279,7 @@ async function get<TSelector, TData>(
 
   // Get the network object for this data provider
   const networkObjectInfo = await networkObjectService.get<
-    IDataProvider<TSelector, TData>
+    IDataProvider<TSelector, TGetData, TSetData>
   >(dataProviderObjectId, (_id, networkObjectContainer) => {
     // Create a networked update event
     const onDidUpdate = NetworkService.getNetworkEvent<boolean>(

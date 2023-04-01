@@ -20,7 +20,9 @@ class QuickVerseDataProviderEngine {
   /** Latest updated verse reference */
   latestVerseRef = 'john 11:35';
 
-  // Note: this method does not have to be provided here for it to work properly because it is layered over on the papi
+  // Note: this method does not have to be provided here for it to work properly because it is layered over on the papi.
+  // The contents of this method run before the update is emitted.
+  // TODO: What will actually happen if we run this in `get`? Stack overflow?
   forceUpdate() {
     logger.log(
       `Quick verse forceUpdate! latestVerseRef = ${this.latestVerseRef}`,
