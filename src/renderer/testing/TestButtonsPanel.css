@@ -20,3 +20,7 @@
   transform: scale(1.05);
   opacity: 1;
 }
+
+.scr-verse-text-area {
+  width: 85%;
+}

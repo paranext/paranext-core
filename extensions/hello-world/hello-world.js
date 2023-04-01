@@ -15,7 +15,7 @@ const getReactComponent = (name, functionModifier = '') =>
   const {
     react: {
       context: { TestContext },
-      hooks: { usePromise },
+      hooks: { useData, usePromise },
       components: { PButton }
     },
     logger
@@ -42,6 +42,8 @@ const getReactComponent = (name, functionModifier = '') =>
       }, []),
       'retrieving',
     );
+
+    const [verseText] = useData('quick-verse.quick-verse', 'John 11:35', 'Loading John 11:35');
 
     return createElement('div', null,
       createElement('div', null,
@@ -79,6 +81,9 @@ const getReactComponent = (name, functionModifier = '') =>
             },
             'Throw test exception'
           )
+      ),
+      createElement('div', null,
+        verseText
       )
     );
   }`;

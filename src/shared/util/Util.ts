@@ -36,6 +36,26 @@ export function isString(o: unknown): o is string {
 }
 
 /**
+ * Get a function that reduces calls to the function passed in
+ * @param fn The function to debounce
+ * @param delay How much delay before the most recent call to the debounced function to call the function
+ * @returns function that, when called, only calls the function passed in at maximum every delay ms
+ */
+// We don't know the parameter types since this function can be anything
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function debounce<T extends (...args: any[]) => void>(
+  fn: T,
+  delay = 300,
+): T {
+  if (isString(fn)) throw new Error('Tried to debounce a string! Could be XSS');
+  let timeout: ReturnType<typeof setTimeout>;
+  return ((...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), delay);
+  }) as T;
+}
+
+/**
  * Groups each item in the array of items into a map according to the keySelector
  * @param items array of items to group by
  * @param keySelector function to run on each item to get the key for the group to which it belongs

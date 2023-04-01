@@ -1,9 +1,9 @@
 import './TestButtonsPanel.css';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import usePromise from '@renderer/hooks/papi-hooks/usePromise';
 import papi from '@shared/services/papi';
 import * as NetworkService from '@shared/services/NetworkService';
-import { getErrorMessage, isString } from '@shared/util/Util';
+import { debounce, getErrorMessage, isString } from '@shared/util/Util';
 import logger from '@shared/util/logger';
 import { TabInfo } from '@shared/data/WebViewTypes';
 import { WebView, WebViewProps } from '@renderer/components/WebView';
@@ -176,6 +176,24 @@ function TestButtonsPanel() {
   );
 
   const [verseRef, setVerseRef] = useState<string>('John 11:35');
+  // Displayed verse ref while debouncing the actual verse ref
+  const [verseRefIntermediate, setVerseRefIntermediate] =
+    useState<string>(verseRef);
+  const setVerseRefDebounced = useMemo(
+    () =>
+      debounce((newVerseRef: string) => {
+        setVerseRef(newVerseRef);
+        setVerseRefIntermediate(newVerseRef);
+      }, 250),
+    [],
+  );
+  const updateVerseRef = useCallback(
+    (newVerseRef: string) => {
+      setVerseRefDebounced(newVerseRef);
+      setVerseRefIntermediate(newVerseRef);
+    },
+    [setVerseRefDebounced],
+  );
   // TODO: add two generic data types, one for set and one for get?
   const [verseTextBadType, setVerseText, verseTextIsLoading] = useData<
     string,
@@ -183,22 +201,18 @@ function TestButtonsPanel() {
   >('quick-verse.quick-verse', verseRef, 'Verse text goes here');
   const verseText = verseTextBadType as string;
 
-  // This ref will always be defined
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const verseInputRef = useRef<HTMLInputElement>(null!);
-
   return (
     <div className="buttons-panel">
       <div className="hello">
         <input
-          ref={verseInputRef}
-          value={verseRef}
+          value={verseRefIntermediate}
           onChange={(e) => {
-            setVerseRef(e.target.value);
+            updateVerseRef(e.target.value);
           }}
         />
         {verseTextIsLoading ? 'Loading verse' : 'Finished loading verse'}
         <textarea
+          className="scr-verse-text-area"
           value={verseText}
           onChange={(e) => {
             if (setVerseText)
