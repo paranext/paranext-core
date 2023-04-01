@@ -27,6 +27,13 @@ export type DataProviderListenerUpdate<TData> =
 // TODO: fix this interface's usage in DataProviderService so you can use arrow functions? https://stackoverflow.com/questions/35686850/determine-if-a-javascript-function-is-a-bound-function
 interface IDataProviderEngine<TSelector, TData> {
   /**
+   * Method to run to send clients updates outside of the `set` method.
+   * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `forceUpdate` method in the DataProviderEngine.
+   *
+   * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
+   */
+  forceUpdate?: () => void;
+  /**
    * Set a subset of data according to the selector.
    * Run by the data provider on set
    * @param selector tells the provider what subset of data is being set

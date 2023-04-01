@@ -137,6 +137,8 @@ function buildDataProvider<TSelector, TData>(
     networkObject: undefined,
   };
 
+  // Object whose methods to run first when the data provider's method is called if they exist here
+  // before falling back to the dataProviderEngine's methods
   const dataProviderInternal: IDataProvider<TSelector, TData> = {
     /** Layered set that emits an update event after running the engine's set */
     set: async (selector: TSelector, data: TData) => {
@@ -174,7 +176,7 @@ function buildDataProvider<TSelector, TData>(
 
       // Get the engine method and bind it
       const engineFunction =
-        obj[prop as keyof typeof obj].bind(dataProviderEngine);
+        obj[prop as keyof typeof obj]?.bind(dataProviderEngine);
 
       // Save the bound engine method on the data provider to be run later
       // There isn't indexing on IDataProviderEngine so normal objects could be used,
@@ -195,6 +197,8 @@ function buildDataProvider<TSelector, TData>(
  * Creates a data provider to be shared on the network layering over the provided data provider engine.
  * @param dataType type of data that this provider serves
  * @param dataProviderEngine the object to layer over with a new data provider object
+ *
+ * WARNING: this function mutates the provided dataProvideEngine object. Its `forceUpdate` method is layered over.
  * @returns information about the data provider including control over disposing of it.
  *  Note that this data provider is a new object distinct from the data provider engine passed in.
  * @type `TSelector` - the type of selector used to get some data from this provider.
@@ -227,6 +231,16 @@ async function registerEngine<TSelector, TData>(
   const onDidUpdateEmitter = NetworkService.createNetworkEventEmitter<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
+
+  // Layer over the data provider engine's forceUpdate with one that actually emits an update
+  const dpeForceUpdate = dataProviderEngine.forceUpdate
+    ? dataProviderEngine.forceUpdate.bind(dataProviderEngine)
+    : undefined;
+  dataProviderEngine.forceUpdate = () => {
+    if (dpeForceUpdate) dpeForceUpdate();
+    onDidUpdateEmitter.emit(true);
+  };
+
   // Build the data provider
   const dataProvider = buildDataProvider(
     dataProviderEngine,

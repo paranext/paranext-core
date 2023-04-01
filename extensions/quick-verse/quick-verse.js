@@ -20,6 +20,21 @@ class QuickVerseDataProviderEngine {
   /** Latest updated verse reference */
   latestVerseRef = 'john 11:35';
 
+  // Note: this method does not have to be provided here for it to work properly because it is layered over on the papi
+  forceUpdate() {
+    logger.log(
+      `Quick verse forceUpdate! latestVerseRef = ${this.latestVerseRef}`,
+    );
+  }
+
+  /**
+   * Valid selectors:
+   * - `'notify'` - informs the listener of any changes in quick verse text but does not carry data
+   * - `'latest'` - the latest-updated quick verse text including pulling a verse from the server and a heretic changing the verse
+   * - Scripture Reference strings. Ex: `'Romans 1:16'`
+   * @param {string} selector selector provided by user
+   * @returns selector for use internally
+   */
   getSelector(selector) {
     const selectorL = selector.toLowerCase();
     return selectorL === 'latest' ? this.latestVerseRef : selectorL;
@@ -77,6 +92,9 @@ class QuickVerseDataProviderEngine {
         const text = verseData.text.replace(/\n/g, '');
         responseVerse = { text };
         this.verses[this.getSelector(selector)] = responseVerse;
+        if (selector !== 'latest')
+          this.latestVerseRef = this.getSelector(selector);
+        this.forceUpdate();
       } catch (e) {
         responseVerse = {
           text: `Failed to fetch ${selector} from bible-api! Reason: ${e}`,
