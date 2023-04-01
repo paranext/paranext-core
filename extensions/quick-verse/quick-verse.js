@@ -12,9 +12,18 @@ const unsubscribers = [];
 class QuickVerseDataProviderEngine {
   /**
    * Verses stored by the Data Provider.
-   * Keys are Scripture References and whose values are { text: '<verse_text>', changed?: boolean }
+   * Keys are Scripture References.
+   * Values are { text: '<verse_text>', changed?: boolean }
    */
   verses = {};
+
+  /** Latest updated verse reference */
+  latestVerseRef = 'john 11:35';
+
+  getSelector(selector) {
+    const selectorL = selector.toLowerCase();
+    return selectorL === 'latest' ? this.latestVerseRef : selectorL;
+  }
 
   /**
    * @param {string} selector string Scripture reference
@@ -31,10 +40,15 @@ class QuickVerseDataProviderEngine {
     if (!data.heresy) return false;
 
     if (
-      !this.verses[selector.toLowerCase()] ||
-      data.text !== this.verses[selector.toLowerCase()].text
+      !this.verses[this.getSelector(selector)] ||
+      data.text !== this.verses[this.getSelector(selector)].text
     ) {
-      this.verses[selector.toLowerCase()] = { text: data.text, changed: true };
+      this.verses[this.getSelector(selector)] = {
+        text: data.text,
+        changed: true,
+      };
+      if (selector !== 'latest')
+        this.latestVerseRef = this.getSelector(selector);
       return true;
     }
 
@@ -48,19 +62,21 @@ class QuickVerseDataProviderEngine {
     // Just get notifications of updates with the 'notify' selector
     if (selector === 'notify') return undefined;
 
-    let responseVerse = this.verses[selector.toLowerCase()];
+    let responseVerse = this.verses[this.getSelector(selector)];
 
     // If we don't already have the verse cached, cache it
     if (!responseVerse) {
       // Fetch the verse, cache it, and return it
       try {
         const verseResponse = await papi.fetch(
-          `https://bible-api.com/${encodeURIComponent(selector)}`,
+          `https://bible-api.com/${encodeURIComponent(
+            this.getSelector(selector),
+          )}`,
         );
         const verseData = await verseResponse.json();
         const text = verseData.text.replace(/\n/g, '');
         responseVerse = { text };
-        this.verses[selector.toLowerCase()] = responseVerse;
+        this.verses[this.getSelector(selector)] = responseVerse;
       } catch (e) {
         responseVerse = {
           text: `Failed to fetch ${selector} from bible-api! Reason: ${e}`,

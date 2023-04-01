@@ -43,7 +43,7 @@ const getReactComponent = (name, functionModifier = '') =>
       'retrieving',
     );
 
-    const [verseText] = useData('quick-verse.quick-verse', 'John 11:35', 'Loading John 11:35');
+    const [latestVerseText] = useData('quick-verse.quick-verse', 'latest', 'Loading latest Scripture text...');
 
     return createElement('div', null,
       createElement('div', null,
@@ -83,7 +83,7 @@ const getReactComponent = (name, functionModifier = '') =>
           )
       ),
       createElement('div', null,
-        verseText
+        latestVerseText
       )
     );
   }`;
