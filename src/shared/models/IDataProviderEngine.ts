@@ -25,7 +25,6 @@ export type DataProviderListenerUpdate<TData> =
  * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
  * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
  */
-// TODO: fix this interface's usage in DataProviderService so you can use arrow functions? https://stackoverflow.com/questions/35686850/determine-if-a-javascript-function-is-a-bound-function
 interface IDataProviderEngine<TSelector, TGetData, TSetData> {
   /**
    * Method to run to send clients updates outside of the `set` method.

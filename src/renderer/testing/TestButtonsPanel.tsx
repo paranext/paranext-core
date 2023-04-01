@@ -10,6 +10,7 @@ import { WebView, WebViewProps } from '@renderer/components/WebView';
 import useEvent from '@renderer/hooks/papi-hooks/useEvent';
 import { AddWebViewEvent } from '@shared/services/WebViewService';
 import useData from '@renderer/hooks/papi-hooks/useData';
+import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
 
 const testBase: (message: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.test');
@@ -194,6 +195,24 @@ function TestButtonsPanel() {
     },
     [setVerseRefDebounced],
   );
+
+  // Test a method on a data provider engine that isn't on the interface to see if you can actually do this
+  const [hasTestedRandomMethod, setHasTestedRandomMethod] = useState(false);
+  const [greetingsDataProvider] = useDataProvider<
+    string,
+    string,
+    string | { text: string; heresy: boolean }
+  >('hello-someone.greetings');
+  if (!hasTestedRandomMethod && greetingsDataProvider)
+    greetingsDataProvider
+      // @ts-ignore ts(2339)
+      .testRandomMethod('from test buttons panel')
+      .then((result: string) => {
+        setHasTestedRandomMethod(true);
+        logger.log(result);
+        return result;
+      })
+      .catch(logger.error);
 
   const [verseText, setVerseText, verseTextIsLoading] = useData<
     string,

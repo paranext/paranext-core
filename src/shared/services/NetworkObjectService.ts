@@ -177,7 +177,6 @@ const set = async <T extends NetworkableObject>(
     NetworkService.registerRequestHandler(
       buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
       (functionName: string, ...args: unknown[]) =>
-        // TODO: try to figure out binding the function to the object if the function is not already bound so you can use class methods? https://stackoverflow.com/questions/35686850/determine-if-a-javascript-function-is-a-bound-function
         // Took the indexing off of NetworkableObject so normal objects could be used,
         // but now members can't be accessed by indexing in NetworkObjectService
         // TODO: fix it so it is indexable but can have specific members

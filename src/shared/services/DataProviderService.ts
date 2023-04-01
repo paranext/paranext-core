@@ -137,14 +137,15 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
     networkObject: undefined,
   };
 
+  /** Saved bound version of the data provider engine's set so we can call it from here */
+  const dpeSet = dataProviderEngine.set.bind(dataProviderEngine);
+
   // Object whose methods to run first when the data provider's method is called if they exist here
   // before falling back to the dataProviderEngine's methods
   const dataProviderInternal: IDataProvider<TSelector, TGetData, TSetData> = {
     /** Layered set that emits an update event after running the engine's set */
     set: async (selector, data) => {
-      const dpeSetResult = await dataProviderEngine.set.bind(
-        dataProviderEngine,
-      )(selector, data);
+      const dpeSetResult = await dpeSet(selector, data);
       if (dpeSetResult) onDidUpdateEmitter.emit(dpeSetResult);
       return dpeSetResult;
     },

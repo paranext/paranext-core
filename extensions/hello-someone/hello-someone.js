@@ -34,10 +34,18 @@ class GreetingsDataProviderEngine {
   /**
    * @param {string} selector
    */
-  async get(selector) {
+  get = async (selector) => {
     if (selector === '*') return this.people;
     return this.people[selector.toLowerCase()];
-  }
+  };
+
+  /** Test method to make sure people can use data providers' custom methods */
+  // eslint-disable-next-line class-methods-use-this
+  testRandomMethod = async (things) => {
+    const result = `Greetings data provider got testRandomMethod! ${things}`;
+    logger.log(result);
+    return result;
+  };
 }
 
 exports.activate = async () => {

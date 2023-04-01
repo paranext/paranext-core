@@ -1,14 +1,16 @@
-import { DataProviderSubscriberOptions } from '@shared/models/IDataProvider';
-import usePromise from '@renderer/hooks/papi-hooks/usePromise';
+import IDataProvider, {
+  DataProviderSubscriberOptions,
+} from '@shared/models/IDataProvider';
 import useEventAsync from '@renderer/hooks/papi-hooks/useEventAsync';
-import useEvent from '@renderer/hooks/papi-hooks/useEvent';
-import { useCallback, useMemo, useState } from 'react';
-import dataProviderService from '@shared/services/DataProviderService';
+import { useMemo, useState } from 'react';
 import { PEventAsync, PEventHandler } from '@shared/models/PEvent';
+import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
+import { isString } from '@shared/util/Util';
 
 /**
  * Subscribes to run a callback on a data provider's data with specified selector
- * @param dataType data type to get data provider for
+ * @param dataType string data type to get data provider for OR [dataProvider, isDisposed] result of useDataProvider if you
+ * want to consolidate and only get the data provider once.
  * @param selector tells the provider what data this listener is listening for
  * @param defaultValue the initial value to return while first awaiting the data
  *
@@ -23,7 +25,9 @@ import { PEventAsync, PEventHandler } from '@shared/models/PEvent';
  *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
  */
 function useData<TSelector, TGetData, TSetData>(
-  dataType: string,
+  dataType:
+    | string
+    | [IDataProvider<TSelector, TGetData, TSetData> | undefined, boolean],
   selector: TSelector,
   defaultValue: TGetData,
   subscriberOptions?: DataProviderSubscriberOptions,
@@ -31,22 +35,25 @@ function useData<TSelector, TGetData, TSetData>(
   // The data from the data provider at this selector
   const [data, setDataInternal] = useState<TGetData>(defaultValue);
 
-  // Get the data provider info for this data type
-  const [dataProviderInfo] = usePromise(
-    useCallback(
-      async () =>
-        dataProviderService.get<TSelector, TGetData, TSetData>(dataType),
-      [dataType],
-    ),
-    undefined,
-  );
+  // Check to see if they passed in the results of a useDataProvider hook
+  const didReceiveDataProvider = !isString(dataType);
 
-  // Disable this hook when the data provider is disposed
-  const [isDisposed, setIsDisposed] = useState<boolean>(false);
-  useEvent(
-    dataProviderInfo && !isDisposed ? dataProviderInfo.onDidDispose : undefined,
-    useCallback(() => setIsDisposed(true), []),
-  );
+  // Get the data provider info for this data type
+  // Note: do nothing if we received a data provider, but still run this hook. We must make sure to run the same number of hooks in all code paths)
+  let [dataProviderTemp, isDisposedTemp] = useDataProvider<
+    TSelector,
+    TGetData,
+    TSetData
+  >(!didReceiveDataProvider ? dataType : undefined);
+
+  // If we received the data provider, just use it
+  if (didReceiveDataProvider) {
+    [dataProviderTemp, isDisposedTemp] = dataType;
+  }
+
+  // Make const variables of the data provider so TypeScript knows they won't change
+  const dataProvider = dataProviderTemp;
+  const isDisposed = isDisposedTemp;
 
   // Indicates if the data with the selector is awaiting retrieval from the data provider
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -54,9 +61,9 @@ function useData<TSelector, TGetData, TSetData>(
   // Wrap subscribe so we can call it as a normal PEvent in useEvent
   const wrappedSubscribeEvent: PEventAsync<TGetData> | undefined = useMemo(
     () =>
-      dataProviderInfo && !isDisposed
+      dataProvider && !isDisposed
         ? async (eventCallback: PEventHandler<TGetData>) => {
-            const unsub = await dataProviderInfo.dataProvider.subscribe(
+            const unsub = await dataProvider.subscribe(
               selector,
               (subscriptionData) => {
                 eventCallback(subscriptionData);
@@ -73,21 +80,20 @@ function useData<TSelector, TGetData, TSetData>(
             };
           }
         : undefined,
-    [dataProviderInfo, selector, subscriberOptions, isDisposed],
+    [dataProvider, selector, subscriberOptions, isDisposed],
   );
 
   // Subscribe to the data provider
   useEventAsync(wrappedSubscribeEvent, setDataInternal);
 
-  // TODO: cache latest setStateAction and fire until we have dataProviderInfo instead of having setData be undefined until we have dataProviderInfo?
+  // TODO: cache latest setStateAction and fire until we have dataProvider instead of having setData be undefined until we have dataProvider?
   /** Send an update to the backend to update the data. Let the update handle actually updating our data here */
   const setData = useMemo(
     () =>
-      dataProviderInfo && !isDisposed
-        ? async (newData: TSetData) =>
-            dataProviderInfo.dataProvider.set(selector, newData)
+      dataProvider && !isDisposed
+        ? async (newData: TSetData) => dataProvider.set(selector, newData)
         : undefined,
-    [dataProviderInfo, selector, isDisposed],
+    [dataProvider, selector, isDisposed],
   );
 
   return [data, setData, isLoading];
