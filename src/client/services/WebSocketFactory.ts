@@ -12,7 +12,7 @@ import { IWebSocket } from './IWebSocket';
 // eslint-disable-next-line import/prefer-default-export
 export const createWebSocket = async (url: string): Promise<IWebSocket> => {
   if (isRenderer()) {
-    const Ws = (await import('@renderer/services/RendererWebSocket')).default;
+    const Ws = (await import('@renderer/services/renderer-web-socket.model')).default;
     return new Ws(url) as IWebSocket;
   }
   const Ws = (await import('@extension-host/services/ExtensionHostWebSocket')).default;

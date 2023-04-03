@@ -1,6 +1,6 @@
 import { Slider as MuiSlider } from '@mui/material';
 import { SyntheticEvent } from 'react';
-import '@renderer/components/papi-components/slider.css';
+import '@renderer/components/papi-components/slider.component.css';
 
 export type SliderProps = {
   /**
