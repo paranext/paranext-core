@@ -42,19 +42,14 @@ const config: StorybookConfig = {
           require('../.erb/configs/webpack.config.renderer.dev').default;
     // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { devServer, entry, output, ...rendererConfigSanitized } =
-      rendererConfig;
+    const { devServer, entry, output, ...rendererConfigSanitized } = rendererConfig;
 
     // Remove the Storybook Webpack rules that we already have our own rules for
     return mergeWithCustomize({
       customizeObject(wpConfig: object, rConfig: object, key: string) {
         if (key === 'module') {
           return mergeWithCustomize({
-            customizeArray(
-              wpModule: object[],
-              rModule: object[],
-              moduleKey: string,
-            ) {
+            customizeArray(wpModule: object[], rModule: object[], moduleKey: string) {
               if (moduleKey === 'rules') {
                 const wpRules = wpModule as RuleSetRule[];
                 const rRules = rModule as RuleSetRule[];
@@ -64,8 +59,7 @@ const config: StorybookConfig = {
                       !rule ||
                       !rule.test ||
                       (rule.test.toString() !== /\.css$/.toString() &&
-                        rule.test.toString() !==
-                          /\.(mjs|tsx?|jsx?)$/.toString()),
+                        rule.test.toString() !== /\.(mjs|tsx?|jsx?)$/.toString()),
                   ),
                   ...rRules,
                 ];
