@@ -4,7 +4,7 @@ import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
 import * as webViewService from '@shared/services/web-view.service';
 import logger from '@shared/services/logger.service';
-import App from './App';
+import App from './app.component';
 
 logger.info('Starting renderer');
 

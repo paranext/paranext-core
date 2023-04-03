@@ -1,6 +1,6 @@
 import { Slider as MuiSlider } from '@mui/material';
 import { SyntheticEvent } from 'react';
-import '@renderer/components/papi-components/slider.css';
+import '@renderer/components/papi-components/slider.component.css';
 
 export type SliderProps = {
   /**
@@ -62,11 +62,7 @@ export type SliderProps = {
    * @param value The new value.
    * @param activeThumb Index of the currently moved thumb.
    */
-  onChange?: (
-    event: Event,
-    value: number | number[],
-    activeThumb: number,
-  ) => void;
+  onChange?: (event: Event, value: number | number[], activeThumb: number) => void;
   /**
    * Callback function that is fired when the mouseup is triggered.
    * @param event The event source of the callback. Warning: This is a generic event not a change event.

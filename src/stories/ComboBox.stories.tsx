@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import ComboBox from '@renderer/components/papi-components/ComboBox';
+import ComboBox from '@renderer/components/papi-components/combo-box.component';
 
 const meta: Meta<typeof ComboBox> = {
   title: 'Basics/ComboBox',

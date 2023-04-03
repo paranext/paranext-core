@@ -1,7 +1,7 @@
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
-import './App.css';
-import ParanextDockLayout from '@renderer/components/docking/ParanextDockLayout';
-import TestContext from '@renderer/context/papi-context/TestContext';
+import './app.component.css';
+import ParanextDockLayout from '@renderer/components/docking/paranext-dock-layout.component';
+import TestContext from '@renderer/context/papi-context/test.context';
 
 function Hello() {
   return (

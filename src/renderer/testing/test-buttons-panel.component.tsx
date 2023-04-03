@@ -1,13 +1,13 @@
-import './TestButtonsPanel.css';
+import './test-buttons-panel.component.css';
 import { useCallback, useState } from 'react';
-import usePromise from '@renderer/hooks/papi-hooks/usePromise';
+import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 import papi from '@shared/services/papi.service';
 import * as networkService from '@shared/services/network.service';
 import { getErrorMessage, isString } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import { TabInfo } from '@shared/data/web-view.model';
-import { WebView, WebViewProps } from '@renderer/components/WebView';
-import useEvent from '@renderer/hooks/papi-hooks/useEvent';
+import { WebView, WebViewProps } from '@renderer/components/web-view.component';
+import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import { AddWebViewEvent } from '@shared/services/web-view.service';
 
 const testBase: (message: string) => Promise<string> =

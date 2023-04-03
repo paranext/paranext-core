@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
 import { ProcessType } from '@shared/global-this.model';
 import PEventEmitter from '@shared/models/p-event-emitter.model';
-import App from '@renderer/App';
+import App from '@renderer/app.component';
 
 // #region globalThis setup
 
@@ -27,15 +27,15 @@ jest.mock('@shared/services/network.service', () => ({
     onDidClientConnect: new PEventEmitter().event,
   },
 }));
-jest.mock('@renderer/hooks/papi-hooks/usePromise', () => ({
+jest.mock('@renderer/hooks/papi-hooks/use-promise.hook', () => ({
   __esModule: true,
   default: /** usePromise Mock */ () => ['mock', false],
 }));
-jest.mock('@renderer/hooks/papi-hooks/useEvent', () => ({
+jest.mock('@renderer/hooks/papi-hooks/use-event.hook', () => ({
   __esModule: true,
   default: /** useEvent Mock */ () => {},
 }));
-jest.mock('@renderer/components/docking/ParanextDockLayout', () => ({
+jest.mock('@renderer/components/docking/paranext-dock-layout.component', () => ({
   __esModule: true,
   default: /** ParanextDockLayout Mock */ () => undefined,
 }));

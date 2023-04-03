@@ -1,6 +1,6 @@
 import { Button as MuiButton } from '@mui/material';
 import { MouseEventHandler, PropsWithChildren } from 'react';
-import '@renderer/components/papi-components/button.css';
+import '@renderer/components/papi-components/button.component.css';
 
 export type ButtonProps = PropsWithChildren<{
   /**
