@@ -1,15 +1,15 @@
 import 'rc-dock/dist/rc-dock.css';
-import './ParanextDockLayout.css';
+import './paranext-dock-layout.component.css';
 import { newGuid } from '@shared/utils/util';
 import { SavedTabInfo, TabCreator, TabInfo } from '@shared/data/web-view.model';
 import DockLayout, { LayoutData, TabBase, TabData, TabGroup } from 'rc-dock';
-import testLayout from '@renderer/testing/testLayout';
-import createHelloPanel from '@renderer/testing/HelloPanel';
-import createButtonsPanel from '@renderer/testing/TestButtonsPanel';
-import createTabPanel from '@renderer/testing/TestPanel';
-import createErrorTab from './ErrorTab';
-import ParanextPanel from './ParanextPanel';
-import ParanextTabTitle from './ParanextTabTitle';
+import testLayout from '@renderer/testing/test-layout.data';
+import createHelloPanel from '@renderer/testing/hello-panel.component';
+import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
+import createTabPanel from '@renderer/testing/test-panel.component';
+import createErrorTab from './error-tab.component';
+import ParanextPanel from './paranext-panel.component';
+import ParanextTabTitle from './paranext-tab-title.component';
 
 // NOTE: 'card' is a built-in style. We can likely remove it when we
 // create a full theme for Paranext.
@@ -74,7 +74,7 @@ const groups: {
   },
 };
 
-function ParanextDockLayout() {
+export default function ParanextDockLayout() {
   return (
     <DockLayout
       groups={groups}
@@ -84,5 +84,3 @@ function ParanextDockLayout() {
     />
   );
 }
-
-export default ParanextDockLayout;

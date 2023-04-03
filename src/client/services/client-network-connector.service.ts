@@ -25,8 +25,8 @@ import {
 import { getErrorMessage } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import PEventEmitter from '@shared/models/p-event-emitter.model';
-import { createWebSocket } from '@client/services/WebSocketFactory';
-import { IWebSocket } from '@client/services/IWebSocket';
+import { createWebSocket } from '@client/services/web-socket.factory';
+import { IWebSocket } from '@client/services/i-web-socket.model';
 
 // #region local variables
 

@@ -2,7 +2,7 @@
  * Service that handles WebView-related operations
  */
 
-import { WebViewProps } from '@renderer/components/WebView';
+import { WebViewProps } from '@renderer/components/web-view.component';
 import { isRenderer } from '@shared/utils/internal-util';
 import { aggregateUnsubscriberAsyncs, CommandHandler } from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';

@@ -12,8 +12,9 @@ import INetworkConnector from '@shared/services/network-connector.model';
 // eslint-disable-next-line import/prefer-default-export
 export const createNetworkConnector = async (): Promise<INetworkConnector> => {
   if (isClient()) {
-    const ClientNetworkConnector = (await import('@client/services/ClientNetworkConnector'))
-      .default;
+    const ClientNetworkConnector = (
+      await import('@client/services/client-network-connector.service')
+    ).default;
     return new ClientNetworkConnector();
   }
   const ServerNetworkConnector = (await import('@main/services/ServerNetworkConnector')).default;
