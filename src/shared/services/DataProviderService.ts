@@ -82,7 +82,9 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
     const { getDataImmediately, receiveEqualUpdates } = subscriberOptions;
 
     /** The most recent data before the newest update. Used for deep comparison checks to prevent useless updates */
-    let dataPrevious: TGetData | undefined;
+    // Start this out as a new object so updates definitely run the callback (including if the data is undefined)
+    // TODO: create a cache for the data provider that holds data returned per selector and shares that cache here
+    let dataPrevious: TGetData = {} as TGetData;
 
     // Create a layer that lets us know if we received an update so we don't run the callback with old data
     let receivedUpdate = false;
@@ -109,6 +111,7 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
       // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
       if (!receivedUpdate) {
         receivedUpdate = true;
+        dataPrevious = data;
         callback(data);
       }
     }
@@ -216,6 +219,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   // Validate that the data provider engine has what it needs
   if (!dataProviderEngine.get || typeof dataProviderEngine.get !== 'function')
     throw new Error('Data provider engine does not have a get function');
+  // TODO: refactor code to allow a read-only data providers to not even provide set?
   if (!dataProviderEngine.set || typeof dataProviderEngine.set !== 'function')
     throw new Error('Data provider engine does not have a set function');
 

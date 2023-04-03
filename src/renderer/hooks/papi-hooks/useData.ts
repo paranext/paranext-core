@@ -40,20 +40,17 @@ function useData<TSelector, TGetData, TSetData>(
 
   // Get the data provider info for this data type
   // Note: do nothing if we received a data provider, but still run this hook. We must make sure to run the same number of hooks in all code paths)
-  let [dataProviderTemp, isDisposedTemp] = useDataProvider<
-    TSelector,
-    TGetData,
-    TSetData
-  >(!didReceiveDataProvider ? dataType : undefined);
+  let dataProviderHookTemp = useDataProvider<TSelector, TGetData, TSetData>(
+    !didReceiveDataProvider ? dataType : undefined,
+  );
 
   // If we received the data provider, just use it
   if (didReceiveDataProvider) {
-    [dataProviderTemp, isDisposedTemp] = dataType;
+    dataProviderHookTemp = dataType;
   }
 
   // Make const variables of the data provider so TypeScript knows they won't change
-  const dataProvider = dataProviderTemp;
-  const isDisposed = isDisposedTemp;
+  const [dataProvider, isDisposed] = dataProviderHookTemp;
 
   // Indicates if the data with the selector is awaiting retrieval from the data provider
   const [isLoading, setIsLoading] = useState<boolean>(true);

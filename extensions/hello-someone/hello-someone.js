@@ -85,34 +85,33 @@ exports.activate = async () => {
 
             // Attach handler for greetings-button
             const greetingsButton = document.getElementById("greetings-button");
-            greetingsButton.addEventListener("click", () => {
+            greetingsButton.addEventListener("click", async () => {
               const greetingsInput = document.getElementById('greetings-input');
-              greetingsDataProvider.get(greetingsInput.value.toLowerCase()).then((message) => {
-                const helloSomeoneOutput = document.getElementById("greetings-button-output");
-                helloSomeoneOutput.innerHTML = message;
-                print(message);
-              })
+              const greeting = await greetingsDataProvider.get(greetingsInput.value.toLowerCase());
+              const helloSomeoneOutput = document.getElementById("greetings-button-output");
+              helloSomeoneOutput.innerHTML = greeting;
+              print(greeting);
             });
-            greetingsButton.addEventListener("contextmenu", (e) => {
+            greetingsButton.addEventListener("contextmenu", async (e) => {
               e.preventDefault();
               const greetingsInput = document.getElementById('greetings-input');
               const name = greetingsInput.value.toLowerCase();
               const promises = new Array(10000);
               for (let i = 0; i < 10000; i += 1)
                 promises[i] = greetingsDataProvider.get(name);
-              Promise.all(promises).then(() => print('Done'))
+              await Promise.all(promises);
+              print('Done');
             });
 
             // Attach handler for set-greetings-button
             const setGreetingsButton = document.getElementById("set-greetings-button");
-            setGreetingsButton.addEventListener("click", () => {
+            setGreetingsButton.addEventListener("click", async () => {
               const greetingsInput = document.getElementById('greetings-input');
               const name = greetingsInput.value;
               const setGreetingsInput = document.getElementById('set-greetings-input');
-              greetingsDataProvider.set(name.toLowerCase(), setGreetingsInput.value).then((success) => {
-                const helloSomeoneOutput = document.getElementById("greetings-button-output");
-                helloSomeoneOutput.innerHTML = \`\${success ? 'Successfully' : 'Unsuccessfully'} set \${name}'s greeting!\`;
-              })
+              const success = await greetingsDataProvider.set(name.toLowerCase(), setGreetingsInput.value);
+              const helloSomeoneOutput = document.getElementById("greetings-button-output");
+              helloSomeoneOutput.innerHTML = \`\${success ? 'Successfully' : 'Unsuccessfully'} set \${name}'s greeting!\`;
             });
 
             // Update the 'all greetings' display on load and on greetings updates
