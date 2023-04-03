@@ -13,7 +13,7 @@ class QuickVerseDataProviderEngine {
   /**
    * Verses stored by the Data Provider.
    * Keys are Scripture References.
-   * Values are { text: '<verse_text>', changed?: boolean }
+   * Values are { text: '<verse_text>', isChanged?: boolean }
    */
   verses = {};
 
@@ -44,7 +44,7 @@ class QuickVerseDataProviderEngine {
 
   /**
    * @param {string} selector string Scripture reference
-   * @param {string} data { text: '<verse_text>', heresy: true } Must inform us that you are a heretic
+   * @param {string} data { text: '<verse_text>', isHeresy: true } Must inform us that you are a heretic
    */
   async set(selector, data) {
     // Just get notifications of updates with the 'notify' selector. Nothing to change
@@ -54,28 +54,25 @@ class QuickVerseDataProviderEngine {
     if (typeof data === 'string' || data instanceof String) return false;
 
     // Only heretics change Scripture, so you have to tell us you're a heretic
-    if (!data.heresy) return false;
+    if (!data.isHeresy) return false;
 
-    if (
-      !this.verses[this.getSelector(selector)] ||
-      data.text !== this.verses[this.getSelector(selector)].text
-    ) {
-      this.verses[this.getSelector(selector)] = {
-        text: data.text,
-        changed: true,
-      };
-      if (selector !== 'latest')
-        this.latestVerseRef = this.getSelector(selector);
-      return true;
-    }
+    // If there is no change in the verse text, don't update
+    if (data.text === this.verses[this.getSelector(selector)].text)
+      return false;
 
-    return false;
+    // Update the verse text, track the latest change, and send an update
+    this.verses[this.getSelector(selector)] = {
+      text: data.text,
+      isChanged: true,
+    };
+    if (selector !== 'latest') this.latestVerseRef = this.getSelector(selector);
+    return true;
   }
 
   /**
    * @param {string} selector
    */
-  async get(selector) {
+  get = async (selector) => {
     // Just get notifications of updates with the 'notify' selector
     if (selector === 'notify') return undefined;
 
@@ -91,9 +88,10 @@ class QuickVerseDataProviderEngine {
           )}`,
         );
         const verseData = await verseResponse.json();
-        const text = verseData.text.replace(/\n/g, '');
+        const text = verseData.text.replaceAll('\n', '');
         responseVerse = { text };
         this.verses[this.getSelector(selector)] = responseVerse;
+        // Cache the verse text, track the latest cached verse, and send an update
         if (selector !== 'latest')
           this.latestVerseRef = this.getSelector(selector);
         this.forceUpdate();
@@ -105,7 +103,7 @@ class QuickVerseDataProviderEngine {
     }
 
     return responseVerse.text;
-  }
+  };
 }
 
 exports.activate = async () => {

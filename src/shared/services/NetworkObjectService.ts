@@ -110,8 +110,8 @@ enum NetworkObjectRequestSubtype {
   Function = 'function',
 }
 
-/** Builds a request type for network requests for the specified network object id and request subtype */
-const buildNetworkObjectRequestType = (
+/** Gets a request type for network requests for the specified network object id and request subtype */
+const getNetworkObjectRequestType = (
   id: string,
   subtype: NetworkObjectRequestSubtype,
 ) => serializeRequestType(CATEGORY_NETWORK_OBJECT, `${id}.${subtype}`);
@@ -127,7 +127,7 @@ const getRemoteNetworkObjectFunctions = async (
 ): Promise<string[] | undefined> => {
   try {
     return await NetworkService.request<[], string[]>(
-      buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
+      getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
     );
   } catch (e) {
     // No processes are registered to handle this get request, meaning a network object with this id does not exist
@@ -168,14 +168,14 @@ const set = async <T extends NetworkableObject>(
   // Set up request handlers for this network object
   const unsubPromises = [
     NetworkService.registerRequestHandler(
-      buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
+      getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
       () =>
         Promise.resolve([
           // TODO: send the eligible functions over so we can reject function calls locally instead of asking the owning process if the function exists
         ]),
     ),
     NetworkService.registerRequestHandler(
-      buildNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
+      getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
       (functionName: string, ...args: unknown[]) =>
         // Took the indexing off of NetworkableObject so normal objects could be used,
         // but now members can't be accessed by indexing in NetworkObjectService
@@ -225,14 +225,14 @@ const set = async <T extends NetworkableObject>(
  * to be used on this process, this function is run, and the returned object is used as a base on which to set up a
  * NetworkObject for use on this process. This is useful for setting up network events on a network object.
  *
- * - param id - id of the network object to get
+ * - param `id` - id of the network object to get
  *
- * - param networkObjectContainer - holds a reference to the final proxied network object that is created (yes, this is self-referencing).
+ * - param `networkObjectContainer` - holds a reference to the final proxied network object that is created (yes, this is self-referencing).
  * Passed in to allow the local object to call network object methods.
  * Note: networkObjectContainer.networkObject is undefined on running createLocalObjectToProxy and is populated after createLocalObjectToProxy is run,
  * so please use networkObjectContainer.networkObject to reference the network object and do not destructure it in order to preserve the reference.
- *
- * -returns the local object to proxy into a network object.
+
+ * - returns the local object to proxy into a network object.
  *
  * @returns information about the object shared on the network with specified id if one exists, undefined otherwise.
  */
@@ -291,10 +291,7 @@ const get = async <T extends NetworkableObject>(
       // If the local network object doesn't have the property, build a request for it
       const requestFunction = (...args: unknown[]) =>
         NetworkService.request(
-          buildNetworkObjectRequestType(
-            id,
-            NetworkObjectRequestSubtype.Function,
-          ),
+          getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
           prop, // Name of function to run
           ...args, // Arguments to put into the function
         );

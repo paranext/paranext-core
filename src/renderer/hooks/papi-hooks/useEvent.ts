@@ -11,7 +11,7 @@ import { useEffect } from 'react';
  *  - If event is undefined, the callback will not be subscribed. Useful if the event is not yet available for example
  * @param eventHandler the callback to run when the event is emitted
  *
- *    WARNING: MUST BE WRAPPED IN A useCallback. The reference must not be updated every render
+ *    WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated every render
  */
 export default <T>(
   event: PEvent<T> | string | undefined,

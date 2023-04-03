@@ -201,7 +201,7 @@ function TestButtonsPanel() {
   const [greetingsDataProvider] = useDataProvider<
     string,
     string,
-    string | { text: string; heresy: boolean }
+    string | { text: string; isHeresy: boolean }
   >('hello-someone.greetings');
   if (!hasTestedRandomMethod && greetingsDataProvider)
     greetingsDataProvider
@@ -217,7 +217,7 @@ function TestButtonsPanel() {
   const [verseText, setVerseText, verseTextIsLoading] = useData<
     string,
     string,
-    string | { text: string; heresy: boolean }
+    string | { text: string; isHeresy: boolean }
   >('quick-verse.quick-verse', verseRef, 'Verse text goes here');
 
   return (
@@ -235,7 +235,7 @@ function TestButtonsPanel() {
           value={verseText}
           onChange={(e) => {
             if (setVerseText)
-              setVerseText({ text: e.target.value, heresy: true });
+              setVerseText({ text: e.target.value, isHeresy: true });
           }}
         />
         <button

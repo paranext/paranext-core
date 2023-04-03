@@ -9,51 +9,51 @@ logger.log('Hello Someone is importing!');
 
 const unsubscribers = [];
 
-class GreetingsDataProviderEngine {
-  people = {
-    bill: 'Hi, my name is Bill!',
-    kathy: 'Hello. My name is Kathy.',
-  };
+const people = {
+  bill: 'Hi, my name is Bill!',
+  kathy: 'Hello. My name is Kathy.',
+};
 
+const greetingsDataProviderEngine = {
   /**
    * @param {string} selector
    * @param {string} data
    */
-  async set(selector, data) {
+  set: async (selector, data) => {
     // Don't change everyone's greeting, you heathen!
     if (selector === '*') return false;
 
-    if (data !== this.people[selector.toLowerCase()]) {
-      this.people[selector.toLowerCase()] = data;
-      return true;
-    }
+    // If there is no change in the greeting, don't update
+    if (data === people[selector.toLowerCase()]) return false;
 
-    return false;
-  }
+    // Update the greeting and send an update
+    people[selector.toLowerCase()] = data;
+    return true;
+  },
 
   /**
    * @param {string} selector
    */
-  get = async (selector) => {
-    if (selector === '*') return this.people;
-    return this.people[selector.toLowerCase()];
-  };
+  get: async (selector) => {
+    if (selector === '*') return people;
+    return people[selector.toLowerCase()];
+  },
 
   /** Test method to make sure people can use data providers' custom methods */
   // eslint-disable-next-line class-methods-use-this
-  testRandomMethod = async (things) => {
+  testRandomMethod: async (things) => {
     const result = `Greetings data provider got testRandomMethod! ${things}`;
     logger.log(result);
     return result;
-  };
-}
+  },
+};
 
 exports.activate = async () => {
   logger.log('Hello Someone is activating!');
 
   const greetingsDataProviderInfo = papi.dataProvider.registerEngine(
     'hello-someone.greetings',
-    new GreetingsDataProviderEngine(),
+    greetingsDataProviderEngine,
   );
 
   papi.webViews.addWebView({
@@ -137,7 +137,7 @@ exports.activate = async () => {
               billAnyGreetingsUpdateCount += 1;
               const billAnyGreetingsUpdateCountDiv = document.getElementById("bill-any-greetings-update-count");
               billAnyGreetingsUpdateCountDiv.innerHTML = \`Any Greetings Updates (via Bill): \${billAnyGreetingsUpdateCount}\`;
-            }, { getDataImmediately: false, skipEqualUpdates: false });
+            }, { getDataImmediately: false, receiveEqualUpdates: true });
 
             // Update the greetings count on greetings updates
             let billGreetingsUpdateCount = -1;

@@ -9,10 +9,17 @@ export type DataProviderSubscriberOptions = {
    */
   getDataImmediately?: boolean;
   /**
-   * Whether to skip updates to the data that result in deeply equal data for this subscriber's selector
-   * @default true
+   * Whether to receive all updates to the data including ones that result in deeply equal data for this subscriber's selector.
+   * If `receiveEqualUpdates` is true and some data irrelevant to this selector updates (meaning the data associated with this
+   * selector does not change), the callback will be run anyway.
+   *
+   * For example, if your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3, your data at
+   * John 3:5 will not change. However, if `receiveEqualUpdates` is true, you will still receive an update because the data
+   * provider updated its data.
+   *
+   * @default false
    */
-  skipEqualUpdates?: boolean;
+  receiveEqualUpdates?: boolean;
 };
 
 /**

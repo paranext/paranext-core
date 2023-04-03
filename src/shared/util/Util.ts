@@ -38,7 +38,7 @@ export function isString(o: unknown): o is string {
 /**
  * Get a function that reduces calls to the function passed in
  * @param fn The function to debounce
- * @param delay How much delay before the most recent call to the debounced function to call the function
+ * @param delay How much delay in milliseconds after the most recent call to the debounced function to call the function
  * @returns function that, when called, only calls the function passed in at maximum every delay ms
  */
 // We don't know the parameter types since this function can be anything

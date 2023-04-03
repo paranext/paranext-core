@@ -25,8 +25,8 @@ const DATA_PROVIDER_LABEL = 'data';
 /** event type for data provider update event */
 const ON_DID_UPDATE = 'onDidUpdate';
 
-/** Builds the id for the data provider network object of the specified type */
-const buildDataProviderObjectId = (dataType: string) =>
+/** Gets the id for the data provider network object of the specified type */
+const getDataProviderObjectId = (dataType: string) =>
   `${dataType}-${DATA_PROVIDER_LABEL}`;
 
 /** Whether this service has finished setting up */
@@ -55,7 +55,7 @@ const initialize = () => {
 async function has(dataType: string): Promise<boolean> {
   await initialize();
 
-  return networkObjectService.has(buildDataProviderObjectId(dataType));
+  return networkObjectService.has(getDataProviderObjectId(dataType));
 }
 
 function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
@@ -75,11 +75,11 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
     // Default options
     const subscriberOptions = {
       getDataImmediately: true,
-      skipEqualUpdates: true,
+      receiveEqualUpdates: false,
       ...options,
     };
 
-    const { getDataImmediately, skipEqualUpdates } = subscriberOptions;
+    const { getDataImmediately, receiveEqualUpdates } = subscriberOptions;
 
     /** The most recent data before the newest update. Used for deep comparison checks to prevent useless updates */
     let dataPrevious: TGetData | undefined;
@@ -95,7 +95,7 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
       receivedUpdate = true;
 
       // Only update if the data is not deeply equal
-      if (!skipEqualUpdates || !deepEqual(dataPrevious, data)) {
+      if (receiveEqualUpdates || !deepEqual(dataPrevious, data)) {
         dataPrevious = data;
         callback(data);
       }
@@ -144,8 +144,8 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
   // before falling back to the dataProviderEngine's methods
   const dataProviderInternal: IDataProvider<TSelector, TGetData, TSetData> = {
     /** Layered set that emits an update event after running the engine's set */
-    set: async (selector, data) => {
-      const dpeSetResult = await dpeSet(selector, data);
+    set: async (...args) => {
+      const dpeSetResult = await dpeSet(...args);
       if (dpeSetResult) onDidUpdateEmitter.emit(dpeSetResult);
       return dpeSetResult;
     },
@@ -169,10 +169,6 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
 
       // If the data provider already has the method, run it
       if (prop in dataProviderInternal)
-        // There isn't indexing on IDataProvider so normal objects could be used,
-        // but now members can't be accessed by indexing in DataProviderService
-        // TODO: fix it so it is indexable but can have specific members
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return dataProviderInternal[prop as keyof typeof dataProviderInternal];
 
       // Get the engine method and bind it
@@ -187,7 +183,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
       (dataProviderInternal as any)[prop] = engineFunction;
       return engineFunction;
     },
-    // Type cast the data provider engine proxy because it is an IDataProvider although
+    // Type assert the data provider engine proxy because it is an IDataProvider although
     // Typescript can't figure it out
   }) as unknown as IDataProvider<TSelector, TGetData, TSetData>;
 
@@ -199,7 +195,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
  * @param dataType type of data that this provider serves
  * @param dataProviderEngine the object to layer over with a new data provider object
  *
- * WARNING: this function mutates the provided dataProvideEngine object. Its `forceUpdate` method is layered over.
+ * WARNING: this function mutates the provided dataProviderEngine object. Its `forceUpdate` method is layered over.
  * @returns information about the data provider including control over disposing of it.
  *  Note that this data provider is a new object distinct from the data provider engine passed in.
  * @type `TSelector` - the type of selector used to get some data from this provider.
@@ -226,7 +222,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   // We are good to go! Create the data provider
 
   // Get the object id for this data type
-  const dataProviderObjectId = buildDataProviderObjectId(dataType);
+  const dataProviderObjectId = getDataProviderObjectId(dataType);
 
   // Create a networked update event
   const onDidUpdateEmitter = NetworkService.createNetworkEventEmitter<boolean>(
@@ -276,7 +272,7 @@ async function get<TSelector, TGetData, TSetData>(
   await initialize();
 
   // Get the object id for this data type
-  const dataProviderObjectId = buildDataProviderObjectId(dataType);
+  const dataProviderObjectId = getDataProviderObjectId(dataType);
 
   // Get the network object for this data provider
   const networkObjectInfo = await networkObjectService.get<

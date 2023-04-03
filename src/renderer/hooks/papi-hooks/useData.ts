@@ -14,10 +14,10 @@ import { isString } from '@shared/util/Util';
  * @param selector tells the provider what data this listener is listening for
  * @param defaultValue the initial value to return while first awaiting the data
  *
- *    WARNING: MUST BE WRAPPED IN A useState, useMemo, etc. The reference must not be updated every render
+ *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
  * @param subscriberOptions various options to adjust how the subscriber emits updates
  *
- *    WARNING: MUST BE WRAPPED IN A useState, useMemo, etc. The reference must not be updated every render
+ *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
  * @returns [data, setData, isLoading]
  *  - `data`: the current value for the data from the data provider with the specified selector, either the defaultValue or the resolved data
  *  - `setData`: asynchronous function to request that the data provider update the data at this selector. Returns true if successful.
