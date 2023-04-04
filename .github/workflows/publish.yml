@@ -21,7 +21,7 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest]
         dotnet_version: [7.0.x]
-        node_version: [16.x]
+        node_version: [18.x]
 
     steps:
       - name: Checkout git repo
