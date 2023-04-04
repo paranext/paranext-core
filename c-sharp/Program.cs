@@ -8,40 +8,29 @@ namespace Paranext.DataProvider;
 
 public static class Program
 {
-    public static async Task Main( /* string[] args */
-    )
+    public static async Task Main()
     {
-        PapiClient connection = new();
+        Console.WriteLine("Paranext data provider starting up");
 
-        // Connect to the server
-        Console.WriteLine("Connecting...");
-        Task connectTask = connection.Connect();
-        await connectTask;
-        if (connectTask.Exception != null)
+        using (PapiClient papi = new())
         {
-            Console.Error.WriteLine("Error connecting:\n" + connectTask.Exception);
-            return;
+            if (!await papi.ConnectAsync())
+            {
+                Console.WriteLine("Paranext data provider could not connect");
+                return;
+            }
+
+            if (!await papi.RegisterRequestHandlerAsync(RequestType.AddOne, RequestAddOne))
+            {
+                Console.WriteLine("Paranext data provider could not register request handler");
+                return;
+            }
+
+            Console.WriteLine("Paranext data provider ready!");
+            papi.BlockUntilMessageHandlingComplete();
         }
-        Console.WriteLine("Paranext .NET connected");
 
-        ManualResetEventSlim messageHandlingIsComplete = new(false);
-        Thread messageHandlingThread =
-            new(
-                new ThreadStart(async () =>
-                {
-                    await connection.HandleMessages();
-                    messageHandlingIsComplete.Set();
-                })
-            );
-        messageHandlingThread.Start();
-
-        // Add request handlers
-        bool result = await connection.RegisterRequestHandler(RequestType.AddOne, RequestAddOne);
-        if (!result)
-            return;
-
-        messageHandlingIsComplete.Wait();
-        Console.WriteLine("Paranext .NET connection closed");
+        Console.WriteLine("Paranext data provider shutting down");
     }
 
     #region Request handlers
