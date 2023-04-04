@@ -1,0 +1,23 @@
+.papi-check-box {
+  background-color: transparent;
+}
+
+.papi-check-box.error {
+  color: #ff0000;
+}
+.papi-check-box.error:hover {
+  color: #ff0000;
+  background-color: rgba(255, 0, 0, 0.2);
+}
+.papi-check-box.paratext {
+  color: greenyellow;
+}
+.papi-check-box.paratext:hover {
+  background-color: rgba(0, 100, 0, 0.3);
+}
+.papi-check-box.paratext.bright {
+  color: darkgreen;
+}
+.papi-check-box.paratext.bright:hover {
+  background-color: rgba(173, 255, 47, 0.3);
+}
