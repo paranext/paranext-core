@@ -61,7 +61,7 @@ const onDidDisposeNetworkObjectEmitter = NetworkService.createNetworkEventEmitte
   'object:onDidDisposeNetworkObject',
 );
 /** Event that emits with network object id when that object is disposed */
-const onDidDisposeNetworkObject = onDidDisposeNetworkObjectEmitter.event;
+const onDidDisposeNetworkObject = onDidDisposeNetworkObjectEmitter.subscribe;
 
 // Dispose of local and remote network objects when we receive events telling us to do so
 onDidDisposeNetworkObject((id: string) => {
@@ -186,7 +186,7 @@ const set = async <T extends NetworkableObject>(
 
   const networkObjectInfo: NetworkObjectInfo<T> = {
     networkObject,
-    onDidDispose: networkObjectOnDidDisposeEmitter.event,
+    onDidDispose: networkObjectOnDidDisposeEmitter.subscribe,
   };
 
   // Set the network object locally
@@ -267,7 +267,7 @@ const get = async <T extends NetworkableObject>(
 
   const networkObjectInfo: NetworkObjectInfo<T> = {
     networkObject: remoteObject as T,
-    onDidDispose: networkObjectOnDidDisposeEmitter.event,
+    onDidDispose: networkObjectOnDidDisposeEmitter.subscribe,
   };
 
   // Save the network object locally

@@ -4,10 +4,12 @@ import PEventEmitter from '@shared/models/PEventEmitter';
 /**
  * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted.
  * Events on NetworkEventEmitters can be emitted across processes. They are coordinated between processes by their type.
- * Use eventEmitter.event(callback) to subscribe to the event.
- * Use eventEmitter.emit(event) to run the subscriptions.
- * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
- * but anyone can subscribe to the event.
+ *
+ * Use `eventEmitter.subscribe(callback)` to subscribe to the event.
+ * Use `eventEmitter.emit(event)` to run the subscriptions.
+ *
+ * Generally, this EventEmitter should be private, and its subscribe function should be public.
+ * That way, the emitter is not publicized, but anyone can subscribe to the event.
  *
  * WARNING: Do not use this class directly outside of NetworkService, or it will not do what you expect. Use NetworkService.createNetworkEventEmitter.
  *

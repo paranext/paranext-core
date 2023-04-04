@@ -24,7 +24,7 @@ jest.mock('@shared/services/NetworkService', () => ({
     createNetworkEventEmitter: () => {
       return new PEventEmitter();
     },
-    onDidClientConnect: new PEventEmitter().event,
+    onDidClientConnect: new PEventEmitter().subscribe,
   },
 }));
 jest.mock('@renderer/hooks/papi-hooks/usePromise', () => ({

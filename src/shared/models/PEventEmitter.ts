@@ -6,20 +6,14 @@ import { PEvent, PEventHandler } from '@shared/models/PEvent';
 
 /**
  * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
- * Use eventEmitter.event(callback) to subscribe to the event.
- * Use eventEmitter.emit(event) to run the subscriptions.
- * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
- * but anyone can subscribe to the event.
+ *
+ * Use `eventEmitter.subscribe(callback)` to subscribe to the event.
+ * Use `eventEmitter.emit(event)` to run the subscriptions.
+ *
+ * Generally, this EventEmitter should be private, and its subscribe function should be public.
+ * That way, the emitter is not publicized, but anyone can subscribe to the event.
  */
 class PEventEmitter<T> {
-  /**
-   * Subscribes a function to run when this event is emitted.
-   * @alias event
-   * @param callback function to run with the event when it is emitted
-   * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-   */
-  public subscribe = this.event;
-
   /** All callback functions that will run when this event is emitted. Lazy loaded */
   private subscriptions?: PEventHandler<T>[];
   /** Event for listeners to subscribe to. Lazy loaded */
@@ -29,11 +23,15 @@ class PEventEmitter<T> {
 
   /**
    * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
-   * Use like `const unsubscriber = event(callback)`
+   * Use like `const unsubscriber = subscribe(callback)`
+   *
+   * Generally, this subscribe function should be saved in a new public-facing variable.
+   *
+   * Ex: `export const onDidAddWebView = onDidAddWebViewEmitter.subscribe;`
    * @param callback function to run with the event when it is emitted
    * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
    */
-  public get event(): PEvent<T> {
+  public get subscribe(): PEvent<T> {
     this.assertNotDisposed();
 
     if (!this.lazyEvent) {

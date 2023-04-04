@@ -555,13 +555,13 @@ const onDidClientConnectEmitter = createNetworkEventEmitterUnsafe<ClientConnectE
   'network:onDidClientConnect',
 );
 /** Event that emits with clientId when a client connects */
-export const onDidClientConnect = onDidClientConnectEmitter.event;
+export const onDidClientConnect = onDidClientConnectEmitter.subscribe;
 /** Emitter for when clients disconnect. Provides clientId */
 const onDidClientDisconnectEmitter = createNetworkEventEmitterUnsafe<ClientDisconnectEvent>(
   'network:onDidClientDisconnect',
 );
 /** Event that emits with clientId when a client disconnects */
-export const onDidClientDisconnect = onDidClientDisconnectEmitter.event;
+export const onDidClientDisconnect = onDidClientDisconnectEmitter.subscribe;
 
 // #endregion
 
@@ -701,9 +701,10 @@ export const createNetworkEventEmitter = <T>(eventType: string): PEventEmitter<T
  */
 export const getNetworkEvent = <T>(eventType: string): PEvent<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
-  if (existingEmitter) return existingEmitter.emitter.event as PEvent<T>;
+  if (existingEmitter) return existingEmitter.emitter.subscribe as PEvent<T>;
   // We didn't find an existing emitter, so create one but don't mark it as registered because you can't emit the event from this function
-  return createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork, false).event as PEvent<T>;
+  return createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork, false)
+    .subscribe as PEvent<T>;
 };
 
 // #endregion

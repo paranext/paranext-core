@@ -34,7 +34,7 @@ let initializePromise: Promise<void> | undefined;
 const onDidAddWebViewEmitter =
   createNetworkEventEmitter<AddWebViewEvent>('webView:onDidAddWebView');
 /** Event that emits with webView info when a webView is added */
-export const onDidAddWebView = onDidAddWebViewEmitter.event;
+export const onDidAddWebView = onDidAddWebViewEmitter.subscribe;
 
 // #region Renderer-only stuff
 
