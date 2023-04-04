@@ -89,9 +89,9 @@ class PEventEmitter<T> {
   }
 
   /** Check to make sure this emitter is not disposed. Throw if it is */
-  protected assertNotDisposed = () => {
+  protected assertNotDisposed() {
     if (this.isDisposed) throw new Error('Emitter is disposed');
-  };
+  }
 
   /**
    * Disposes of this event, preparing it to release from memory.
