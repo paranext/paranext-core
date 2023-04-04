@@ -44,7 +44,7 @@ internal sealed class PapiClient : IDisposable
     public PapiClient()
     {
         _webSocket = new ClientWebSocket();
-        _messageHandlingThread = new(new ThreadStart(HandleMessages));
+        _messageHandlingThread = new(HandleMessages);
         _messageHandlersByMessageType[MessageType.Event] = new MessageHandlerEvent();
         _messageHandlersByMessageType[MessageType.Request] =
             new MessageHandlerRequestByRequestType();
@@ -71,19 +71,19 @@ internal sealed class PapiClient : IDisposable
 
     private void Dispose(bool isDisposing)
     {
-        if (!_isDisposed)
+        if (_isDisposed)
+            return;
+
+        if (isDisposing)
         {
-            if (isDisposing)
-            {
-                _webSocket.Dispose();
-                _cancellationTokenSource.Dispose();
-                _messageHandlingComplete.Dispose();
-            }
-
-            _messageHandlersForMyRequests.Clear();
-
-            _isDisposed = true;
+            _webSocket.Dispose();
+            _cancellationTokenSource.Dispose();
+            _messageHandlingComplete.Dispose();
         }
+
+        _messageHandlersForMyRequests.Clear();
+
+        _isDisposed = true;
     }
 
     #endregion
@@ -134,6 +134,8 @@ internal sealed class PapiClient : IDisposable
         // Start a graceful disconnection process before disposing
         _cancellationTokenSource.Cancel();
         _messageHandlingComplete.Set();
+        if (!_messageHandlingThread.Join(TimeSpan.FromSeconds(2)))
+            Console.Error.WriteLine("Message handling thread did not shut down properly");
         await _webSocket.CloseAsync(
             WebSocketCloseStatus.NormalClosure,
             string.Empty,
