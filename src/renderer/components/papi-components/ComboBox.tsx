@@ -35,7 +35,7 @@ export type ComboBoxProps = {
    */
   options?: readonly (string | { label: string })[];
   /**
-   * Additional css classes to help with unique styling of the button
+   * Additional css classes to help with unique styling of the combo box
    */
   className?: string;
   /**
