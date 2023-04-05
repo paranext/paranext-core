@@ -11,7 +11,7 @@ namespace Paranext.DataProvider.JsonUtils;
 /// </summary>
 internal sealed class MessageConverter : JsonConverter<Message>
 {
-    private static readonly JsonSerializerOptions s_recursiveSafeOptions =
+    private static readonly JsonSerializerOptions s_jsonOptions =
         SerializationOptions.CreateSerializationOptions();
     private static readonly Dictionary<Enum<MessageType>, Type> s_messageTypeMap = new();
     private static readonly Dictionary<Enum<EventType>, Type> s_eventTypeMap = new();
@@ -80,28 +80,25 @@ internal sealed class MessageConverter : JsonConverter<Message>
         if (reader.TokenType != JsonTokenType.StartObject)
             throw new JsonException("Not at start of JSON object");
 
-        Utf8JsonReader readerClone = reader; // Make copy of reader state (struct copy)
-
         // Find the right message type to deserialize
-        var messageType = ReadValue<MessageType>(ref readerClone, "type");
+        Enum<MessageType> messageType = ReadValue<MessageType>(reader, "type");
         if (!s_messageTypeMap.TryGetValue(messageType, out Type? messageDataType))
             throw new ArgumentException("Unexpected message type: " + messageType);
 
         // Provide a more specific type for event messages if we know about it
         if (messageDataType == typeof(MessageEvent))
         {
-            readerClone = reader; // Ordering of items in JSON isn't guaranteed
-            var eventType = ReadValue<EventType>(ref readerClone, "eventType");
+            Enum<EventType> eventType = ReadValue<EventType>(reader, "eventType");
             if (s_eventTypeMap.TryGetValue(eventType, out Type? eventMessageDataType))
                 messageDataType = eventMessageDataType;
-
-            readerClone = reader; // We'll need it again below
         }
 
-        var msg = (Message)
-            JsonSerializer.Deserialize(ref reader, messageDataType!, s_recursiveSafeOptions)!;
+        // Copy the current state of the reader because we might need it again
+        Utf8JsonReader readerClone = reader;
+
+        var msg = (Message)JsonSerializer.Deserialize(ref reader, messageDataType!, s_jsonOptions)!;
         if (msg is MessageEvent msgEvent)
-            msgEvent.Event = GetEventData(ref readerClone, msgEvent.EventContentsType);
+            msgEvent.Event = GetEventData(readerClone, msgEvent.EventContentsType);
         return msg;
     }
 
@@ -111,13 +108,13 @@ internal sealed class MessageConverter : JsonConverter<Message>
         JsonSerializerOptions options
     )
     {
-        JsonSerializer.Serialize(writer, message, message.GetType(), s_recursiveSafeOptions);
+        JsonSerializer.Serialize(writer, message, message.GetType(), s_jsonOptions);
     }
 
     /// <summary>
     /// Reads the property from the message given the specified reader
     /// </summary>
-    private static Enum<T> ReadValue<T>(ref Utf8JsonReader reader, string property)
+    private static Enum<T> ReadValue<T>(Utf8JsonReader reader, string property)
         where T : class, EnumType
     {
         do
@@ -147,7 +144,7 @@ internal sealed class MessageConverter : JsonConverter<Message>
     /// <summary>
     /// Deserializes the specific type for the "event" property from the given reader
     /// </summary>
-    private static dynamic? GetEventData(ref Utf8JsonReader reader, Type type)
+    private static dynamic? GetEventData(Utf8JsonReader reader, Type type)
     {
         do
         {
@@ -162,7 +159,7 @@ internal sealed class MessageConverter : JsonConverter<Message>
                 continue;
 
             reader.Read();
-            return JsonSerializer.Deserialize(ref reader, type, s_recursiveSafeOptions);
+            return JsonSerializer.Deserialize(ref reader, type, s_jsonOptions);
         } while (true);
 
         throw new JsonException("Could not find event data within event message");
