@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import CheckBox from '@renderer/components/papi-components/checkbox';
+import Checkbox from '@renderer/components/papi-components/checkbox';
 
-const meta: Meta<typeof CheckBox> = {
-  title: 'Basics/CheckBox',
-  component: CheckBox,
+const meta: Meta<typeof Checkbox> = {
+  title: 'Basics/Checkbox',
+  component: Checkbox,
   tags: ['autodocs'],
   argTypes: {
     isDisabled: { control: 'boolean' },
@@ -13,36 +13,42 @@ const meta: Meta<typeof CheckBox> = {
 };
 export default meta;
 
-type Story = StoryObj<typeof CheckBox>;
+type Story = StoryObj<typeof Checkbox>;
 
 export const Default: Story = {
   args: {},
 };
 
 export const DefaultChecked: Story = {
-  args: { defaultChecked: true },
+  args: { defaultChecked: true, labelText: 'Initially checked' },
 };
 
 export const Indeterminate: Story = {
-  args: { isIndeterminate: true },
+  args: {
+    isIndeterminate: true,
+    labelText:
+      'Clicking this does nothing. It would need isIndeterminate to be programmatically set to false.',
+  },
 };
 
 export const Disabled: Story = {
-  args: { isDisabled: true },
+  args: { isDisabled: true, labelText: 'This is disabled' },
 };
 
 export const ErrorState: Story = {
-  args: { hasError: true },
+  args: { hasError: true, labelText: 'Bad!' },
 };
 
 export const Paratext: Story = {
   args: {
+    labelText: 'Paratext',
     className: 'paratext',
   },
 };
 
 export const ParatextBright: Story = {
   args: {
+    labelText: 'Paratext Bright',
     className: 'paratext bright',
   },
 };

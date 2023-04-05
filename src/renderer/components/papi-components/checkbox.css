@@ -1,23 +1,23 @@
-.papi-check-box {
+.papi-checkbox {
   background-color: transparent;
 }
 
-.papi-check-box.error {
+.papi-checkbox.error {
   color: #ff0000;
 }
-.papi-check-box.error:hover {
+.papi-checkbox.error:hover {
   color: #ff0000;
   background-color: rgba(255, 0, 0, 0.2);
 }
-.papi-check-box.paratext {
+.papi-checkbox.paratext {
   color: greenyellow;
 }
-.papi-check-box.paratext:hover {
+.papi-checkbox.paratext:hover {
   background-color: rgba(0, 100, 0, 0.3);
 }
-.papi-check-box.paratext.bright {
+.papi-checkbox.paratext.bright {
   color: darkgreen;
 }
-.papi-check-box.paratext.bright:hover {
+.papi-checkbox.paratext.bright:hover {
   background-color: rgba(173, 255, 47, 0.3);
 }
