@@ -6,7 +6,7 @@ namespace TestParanextDataProvider.MessageHandlers;
 
 public class MessageHandlerEventTests
 {
-    [Fact]
+    [Test]
     public void HandleMessage_NoHandlers_NothingHappens()
     {
         MessageHandlerEvent mhe = new();
@@ -14,7 +14,7 @@ public class MessageHandlerEventTests
         VerifyResults(mhe.HandleMessage(TestMessage), 0);
     }
 
-    [Fact]
+    [Test]
     public void HandleMessage_OneHandler_RegistrationWorks()
     {
         MessageHandlerEvent mhe = new();
@@ -29,7 +29,7 @@ public class MessageHandlerEventTests
         VerifyResults(mhe.HandleMessage(TestMessage), 0);
     }
 
-    [Fact]
+    [Test]
     public void HandleMessage_SeveralHandlers_RegistrationWorks()
     {
         MessageHandlerEvent mhe = new();
@@ -53,12 +53,12 @@ public class MessageHandlerEventTests
     {
         if (expectedCount == 0)
         {
-            Assert.Null(messages);
+            Assert.That(messages, Is.Null);
             return;
         }
 
-        Assert.NotNull(messages);
-        Assert.Equal(expectedCount, messages.Count());
+        Assert.That(messages, Is.Not.Null);
+        Assert.That(messages.Count(), Is.EqualTo(expectedCount));
         List<string> messageContents = new();
         foreach (var msg in messages)
         {
@@ -67,7 +67,7 @@ public class MessageHandlerEventTests
         messageContents.Sort();
         for (int i = 0; i < expectedCount; i++)
         {
-            Assert.Equal((i + 1).ToString(), messageContents[i]);
+            Assert.That(messageContents[i], Is.EqualTo((i + 1).ToString()));
         }
     }
 
