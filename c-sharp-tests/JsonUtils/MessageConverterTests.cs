@@ -4,18 +4,10 @@ using System.Text.Json;
 
 namespace TestParanextDataProvider.MessageHandlers;
 
-public class MessageConverterTest
+public class MessageConverterTests
 {
-    private readonly MessageConverter messageConverter = new();
-    private readonly JsonSerializerOptions so = SerializationOptions.CreateSerializationOptions();
-
-    public MessageConverterTest()
-    {
-        so.Converters.Add(messageConverter);
-    }
-
     [Fact]
-    public void TestMessageEventClientConnect()
+    public void Deserialize_ClientConnect_StronglyTypedContentsAreCorrect()
     {
         string messageToDecode = """
             {"type":"event","eventType":"network:onDidClientConnect","senderId":0,"event":{"clientId":3,"didReconnect":false}}
@@ -26,7 +18,7 @@ public class MessageConverterTest
     }
 
     [Fact]
-    public void TestMessageEventClientDisconnect()
+    public void Deserialize_ClientDisconnect_StronglyTypedContentsAreCorrect()
     {
         string messageToDecode = """
             {"type":"event","eventType":"network:onDidClientDisconnect","senderId":0,"event":{"clientId":123}}
@@ -36,7 +28,7 @@ public class MessageConverterTest
     }
 
     [Fact]
-    public void TestMessageEventObjectDisposed()
+    public void Deserialize_ObjectDispose_StronglyTypedContentsAreCorrect()
     {
         string messageToDecode = """
             {"type":"event","eventType":"object:onDidDisposeNetworkObject","senderId":0,"event":"test-main"}
@@ -46,7 +38,7 @@ public class MessageConverterTest
     }
 
     [Fact]
-    public void TestMessageEventThatDoesNotExist()
+    public void Deserialize_UnknownEventType_ProducesMessageEvent()
     {
         string messageToDecode = """
             {"type":"event","eventType":"no-such-event","senderId":0,"event":"What type am I?"}
@@ -58,6 +50,8 @@ public class MessageConverterTest
     private MessageType DeserializeMessageEvent<MessageType>(string messageToDecode)
         where MessageType : MessageEvent
     {
+        JsonSerializerOptions so = JsonSerializerOptionsForTesting;
+
         var msg = JsonSerializer.Deserialize<MessageType>(messageToDecode, so);
         Assert.NotNull(msg);
         Assert.NotNull(msg.Event);
@@ -69,10 +63,21 @@ public class MessageConverterTest
 
         // Make sure that we get the same event contents when doing a round trip through serialization/deserialization
         if (msg.GetType() == typeof(MessageEvent))
-            Assert.Equal(msg.Event!.ToString(), msg2.Event!.ToString()); // Short cut to check equality of JsonElements
+            // Short cut to check equality of JsonElements
+            Assert.Equal(msg.Event!.ToString(), msg2.Event!.ToString());
         else
             Assert.Equal(msg.Event, msg2.Event);
 
         return msg;
+    }
+
+    private JsonSerializerOptions JsonSerializerOptionsForTesting
+    {
+        get
+        {
+            JsonSerializerOptions so = SerializationOptions.CreateSerializationOptions();
+            so.Converters.Add(new MessageConverter());
+            return so;
+        }
     }
 }
