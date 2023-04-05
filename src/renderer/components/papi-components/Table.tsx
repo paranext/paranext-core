@@ -12,9 +12,9 @@ import DataGrid, {
 } from 'react-data-grid';
 import { Key, UIEvent } from 'react';
 
-export type TableCellClickArgs<T = TableRow> = CellClickArgs<T>;
+export type TableCellClickArgs<T> = CellClickArgs<T>;
 export type TableCellKeyboardEvent = CellKeyboardEvent;
-export type TableCellKeyDownArgs<T = TableRow> = CellKeyDownArgs<T>;
+export type TableCellKeyDownArgs<T> = CellKeyDownArgs<T>;
 export type TableCellMouseEvent = CellMouseEvent;
 export type TableColumn = {
   /**
@@ -60,11 +60,10 @@ export type TableColumn = {
    */
   readonly sortDescendingFirst?: boolean;
 };
-export type TableCopyEvent<T = TableRow> = CopyEvent<T>;
-export type TableFillEvent<T = TableRow> = FillEvent<T>;
-export type TablePasteEvent<T = TableRow> = PasteEvent<T>;
-export type TableRow = {}; // Make default TRow type
-export type TableRowsChangeData<T = TableRow> = RowsChangeData<T>;
+export type TableCopyEvent<T> = CopyEvent<T>;
+export type TableFillEvent<T> = FillEvent<T>;
+export type TablePasteEvent<T> = PasteEvent<T>;
+export type TableRowsChangeData<T> = RowsChangeData<T>;
 export type TableSortColumn = SortColumn;
 
 // Subset of https://github.com/adazzle/react-data-grid#api
