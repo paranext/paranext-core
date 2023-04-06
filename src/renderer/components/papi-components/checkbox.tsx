@@ -44,6 +44,15 @@ export type CheckboxProps = {
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
 };
 
+/* function CheckboxContainer({ labelText? = '', isDisabled : boolean, hasError : boolean, children? }) {
+  return (
+    <FormLabel disabled={isDisabled} error={hasError}>
+      {children}
+      labelText
+    </FormLabel>
+  );
+} */
+
 /**
  * Primary UI component for user interaction
  */
@@ -57,18 +66,26 @@ function Checkbox({
   className,
   onChange,
 }: CheckboxProps) {
-  return (
+  const checkBox = (
+    <MuiCheckbox
+      checked={isChecked}
+      indeterminate={isIndeterminate}
+      defaultChecked={isDefaultChecked}
+      disabled={isDisabled}
+      className={`papi-checkbox ${hasError ? 'error' : ''} ${className ?? ''}`}
+      onChange={onChange}
+    />
+  );
+
+  return labelText ? (
     <FormLabel disabled={isDisabled} error={hasError}>
-      <MuiCheckbox
-        checked={isChecked}
-        indeterminate={isIndeterminate}
-        defaultChecked={isDefaultChecked}
-        disabled={isDisabled}
-        className={`papi-checkbox ${hasError ? 'error' : ''} ${className ?? ''}`}
-        onChange={onChange}
-      />
-      {labelText}
+      {checkBox}
+      <span className={`papi-checkbox-label ${hasError ? 'error' : ''} ${className ?? ''}`}>
+        {labelText}
+      </span>
     </FormLabel>
+  ) : (
+    { checkBox }
   );
 }
 
