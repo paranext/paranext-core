@@ -176,6 +176,8 @@ exports.activate = async () => {
                 logger.error(\`Could not get Scripture from bible-api! Reason: \${e}\`),
               );
           });
+
+          //# sourceURL=hello-world-webview.js
         </script>
       </body>
     </html>`,

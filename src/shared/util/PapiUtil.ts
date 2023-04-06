@@ -1,3 +1,6 @@
+// There is a React version 'fast-deep-equal/react' that I think allows comparing refs
+// (which have circular references in particular places that this library would ignore).
+// Maybe we can change to that version sometime if needed.
 import equal from 'fast-deep-equal';
 
 // #region Unsubscriber stuff

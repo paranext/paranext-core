@@ -9,12 +9,11 @@ logger.log('Hello Someone is importing!');
 
 const unsubscribers = [];
 
-const people = {
-  bill: 'Hi, my name is Bill!',
-  kathy: 'Hello. My name is Kathy.',
-};
-
 const greetingsDataProviderEngine = {
+  people: {
+    bill: 'Hi, my name is Bill!',
+    kathy: 'Hello. My name is Kathy.',
+  },
   /**
    * @param {string} selector
    * @param {string} data
@@ -24,19 +23,20 @@ const greetingsDataProviderEngine = {
     if (selector === '*') return false;
 
     // If there is no change in the greeting, don't update
-    if (data === people[selector.toLowerCase()]) return false;
+    if (data === greetingsDataProviderEngine.people[selector.toLowerCase()])
+      return false;
 
     // Update the greeting and send an update
-    people[selector.toLowerCase()] = data;
+    greetingsDataProviderEngine.people[selector.toLowerCase()] = data;
     return true;
   },
 
   /**
    * @param {string} selector
    */
-  get: async (selector) => {
-    if (selector === '*') return people;
-    return people[selector.toLowerCase()];
+  async get(selector) {
+    if (selector === '*') return this.people;
+    return this.people[selector.toLowerCase()];
   },
 
   /** Test method to make sure people can use data providers' custom methods */
@@ -128,7 +128,7 @@ exports.activate = async () => {
               anyGreetingsUpdateCount += 1;
               const anyGreetingsUpdateCountDiv = document.getElementById("any-greetings-update-count");
               anyGreetingsUpdateCountDiv.innerHTML = \`Any Greetings Updates: \${anyGreetingsUpdateCount}\`;
-            }, { getDataImmediately: false });
+            }, { retrieveDataImmediately: false });
 
             // Update the greetings count on greetings updates
             let billAnyGreetingsUpdateCount = 0;
@@ -136,7 +136,7 @@ exports.activate = async () => {
               billAnyGreetingsUpdateCount += 1;
               const billAnyGreetingsUpdateCountDiv = document.getElementById("bill-any-greetings-update-count");
               billAnyGreetingsUpdateCountDiv.innerHTML = \`Any Greetings Updates (via Bill): \${billAnyGreetingsUpdateCount}\`;
-            }, { getDataImmediately: false, receiveEqualUpdates: true });
+            }, { retrieveDataImmediately: false, whichUpdates: 'all' });
 
             // Update the greetings count on greetings updates
             let billGreetingsUpdateCount = -1;
@@ -150,6 +150,8 @@ exports.activate = async () => {
           if (document.readyState === 'loading')
             document.addEventListener("DOMContentLoaded", setupWebView);
           else setupWebView();
+
+          //# sourceURL=hello-someone-webview.js
         </script>
       </body>
     </html>`,

@@ -73,13 +73,13 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
       throw new Error("Somehow the data provider doesn't exist! Investigate");
 
     // Default options
-    const subscriberOptions = {
-      getDataImmediately: true,
-      receiveEqualUpdates: false,
+    const subscriberOptions: DataProviderSubscriberOptions = {
+      retrieveDataImmediately: true,
+      whichUpdates: 'deeply-equal',
       ...options,
     };
 
-    const { getDataImmediately, receiveEqualUpdates } = subscriberOptions;
+    const { retrieveDataImmediately, whichUpdates } = subscriberOptions;
 
     /** The most recent data before the newest update. Used for deep comparison checks to prevent useless updates */
     // Start this out as a new object so updates definitely run the callback (including if the data is undefined)
@@ -96,8 +96,8 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
       const data = await dataProviderContainer.networkObject.get(selector);
       receivedUpdate = true;
 
-      // Only update if the data is not deeply equal
-      if (receiveEqualUpdates || !deepEqual(dataPrevious, data)) {
+      // Only update if we should listen to all updates or the data is not deeply equal
+      if (whichUpdates === 'all' || !deepEqual(dataPrevious, data)) {
         dataPrevious = data;
         callback(data);
       }
@@ -105,7 +105,7 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
 
     const unsubscribe = onDidUpdate(callbackWithUpdate);
 
-    if (getDataImmediately) {
+    if (retrieveDataImmediately) {
       // Get the data to run the callback immediately so it has the data
       const data = await dataProviderContainer.networkObject.get(selector);
       // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
