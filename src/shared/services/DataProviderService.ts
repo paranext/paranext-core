@@ -125,6 +125,8 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
  * Wrap a data provider engine to create a data provider that handles subscriptions for it.
  *
  * Note: This should only run locally when you have the data provider engine. The remote data provider is pretty much just a network object
+ *
+ * WARNING: this function mutates the provided object. Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
  * @param dataProviderEngine provider engine that handles setting and getting data as well as informing which listeners should get what updates
  * @param onDidUpdateEmitter event emitter to use for informing subscribers of updates. The event just returns what set returns (should be true according to IDataProvider)
  * @returns data provider layering over the provided data provider engine
@@ -140,18 +142,38 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
     networkObject: undefined,
   };
 
-  /** Saved bound version of the data provider engine's set so we can call it from here */
-  const dpeSet = dataProviderEngine.set.bind(dataProviderEngine);
+  // Layer over data provider engine methods to give it control over emitting updates
+  // Layer over the data provider engine's notifyUpdate with one that actually emits an update
+  // or if the dpe doesn't have notifyUpdate, give it one
+  const dpeNotifyUpdate = dataProviderEngine.notifyUpdate
+    ? dataProviderEngine.notifyUpdate.bind(dataProviderEngine)
+    : undefined;
+  dataProviderEngine.notifyUpdate = (...args) => {
+    if (dpeNotifyUpdate) dpeNotifyUpdate(...args);
+    onDidUpdateEmitter.emit(true);
+  };
 
-  // Object whose methods to run first when the data provider's method is called if they exist here
-  // before falling back to the dataProviderEngine's methods
-  const dataProviderInternal: IDataProvider<TSelector, TGetData, TSetData> = {
+  // Layer over the data provider engine's set with one that actually emits an update if set returns true
+  if (dataProviderEngine.set) {
+    /** Saved bound version of the data provider engine's set so we can call it from here */
+    const dpeSet = dataProviderEngine.set.bind(dataProviderEngine);
     /** Layered set that emits an update event after running the engine's set */
-    set: async (...args) => {
+    dataProviderEngine.set = async (...args) => {
       const dpeSetResult = await dpeSet(...args);
       if (dpeSetResult) onDidUpdateEmitter.emit(dpeSetResult);
       return dpeSetResult;
-    },
+    };
+  }
+
+  // Object whose methods to run first when the data provider's method is called if they exist here
+  // before falling back to the dataProviderEngine's methods. Also stores bound versions of the dpe methods
+  // Currently, set is omitted because it may or may not be provided on the data provider engine, and we want to
+  // throw an exception if someone uses it without it being provided.
+  // TODO: update network objects so remote objects know when methods do not exist, then make IDataProvider.set optional
+  const dataProviderInternal: Omit<
+    IDataProvider<TSelector, TGetData, TSetData>,
+    'set'
+  > = {
     /** Layered get that runs the engine's get */
     get: dataProviderEngine.get.bind(dataProviderEngine),
     /** Subscribe to run the callback when data changes. Also immediately calls callback with the current value */
@@ -162,7 +184,12 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
   };
 
   // Update the dataProviderContainer so the local object can access the dataProvider appropriately
-  dataProviderContainer.networkObject = dataProviderInternal;
+  // See above for why dataProviderInternal does not have set and why it needs to be type asserted here for now
+  dataProviderContainer.networkObject = dataProviderInternal as IDataProvider<
+    TSelector,
+    TGetData,
+    TSetData
+  >;
 
   // Create a proxy that runs the data provider method if it exists or runs the engine method otherwise
   const dataProvider = new Proxy(dataProviderEngine, {
@@ -175,7 +202,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
         return dataProviderInternal[prop as keyof typeof dataProviderInternal];
 
       // Get the engine method and bind it
-      const engineFunction =
+      const engineMethod =
         obj[prop as keyof typeof obj]?.bind(dataProviderEngine);
 
       // Save the bound engine method on the data provider to be run later
@@ -183,8 +210,8 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
       // but now members can't be accessed by indexing in DataProviderService
       // TODO: fix it so it is indexable but can have specific members
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (dataProviderInternal as any)[prop] = engineFunction;
-      return engineFunction;
+      (dataProviderInternal as any)[prop] = engineMethod;
+      return engineMethod;
     },
     // Type assert the data provider engine proxy because it is an IDataProvider although
     // Typescript can't figure it out
@@ -198,7 +225,8 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
  * @param dataType type of data that this provider serves
  * @param dataProviderEngine the object to layer over with a new data provider object
  *
- * WARNING: this function mutates the provided dataProviderEngine object. Its `forceUpdate` method is layered over.
+ * WARNING: registering a dataProviderEngine mutates the provided object.
+ * Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
  * @returns information about the data provider including control over disposing of it.
  *  Note that this data provider is a new object distinct from the data provider engine passed in.
  * @type `TSelector` - the type of selector used to get some data from this provider.
@@ -219,9 +247,6 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   // Validate that the data provider engine has what it needs
   if (!dataProviderEngine.get || typeof dataProviderEngine.get !== 'function')
     throw new Error('Data provider engine does not have a get function');
-  // TODO: refactor code to allow a read-only data providers to not even provide set?
-  if (!dataProviderEngine.set || typeof dataProviderEngine.set !== 'function')
-    throw new Error('Data provider engine does not have a set function');
 
   // We are good to go! Create the data provider
 
@@ -232,15 +257,6 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   const onDidUpdateEmitter = NetworkService.createNetworkEventEmitter<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
-
-  // Layer over the data provider engine's forceUpdate with one that actually emits an update
-  const dpeForceUpdate = dataProviderEngine.forceUpdate
-    ? dataProviderEngine.forceUpdate.bind(dataProviderEngine)
-    : undefined;
-  dataProviderEngine.forceUpdate = () => {
-    if (dpeForceUpdate) dpeForceUpdate();
-    onDidUpdateEmitter.emit(true);
-  };
 
   // Build the data provider
   const dataProvider = buildDataProvider(

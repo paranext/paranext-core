@@ -12,6 +12,7 @@
       "@assets/*": ["../assets/*"],
       "@client/*": ["./client/*"],
       "@extension-host/*": ["./extension-host/*"],
+      "@extensions/*": ["../extensions/*"],
       "@main/*": ["./main/*"],
       "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],

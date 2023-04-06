@@ -11,6 +11,7 @@ import useEvent from '@renderer/hooks/papi-hooks/useEvent';
 import { AddWebViewEvent } from '@shared/services/WebViewService';
 import useData from '@renderer/hooks/papi-hooks/useData';
 import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
+import IDataProvider from '@shared/models/IDataProvider';
 
 const testBase: (message: string) => Promise<string> =
   NetworkService.createRequestFunction('electronAPI.env.test');
@@ -199,12 +200,12 @@ function TestButtonsPanel() {
   // Test a method on a data provider engine that isn't on the interface to see if you can actually do this
   const [hasTestedRandomMethod, setHasTestedRandomMethod] = useState(false);
   const [greetingsDataProvider] = useDataProvider<
-    string,
-    string,
-    string | { text: string; isHeresy: boolean }
+    IDataProvider<string, string, string>
   >('hello-someone.greetings');
   if (!hasTestedRandomMethod && greetingsDataProvider)
     greetingsDataProvider
+      // Could make this a GreetingsDataProvider type and have this method available,
+      // but this is about the only opportunity to demonstrate how to type `useDataProvider`
       // @ts-ignore ts(2339)
       .testRandomMethod('from test buttons panel')
       .then((result: string) => {

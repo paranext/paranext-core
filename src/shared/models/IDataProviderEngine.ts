@@ -28,26 +28,30 @@ export type DataProviderListenerUpdate<TData> =
 interface IDataProviderEngine<TSelector, TGetData, TSetData> {
   /**
    * Method to run to send clients updates outside of the `set` method.
-   * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `forceUpdate` method in the DataProviderEngine.
+   * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
    *
    * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
    */
-  forceUpdate?: () => void;
+  notifyUpdate?(): void;
   /**
    * Set a subset of data according to the selector.
-   * Run by the data provider on set
+   * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `set` method in the DataProviderEngine.
+   *
+   * Note: you could consider this data provider to be read-only if this method is not provided.
+   *
+   * WARNING: Do not run this recursively in its own `set` method! It will create as many updates as you run `set` methods.
    * @param selector tells the provider what subset of data is being set
    * @param data the data that determines what to set at the selector
    * @returns true if successfully set (will send updates), false otherwise (will not send updates)
    */
-  set: (selector: TSelector, data: TSetData) => Promise<boolean>;
+  set?(selector: TSelector, data: TSetData): Promise<boolean>;
   /**
    * Get a subset of data from the provider according to the selector.
    * Run by the data provider on get
    * @param selector tells the provider what subset of data to get
    * @returns the subset of data represented by the selector
    */
-  get: (selector: TSelector) => Promise<TGetData>;
+  get(selector: TSelector): Promise<TGetData>;
   /**
    * Generates data updates for each listener based on what was updated and what listeners are listening for.
    * Run by the data provider on set if the data was updated
@@ -56,10 +60,10 @@ interface IDataProviderEngine<TSelector, TGetData, TSetData> {
    * @returns array of update information for each listener including whether or not an update should be sent to that listener and what that update data is.
    *   Each index in this array should correspond to the same index in the listenerSelectors array
    */
-  generateUpdates: (
+  generateUpdates(
     setSelector: TSelector,
     listenerSelectors: TSelector[],
-  ) => Promise<DataProviderListenerUpdate<TGetData>[]>;
+  ): Promise<DataProviderListenerUpdate<TGetData>[]>;
 }
 
 export default IDataProviderEngine;

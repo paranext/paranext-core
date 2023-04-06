@@ -4,16 +4,28 @@ import { useCallback, useState } from 'react';
 import useEvent from '@renderer/hooks/papi-hooks/useEvent';
 import usePromise from '@renderer/hooks/papi-hooks/usePromise';
 
-function useDataProvider<TSelector, TGetData, TSetData>(
+/**
+ * Gets a data provider with specified data type
+ * @param dataType string data type to get data provider for
+ * @returns [dataProvider, isDisposed]
+ *  - `dataProvider`: data provider if it has been retrieved and is not disposed, undefined otherwise
+ *  - `isDisposed`: whether the data provider is disposed and is no longer available
+ *
+ * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
+ *  specifying your own types, or provide a custom data provider type
+ */
+// User of this hook must provide types. Cannot use `unknown` here unfortunately because TypeScript thinks we want
+// the implementing IDataProvider types to be unknown as well
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function useDataProvider<T extends IDataProvider<any, any, any>>(
   dataType: string | undefined,
-): [IDataProvider<TSelector, TGetData, TSetData> | undefined, boolean] {
+): [T | undefined, boolean] {
   // Get the data provider info for this data type
   const [dataProviderInfo] = usePromise(
     useCallback(
       async () =>
-        dataType
-          ? dataProviderService.get<TSelector, TGetData, TSetData>(dataType)
-          : undefined,
+        // Type assert here - the user of this hook must make sure to provide the correct type
+        dataType ? dataProviderService.get(dataType) : undefined,
       [dataType],
     ),
     undefined,
@@ -26,7 +38,12 @@ function useDataProvider<TSelector, TGetData, TSetData>(
     useCallback(() => setIsDisposed(true), []),
   );
 
-  return [dataProviderInfo?.dataProvider, isDisposed];
+  return [
+    (dataProviderInfo && !isDisposed
+      ? dataProviderInfo.dataProvider
+      : undefined) as T | undefined,
+    isDisposed,
+  ];
 }
 
 export default useDataProvider;

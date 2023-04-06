@@ -49,7 +49,9 @@ export type DataProviderSubscriber<TSelector, TGetData> = (
  */
 interface IDataProvider<TSelector, TGetData, TSetData> {
   /**
-   * Set a subset of data according to the selector
+   * Set a subset of data according to the selector.
+   *
+   * Note: if a data provider engine does not provide `set` (possibly indicating it is read-only), this will throw an exception.
    * @param selector tells the provider what subset of data is being set
    * @param data the data that determines what to set at the selector
    * @returns true if successfully set (will send updates), false otherwise (will not send updates)

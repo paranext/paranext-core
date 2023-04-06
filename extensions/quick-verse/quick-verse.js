@@ -23,9 +23,9 @@ class QuickVerseDataProviderEngine {
   // Note: this method does not have to be provided here for it to work properly because it is layered over on the papi.
   // The contents of this method run before the update is emitted.
   // TODO: What will actually happen if we run this in `get`? Stack overflow?
-  forceUpdate() {
+  notifyUpdate() {
     logger.log(
-      `Quick verse forceUpdate! latestVerseRef = ${this.latestVerseRef}`,
+      `Quick verse notifyUpdate! latestVerseRef = ${this.latestVerseRef}`,
     );
   }
 
@@ -37,7 +37,7 @@ class QuickVerseDataProviderEngine {
    * @param {string} selector selector provided by user
    * @returns selector for use internally
    */
-  getSelector(selector) {
+  #getSelector(selector) {
     const selectorL = selector.toLowerCase();
     return selectorL === 'latest' ? this.latestVerseRef : selectorL;
   }
@@ -46,6 +46,7 @@ class QuickVerseDataProviderEngine {
    * @param {string} selector string Scripture reference
    * @param {string} data { text: '<verse_text>', isHeresy: true } Must inform us that you are a heretic
    */
+  // Note: this method gets layered over so that you can run `this.set` in the data provider engine, and it will notify update afterward.
   async set(selector, data) {
     // Just get notifications of updates with the 'notify' selector. Nothing to change
     if (selector === 'notify') return false;
@@ -57,16 +58,26 @@ class QuickVerseDataProviderEngine {
     if (!data.isHeresy) return false;
 
     // If there is no change in the verse text, don't update
-    if (data.text === this.verses[this.getSelector(selector)].text)
+    if (data.text === this.verses[this.#getSelector(selector)].text)
       return false;
 
     // Update the verse text, track the latest change, and send an update
-    this.verses[this.getSelector(selector)] = {
+    this.verses[this.#getSelector(selector)] = {
       text: data.text,
       isChanged: true,
     };
-    if (selector !== 'latest') this.latestVerseRef = this.getSelector(selector);
+    if (selector !== 'latest')
+      this.latestVerseRef = this.#getSelector(selector);
     return true;
+  }
+
+  /**
+   * Example of layering over set inside a data provider. This updates the verse text and sends an update event
+   * @param {*} verseRef verse reference to change
+   * @param {*} verseText text to update the verse to, you heretic
+   */
+  async setHeresy(verseRef, verseText) {
+    return this.set(verseRef, { text: verseText, isHeresy: true });
   }
 
   /**
@@ -76,7 +87,7 @@ class QuickVerseDataProviderEngine {
     // Just get notifications of updates with the 'notify' selector
     if (selector === 'notify') return undefined;
 
-    let responseVerse = this.verses[this.getSelector(selector)];
+    let responseVerse = this.verses[this.#getSelector(selector)];
 
     // If we don't already have the verse cached, cache it
     if (!responseVerse) {
@@ -84,17 +95,17 @@ class QuickVerseDataProviderEngine {
       try {
         const verseResponse = await papi.fetch(
           `https://bible-api.com/${encodeURIComponent(
-            this.getSelector(selector),
+            this.#getSelector(selector),
           )}`,
         );
         const verseData = await verseResponse.json();
         const text = verseData.text.replaceAll('\n', '');
         responseVerse = { text };
-        this.verses[this.getSelector(selector)] = responseVerse;
+        this.verses[this.#getSelector(selector)] = responseVerse;
         // Cache the verse text, track the latest cached verse, and send an update
         if (selector !== 'latest')
-          this.latestVerseRef = this.getSelector(selector);
-        this.forceUpdate();
+          this.latestVerseRef = this.#getSelector(selector);
+        this.notifyUpdate();
       } catch (e) {
         responseVerse = {
           text: `Failed to fetch ${selector} from bible-api! Reason: ${e}`,
