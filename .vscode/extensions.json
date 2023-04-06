@@ -4,8 +4,8 @@
     "dbaeumer.vscode-eslint",
     "editorconfig.editorconfig",
     "esbenp.prettier-vscode",
-    "formulahendry.dotnet-test-explorer"
+    "formulahendry.dotnet-test-explorer",
     "mrmlnc.vscode-json5",
-    "streetsidesoftware.code-spell-checker",
+    "streetsidesoftware.code-spell-checker"
   ]
 }
