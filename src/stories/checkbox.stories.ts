@@ -6,7 +6,10 @@ const meta: Meta<typeof Checkbox> = {
   component: Checkbox,
   tags: ['autodocs'],
   argTypes: {
+    isChecked: { control: 'boolean' },
+    isDefaultChecked: { control: 'boolean' },
     isDisabled: { control: 'boolean' },
+    isIndeterminate: { control: 'boolean' },
     hasError: { control: 'boolean' },
     className: { control: 'text' },
   },
@@ -20,7 +23,7 @@ export const Default: Story = {
 };
 
 export const DefaultChecked: Story = {
-  args: { defaultChecked: true, labelText: 'Initially checked' },
+  args: { isDefaultChecked: true, labelText: 'Initially checked' },
 };
 
 export const Indeterminate: Story = {
