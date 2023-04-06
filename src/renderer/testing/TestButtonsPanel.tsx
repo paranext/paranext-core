@@ -202,7 +202,7 @@ function TestButtonsPanel() {
   const [greetingsDataProvider] = useDataProvider<
     IDataProvider<string, string, string>
   >('hello-someone.greetings');
-  if (!hasTestedRandomMethod && greetingsDataProvider)
+  if (!hasTestedRandomMethod && greetingsDataProvider) {
     greetingsDataProvider
       // Could make this a GreetingsDataProvider type and have this method available,
       // but this is about the only opportunity to demonstrate how to type `useDataProvider`
@@ -210,10 +210,22 @@ function TestButtonsPanel() {
       .testRandomMethod('from test buttons panel')
       .then((result: string) => {
         setHasTestedRandomMethod(true);
-        logger.log(result);
+        logger.info(result);
         return result;
       })
       .catch(logger.error);
+
+    // Test to make sure we literally can't run updates from outside the data provider
+    // @ts-ignore ts(2339)
+    greetingsDataProvider
+      .notifyUpdate()
+      .then((e: string) =>
+        logger.error(`Remote notify update succeeded! Bad ${e}`),
+      )
+      .catch((e: string) =>
+        logger.debug(`Remote notify update failed! Good ${e}`),
+      );
+  }
 
   const [verseText, setVerseText, verseTextIsLoading] = useData<
     string,

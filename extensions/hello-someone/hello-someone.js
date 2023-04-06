@@ -43,7 +43,7 @@ const greetingsDataProviderEngine = {
   // eslint-disable-next-line class-methods-use-this
   testRandomMethod: async (things) => {
     const result = `Greetings data provider got testRandomMethod! ${things}`;
-    logger.log(result);
+    logger.info(result);
     return result;
   },
 };

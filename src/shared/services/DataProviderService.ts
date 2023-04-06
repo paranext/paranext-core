@@ -197,6 +197,12 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
       // Pass promises through
       if (prop === 'then') return obj[prop as keyof typeof obj];
 
+      // Do not let anyone but the data provider engine send updates
+      if (prop === 'notifyUpdate')
+        throw new Error(
+          'Cannot run notifyUpdate outside of data provider engine',
+        );
+
       // If the data provider already has the method, run it
       if (prop in dataProviderInternal)
         return dataProviderInternal[prop as keyof typeof dataProviderInternal];
