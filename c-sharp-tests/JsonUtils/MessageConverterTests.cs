@@ -7,6 +7,16 @@ namespace TestParanextDataProvider.JsonUtils;
 public class MessageConverterTests
 {
     [Test]
+    public void Deserialize_Event_SenderIdIsCorrect()
+    {
+        string messageToDecode = """
+            {"type":"event","eventType":"does-not-matter","senderId":12345,"event":{"also-does-not-matter":""}}
+            """;
+        var msg = DeserializeMessageEvent<MessageEvent>(messageToDecode);
+        Assert.That(msg.SenderId, Is.EqualTo(12345));
+    }
+
+    [Test]
     public void Deserialize_ClientConnect_StronglyTypedContentsAreCorrect()
     {
         string messageToDecode = """
