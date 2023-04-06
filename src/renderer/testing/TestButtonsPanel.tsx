@@ -215,9 +215,9 @@ function TestButtonsPanel() {
       })
       .catch(logger.error);
 
-    // Test to make sure we literally can't run updates from outside the data provider
-    // @ts-ignore ts(2339)
     greetingsDataProvider
+      // Test to make sure we literally can't run updates from outside the data provider
+      // @ts-ignore ts(2339)
       .notifyUpdate()
       .then((e: string) =>
         logger.error(`Remote notify update succeeded! Bad ${e}`),
