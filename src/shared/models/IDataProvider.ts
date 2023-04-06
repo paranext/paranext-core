@@ -7,19 +7,22 @@ export type DataProviderSubscriberOptions = {
    * Whether to immediately retrieve the data for this subscriber and run the callback as soon as possible
    * @default true
    */
-  getDataImmediately?: boolean;
+  retrieveDataImmediately?: boolean;
   /**
-   * Whether to receive all updates to the data including ones that result in deeply equal data for this subscriber's selector.
-   * If `receiveEqualUpdates` is true and some data irrelevant to this selector updates (meaning the data associated with this
-   * selector does not change), the callback will be run anyway.
+   * Under which conditions to run the callback when we receive updates to the data.
+   *  - `'deeply-equal'` - only run the update callback when the data at this selector has changed.
    *
-   * For example, if your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3, your data at
-   * John 3:5 will not change. However, if `receiveEqualUpdates` is true, you will still receive an update because the data
-   * provider updated its data.
+   *    For example, suppose your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3. Your data
+   *    at John 3:5 does not change, and your callback will not run.
+   *  - `'all'` - run the update callback every time the data has been updated whether or not the data
+   *    at this selector has changed.
    *
-   * @default false
+   *    For example, suppose your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3. Your data
+   *    at John 3:5 does not change, but your callback will run again with the same data anyway.
+   *
+   * @default 'deeply-equal'
    */
-  receiveEqualUpdates?: boolean;
+  whichUpdates?: 'deeply-equal' | 'all';
 };
 
 /**
