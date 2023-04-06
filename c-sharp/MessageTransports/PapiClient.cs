@@ -362,13 +362,9 @@ internal sealed class PapiClient : IDisposable
 
             if (_messageHandlersByMessageType.TryGetValue(message.Type, out var messageHandler))
             {
-                var messagesToSend = messageHandler.HandleMessage(message);
-                if (messagesToSend != null)
+                foreach (var messageToSend in messageHandler.HandleMessage(message))
                 {
-                    foreach (var m in messagesToSend)
-                    {
-                        await SendMessageAsync(m, _cancellationTokenSource.Token);
-                    }
+                    await SendMessageAsync(messageToSend, _cancellationTokenSource.Token);
                 }
             }
             else
@@ -390,13 +386,9 @@ internal sealed class PapiClient : IDisposable
         // Remove, don't just get, the response handler since the request is complete
         if (_messageHandlersForMyRequests.TryRemove(response.RequestId, out var messageHandler))
         {
-            var messagesToSend = messageHandler.HandleMessage(response);
-            if (messagesToSend != null)
+            foreach (var messageToSend in messageHandler.HandleMessage(response))
             {
-                foreach (var m in messagesToSend)
-                {
-                    await SendMessageAsync(m, _cancellationTokenSource.Token);
-                }
+                await SendMessageAsync(messageToSend, _cancellationTokenSource.Token);
             }
         }
         else

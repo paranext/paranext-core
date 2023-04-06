@@ -21,7 +21,7 @@ internal class MessageHandlerRequestByRequestType : IMessageHandler
         _handlersByRequestType[requestType] = handler;
     }
 
-    public IEnumerable<Message>? HandleMessage(Message message)
+    public IEnumerable<Message> HandleMessage(Message message)
     {
         if (message == null)
             throw new ArgumentNullException(nameof(message));
@@ -33,33 +33,27 @@ internal class MessageHandlerRequestByRequestType : IMessageHandler
         if (!_handlersByRequestType.TryGetValue(request.RequestType, out RequestHandler? handler))
         {
             Console.Error.WriteLine($"Unable to process request type: {request.RequestType}");
-            return null;
+            yield break;
         }
 
-        List<Message> messageList = new();
         var response = handler(request.Contents);
         if (response.Success)
         {
-            messageList.Add(
-                new MessageResponse(
-                    request.RequestType,
-                    request.RequestId,
-                    request.SenderId,
-                    response.Contents
-                )
+            yield return new MessageResponse(
+                request.RequestType,
+                request.RequestId,
+                request.SenderId,
+                response.Contents
             );
         }
         else
         {
-            messageList.Add(
-                new MessageResponse(
-                    request.RequestType,
-                    request.RequestId,
-                    request.SenderId,
-                    response.ErrorMessage
-                )
+            yield return new MessageResponse(
+                request.RequestType,
+                request.RequestId,
+                request.SenderId,
+                response.ErrorMessage
             );
         }
-        return messageList;
     }
 }

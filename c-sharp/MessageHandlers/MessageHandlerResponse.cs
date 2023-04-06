@@ -21,7 +21,7 @@ internal class MessageHandlerResponse : IMessageHandler
 
     private static void DoNothing(bool success, dynamic? message) { }
 
-    public IEnumerable<Message>? HandleMessage(Message message)
+    public IEnumerable<Message> HandleMessage(Message message)
     {
         if (message == null)
             throw new ArgumentNullException(nameof(message));
@@ -38,6 +38,6 @@ internal class MessageHandlerResponse : IMessageHandler
             );
 
         _messageProcessingCallback(response.Success, response.Contents);
-        return null;
+        yield break;
     }
 }

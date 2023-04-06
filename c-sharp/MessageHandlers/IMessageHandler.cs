@@ -9,5 +9,5 @@ internal interface IMessageHandler
     /// </summary>
     /// <param name="message">Incoming message to handle</param>
     /// <returns>Optional responses to the incoming message</returns>
-    public IEnumerable<Message>? HandleMessage(Message message);
+    public IEnumerable<Message> HandleMessage(Message message);
 }

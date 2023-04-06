@@ -49,7 +49,7 @@ internal class MessageHandlerEvent : IMessageHandler
         }
     }
 
-    public IEnumerable<Message>? HandleMessage(Message message)
+    public IEnumerable<Message> HandleMessage(Message message)
     {
         if (message == null)
             throw new ArgumentNullException(nameof(message));
@@ -64,21 +64,18 @@ internal class MessageHandlerEvent : IMessageHandler
         lock (_handlersLock)
         {
             if (!_handlers.TryGetValue(evt.EventType, out PapiEventHandler? handlersForEventType))
-                return null;
+                yield break;
 
             // The returned array and the functions in it will not change after this call
             // even if Register/Unregister is called while we are invoking the handlers
             handlersToRun = handlersForEventType.GetInvocationList();
         }
 
-        List<Message> messages = new();
         foreach (var handler in handlersToRun)
         {
             var msg = handler.DynamicInvoke(evt);
             if (msg != null)
-                messages.Add((Message)msg);
+                yield return (Message)msg;
         }
-
-        return (messages.Count > 0) ? messages : null;
     }
 }

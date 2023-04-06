@@ -49,16 +49,13 @@ public class MessageHandlerEventTests
         VerifyResults(mhe.HandleMessage(TestMessage), 3);
     }
 
-    private static void VerifyResults(IEnumerable<Message>? messages, int expectedCount)
+    private static void VerifyResults(IEnumerable<Message> messages, int expectedCount)
     {
-        if (expectedCount == 0)
-        {
-            Assert.That(messages, Is.Null);
-            return;
-        }
-
-        Assert.That(messages, Is.Not.Null);
         Assert.That(messages.Count(), Is.EqualTo(expectedCount));
+
+        if (expectedCount == 0)
+            return;
+
         List<string> messageContents = new();
         foreach (var msg in messages)
         {

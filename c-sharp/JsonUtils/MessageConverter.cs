@@ -13,17 +13,36 @@ internal sealed class MessageConverter : JsonConverter<Message>
 {
     private static readonly JsonSerializerOptions s_jsonOptions =
         SerializationOptions.CreateSerializationOptions();
+
+    // Our type hierarchy for messages follows this pattern:
+    // Base (abstract) <- Messages <- Base subtype (abstract) <- Message Subtypes
+    //                                       ^
+    //                                       |-- Not all messages have subtypes
+    // For example:
+    // Message <- MessageRequest
+    // Message <- MessageEvent <- MessageEventGeneric <- MessageEventClientConnect
+    //
+    // All non-abstract types have Enum<MessageType> values that can be seen in raw message JSON.
+    // s_messageTypeMap holds a mapping from Enum<MessageType> values to the .NET types.
+    // It does not contain message subtypes, only individual message types.
+    // For example, it maps "event" to MessageEvent and nothing to MessageEventClientConnect.
     private static readonly Dictionary<Enum<MessageType>, Type> s_messageTypeMap = new();
+
+    // For event messages, all but MessageEventGeneric (since it is abstract) hold an
+    // Enum<EventType> value that can be discerned from raw message JSON.
+    // s_eventTypeMap holds a mapping from Enum<EventType> values to .NET types.
+    // It doesn't contain all message types, only event subtypes (subtypes of MessageEventGeneric).
+    // For example, it maps "network:onDidClientConnect" to "MessageEventClientConnect".
     private static readonly Dictionary<Enum<EventType>, Type> s_eventTypeMap = new();
 
     static MessageConverter()
     {
-        foreach (var msg in GetObjectsOfClosestSubclasses<Message>())
+        foreach (var msg in GetObjectsOfClosestSubtypes<Message>())
         {
             s_messageTypeMap.Add(msg.Type, msg.GetType());
         }
 
-        foreach (var evt in GetObjectsOfClosestSubclasses<MessageEvent>())
+        foreach (var evt in GetObjectsOfClosestSubtypes<MessageEvent>())
         {
             s_eventTypeMap.Add(evt.EventType, evt.GetType());
         }
@@ -35,14 +54,15 @@ internal sealed class MessageConverter : JsonConverter<Message>
     ///   When calling this for A, if B is abstract, then an object of type C will be returned.
     ///   When calling this for A, if B is not abstract, then an object of type B will be returned.
     /// </summary>
-    private static IEnumerable<BaseClass> GetObjectsOfClosestSubclasses<BaseClass>()
-        where BaseClass : class
+    private static IEnumerable<BaseType> GetObjectsOfClosestSubtypes<BaseType>()
+        where BaseType : class
     {
         var possibilities = Assembly
             .GetExecutingAssembly()
             .GetTypes()
-            .Where(t => t.IsClass && !t.IsAbstract && t.IsSubclassOf(typeof(BaseClass)))
-            .Select(type => Activator.CreateInstance(type, true) as BaseClass)
+            // Note that "IsSubclassOf" goes arbitrarily deep in the hierarchy
+            .Where(t => t.IsClass && !t.IsAbstract && t.IsSubclassOf(typeof(BaseType)))
+            .Select(type => Activator.CreateInstance(type, true) as BaseType)
             .Where(obj => obj is not null);
 
         foreach (var obj in possibilities)
@@ -50,7 +70,7 @@ internal sealed class MessageConverter : JsonConverter<Message>
             var baseType = obj!.GetType().BaseType;
             while (baseType != null)
             {
-                if (baseType == typeof(BaseClass))
+                if (baseType == typeof(BaseType))
                 {
                     yield return obj;
                     break;
@@ -62,7 +82,7 @@ internal sealed class MessageConverter : JsonConverter<Message>
                     continue;
                 }
 
-                // At this point, a closer, creatable subclass was found
+                // At this point, a closer, creatable (i.e., non-abstract) subclass was found
                 break;
             }
         }
