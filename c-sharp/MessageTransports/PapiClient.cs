@@ -127,7 +127,7 @@ internal sealed class PapiClient : IDisposable
     /// If true is returned, then <see cref="DisconnectAsync"/> should be called before <see cref="Dispose"/> for a proper cleanup of resources.
     /// If false is returned, then there is no need to call <see cref="DisconnectAsync"/> before calling <see cref="Dispose"/>.
     /// </summary>
-    /// <returns><see cref="Task"/> will resolve to true if the connection initialied properly, false otherwise</returns>
+    /// <returns><see cref="Task"/> will resolve to true if the connection initialized properly, false otherwise</returns>
     public async Task<bool> ConnectAsync()
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
