@@ -50,7 +50,7 @@ function TestQuickVerseHeresyPanel() {
           className="scr-verse-text-area"
           value={verseText}
           onChange={(e) => {
-            if (quickVerseDataProvider)
+            if (quickVerseDataProvider && !quickVerseDataProviderIsDisposed)
               quickVerseDataProvider.setHeresy(verseRef, e.target.value);
           }}
         />

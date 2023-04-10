@@ -40,9 +40,9 @@ function useData<TSelector, TGetData, TSetData>(
 
   // Get the data provider info for this data type
   // Note: do nothing if we received a data provider, but still run this hook. We must make sure to run the same number of hooks in all code paths)
-  let dataProviderHookTemp = useDataProvider<TSelector, TGetData, TSetData>(
-    !didReceiveDataProvider ? dataType : undefined,
-  );
+  let dataProviderHookTemp = useDataProvider<
+    IDataProvider<TSelector, TGetData, TSetData>
+  >(!didReceiveDataProvider ? dataType : undefined);
 
   // If we received the data provider, just use it
   if (didReceiveDataProvider) {

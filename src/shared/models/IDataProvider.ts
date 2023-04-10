@@ -4,7 +4,10 @@ import { PEventHandler } from '@shared/models/PEvent';
 /** Various options to adjust how the data provider subscriber emits updates */
 export type DataProviderSubscriberOptions = {
   /**
-   * Whether to immediately retrieve the data for this subscriber and run the callback as soon as possible
+   * Whether to immediately retrieve the data for this subscriber and run the callback as soon as possible.
+   *
+   * This allows a subscriber to simply subscribe and provide a callback instead of subscribing, running `get`,
+   * and managing the race condition of an event coming in to update the data and the initial `get` coming back in.
    * @default true
    */
   retrieveDataImmediately?: boolean;
@@ -26,7 +29,11 @@ export type DataProviderSubscriberOptions = {
 };
 
 /**
- * Subscribe to receive updates from this data provider that are relevant to the provided selector
+ * Subscribe to receive updates from this data provider that are relevant to the provided selector.
+ *
+ * Note: By default, this `subscribe` function automatically retrieves the current state of the data
+ * and runs the provided callback as soon as possible. That way, if you want to keep your data up-to-date,
+ * you do not also have to run `get`. You can turn this functionality off in the `options` parameter.
  * @param selector tells the provider what data this listener is listening for
  * @param callback function to run with the updated data for this selector
  * @param options various options to adjust how the subscriber emits updates
@@ -58,15 +65,23 @@ interface IDataProvider<TSelector, TGetData, TSetData> {
    */
   set: (selector: TSelector, data: TSetData) => Promise<boolean>;
   /**
-   * Get a subset of data from the provider according to the selector
+   * Get a subset of data from the provider according to the selector.
+   *
+   * Note: This is good for retrieving data from a provider once. If you want to keep the data up-to-date,
+   * use `subscribe` instead, which can immediately give you the data and keep it up-to-date.
    * @param selector tells the provider what subset of data to get
    * @returns the subset of data represented by the selector
    */
   get: (selector: TSelector) => Promise<TGetData>;
   /**
-   * Subscribe to receive updates from this data provider that are relevant to the provided selector
+   * Subscribe to receive updates from this data provider that are relevant to the provided selector.
+   *
+   * Note: By default, this `subscribe` function automatically retrieves the current state of the data
+   * and runs the provided callback as soon as possible. That way, if you want to keep your data up-to-date,
+   * you do not also have to run `get`. You can turn this functionality off in the `options` parameter.
    * @param selector tells the provider what data this listener is listening for
    * @param callback function to run with the updated data for this selector
+   * @param options various options to adjust how the subscriber emits updates
    * @returns unsubscriber to stop listening for updates
    */
   subscribe: DataProviderSubscriber<TSelector, TGetData>;

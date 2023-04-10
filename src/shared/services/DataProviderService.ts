@@ -58,6 +58,13 @@ async function has(dataType: string): Promise<boolean> {
   return networkObjectService.has(getDataProviderObjectId(dataType));
 }
 
+/**
+ * An object reference that is a placeholder for updates for data provider subscribers.
+ * We want to make absolutely sure updates that come in are sent to subscribers, so we
+ * use this object reference to tell if we have never had an update before.
+ */
+const SUBSCRIBE_PLACEHOLDER = {};
+
 function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
   dataProviderContainer: NetworkObjectContainer<
     IDataProvider<TSelector, TGetData, TSetData>
@@ -82,11 +89,12 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
     const { retrieveDataImmediately, whichUpdates } = subscriberOptions;
 
     /** The most recent data before the newest update. Used for deep comparison checks to prevent useless updates */
-    // Start this out as a new object so updates definitely run the callback (including if the data is undefined)
+    // Start this out as a placeholder so updates definitely run the callback (including if the data is undefined or an empty object)
     // TODO: create a cache for the data provider that holds data returned per selector and shares that cache here
-    let dataPrevious: TGetData = {} as TGetData;
+    let dataPrevious: TGetData = SUBSCRIBE_PLACEHOLDER as TGetData;
 
-    // Create a layer that lets us know if we received an update so we don't run the callback with old data
+    // Create a layer over the provided callback that lets us know if we received an update so we don't run the callback with old data after updating
+    /** Whether we have already received an update event, meaning our initial `get` will return old data */
     let receivedUpdate = false;
     const callbackWithUpdate = async () => {
       if (!dataProviderContainer.networkObject)
@@ -94,10 +102,15 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
       // Get the data at our selector when we receive notification that the data updated
       // TODO: Implement selector events so we can receive the new data with the update instead of reaching back out for it
       const data = await dataProviderContainer.networkObject.get(selector);
+      // Take note that we have received an update so we don't run the callback with the old data below in the `retrieveDataImmediately` code
       receivedUpdate = true;
 
-      // Only update if we should listen to all updates or the data is not deeply equal
-      if (whichUpdates === 'all' || !deepEqual(dataPrevious, data)) {
+      // Only update if we should listen to all updates, if the old data is the default placeholder data, or the data is not deeply equal
+      if (
+        whichUpdates === 'all' ||
+        dataPrevious === SUBSCRIBE_PLACEHOLDER ||
+        !deepEqual(dataPrevious, data)
+      ) {
         dataPrevious = data;
         callback(data);
       }
@@ -105,6 +118,7 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
 
     const unsubscribe = onDidUpdate(callbackWithUpdate);
 
+    // If the subscriber wants to get the data as soon as possible in addition to running the callback on updates, get the data
     if (retrieveDataImmediately) {
       // Get the data to run the callback immediately so it has the data
       const data = await dataProviderContainer.networkObject.get(selector);

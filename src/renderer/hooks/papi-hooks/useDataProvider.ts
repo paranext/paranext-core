@@ -8,7 +8,7 @@ import usePromise from '@renderer/hooks/papi-hooks/usePromise';
  * Gets a data provider with specified data type
  * @param dataType string data type to get data provider for
  * @returns [dataProvider, isDisposed]
- *  - `dataProvider`: data provider if it has been retrieved and is not disposed, undefined otherwise
+ *  - `dataProvider`: data provider if it has been retrieved, undefined otherwise
  *  - `isDisposed`: whether the data provider is disposed and is no longer available
  *
  * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
@@ -38,12 +38,7 @@ function useDataProvider<T extends IDataProvider<any, any, any>>(
     useCallback(() => setIsDisposed(true), []),
   );
 
-  return [
-    (dataProviderInfo && !isDisposed
-      ? dataProviderInfo.dataProvider
-      : undefined) as T | undefined,
-    isDisposed,
-  ];
+  return [dataProviderInfo?.dataProvider as T | undefined, isDisposed];
 }
 
 export default useDataProvider;
