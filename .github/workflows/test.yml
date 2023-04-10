@@ -51,6 +51,9 @@ jobs:
       - name: dotnet build
         run: npm run build:data-release
 
+      - name: run dotnet unit tests
+        run: dotnet test c-sharp-tests/c-sharp-tests.csproj
+
       - name: check dotnet formatting
         run: cd c-sharp && dotnet tool restore && dotnet csharpier --check .
 
