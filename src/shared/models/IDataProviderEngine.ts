@@ -31,8 +31,10 @@ interface IDataProviderEngine<TSelector, TGetData, TSetData> {
    * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
    *
    * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
+   *
+   * @returns true if we should send updates, false otherwise (will not send updates). Same return as `set`
    */
-  notifyUpdate?(): void;
+  notifyUpdate?(): boolean;
   /**
    * Set a subset of data according to the selector.
    * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `set` method in the DataProviderEngine.

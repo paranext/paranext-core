@@ -149,8 +149,11 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
     ? dataProviderEngine.notifyUpdate.bind(dataProviderEngine)
     : undefined;
   dataProviderEngine.notifyUpdate = (...args) => {
-    if (dpeNotifyUpdate) dpeNotifyUpdate(...args);
-    onDidUpdateEmitter.emit(true);
+    // If notifyUpdate is not overridden, just return true
+    let dpeNotifyUpdateResult = true;
+    if (dpeNotifyUpdate) dpeNotifyUpdateResult = dpeNotifyUpdate(...args);
+    if (dpeNotifyUpdateResult) onDidUpdateEmitter.emit(dpeNotifyUpdateResult);
+    return dpeNotifyUpdateResult;
   };
 
   // Layer over the data provider engine's set with one that actually emits an update if set returns true

@@ -203,28 +203,29 @@ function TestButtonsPanel() {
     IDataProvider<string, string, string>
   >('hello-someone.greetings');
   if (!hasTestedRandomMethod && greetingsDataProvider) {
-    greetingsDataProvider
-      // Could make this a GreetingsDataProvider type and have this method available,
-      // but this is about the only opportunity to demonstrate how to type `useDataProvider`
-      // @ts-ignore ts(2339)
-      .testRandomMethod('from test buttons panel')
-      .then((result: string) => {
-        setHasTestedRandomMethod(true);
+    setHasTestedRandomMethod(true);
+    (async () => {
+      try {
+        // Could make this a GreetingsDataProvider type and have this method available,
+        // but this is the only opportunity so far to demonstrate how to type `useDataProvider`
+        // @ts-ignore ts(2339)
+        const result = await greetingsDataProvider.testRandomMethod(
+          'from test buttons panel',
+        );
         logger.info(result);
-        return result;
-      })
-      .catch(logger.error);
+      } catch (e) {
+        logger.error(e);
+      }
 
-    greetingsDataProvider
-      // Test to make sure we literally can't run updates from outside the data provider
-      // @ts-ignore ts(2339)
-      .notifyUpdate()
-      .then((e: string) =>
-        logger.error(`Remote notify update succeeded! Bad ${e}`),
-      )
-      .catch((e: string) =>
-        logger.debug(`Remote notify update failed! Good ${e}`),
-      );
+      try {
+        // Test to make sure we literally can't run updates from outside the data provider
+        // @ts-ignore ts(2339)
+        const result = await greetingsDataProvider.notifyUpdate();
+        logger.error(`Remote notify update succeeded! Bad ${result}`);
+      } catch (e) {
+        logger.info(`Remote notify update failed! Good ${e}`);
+      }
+    })();
   }
 
   const [verseText, setVerseText, verseTextIsLoading] = useData<

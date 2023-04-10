@@ -177,7 +177,7 @@ exports.activate = async () => {
               );
           });
 
-          //# sourceURL=hello-world-webview.j
+          //# sourceURL=hello-world-webview.js
         </script>
       </body>
     </html>`,
