@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 /**
  * Awaits a promise and returns a loading value while the promise is unresolved
  * @param promiseFactoryCallback a function that returns the promise to await. If the promise resolves to null, the value will not change.
+ * If this callback is undefined, the current value will be returned (defaultValue unless it was previously changed and preserveValue is true), and there will be no loading.
  *
  *    WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated every render
  * @param defaultValue the initial value to return while first awaiting the promise. If preserveValue is false, this value is also shown while awaiting the promise on subsequent calls.
@@ -14,7 +15,7 @@ import { useEffect, useState } from 'react';
  *  - `isLoading`: whether the promise is waiting to be resolved
  */
 export default <T>(
-  promiseFactoryCallback: () => Promise<T | null>,
+  promiseFactoryCallback: (() => Promise<T | null>) | undefined,
   defaultValue: T,
   preserveValue = true,
 ): [value: T, isLoading: boolean] => {
@@ -22,13 +23,18 @@ export default <T>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
   useEffect(() => {
     let promiseIsCurrent = true;
-    setIsLoading(true);
+    // If a promiseFactoryCallback was provided, we are loading. Otherwise, there is no loading to do
+    setIsLoading(!!promiseFactoryCallback);
     (async () => {
-      const result = await promiseFactoryCallback();
-      if (promiseIsCurrent) {
-        // If the promise returned null, it purposely did this to do nothing. Maybe its dependencies are not set up
-        if (result != null) setValue(() => result);
-        setIsLoading(false);
+      // If there is a callback to run, run it
+      if (promiseFactoryCallback) {
+        const result = await promiseFactoryCallback();
+        // If the promise was not already replaced, update the value
+        if (promiseIsCurrent) {
+          // If the promise returned null, it purposely did this to do nothing. Maybe its dependencies are not set up
+          if (result !== null) setValue(() => result);
+          setIsLoading(false);
+        }
       }
     })();
 

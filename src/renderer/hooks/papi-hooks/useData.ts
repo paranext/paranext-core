@@ -5,7 +5,6 @@ import useEventAsync from '@renderer/hooks/papi-hooks/useEventAsync';
 import { useMemo, useState } from 'react';
 import { PEventAsync, PEventHandler } from '@shared/models/PEvent';
 import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
-import { isString } from '@shared/util/Util';
 
 /**
  * Subscribes to run a callback on a data provider's data with specified selector
@@ -27,7 +26,8 @@ import { isString } from '@shared/util/Util';
 function useData<TSelector, TGetData, TSetData>(
   dataType:
     | string
-    | [IDataProvider<TSelector, TGetData, TSetData> | undefined, boolean],
+    | [IDataProvider<TSelector, TGetData, TSetData> | undefined, boolean]
+    | undefined,
   selector: TSelector,
   defaultValue: TGetData,
   subscriberOptions?: DataProviderSubscriberOptions,
@@ -35,22 +35,9 @@ function useData<TSelector, TGetData, TSetData>(
   // The data from the data provider at this selector
   const [data, setDataInternal] = useState<TGetData>(defaultValue);
 
-  // Check to see if they passed in the results of a useDataProvider hook
-  const didReceiveDataProvider = !isString(dataType);
-
   // Get the data provider info for this data type
-  // Note: do nothing if we received a data provider, but still run this hook. We must make sure to run the same number of hooks in all code paths)
-  let dataProviderHookTemp = useDataProvider<
-    IDataProvider<TSelector, TGetData, TSetData>
-  >(!didReceiveDataProvider ? dataType : undefined);
-
-  // If we received the data provider, just use it
-  if (didReceiveDataProvider) {
-    dataProviderHookTemp = dataType;
-  }
-
-  // Make const variables of the data provider so TypeScript knows they won't change
-  const [dataProvider, isDisposed] = dataProviderHookTemp;
+  const [dataProvider, isDisposed] =
+    useDataProvider<IDataProvider<TSelector, TGetData, TSetData>>(dataType);
 
   // Indicates if the data with the selector is awaiting retrieval from the data provider
   const [isLoading, setIsLoading] = useState<boolean>(true);
