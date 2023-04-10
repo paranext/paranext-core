@@ -8,7 +8,7 @@ import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
 
 /**
  * Subscribes to run a callback on a data provider's data with specified selector
- * @param dataType string data type to get data provider for OR [dataProvider, isDisposed] result of useDataProvider if you
+ * @param dataProviderSource string data type to get data provider for OR [dataProvider, isDisposed] result of useDataProvider if you
  * want to consolidate and only get the data provider once.
  * @param selector tells the provider what data this listener is listening for
  * @param defaultValue the initial value to return while first awaiting the data
@@ -24,7 +24,21 @@ import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
  *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
  */
 function useData<TSelector, TGetData, TSetData>(
-  dataType:
+  dataType: string | undefined,
+  selector: TSelector,
+  defaultValue: TGetData,
+  subscriberOptions?: DataProviderSubscriberOptions,
+): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
+function useData<TSelector, TGetData, TSetData>(
+  dataProvider:
+    | [IDataProvider<TSelector, TGetData, TSetData> | undefined, boolean]
+    | undefined,
+  selector: TSelector,
+  defaultValue: TGetData,
+  subscriberOptions?: DataProviderSubscriberOptions,
+): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
+function useData<TSelector, TGetData, TSetData>(
+  dataProviderSource:
     | string
     | [IDataProvider<TSelector, TGetData, TSetData> | undefined, boolean]
     | undefined,
@@ -37,7 +51,9 @@ function useData<TSelector, TGetData, TSetData>(
 
   // Get the data provider info for this data type
   const [dataProvider, isDisposed] =
-    useDataProvider<IDataProvider<TSelector, TGetData, TSetData>>(dataType);
+    useDataProvider<IDataProvider<TSelector, TGetData, TSetData>>(
+      dataProviderSource,
+    );
 
   // Indicates if the data with the selector is awaiting retrieval from the data provider
   const [isLoading, setIsLoading] = useState<boolean>(true);
