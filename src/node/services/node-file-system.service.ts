@@ -4,7 +4,7 @@
 
 import fs from 'fs';
 import { Uri } from '@shared/data/file-system.model';
-import { getPathFromUri, joinUriPaths } from '@node/util/util';
+import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { groupBy } from '@shared/utils/util';
 
 /**

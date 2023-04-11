@@ -2,9 +2,9 @@
  * Handles setting up activation of and running of extensions
  */
 
-import { IExtension } from '@extension-host/extension-types/i-extension.model';
+import { IExtension } from '@extension-host/extension-types/extension.interface';
 import { EntryType, readDir, readFileText } from '@node/services/node-file-system.service';
-import { getPathFromUri, joinUriPaths } from '@node/util/util';
+import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
 import { UnsubscriberAsync } from '@shared/utils/papi-util';
 import Module from 'module';

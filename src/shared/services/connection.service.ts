@@ -18,7 +18,7 @@ import {
   RequestHandler,
   RequestRouter,
 } from '@shared/data/internal-connection.model';
-import INetworkConnector from '@shared/services/network-connector.model';
+import INetworkConnector from '@shared/services/network-connector.interface';
 import { createNetworkConnector } from '@shared/services/network-connector.factory';
 import logger from '@shared/services/logger.service';
 import { ComplexResponse } from '@shared/utils/papi-util';

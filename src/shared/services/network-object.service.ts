@@ -10,7 +10,7 @@ import {
   serializeRequestType,
   UnsubscriberAsync,
 } from '@shared/utils/papi-util';
-import PEventEmitter from '@shared/models/p-event-emitter.model';
+import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import { isString } from '@shared/utils/util';
 import {
   DisposableNetworkObjectInfo,
@@ -31,7 +31,7 @@ type NetworkObjectRegistration<T extends NetworkableObject> = {
   /** The actual network object stuff returned by get */
   networkObjectInfo: NetworkObjectInfo<T>;
   /** Emitter that indicates locally when the network object was disposed. Run when the network disposal emitter runs for this registration's id */
-  onDidDisposeEmitter: PEventEmitter<void>;
+  onDidDisposeEmitter: PapiEventEmitter<void>;
 } & (
   | {
       registrationType: NetworkObjectRegistrationType.Local;
@@ -149,7 +149,7 @@ const set = async <T extends NetworkableObject>(
   await initialize();
   if (await has(id)) throw new Error(`Network object with id ${id} is already registered`);
 
-  const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
+  const networkObjectOnDidDisposeEmitter = new PapiEventEmitter<void>();
 
   // Set up request handlers for this network object
   const unsubPromises = [
@@ -229,7 +229,7 @@ const get = async <T extends NetworkableObject>(
 
   // Create an individual emitter that indicates when this object is disposed.
   // Called by the event handler that handles general network object disposal
-  const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
+  const networkObjectOnDidDisposeEmitter = new PapiEventEmitter<void>();
 
   // Create the local object to be proxied
   const localObject = createLocalObjectToProxy ? createLocalObjectToProxy(id) : {};

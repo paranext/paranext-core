@@ -10,7 +10,7 @@ import {
   RequestRouter,
 } from '@shared/data/internal-connection.model';
 import { Unsubscriber } from '@shared/utils/papi-util';
-import INetworkConnector from '@shared/services/network-connector.model';
+import INetworkConnector from '@shared/services/network-connector.interface';
 import {
   InitClient,
   Message,
@@ -24,9 +24,9 @@ import {
 } from '@shared/data/network-connector.model';
 import { getErrorMessage } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
-import PEventEmitter from '@shared/models/p-event-emitter.model';
+import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
-import { IWebSocket } from '@client/services/i-web-socket.model';
+import { IWebSocket } from '@client/services/web-socket.interface';
 
 // #region local variables
 
@@ -60,7 +60,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
   private webSocket?: IWebSocket;
 
   /** All message subscriptions - emitters that emit an event each time a message with a specific message type comes in */
-  private messageEmitters = new Map<MessageType, PEventEmitter<Message>>();
+  private messageEmitters = new Map<MessageType, PapiEventEmitter<Message>>();
 
   /** Promise that resolves when the connection is finished or rejects if disconnected before the connection finishes */
   private connectPromise?: Promise<NetworkConnectorInfo>;
@@ -355,7 +355,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
   ): Unsubscriber => {
     let emitter = this.messageEmitters.get(messageType);
     if (!emitter) {
-      emitter = new PEventEmitter<Message>();
+      emitter = new PapiEventEmitter<Message>();
       this.messageEmitters.set(messageType, emitter);
     }
     return emitter.subscribe(callback);

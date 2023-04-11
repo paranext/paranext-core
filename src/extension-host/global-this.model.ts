@@ -2,7 +2,7 @@
  * Module to set up globalThis and polyfills in the extension host
  */
 
-import polyfillLocalStorage from '@node/polyfill/local-storage.polyfill';
+import polyfillLocalStorage from '@node/polyfills/local-storage.polyfill';
 import { ProcessType } from '@shared/global-this.model';
 
 // #region command-line arguments

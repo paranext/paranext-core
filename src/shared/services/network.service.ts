@@ -26,9 +26,9 @@ import { getErrorMessage } from '@shared/utils/util';
 import * as connectionService from '@shared/services/connection.service';
 import { isClient, isRenderer, isServer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
-import PNetworkEventEmitter from '@shared/models/p-network-event-emitter.model';
-import PEventEmitter from '@shared/models/p-event-emitter.model';
-import { PEvent } from '@shared/models/p-event.model';
+import PapiNetworkEventEmitter from '@shared/models/papi-network-event-emitter.model';
+import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+import { PapiEvent } from '@shared/models/papi-event.model';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -48,7 +48,7 @@ const requestRegistrations = new Map<string, RequestRegistration>();
  */
 const networkEventEmitters = new Map<
   string,
-  { emitter: PNetworkEventEmitter<unknown>; isRegistered: boolean }
+  { emitter: PapiNetworkEventEmitter<unknown>; isRegistered: boolean }
 >();
 
 /** Request handler that is a local function and can be handled locally */
@@ -333,20 +333,20 @@ const createNetworkEventEmitterUnsafe = <T>(
   eventType: string,
   emitOnNetwork = emitEventOnNetworkUnsafe,
   register = true,
-): PEventEmitter<T> => {
+): PapiEventEmitter<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
   if (existingEmitter) {
     if (existingEmitter.isRegistered)
       throw new Error(`type ${eventType} is already registered to a network event emitter`);
     existingEmitter.isRegistered = register;
-    return existingEmitter.emitter as PEventEmitter<T>;
+    return existingEmitter.emitter as PapiEventEmitter<T>;
   }
-  const newNetworkEventEmitter = new PNetworkEventEmitter<T>(
+  const newNetworkEventEmitter = new PapiNetworkEventEmitter<T>(
     (event) => emitOnNetwork(eventType, event),
     () => removeNetworkEventEmitterInternal(eventType),
   );
   networkEventEmitters.set(eventType, {
-    emitter: newNetworkEventEmitter as PNetworkEventEmitter<unknown>,
+    emitter: newNetworkEventEmitter as PapiNetworkEventEmitter<unknown>,
     isRegistered: register,
   });
   return newNetworkEventEmitter;
@@ -688,7 +688,7 @@ const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
  * @param eventType unique network event type for coordinating between connections
  * @returns event emitter whose event works between connections
  */
-export const createNetworkEventEmitter = <T>(eventType: string): PEventEmitter<T> =>
+export const createNetworkEventEmitter = <T>(eventType: string): PapiEventEmitter<T> =>
   // Note: running createNetworkEventEmitterUnsafe without initializing is not technically an initialization
   // problem. However, emitting a network event before initializing is. As such, we create an emitter here
   // without awaiting initialization, but we pass in emitEventOnNetwork, which does wait for initialization.
@@ -699,11 +699,12 @@ export const createNetworkEventEmitter = <T>(eventType: string): PEventEmitter<T
  * @param eventType unique network event type for coordinating between connections
  * @returns event for the event type that runs the callback provided when the event is emitted
  */
-export const getNetworkEvent = <T>(eventType: string): PEvent<T> => {
+export const getNetworkEvent = <T>(eventType: string): PapiEvent<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
-  if (existingEmitter) return existingEmitter.emitter.event as PEvent<T>;
+  if (existingEmitter) return existingEmitter.emitter.event as PapiEvent<T>;
   // We didn't find an existing emitter, so create one but don't mark it as registered because you can't emit the event from this function
-  return createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork, false).event as PEvent<T>;
+  return createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork, false)
+    .event as PapiEvent<T>;
 };
 
 // #endregion

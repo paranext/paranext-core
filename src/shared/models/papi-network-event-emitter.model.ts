@@ -1,5 +1,5 @@
-import { PEventHandler } from '@shared/models/p-event.model';
-import PEventEmitter from '@shared/models/p-event-emitter.model';
+import { PapiEventHandler } from '@shared/models/papi-event.model';
+import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 
 /**
  * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted.
@@ -13,7 +13,7 @@ import PEventEmitter from '@shared/models/p-event-emitter.model';
  *
  * WARNING: You cannot emit events with complex types on the network.
  */
-class PNetworkEventEmitter<T> extends PEventEmitter<T> {
+export default class PapiNetworkEventEmitter<T> extends PapiEventEmitter<T> {
   /**
    * Creates a NetworkEventEmitter
    * @param networkSubscriber callback that accepts the event and emits it to other processes
@@ -21,7 +21,7 @@ class PNetworkEventEmitter<T> extends PEventEmitter<T> {
    */
   constructor(
     /** Callback that sends the event to other processes on the network when it is emitted */
-    private networkSubscriber: PEventHandler<T>,
+    private networkSubscriber: PapiEventHandler<T>,
     /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
     private networkDisposer: () => void,
   ) {
@@ -48,9 +48,7 @@ class PNetworkEventEmitter<T> extends PEventEmitter<T> {
   public override dispose = () => {
     super.disposeFn();
     // TODO: Do we need to set networkSubscriber to undefined? Had to remove readonly from it to do this
-    this.networkSubscriber = undefined as unknown as PEventHandler<T>;
+    this.networkSubscriber = undefined as unknown as PapiEventHandler<T>;
     this.networkDisposer();
   };
 }
-
-export default PNetworkEventEmitter;

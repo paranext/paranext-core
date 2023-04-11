@@ -1,4 +1,4 @@
-import { PEvent } from '@shared/models/p-event.model';
+import { PapiEvent } from '@shared/models/papi-event.model';
 import { UnsubscriberAsync } from '@shared/utils/papi-util';
 
 /**
@@ -23,7 +23,7 @@ export type NetworkObjectInfo<T extends NetworkableObject> = {
   /** Object that is shared on the network */
   networkObject: T;
   /** Event that emits when this network object is being disposed */
-  onDidDispose: PEvent<void>;
+  onDidDispose: PapiEvent<void>;
 };
 
 /**

@@ -8,7 +8,7 @@ import * as papiUtil from '@shared/utils/papi-util';
 // We need the WebViewService here to include on the papi, but WebViewService passes papi into WebViews
 // eslint-disable-next-line import/no-cycle
 import * as webViewService from '@shared/services/web-view.service';
-import PEventEmitter from '@shared/models/p-event-emitter.model';
+import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import logger from '@shared/services/logger.service';
 import { isRenderer } from '@shared/utils/internal-util';
 import internetService from '@shared/services/internet.service';
@@ -20,7 +20,7 @@ const papiHooks = isRenderer() ? require('@renderer/hooks/papi-hooks').default :
 
 const papi = {
   // Classes
-  PEventEmitter,
+  EventEmitter: PapiEventEmitter,
 
   // Functions
   fetch: internetService.fetch, // Alias for internet.fetch for easy access

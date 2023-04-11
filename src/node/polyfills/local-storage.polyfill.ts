@@ -1,4 +1,4 @@
-import { getAppDir } from '@node/util/util';
+import { getAppDir } from '@node/utils/util';
 import { LocalStorage } from 'node-localstorage';
 import path from 'path';
 

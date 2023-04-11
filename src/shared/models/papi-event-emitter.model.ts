@@ -2,7 +2,7 @@
  * Interfaces, classes, and functions related to events and event emitters
  */
 
-import { PEvent, PEventHandler } from '@shared/models/p-event.model';
+import { PapiEvent, PapiEventHandler } from '@shared/models/papi-event.model';
 
 /**
  * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
@@ -11,7 +11,7 @@ import { PEvent, PEventHandler } from '@shared/models/p-event.model';
  * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
  * but anyone can subscribe to the event.
  */
-class PEventEmitter<T> {
+export default class PapiEventEmitter<T> {
   /**
    * Subscribes a function to run when this event is emitted.
    * @alias event
@@ -21,9 +21,9 @@ class PEventEmitter<T> {
   public subscribe = this.event;
 
   /** All callback functions that will run when this event is emitted. Lazy loaded */
-  private subscriptions?: PEventHandler<T>[];
+  private subscriptions?: PapiEventHandler<T>[];
   /** Event for listeners to subscribe to. Lazy loaded */
-  private lazyEvent?: PEvent<T>;
+  private lazyEvent?: PapiEvent<T>;
   /** Whether this emitter has been disposed */
   private isDisposed = false;
 
@@ -33,7 +33,7 @@ class PEventEmitter<T> {
    * @param callback function to run with the event when it is emitted
    * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
    */
-  public get event(): PEvent<T> {
+  public get event(): PapiEvent<T> {
     this.assertNotDisposed();
 
     if (!this.lazyEvent) {
@@ -105,5 +105,3 @@ class PEventEmitter<T> {
     this.lazyEvent = undefined;
   }
 }
-
-export default PEventEmitter;

@@ -3,7 +3,7 @@
  */
 
 import { isClient } from '@shared/utils/internal-util';
-import INetworkConnector from '@shared/services/network-connector.model';
+import INetworkConnector from '@shared/services/network-connector.interface';
 
 /**
  * Creates a NetworkConnector for the client or the server depending on where you're running

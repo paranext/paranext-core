@@ -1,5 +1,5 @@
 import { getNetworkEvent } from '@shared/services/network.service';
-import { PEvent, PEventHandler } from '@shared/models/p-event.model';
+import { PapiEvent, PapiEventHandler } from '@shared/models/papi-event.model';
 import { isString } from '@shared/utils/util';
 import { useEffect } from 'react';
 
@@ -12,7 +12,7 @@ import { useEffect } from 'react';
  *
  *    WARNING: MUST BE WRAPPED IN A useCallback. The reference must not be updated every render
  */
-const useEvent = <T>(event: PEvent<T> | string, eventHandler: PEventHandler<T>) => {
+const useEvent = <T>(event: PapiEvent<T> | string, eventHandler: PapiEventHandler<T>) => {
   useEffect(() => {
     const onEvent = isString(event) ? getNetworkEvent<T>(event) : event;
     const unsubscriber = onEvent(eventHandler);

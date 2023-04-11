@@ -3,7 +3,7 @@
  */
 
 import { isRenderer } from '@shared/utils/internal-util';
-import { IWebSocket } from './i-web-socket.model';
+import { IWebSocket } from './web-socket.interface';
 
 /**
  * Creates a WebSocket for the renderer or extension host depending on where you're running
