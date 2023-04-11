@@ -8,7 +8,7 @@
  */
 
 import path from 'path';
-import polyfillLocalStorage from '@node/polyfill/LocalStorage';
+import polyfillLocalStorage from '@node/polyfill/local-storage.polyfill';
 import { ProcessType } from '@shared/global-this.model';
 import { app } from 'electron';
 

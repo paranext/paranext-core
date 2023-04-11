@@ -15,6 +15,6 @@ export const createWebSocket = async (url: string): Promise<IWebSocket> => {
     const Ws = (await import('@renderer/services/renderer-web-socket.model')).default;
     return new Ws(url) as IWebSocket;
   }
-  const Ws = (await import('@extension-host/services/ExtensionHostWebSocket')).default;
+  const Ws = (await import('@extension-host/services/extension-host-web-socket.model')).default;
   return new Ws(url) as unknown as IWebSocket;
 };

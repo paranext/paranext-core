@@ -18,7 +18,7 @@ import * as networkService from '@shared/services/network.service';
 import papi from '@shared/services/papi.service';
 import { CommandHandler } from '@shared/utils/papi-util';
 import { resolveHtmlPath } from '@node/util/util';
-import MenuBuilder from '@main/menu';
+import MenuBuilder from '@main/menu.model';
 import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/network-object.service';
 

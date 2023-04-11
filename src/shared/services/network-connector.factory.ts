@@ -17,6 +17,7 @@ export const createNetworkConnector = async (): Promise<INetworkConnector> => {
     ).default;
     return new ClientNetworkConnector();
   }
-  const ServerNetworkConnector = (await import('@main/services/ServerNetworkConnector')).default;
+  const ServerNetworkConnector = (await import('@main/services/server-network-connector.service'))
+    .default;
   return new ServerNetworkConnector();
 };
