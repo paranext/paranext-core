@@ -14,6 +14,7 @@ import PEventEmitter from '@shared/models/PEventEmitter';
 import { isString } from '@shared/util/Util';
 import {
   DisposableNetworkObjectInfo,
+  LocalObjectToProxyCreator,
   NetworkableObject,
   NetworkObjectContainer,
   NetworkObjectInfo,
@@ -49,6 +50,13 @@ const networkObjectRegistrations = new Map<
   string,
   NetworkObjectRegistration<NetworkableObject>
 >();
+
+/** Saved (memoized) promises to return when running NetworkObjectService.get with the same arguments from multiple places before the promise resolves. */
+const networkObjectPromiseInfos: {
+  id: string;
+  createLocalObjectToProxy?: LocalObjectToProxyCreator<NetworkableObject>;
+  promise: Promise<NetworkObjectInfo<NetworkableObject> | undefined>;
+}[] = [];
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -257,6 +265,9 @@ const set = async <T extends NetworkableObject>(
 
 /**
  * Get a NetworkObject that has previously been set up to be shared on the network.
+ *
+ * Note: this function is semi-memoized, so running it twice with the same inputs
+ * yields the same promise or the same network object.
  * @param id id of the network object - all processes must use this id to look up this network object
  * @param createLocalObjectToProxy if a network object with the provided id exists remotely but has not been set up
  * to be used on this process, this function is run, and the returned object is used as a base on which to set up a
@@ -273,94 +284,135 @@ const set = async <T extends NetworkableObject>(
  *
  * @returns information about the object shared on the network with specified id if one exists, undefined otherwise.
  */
-const get = async <T extends NetworkableObject>(
+const get = <T extends NetworkableObject>(
   id: string,
-  createLocalObjectToProxy?: (
-    id: string,
-    networkObjectContainer: NetworkObjectContainer<T>,
-  ) => Record<string, unknown>,
+  createLocalObjectToProxy?: LocalObjectToProxyCreator<T>,
 ): Promise<NetworkObjectInfo<T> | undefined> => {
-  await initialize();
-
   // If we already have this network object, return it
   const networkObjectRegistration = networkObjectRegistrations.get(id);
   if (networkObjectRegistration)
-    return networkObjectRegistration.networkObjectInfo as NetworkObjectInfo<T>;
+    return Promise.resolve(
+      networkObjectRegistration.networkObjectInfo as NetworkObjectInfo<T>,
+    );
 
-  // We don't already have this network object. See if other process have it
-  const networkObjectFunctions = await getRemoteNetworkObjectFunctions(id);
+  // If we are already retrieving the network object, return its promise
+  const savedNetworkObjectPromiseInfo = networkObjectPromiseInfos.find(
+    (nopi) =>
+      id === nopi.id &&
+      createLocalObjectToProxy === nopi.createLocalObjectToProxy,
+  );
+  if (savedNetworkObjectPromiseInfo)
+    return savedNetworkObjectPromiseInfo.promise as Promise<
+      NetworkObjectInfo<T> | undefined
+    >;
 
-  // This network object does not exist
-  if (!networkObjectFunctions) return undefined;
+  // We don't already have this network object or a promise looking for it, so look for it
+  const networkObjectPromise = (async (): Promise<
+    NetworkObjectInfo<T> | undefined
+  > => {
+    await initialize();
 
-  // This object exists remotely but does not yet exist locally. Set up its local proxy so its functions send requests to the remote object
+    // We don't already have this network object. See if other process have it
+    const networkObjectFunctions = await getRemoteNetworkObjectFunctions(id);
 
-  // Create an individual emitter that indicates when this object is disposed.
-  // Called by the event handler that handles general network object disposal
-  const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
+    // This network object does not exist
+    if (!networkObjectFunctions) return undefined;
 
-  /** Container to hold a reference to the network object so the local object can reference the network object in its functions */
-  const networkObjectContainer: NetworkObjectContainer<T> = {
-    networkObject: undefined,
-  };
+    // This object exists remotely but does not yet exist locally. Set up its local proxy so its functions send requests to the remote object
 
-  // Create the local object to be proxied
-  const localObject = createLocalObjectToProxy
-    ? createLocalObjectToProxy(id, networkObjectContainer)
-    : {};
+    // Create an individual emitter that indicates when this object is disposed.
+    // Called by the event handler that handles general network object disposal
+    const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
 
-  // Create a proxy that, for all unknown properties (function calls that the local object creator didn't set),
-  // returns a function that sends a request to the remote network object
-  // TODO: use returned networkObjectFunctions to limit the functions available instead of sending a request for anything
-  const {
-    // The full 'remote' network object which accesses local properties and sends requests for remote functions
-    proxy: remoteObject,
-    // Function to revoke the proxy aka make the proxy stop working. Should use on disposing the network object
-    revoke: revokeProxy,
-  } = Proxy.revocable(localObject, {
-    get(obj: NetworkableObject, prop) {
-      // If the local network object has the property, return it
-      if (prop === 'then' || prop in obj) return obj[prop as keyof typeof obj];
+    /** Container to hold a reference to the network object so the local object can reference the network object in its functions */
+    const networkObjectContainer: NetworkObjectContainer<T> = {
+      networkObject: undefined,
+    };
 
-      // If the prop requested is a symbol, that doesn't work over the network. Reject
-      if (!isString(prop)) return null;
+    // Create the local object to be proxied
+    const localObject = createLocalObjectToProxy
+      ? createLocalObjectToProxy(id, networkObjectContainer)
+      : {};
 
-      // If the local network object doesn't have the property, build a request for it
-      const requestFunction = (...args: unknown[]) =>
-        NetworkService.request(
-          getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
-          prop, // Name of function to run
-          ...args, // Arguments to put into the function
+    // Create a proxy that, for all unknown properties (function calls that the local object creator didn't set),
+    // returns a function that sends a request to the remote network object
+    // TODO: use returned networkObjectFunctions to limit the functions available instead of sending a request for anything
+    const {
+      // The full 'remote' network object which accesses local properties and sends requests for remote functions
+      proxy: remoteObject,
+      // Function to revoke the proxy aka make the proxy stop working. Should use on disposing the network object
+      revoke: revokeProxy,
+    } = Proxy.revocable(localObject, {
+      get(obj: NetworkableObject, prop) {
+        // If the local network object has the property, return it
+        if (prop === 'then' || prop in obj)
+          return obj[prop as keyof typeof obj];
+
+        // If the prop requested is a symbol, that doesn't work over the network. Reject
+        if (!isString(prop)) return null;
+
+        // If the local network object doesn't have the property, build a request for it
+        const requestFunction = (...args: unknown[]) =>
+          NetworkService.request(
+            getNetworkObjectRequestType(
+              id,
+              NetworkObjectRequestSubtype.Function,
+            ),
+            prop, // Name of function to run
+            ...args, // Arguments to put into the function
+          );
+
+        // Save the new request function as the actual function on the object so we don't have to create this function multiple times
+        // TODO: Try making a separate array of lazy loaded request functions instead of putting them on the object and thereby reducing the usefulness of revokeProxy
+        // Took the indexing off of NetworkableObject so normal objects could be used,
+        // but now members can't be accessed by indexing in NetworkObjectService
+        // TODO: fix it so it is indexable but can have specific members
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (obj as any)[prop] = requestFunction;
+        return requestFunction;
+      },
+    });
+
+    const networkObjectInfo: NetworkObjectInfo<T> = {
+      networkObject: remoteObject as T,
+      onDidDispose: networkObjectOnDidDisposeEmitter.event,
+    };
+
+    // Update the networkObjectContainer so the local object can access the networkObject appropriately
+    networkObjectContainer.networkObject = networkObjectInfo.networkObject;
+
+    // Save the network object locally
+    networkObjectRegistrations.set(id, {
+      registrationType: NetworkObjectRegistrationType.Remote,
+      networkObjectInfo,
+      onDidDisposeEmitter: networkObjectOnDidDisposeEmitter,
+      revokeProxy,
+    });
+
+    return networkObjectInfo;
+  })()
+    // Using promise callback notation because I need to run an async function in this sync function and do stuff when it resolves
+    .then((networkObjectInfo) => {
+      // Remove this saved network object promise
+      const thisNetworkObjectPromiseInfoIndex =
+        networkObjectPromiseInfos.findIndex(
+          (nop) => nop.promise === networkObjectPromise,
         );
+      if (thisNetworkObjectPromiseInfoIndex >= 0)
+        networkObjectPromiseInfos.splice(thisNetworkObjectPromiseInfoIndex, 1);
 
-      // Save the new request function as the actual function on the object so we don't have to create this function multiple times
-      // TODO: Try making a separate array of lazy loaded request functions instead of putting them on the object and thereby reducing the usefulness of revokeProxy
-      // Took the indexing off of NetworkableObject so normal objects could be used,
-      // but now members can't be accessed by indexing in NetworkObjectService
-      // TODO: fix it so it is indexable but can have specific members
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (obj as any)[prop] = requestFunction;
-      return requestFunction;
-    },
+      return networkObjectInfo;
+    });
+
+  // Save this promise to return the same thing later
+  networkObjectPromiseInfos.push({
+    id,
+    createLocalObjectToProxy:
+      createLocalObjectToProxy as LocalObjectToProxyCreator<NetworkableObject>,
+    promise: networkObjectPromise,
   });
 
-  const networkObjectInfo: NetworkObjectInfo<T> = {
-    networkObject: remoteObject as T,
-    onDidDispose: networkObjectOnDidDisposeEmitter.event,
-  };
-
-  // Update the networkObjectContainer so the local object can access the networkObject appropriately
-  networkObjectContainer.networkObject = networkObjectInfo.networkObject;
-
-  // Save the network object locally
-  networkObjectRegistrations.set(id, {
-    registrationType: NetworkObjectRegistrationType.Remote,
-    networkObjectInfo,
-    onDidDisposeEmitter: networkObjectOnDidDisposeEmitter,
-    revokeProxy,
-  });
-
-  return networkObjectInfo;
+  return networkObjectPromise;
 };
 
 const networkObjectService = {

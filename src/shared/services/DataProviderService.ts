@@ -25,6 +25,13 @@ const DATA_PROVIDER_LABEL = 'data';
 /** event type for data provider update event */
 const ON_DID_UPDATE = 'onDidUpdate';
 
+/**
+ * An object reference that is a placeholder for updates for data provider subscribers.
+ * We want to make absolutely sure updates that come in are sent to subscribers, so we
+ * use this object reference to tell if we have never had an update before.
+ */
+const SUBSCRIBE_PLACEHOLDER = {};
+
 /** Gets the id for the data provider network object of the specified type */
 const getDataProviderObjectId = (dataType: string) =>
   `${dataType}-${DATA_PROVIDER_LABEL}`;
@@ -59,12 +66,11 @@ async function has(dataType: string): Promise<boolean> {
 }
 
 /**
- * An object reference that is a placeholder for updates for data provider subscribers.
- * We want to make absolutely sure updates that come in are sent to subscribers, so we
- * use this object reference to tell if we have never had an update before.
+ * Creates a subscribe function for a data provider to allow subscribing to updates on the data
+ * @param dataProviderContainer container that holds a reference to the data provider so this subscribe function can reference the data provider
+ * @param onDidUpdate the event to listen to for updates on the data
+ * @returns subscribe function for a data provider
  */
-const SUBSCRIBE_PLACEHOLDER = {};
-
 function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
   dataProviderContainer: NetworkObjectContainer<
     IDataProvider<TSelector, TGetData, TSetData>
@@ -305,6 +311,27 @@ async function registerEngine<TSelector, TGetData, TSetData>(
 }
 
 /**
+ * Create a mock local data provider object for connecting to the remote data provider
+ * @param dataProviderObjectId network object id corresponding to this data provider
+ * @param dataProviderContainer container that holds a reference to the data provider so this subscribe function can reference the data provider
+ * @returns local data provider object that represents a remote data provider
+ */
+function createLocalDataProviderToProxy<TSelector, TGetData, TSetData>(
+  dataProviderObjectId: string,
+  dataProviderContainer: NetworkObjectContainer<
+    IDataProvider<TSelector, TGetData, TSetData>
+  >,
+) {
+  // Create a networked update event
+  const onDidUpdate = NetworkService.getNetworkEvent<boolean>(
+    serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
+  );
+  return {
+    subscribe: createDataProviderSubscriber(dataProviderContainer, onDidUpdate),
+  };
+}
+
+/**
  * Get a data provider that has previously been set up
  * @param dataType type of data that this provider serves
  * @returns information about the data provider with the specified type if one exists, undefined otherwise
@@ -324,18 +351,7 @@ async function get<TSelector, TGetData, TSetData>(
   // Get the network object for this data provider
   const networkObjectInfo = await networkObjectService.get<
     IDataProvider<TSelector, TGetData, TSetData>
-  >(dataProviderObjectId, (_id, networkObjectContainer) => {
-    // Create a networked update event
-    const onDidUpdate = NetworkService.getNetworkEvent<boolean>(
-      serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
-    );
-    return {
-      subscribe: createDataProviderSubscriber(
-        networkObjectContainer,
-        onDidUpdate,
-      ),
-    };
-  });
+  >(dataProviderObjectId, createLocalDataProviderToProxy);
 
   if (!networkObjectInfo) return undefined;
 
