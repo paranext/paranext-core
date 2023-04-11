@@ -122,7 +122,7 @@ class QuickVerseDataProviderEngine {
 exports.activate = async () => {
   logger.log('Quick Verse is activating!');
 
-  const quickVerseDataProviderInfo = papi.dataProvider.registerEngine(
+  const quickVerseDataProviderInfo = await papi.dataProvider.registerEngine(
     'quick-verse.quick-verse',
     new QuickVerseDataProviderEngine(),
   );

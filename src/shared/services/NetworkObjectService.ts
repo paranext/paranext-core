@@ -136,12 +136,15 @@ const getRemoteNetworkObjectFunctions = async (
   }
 };
 
+/** Determine whether or not we know locally if a network object with the provided id exists anywhere on the network */
+const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
+
 /** Determine whether or not a network object with the provided id exists anywhere on the network */
 const has = async (id: string): Promise<boolean> => {
   await initialize();
 
   // Check if we already have this network object
-  if (networkObjectRegistrations.has(id)) return true;
+  if (hasKnown(id)) return true;
 
   // We don't already have this network object. See if other processes have this network object
   // If we get truthy from the request for network object functions, we do have that id
@@ -160,12 +163,12 @@ const set = async <T extends NetworkableObject>(
   networkObject: T,
 ): Promise<DisposableNetworkObjectInfo<T>> => {
   await initialize();
-  if (await has(id))
+  // Check to see if we already know there is a network object with this id.
+  if (hasKnown(id))
     throw new Error(`Network object with id ${id} is already registered`);
 
-  const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
-
-  // Set up request handlers for this network object
+  // Check if there is a network object with this id remotely by trying to register and understanding failure
+  // Try to set up request handlers for this network object
   const unsubPromises = [
     NetworkService.registerRequestHandler(
       getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
@@ -184,7 +187,41 @@ const set = async <T extends NetworkableObject>(
         Promise.resolve((networkObject as any)[functionName](...args)),
     ),
   ];
-  await Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise));
+
+  // Await all of the registrations finishing, successful or not
+  const registrationResponses = await Promise.allSettled(
+    unsubPromises.map((unsubPromise) => unsubPromise.promise),
+  );
+
+  /** Whether the network object successfully registered aka all its request handler registrations were successful */
+  const didSuccessfullyRegister = registrationResponses.every(
+    (response) => response.status === 'fulfilled',
+  );
+
+  if (!didSuccessfullyRegister) {
+    // The network object failed to register. Clean up by unregistering any successful request handlers
+    const unregisterRequestHandlerPromises: Promise<boolean>[] = [];
+    const rejectedRequestHandlerReasons: string[] = [];
+    registrationResponses.forEach((response, registrationIndex) => {
+      if (response.status === 'fulfilled')
+        unregisterRequestHandlerPromises.push(
+          // Run the unsubscriber for this registration
+          unsubPromises[registrationIndex].unsubscriber(),
+        );
+      // Collect the reasons for failure so we can throw a useful error
+      else rejectedRequestHandlerReasons.push(response.reason);
+    });
+
+    throw new Error(
+      `Unable to register network object with id ${id}:\n\t${rejectedRequestHandlerReasons.join(
+        '\n\t',
+      )}`,
+    );
+  }
+
+  // The network object was successfully registered! Set it up locally
+
+  const networkObjectOnDidDisposeEmitter = new PEventEmitter<void>();
 
   const dispose: UnsubscriberAsync = async () => {
     // Unsubscribe all requests for this network object

@@ -262,6 +262,10 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
 ): Promise<DisposableDataProviderInfo<TSelector, TGetData, TSetData>> {
   await initialize();
+
+  // There is a potential networking sync issue here. We check for a data provider, then we create a network event, then we create a network object.
+  // If someone else registers an engine with the same data type at the same time, the two registrations could get intermixed and mess stuff up
+  // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
   if (await has(dataType))
     throw new Error(
       `Data provider with type ${dataType} is already registered`,

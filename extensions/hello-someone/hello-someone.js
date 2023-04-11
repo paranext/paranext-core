@@ -51,7 +51,7 @@ const greetingsDataProviderEngine = {
 exports.activate = async () => {
   logger.log('Hello Someone is activating!');
 
-  const greetingsDataProviderInfo = papi.dataProvider.registerEngine(
+  const greetingsDataProviderInfoPromise = papi.dataProvider.registerEngine(
     'hello-someone.greetings',
     greetingsDataProviderEngine,
   );
@@ -173,6 +173,9 @@ exports.activate = async () => {
       },
     ),
   ];
+
+  // For now, let's just make things easy and await the data provider promise at the end so we don't hold everything else up
+  const greetingsDataProviderInfo = await greetingsDataProviderInfoPromise;
 
   return Promise.all(
     unsubPromises.map((unsubPromise) => unsubPromise.promise),

@@ -280,7 +280,7 @@ function registerRequestHandlerUnsafe(
   const remoteRequest: Promise<void> = isClient()
     ? // If we are the client, try to register with the server because server has all registrations
       requestUnsafe(
-        'server:registerRequest',
+        serializeRequestType(CATEGORY_SERVER, 'registerRequest'),
         requestType,
         ConnectionService.getClientId(),
       )
@@ -289,7 +289,7 @@ function registerRequestHandlerUnsafe(
 
   remoteRequest
     .then(() => {
-      // We have successfully checked that this is the first registration for this requestType, set up the handler
+      // We have successfully checked that this is the first registration for this requestType. Set up the handler
       requestRegistrations.set(requestType, {
         registrationType: 'local',
         requestType,
@@ -475,8 +475,10 @@ const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
 
 /** Map of requestTypes to server-side handlers for those requests */
 const serverRequestHandlers = {
-  'server:registerRequest': registerRemoteRequestHandler,
-  'server:unregisterRequest': unregisterRemoteRequestHandler,
+  [serializeRequestType(CATEGORY_SERVER, 'registerRequest')]:
+    registerRemoteRequestHandler,
+  [serializeRequestType(CATEGORY_SERVER, 'unregisterRequest')]:
+    unregisterRemoteRequestHandler,
 };
 /** Function that unsubscribes all the server request handlers */
 let unsubscribeServerRequestHandlers: UnsubscriberAsync | undefined;
