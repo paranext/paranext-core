@@ -1,6 +1,5 @@
 import './TestButtonsPanel.css';
 import { useCallback, useMemo, useState } from 'react';
-import usePromise from '@renderer/hooks/papi-hooks/usePromise';
 import papi from '@shared/services/papi';
 import * as NetworkService from '@shared/services/NetworkService';
 import { debounce, getErrorMessage, isString } from '@shared/util/Util';
@@ -50,10 +49,6 @@ const addThree = papi.commands.createSendCommandFunction<
 
 const addMany = papi.commands.createSendCommandFunction<number[], number>(
   'addMany',
-);
-
-const getResourcesPath = papi.commands.createSendCommandFunction<[], string>(
-  'getResourcesPath',
 );
 
 const helloWorld = papi.commands.createSendCommandFunction<[], string>(
@@ -124,16 +119,6 @@ function TestButtonsPanel() {
   );
 
   const [addOneResult, setAddOneResult] = useState(0);
-
-  const [resourcesPath] = usePromise(
-    useCallback(async () => {
-      await new Promise<void>((resolve) => {
-        setTimeout(() => resolve(), 5000);
-      });
-      return getResourcesPath();
-    }, []),
-    'retrieving',
-  );
 
   const runPromise = useCallback(
     async (asyncFn: () => Promise<unknown>) => {
@@ -459,7 +444,6 @@ function TestButtonsPanel() {
         </papi.react.components.PButton>
       </div>
       <div className="hello">
-        <div>resourcesPath: {resourcesPath}</div>
         <div>{promiseReturn}</div>
       </div>
       {webViews.map((webView, i) => (

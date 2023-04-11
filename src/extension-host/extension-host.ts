@@ -33,7 +33,6 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
       `Test Error thrown in throwErrorExtensionHost command: ${message}`,
     );
   },
-  getResourcesPath: async () => globalThis.resourcesPath,
 };
 
 NetworkService.initialize()
