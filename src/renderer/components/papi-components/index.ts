@@ -5,10 +5,11 @@ import Switch from '@renderer/components/papi-components/switch.component';
 import TextField from '@renderer/components/papi-components/text-field.component';
 
 /** All React components to be exposed on the papi */
-export default {
+const papiComponents = {
   Button,
   ComboBox,
   Slider,
   Switch,
   TextField,
 };
+export default papiComponents;

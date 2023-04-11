@@ -10,6 +10,7 @@ const papiFetch: typeof fetch = (...args) => {
   return fetchOriginal(...args);
 };
 
-export default {
+const internetService = {
   fetch: papiFetch,
 };
+export default internetService;

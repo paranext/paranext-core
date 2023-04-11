@@ -18,7 +18,7 @@ const papiComponents = isRenderer() ? require('@renderer/components/papi-compone
 const papiContext = isRenderer() ? require('@renderer/context/papi-context').default : {};
 const papiHooks = isRenderer() ? require('@renderer/hooks/papi-hooks').default : {};
 
-export default {
+const papi = {
   // Classes
   PEventEmitter,
 
@@ -38,6 +38,7 @@ export default {
   logger,
   internet: internetService,
 };
+export default papi;
 
 /**
  * Modules that someone might try to require in their extensions that we have similar apis for.

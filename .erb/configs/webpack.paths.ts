@@ -23,7 +23,7 @@ const distRendererPath = path.join(distPath, 'renderer');
 
 const buildPath = path.join(releasePath, 'build');
 
-export default {
+const webpackPaths = {
   rootPath,
   dllPath,
   srcPath,
@@ -42,3 +42,4 @@ export default {
   distRendererPath,
   buildPath,
 };
+export default webpackPaths;

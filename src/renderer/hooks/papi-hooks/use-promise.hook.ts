@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
  * @param preserveValue whether to leave the value as the most recent resolved promise value or set it back to defaultValue while running the promise again. Default to true
  * @returns [value, isLoading] the current value for the promise, either the defaultValue or the resolved promise value; whether the promise is waiting to be resolved
  */
-export default <T>(
+const usePromise = <T>(
   promiseFactoryCallback: () => Promise<T | null>,
   defaultValue: T,
   preserveValue = true,
@@ -39,3 +39,4 @@ export default <T>(
 
   return [value, loading];
 };
+export default usePromise;
