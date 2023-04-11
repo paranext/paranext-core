@@ -199,7 +199,7 @@ function TestButtonsPanel() {
 
   // Test a method on a data provider engine that isn't on the interface to see if you can actually do this
   const [hasTestedRandomMethod, setHasTestedRandomMethod] = useState(false);
-  const [greetingsDataProvider] = useDataProvider<
+  const greetingsDataProvider = useDataProvider<
     IDataProvider<string, string, string>
   >('hello-someone.greetings');
   if (!hasTestedRandomMethod && greetingsDataProvider) {

@@ -7,11 +7,9 @@ import { isString } from '@shared/util/Util';
 
 /**
  * Gets a data provider with specified data type
- * @param dataProviderSource string data type to get data provider for OR [dataProvider, isDisposed] result of useDataProvider if you
- * want this hook to just return the data provider again
- * @returns [dataProvider, isDisposed]
- *  - `dataProvider`: data provider if it has been retrieved, undefined otherwise
- *  - `isDisposed`: whether the data provider is disposed and is no longer available
+ * @param dataProviderSource string data type to get data provider for OR dataProvider (result of useDataProvider if you
+ * want this hook to just return the data provider again)
+ * @returns data provider if it has been retrieved and is not disposed, undefined otherwise
  *
  * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
  *  specifying your own types, or provide a custom data provider type
@@ -21,19 +19,19 @@ import { isString } from '@shared/util/Util';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function useDataProvider<T extends IDataProvider<any, any, any>>(
   dataType: string | undefined,
-): [T | undefined, boolean];
+): T | undefined;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function useDataProvider<T extends IDataProvider<any, any, any>>(
-  dataProvider: [T | undefined, boolean] | undefined,
-): [T | undefined, boolean];
+  dataProvider: T | undefined,
+): T | undefined;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function useDataProvider<T extends IDataProvider<any, any, any>>(
-  dataProviderSource: string | [T | undefined, boolean] | undefined,
-): [T | undefined, boolean];
+  dataProviderSource: string | T | undefined,
+): T | undefined;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function useDataProvider<T extends IDataProvider<any, any, any>>(
-  dataProviderSource: string | [T | undefined, boolean] | undefined,
-): [T | undefined, boolean] {
+  dataProviderSource: string | T | undefined,
+): T | undefined {
   // Check to see if they passed in the results of a useDataProvider hook or undefined
   const didReceiveDataProvider = !isString(dataProviderSource);
 
@@ -63,18 +61,14 @@ function useDataProvider<T extends IDataProvider<any, any, any>>(
     useCallback(() => setIsDisposed(true), []),
   );
 
-  // Get the data provider that was provided or make an array to return for undefined
-  const dataProviderReceived: [T | undefined, boolean] =
-    didReceiveDataProvider && dataProviderSource
-      ? // We actually received a data provider, so just return it
-        dataProviderSource
-      : // Type assert dataType to undefined because we know it is not a string because didReceiveDataProvider is true
-        [dataProviderSource as undefined, isDisposed];
+  // If we received a data provider or undefined, return it
+  if (didReceiveDataProvider) return dataProviderSource;
 
-  return didReceiveDataProvider
-    ? dataProviderReceived
-    : // Type assert here - the user of this hook must make sure to provide the correct type
-      [dataProviderInfo?.dataProvider as T | undefined, isDisposed];
+  // If we had to get a data provider, return it if it is not disposed
+  return dataProviderInfo && !isDisposed
+    ? // Type assert here - the user of this hook must make sure to provide the correct type
+      (dataProviderInfo.dataProvider as T)
+    : undefined;
 }
 
 export default useDataProvider;

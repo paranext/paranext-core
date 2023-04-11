@@ -8,8 +8,8 @@ import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
 
 /**
  * Subscribes to run a callback on a data provider's data with specified selector
- * @param dataProviderSource string data type to get data provider for OR [dataProvider, isDisposed] result of useDataProvider if you
- * want to consolidate and only get the data provider once.
+ * @param dataProviderSource string data type to get data provider for OR dataProvider (result of useDataProvider if you
+ * want to consolidate and only get the data provider once)
  * @param selector tells the provider what data this listener is listening for
  * @param defaultValue the initial value to return while first awaiting the data
  *
@@ -30,9 +30,7 @@ function useData<TSelector, TGetData, TSetData>(
   subscriberOptions?: DataProviderSubscriberOptions,
 ): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
 function useData<TSelector, TGetData, TSetData>(
-  dataProvider:
-    | [IDataProvider<TSelector, TGetData, TSetData> | undefined, boolean]
-    | undefined,
+  dataProvider: IDataProvider<TSelector, TGetData, TSetData> | undefined,
   selector: TSelector,
   defaultValue: TGetData,
   subscriberOptions?: DataProviderSubscriberOptions,
@@ -40,7 +38,7 @@ function useData<TSelector, TGetData, TSetData>(
 function useData<TSelector, TGetData, TSetData>(
   dataProviderSource:
     | string
-    | [IDataProvider<TSelector, TGetData, TSetData> | undefined, boolean]
+    | IDataProvider<TSelector, TGetData, TSetData>
     | undefined,
   selector: TSelector,
   defaultValue: TGetData,
@@ -50,7 +48,7 @@ function useData<TSelector, TGetData, TSetData>(
   const [data, setDataInternal] = useState<TGetData>(defaultValue);
 
   // Get the data provider info for this data type
-  const [dataProvider, isDisposed] =
+  const dataProvider =
     useDataProvider<IDataProvider<TSelector, TGetData, TSetData>>(
       dataProviderSource,
     );
@@ -61,7 +59,7 @@ function useData<TSelector, TGetData, TSetData>(
   // Wrap subscribe so we can call it as a normal PEvent in useEvent
   const wrappedSubscribeEvent: PEventAsync<TGetData> | undefined = useMemo(
     () =>
-      dataProvider && !isDisposed
+      dataProvider
         ? async (eventCallback: PEventHandler<TGetData>) => {
             const unsub = await dataProvider.subscribe(
               selector,
@@ -80,7 +78,7 @@ function useData<TSelector, TGetData, TSetData>(
             };
           }
         : undefined,
-    [dataProvider, selector, subscriberOptions, isDisposed],
+    [dataProvider, selector, subscriberOptions],
   );
 
   // Subscribe to the data provider
@@ -90,10 +88,10 @@ function useData<TSelector, TGetData, TSetData>(
   /** Send an update to the backend to update the data. Let the update handle actually updating our data here */
   const setData = useMemo(
     () =>
-      dataProvider && !isDisposed
+      dataProvider
         ? async (newData: TSetData) => dataProvider.set(selector, newData)
         : undefined,
-    [dataProvider, selector, isDisposed],
+    [dataProvider, selector],
   );
 
   return [data, setData, isLoading];

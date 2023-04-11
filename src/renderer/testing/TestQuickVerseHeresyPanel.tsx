@@ -28,11 +28,12 @@ function TestQuickVerseHeresyPanel() {
   );
 
   // Test a custom setter method on a data provider engine that isn't on the interface to see if you can actually do this
-  const [quickVerseDataProvider, quickVerseDataProviderIsDisposed] =
-    useDataProvider<QuickVerseDataProvider>('quick-verse.quick-verse');
+  const quickVerseDataProvider = useDataProvider<QuickVerseDataProvider>(
+    'quick-verse.quick-verse',
+  );
 
   const [verseText] = useData(
-    [quickVerseDataProvider, quickVerseDataProviderIsDisposed],
+    quickVerseDataProvider,
     verseRef,
     'Verse text goes here',
   );
@@ -50,7 +51,7 @@ function TestQuickVerseHeresyPanel() {
           className="scr-verse-text-area"
           value={verseText}
           onChange={(e) => {
-            if (quickVerseDataProvider && !quickVerseDataProviderIsDisposed)
+            if (quickVerseDataProvider)
               quickVerseDataProvider.setHeresy(verseRef, e.target.value);
           }}
         />
