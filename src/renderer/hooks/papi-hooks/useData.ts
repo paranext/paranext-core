@@ -8,8 +8,7 @@ import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
 
 /**
  * Subscribes to run a callback on a data provider's data with specified selector
- * @param dataProviderSource string data type to get data provider for OR dataProvider (result of useDataProvider if you
- * want to consolidate and only get the data provider once)
+ * @param dataType string data type to get data provider for
  * @param selector tells the provider what data this listener is listening for
  * @param defaultValue the initial value to return while first awaiting the data
  *
@@ -29,12 +28,32 @@ function useData<TSelector, TGetData, TSetData>(
   defaultValue: TGetData,
   subscriberOptions?: DataProviderSubscriberOptions,
 ): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
+/**
+ * Subscribes to run a callback on a data provider's data with specified selector
+ * @param dataProvider result of useDataProvider if you want to consolidate and only get the data provider once
+ * @param selector tells the provider what data this listener is listening for
+ * @param defaultValue the initial value to return while first awaiting the data
+ *
+ *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+ * @param subscriberOptions various options to adjust how the subscriber emits updates
+ *
+ *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+ * @returns [data, setData, isLoading]
+ *  - `data`: the current value for the data from the data provider with the specified selector, either the defaultValue or the resolved data
+ *  - `setData`: asynchronous function to request that the data provider update the data at this selector. Returns true if successful.
+ *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
+ *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
+ */
 function useData<TSelector, TGetData, TSetData>(
   dataProvider: IDataProvider<TSelector, TGetData, TSetData> | undefined,
   selector: TSelector,
   defaultValue: TGetData,
   subscriberOptions?: DataProviderSubscriberOptions,
 ): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
+/**
+ * @param dataProviderSource string data type to get data provider for OR dataProvider (result of useDataProvider if you
+ * want to consolidate and only get the data provider once)
+ */
 function useData<TSelector, TGetData, TSetData>(
   dataProviderSource:
     | string
