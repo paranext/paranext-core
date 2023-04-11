@@ -19,6 +19,7 @@ import {
   NetworkObjectContainer,
   NetworkObjectInfo,
 } from '@shared/models/NetworkObjectInfo';
+import logger from '@shared/util/logger';
 
 /** Prefix on requests that indicates that the request is related to a network object */
 const CATEGORY_NETWORK_OBJECT = 'object';
@@ -380,6 +381,12 @@ const get = <T extends NetworkableObject>(
 
     // Update the networkObjectContainer so the local object can access the networkObject appropriately
     networkObjectContainer.networkObject = networkObjectInfo.networkObject;
+
+    // Quick sanity check to make sure our memoization worked and we didn't accidentally generate multiple network objects with the same id
+    if (networkObjectRegistrations.get(id))
+      logger.error(
+        `Network object with id ${id} already exists! This may cause problems.`,
+      );
 
     // Save the network object locally
     networkObjectRegistrations.set(id, {
