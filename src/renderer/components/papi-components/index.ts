@@ -12,4 +12,7 @@ const papiComponents = {
   Switch,
   TextField,
 };
+
 export default papiComponents;
+
+export type PapiComponents = typeof papiComponents;

@@ -44,6 +44,14 @@ export type TextFieldProps = {
    */
   className?: string;
   /**
+   * Starting value for the text field if it is not controlled
+   */
+  defaultValue?: unknown;
+  /**
+   * Value of the text field if controlled
+   */
+  value?: unknown;
+  /**
    * Triggers when content of textfield is changed
    */
   onChange?: ChangeEventHandler<HTMLInputElement>;
@@ -67,6 +75,8 @@ function TextField({
   placeholder,
   isRequired = false,
   className,
+  defaultValue,
+  value,
   onChange,
   onFocus,
   onBlur,
@@ -82,6 +92,8 @@ function TextField({
       placeholder={placeholder}
       required={isRequired}
       className={`papi-textfield ${className ?? ''}`}
+      defaultValue={defaultValue}
+      value={value}
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}

@@ -5,6 +5,7 @@ import { TabInfo } from '@shared/data/web-view.model';
 import { debounce } from '@shared/utils/util';
 import { useState, useMemo, useCallback } from 'react';
 import { QuickVerseDataProvider } from '@extensions/quick-verse/quick-verse';
+import TextField from '@renderer/components/papi-components/text-field.component';
 
 function TestQuickVerseHeresyPanel() {
   const [verseRef, setVerseRef] = useState<string>('John 11:35');
@@ -34,7 +35,8 @@ function TestQuickVerseHeresyPanel() {
   return (
     <div className="buttons-panel">
       <div className="hello">
-        <input
+        <TextField
+          label="Verse Ref"
           value={verseRefIntermediate}
           onChange={(e) => {
             updateVerseRef(e.target.value);

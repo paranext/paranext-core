@@ -14,3 +14,5 @@ const papiHooks = {
 };
 
 export default papiHooks;
+
+export type PapiHooks = typeof papiHooks;

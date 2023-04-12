@@ -199,7 +199,8 @@ function TestButtonsPanel() {
   return (
     <div className="buttons-panel">
       <div className="hello">
-        <input
+        <papi.react.components.TextField
+          label="Verse Ref"
           value={verseRefIntermediate}
           onChange={(e) => {
             updateVerseRef(e.target.value);
@@ -213,9 +214,8 @@ function TestButtonsPanel() {
             if (setVerseText) setVerseText({ text: e.target.value, isHeresy: true });
           }}
         />
-        <button
-          className="testButton"
-          type="button"
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echo('Echo Stuff'));
@@ -227,10 +227,9 @@ function TestButtonsPanel() {
           }}
         >
           Echo
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echoRenderer('Echo Renderer Stuff'));
@@ -242,10 +241,9 @@ function TestButtonsPanel() {
           }}
         >
           Echo Renderer
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echoExtensionHost('Echo Extension Host Stuff'));
@@ -259,10 +257,9 @@ function TestButtonsPanel() {
           }}
         >
           Echo Extension Host
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() =>
@@ -280,10 +277,9 @@ function TestButtonsPanel() {
           }}
         >
           Echo Someone Renderer
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addThree(1, 2, 3));
@@ -295,10 +291,9 @@ function TestButtonsPanel() {
           }}
         >
           AddThree (Renderer)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
@@ -310,10 +305,9 @@ function TestButtonsPanel() {
           }}
         >
           AddMany (Extension Host)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={() =>
             runPromise(async () => {
               const addResult = await addOne(addOneResult);
@@ -327,10 +321,9 @@ function TestButtonsPanel() {
           }}
         >
           AddOne (C#)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => helloWorld());
@@ -344,10 +337,9 @@ function TestButtonsPanel() {
           }}
         >
           Hello World (Extension)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => helloSomeone('Paranext user'));
@@ -361,30 +353,27 @@ function TestButtonsPanel() {
           }}
         >
           Hello Someone (Extension)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={() => runPromise(() => throwError('Test error'))}
         >
           Test Exception
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={() => runPromise(() => throwErrorExtensionHost('Test error'))}
         >
           Test Exception (Extension Host)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={() => runPromise(() => throwErrorHelloWorld('Test error'))}
         >
           Test Exception (Hello World)
-        </button>
+        </papi.react.components.Button>
         <papi.react.components.Button
-          className="testButton"
+          className="test-button"
           onClick={() => runPromise(() => test())}
           onContextMenu={() => {
             executeMany(test);
