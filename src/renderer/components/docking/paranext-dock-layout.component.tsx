@@ -10,7 +10,7 @@ import createTabPanel from '@renderer/testing/test-panel.component';
 import createErrorTab from '@renderer/components/docking/error-tab.component';
 import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
-import createQuickVerseHeresyPanel from '@renderer/testing/TestQuickVerseHeresyPanel';
+import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-heresy-panel.component';
 
 // NOTE: 'card' is a built-in style. We can likely remove it when we
 // create a full theme for Paranext.

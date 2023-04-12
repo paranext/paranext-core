@@ -1,5 +1,5 @@
-import IDataProvider from '@shared/models/IDataProvider';
-import dataProviderService from '@shared/services/DataProviderService';
+import IDataProvider from '@shared/models/data-provider.interface';
+import dataProviderService from '@shared/services/data-provider.service';
 import { useCallback, useMemo, useState } from 'react';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';

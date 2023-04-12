@@ -42,10 +42,7 @@ export function isString(o: unknown): o is string {
  */
 // We don't know the parameter types since this function can be anything
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function debounce<T extends (...args: any[]) => void>(
-  fn: T,
-  delay = 300,
-): T {
+export function debounce<T extends (...args: any[]) => void>(fn: T, delay = 300): T {
   if (isString(fn)) throw new Error('Tried to debounce a string! Could be XSS');
   let timeout: ReturnType<typeof setTimeout>;
   return ((...args) => {

@@ -1,4 +1,4 @@
-import IDataProvider from '@shared/models/IDataProvider';
+import IDataProvider from '@shared/models/data-provider.interface';
 import { PapiEvent } from '@shared/models/papi-event.model';
 import { UnsubscriberAsync } from '@shared/utils/papi-util';
 

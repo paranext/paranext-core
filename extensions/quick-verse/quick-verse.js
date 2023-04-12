@@ -25,23 +25,8 @@ class QuickVerseDataProviderEngine {
   // The contents of this method run before the update is emitted.
   // TODO: What will actually happen if we run this in `get`? Stack overflow?
   notifyUpdate() {
-    logger.log(
-      `Quick verse notifyUpdate! latestVerseRef = ${this.latestVerseRef}`,
-    );
+    logger.log(`Quick verse notifyUpdate! latestVerseRef = ${this.latestVerseRef}`);
     return true;
-  }
-
-  /**
-   * Valid selectors:
-   * - `'notify'` - informs the listener of any changes in quick verse text but does not carry data
-   * - `'latest'` - the latest-updated quick verse text including pulling a verse from the server and a heretic changing the verse
-   * - Scripture Reference strings. Ex: `'Romans 1:16'`
-   * @param {string} selector selector provided by user
-   * @returns selector for use internally
-   */
-  #getSelector(selector) {
-    const selectorL = selector.toLowerCase();
-    return selectorL === 'latest' ? this.latestVerseRef : selectorL;
   }
 
   /**
@@ -60,16 +45,14 @@ class QuickVerseDataProviderEngine {
     if (!data.isHeresy) return false;
 
     // If there is no change in the verse text, don't update
-    if (data.text === this.verses[this.#getSelector(selector)].text)
-      return false;
+    if (data.text === this.verses[this.#getSelector(selector)].text) return false;
 
     // Update the verse text, track the latest change, and send an update
     this.verses[this.#getSelector(selector)] = {
       text: data.text,
       isChanged: true,
     };
-    if (selector !== 'latest')
-      this.latestVerseRef = this.#getSelector(selector);
+    if (selector !== 'latest') this.latestVerseRef = this.#getSelector(selector);
     return true;
   }
 
@@ -96,17 +79,14 @@ class QuickVerseDataProviderEngine {
       // Fetch the verse, cache it, and return it
       try {
         const verseResponse = await papi.fetch(
-          `https://bible-api.com/${encodeURIComponent(
-            this.#getSelector(selector),
-          )}`,
+          `https://bible-api.com/${encodeURIComponent(this.#getSelector(selector))}`,
         );
         const verseData = await verseResponse.json();
         const text = verseData.text.replaceAll('\n', '');
         responseVerse = { text };
         this.verses[this.#getSelector(selector)] = responseVerse;
         // Cache the verse text, track the latest cached verse, and send an update
-        if (selector !== 'latest')
-          this.latestVerseRef = this.#getSelector(selector);
+        if (selector !== 'latest') this.latestVerseRef = this.#getSelector(selector);
         this.notifyUpdate();
       } catch (e) {
         responseVerse = {
@@ -117,6 +97,19 @@ class QuickVerseDataProviderEngine {
 
     return responseVerse.text;
   };
+
+  /**
+   * Valid selectors:
+   * - `'notify'` - informs the listener of any changes in quick verse text but does not carry data
+   * - `'latest'` - the latest-updated quick verse text including pulling a verse from the server and a heretic changing the verse
+   * - Scripture Reference strings. Ex: `'Romans 1:16'`
+   * @param {string} selector selector provided by user
+   * @returns selector for use internally
+   */
+  #getSelector(selector) {
+    const selectorL = selector.toLowerCase();
+    return selectorL === 'latest' ? this.latestVerseRef : selectorL;
+  }
 }
 
 exports.activate = async () => {
@@ -129,9 +122,7 @@ exports.activate = async () => {
 
   const unsubPromises = [];
 
-  return Promise.all(
-    unsubPromises.map((unsubPromise) => unsubPromise.promise),
-  ).then(() => {
+  return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
     logger.log('Quick Verse is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises

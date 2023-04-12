@@ -1,8 +1,10 @@
-import IDataProvider, { DataProviderSubscriberOptions } from '@shared/models/IDataProvider';
-import useEventAsync from '@renderer/hooks/papi-hooks/useEventAsync';
+import IDataProvider, {
+  DataProviderSubscriberOptions,
+} from '@shared/models/data-provider.interface';
+import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
 import { useMemo, useState } from 'react';
 import { PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.model';
-import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
+import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 
 /**
  * Subscribes to run a callback on a data provider's data with specified selector

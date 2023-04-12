@@ -14,7 +14,7 @@ import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import logger from '@shared/services/logger.service';
 import { isRenderer } from '@shared/utils/internal-util';
 import internetService from '@shared/services/internet.service';
-import dataProviderService from '@shared/services/DataProviderService';
+import dataProviderService from '@shared/services/data-provider.service';
 
 // TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
 const papiComponents = isRenderer() ? require('@renderer/components/papi-components').default : {};

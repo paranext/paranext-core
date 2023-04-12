@@ -1,6 +1,6 @@
 import './test-buttons-panel.component.css';
-import useData from '@renderer/hooks/papi-hooks/useData';
-import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
+import useData from '@renderer/hooks/papi-hooks/use-data.hook';
+import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import { TabInfo } from '@shared/data/web-view.model';
 import { debounce } from '@shared/utils/util';
 import { useState, useMemo, useCallback } from 'react';
