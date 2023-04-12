@@ -57,6 +57,12 @@ export type ComboBoxProps = {
   onBlur?: FocusEventHandler<HTMLDivElement>;
 };
 
+/**
+ * Dropdown selector displaying various options from which to choose
+ *
+ * Thanks to MUI for heavy inspiration and documentation
+ * https://mui.com/material-ui/getting-started/overview/
+ */
 function ComboBox({
   title,
   isDisabled = false,

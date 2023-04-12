@@ -65,6 +65,12 @@ export type TextFieldProps = {
   onBlur?: FocusEventHandler<HTMLInputElement>;
 };
 
+/**
+ * Text input field
+ *
+ * Thanks to MUI for heavy inspiration and documentation
+ * https://mui.com/material-ui/getting-started/overview/
+ */
 function TextField({
   variant = 'outlined',
   isDisabled = false,
