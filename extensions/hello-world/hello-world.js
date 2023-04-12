@@ -192,13 +192,13 @@ exports.activate = async () => {
 
   // Test subscribing to a data provider
   const unsubGreetings = await greetingsDataProvider.subscribe('Bill', (billGreeting) =>
-    logger.log(`Bill's greeting: ${billGreeting}`),
+    logger.info(`Bill's greeting: ${billGreeting}`),
   );
 
   unsubPromises.push(unsubGreetings);
 
   return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
-    logger.log('Hello World is finished activating!');
+    logger.info('Hello World is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
     );

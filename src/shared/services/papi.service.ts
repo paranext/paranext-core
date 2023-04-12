@@ -15,9 +15,9 @@ import logger from '@shared/services/logger.service';
 import { isRenderer } from '@shared/utils/internal-util';
 import internetService from '@shared/services/internet.service';
 import dataProviderService from '@shared/services/data-provider.service';
-import { type PapiComponents } from '@renderer/components/papi-components';
-import { type PapiContext } from '@renderer/context/papi-context';
-import { type PapiHooks } from '@renderer/hooks/papi-hooks';
+import type { PapiComponents } from '@renderer/components/papi-components';
+import type { PapiContext } from '@renderer/context/papi-context';
+import type { PapiHooks } from '@renderer/hooks/papi-hooks';
 
 // TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
 const papiComponents: PapiComponents = isRenderer()

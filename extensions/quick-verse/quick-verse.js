@@ -5,7 +5,7 @@ const papi = require('papi');
 
 const { logger } = papi;
 
-logger.log('Quick Verse is importing!');
+logger.info('Quick Verse is importing!');
 
 const unsubscribers = [];
 
@@ -25,7 +25,7 @@ class QuickVerseDataProviderEngine {
   // The contents of this method run before the update is emitted.
   // TODO: What will actually happen if we run this in `get`? Stack overflow?
   notifyUpdate() {
-    logger.log(`Quick verse notifyUpdate! latestVerseRef = ${this.latestVerseRef}`);
+    logger.info(`Quick verse notifyUpdate! latestVerseRef = ${this.latestVerseRef}`);
     return true;
   }
 
@@ -113,7 +113,7 @@ class QuickVerseDataProviderEngine {
 }
 
 exports.activate = async () => {
-  logger.log('Quick Verse is activating!');
+  logger.info('Quick Verse is activating!');
 
   const quickVerseDataProviderInfo = await papi.dataProvider.registerEngine(
     'quick-verse.quick-verse',
@@ -123,7 +123,7 @@ exports.activate = async () => {
   const unsubPromises = [];
 
   return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
-    logger.log('Quick Verse is finished activating!');
+    logger.info('Quick Verse is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises
         .map((unsubPromise) => unsubPromise.unsubscriber)

@@ -74,7 +74,7 @@ exports.activate = async () => {
           console.debug('Debug Hello Someone WebView');
 
           function print(input) {
-            papi.logger.log(input);
+            papi.logger.info(input);
           }
 
           const dataProviderInfoPromise = papi.dataProvider.get('hello-someone.greetings');
@@ -174,7 +174,7 @@ exports.activate = async () => {
   const greetingsDataProviderInfo = await greetingsDataProviderInfoPromise;
 
   return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
-    logger.log('Hello Someone is finished activating!');
+    logger.info('Hello Someone is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises
         .map((unsubPromise) => unsubPromise.unsubscriber)
