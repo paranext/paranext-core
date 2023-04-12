@@ -1,49 +1,59 @@
 using System.Text.Json;
-using Paranext.DataProvider.Data;
-using Paranext.DataProvider.Web;
+using Paranext.DataProvider.MessageHandlers;
+using Paranext.DataProvider.Messages;
+using Paranext.DataProvider.MessageTransports;
 using PtxUtils;
 
 namespace Paranext.DataProvider;
 
 public static class Program
 {
-    public static async Task Main(/* string[] args */)
+    public static async Task Main()
     {
-        PapiClient connection = new();
+        Console.WriteLine("Paranext data provider starting up");
 
-        // Connect to the server
-        Console.WriteLine("Connecting...");
-        Task connectTask = connection.Connect();
-        await connectTask;
-        if (connectTask.Exception != null)
+        using PapiClient papi = new();
+        try
         {
-            Console.Error.WriteLine("Error connecting:\n" + connectTask.Exception);
-            return;
+            if (!await papi.ConnectAsync())
+            {
+                Console.WriteLine("Paranext data provider could not connect");
+                return;
+            }
+
+            if (!papi.RegisterRequestHandler(RequestType.AddOne, RequestAddOne))
+            {
+                Console.WriteLine("Paranext data provider could not register request handler");
+                return;
+            }
+
+            Console.WriteLine("Paranext data provider ready!");
+            papi.BlockUntilMessageHandlingComplete();
         }
-        Console.WriteLine("Connected");
+        finally
+        {
+            await papi.DisconnectAsync();
+        }
 
-        // Add request handlers
-        bool result = await connection.RegisterRequest(RequestTypes.AddOne, RequestAddOne);
-        if (!result)
-            return;
-
-        // Main loop for handling messages from the server
-        await connection.HandleMessages();
-
-        Console.WriteLine("Connection closed");
+        Console.WriteLine("Paranext data provider shutting down");
     }
 
     #region Request handlers
-    private static RequestReturn RequestAddOne(dynamic val)
+
+    private static ResponseToRequest RequestAddOne(dynamic val)
     {
         if (val is not JsonElement element || element.GetArrayLength() != 1)
-            return new RequestReturn("Unexpected data in request: " + val);
+            return new ResponseToRequest("Unexpected data in request: " + val);
 
-        int? intVal = ErrorUtils.IgnoreErrors("Trying to parse data from server", () => element[0].GetInt32());
+        int? intVal = ErrorUtils.IgnoreErrors(
+            "Trying to parse data from server",
+            () => element[0].GetInt32()
+        );
         if (intVal == null)
-            return new RequestReturn("Unexpected data in request: " + val);
+            return new ResponseToRequest("Unexpected data in request: " + val);
 
-        return new RequestReturn(intVal + 1);
+        return new ResponseToRequest(intVal + 1);
     }
+
     #endregion
 }

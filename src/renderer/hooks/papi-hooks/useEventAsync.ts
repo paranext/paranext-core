@@ -1,8 +1,8 @@
-import { getNetworkEvent } from '@shared/services/NetworkService';
-import { PEvent, PEventAsync, PEventHandler } from '@shared/models/PEvent';
-import { isString } from '@shared/util/Util';
 import { useCallback, useEffect, useMemo } from 'react';
-import usePromise from '@renderer/hooks/papi-hooks/usePromise';
+import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
+import { PapiEvent, PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.model';
+import { getNetworkEvent } from '@shared/services/network.service';
+import { isString } from '@shared/utils/util';
 
 const noopUnsubscriber = () => false;
 
@@ -16,14 +16,11 @@ const noopUnsubscriber = () => false;
  *
  *    WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated every render
  */
-export default <T>(
-  event: PEvent<T> | PEventAsync<T> | string | undefined,
-  eventHandler: PEventHandler<T>,
+const useEventAsync = <T>(
+  event: PapiEvent<T> | PapiEventAsync<T> | string | undefined,
+  eventHandler: PapiEventHandler<T>,
 ) => {
-  const onEvent = useMemo(
-    () => (isString(event) ? getNetworkEvent<T>(event) : event),
-    [event],
-  );
+  const onEvent = useMemo(() => (isString(event) ? getNetworkEvent<T>(event) : event), [event]);
 
   // Subscribe to the event asynchronously
   const [unsubscribe] = usePromise(
@@ -50,3 +47,5 @@ export default <T>(
     };
   }, [unsubscribe]);
 };
+
+export default useEventAsync;

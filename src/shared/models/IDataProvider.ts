@@ -1,5 +1,5 @@
-import { UnsubscriberAsync } from '@shared/util/PapiUtil';
-import { PEventHandler } from '@shared/models/PEvent';
+import { UnsubscriberAsync } from '@shared/utils/papi-util';
+import { PapiEventHandler } from '@shared/models/papi-event.model';
 
 /** Various options to adjust how the data provider subscriber emits updates */
 export type DataProviderSubscriberOptions = {
@@ -41,7 +41,7 @@ export type DataProviderSubscriberOptions = {
  */
 export type DataProviderSubscriber<TSelector, TGetData> = (
   selector: TSelector,
-  callback: PEventHandler<TGetData>,
+  callback: PapiEventHandler<TGetData>,
   options?: DataProviderSubscriberOptions,
 ) => Promise<UnsubscriberAsync>;
 

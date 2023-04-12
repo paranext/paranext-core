@@ -1,16 +1,15 @@
-import './TestButtonsPanel.css';
+import './test-buttons-panel.component.css';
 import useData from '@renderer/hooks/papi-hooks/useData';
 import useDataProvider from '@renderer/hooks/papi-hooks/useDataProvider';
-import { TabInfo } from '@shared/data/WebViewTypes';
-import { debounce } from '@shared/util/Util';
+import { TabInfo } from '@shared/data/web-view.model';
+import { debounce } from '@shared/utils/util';
 import { useState, useMemo, useCallback } from 'react';
 import { QuickVerseDataProvider } from '@extensions/quick-verse/quick-verse';
 
 function TestQuickVerseHeresyPanel() {
   const [verseRef, setVerseRef] = useState<string>('John 11:35');
   // Displayed verse ref while debouncing the actual verse ref
-  const [verseRefIntermediate, setVerseRefIntermediate] =
-    useState<string>(verseRef);
+  const [verseRefIntermediate, setVerseRefIntermediate] = useState<string>(verseRef);
   const setVerseRefDebounced = useMemo(
     () =>
       debounce((newVerseRef: string) => {
@@ -28,15 +27,9 @@ function TestQuickVerseHeresyPanel() {
   );
 
   // Test a custom setter method on a data provider engine that isn't on the interface to see if you can actually do this
-  const quickVerseDataProvider = useDataProvider<QuickVerseDataProvider>(
-    'quick-verse.quick-verse',
-  );
+  const quickVerseDataProvider = useDataProvider<QuickVerseDataProvider>('quick-verse.quick-verse');
 
-  const [verseText] = useData(
-    quickVerseDataProvider,
-    verseRef,
-    'Verse text goes here',
-  );
+  const [verseText] = useData(quickVerseDataProvider, verseRef, 'Verse text goes here');
 
   return (
     <div className="buttons-panel">
@@ -51,8 +44,7 @@ function TestQuickVerseHeresyPanel() {
           className="scr-verse-text-area"
           value={verseText}
           onChange={(e) => {
-            if (quickVerseDataProvider)
-              quickVerseDataProvider.setHeresy(verseRef, e.target.value);
+            if (quickVerseDataProvider) quickVerseDataProvider.setHeresy(verseRef, e.target.value);
           }}
         />
       </div>

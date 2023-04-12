@@ -3,21 +3,18 @@
  * Exposed on the papi.
  */
 
-import {
-  DataProviderInfo,
-  DisposableDataProviderInfo,
-} from '@shared/models/DataProviderInfo';
+import { DataProviderInfo, DisposableDataProviderInfo } from '@shared/models/DataProviderInfo';
 import IDataProvider, {
   DataProviderSubscriber,
   DataProviderSubscriberOptions,
 } from '@shared/models/IDataProvider';
 import IDataProviderEngine from '@shared/models/IDataProviderEngine';
-import { NetworkObjectContainer } from '@shared/models/NetworkObjectInfo';
-import { PEvent } from '@shared/models/PEvent';
-import PEventEmitter from '@shared/models/PEventEmitter';
-import * as NetworkService from '@shared/services/NetworkService';
-import { deepEqual, serializeRequestType } from '@shared/util/PapiUtil';
-import networkObjectService from './NetworkObjectService';
+import { NetworkObjectContainer } from '@shared/models/network-object-info.model';
+import { PapiEvent } from '@shared/models/papi-event.model';
+import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+import * as networkService from '@shared/services/network.service';
+import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
+import networkObjectService from '@shared/services/network-object.service';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -33,8 +30,7 @@ const ON_DID_UPDATE = 'onDidUpdate';
 const SUBSCRIBE_PLACEHOLDER = {};
 
 /** Gets the id for the data provider network object of the specified type */
-const getDataProviderObjectId = (dataType: string) =>
-  `${dataType}-${DATA_PROVIDER_LABEL}`;
+const getDataProviderObjectId = (dataType: string) => `${dataType}-${DATA_PROVIDER_LABEL}`;
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -50,7 +46,7 @@ const initialize = () => {
     if (isInitialized) return;
 
     // TODO: Might be best to make a singleton or something
-    await NetworkService.initialize();
+    await networkService.initialize();
 
     isInitialized = true;
   })();
@@ -72,16 +68,10 @@ async function has(dataType: string): Promise<boolean> {
  * @returns subscribe function for a data provider
  */
 function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
-  dataProviderContainer: NetworkObjectContainer<
-    IDataProvider<TSelector, TGetData, TSetData>
-  >,
-  onDidUpdate: PEvent<boolean>,
+  dataProviderContainer: NetworkObjectContainer<IDataProvider<TSelector, TGetData, TSetData>>,
+  onDidUpdate: PapiEvent<boolean>,
 ): DataProviderSubscriber<TSelector, TGetData> {
-  return async (
-    selector,
-    callback,
-    options?: DataProviderSubscriberOptions,
-  ) => {
+  return async (selector, callback, options?: DataProviderSubscriberOptions) => {
     if (!dataProviderContainer.networkObject)
       throw new Error("Somehow the data provider doesn't exist! Investigate");
 
@@ -153,7 +143,7 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
  */
 function buildDataProvider<TSelector, TGetData, TSetData>(
   dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
-  onDidUpdateEmitter: PEventEmitter<boolean>,
+  onDidUpdateEmitter: PapiEventEmitter<boolean>,
 ): IDataProvider<TSelector, TGetData, TSetData> {
   /** Container to hold a reference to the data provider so the local object can reference the network object in its functions */
   const dataProviderContainer: NetworkObjectContainer<
@@ -193,17 +183,11 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
   // Currently, set is omitted because it may or may not be provided on the data provider engine, and we want to
   // throw an exception if someone uses it without it being provided.
   // TODO: update network objects so remote objects know when methods do not exist, then make IDataProvider.set optional
-  const dataProviderInternal: Omit<
-    IDataProvider<TSelector, TGetData, TSetData>,
-    'set'
-  > = {
+  const dataProviderInternal: Omit<IDataProvider<TSelector, TGetData, TSetData>, 'set'> = {
     /** Layered get that runs the engine's get */
     get: dataProviderEngine.get.bind(dataProviderEngine),
     /** Subscribe to run the callback when data changes. Also immediately calls callback with the current value */
-    subscribe: createDataProviderSubscriber(
-      dataProviderContainer,
-      onDidUpdateEmitter.event,
-    ),
+    subscribe: createDataProviderSubscriber(dataProviderContainer, onDidUpdateEmitter.event),
   };
 
   // Update the dataProviderContainer so the local object can access the dataProvider appropriately
@@ -222,17 +206,14 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
 
       // Do not let anyone but the data provider engine send updates
       if (prop === 'notifyUpdate')
-        throw new Error(
-          'Cannot run notifyUpdate outside of data provider engine',
-        );
+        throw new Error('Cannot run notifyUpdate outside of data provider engine');
 
       // If the data provider already has the method, run it
       if (prop in dataProviderInternal)
         return dataProviderInternal[prop as keyof typeof dataProviderInternal];
 
       // Get the engine method and bind it
-      const engineMethod =
-        obj[prop as keyof typeof obj]?.bind(dataProviderEngine);
+      const engineMethod = obj[prop as keyof typeof obj]?.bind(dataProviderEngine);
 
       // Save the bound engine method on the data provider to be run later
       // There isn't indexing on IDataProviderEngine so normal objects could be used,
@@ -273,9 +254,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   // If someone else registers an engine with the same data type at the same time, the two registrations could get intermixed and mess stuff up
   // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
   if (await has(dataType))
-    throw new Error(
-      `Data provider with type ${dataType} is already registered`,
-    );
+    throw new Error(`Data provider with type ${dataType} is already registered`);
 
   // Validate that the data provider engine has what it needs
   if (!dataProviderEngine.get || typeof dataProviderEngine.get !== 'function')
@@ -287,21 +266,15 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   const dataProviderObjectId = getDataProviderObjectId(dataType);
 
   // Create a networked update event
-  const onDidUpdateEmitter = NetworkService.createNetworkEventEmitter<boolean>(
+  const onDidUpdateEmitter = networkService.createNetworkEventEmitter<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
 
   // Build the data provider
-  const dataProvider = buildDataProvider(
-    dataProviderEngine,
-    onDidUpdateEmitter,
-  );
+  const dataProvider = buildDataProvider(dataProviderEngine, onDidUpdateEmitter);
 
   // Set up the data provider to be a network object so other processes can use it
-  const networkObjectInfo = await networkObjectService.set(
-    dataProviderObjectId,
-    dataProvider,
-  );
+  const networkObjectInfo = await networkObjectService.set(dataProviderObjectId, dataProvider);
 
   return {
     dataProvider: networkObjectInfo.networkObject,
@@ -318,12 +291,10 @@ async function registerEngine<TSelector, TGetData, TSetData>(
  */
 function createLocalDataProviderToProxy<TSelector, TGetData, TSetData>(
   dataProviderObjectId: string,
-  dataProviderContainer: NetworkObjectContainer<
-    IDataProvider<TSelector, TGetData, TSetData>
-  >,
+  dataProviderContainer: NetworkObjectContainer<IDataProvider<TSelector, TGetData, TSetData>>,
 ) {
   // Create a networked update event
-  const onDidUpdate = NetworkService.getNetworkEvent<boolean>(
+  const onDidUpdate = networkService.getNetworkEvent<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
   return {

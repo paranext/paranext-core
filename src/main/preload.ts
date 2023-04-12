@@ -3,8 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 const electronAPIHandler = {
   env: {
     /** Test electron ipc */
-    test: (message: string) =>
-      ipcRenderer.invoke('electronAPI.env.test', message),
+    test: (message: string) => ipcRenderer.invoke('electronAPI.env.test', message),
   },
 };
 

@@ -1,16 +1,22 @@
 {
+  "dotnet-test-explorer.testProjectPath": "c-sharp-tests/c-sharp-tests.csproj",
+
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[csharp]": {
+    "editor.defaultFormatter": "csharpier.csharpier-vscode"
+  },
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "editor.wordWrapColumn": 100,
+
+  "eslint.validate": ["javascript", "javascriptreact", "html", "typescriptreact"],
+
   "files.associations": {
     ".eslintrc": "jsonc",
     ".prettierrc": "jsonc",
     ".eslintignore": "ignore"
   },
-
-  "eslint.validate": [
-    "javascript",
-    "javascriptreact",
-    "html",
-    "typescriptreact"
-  ],
+  "files.eol": "\n",
 
   "javascript.validate.enable": false,
   "javascript.format.enable": false,

@@ -5,7 +5,7 @@ const papi = require('papi');
 
 const { logger } = papi;
 
-logger.log('Hello Someone is importing!');
+logger.info('Hello Someone is importing!');
 
 const unsubscribers = [];
 
@@ -23,8 +23,7 @@ const greetingsDataProviderEngine = {
     if (selector === '*') return false;
 
     // If there is no change in the greeting, don't update
-    if (data === greetingsDataProviderEngine.people[selector.toLowerCase()])
-      return false;
+    if (data === greetingsDataProviderEngine.people[selector.toLowerCase()]) return false;
 
     // Update the greeting and send an update
     greetingsDataProviderEngine.people[selector.toLowerCase()] = data;
@@ -49,7 +48,7 @@ const greetingsDataProviderEngine = {
 };
 
 exports.activate = async () => {
-  logger.log('Hello Someone is activating!');
+  logger.info('Hello Someone is activating!');
 
   const greetingsDataProviderInfoPromise = papi.dataProvider.registerEngine(
     'hello-someone.greetings',
@@ -161,25 +160,20 @@ exports.activate = async () => {
     papi.commands.registerCommand('hello-someone.hello-someone', (someone) => {
       return `Hello ${someone}!`;
     }),
-    papi.commands.registerCommand(
-      'hello-someone.echo-someone-renderer',
-      async (message) => {
-        return `echo-someone-renderer: ${await papi.commands.sendCommand(
-          'addThree',
-          2,
-          4,
-          6,
-        )}! ${message}`;
-      },
-    ),
+    papi.commands.registerCommand('hello-someone.echo-someone-renderer', async (message) => {
+      return `echo-someone-renderer: ${await papi.commands.sendCommand(
+        'addThree',
+        2,
+        4,
+        6,
+      )}! ${message}`;
+    }),
   ];
 
   // For now, let's just make things easy and await the data provider promise at the end so we don't hold everything else up
   const greetingsDataProviderInfo = await greetingsDataProviderInfoPromise;
 
-  return Promise.all(
-    unsubPromises.map((unsubPromise) => unsubPromise.promise),
-  ).then(() => {
+  return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
     logger.log('Hello Someone is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises

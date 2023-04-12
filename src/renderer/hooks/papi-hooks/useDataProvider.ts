@@ -1,9 +1,9 @@
 import IDataProvider from '@shared/models/IDataProvider';
 import dataProviderService from '@shared/services/DataProviderService';
 import { useCallback, useMemo, useState } from 'react';
-import useEvent from '@renderer/hooks/papi-hooks/useEvent';
-import usePromise from '@renderer/hooks/papi-hooks/usePromise';
-import { isString } from '@shared/util/Util';
+import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
+import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
+import { isString } from '@shared/utils/util';
 
 /**
  * Gets a data provider with specified data type
@@ -66,9 +66,7 @@ function useDataProvider<T extends IDataProvider<any, any, any>>(
           undefined
         : async () =>
             // We have the data provider's type, so we need to get the provider
-            dataProviderSource
-              ? dataProviderService.get(dataProviderSource)
-              : undefined;
+            dataProviderSource ? dataProviderService.get(dataProviderSource) : undefined;
     }, [didReceiveDataProvider, dataProviderSource]),
     undefined,
   );

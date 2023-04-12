@@ -1,6 +1,15 @@
 module.exports = {
-  extends: 'erb', // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
-  // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
+  extends: [
+    // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
+    // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
+    'erb',
+    // https://github.com/storybookjs/eslint-plugin-storybook/blob/main/lib/configs/recommended.ts
+    'plugin:storybook/recommended',
+    // Make sure this is last so it gets the chance to override other configs.
+    // See https://github.com/prettier/eslint-config-prettier and https://github.com/prettier/eslint-plugin-prettier
+    'plugin:prettier/recommended',
+  ],
+
   rules: {
     // #region ERB rules
 
@@ -16,18 +25,28 @@ module.exports = {
 
     // #region Paranext rules
 
+    // Rules in each section are generally in alphabetical order. However, several
+    // `@typescript-eslint` rules require disabling the equivalent ESLint rule. So in these cases
+    // each ESLint rule is turned off immediately above the corresponding `@typescript-eslint` rule.
+    'import/no-anonymous-default-export': ['error', { allowCallExpression: false }],
     'lines-between-class-members': 'off',
     '@typescript-eslint/lines-between-class-members': [
       'error',
       'always',
       { exceptAfterSingleLine: true, exceptAfterOverload: true },
     ],
+    '@typescript-eslint/member-ordering': 'error',
     '@typescript-eslint/no-explicit-any': 'error',
     '@typescript-eslint/no-non-null-assertion': 'error',
     'no-redeclare': 'off',
     '@typescript-eslint/no-redeclare': 'error',
     'no-shadow': 'off',
     '@typescript-eslint/no-shadow': 'error',
+    'no-use-before-define': 'off',
+    '@typescript-eslint/no-use-before-define': [
+      'error',
+      { functions: false, allowNamedExports: true, typedefs: false, ignoreTypeReferences: true },
+    ],
     'no-unused-vars': 'off',
     '@typescript-eslint/no-unused-vars': 'error',
     'comma-dangle': ['error', 'always-multiline'],
@@ -41,7 +60,6 @@ module.exports = {
     // Should use our logger anytime you want logs that persist. Otherwise use console only in testing
     'no-console': 'warn',
     'no-plusplus': ['error', { allowForLoopAfterthoughts: true }],
-    'no-use-before-define': 'off',
     'prettier/prettier': ['warn', { tabWidth: 2, trailingComma: 'all' }],
     'react/jsx-indent-props': ['warn', 2],
     'react/jsx-props-no-spreading': ['error', { custom: 'ignore' }],

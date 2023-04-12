@@ -9,7 +9,10 @@ pids
 
 # Coverage directory used by tools like istanbul
 coverage
+
+# formatting and linting
 .eslintcache
+.eslintConfig.json
 
 # Dependency directory
 # https://www.npmjs.org/doc/misc/npm-faq.html#should-i-check-my-node_modules-folder-into-git
@@ -21,6 +24,7 @@ node_modules
 release/app/dist
 release/build
 .erb/dll
+storybook-static
 
 .idea
 npm-debug.log.*

@@ -1,18 +1,18 @@
-import '@extension-host/globalThis';
-import { isClient } from '@shared/util/InternalUtil';
-import * as NetworkService from '@shared/services/NetworkService';
-import papi from '@shared/services/papi';
-import { CommandHandler } from '@shared/util/PapiUtil';
-import * as ExtensionService from '@extension-host/services/ExtensionService';
-import logger from '@shared/util/logger';
-import networkObjectService from '@shared/services/NetworkObjectService';
+import '@extension-host/global-this.model';
+import { isClient } from '@shared/utils/internal-util';
+import * as networkService from '@shared/services/network.service';
+import papi from '@shared/services/papi.service';
+import { CommandHandler } from '@shared/utils/papi-util';
+import * as ExtensionService from '@extension-host/services/extension.service';
+import logger from '@shared/services/logger.service';
+import networkObjectService from '@shared/services/network-object.service';
 
 // #region Test logs
 
-logger.log('Starting extension-host');
-logger.log(`Extension host is${isClient() ? '' : ' not'} client`);
-logger.log(`Extension host process.type = ${process.type}`);
-logger.log(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
+logger.info('Starting extension-host');
+logger.info(`Extension host is${isClient() ? '' : ' not'} client`);
+logger.info(`Extension host process.type = ${process.type}`);
+logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
 logger.warn('Extension host example warning');
 
 // #endregion
@@ -23,19 +23,18 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   addMany: async (...nums: number[]) => {
     /* const start = performance.now(); */
     /* const result = await papi.commands.sendCommand('addThree', 1, 4, 9); */
-    /* logger.log(
+    /* logger.info(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return nums.reduce((acc, current) => acc + current, 0);
   },
   throwErrorExtensionHost: async (message: string) => {
-    throw new Error(
-      `Test Error thrown in throwErrorExtensionHost command: ${message}`,
-    );
+    throw new Error(`Test Error thrown in throwErrorExtensionHost command: ${message}`);
   },
 };
 
-NetworkService.initialize()
+networkService
+  .initialize()
   .then(() => {
     // Set up test handlers
     Object.entries(commandHandlers).forEach(([commandName, handler]) => {
@@ -66,7 +65,7 @@ setTimeout(
   }>('test-main');
   if (testMainInfo) {
     const unsub = testMainInfo?.onDidDispose(async () => {
-      logger.log('Disposed of test-main!');
+      logger.info('Disposed of test-main!');
       testMainInfo = undefined;
       unsub();
 
@@ -74,18 +73,15 @@ setTimeout(
         getVerse: async () => {
           const verse = await fetch('https://bible-api.com/matthew+24:14');
           const verseJson = await verse.json();
-          const results = `test-extension-host got verse: ${verseJson.text.replace(
-            /\\n/g,
-            '',
-          )}`;
-          logger.log(results);
+          const results = `test-extension-host got verse: ${verseJson.text.replace(/\\n/g, '')}`;
+          logger.info(results);
           return results;
         },
       });
 
       if (testEHInfo) {
         const unsub2 = testEHInfo.onDidDispose(() => {
-          logger.log('Disposed of test-extension-host!');
+          logger.info('Disposed of test-extension-host!');
           unsub2();
         });
       }
@@ -94,11 +90,7 @@ setTimeout(
     });
   }
 
-  logger.log(
-    `do stuff: ${await testMainInfo?.networkObject.doStuff(
-      'extension host things',
-    )}`,
-  );
+  logger.info(`do stuff: ${await testMainInfo?.networkObject.doStuff('extension host things')}`);
 })();
 
 // #endregion

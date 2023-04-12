@@ -9,6 +9,7 @@ Electron client, extension host, and C# library for Paranext
 <div align="center">
 
 [![Build Status][github-actions-status]][github-actions-url]
+[![CodeQL][gitghub-codeql-status]][gitghub-codeql-url]
 [![Github Tag][github-tag-image]][github-tag-url]
 
 </div>
@@ -90,6 +91,26 @@ npm run package
 8. Publish the release on GitHub.
 9. Merge the release branch back into **main** with a merge commit.
 
+## Storybook
+
+To run Storybook locally:
+
+```bash
+npm run storybook
+```
+
+To build Storybook:
+
+```bash
+npm run storybook:build
+```
+
+To run Storybook as a web app, after it was built successfully:
+
+```bash
+npx http-server ./storybook-static
+```
+
 ## Windows Development with WSL2
 
 On Windows, you can install [WSL](https://learn.microsoft.com/en-us/windows/wsl/) (Windows Subsystem for Linux) so you can test cross-platform compatibility on Linux (as well as Windows). You'll need to use a Linux distribution with WSL2 (rather than WSL1) so the X-Server windows can be opened for Electron.
@@ -110,6 +131,25 @@ Extensions highly recommended for this repo are already displayed in VS Code thr
 - [TODO Highlight](https://marketplace.visualstudio.com/items?itemName=wayou.vscode-todo-highlight)
 - [Version Lens](https://marketplace.visualstudio.com/items?itemName=pflannery.vscode-versionlens)
 
+## Formatting and Linting
+
+Formatting happens automatically when you commit. If you use VS Code with this repo's recommended extensions it will format when you save.
+
+To check TypeScript for readability, maintainability, and functionality errors, and to check a few other files for proper formatting, run the following from the repo root (or just use VS Code with this repo's recommended extensions)
+
+```bash
+npm run prettier
+npm run lint
+```
+
+To check C# for readability, maintainability, and functionality errors, run the following from the repo root (or just use VS Code with this repo's recommended extensions)
+
+```bash
+cd c-sharp
+dotnet tool restore
+dotnet csharpier .
+```
+
 ## License
 
 MIT © [SIL International](https://www.sil.org/)
@@ -118,5 +158,7 @@ MIT © [SIL International](https://www.sil.org/)
 
 [github-actions-status]: https://github.com/paranext/paranext-core/workflows/Test/badge.svg
 [github-actions-url]: https://github.com/paranext/paranext-core/actions
+[gitghub-codeql-status]: https://github.com/paranext/paranext-core/actions/workflows/codeql-analysis.yml/badge.svg
+[gitghub-codeql-url]: https://github.com/paranext/paranext-core/actions/workflows/codeql-analysis.yml
 [github-tag-image]: https://img.shields.io/github/tag/paranext/paranext-core.svg?label=version
 [github-tag-url]: https://github.com/paranext/paranext-core/releases/latest

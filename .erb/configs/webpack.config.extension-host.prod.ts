@@ -15,10 +15,7 @@ deleteSourceMaps();
 
 const configuration: webpack.Configuration = {
   entry: {
-    'extension-host': path.join(
-      webpackPaths.srcExtensionHostPath,
-      'extension-host.ts',
-    ),
+    'extension-host': path.join(webpackPaths.srcExtensionHostPath, 'extension-host.ts'),
   },
 
   output: {
@@ -26,9 +23,10 @@ const configuration: webpack.Configuration = {
   },
 };
 
-export default mergeWithCustomize({
+const extensionHostConfig = mergeWithCustomize({
   customizeObject(a, b, key) {
     if (key === 'entry') return b;
     return merge(a, b);
   },
 })(mainConfig, configuration);
+export default extensionHostConfig;

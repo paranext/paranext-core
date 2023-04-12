@@ -1,17 +1,17 @@
-import '@renderer/globalThis';
+import '@renderer/global-this.model';
 import { createRoot } from 'react-dom/client';
-import * as NetworkService from '@shared/services/NetworkService';
-import * as CommandService from '@shared/services/CommandService';
-import * as WebViewService from '@shared/services/WebViewService';
-import logger from '@shared/util/logger';
-import App from './App';
+import * as networkService from '@shared/services/network.service';
+import * as commandService from '@shared/services/command.service';
+import * as webViewService from '@shared/services/web-view.service';
+import logger from '@shared/services/logger.service';
+import App from './app.component';
 
-logger.log('Starting renderer');
+logger.info('Starting renderer');
 
 // App-wide service setup
-NetworkService.initialize();
-CommandService.initialize();
-WebViewService.initialize();
+networkService.initialize();
+commandService.initialize();
+webViewService.initialize();
 
 const container = document.getElementById('root');
 const root = createRoot(container as HTMLElement);

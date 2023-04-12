@@ -1,0 +1,18 @@
+.papi-combo-box {
+  background-color: transparent;
+}
+
+.papi-combo-box.fullwidth {
+  width: 100%;
+}
+.papi-combo-box.error {
+  background-color: #ff0000;
+}
+.papi-combo-box.paratext {
+  color: greenyellow;
+  background-color: darkgreen;
+}
+.papi-combo-box.paratext.bright {
+  color: darkgreen;
+  background-color: greenyellow;
+}

@@ -7,28 +7,22 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import {
-  app,
-  BrowserWindow,
-  shell,
-  ipcMain,
-  IpcMainInvokeEvent,
-} from 'electron';
+import { app, BrowserWindow, shell, ipcMain, IpcMainInvokeEvent } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
-import '@main/globalThis';
+import '@main/global-this.model';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
-import logger from '@shared/util/logger';
-import * as NetworkService from '@shared/services/NetworkService';
-import papi from '@shared/services/papi';
-import { CommandHandler } from '@shared/util/PapiUtil';
-import { resolveHtmlPath } from '@node/util/util';
-import MenuBuilder from '@main/menu';
+import logger from '@shared/services/logger.service';
+import * as networkService from '@shared/services/network.service';
+import papi from '@shared/services/papi.service';
+import { CommandHandler } from '@shared/utils/papi-util';
+import { resolveHtmlPath } from '@node/utils/util';
+import MenuBuilder from '@main/menu.model';
 import extensionHostService from '@main/services/extension-host.service';
-import networkObjectService from '@shared/services/NetworkObjectService';
+import networkObjectService from '@shared/services/network-object.service';
 
-logger.log('Starting main');
+logger.info('Starting main');
 
 // #region ELECTRON SETUP
 
@@ -50,8 +44,7 @@ if (process.env.NODE_ENV === 'production') {
   sourceMapSupport.install();
 }
 
-const isDebug =
-  process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
+const isDebug = process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
 
 if (isDebug) {
   // eslint-disable-next-line global-require
@@ -70,7 +63,7 @@ const installExtensions = async () => {
       extensions.map((name) => installer[name]),
       forceDownload,
     )
-    .catch(logger.log);
+    .catch(logger.info);
 };
 
 const getAssetPath = (...paths: string[]): string => {
@@ -170,8 +163,7 @@ const ipcHandlers: {
     ...args: any[]
   ) => Promise<unknown> | unknown;
 } = {
-  'electronAPI.env.test': (_event, message: string) =>
-    `From main.ts: test ${message}`,
+  'electronAPI.env.test': (_event, message: string) => `From main.ts: test ${message}`,
 };
 
 app
@@ -192,7 +184,7 @@ app
 
     return undefined;
   })
-  .catch(logger.log);
+  .catch(logger.info);
 
 // #endregion
 
@@ -205,7 +197,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   echoRenderer: async (message: string) => {
     /* const start = performance.now(); */
     /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
-    /* logger.log(
+    /* logger.info(
       `addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return message;
@@ -220,12 +212,11 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 };
 
 (async () => {
-  await NetworkService.initialize();
+  await networkService.initialize();
   // Set up test handlers
   Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
-    NetworkService.registerRequestHandler(
-      ipcHandle,
-      async (...args: unknown[]) => handler({} as IpcMainInvokeEvent, ...args),
+    networkService.registerRequestHandler(ipcHandle, async (...args: unknown[]) =>
+      handler({} as IpcMainInvokeEvent, ...args),
     );
   });
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
@@ -247,15 +238,7 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 extensionHostService.start();
 
 setTimeout(async () => {
-  logger.log(
-    `Add Many (from EH): ${await papi.commands.sendCommand(
-      'addMany',
-      2,
-      5,
-      9,
-      7,
-    )}`,
-  );
+  logger.info(`Add Many (from EH): ${await papi.commands.sendCommand('addMany', 2, 5, 9, 7)}`);
 }, 5000);
 
 // #endregion
@@ -270,13 +253,13 @@ setTimeout(async () => {
   } = await networkObjectService.set('test-main', {
     doStuff: async (stuff: string) => {
       const result = `test-main did stuff: ${stuff}!`;
-      logger.log(result);
+      logger.info(result);
       return result;
     },
   });
 
   const unsub = testMainOnDidDispose(() => {
-    logger.log('Disposed of test-main!');
+    logger.info('Disposed of test-main!');
     unsub();
   });
 
@@ -291,15 +274,13 @@ setTimeout(async () => {
       }>('test-extension-host');
       if (testExtensionHostInfo) {
         const unsub2 = testExtensionHostInfo?.onDidDispose(() => {
-          logger.log('Disposed of test-extension-host!');
+          logger.info('Disposed of test-extension-host!');
           testExtensionHostInfo = undefined;
           unsub2();
         });
 
-        logger.log(
-          `get verse: ${await Promise.resolve(
-            testExtensionHostInfo?.networkObject.getVerse(),
-          )}`,
+        logger.info(
+          `get verse: ${await Promise.resolve(testExtensionHostInfo?.networkObject.getVerse())}`,
         );
       }
     }, 1000);
