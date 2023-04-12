@@ -7,7 +7,7 @@ import { useEffect } from 'react';
  * Adds an event handler to an event so the event handler runs when the event is emitted
  * @param event the event to subscribe to. Can be either a string or an Event
  *  - If event is a `string`, the network event associated with this type will automatically be used
- *  - If event is a `PEvent`, that event will be used
+ *  - If event is a `PapiEvent`, that event will be used
  *  - If event is undefined, the callback will not be subscribed. Useful if the event is not yet available for example
  * @param eventHandler the callback to run when the event is emitted
  *

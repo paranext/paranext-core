@@ -20,7 +20,7 @@ jest.mock('@shared/services/network.service', () => ({
   createNetworkEventEmitter: () => {
     return new PapiEventEmitter();
   },
-  papiExports: {
+  papiNetworkService: {
     createNetworkEventEmitter: () => {
       return new PapiEventEmitter();
     },

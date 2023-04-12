@@ -736,7 +736,7 @@ export const createRequestFunction = <TParam extends Array<unknown>, TReturn>(
 };
 
 /** All the exports in this service that are to be exposed on the PAPI */
-export const papiExports = {
+export const papiNetworkService = {
   onDidClientConnect,
   onDidClientDisconnect,
   createNetworkEventEmitter,
