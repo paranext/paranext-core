@@ -11,7 +11,7 @@ export type PapiEventHandler<T> = (event: T) => void;
 export type PapiEvent<T> = (callback: PapiEventHandler<T>) => Unsubscriber;
 
 /**
- * A PEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
+ * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
  *
  * Note: The callback itself is not asynchronous.
  */

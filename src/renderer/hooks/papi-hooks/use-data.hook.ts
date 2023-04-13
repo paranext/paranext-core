@@ -70,7 +70,7 @@ function useData<TSelector, TGetData, TSetData>(
   // Indicates if the data with the selector is awaiting retrieval from the data provider
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Wrap subscribe so we can call it as a normal PEvent in useEvent
+  // Wrap subscribe so we can call it as a normal PapiEvent in useEvent
   const wrappedSubscribeEvent: PapiEventAsync<TGetData> | undefined = useMemo(
     () =>
       dataProvider

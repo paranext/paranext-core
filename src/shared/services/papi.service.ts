@@ -5,7 +5,7 @@
  */
 
 import * as commandService from '@shared/services/command.service';
-import { papiExports } from '@shared/services/network.service';
+import { papiNetworkService } from '@shared/services/network.service';
 import * as papiUtil from '@shared/utils/papi-util';
 // We need the WebViewService here to include on the papi, but WebViewService passes papi into WebViews
 // eslint-disable-next-line import/no-cycle
@@ -44,7 +44,7 @@ const papi = {
     context: papiContext,
     hooks: papiHooks,
   },
-  network: papiExports,
+  network: papiNetworkService,
   logger,
   internet: internetService,
   dataProvider: dataProviderService,
