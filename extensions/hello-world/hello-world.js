@@ -15,7 +15,7 @@ const getReactComponent = (name, functionModifier = '') =>
   const {
     react: {
       context: { TestContext },
-      hooks: { usePromise },
+      hooks: { useData, usePromise },
       components: { Button }
     },
     logger
@@ -42,6 +42,8 @@ const getReactComponent = (name, functionModifier = '') =>
       }, []),
       'retrieving',
     );
+
+    const [latestVerseText] = useData('quick-verse.quick-verse', 'latest', 'Loading latest Scripture text...');
 
     return createElement('div', null,
       createElement('div', null,
@@ -79,6 +81,9 @@ const getReactComponent = (name, functionModifier = '') =>
             },
             'Throw test exception'
           )
+      ),
+      createElement('div', null,
+        latestVerseText
       )
     );
   }`;
@@ -169,15 +174,28 @@ exports.activate = async () => {
                 logger.error(\`Could not get Scripture from bible-api! Reason: \${e}\`),
               );
           });
+
+          //# sourceURL=hello-world-webview.js
         </script>
       </body>
     </html>`,
   });
 
-  papi.webViews.addWebView({
+  await papi.webViews.addWebView({
     componentName: 'HelloWorld',
     contents: getReactComponent('Hello World React Webview'),
   });
+
+  const { dataProvider: greetingsDataProvider } = await papi.dataProvider.get(
+    'hello-someone.greetings',
+  );
+
+  // Test subscribing to a data provider
+  const unsubGreetings = await greetingsDataProvider.subscribe('Bill', (billGreeting) =>
+    logger.info(`Bill's greeting: ${billGreeting}`),
+  );
+
+  unsubPromises.push(unsubGreetings);
 
   return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
     logger.info('Hello World is finished activating!');

@@ -7,9 +7,10 @@ import testLayout from '@renderer/testing/test-layout.data';
 import createHelloPanel from '@renderer/testing/hello-panel.component';
 import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
 import createTabPanel from '@renderer/testing/test-panel.component';
-import createErrorTab from './error-tab.component';
-import ParanextPanel from './paranext-panel.component';
-import ParanextTabTitle from './paranext-tab-title.component';
+import createErrorTab from '@renderer/components/docking/error-tab.component';
+import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
+import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
+import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-heresy-panel.component';
 
 // NOTE: 'card' is a built-in style. We can likely remove it when we
 // create a full theme for Paranext.
@@ -19,6 +20,7 @@ const TAB_GROUPS = 'card paranext';
 const tabTypeCreationMap = new Map<string, TabCreator>([
   ['hello', createHelloPanel],
   ['buttons', createButtonsPanel],
+  ['quick-verse-heresy', createQuickVerseHeresyPanel],
   ['tab', createTabPanel],
 ]);
 

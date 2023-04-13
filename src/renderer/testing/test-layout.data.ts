@@ -47,12 +47,7 @@ const testLayout: LayoutBase = {
     mode: 'float',
     children: [
       {
-        tabs: [
-          createTab({
-            type: 'tab',
-            data: { title: 'Floating', content: 'Floating content!' },
-          }),
-        ],
+        tabs: [createTab({ type: 'quick-verse-heresy' })],
         x: 30,
         y: 60,
         w: 320,

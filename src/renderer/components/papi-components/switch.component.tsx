@@ -30,7 +30,10 @@ export type SwitchProps = {
 };
 
 /**
- * Primary UI component for user interaction
+ * Switch to toggle on and off
+ *
+ * Thanks to MUI for heavy inspiration and documentation
+ * https://mui.com/material-ui/getting-started/overview/
  */
 function Switch({
   isChecked: checked,

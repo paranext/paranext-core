@@ -1,5 +1,7 @@
 /**
- * Unified module for accessing API features in extensions
+ * Unified module for accessing API features in extensions.
+ *
+ * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
  */
 
 import * as commandService from '@shared/services/command.service';
@@ -12,11 +14,19 @@ import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import logger from '@shared/services/logger.service';
 import { isRenderer } from '@shared/utils/internal-util';
 import internetService from '@shared/services/internet.service';
+import dataProviderService from '@shared/services/data-provider.service';
+import type { PapiComponents } from '@renderer/components/papi-components';
+import type { PapiContext } from '@renderer/context/papi-context';
+import type { PapiHooks } from '@renderer/hooks/papi-hooks';
 
 // TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
-const papiComponents = isRenderer() ? require('@renderer/components/papi-components').default : {};
-const papiContext = isRenderer() ? require('@renderer/context/papi-context').default : {};
-const papiHooks = isRenderer() ? require('@renderer/hooks/papi-hooks').default : {};
+const papiComponents: PapiComponents = isRenderer()
+  ? require('@renderer/components/papi-components').default
+  : {};
+const papiContext: PapiContext = isRenderer()
+  ? require('@renderer/context/papi-context').default
+  : {};
+const papiHooks: PapiHooks = isRenderer() ? require('@renderer/hooks/papi-hooks').default : {};
 
 const papi = {
   // Classes
@@ -37,6 +47,7 @@ const papi = {
   network: papiExports,
   logger,
   internet: internetService,
+  dataProvider: dataProviderService,
 };
 export default papi;
 

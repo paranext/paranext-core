@@ -19,6 +19,7 @@ import {
   ComplexResponse,
   createSafeRegisterFn,
   RequestHandlerType,
+  serializeRequestType,
   UnsubPromiseAsync,
   UnsubscriberAsync,
 } from '@shared/utils/papi-util';
@@ -29,6 +30,11 @@ import logger from '@shared/services/logger.service';
 import PapiNetworkEventEmitter from '@shared/models/papi-network-event-emitter.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import { PapiEvent } from '@shared/models/papi-event.model';
+
+/** Prefix on requests that indicates that the request is related to server operations */
+const CATEGORY_SERVER = 'server';
+/** Prefix on events that indicates that the event is related to the network */
+const CATEGORY_NETWORK = 'network';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -193,7 +199,11 @@ async function unregisterRequestHandlerUnsafe(
 
   // Check with the server to make sure we can unregister this registration
   const remoteUnregisterSuccessful = isClient()
-    ? await requestUnsafe('server:unregisterRequest', requestType, connectionService.getClientId())
+    ? await requestUnsafe(
+        serializeRequestType(CATEGORY_SERVER, 'unregisterRequest'),
+        requestType,
+        connectionService.getClientId(),
+      )
     : true;
 
   if (!remoteUnregisterSuccessful)
@@ -259,13 +269,17 @@ function registerRequestHandlerUnsafe(
   // Check with the server if it already has a handler for this requestType
   const remoteRequest: Promise<void> = isClient()
     ? // If we are the client, try to register with the server because server has all registrations
-      requestUnsafe('server:registerRequest', requestType, connectionService.getClientId())
+      requestUnsafe(
+        serializeRequestType(CATEGORY_SERVER, 'registerRequest'),
+        requestType,
+        connectionService.getClientId(),
+      )
     : // If we are the server, we just checked if there was already a registration
       Promise.resolve();
 
   remoteRequest
     .then(() => {
-      // We have successfully checked that this is the first registration for this requestType, set up the handler
+      // We have successfully checked that this is the first registration for this requestType. Set up the handler
       requestRegistrations.set(requestType, {
         registrationType: 'local',
         requestType,
@@ -436,8 +450,8 @@ const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
 
 /** Map of requestTypes to server-side handlers for those requests */
 const serverRequestHandlers = {
-  'server:registerRequest': registerRemoteRequestHandler,
-  'server:unregisterRequest': unregisterRemoteRequestHandler,
+  [serializeRequestType(CATEGORY_SERVER, 'registerRequest')]: registerRemoteRequestHandler,
+  [serializeRequestType(CATEGORY_SERVER, 'unregisterRequest')]: unregisterRemoteRequestHandler,
 };
 /** Function that unsubscribes all the server request handlers */
 let unsubscribeServerRequestHandlers: UnsubscriberAsync | undefined;
@@ -552,13 +566,13 @@ const handleEventFromNetwork: NetworkEventHandler = <T>(eventType: string, event
 // TODO: Why doesn't createNetworkEventEmitterUnsafe require that I specify a generic type? I can't figure it out.
 /** Emitter for when clients connect. Provides clientId */
 const onDidClientConnectEmitter = createNetworkEventEmitterUnsafe<ClientConnectEvent>(
-  'network:onDidClientConnect',
+  serializeRequestType(CATEGORY_NETWORK, 'onDidClientConnect'),
 );
 /** Event that emits with clientId when a client connects */
 export const onDidClientConnect = onDidClientConnectEmitter.event;
 /** Emitter for when clients disconnect. Provides clientId */
 const onDidClientDisconnectEmitter = createNetworkEventEmitterUnsafe<ClientDisconnectEvent>(
-  'network:onDidClientDisconnect',
+  serializeRequestType(CATEGORY_NETWORK, 'onDidClientDisconnect'),
 );
 /** Event that emits with clientId when a client disconnects */
 export const onDidClientDisconnect = onDidClientDisconnectEmitter.event;

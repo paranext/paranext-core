@@ -1,10 +1,13 @@
 /**
  * Service that handles WebView-related operations
  */
-
 import { WebViewProps } from '@renderer/components/web-view.component';
 import { isRenderer } from '@shared/utils/internal-util';
-import { aggregateUnsubscriberAsyncs, CommandHandler } from '@shared/utils/papi-util';
+import {
+  aggregateUnsubscriberAsyncs,
+  CommandHandler,
+  serializeRequestType,
+} from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';
 import { newGuid, newNonce } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
@@ -19,6 +22,9 @@ import {
   WebViewContentType,
 } from '@shared/data/web-view.model';
 
+/** Prefix on requests that indicates that the request is related to webView operations */
+const CATEGORY_WEB_VIEW = 'webView';
+
 /** Event emitted when webViews are added */
 export type AddWebViewEvent = {
   webView: WebViewProps;
@@ -31,8 +37,9 @@ let isInitialized = false;
 let initializePromise: Promise<void> | undefined;
 
 /** Emitter for when a webview is added */
-const onDidAddWebViewEmitter =
-  createNetworkEventEmitter<AddWebViewEvent>('webView:onDidAddWebView');
+const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
+  serializeRequestType(CATEGORY_WEB_VIEW, 'onDidAddWebView'),
+);
 /** Event that emits with webView info when a webView is added */
 export const onDidAddWebView = onDidAddWebViewEmitter.event;
 
@@ -135,6 +142,9 @@ export const addWebView = async (webView: WebViewContents) => {
             <div id="root">
             </div>
             <script nonce="${srcNonce}">
+              // Enable webview debugging
+              console.debug('Debug ${reactWebView.componentName} Webview')
+
               ${reactWebView.contents}
 
               function initializeReact() {

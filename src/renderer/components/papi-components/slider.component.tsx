@@ -74,6 +74,12 @@ export type SliderProps = {
   ) => void;
 };
 
+/**
+ * Slider that allows selecting a value from a range
+ *
+ * Thanks to MUI for heavy inspiration and documentation
+ * https://mui.com/material-ui/getting-started/overview/
+ */
 function Slider({
   isDisabled = false,
   orientation = 'horizontal',

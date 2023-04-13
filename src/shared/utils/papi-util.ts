@@ -1,3 +1,8 @@
+// There is a React version 'fast-deep-equal/react' that I think allows comparing refs
+// (which have circular references in particular places that this library would ignore).
+// Maybe we can change to that version sometime if needed.
+import equal from 'fast-deep-equal';
+
 // #region Unsubscriber stuff
 
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
@@ -198,3 +203,8 @@ export const deserializeRequestType = (requestType: string): RequestType => {
   const [category, directive] = requestType.split(':', 1);
   return { category, directive };
 };
+
+/** Check that two objects are deeply equal, comparing members of each object and such */
+export function deepEqual(a: unknown, b: unknown) {
+  return equal(a, b);
+}

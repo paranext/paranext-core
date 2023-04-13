@@ -23,7 +23,10 @@ export type ButtonProps = PropsWithChildren<{
 }>;
 
 /**
- * Primary UI component for user interaction
+ * Button a user can click to do something
+ *
+ * Thanks to MUI for heavy inspiration and documentation
+ * https://mui.com/material-ui/getting-started/overview/
  */
 function Button({ isDisabled = false, className, onClick, onContextMenu, children }: ButtonProps) {
   return (

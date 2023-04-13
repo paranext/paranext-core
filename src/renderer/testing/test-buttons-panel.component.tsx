@@ -1,14 +1,16 @@
 import './test-buttons-panel.component.css';
-import { useCallback, useState } from 'react';
-import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
+import { useCallback, useMemo, useState } from 'react';
 import papi from '@shared/services/papi.service';
 import * as networkService from '@shared/services/network.service';
-import { getErrorMessage, isString } from '@shared/utils/util';
+import { debounce, getErrorMessage, isString } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import { TabInfo } from '@shared/data/web-view.model';
 import { WebView, WebViewProps } from '@renderer/components/web-view.component';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import { AddWebViewEvent } from '@shared/services/web-view.service';
+import useData from '@renderer/hooks/papi-hooks/use-data.hook';
+import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
+import IDataProvider from '@shared/models/data-provider.interface';
 
 const testBase: (message: string) => Promise<string> =
   networkService.createRequestFunction('electronAPI.env.test');
@@ -42,8 +44,6 @@ const addThree = papi.commands.createSendCommandFunction<[number, number, number
 );
 
 const addMany = papi.commands.createSendCommandFunction<number[], number>('addMany');
-
-const getResourcesPath = papi.commands.createSendCommandFunction<[], string>('getResourcesPath');
 
 const helloWorld = papi.commands.createSendCommandFunction<[], string>('hello-world.hello-world');
 
@@ -103,16 +103,6 @@ function TestButtonsPanel() {
 
   const [addOneResult, setAddOneResult] = useState(0);
 
-  const [resourcesPath] = usePromise(
-    useCallback(async () => {
-      await new Promise<void>((resolve) => {
-        setTimeout(() => resolve(), 5000);
-      });
-      return getResourcesPath();
-    }, []),
-    'retrieving',
-  );
-
   const runPromise = useCallback(
     async (asyncFn: () => Promise<unknown>) => {
       try {
@@ -153,12 +143,79 @@ function TestButtonsPanel() {
     ),
   );
 
+  const [verseRef, setVerseRef] = useState<string>('John 11:35');
+  // Displayed verse ref while debouncing the actual verse ref
+  const [verseRefIntermediate, setVerseRefIntermediate] = useState<string>(verseRef);
+  const setVerseRefDebounced = useMemo(
+    () =>
+      debounce((newVerseRef: string) => {
+        setVerseRef(newVerseRef);
+        setVerseRefIntermediate(newVerseRef);
+      }, 250),
+    [],
+  );
+  const updateVerseRef = useCallback(
+    (newVerseRef: string) => {
+      setVerseRefDebounced(newVerseRef);
+      setVerseRefIntermediate(newVerseRef);
+    },
+    [setVerseRefDebounced],
+  );
+
+  // Test a method on a data provider engine that isn't on the interface to see if you can actually do this
+  const [hasTestedRandomMethod, setHasTestedRandomMethod] = useState(false);
+  const greetingsDataProvider =
+    useDataProvider<IDataProvider<string, string, string>>('hello-someone.greetings');
+  if (!hasTestedRandomMethod && greetingsDataProvider) {
+    setHasTestedRandomMethod(true);
+    (async () => {
+      try {
+        // Could make this a GreetingsDataProvider type and have this method available,
+        // but this is the only opportunity so far to demonstrate how to type `useDataProvider`
+        // @ts-ignore ts(2339)
+        const result = await greetingsDataProvider.testRandomMethod('from test buttons panel');
+        logger.info(result);
+      } catch (e) {
+        logger.error(e);
+      }
+
+      try {
+        // Test to make sure we literally can't run updates from outside the data provider
+        // @ts-ignore ts(2339)
+        const result = await greetingsDataProvider.notifyUpdate();
+        logger.error(`Remote notify update succeeded! Bad ${result}`);
+      } catch (e) {
+        logger.info(`Remote notify update failed! Good ${e}`);
+      }
+    })();
+  }
+
+  const [verseText, setVerseText, verseTextIsLoading] = useData<
+    string,
+    string,
+    string | { text: string; isHeresy: boolean }
+  >('quick-verse.quick-verse', verseRef, 'Verse text goes here');
+
   return (
     <div className="buttons-panel">
       <div className="hello">
-        <button
-          className="testButton"
-          type="button"
+        <papi.react.components.TextField
+          label="Verse Ref"
+          value={verseRefIntermediate}
+          onChange={(e) => {
+            updateVerseRef(e.target.value);
+          }}
+        />
+        {verseTextIsLoading ? 'Loading verse' : 'Finished loading verse'}
+        <textarea
+          className="scr-verse-text-area"
+          value={verseText}
+          onChange={(e) => {
+            if (setVerseText) setVerseText({ text: e.target.value, isHeresy: true });
+          }}
+        />
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echo('Echo Stuff'));
@@ -170,10 +227,9 @@ function TestButtonsPanel() {
           }}
         >
           Echo
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echoRenderer('Echo Renderer Stuff'));
@@ -185,10 +241,9 @@ function TestButtonsPanel() {
           }}
         >
           Echo Renderer
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echoExtensionHost('Echo Extension Host Stuff'));
@@ -202,10 +257,9 @@ function TestButtonsPanel() {
           }}
         >
           Echo Extension Host
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() =>
@@ -223,10 +277,9 @@ function TestButtonsPanel() {
           }}
         >
           Echo Someone Renderer
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addThree(1, 2, 3));
@@ -238,10 +291,9 @@ function TestButtonsPanel() {
           }}
         >
           AddThree (Renderer)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
@@ -253,10 +305,9 @@ function TestButtonsPanel() {
           }}
         >
           AddMany (Extension Host)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={() =>
             runPromise(async () => {
               const addResult = await addOne(addOneResult);
@@ -270,10 +321,9 @@ function TestButtonsPanel() {
           }}
         >
           AddOne (C#)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => helloWorld());
@@ -287,10 +337,9 @@ function TestButtonsPanel() {
           }}
         >
           Hello World (Extension)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => helloSomeone('Paranext user'));
@@ -304,30 +353,27 @@ function TestButtonsPanel() {
           }}
         >
           Hello Someone (Extension)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={() => runPromise(() => throwError('Test error'))}
         >
           Test Exception
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={() => runPromise(() => throwErrorExtensionHost('Test error'))}
         >
           Test Exception (Extension Host)
-        </button>
-        <button
-          className="testButton"
-          type="button"
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
           onClick={() => runPromise(() => throwErrorHelloWorld('Test error'))}
         >
           Test Exception (Hello World)
-        </button>
+        </papi.react.components.Button>
         <papi.react.components.Button
-          className="testButton"
+          className="test-button"
           onClick={() => runPromise(() => test())}
           onContextMenu={() => {
             executeMany(test);
@@ -337,7 +383,6 @@ function TestButtonsPanel() {
         </papi.react.components.Button>
       </div>
       <div className="hello">
-        <div>resourcesPath: {resourcesPath}</div>
         <div>{promiseReturn}</div>
       </div>
       {webViews.map((webView, i) => (
