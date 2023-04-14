@@ -103,7 +103,7 @@ export const addWebView = async (webView: WebViewContents) => {
           await sleep(1000);
         });
 
-      if (succeeded) return;
+      if (succeeded) return undefined;
     }
     throw Error(`addWebView failed, but you should have seen a different error than this!`);
   }
