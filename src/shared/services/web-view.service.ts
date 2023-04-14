@@ -77,6 +77,11 @@ const getWebViewPapi = (webViewId: string) => {
 
 // #endregion
 
+const sleep = (ms: number) => {
+  // eslint-disable-next-line no-promise-executor-return
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
 /**
  * Adds a WebView and runs all event handlers who are listening to this event
  * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
@@ -84,7 +89,23 @@ const getWebViewPapi = (webViewId: string) => {
  */
 export const addWebView = async (webView: WebViewContents) => {
   if (!isRenderer()) {
-    return commandService.sendCommand<[WebViewContents], void>('addWebView', webView);
+    // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
+    // TODO: This block should be removed when https://github.com/paranext/paranext-core/issues/51
+    // is done. It can go back to just the `sendCommand` call without the loop.
+    for (let attemptsRemaining = 20; attemptsRemaining > 0; attemptsRemaining--) {
+      let succeeded = true;
+      // eslint-disable-next-line no-await-in-loop
+      await commandService
+        .sendCommand<[WebViewContents], void>('addWebView', webView)
+        .catch(async (error) => {
+          succeeded = false;
+          if (attemptsRemaining === 1) throw error;
+          await sleep(1000);
+        });
+
+      if (succeeded) return;
+    }
+    throw Error(`addWebView failed, but you should have seen a different error than this!`);
   }
 
   // Create a papi instance for this WebView
