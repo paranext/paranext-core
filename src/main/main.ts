@@ -239,7 +239,7 @@ extensionHostService.start();
 
 setTimeout(async () => {
   logger.info(`Add Many (from EH): ${await papi.commands.sendCommand('addMany', 2, 5, 9, 7)}`);
-}, 5000);
+}, 20000);
 
 // #endregion
 
