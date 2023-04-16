@@ -1,9 +1,9 @@
 import icon from '@assets/icon.png';
 import { TabInfo } from '@shared/data/web-view.model';
 
-function HelloPanel() {
+function AboutPanel() {
   return (
-    <div className="hello-panel">
+    <div className="about-panel">
       <div className="hello">
         <img width="200" alt="icon" src={icon} />
       </div>
@@ -14,14 +14,14 @@ function HelloPanel() {
   );
 }
 
-const createHelloPanel = (): TabInfo => {
+const createAboutPanel = (): TabInfo => {
   return {
-    type: 'hello',
-    title: 'Hello',
-    content: <HelloPanel />,
+    type: 'about',
+    title: 'About',
+    content: <AboutPanel />,
     minWidth: 230,
     minHeight: 230,
   };
 };
 
-export default createHelloPanel;
+export default createAboutPanel;

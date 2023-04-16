@@ -19,22 +19,12 @@ const testLayout: LayoutBase = {
             tabs: [
               createTab({
                 type: 'tab',
-                data: { title: 'Bla', content: 'Random content!' },
+                data: { title: 'WebView Placeholder', content: 'WebView placeholder' },
               }),
             ],
           },
           {
-            tabs: [
-              createTab({ type: 'hello' }),
-              createTab({
-                type: 'tab',
-                data: { title: 'two', content: 'Content for tab two' },
-              }),
-              createTab({
-                type: 'tab',
-                data: { title: 'one', content: 'Content for tab one' },
-              }),
-            ],
+            tabs: [createTab({ type: 'about' })],
           },
         ],
       },

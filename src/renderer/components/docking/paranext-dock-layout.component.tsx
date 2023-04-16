@@ -6,7 +6,7 @@ import { SavedTabInfo, TabCreator, TabInfo, TabType } from '@shared/data/web-vie
 import { registerLayoutSave } from '@shared/services/web-view.service';
 import DockLayout, { LayoutBase, LayoutData, TabBase, TabData, TabGroup } from 'rc-dock';
 import testLayout from '@renderer/testing/test-layout.data';
-import createHelloPanel from '@renderer/testing/hello-panel.component';
+import createAboutPanel from '@renderer/testing/about-panel.component';
 import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
 import createTabPanel from '@renderer/testing/test-panel.component';
 import * as commandService from '@shared/services/command.service';
@@ -26,7 +26,7 @@ const savedLayout: LayoutData = getStorageValue(DOCK_LAYOUT_KEY, testLayout as L
 
 // TODO: Build this mapping from extensions so extensions can create their own panels
 const tabTypeCreationMap = new Map<TabType, TabCreator>([
-  ['hello', createHelloPanel],
+  ['about', createAboutPanel],
   ['buttons', createButtonsPanel],
   ['quick-verse-heresy', createQuickVerseHeresyPanel],
   ['tab', createTabPanel],

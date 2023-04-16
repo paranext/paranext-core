@@ -33,11 +33,13 @@ export async function activate() {
     .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
 
   papi.webViews.addWebView({
+    title: 'Hello World HTML',
     contentType: 'html' as WebViewContentType.HTML,
     contents: helloWorldHtmlWebView,
   });
 
   await papi.webViews.addWebView({
+    title: 'Hello World React',
     componentName: 'HelloWorld',
     contents: helloWorldReactWebView,
     styles: helloWorldReactWebViewStyles,

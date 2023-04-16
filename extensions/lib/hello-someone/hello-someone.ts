@@ -54,6 +54,7 @@ export async function activate() {
   );
 
   papi.webViews.addWebView({
+    title: 'Hello Someone HTML',
     contentType: 'html' as WebViewContentType.HTML,
     contents: helloSomeoneHtmlWebView,
   });

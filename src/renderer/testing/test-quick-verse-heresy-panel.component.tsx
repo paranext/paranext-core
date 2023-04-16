@@ -56,8 +56,8 @@ function TestQuickVerseHeresyPanel() {
 
 const createQuickVerseHeresyPanel = (): TabInfo => {
   return {
-    type: 'buttons',
-    title: 'Test Buttons',
+    type: 'quick-verse-heresy',
+    title: 'Quick Verse Heresy',
     content: <TestQuickVerseHeresyPanel />,
   };
 };
