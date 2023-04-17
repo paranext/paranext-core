@@ -1,7 +1,7 @@
 /**
  * Service that handles WebView-related operations
  * Likely shouldn't need/want to expose this whole service on papi,
- * but most things are exposed via papiExports
+ * but most things are exposed via papiWebViewService
  */
 import { WebViewProps } from '@renderer/components/web-view.component';
 import { isRenderer } from '@shared/utils/internal-util';
@@ -275,7 +275,7 @@ export const initialize = () => {
       await Promise.all(unsubPromises.map(({ promise }) => promise));
 
       // On closing, try to remove command listeners
-      // TODO: should do this on the server when the connection closes or when the server exists as well
+      // TODO: should do this on the server when the connection closes or when the server exits as well
       if (isRenderer())
         window.addEventListener('beforeunload', async () => {
           await unsubscribeCommands();
@@ -298,7 +298,7 @@ export const registerLayoutSave = (newLayoutSaver: LayoutSaver) => {
 };
 
 /** All the exports in this service that are to be exposed on the PAPI */
-export const papiExports = {
+export const papiWebViewService = {
   onDidAddWebView,
   addWebView,
   initialize,

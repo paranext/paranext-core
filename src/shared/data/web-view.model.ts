@@ -1,13 +1,18 @@
 import { ReactNode } from 'react';
 
 /**
+ * The underlying tab type. Used to determine which extension owns it.
+ */
+export type TabType = string;
+
+/**
  * Information used to recreate a tab
  */
 export type SavedTabInfo = {
   /**
    * The underlying tab type. Used to determine which extension owns it.
    */
-  type: string;
+  type: TabType;
   /**
    * Data needed to recreate the tab during load
    */
@@ -21,7 +26,7 @@ export type TabInfo = {
   /**
    * The underlying tab type. Used to determine which extension owns it.
    */
-  type: string;
+  type: TabType;
   /**
    * Text to show on the title bar of the tab
    */

@@ -2,36 +2,37 @@ import 'rc-dock/dist/rc-dock.css';
 import './paranext-dock-layout.component.css';
 import { useRef, useEffect, ReactElement } from 'react';
 import { newGuid } from '@shared/utils/util';
-import { SavedTabInfo, TabCreator, TabInfo } from '@shared/data/web-view.model';
+import { SavedTabInfo, TabCreator, TabInfo, TabType } from '@shared/data/web-view.model';
 import { registerLayoutSave } from '@shared/services/web-view.service';
-import DockLayout, { LayoutData, TabBase, TabData, TabGroup } from 'rc-dock';
+import DockLayout, { LayoutBase, LayoutData, TabBase, TabData, TabGroup } from 'rc-dock';
 import testLayout from '@renderer/testing/test-layout.data';
-// import createHelloPanel from '@renderer/testing/hello-panel.component';
-// import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
-// import createTabPanel from '@renderer/testing/test-panel.component';
+import createHelloPanel from '@renderer/testing/hello-panel.component';
+import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
+import createTabPanel from '@renderer/testing/test-panel.component';
 import * as commandService from '@shared/services/command.service';
 import { isRenderer } from '@shared/utils/internal-util';
 import createErrorTab from '@renderer/components/docking/error-tab.component';
 import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
-// import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-heresy-panel.component';
+import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-heresy-panel.component';
 
-// NOTE: 'card' is a built-in style. We can likely remove it when we
-// create a full theme for Paranext.
+// NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
+// Paranext.
 const TAB_GROUPS = 'card paranext';
 
+const DOCK_LAYOUT_KEY = 'dock-saved-layout';
+
+const savedLayout: LayoutData = getStorageValue(DOCK_LAYOUT_KEY, testLayout as LayoutData);
+
 // TODO: Build this mapping from extensions so extensions can create their own panels
+const tabTypeCreationMap = new Map<TabType, TabCreator>([
+  ['hello', createHelloPanel],
+  ['buttons', createButtonsPanel],
+  ['quick-verse-heresy', createQuickVerseHeresyPanel],
+  ['tab', createTabPanel],
+]);
 
-const tabTypeCreationMap: Map<string, TabCreator> = new Map();
-
-// const tabTypeCreationMap = new Map<string, TabCreator>([
-//   ['hello', createHelloPanel],
-//   ['buttons', createButtonsPanel],
-//   ['quick-verse-heresy', createQuickVerseHeresyPanel],
-//   ['tab', createTabPanel],
-// ]);
-
-export function addTabHandlerDock(type: string, creator: TabCreator) {
+export function addTabHandlerDock(type: TabType, creator: TabCreator) {
   tabTypeCreationMap.set(type, creator);
 }
 
@@ -57,7 +58,7 @@ function saveTab(tab: TabData): TabBase {
 }
 
 type WebviewInfo = {
-  type: string;
+  type: TabType;
   id: string;
   data?: unknown;
   group?: string;
@@ -94,6 +95,16 @@ function loadTab(savedTabInfo: TabBase): WebviewInfo {
   };
 }
 
+function onLayoutChange(newLayout: LayoutBase): void {
+  localStorage.setItem(DOCK_LAYOUT_KEY, JSON.stringify(newLayout));
+}
+
+function getStorageValue<T>(key: string, defaultValue: T): T {
+  const saved = localStorage.getItem(key);
+  const initial = saved ? JSON.parse(saved) : undefined;
+  return initial || defaultValue;
+}
+
 const groups: {
   [key: string]: TabGroup;
 } = {
@@ -106,9 +117,9 @@ const groups: {
   },
 };
 
-export async function addTabHandler(type: string, creator: TabCreator) {
+export async function addTabHandler(type: TabType, creator: TabCreator) {
   if (!isRenderer()) {
-    return commandService.sendCommand<[string, TabCreator], void>('addTabHandler', type, creator);
+    return commandService.sendCommand<[TabType, TabCreator], void>('addTabHandler', type, creator);
   }
 
   addTabHandlerDock(type, creator);
@@ -129,19 +140,18 @@ export default function ParanextDockLayout() {
       const layout = dockLayout.saveLayout();
       // TODO: Save layout
     });
-    return () => {
-      unregister();
-    };
+    return () => unregister();
   }, []);
 
   return (
     <DockLayout
       ref={dockLayoutRef}
       groups={groups}
-      defaultLayout={testLayout as LayoutData}
+      defaultLayout={savedLayout}
       dropMode="edge"
       saveTab={saveTab}
       loadTab={loadTab}
+      onLayoutChange={onLayoutChange}
     />
   );
 }
