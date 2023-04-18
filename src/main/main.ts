@@ -21,6 +21,11 @@ import { resolveHtmlPath } from '@node/utils/util';
 import MenuBuilder from '@main/menu.model';
 import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/network-object.service';
+import { wait } from '@shared/utils/util';
+
+const PROCESS_CLOSE_TIME_OUT = 2000;
+
+let isClosing = false;
 
 logger.info('Starting main');
 
@@ -137,17 +142,31 @@ app.on('window-all-closed', () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
   if (process.platform !== 'darwin') {
-    // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
-    dotnetDataProvider.kill();
-    extensionHostService.kill();
     app.quit();
   }
 });
 
-app.on('will-quit', () => {
-  // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
-  dotnetDataProvider.kill();
-  extensionHostService.kill();
+app.on('will-quit', async (e) => {
+  if (!isClosing) {
+    // Prevent closing before graceful shutdown is complete.
+    // Also, in the future, this should allow a "are you sure?" dialog to display.
+    e.preventDefault();
+    isClosing = true;
+
+    networkService.shutdown();
+    await Promise.all([
+      dotnetDataProvider.wait(PROCESS_CLOSE_TIME_OUT),
+      extensionHostService.wait(PROCESS_CLOSE_TIME_OUT),
+    ]);
+
+    // In development, the dotnet watcher was killed so we have to wait here.
+    if (process.env.NODE_ENV !== 'production') await wait(500);
+
+    app.quit();
+  } else {
+    dotnetDataProvider.kill();
+    extensionHostService.kill();
+  }
 });
 
 // #endregion

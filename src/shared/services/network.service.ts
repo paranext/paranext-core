@@ -579,6 +579,11 @@ export const onDidClientDisconnect = onDidClientDisconnectEmitter.event;
 
 // #endregion
 
+/** Closes the network services gracefully */
+export const shutdown = () => {
+  connectionService.disconnect();
+};
+
 /** Sets up the NetworkService. Runs only once */
 export const initialize = () => {
   if (initializePromise) return initializePromise;
