@@ -9,7 +9,7 @@ import {
   serializeRequestType,
 } from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';
-import { newGuid, newNonce } from '@shared/utils/util';
+import { newGuid, newNonce, wait } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi.service';
@@ -77,11 +77,6 @@ const getWebViewPapi = (webViewId: string) => {
 
 // #endregion
 
-const sleep = (ms: number) => {
-  // eslint-disable-next-line no-promise-executor-return
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};
-
 /**
  * Adds a WebView and runs all event handlers who are listening to this event
  * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
@@ -100,7 +95,7 @@ export const addWebView = async (webView: WebViewContents) => {
         .catch(async (error) => {
           succeeded = false;
           if (attemptsRemaining === 1) throw error;
-          await sleep(1000);
+          await wait(1000);
         });
 
       if (succeeded) return undefined;

@@ -123,3 +123,24 @@ function toErrorWithMessage(maybeError: unknown): ErrorWithMessage {
 export function getErrorMessage(error: unknown) {
   return toErrorWithMessage(error).message;
 }
+
+/**
+ * Asynchronously waits for the specified number of milliseconds.
+ * (wraps setTimeout in a promise)
+ */
+export function wait(ms: number) {
+  // eslint-disable-next-line no-promise-executor-return
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Runs the specified function and will timeout if it takes longer than the specified wait time
+ * @param fn The function to run
+ * @param maxWaitTimeInMS The maximum amount of time to wait for the function to resolve
+ * @returns Promise that resolves to the resolved value of the function or null if it
+ * ran longer than the specified wait time
+ */
+export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTimeInMS: number) {
+  const timeout = wait(maxWaitTimeInMS).then(() => null);
+  return Promise.any([timeout, fn()]);
+}
