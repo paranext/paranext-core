@@ -1,61 +1,51 @@
 import { PapiEvent } from '@shared/models/papi-event.model';
 import { UnsubscriberAsync } from '@shared/utils/papi-util';
+import { IContainer } from '@shared/utils/util';
 
 /**
- * Object that is able to be shared on the network.
- * Shared functions must be called asynchronously on other processes whether
- * or not they are asynchronous, so it is best to make them all asynchronous.
- * All shared functions' arguments and returns must be serializable in order
- * to be called across processes.
+ * An object of this type is returned from NetworkObjectService.get.
  */
-// Took the indexing off of NetworkableObject so normal objects could be used,
-// but now members can't be accessed by indexing in NetworkObjectService
-// TODO: fix it so it is indexable but can have specific members
-export type NetworkableObject = {};
-
-/**
- * Information about an object shared on the network.
- * Returned from getting a network object.
- */
-export type NetworkObjectInfo<T extends NetworkableObject> = {
-  /** Object that is shared on the network */
-  networkObject: T;
+export type NetworkObject<T> = T & {
   /** Event that emits when this network object is being disposed */
   onDidDispose: PapiEvent<void>;
 };
 
 /**
- * Information about an object shared on the network including control over disposing of the object.
- * Returned from setting up a network object (only the process that set up the network object should dispose of it)
+ * An object of this type is returned from NetworkObjectService.set.
+ * Only the process that set the object should call dispose.
  */
-export type DisposableNetworkObjectInfo<T extends NetworkableObject> = NetworkObjectInfo<T> & {
-  /** Unsubscriber to call to remove this object from the network */
+export type DisposableNetworkObject<T> = NetworkObject<T> & {
+  /** Call this when the network object should be disposed */
   dispose: UnsubscriberAsync;
 };
 
 /**
- * Holds a reference to the final proxied network object that is created (yes, this is self-referencing).
- * Passed into createLocalObjectToProxy on NetworkObjectService.get to allow the local object to call network object methods.
- * Note: networkObjectContainer.networkObject is undefined on first running createLocalObjectToProxy and is populated after createLocalObjectToProxy is run,
- * so please use networkObjectContainer.networkObject to reference the network object inside createLocalObjectToProxy and do not destructure it in order to preserve the reference.
+ * An object of this type is passed into NetworkObjectService.set. Its properties related to
+ * disposal will be changed.
+ *
+ * Functions that are shared by this object must be called asynchronously on other processes
+ * whether or not they are asynchronous, so it is best to make them all asynchronous. All shared
+ * functions' arguments and returns must be serializable in order to be called across processes.
  */
-export type NetworkObjectContainer<T> = { networkObject: T | undefined };
+export type NetworkableObject<T> = Partial<DisposableNetworkObject<T>> & {
+  onDidDispose: never;
+};
 
 /**
- * If a network object with the provided id exists remotely but has not been set up
- * to be used on this process, this function is run in NetworkObjectService.get, and the returned object is used as a base on which to set up a
- * NetworkObject for use on this process. This is useful for setting up network events on a network object.
+ * If a network object with the provided ID exists remotely but has not been set up to be used on
+ * this process, this function is run in NetworkObjectService.get, and the returned object is used
+ * as a base on which to set up a NetworkObject for use on this process. All properties that are
+ * exposed in the base object will be used as-is, and all other properties will be assumed to exist
+ * on the remote network object.
  *
- * @param id id of the network object to get
+ * @param id ID of the network object to get
  *
- * @param networkObjectContainer holds a reference to the final proxied network object that is created (yes, this is self-referencing).
+ * @param baseObject The object that will be proxied within NetworkObjectService.get.
  * Passed in to allow the local object to call network object methods.
- * Note: networkObjectContainer.networkObject is undefined on running createLocalObjectToProxy and is populated after createLocalObjectToProxy is run,
- * so please use networkObjectContainer.networkObject to reference the network object and do not destructure it in order to preserve the reference.
 
- * @returns the local object to proxy into a network object.
+* @returns the local object to proxy into a network object.
  */
-export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
+export type LocalObjectToProxyCreator<T> = (
   id: string,
-  networkObjectContainer: NetworkObjectContainer<T>,
+  baseObject: IContainer<T>,
 ) => Record<string, unknown>;

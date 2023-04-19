@@ -6,6 +6,7 @@ import { CommandHandler } from '@shared/utils/papi-util';
 import * as ExtensionService from '@extension-host/services/extension.service';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
+import dataProviderService from '@shared/services/data-provider.service';
 
 // #region Test logs
 
@@ -60,37 +61,58 @@ setTimeout(
 // #region network object test
 
 (async () => {
+  const testEHInfo = await networkObjectService.set('test-extension-host', {
+    getVerse: async () => {
+      const verse = await papi.fetch('https://bible-api.com/matthew+24:14');
+      const verseJson = await verse.json();
+      const results = `test-extension-host got verse: ${verseJson.text.replace(/\\n/g, '')}`;
+      logger.info(results);
+      return results;
+    },
+  });
+
+  if (testEHInfo) {
+    testEHInfo.onDidDispose(() => {
+      logger.info('test-extension-host disposed in extension-host');
+    });
+  }
+
+  setTimeout(testEHInfo.dispose, 10000);
+})();
+
+setTimeout(async () => {
   let testMainInfo = await networkObjectService.get<{
     doStuff: (stuff: string) => Promise<string>;
   }>('test-main');
   if (testMainInfo) {
-    const unsub = testMainInfo?.onDidDispose(async () => {
-      logger.info('Disposed of test-main!');
+    testMainInfo?.onDidDispose(async () => {
+      logger.info('test-main disposed in extension-host');
       testMainInfo = undefined;
-      unsub();
-
-      const testEHInfo = await networkObjectService.set('test-extension-host', {
-        getVerse: async () => {
-          const verse = await fetch('https://bible-api.com/matthew+24:14');
-          const verseJson = await verse.json();
-          const results = `test-extension-host got verse: ${verseJson.text.replace(/\\n/g, '')}`;
-          logger.info(results);
-          return results;
-        },
-      });
-
-      if (testEHInfo) {
-        const unsub2 = testEHInfo.onDidDispose(() => {
-          logger.info('Disposed of test-extension-host!');
-          unsub2();
-        });
-      }
-
-      setTimeout(testEHInfo.dispose, 10000);
     });
-  }
+  } else logger.error('Could not get test-main from extension host');
 
-  logger.info(`do stuff: ${await testMainInfo?.networkObject.doStuff('extension host things')}`);
+  logger.info(`do stuff: ${await testMainInfo?.doStuff('extension host things')}`);
+}, 5000);
+
+// This is just testing dispose on data providers
+(async () => {
+  const testDP = {
+    set: () => {
+      throw new Error('I am a bad data provider');
+    },
+    get: () => {
+      throw new Error('I am a bad data provider');
+    },
+    dispose: async () => {
+      logger.info('Inside testDP dispose');
+    },
+  };
+
+  const realDP = await dataProviderService.registerEngine('testDP', testDP);
+  realDP.onDidDispose(() => {
+    logger.info('testDP onDidDispose ran');
+  });
+  setTimeout(realDP.dispose, 3000);
 })();
 
 // #endregion

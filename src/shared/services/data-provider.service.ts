@@ -12,12 +12,13 @@ import IDataProvider, {
   DataProviderSubscriberOptions,
 } from '@shared/models/data-provider.interface';
 import IDataProviderEngine from '@shared/models/data-provider-engine.model';
-import { NetworkObjectContainer } from '@shared/models/network-object-info.model';
 import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
 import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
+import { IContainer } from '@shared/utils/util';
 import networkObjectService from '@shared/services/network-object.service';
+import logger from './logger.service';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -32,8 +33,8 @@ const ON_DID_UPDATE = 'onDidUpdate';
  */
 const SUBSCRIBE_PLACEHOLDER = {};
 
-/** Gets the id for the data provider network object of the specified type */
-const getDataProviderObjectId = (dataType: string) => `${dataType}-${DATA_PROVIDER_LABEL}`;
+/** Gets the id for the data provider network object with the given name */
+const getDataProviderObjectId = (providerName: string) => `${providerName}-${DATA_PROVIDER_LABEL}`;
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -71,12 +72,12 @@ async function has(dataType: string): Promise<boolean> {
  * @returns subscribe function for a data provider
  */
 function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
-  dataProviderContainer: NetworkObjectContainer<IDataProvider<TSelector, TGetData, TSetData>>,
+  dataProviderContainer: IContainer<IDataProvider<TSelector, TGetData, TSetData>>,
   onDidUpdate: PapiEvent<boolean>,
 ): DataProviderSubscriber<TSelector, TGetData> {
   return async (selector, callback, options?: DataProviderSubscriberOptions) => {
-    if (!dataProviderContainer.networkObject)
-      throw new Error("Somehow the data provider doesn't exist! Investigate");
+    if (!dataProviderContainer.contents)
+      throw new Error("subscribe: Somehow the data provider doesn't exist! Investigate");
 
     // Default options
     const subscriberOptions: DataProviderSubscriberOptions = {
@@ -96,11 +97,11 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
     /** Whether we have already received an update event, meaning our initial `get` will return old data */
     let receivedUpdate = false;
     const callbackWithUpdate = async () => {
-      if (!dataProviderContainer.networkObject)
-        throw new Error("Somehow the data provider doesn't exist! Investigate");
+      if (!dataProviderContainer.contents)
+        throw new Error("onDidUpdate: Somehow the data provider doesn't exist! Investigate");
       // Get the data at our selector when we receive notification that the data updated
       // TODO: Implement selector events so we can receive the new data with the update instead of reaching back out for it
-      const data = await dataProviderContainer.networkObject.get(selector);
+      const data = await dataProviderContainer.contents.get(selector);
       // Take note that we have received an update so we don't run the callback with the old data below in the `retrieveDataImmediately` code
       receivedUpdate = true;
 
@@ -120,7 +121,7 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
     // If the subscriber wants to get the data as soon as possible in addition to running the callback on updates, get the data
     if (retrieveDataImmediately) {
       // Get the data to run the callback immediately so it has the data
-      const data = await dataProviderContainer.networkObject.get(selector);
+      const data = await dataProviderContainer.contents.get(selector);
       // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
       if (!receivedUpdate) {
         receivedUpdate = true;
@@ -149,10 +150,8 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
   onDidUpdateEmitter: PapiEventEmitter<boolean>,
 ): IDataProvider<TSelector, TGetData, TSetData> {
   /** Container to hold a reference to the data provider so the local object can reference the network object in its functions */
-  const dataProviderContainer: NetworkObjectContainer<
-    IDataProvider<TSelector, TGetData, TSetData>
-  > = {
-    networkObject: undefined,
+  const dataProviderContainer: IContainer<IDataProvider<TSelector, TGetData, TSetData>> = {
+    contents: undefined,
   };
 
   // Layer over data provider engine methods to give it control over emitting updates
@@ -195,7 +194,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
 
   // Update the dataProviderContainer so the local object can access the dataProvider appropriately
   // See above for why dataProviderInternal does not have set and why it needs to be type asserted here for now
-  dataProviderContainer.networkObject = dataProviderInternal as IDataProvider<
+  dataProviderContainer.contents = dataProviderInternal as IDataProvider<
     TSelector,
     TGetData,
     TSetData
@@ -223,8 +222,21 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
       // but now members can't be accessed by indexing in DataProviderService
       // TODO: fix it so it is indexable but can have specific members
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (dataProviderInternal as any)[prop] = engineMethod;
+      if (engineMethod) (dataProviderInternal as any)[prop] = engineMethod;
       return engineMethod;
+    },
+    set(obj: IDataProviderEngine<TSelector, TGetData, TSetData>, prop, value) {
+      // We create `subscribe` for extensions, and `subscribe` uses `get` internally, so those 2
+      // properties can't change after the data provider has been created or bad things will happen.
+      if (prop === 'get' || prop === 'subscribe') return false;
+
+      // If we cached a property previously, purge the cache for that property since it is changing.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((dataProviderInternal as any)[prop]) delete (dataProviderInternal as any)[prop];
+
+      // Actually set the provided property
+      Reflect.set(obj, prop, value);
+      return true;
     },
     // Type assert the data provider engine proxy because it is an IDataProvider although
     // Typescript can't figure it out
@@ -277,13 +289,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   const dataProvider = buildDataProvider(dataProviderEngine, onDidUpdateEmitter);
 
   // Set up the data provider to be a network object so other processes can use it
-  const networkObjectInfo = await networkObjectService.set(dataProviderObjectId, dataProvider);
-
-  return {
-    dataProvider: networkObjectInfo.networkObject,
-    dispose: networkObjectInfo.dispose,
-    onDidDispose: networkObjectInfo.onDidDispose,
-  };
+  return networkObjectService.set(dataProviderObjectId, dataProvider);
 }
 
 /**
@@ -292,10 +298,11 @@ async function registerEngine<TSelector, TGetData, TSetData>(
  * @param dataProviderContainer container that holds a reference to the data provider so this subscribe function can reference the data provider
  * @returns local data provider object that represents a remote data provider
  */
-function createLocalDataProviderToProxy<TSelector, TGetData, TSetData>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function createLocalDataProviderToProxy<T extends IDataProvider<any, any, any>>(
   dataProviderObjectId: string,
-  dataProviderContainer: NetworkObjectContainer<IDataProvider<TSelector, TGetData, TSetData>>,
-) {
+  dataProviderContainer: IContainer<T>,
+): Record<string, unknown> {
   // Create a networked update event
   const onDidUpdate = networkService.getNetworkEvent<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
@@ -307,32 +314,31 @@ function createLocalDataProviderToProxy<TSelector, TGetData, TSetData>(
 
 /**
  * Get a data provider that has previously been set up
- * @param dataType type of data that this provider serves
- * @returns information about the data provider with the specified type if one exists, undefined otherwise
- * @type `TSelector` - the type of selector used to get some data from this provider.
- *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
- *  Note: A selector must be stringifiable.
- * @type `TData` - the type of data provided by this data provider based on a provided selector
+ * @param dataProviderName Name of the desired data provider
+ * @returns The data provider with the given name if one exists, undefined otherwise
  */
-async function get<TSelector, TGetData, TSetData>(
-  dataType: string,
-): Promise<DataProviderInfo<TSelector, TGetData, TSetData> | undefined> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function get<T extends IDataProvider<any, any, any>>(
+  dataProviderName: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<DataProviderInfo<any, any, any> | undefined> {
   await initialize();
 
   // Get the object id for this data type
-  const dataProviderObjectId = getDataProviderObjectId(dataType);
+  const dataProviderObjectId = getDataProviderObjectId(dataProviderName);
 
   // Get the network object for this data provider
-  const networkObjectInfo = await networkObjectService.get<
-    IDataProvider<TSelector, TGetData, TSetData>
-  >(dataProviderObjectId, createLocalDataProviderToProxy);
+  const dataProvider = await networkObjectService.get<T>(
+    dataProviderObjectId,
+    createLocalDataProviderToProxy,
+  );
 
-  if (!networkObjectInfo) return undefined;
+  if (!dataProvider) {
+    logger.info(`No data provider found with name = ${dataProviderName}`);
+    return undefined;
+  }
 
-  return {
-    dataProvider: networkObjectInfo.networkObject,
-    onDidDispose: networkObjectInfo.onDidDispose,
-  };
+  return dataProvider;
 }
 
 const dataProviderService = {

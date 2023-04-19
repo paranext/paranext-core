@@ -87,7 +87,7 @@ function useDataProvider<T extends IDataProvider<any, any, any>>(
   // If we had to get a data provider, return it if it is not disposed
   return dataProviderInfo && !isDisposed
     ? // Type assert here - the user of this hook must make sure to provide the correct type
-      (dataProviderInfo.dataProvider as T)
+      (dataProviderInfo as unknown as T)
     : undefined;
 }
 

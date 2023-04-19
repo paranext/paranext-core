@@ -7,8 +7,11 @@ import { UnsubscriberAsync } from '@shared/utils/papi-util';
  * Returned from getting a data provider.
  */
 // Basically a layer over NetworkObjectInfo
-export type DataProviderInfo<TSelector, TGetData, TSetData> = {
-  dataProvider: IDataProvider<TSelector, TGetData, TSetData>;
+export type DataProviderInfo<TSelector, TGetData, TSetData> = IDataProvider<
+  TSelector,
+  TGetData,
+  TSetData
+> & {
   /** Event that emits when this data provider is being disposed */
   onDidDispose: PapiEvent<void>;
 };
