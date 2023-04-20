@@ -27,9 +27,12 @@ import {
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
 
+type LayoutType = 'tab' | 'panel' | 'float';
+
 /** Event emitted when webViews are added */
 export type AddWebViewEvent = {
   webView: WebViewProps;
+  layoutType: LayoutType;
 };
 
 export type LayoutSaver = () => void;
@@ -89,7 +92,7 @@ const getWebViewPapi = (webViewId: string) => {
  * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
  * @returns promise that resolves nothing if we successfully handled the webView
  */
-export const addWebView = async (webView: WebViewContents) => {
+export const addWebView = async (webView: WebViewContents, layoutType: LayoutType = 'tab') => {
   if (!isRenderer()) {
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
     // TODO: This block should be removed when https://github.com/paranext/paranext-core/issues/51
@@ -98,7 +101,7 @@ export const addWebView = async (webView: WebViewContents) => {
       let succeeded = true;
       // eslint-disable-next-line no-await-in-loop
       await commandService
-        .sendCommand<[WebViewContents], void>('addWebView', webView)
+        .sendCommand<[WebViewContents, LayoutType], void>('addWebView', webView, layoutType)
         .catch(async (error) => {
           succeeded = false;
           if (attemptsRemaining === 1) throw error;
@@ -240,7 +243,7 @@ export const addWebView = async (webView: WebViewContents) => {
     contents: webViewContents,
   };
   // Inform web view consumers we added a web view
-  onDidAddWebViewEmitter.emit({ webView: updatedWebView });
+  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layoutType });
 
   // Resolve this promise
   return undefined;

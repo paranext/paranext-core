@@ -1,9 +1,9 @@
 import 'rc-dock/dist/rc-dock.css';
 import './paranext-dock-layout.component.css';
-import { useRef, useEffect, ReactElement } from 'react';
+import { useRef, useEffect, ReactElement, useCallback } from 'react';
 import { newGuid } from '@shared/utils/util';
 import { SavedTabInfo, TabCreator, TabInfo, TabType } from '@shared/data/web-view.model';
-import { registerLayoutSave } from '@shared/services/web-view.service';
+import { AddWebViewEvent, registerLayoutSave } from '@shared/services/web-view.service';
 import DockLayout, { LayoutBase, LayoutData, TabBase, TabData, TabGroup } from 'rc-dock';
 import testLayout from '@renderer/testing/test-layout.data';
 import createAboutPanel from '@renderer/testing/about-panel.component';
@@ -14,13 +14,16 @@ import { isRenderer } from '@shared/utils/internal-util';
 import createErrorTab from '@renderer/components/docking/error-tab.component';
 import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
+import { WebView } from '@renderer/components/web-view.component';
+import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-heresy-panel.component';
+import papi from '@shared/services/papi.service';
 
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
 // Paranext.
 const TAB_GROUPS = 'card paranext';
-
 const DOCK_LAYOUT_KEY = 'dock-saved-layout';
+const WEBVIEW_PLACEHOLDER_TAB_TITLE = 'Tab WebView Placeholder';
 
 const savedLayout: LayoutData = getStorageValue(DOCK_LAYOUT_KEY, testLayout as LayoutData);
 
@@ -69,6 +72,8 @@ type WebviewInfo = {
   closable?: boolean;
 };
 
+let targetTabId: string;
+
 /**
  * Creates tab data from the specified saved tab information by calling back to the
  * extension that registered the creation of the tab type
@@ -80,6 +85,8 @@ function loadTab(savedTabInfo: TabBase): WebviewInfo {
 
   const tabInfo = savedTabInfo as SavedTabInfo;
   const newTabData = getTabDataFromSavedInfo(tabInfo);
+
+  if (newTabData.title === WEBVIEW_PLACEHOLDER_TAB_TITLE) targetTabId = id;
 
   // Translate the data from the extension to be in the form needed by rc-dock
   return {
@@ -128,6 +135,26 @@ export async function addTabHandler(type: TabType, creator: TabCreator) {
   return undefined;
 }
 
+function addWebViewToDock({ webView, layoutType }: AddWebViewEvent, dockLayout: DockLayout) {
+  const id = newGuid();
+  const targetTab = dockLayout.find(targetTabId);
+  const tab: TabData = {
+    id,
+    title: <ParanextTabTitle text={webView.title ?? ''} />,
+    content: <WebView {...webView} />,
+    group: TAB_GROUPS,
+    closable: true,
+  };
+  switch (layoutType) {
+    case 'tab':
+      dockLayout.dockMove(tab, targetTab, 'after-tab');
+      break;
+
+    default:
+      throw Error(`Not yet implemented or unknown panelType: '${layoutType}'`);
+  }
+}
+
 export default function ParanextDockLayout() {
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -142,6 +169,14 @@ export default function ParanextDockLayout() {
     });
     return () => unregister();
   }, []);
+
+  useEvent(
+    papi.webViews.onDidAddWebView,
+    useCallback((event: AddWebViewEvent) => {
+      const dockLayout = dockLayoutRef.current;
+      addWebViewToDock(event, dockLayout);
+    }, []),
+  );
 
   return (
     <DockLayout

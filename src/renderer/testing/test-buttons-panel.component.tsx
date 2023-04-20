@@ -5,9 +5,9 @@ import * as networkService from '@shared/services/network.service';
 import { debounce, getErrorMessage, isString } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import { TabInfo } from '@shared/data/web-view.model';
-import { WebView, WebViewProps } from '@renderer/components/web-view.component';
+// import { WebView, WebViewProps } from '@renderer/components/web-view.component';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
-import { AddWebViewEvent } from '@shared/services/web-view.service';
+// import { AddWebViewEvent } from '@shared/services/web-view.service';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import IDataProvider from '@shared/models/data-provider.interface';
@@ -118,7 +118,7 @@ function TestButtonsPanel() {
     },
     [updatePromiseReturn],
   );
-
+  /*
   const [webViews, setWebViews] = useState<WebViewProps[]>([]);
 
   useEvent(
@@ -130,7 +130,7 @@ function TestButtonsPanel() {
       [setWebViews],
     ),
   );
-
+*/
   useEvent(
     papi.network.onDidClientConnect,
     useCallback(
@@ -385,11 +385,13 @@ function TestButtonsPanel() {
       <div className="hello">
         <div>{promiseReturn}</div>
       </div>
+      {/*
       {webViews.map((webView, i) => (
         // TODO: Make webViews trackable in some way
         // eslint-disable-next-line react/no-array-index-key
         <WebView key={i} {...webView} />
       ))}
+      */}
     </div>
   );
 }
