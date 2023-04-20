@@ -1,4 +1,4 @@
-import type { Meta, StoryContext, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react';
 import { useArgs } from '@storybook/client-api';
 
 import Table, {
@@ -7,7 +7,7 @@ import Table, {
   TableSelectColumn,
   TableSortColumn,
 } from '@renderer/components/papi-components/Table';
-import { ReactElement } from 'react';
+import { Key, ReactElement } from 'react';
 
 type Row = {
   id: number;
@@ -16,75 +16,62 @@ type Row = {
 
 type Story = StoryObj<typeof Table<Row>>;
 
-function TableDecorator(
-  Story: (props: Partial<TableProps<Row>>) => ReactElement,
-  context: StoryContext,
-) {
+function TableDecorator(Story: (update?: { args: Partial<TableProps<Row>> }) => ReactElement) {
   const [args, updateArgs] = useArgs();
+
+  type Comparator = (a: Row, b: Row) => number;
+  function getComparator(sortColumn: string): Comparator {
+    switch (sortColumn) {
+      case 'title':
+        return (a, b) => {
+          return a[sortColumn].localeCompare(b[sortColumn]);
+        };
+      case 'id':
+        return (a, b) => {
+          return a[sortColumn] - b[sortColumn];
+        };
+      default:
+        throw new Error(`unsupported sortColumn: "${sortColumn}"`);
+    }
+  }
 
   const setSortColumns = (cols: TableSortColumn[]) => {
     updateArgs({ sortColumns: cols });
+
+    if (cols.length === 0) {
+      setRows(args.rows);
+    } else {
+      setRows(
+        args.rows.sort((a: Row, b: Row) => {
+          // eslint-disable-next-line no-restricted-syntax
+          for (const sort of cols) {
+            const comparator = getComparator(sort.columnKey);
+            const compResult = comparator(a, b);
+            if (compResult !== 0) {
+              return sort.direction === 'ASC' ? compResult : -compResult;
+            }
+          }
+          return 0; // What do we need this for?
+        }),
+      );
+    }
   };
 
-  const setSelectedRows = (rows: Row[]) => {
+  const setSelectedRows = (rows: Set<Key>) => {
     updateArgs({ selectedRows: rows });
   };
 
-  // const setRows = (rows: Row[]) => {
-  //   updateArgs({ rows });
-  // };
-
-  // const rows: Row[] = [
-  //   { id: 0, title: 'Lorem ipsum dolor sit amet' },
-  //   { id: 1, title: 'Consectetur adipiscing elit' },
-  //   { id: 2, title: 'Pellentesque suscipit tortor est' },
-  //   { id: 3, title: 'Ut egestas massa aliquam a' },
-  //   { id: 4, title: 'Nulla egestas vestibulum felis a venenatis' },
-  //   { id: 5, title: 'Sed aliquet pulvinar neque' },
-  // ];
-
-  // type Comparator = (a: Row, b: Row) => number;
-  // function getComparator(sortColumn: string): Comparator {
-  //   switch (sortColumn) {
-  //     case 'title':
-  //       return (a, b) => {
-  //         return a[sortColumn].localeCompare(b[sortColumn]);
-  //       };
-  //     case 'id':
-  //       return (a, b) => {
-  //         return a[sortColumn] - b[sortColumn];
-  //       };
-  //     default:
-  //       throw new Error(`unsupported sortColumn: "${sortColumn}"`);
-  //   }
-  // }
-
-  // const sortedRows = (): readonly Row[] => {
-  //   console.log('hi');
-  //   if (args.sortColumns.length === 0) return rows;
-
-  //   return [...rows].sort((a, b) => {
-  //     // eslint-disable-next-line no-restricted-syntax
-  //     for (const sort of args.sortColumns) {
-  //       const comparator = getComparator(sort.columnKey);
-  //       const compResult = comparator(a, b);
-  //       if (compResult !== 0) {
-  //         return sort.direction === 'ASC' ? compResult : -compResult;
-  //       }
-  //     }
-  //     return 0;
-  //   });
-  // };
+  const setRows = (rows: Row[]) => {
+    updateArgs({ rows });
+  };
 
   return (
     <Story
-      {...context}
       args={{
         ...args,
         onSelectedRowsChange: setSelectedRows,
         onSortColumnsChange: setSortColumns,
-        // onRowsChange: setRows,
-        // rows: sortedRows,
+        onRowsChange: setRows,
       }}
     />
   );
@@ -225,8 +212,8 @@ export const ColumnCallBackFunctions: Story = {
       },
       {
         key: 'title',
-        name: 'Title (not sortable)',
-        sortable: false,
+        name: 'Title (sortable)',
+        sortable: true,
         editor: TableTextEditor,
       },
     ],
@@ -276,12 +263,6 @@ export const RowCallBackFunctions: Story = {
       { id: 4, title: 'Nulla egestas vestibulum felis a venenatis' },
       { id: 5, title: 'Sed aliquet pulvinar neque' },
     ],
-
-    onSelectedRowsChange: () => {
-      console.log('test');
-    },
-
-    // onRowsChange,
 
     // rowClassGetter,
 
