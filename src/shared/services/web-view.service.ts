@@ -3,7 +3,6 @@
  * Likely shouldn't need/want to expose this whole service on papi,
  * but most things are exposed via papiWebViewService
  */
-import { WebViewProps } from '@renderer/components/web-view.component';
 import { isRenderer } from '@shared/utils/internal-util';
 import {
   aggregateUnsubscriberAsyncs,
@@ -11,7 +10,7 @@ import {
   serializeRequestType,
 } from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';
-import { newGuid, newNonce, wait } from '@shared/utils/util';
+import { newNonce, wait } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi.service';
@@ -22,6 +21,7 @@ import {
   WebViewContents,
   WebViewContentsReact,
   WebViewContentType,
+  WebViewProps,
 } from '@shared/data/web-view.model';
 
 /** Prefix on requests that indicates that the request is related to webView operations */
@@ -71,7 +71,7 @@ const setWebViewPapi = (webViewId: string, webViewPapi: typeof papi) =>
  */
 const getWebViewPapi = (webViewId: string) => {
   const webViewPapi = webViewPapis.get(webViewId);
-  if (!webViewPapi) throw new Error(`Cannot find papi for WebView with id ${webViewId}`);
+  if (!webViewPapi) throw new Error(`Cannot find papi for WebView with id: '${webViewId}'`);
 
   webViewPapis.delete(webViewId);
   return webViewPapi;
@@ -114,7 +114,7 @@ export const addWebView = async (webView: WebViewContents, layoutType: LayoutTyp
   }
 
   // Create a papi instance for this WebView
-  const webViewId = newGuid();
+  const webViewId = webView.id;
   setWebViewPapi(webViewId, papi);
 
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
@@ -137,15 +137,15 @@ export const addWebView = async (webView: WebViewContents, layoutType: LayoutTyp
   const srcNonce = newNonce();
 
   // Build the contents of the iframe
-  let webViewContents: string;
+  let webViewContent: string;
   /** CSP for allowing only certain scripts and styles */
   let specificSrcPolicy: string;
   switch (contentType) {
     case WebViewContentType.HTML:
       // Add wrapping to turn a plain string into an iframe
-      webViewContents = webView.contents.includes('<html')
-        ? webView.contents
-        : `<html><head></head><body>${webView.contents}</body></html>`;
+      webViewContent = webView.content.includes('<html')
+        ? webView.content
+        : `<html><head></head><body>${webView.content}</body></html>`;
       // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
@@ -153,7 +153,7 @@ export const addWebView = async (webView: WebViewContents, layoutType: LayoutTyp
       const reactWebView = webView as WebViewContentsReact;
 
       // Add the component as a script
-      webViewContents = `
+      webViewContent = `
         <html>
           <head>
             ${
@@ -171,7 +171,7 @@ export const addWebView = async (webView: WebViewContents, layoutType: LayoutTyp
               // Enable webview debugging
               console.debug('Debug ${reactWebView.componentName} Webview')
 
-              ${reactWebView.contents}
+              ${reactWebView.content}
 
               function initializeReact() {
                 const container = document.getElementById('root');
@@ -227,20 +227,20 @@ export const addWebView = async (webView: WebViewContents, layoutType: LayoutTyp
     ">`;
 
   // Add a script at the start of the head to give access to papi
-  const headStart = webViewContents.indexOf('<head');
-  const headEnd = webViewContents.indexOf('>', headStart);
+  const headStart = webViewContent.indexOf('<head');
+  const headEnd = webViewContent.indexOf('>', headStart);
 
   // Inject the import scripts into the html
-  webViewContents = `${webViewContents.substring(0, headEnd + 1)}
+  webViewContent = `${webViewContent.substring(0, headEnd + 1)}
     ${contentSecurityPolicy}
     <script nonce="${srcNonce}">
     ${imports}
-    </script>${webViewContents.substring(headEnd + 1)}`;
+    </script>${webViewContent.substring(headEnd + 1)}`;
 
   const updatedWebView: WebViewProps = {
     ...webView,
     contentType,
-    contents: webViewContents,
+    content: webViewContent,
   };
   // Inform web view consumers we added a web view
   onDidAddWebViewEmitter.emit({ webView: updatedWebView, layoutType });

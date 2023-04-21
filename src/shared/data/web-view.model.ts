@@ -1,18 +1,15 @@
 import { ReactNode } from 'react';
 
-/**
- * The underlying tab type. Used to determine which extension owns it.
- */
-export type TabType = string;
+export type WebViewProps = Omit<WebViewContents, 'componentName'>;
 
 /**
  * Information used to recreate a tab
  */
 export type SavedTabInfo = {
   /**
-   * The underlying tab type. Used to determine which extension owns it.
+   * Tab ID - must be unique
    */
-  type: TabType;
+  id?: string;
   /**
    * Data needed to recreate the tab during load
    */
@@ -23,10 +20,6 @@ export type SavedTabInfo = {
  * Information needed to create a tab inside of Paranext
  */
 export type TabInfo = {
-  /**
-   * The underlying tab type. Used to determine which extension owns it.
-   */
-  type: TabType;
   /**
    * Text to show on the title bar of the tab
    */
@@ -46,6 +39,11 @@ export type TabInfo = {
 };
 
 /**
+ * The underlying tab type. Used to determine which extension owns it.
+ */
+export type TabType = string;
+
+/**
  * For now all tab creators must do their own data type verification
  */
 export type TabCreator = (tabData: SavedTabInfo) => TabInfo;
@@ -56,7 +54,7 @@ export enum WebViewContentType {
 }
 
 /** Base WebView properties that all WebViews share */
-type WebViewContentsBase = { contents: string; title?: string };
+type WebViewContentsBase = { id: string; content: string; title?: string };
 
 /** WebView representation using React */
 export type WebViewContentsReact = WebViewContentsBase & {

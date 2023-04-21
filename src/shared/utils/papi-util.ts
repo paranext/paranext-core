@@ -179,6 +179,11 @@ export type CommandHandler<
   TReturn = any,
 > = (...args: TParam) => Promise<TReturn> | TReturn;
 
+/** Check that two objects are deeply equal, comparing members of each object and such */
+export function deepEqual(a: unknown, b: unknown) {
+  return equal(a, b);
+}
+
 /** Information about a request that tells us what to do with it */
 export type RequestType = {
   /** the general category of request */
@@ -187,25 +192,54 @@ export type RequestType = {
   directive: string;
 };
 
+const REQUEST_TYPE_SEPARATOR = ':';
+
 /**
  * Create a request message requestType string from a category and a directive
  * @param category the general category of request
  * @param directive specific identifier for this type of request
  * @returns full requestType for use in network calls
  */
-export const serializeRequestType = (category: string, directive: string): string =>
-  `${category}:${directive}`;
+export function serializeRequestType(category: string, directive: string): string {
+  if (!category) throw new Error('serializeRequestType: "category" is not defined or empty.');
+  if (!directive) throw new Error('serializeRequestType: "directive" is not defined or empty.');
+
+  return `${category}${REQUEST_TYPE_SEPARATOR}${directive}`;
+}
 
 /** Split a request message requestType string into its parts */
-export const deserializeRequestType = (requestType: string): RequestType => {
-  // TODO: fix this to split on one colon and leave all the rest. Right now, directive is anything between the first and second colons, which is probably bad
-  const [category, directive] = requestType.split(':', 1);
+export function deserializeRequestType(requestType: string): RequestType {
+  const [category, ...directiveParts] = requestType.split(REQUEST_TYPE_SEPARATOR);
+  const directive = directiveParts.join(REQUEST_TYPE_SEPARATOR);
   return { category, directive };
-};
+}
 
-/** Check that two objects are deeply equal, comparing members of each object and such */
-export function deepEqual(a: unknown, b: unknown) {
-  return equal(a, b);
+/** Parts of a Dock Tab ID */
+export interface TabIdParts {
+  /** Type of the tab */
+  type: string;
+  /** ID of the particular tab type */
+  typeId: string;
+}
+
+/**
+ * Create a tab ID.
+ * @param type Type of the tab.
+ * @param typeId ID of the particular tab type.
+ * @returns a tab ID
+ */
+export function serializeTabId(type: string, typeId: string): string {
+  return serializeRequestType(type, typeId);
+}
+
+/**
+ * Split the tab ID into its parts.
+ * @param id Tab ID.
+ * @returns The two parts of the tab ID
+ */
+export function deserializeTabId(id: string): TabIdParts {
+  const { category: type, directive: typeId } = deserializeRequestType(id);
+  return { type, typeId };
 }
 
 /**

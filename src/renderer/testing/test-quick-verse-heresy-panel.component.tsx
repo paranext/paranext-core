@@ -54,12 +54,9 @@ function TestQuickVerseHeresyPanel() {
   );
 }
 
-const createQuickVerseHeresyPanel = (): TabInfo => {
+export default function createQuickVerseHeresyPanel(): TabInfo {
   return {
-    type: 'quick-verse-heresy',
     title: 'Quick Verse Heresy',
     content: <TestQuickVerseHeresyPanel />,
   };
-};
-
-export default createQuickVerseHeresyPanel;
+}

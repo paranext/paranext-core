@@ -1,38 +1,34 @@
-import { WebViewContents } from '@shared/data/web-view.model';
-import logger from '@shared/services/logger.service';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
+import {
+  SavedTabInfo,
+  TabInfo,
+  WebViewContentType,
+  WebViewProps,
+} from '@shared/data/web-view.model';
+import { deserializeTabId } from '@shared/utils/papi-util';
 
-export type WebViewProps = Omit<WebViewContents, 'componentName'>;
+export const TYPE_WEBVIEW = 'webview';
 
-export function WebView({ contents, title, contentType }: WebViewProps) {
+export function getTitle({ id, title, contentType }: WebViewProps): string {
+  const defaultTitle = id ? `${id} ${contentType}` : `${contentType} Web View`;
+  return title || defaultTitle;
+}
+
+export function WebView({ id, content, title, contentType }: WebViewProps) {
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const iframeRef = useRef<HTMLIFrameElement>(null!);
 
-  useEffect(() => {
-    // TODO: This doesn't work. Probably because the browser considers it to be cross-origin since we are loading from a script. Figure out how to fix this
-    const iframe = iframeRef.current;
-    const errorHandler = (e: ErrorEvent) => {
-      logger.error(`WebView threw an error: ${e.message}`);
-    };
-    const getIframeContentWindowSafe = (stage: string) => {
-      if (iframe.contentWindow === null)
-        throw new Error(
-          `Somehow the webview's contentWindow is null while ${stage} error handler! Investigate`,
-        );
-      return iframe.contentWindow;
-    };
-    getIframeContentWindowSafe('setting up').addEventListener('error', errorHandler);
-    return () => {
-      getIframeContentWindowSafe('removing').removeEventListener('error', errorHandler);
-    };
-  }, []);
+  // TODO: We may be catching iframe exceptions moving forward by posting messages from the child
+  // iframe to the parent, so it might be good to figure out how it works to add and remove a
+  // handler of some sort. Maybe the post message handler can more easily handle this kind of
+  // situation, though. We just don't want to leak memory by leaving an event handler on an iframe
+  // when it gets removed (if that does leak memory).
 
   return (
     <iframe
       ref={iframeRef}
-      // TODO: Improve the default title when we have WebView types
-      title={title || `${contentType} Web View`}
+      title={getTitle({ id, content, title, contentType })}
       // TODO: csp?
       // TODO: credentialless?
       // TODO: referrerpolicy?
@@ -49,7 +45,27 @@ export function WebView({ contents, title, contentType }: WebViewProps) {
       // is done by accessing window.parent or window.top, which is removed from the iframe with the injected
       // scripts in WebViewService. We will probably want to stay vigilant on security in this area.
       sandbox="allow-same-origin allow-scripts allow-pointer-lock"
-      srcDoc={contents as string}
+      srcDoc={content}
     />
   );
+}
+
+export default function createWebViewPanel(tabInfo: SavedTabInfo): TabInfo {
+  if (!tabInfo.id) throw new Error('"id" is missing.');
+
+  let data: WebViewProps;
+  if (tabInfo.data) {
+    // We need to make sure that the data is of the correct type
+    data = tabInfo.data as WebViewProps;
+  } else {
+    // placeholder data
+    const { typeId } = deserializeTabId(tabInfo.id);
+    data = { id: typeId, title: typeId, content: '', contentType: WebViewContentType.HTML };
+  }
+
+  const title = data.title ?? 'Unknown';
+  return {
+    title: `${title}`,
+    content: <WebView {...data} />,
+  };
 }

@@ -14,14 +14,11 @@ function AboutPanel() {
   );
 }
 
-const createAboutPanel = (): TabInfo => {
+export default function createAboutPanel(): TabInfo {
   return {
-    type: 'about',
     title: 'About',
     content: <AboutPanel />,
     minWidth: 230,
     minHeight: 230,
   };
-};
-
-export default createAboutPanel;
+}
