@@ -6,11 +6,13 @@ import Table, {
   TableTextEditor,
   TableSelectColumn,
   TableSortColumn,
+  TableCopyEvent,
+  TablePasteEvent,
 } from '@renderer/components/papi-components/Table';
-import { Key, ReactElement } from 'react';
+import { Key, ReactElement, UIEvent } from 'react';
 
 type Row = {
-  id: number;
+  id: string;
   title: string;
 };
 
@@ -28,7 +30,7 @@ function TableDecorator(Story: (update?: { args: Partial<TableProps<Row>> }) => 
         };
       case 'id':
         return (a, b) => {
-          return a[sortColumn] - b[sortColumn];
+          return +a[sortColumn] - +b[sortColumn];
         };
       default:
         throw new Error(`unsupported sortColumn: "${sortColumn}"`);
@@ -115,6 +117,7 @@ export const Default: Story = {
       {
         key: 'id',
         name: 'ID',
+        editor: TableTextEditor,
       },
       {
         key: 'title',
@@ -123,12 +126,12 @@ export const Default: Story = {
       },
     ],
     rows: [
-      { id: 0, title: 'Lorem ipsum dolor sit amet' },
-      { id: 1, title: 'Consectetur adipiscing elit' },
-      { id: 2, title: 'Pellentesque suscipit tortor est' },
-      { id: 3, title: 'Ut egestas massa aliquam a' },
-      { id: 4, title: 'Nulla egestas vestibulum felis a venenatis' },
-      { id: 5, title: 'Sed aliquet pulvinar neque' },
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
     ],
   },
 };
@@ -161,17 +164,17 @@ export const CustomizedColumns: Story = {
     ],
 
     rows: [
-      { id: 0, title: 'Lorem ipsum dolor sit amet' },
-      { id: 1, title: 'Consectetur adipiscing elit' },
-      { id: 2, title: 'Pellentesque suscipit tortor est' },
-      { id: 3, title: 'Ut egestas massa aliquam a' },
-      { id: 4, title: 'Nulla egestas vestibulum felis a venenatis' },
-      { id: 5, title: 'Sed aliquet pulvinar neque' },
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
     ],
   },
 };
 
-export const ConfigureDefaultColumnSettings: Story = {
+export const CustomizedColumnDefaults: Story = {
   args: {
     columns: [
       {
@@ -181,23 +184,22 @@ export const ConfigureDefaultColumnSettings: Story = {
       {
         key: 'title',
         name: 'Title',
-        editor: TableTextEditor,
       },
     ],
 
     rows: [
-      { id: 0, title: 'Lorem ipsum dolor sit amet' },
-      { id: 1, title: 'Consectetur adipiscing elit' },
-      { id: 2, title: 'Pellentesque suscipit tortor est' },
-      { id: 3, title: 'Ut egestas massa aliquam a' },
-      { id: 4, title: 'Nulla egestas vestibulum felis a venenatis' },
-      { id: 5, title: 'Sed aliquet pulvinar neque' },
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
     ],
 
     defaultColumnWidth: 300,
     defaultColumnMinWidth: 100,
     defaultColumnMaxWidth: 500,
-    defaultColumnSortable: true, // Sorting columns doesn't seem to work yet
+    defaultColumnSortable: false,
     defaultColumnResizable: true,
   },
 };
@@ -212,35 +214,28 @@ export const ColumnCallBackFunctions: Story = {
       },
       {
         key: 'title',
-        name: 'Title (sortable)',
+        name: 'Title (sortable & editable)',
         sortable: true,
-        editor: TableTextEditor,
       },
     ],
 
     rows: [
-      { id: 0, title: 'Lorem ipsum dolor sit amet' },
-      { id: 1, title: 'Consectetur adipiscing elit' },
-      { id: 2, title: 'Pellentesque suscipit tortor est' },
-      { id: 3, title: 'Ut egestas massa aliquam a' },
-      { id: 4, title: 'Nulla egestas vestibulum felis a venenatis' },
-      { id: 5, title: 'Sed aliquet pulvinar neque' },
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
     ],
 
     onColumnResize: () => {
       // eslint-disable-next-line no-console
       console.log('Column resized');
     },
-
-    onSortColumnsChange: (col) => {
-      console.log(col);
-      // eslint-disable-next-line no-console
-      console.log('SortColumns Changed');
-    },
   },
 };
 
-export const RowCallBackFunctions: Story = {
+export const CustomizedRows: Story = {
   args: {
     columns: [
       TableSelectColumn,
@@ -250,23 +245,219 @@ export const RowCallBackFunctions: Story = {
       },
       {
         key: 'title',
-        name: 'Title',
+        name: 'Title (editable)',
+      },
+    ],
+
+    rows: [
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
+    ],
+
+    rowHeight: 50,
+    headerRowHeight: 100,
+  },
+};
+
+export const CellCallbackFunction: Story = {
+  args: {
+    columns: [
+      {
+        key: 'id',
+        name: 'ID',
+      },
+      {
+        key: 'title',
+        name: 'Title (editable)',
+      },
+    ],
+
+    rows: [
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
+    ],
+
+    onCellClick: (args, event) => {
+      // eslint-disable-next-line no-console
+      console.log(args);
+
+      // eslint-disable-next-line no-console
+      console.log(event);
+    },
+
+    onCellDoubleClick: (args, event) => {
+      // eslint-disable-next-line no-console
+      console.log(args);
+
+      // eslint-disable-next-line no-console
+      console.log(event);
+    },
+
+    onCellContextMenu: (args, event) => {
+      // eslint-disable-next-line no-console
+      console.log(args);
+
+      // eslint-disable-next-line no-console
+      console.log(event);
+    },
+
+    onCellKeyDown: (args, event) => {
+      // eslint-disable-next-line no-console
+      console.log(args);
+
+      // eslint-disable-next-line no-console
+      console.log(event);
+    },
+  },
+};
+
+export const Direction: Story = {
+  args: {
+    columns: [
+      {
+        key: 'id',
+        name: 'ID',
+      },
+      {
+        key: 'title',
+        name: 'Title (editable)',
+      },
+    ],
+
+    rows: [
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
+    ],
+
+    direction: 'rtl',
+  },
+};
+
+const generateRows = (): Row[] => {
+  const rows: Row[] = [];
+
+  for (let i = 0; i < 1000; i++) {
+    rows.push({ id: `i`, title: 'Lorem ipsum dolor sit amet' });
+  }
+  return rows;
+};
+
+export const Virtualization: Story = {
+  args: {
+    columns: [
+      {
+        key: 'id',
+        name: 'ID',
+      },
+      {
+        key: 'title',
+        name: 'Title (editable)',
+      },
+    ],
+
+    rows: generateRows(),
+
+    enableVirtualization: true,
+  },
+};
+
+export const MiscellaneousFunctions: Story = {
+  args: {
+    columns: [
+      {
+        key: 'id',
+        name: 'ID',
+      },
+      {
+        key: 'title',
+        name: 'Title (editable)',
         editor: TableTextEditor,
       },
     ],
 
     rows: [
-      { id: 0, title: 'Lorem ipsum dolor sit amet' },
-      { id: 1, title: 'Consectetur adipiscing elit' },
-      { id: 2, title: 'Pellentesque suscipit tortor est' },
-      { id: 3, title: 'Ut egestas massa aliquam a' },
-      { id: 4, title: 'Nulla egestas vestibulum felis a venenatis' },
-      { id: 5, title: 'Sed aliquet pulvinar neque' },
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
+      { id: '6', title: 'Lorem ipsum dolor sit amet' },
+      { id: '7', title: 'Consectetur adipiscing elit' },
+      { id: '8', title: 'Pellentesque suscipit tortor est' },
+      { id: '9', title: 'Ut egestas massa aliquam a' },
+      { id: '10', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '11', title: 'Sed aliquet pulvinar neque' },
+      { id: '12', title: 'Lorem ipsum dolor sit amet' },
+      { id: '13', title: 'Consectetur adipiscing elit' },
+      { id: '14', title: 'Pellentesque suscipit tortor est' },
+      { id: '15', title: 'Ut egestas massa aliquam a' },
+      { id: '16', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '17', title: 'Sed aliquet pulvinar neque' },
     ],
 
-    // rowClassGetter,
+    onScroll: (event: UIEvent<HTMLDivElement>) => {
+      // eslint-disable-next-line no-console
+      console.log(event);
+    },
 
-    rowHeight: 50,
-    headerRowHeight: 100,
+    onCopy: ({ sourceRow, sourceColumnKey }: TableCopyEvent<Row>) => {
+      if (window.isSecureContext) {
+        navigator.clipboard.writeText(sourceRow[sourceColumnKey as keyof Row]);
+      }
+    },
+
+    onPaste: ({ sourceColumnKey, sourceRow, targetColumnKey, targetRow }: TablePasteEvent<Row>) => {
+      const incompatibleColumns = ['email', 'zipCode', 'date'];
+      if (
+        sourceColumnKey === 'avatar' ||
+        ['id', 'avatar'].includes(targetColumnKey) ||
+        ((incompatibleColumns.includes(targetColumnKey) ||
+          incompatibleColumns.includes(sourceColumnKey)) &&
+          sourceColumnKey !== targetColumnKey)
+      ) {
+        return targetRow;
+      }
+
+      return { ...targetRow, [targetColumnKey]: sourceRow[sourceColumnKey as keyof Row] };
+    },
+  },
+};
+
+export const CustomClassNames: Story = {
+  args: {
+    columns: [
+      {
+        key: 'id',
+        name: 'ID',
+      },
+      {
+        key: 'title',
+        name: 'Title (editable)',
+      },
+    ],
+
+    rows: [
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
+    ],
+
+    className: 'paratext',
   },
 };

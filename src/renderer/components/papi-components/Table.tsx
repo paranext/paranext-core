@@ -1,11 +1,9 @@
-import 'react-data-grid/lib/styles.css';
 import DataGrid, {
   CellClickArgs,
   CellKeyboardEvent,
   CellKeyDownArgs,
   CellMouseEvent,
   CopyEvent,
-  FillEvent,
   FormatterProps,
   PasteEvent,
   RowsChangeData,
@@ -14,6 +12,9 @@ import DataGrid, {
   textEditor,
 } from 'react-data-grid';
 import { Key, ReactElement, ReactNode, UIEvent } from 'react';
+
+import 'react-data-grid/lib/styles.css';
+import '@renderer/components/papi-components/table.css';
 
 export interface TableCalculatedColumn<T> extends TableColumn<T> {
   readonly idx: number;
@@ -91,7 +92,6 @@ export type TableEditorProps<T> = {
   onRowChange: (row: T, commitChanges?: boolean) => void;
   onClose: (commitChanges?: boolean) => void;
 };
-export type TableFillEvent<T> = FillEvent<T>;
 export type TableFormatterProps<T> = FormatterProps<T>;
 export type TablePasteEvent<T> = PasteEvent<T>;
 export type TableRowsChangeData<T> = RowsChangeData<T>;
@@ -152,10 +152,6 @@ export type TableProps<T> = {
    */
   rowKeyGetter?: (row: T) => Key;
   /**
-   * A function that returns the class name for a given row
-   */
-  rowClassGetter?: (row: T) => string;
-  /**
    * The height of each row in pixels
    * @default 35
    */
@@ -213,11 +209,6 @@ export type TableProps<T> = {
    */
   onScroll?: (event: UIEvent<HTMLDivElement>) => void;
   /**
-   * A callback function that is called when the table is filled with data
-   * @param event The event source of the callback
-   */
-  onFill?: (event: TableFillEvent<T>) => T;
-  /**
    * A callback function that is called when the user copies data from the table.
    * @param event The event source of the callback
    */
@@ -245,7 +236,6 @@ function Table<T>({
   defaultColumnResizable = true,
   rows,
   rowKeyGetter,
-  rowClassGetter,
   rowHeight = 35,
   headerRowHeight = 35,
   selectedRows,
@@ -257,7 +247,6 @@ function Table<T>({
   onCellKeyDown,
   direction = 'ltr',
   enableVirtualization = true,
-  onFill,
   onCopy,
   onPaste,
   onScroll,
@@ -278,7 +267,6 @@ function Table<T>({
       onColumnResize={onColumnResize}
       rows={rows}
       rowKeyGetter={rowKeyGetter}
-      rowClass={rowClassGetter}
       rowHeight={rowHeight}
       headerRowHeight={headerRowHeight}
       selectedRows={selectedRows}
@@ -290,11 +278,10 @@ function Table<T>({
       onCellKeyDown={onCellKeyDown}
       direction={direction}
       enableVirtualization={enableVirtualization}
-      onFill={onFill}
       onCopy={onCopy}
       onPaste={onPaste}
       onScroll={onScroll}
-      className={className}
+      className={`${className ?? ''}`}
     />
   );
 }
