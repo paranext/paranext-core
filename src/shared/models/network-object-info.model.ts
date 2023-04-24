@@ -52,7 +52,7 @@ export type NetworkableObject<T> = Partial<DisposableNetworkObject<T>> & {
  *
  * @returns the local object to proxy into a network object.
  */
-export type LocalObjectToProxyCreator<T extends NetworkableObject<unknown>> = (
+export type LocalObjectToProxyCreator<T> = (
   id: string,
   networkObjectContainer: IContainer<T>,
 ) => Record<string, unknown>;

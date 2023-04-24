@@ -13,7 +13,6 @@ import {
   NetworkObject,
   DisposableNetworkObject,
   LocalObjectToProxyCreator,
-  NetworkableObject,
 } from '@shared/models/network-object-info.model';
 import { Mutex } from 'async-mutex';
 import logger from './logger.service';
@@ -283,7 +282,7 @@ const overrideDispose = (
  */
 const get = async <T extends object>(
   id: string,
-  createLocalObjectToProxy?: LocalObjectToProxyCreator<NetworkableObject<T>,
+  createLocalObjectToProxy?: LocalObjectToProxyCreator<T>,
 ): Promise<NetworkObject<T> | undefined> => {
   await initialize();
 
@@ -303,7 +302,7 @@ const get = async <T extends object>(
 
     // The base object created below might need a reference to the final proxy. Since the proxy
     // doesn't exist yet, create a container now and fill it in after the proxy is created.
-    const proxyContainer: IContainer<NetworkableObject<T>> = { contents: undefined };
+    const proxyContainer: IContainer<T> = { contents: undefined };
 
     // Create the base object that will be proxied for remote calls.
     // If a property exists on the base object, we use it and won't look for it on the remote object.
@@ -314,7 +313,7 @@ const get = async <T extends object>(
     const remoteProxy = createRemoteProxy(id, baseObject);
 
     // Store the proxy in the container so baseObject has a valid reference
-    proxyContainer.contents = remoteProxy.proxy as NetworkableObject<T>;
+    proxyContainer.contents = remoteProxy.proxy as T;
 
     // Setup onDidDispose so that services will know when the proxy is dead
     const eventEmitter = new PapiEventEmitter<void>();
