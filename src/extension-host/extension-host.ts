@@ -61,7 +61,7 @@ setTimeout(
 // #region network object test
 
 (async () => {
-  const testEHInfo = await networkObjectService.set('test-extension-host', {
+  const testEH = await networkObjectService.set('test-extension-host', {
     getVerse: async () => {
       const verse = await papi.fetch('https://bible-api.com/matthew+24:14');
       const verseJson = await verse.json();
@@ -71,27 +71,27 @@ setTimeout(
     },
   });
 
-  if (testEHInfo) {
-    testEHInfo.onDidDispose(() => {
+  if (testEH) {
+    testEH.onDidDispose(() => {
       logger.info('test-extension-host disposed in extension-host');
     });
   }
 
-  setTimeout(testEHInfo.dispose, 10000);
+  setTimeout(testEH.dispose, 10000);
 })();
 
 setTimeout(async () => {
-  let testMainInfo = await networkObjectService.get<{
+  let testMain = await networkObjectService.get<{
     doStuff: (stuff: string) => Promise<string>;
   }>('test-main');
-  if (testMainInfo) {
-    testMainInfo?.onDidDispose(async () => {
+  if (testMain) {
+    testMain?.onDidDispose(async () => {
       logger.info('test-main disposed in extension-host');
-      testMainInfo = undefined;
+      testMain = undefined;
     });
   } else logger.error('Could not get test-main from extension host');
 
-  logger.info(`do stuff: ${await testMainInfo?.doStuff('extension host things')}`);
+  logger.info(`do stuff: ${await testMain?.doStuff('extension host things')}`);
 }, 5000);
 
 // This is just testing dispose on data providers

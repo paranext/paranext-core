@@ -1,8 +1,4 @@
-/**
- * Handles registering and serving objects over the papi.
- * Not sure if this should be exposed on papi.
- * Might only layer over it to prevent name collisions? See DataProviderService for example.
- */
+// #region imports
 
 import * as networkService from '@shared/services/network.service';
 import {
@@ -17,9 +13,12 @@ import {
   NetworkObject,
   DisposableNetworkObject,
   LocalObjectToProxyCreator,
+  NetworkableObject,
 } from '@shared/models/network-object-info.model';
 import { Mutex } from 'async-mutex';
 import logger from './logger.service';
+
+// #endregion
 
 // #region initialize
 
@@ -173,7 +172,7 @@ class MutexMap {
 
 const mutexMap: MutexMap = new MutexMap();
 
-/** Remote proxy means a proxy object referencing something on the other side of the network */
+/** This proxy enables calling functions on a network object that exists in a different process */
 const createRemoteProxy = (
   id: string,
   base: object | undefined,
@@ -213,7 +212,8 @@ const createRemoteProxy = (
     },
   });
 
-/** Local proxy means a proxy object in the same process used by something that didn't set the object */
+/** This proxy enables calling functions on a network object that exists in the same process, but is
+ * owned by some other service. We only give the actual network object to the owning service. */
 const createLocalProxy = (
   objectBeingSet: object,
 ): {
@@ -276,12 +276,14 @@ const overrideDispose = (
  *
  * Running this function twice with the same inputs yields the same network object.
  * @param id id of the network object - all processes must use this id to look up this network object
- * @param base Object that the proxy will be based upon when building the return value
+ * @param createLocalObjectToProxy Function that creates an object that the network object proxy
+ * will be based upon. The object this function creates cannot have an `onDidDispose` property
+ * defined because we will ignore it and overwrite it while setting up the proxy.
  * @returns A promise for the network object with specified id if one exists, undefined otherwise
  */
 const get = async <T extends object>(
   id: string,
-  createLocalObjectToProxy?: LocalObjectToProxyCreator<T>,
+  createLocalObjectToProxy?: LocalObjectToProxyCreator<NetworkableObject<T>,
 ): Promise<NetworkObject<T> | undefined> => {
   await initialize();
 
@@ -291,7 +293,7 @@ const get = async <T extends object>(
     // If we already have this network object, return it
     const networkObjectRegistration = networkObjectRegistrations.get(id);
     if (networkObjectRegistration)
-      return Promise.resolve(networkObjectRegistration.networkObject as NetworkObject<T>);
+      return networkObjectRegistration.networkObject as NetworkObject<T>;
 
     // We don't already have this network object. See if it exists somewhere else.
     const networkObjectFunctions = await getRemoteNetworkObjectFunctions(id);
@@ -301,7 +303,7 @@ const get = async <T extends object>(
 
     // The base object created below might need a reference to the final proxy. Since the proxy
     // doesn't exist yet, create a container now and fill it in after the proxy is created.
-    const proxyContainer: IContainer<T> = { contents: undefined };
+    const proxyContainer: IContainer<NetworkableObject<T>> = { contents: undefined };
 
     // Create the base object that will be proxied for remote calls.
     // If a property exists on the base object, we use it and won't look for it on the remote object.
@@ -312,7 +314,7 @@ const get = async <T extends object>(
     const remoteProxy = createRemoteProxy(id, baseObject);
 
     // Store the proxy in the container so baseObject has a valid reference
-    proxyContainer.contents = remoteProxy.proxy as T;
+    proxyContainer.contents = remoteProxy.proxy as NetworkableObject<T>;
 
     // Setup onDidDispose so that services will know when the proxy is dead
     const eventEmitter = new PapiEventEmitter<void>();
@@ -337,7 +339,10 @@ const get = async <T extends object>(
 /**
  * Set up an object to be shared on the network.
  * @param id ID of the object to share on the network. All processes must use this ID to look it up.
- * @param objectToShare The object to set up as a network object. Its `dispose` and `onDidDispose` properties will be written/overwritten.
+ * @param objectToShare The object to set up as a network object. It will have an event named
+ * `onDidDispose` added to its properties. If the object already contained a `dispose` function, a
+ * new `dispose` function will be set that calls the existing function (amongst other things). If
+ * the object did not already define a `dispose` function, one will be added.
  * @returns INetworkObjectDisposer wrapping the object to share
  */
 const set = async <T extends object>(
@@ -442,6 +447,27 @@ const set = async <T extends object>(
 
 // #endregion
 
+/**
+ * Network objects are {@link https://en.wikipedia.org/wiki/Distributed_object distributed objects} within PAPI for TS/JS objects.
+ *
+ * Objects registered via {@link networkObjectService.set} are retrievable using {@link networkObjectService.get}.
+ *
+ * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied and
+ * sent to the original objects registered via {@link networkObjectService.set}.
+ *
+ * Functions on a network object will be called asynchronously by other processes regardless of
+ * whether the functions are synchronous or asynchronous, so it is best to make them all
+ * asynchronous. All shared functions' arguments and return values must be serializable to be
+ * called across processes.
+ *
+ * When a service registers an object via {@link networkObjectService.set}, it is the responsibility of
+ * that service, and only that service, to call `dispose` on that object when it is no longer
+ * intended to be shared with other services.
+ *
+ * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+ * event handler will be called. After an object is disposed, calls to its functions will no longer
+ * be proxied to the original object.
+ */
 const networkObjectService = {
   initialize,
   has,
