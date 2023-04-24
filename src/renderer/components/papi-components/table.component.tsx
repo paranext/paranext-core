@@ -14,7 +14,7 @@ import DataGrid, {
 import { Key, ReactElement, ReactNode, UIEvent } from 'react';
 
 import 'react-data-grid/lib/styles.css';
-import '@renderer/components/papi-components/table.css';
+import '@renderer/components/papi-components/table.component.css';
 
 export interface TableCalculatedColumn<T> extends TableColumn<T> {
   readonly idx: number;
@@ -224,6 +224,12 @@ export type TableProps<T> = {
   className?: string;
 };
 
+/**
+ * Configurable table component
+ *
+ * Thanks to Adazzle for heavy inspiration and documentation
+ * https://adazzle.github.io/react-data-grid/
+ */
 function Table<T>({
   columns,
   sortColumns,

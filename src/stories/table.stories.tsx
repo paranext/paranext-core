@@ -8,7 +8,7 @@ import Table, {
   TableSortColumn,
   TableCopyEvent,
   TablePasteEvent,
-} from '@renderer/components/papi-components/Table';
+} from '@renderer/components/papi-components/table.component';
 import { Key, ReactElement, UIEvent } from 'react';
 
 type Row = {
@@ -37,6 +37,10 @@ function TableDecorator(Story: (update?: { args: Partial<TableProps<Row>> }) => 
     }
   }
 
+  const setRows = (rows: Row[]) => {
+    updateArgs({ rows });
+  };
+
   const setSortColumns = (cols: TableSortColumn[]) => {
     updateArgs({ sortColumns: cols });
 
@@ -61,10 +65,6 @@ function TableDecorator(Story: (update?: { args: Partial<TableProps<Row>> }) => 
 
   const setSelectedRows = (rows: Set<Key>) => {
     updateArgs({ selectedRows: rows });
-  };
-
-  const setRows = (rows: Row[]) => {
-    updateArgs({ rows });
   };
 
   return (
