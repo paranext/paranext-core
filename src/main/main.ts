@@ -11,16 +11,21 @@ import { app, BrowserWindow, shell, ipcMain, IpcMainInvokeEvent } from 'electron
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
-import '@main/globalThis';
+import '@main/global-this.model';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import logger from '@shared/services/logger.service';
-import * as NetworkService from '@shared/services/NetworkService';
-import papi from '@shared/services/papi';
-import { CommandHandler } from '@shared/util/PapiUtil';
-import { resolveHtmlPath } from '@node/util/util';
-import MenuBuilder from '@main/menu';
+import * as networkService from '@shared/services/network.service';
+import papi from '@shared/services/papi.service';
+import { CommandHandler } from '@shared/utils/papi-util';
+import { resolveHtmlPath } from '@node/utils/util';
+import MenuBuilder from '@main/menu.model';
 import extensionHostService from '@main/services/extension-host.service';
-import networkObjectService from '@shared/services/NetworkObjectService';
+import networkObjectService from '@shared/services/network-object.service';
+import { wait } from '@shared/utils/util';
+
+const PROCESS_CLOSE_TIME_OUT = 2000;
+
+let isClosing = false;
 
 logger.info('Starting main');
 
@@ -137,17 +142,31 @@ app.on('window-all-closed', () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
   if (process.platform !== 'darwin') {
-    // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
-    dotnetDataProvider.kill();
-    extensionHostService.kill();
     app.quit();
   }
 });
 
-app.on('will-quit', () => {
-  // TODO: cleanly stop the provider (close the ws or send command) - IJH 2022-02-23
-  dotnetDataProvider.kill();
-  extensionHostService.kill();
+app.on('will-quit', async (e) => {
+  if (!isClosing) {
+    // Prevent closing before graceful shutdown is complete.
+    // Also, in the future, this should allow a "are you sure?" dialog to display.
+    e.preventDefault();
+    isClosing = true;
+
+    networkService.shutdown();
+    await Promise.all([
+      dotnetDataProvider.wait(PROCESS_CLOSE_TIME_OUT),
+      extensionHostService.wait(PROCESS_CLOSE_TIME_OUT),
+    ]);
+
+    // In development, the dotnet watcher was killed so we have to wait here.
+    if (process.env.NODE_ENV !== 'production') await wait(500);
+
+    app.quit();
+  } else {
+    dotnetDataProvider.kill();
+    extensionHostService.kill();
+  }
 });
 
 // #endregion
@@ -212,10 +231,10 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 };
 
 (async () => {
-  await NetworkService.initialize();
+  await networkService.initialize();
   // Set up test handlers
   Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
-    NetworkService.registerRequestHandler(ipcHandle, async (...args: unknown[]) =>
+    networkService.registerRequestHandler(ipcHandle, async (...args: unknown[]) =>
       handler({} as IpcMainInvokeEvent, ...args),
     );
   });
@@ -239,7 +258,7 @@ extensionHostService.start();
 
 setTimeout(async () => {
   logger.info(`Add Many (from EH): ${await papi.commands.sendCommand('addMany', 2, 5, 9, 7)}`);
-}, 5000);
+}, 20000);
 
 // #endregion
 

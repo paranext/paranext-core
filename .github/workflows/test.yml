@@ -24,7 +24,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
         dotnet_version: [7.0.x]
-        node_version: [16.x]
+        node_version: [18.x]
 
     steps:
       - name: Check out Git repository
@@ -50,6 +50,9 @@ jobs:
 
       - name: dotnet build
         run: npm run build:data-release
+
+      - name: run dotnet unit tests
+        run: dotnet test c-sharp-tests/c-sharp-tests.csproj
 
       - name: check dotnet formatting
         run: cd c-sharp && dotnet tool restore && dotnet csharpier --check .

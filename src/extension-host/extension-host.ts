@@ -1,11 +1,11 @@
-import '@extension-host/globalThis';
-import { isClient } from '@shared/util/InternalUtil';
-import * as NetworkService from '@shared/services/NetworkService';
-import papi from '@shared/services/papi';
-import { CommandHandler } from '@shared/util/PapiUtil';
-import * as ExtensionService from '@extension-host/services/ExtensionService';
+import '@extension-host/global-this.model';
+import { isClient } from '@shared/utils/internal-util';
+import * as networkService from '@shared/services/network.service';
+import papi from '@shared/services/papi.service';
+import { CommandHandler } from '@shared/utils/papi-util';
+import * as ExtensionService from '@extension-host/services/extension.service';
 import logger from '@shared/services/logger.service';
-import networkObjectService from '@shared/services/NetworkObjectService';
+import networkObjectService from '@shared/services/network-object.service';
 
 // #region Test logs
 
@@ -31,10 +31,10 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   throwErrorExtensionHost: async (message: string) => {
     throw new Error(`Test Error thrown in throwErrorExtensionHost command: ${message}`);
   },
-  getResourcesPath: async () => globalThis.resourcesPath,
 };
 
-NetworkService.initialize()
+networkService
+  .initialize()
   .then(() => {
     // Set up test handlers
     Object.entries(commandHandlers).forEach(([commandName, handler]) => {

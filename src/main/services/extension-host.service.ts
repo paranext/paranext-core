@@ -3,6 +3,7 @@
  */
 
 import logger, { formatLog } from '@shared/services/logger.service';
+import { waitForDuration } from '@shared/utils/util';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
@@ -13,12 +14,26 @@ const EXTENSION_HOST_NAME = 'extension host';
 
 let extensionHost: ChildProcess | ChildProcessByStdio<null, Readable, Readable> | undefined;
 
+let resolveClose: (value: void | PromiseLike<void>) => void;
+const closePromise: Promise<void> = new Promise<void>((resolve) => {
+  resolveClose = resolve;
+});
+
 // log functions for inside the extension host process
 function logProcessError(message: unknown) {
   logger.error(formatLog(message?.toString() || '', EXTENSION_HOST_NAME, 'error'));
 }
 function logProcessInfo(message: unknown) {
   logger.info(formatLog(message?.toString() || '', EXTENSION_HOST_NAME));
+}
+
+async function waitForExtensionHost(maxWaitTimeInMS: number) {
+  const didClose = await waitForDuration(async () => {
+    await closePromise;
+    return true;
+  }, maxWaitTimeInMS);
+
+  if (!didClose) killExtensionHost();
 }
 
 /**
@@ -54,10 +69,17 @@ function startExtensionHost() {
         },
       )
     : spawn(
-        process.platform.includes('win') ? 'npm.cmd' : 'npm',
-        ['run', 'start:extension-host', '--', ...sharedArgs],
+        'node',
+        [
+          'node_modules/nodemon/bin/nodemon.js',
+          '--transpile-only',
+          './src/extension-host/extension-host.ts',
+          '--',
+          ...sharedArgs,
+        ],
         {
           stdio: ['ignore', 'pipe', 'pipe'],
+          env: { ...process.env, NODE_ENV: 'development' },
         },
       );
 
@@ -79,6 +101,7 @@ function startExtensionHost() {
     // TODO: listen for 'exit' event as well?
     // TODO: unsubscribe event listeners
     extensionHost = undefined;
+    resolveClose();
   });
 }
 
@@ -88,6 +111,7 @@ function startExtensionHost() {
 const extensionHostService = {
   start: startExtensionHost,
   kill: killExtensionHost,
+  wait: waitForExtensionHost,
 };
 
 export default extensionHostService;
