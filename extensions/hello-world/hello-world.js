@@ -186,9 +186,7 @@ exports.activate = async () => {
     contents: getReactComponent('Hello World React Webview'),
   });
 
-  const { dataProvider: greetingsDataProvider } = await papi.dataProvider.get(
-    'hello-someone.greetings',
-  );
+  const greetingsDataProvider = await papi.dataProvider.get('hello-someone.greetings');
 
   // Test subscribing to a data provider
   const unsubGreetings = await greetingsDataProvider.subscribe('Bill', (billGreeting) =>

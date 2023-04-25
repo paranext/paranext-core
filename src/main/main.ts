@@ -265,45 +265,41 @@ setTimeout(async () => {
 // #region network object test
 
 (async () => {
-  const {
-    networkObject: testMain,
-    dispose: unsubTestMain,
-    onDidDispose: testMainOnDidDispose,
-  } = await networkObjectService.set('test-main', {
-    doStuff: async (stuff: string) => {
+  const testMain = {
+    doStuff: (stuff: string) => {
       const result = `test-main did stuff: ${stuff}!`;
       logger.info(result);
       return result;
     },
+    dispose: () => {
+      logger.info('testMain.dispose() ran in test-main');
+      return Promise.resolve(true);
+    },
+  };
+
+  const testMainDisposer = await networkObjectService.set('test-main', testMain);
+  testMain.doStuff('main things');
+  testMainDisposer.onDidDispose(() => {
+    logger.info('test-main disposed in main message #1');
+  });
+  testMainDisposer.onDidDispose(() => {
+    logger.info('test-main disposed in main message #2');
   });
 
-  const unsub = testMainOnDidDispose(() => {
-    logger.info('Disposed of test-main!');
-    unsub();
-  });
-
-  await testMain.doStuff('main things');
-
-  setTimeout(async () => {
-    await unsubTestMain();
-
-    setTimeout(async () => {
-      let testExtensionHostInfo = await networkObjectService.get<{
-        getVerse: () => Promise<string>;
-      }>('test-extension-host');
-      if (testExtensionHostInfo) {
-        const unsub2 = testExtensionHostInfo?.onDidDispose(() => {
-          logger.info('Disposed of test-extension-host!');
-          testExtensionHostInfo = undefined;
-          unsub2();
-        });
-
-        logger.info(
-          `get verse: ${await Promise.resolve(testExtensionHostInfo?.networkObject.getVerse())}`,
-        );
-      }
-    }, 1000);
-  }, 10000);
+  setTimeout(testMainDisposer.dispose, 10000);
 })();
+
+setTimeout(async () => {
+  let testExtensionHost = await networkObjectService.get<{
+    getVerse: () => Promise<string>;
+  }>('test-extension-host');
+  if (testExtensionHost) {
+    logger.info(`get verse: ${await testExtensionHost.getVerse()}`);
+    testExtensionHost.onDidDispose(() => {
+      logger.info('test-extension-host disposed in main');
+      testExtensionHost = undefined;
+    });
+  } else logger.error('Could not get test-extension-host from main');
+}, 5000);
 
 // #endregion
