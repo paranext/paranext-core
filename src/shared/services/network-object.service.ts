@@ -459,7 +459,8 @@ const set = async <T extends object>(
 // #endregion
 
 /**
- * Network objects are {@link https://en.wikipedia.org/wiki/Distributed_object distributed objects} within PAPI for TS/JS objects.
+ * Network objects are distributed objects within PAPI for TS/JS objects.
+ * @see https://en.wikipedia.org/wiki/Distributed_object
  *
  * Objects registered via {@link networkObjectService.set} are retrievable using {@link networkObjectService.get}.
  *
