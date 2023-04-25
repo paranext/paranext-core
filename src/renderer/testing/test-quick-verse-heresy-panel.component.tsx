@@ -4,8 +4,18 @@ import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import { TabInfo } from '@shared/data/web-view.model';
 import { debounce } from '@shared/utils/util';
 import { useState, useMemo, useCallback } from 'react';
-import { QuickVerseDataProvider } from '@extensions/quick-verse/quick-verse';
 import TextField from '@renderer/components/papi-components/text-field.component';
+import IDataProvider, { DataProviderSubscriber } from 'shared/models/data-provider.interface';
+
+export type QuickVerseSetData = string | { text: string; isHeresy: boolean };
+
+export interface QuickVerseDataProvider
+  extends IDataProvider<string, string | undefined, QuickVerseSetData> {
+  subscribe: DataProviderSubscriber<string, string>;
+  set(selector: string, data: QuickVerseSetData): Promise<boolean>;
+  setHeresy(verseRef: string, verseText: string): Promise<boolean>;
+  get(selector: string): Promise<string>;
+}
 
 function TestQuickVerseHeresyPanel() {
   const [verseRef, setVerseRef] = useState<string>('John 11:35');

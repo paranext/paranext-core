@@ -1,0 +1,9 @@
+{
+  "name": "sneeze-board",
+  "version": "0.0.1",
+  "description": "Simple sneeze board extension for Paranext",
+  "author": "Rolf Heij and Katherine Jensen",
+  "license": "MIT",
+  "main": "sneeze-board.js",
+  "activationEvents": []
+}
