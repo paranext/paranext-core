@@ -17,6 +17,7 @@ import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
 import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
 import { IContainer } from '@shared/utils/util';
+import { NetworkObject, NetworkableObject } from '@shared/models/network-object-info.model';
 import networkObjectService from '@shared/services/network-object.service';
 import logger from './logger.service';
 
@@ -266,7 +267,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   await initialize();
 
   // There is a potential networking sync issue here. We check for a data provider, then we create a network event, then we create a network object.
-  // If someone else registers an engine with the same data type at the same time, the two registrations could get intermixed and mess stuff up
+  // If someone else registers an engine with the same data provider name at the same time, the two registrations could get intermixed and mess stuff up
   // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
   if (await has(providerName))
     throw new Error(`Data provider with type ${providerName} is already registered`);
@@ -277,7 +278,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
 
   // We are good to go! Create the data provider
 
-  // Get the object id for this provider name
+  // Get the object id for this data provider name
   const dataProviderObjectId = getDataProviderObjectId(providerName);
 
   // Create a networked update event
@@ -301,15 +302,15 @@ async function registerEngine<TSelector, TGetData, TSetData>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createLocalDataProviderToProxy<T extends IDataProvider<any, any, any>>(
   dataProviderObjectId: string,
-  dataProviderContainer: IContainer<T>,
-): Record<string, unknown> {
+  dataProviderContainer: IContainer<NetworkObject<T>>,
+): Partial<NetworkableObject<T>> {
   // Create a networked update event
   const onDidUpdate = networkService.getNetworkEvent<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
   return {
     subscribe: createDataProviderSubscriber(dataProviderContainer, onDidUpdate),
-  };
+  } as Partial<NetworkableObject<T>>;
 }
 
 /**
@@ -318,13 +319,13 @@ function createLocalDataProviderToProxy<T extends IDataProvider<any, any, any>>(
  * @returns The data provider with the given name if one exists, undefined otherwise
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function get<T extends IDataProvider<any, any, any> & Record<string, unknown>>(
+async function get<T extends IDataProvider<any, any, any>>(
   dataProviderName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<DataProviderInfo<any, any, any> | undefined> {
   await initialize();
 
-  // Get the object id for this data type
+  // Get the object id for this data provider name
   const dataProviderObjectId = getDataProviderObjectId(dataProviderName);
 
   // Get the network object for this data provider

@@ -7,7 +7,7 @@ import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 
 /**
  * Subscribes to run a callback on a data provider's data with specified selector
- * @param dataType string data type to get data provider for
+ * @param providerName name of the data provider to subscribe to
  * @param selector tells the provider what data this listener is listening for
  * @param defaultValue the initial value to return while first awaiting the data
  *
@@ -22,7 +22,7 @@ import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
  *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
  */
 function useData<TSelector, TGetData, TSetData>(
-  dataType: string | undefined,
+  providerName: string | undefined,
   selector: TSelector,
   defaultValue: TGetData,
   subscriberOptions?: DataProviderSubscriberOptions,
@@ -50,7 +50,7 @@ function useData<TSelector, TGetData, TSetData>(
   subscriberOptions?: DataProviderSubscriberOptions,
 ): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
 /**
- * @param dataProviderSource string data type to get data provider for OR dataProvider (result of useDataProvider if you
+ * @param dataProviderSource string name of data provider to get OR dataProvider (result of useDataProvider if you
  * want to consolidate and only get the data provider once)
  */
 function useData<TSelector, TGetData, TSetData>(
@@ -62,7 +62,7 @@ function useData<TSelector, TGetData, TSetData>(
   // The data from the data provider at this selector
   const [data, setDataInternal] = useState<TGetData>(defaultValue);
 
-  // Get the data provider info for this data type
+  // Get the data provider info for this data provider name
   const dataProvider =
     useDataProvider<DataProviderInfo<TSelector, TGetData, TSetData>>(dataProviderSource);
 

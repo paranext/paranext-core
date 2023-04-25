@@ -1,5 +1,5 @@
 import { IContainer } from '@shared/utils/util';
-import { IDispose, IOnDidDispose, CannotHaveOnDidDispose } from './disposal-interface';
+import { IDispose, IOnDidDispose, CannotHaveOnDidDispose } from './disposal.model';
 
 /**
  * An object of this type is returned from {@link networkObjectService.get}.
@@ -20,7 +20,7 @@ export type DisposableNetworkObject<T> = T & IOnDidDispose & IDispose;
  *
  * @see networkObjectService
  */
-export type NetworkableObject<T = Record<string, unknown>> = CannotHaveOnDidDispose<T>;
+export type NetworkableObject<T = object> = CannotHaveOnDidDispose<T>;
 
 /**
  * If a network object with the provided ID exists remotely but has not been set up to use inside
@@ -43,7 +43,7 @@ export type NetworkableObject<T = Record<string, unknown>> = CannotHaveOnDidDisp
  *
  * @returns the local object to proxy into a network object.
  */
-export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
+export type LocalObjectToProxyCreator<T> = (
   id: string,
-  networkObjectContainer: IContainer<T>,
-) => Record<string, unknown>;
+  networkObjectContainer: IContainer<NetworkObject<T>>,
+) => Partial<NetworkableObject<T>>;

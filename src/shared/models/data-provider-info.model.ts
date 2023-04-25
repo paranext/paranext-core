@@ -1,5 +1,5 @@
 import IDataProvider from '@shared/models/data-provider.interface';
-import { IDispose, IOnDidDispose } from './disposal-interface';
+import { IDispose, IOnDidDispose } from './disposal.model';
 
 /**
  * Information about a data provider.

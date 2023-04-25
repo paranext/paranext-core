@@ -288,9 +288,10 @@ const overrideDispose = (
  * @param id id of the network object - all processes must use this id to look up this network object
  * @param createLocalObjectToProxy Function that creates an object that the network object proxy
  * will be based upon. The object this function creates cannot have an `onDidDispose` property.
+ * This function is useful for setting up network events on a network object.
  * @returns A promise for the network object with specified id if one exists, undefined otherwise
  */
-const get = async <T extends NetworkableObject>(
+const get = async <T>(
   id: string,
   createLocalObjectToProxy?: LocalObjectToProxyCreator<T>,
 ): Promise<NetworkObject<T> | undefined> => {
@@ -312,7 +313,7 @@ const get = async <T extends NetworkableObject>(
 
     // The base object created below might need a reference to the final proxy. Since the proxy
     // doesn't exist yet, create a container now and fill it in after the proxy is created.
-    const proxyContainer: IContainer<T> = { contents: undefined };
+    const proxyContainer: IContainer<NetworkObject<T>> = { contents: undefined };
 
     // Create the base object that will be proxied for remote calls.
     // If a property exists on the base object, we use it and won't look for it on the remote object.
@@ -323,7 +324,7 @@ const get = async <T extends NetworkableObject>(
     const remoteProxy = createRemoteProxy(id, baseObject);
 
     // Store the proxy in the container so baseObject has a valid reference
-    proxyContainer.contents = remoteProxy.proxy as T;
+    proxyContainer.contents = remoteProxy.proxy as NetworkObject<T>;
 
     // Setup onDidDispose so that services will know when the proxy is dead
     const eventEmitter = new PapiEventEmitter<void>();
@@ -355,9 +356,10 @@ const get = async <T extends NetworkableObject>(
  * object did not already define a `dispose` function, one will be added.
  * @returns INetworkObjectDisposer wrapping the object to share
  */
-const set = async <T extends object>(
+
+const set = async <T extends NetworkableObject>(
   id: string,
-  objectToShare: NetworkableObject<T>,
+  objectToShare: T,
 ): Promise<DisposableNetworkObject<T>> => {
   await initialize();
 
@@ -452,7 +454,7 @@ const set = async <T extends object>(
     });
 
     // Cast through "unknown" because objectToShare wasn't allowed to have onDidDispose originally
-    return objectToShare as unknown as DisposableNetworkObject<T>;
+    return objectToShare as DisposableNetworkObject<T>;
   });
 };
 
