@@ -243,7 +243,7 @@ interface IOnDidDisposableObject {
   onDidDispose?: PapiEvent<void>;
 }
 
-/** Don't pass in a remote proxy object as `objectToCheck`, because that will cause it to create `onDidDispose` */
+/** Set an `onDidDispose` property on the object to mutate. Throw if one already exists. */
 const overrideOnDidDispose = (
   objectId: string,
   objectToMutate: IOnDidDisposableObject,
