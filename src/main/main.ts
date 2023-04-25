@@ -273,6 +273,7 @@ setTimeout(async () => {
     },
     dispose: () => {
       logger.info('testMain.dispose() ran in test-main');
+      return Promise.resolve(true);
     },
   };
 

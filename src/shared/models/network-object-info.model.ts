@@ -1,35 +1,26 @@
-import { PapiEvent } from '@shared/models/papi-event.model';
-import { UnsubscriberAsync } from '@shared/utils/papi-util';
 import { IContainer } from '@shared/utils/util';
+import { IDispose, IOnDidDispose, CannotHaveOnDidDispose } from './disposal-interface';
 
 /**
  * An object of this type is returned from {@link networkObjectService.get}.
  *
  * @see networkObjectService
  */
-export type NetworkObject<T> = T & {
-  /** Event that emits when this network object is being disposed */
-  onDidDispose: PapiEvent<void>;
-};
+export type NetworkObject<T> = T & IOnDidDispose;
 
 /**
  * An object of this type is returned from {@link networkObjectService.set}.
  *
  * @see networkObjectService
  */
-export type DisposableNetworkObject<T> = NetworkObject<T> & {
-  /** Call this when the network object should be disposed */
-  dispose: UnsubscriberAsync;
-};
+export type DisposableNetworkObject<T> = T & IOnDidDispose & IDispose;
 
 /**
  * An object of this type is passed into {@link networkObjectService.set}.
  *
  * @see networkObjectService
  */
-export type NetworkableObject<T> = Partial<DisposableNetworkObject<T>> & {
-  onDidDispose: never;
-};
+export type NetworkableObject<T = Record<string, unknown>> = CannotHaveOnDidDispose<T>;
 
 /**
  * If a network object with the provided ID exists remotely but has not been set up to use inside
@@ -52,7 +43,7 @@ export type NetworkableObject<T> = Partial<DisposableNetworkObject<T>> & {
  *
  * @returns the local object to proxy into a network object.
  */
-export type LocalObjectToProxyCreator<T> = (
+export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
   id: string,
   networkObjectContainer: IContainer<T>,
 ) => Record<string, unknown>;

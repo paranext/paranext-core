@@ -1,5 +1,5 @@
-import IDataProvider from '@shared/models/data-provider.interface';
 import dataProviderService from '@shared/services/data-provider.service';
+import { DataProviderInfo } from '@shared/models/data-provider-info.model';
 import { useCallback, useMemo, useState } from 'react';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
@@ -18,7 +18,7 @@ import { isString } from '@shared/utils/util';
 // User of this hook must provide types. Cannot use `unknown` here unfortunately because TypeScript would think
 // we want the implementing IDataProvider types to be unknown as well
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends IDataProvider<any, any, any>>(
+function useDataProvider<T extends DataProviderInfo<any, any, any>>(
   dataType: string | undefined,
 ): T | undefined;
 /**
@@ -32,7 +32,7 @@ function useDataProvider<T extends IDataProvider<any, any, any>>(
  *  specifying your own types, or provide a custom data provider type
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends IDataProvider<any, any, any>>(
+function useDataProvider<T extends DataProviderInfo<any, any, any>>(
   dataProvider: T | undefined,
 ): T | undefined;
 /**
@@ -47,11 +47,11 @@ function useDataProvider<T extends IDataProvider<any, any, any>>(
  *  specifying your own types, or provide a custom data provider type
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends IDataProvider<any, any, any>>(
+function useDataProvider<T extends DataProviderInfo<any, any, any>>(
   dataProviderSource: string | T | undefined,
 ): T | undefined;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends IDataProvider<any, any, any>>(
+function useDataProvider<T extends DataProviderInfo<any, any, any>>(
   dataProviderSource: string | T | undefined,
 ): T | undefined {
   // Check to see if they passed in the results of a useDataProvider hook or undefined
@@ -66,7 +66,9 @@ function useDataProvider<T extends IDataProvider<any, any, any>>(
           undefined
         : async () =>
             // We have the data provider's type, so we need to get the provider
-            dataProviderSource ? dataProviderService.get(dataProviderSource) : undefined;
+            dataProviderSource
+              ? (dataProviderService.get(dataProviderSource) as Promise<T | undefined>)
+              : undefined;
     }, [didReceiveDataProvider, dataProviderSource]),
     undefined,
   );
@@ -87,7 +89,7 @@ function useDataProvider<T extends IDataProvider<any, any, any>>(
   // If we had to get a data provider, return it if it is not disposed
   return dataProviderInfo && !isDisposed
     ? // Type assert here - the user of this hook must make sure to provide the correct type
-      (dataProviderInfo as unknown as T)
+      dataProviderInfo
     : undefined;
 }
 

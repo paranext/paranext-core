@@ -12,6 +12,7 @@ import { IContainer, isString } from '@shared/utils/util';
 import {
   NetworkObject,
   DisposableNetworkObject,
+  NetworkableObject,
   LocalObjectToProxyCreator,
 } from '@shared/models/network-object-info.model';
 import { Mutex } from 'async-mutex';
@@ -184,8 +185,9 @@ const createRemoteProxy = (
   Proxy.revocable(base ?? {}, {
     get: (target, key) => {
       if (key === 'dispose') return undefined;
-      // onDidDispose
       if (key === 'then' || key in target) return target[key as keyof typeof target];
+      // If onDidDispose wasn't found in the target already, don't create a remote proxy for it
+      if (key === 'onDidDispose') return undefined;
 
       // If the prop requested is a symbol, that doesn't work over the network. Reject
       if (!isString(key)) return null;
@@ -208,6 +210,15 @@ const createRemoteProxy = (
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (target as any)[key] = requestFunction;
       return requestFunction;
+    },
+    set(obj, prop, value) {
+      // If we cached a property previously, purge the cache for that property since it is changing.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((obj as any)[prop]) delete (obj as any)[prop];
+
+      // Actually set the provided property
+      Reflect.set(obj, prop, value);
+      return true;
     },
   });
 
@@ -234,13 +245,13 @@ interface IOnDidDisposableObject {
 
 /** Don't pass in a remote proxy object as `objectToCheck`, because that will cause it to create `onDidDispose` */
 const overrideOnDidDispose = (
-  objectToCheck: IOnDidDisposableObject,
+  objectId: string,
   objectToMutate: IOnDidDisposableObject,
   newOnDidDispose: PapiEvent<void>,
 ): void => {
-  if (objectToCheck.onDidDispose) {
+  if (objectToMutate.onDidDispose) {
     throw new Error(
-      "You can't register an object as a network object if it already has an onDidDispose property",
+      `You can't register "${objectId}" as a network object since it already has an onDidDispose property`,
     );
   }
 
@@ -276,11 +287,10 @@ const overrideDispose = (
  * Running this function twice with the same inputs yields the same network object.
  * @param id id of the network object - all processes must use this id to look up this network object
  * @param createLocalObjectToProxy Function that creates an object that the network object proxy
- * will be based upon. The object this function creates cannot have an `onDidDispose` property
- * defined because we will ignore it and overwrite it while setting up the proxy.
+ * will be based upon. The object this function creates cannot have an `onDidDispose` property.
  * @returns A promise for the network object with specified id if one exists, undefined otherwise
  */
-const get = async <T extends object>(
+const get = async <T extends NetworkableObject>(
   id: string,
   createLocalObjectToProxy?: LocalObjectToProxyCreator<T>,
 ): Promise<NetworkObject<T> | undefined> => {
@@ -317,7 +327,7 @@ const get = async <T extends object>(
 
     // Setup onDidDispose so that services will know when the proxy is dead
     const eventEmitter = new PapiEventEmitter<void>();
-    overrideOnDidDispose(baseObject, remoteProxy.proxy, eventEmitter.event);
+    overrideOnDidDispose(id, remoteProxy.proxy, eventEmitter.event);
 
     // Save the network object for future lookups
     networkObjectRegistrations.set(id, {
@@ -339,14 +349,15 @@ const get = async <T extends object>(
  * Set up an object to be shared on the network.
  * @param id ID of the object to share on the network. All processes must use this ID to look it up.
  * @param objectToShare The object to set up as a network object. It will have an event named
- * `onDidDispose` added to its properties. If the object already contained a `dispose` function, a
- * new `dispose` function will be set that calls the existing function (amongst other things). If
- * the object did not already define a `dispose` function, one will be added.
+ * `onDidDispose` added to its properties. An error will be thrown if the object already had an
+ * `onDidDispose` property on it. If the object already contained a `dispose` function, a new
+ * `dispose` function will be set that calls the existing function (amongst other things). If the
+ * object did not already define a `dispose` function, one will be added.
  * @returns INetworkObjectDisposer wrapping the object to share
  */
 const set = async <T extends object>(
   id: string,
-  objectToShare: T,
+  objectToShare: NetworkableObject<T>,
 ): Promise<DisposableNetworkObject<T>> => {
   await initialize();
 
@@ -412,7 +423,7 @@ const set = async <T extends object>(
 
     // Setup onDidDispose so that services will know when the proxy is dead
     const onDidDisposeLocalEmitter = new PapiEventEmitter<void>();
-    overrideOnDidDispose(objectToShare, objectToShare, onDidDisposeLocalEmitter.event);
+    overrideOnDidDispose(id, objectToShare, onDidDisposeLocalEmitter.event);
 
     // Override dispose on the object passed in to clean up the network object
     overrideDispose(objectToShare, async (): Promise<boolean> => {
@@ -440,7 +451,8 @@ const set = async <T extends object>(
       revokeProxy: localProxy.revoke,
     });
 
-    return objectToShare as DisposableNetworkObject<T>;
+    // Cast through "unknown" because objectToShare wasn't allowed to have onDidDispose originally
+    return objectToShare as unknown as DisposableNetworkObject<T>;
   });
 };
 

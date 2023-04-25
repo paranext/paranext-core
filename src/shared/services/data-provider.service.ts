@@ -58,11 +58,11 @@ const initialize = () => {
   return initializePromise;
 };
 
-/** Determine if a data provider with the provided type exists anywhere on the network */
-async function has(dataType: string): Promise<boolean> {
+/** Determine if a data provider with the given name exists anywhere on the network */
+async function has(providerName: string): Promise<boolean> {
   await initialize();
 
-  return networkObjectService.has(getDataProviderObjectId(dataType));
+  return networkObjectService.has(getDataProviderObjectId(providerName));
 }
 
 /**
@@ -247,7 +247,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
 
 /**
  * Creates a data provider to be shared on the network layering over the provided data provider engine.
- * @param dataType type of data that this provider serves
+ * @param providerName name this data provider should be called on the network
  * @param dataProviderEngine the object to layer over with a new data provider object
  *
  * WARNING: registering a dataProviderEngine mutates the provided object.
@@ -260,7 +260,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
  * @type `TData` - the type of data provided by this data provider based on a provided selector
  */
 async function registerEngine<TSelector, TGetData, TSetData>(
-  dataType: string,
+  providerName: string,
   dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
 ): Promise<DisposableDataProviderInfo<TSelector, TGetData, TSetData>> {
   await initialize();
@@ -268,8 +268,8 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   // There is a potential networking sync issue here. We check for a data provider, then we create a network event, then we create a network object.
   // If someone else registers an engine with the same data type at the same time, the two registrations could get intermixed and mess stuff up
   // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
-  if (await has(dataType))
-    throw new Error(`Data provider with type ${dataType} is already registered`);
+  if (await has(providerName))
+    throw new Error(`Data provider with type ${providerName} is already registered`);
 
   // Validate that the data provider engine has what it needs
   if (!dataProviderEngine.get || typeof dataProviderEngine.get !== 'function')
@@ -277,8 +277,8 @@ async function registerEngine<TSelector, TGetData, TSetData>(
 
   // We are good to go! Create the data provider
 
-  // Get the object id for this data type
-  const dataProviderObjectId = getDataProviderObjectId(dataType);
+  // Get the object id for this provider name
+  const dataProviderObjectId = getDataProviderObjectId(providerName);
 
   // Create a networked update event
   const onDidUpdateEmitter = networkService.createNetworkEventEmitter<boolean>(
@@ -318,7 +318,7 @@ function createLocalDataProviderToProxy<T extends IDataProvider<any, any, any>>(
  * @returns The data provider with the given name if one exists, undefined otherwise
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function get<T extends IDataProvider<any, any, any>>(
+async function get<T extends IDataProvider<any, any, any> & Record<string, unknown>>(
   dataProviderName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<DataProviderInfo<any, any, any> | undefined> {
