@@ -1,0 +1,11 @@
+{
+  "name": "sneeze-board",
+  "version": "0.0.1",
+  "description": "Simple sneeze board extension for Paranext",
+  "main": "sneeze-board.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Rolf Heij and Katherine Jensen",
+  "license": "MIT"
+}

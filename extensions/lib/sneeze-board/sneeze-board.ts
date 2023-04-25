@@ -24,12 +24,9 @@ class AchYouDataProviderEngine
   startOfCountdown: number;
   constructor() {
     this.startOfCountdown = +blessYouData.CountdownStart;
-    this.sneezes = blessYouData.Sneezes.map((s) => {
-      // TODO: Should we actually disable the line below?
-      // eslint-disable-next-line no-plusplus
-      return { sneezeId: this.startOfCountdown--, ...s };
+    this.sneezes = blessYouData.Sneezes.map((s, i) => {
+      return { sneezeId: this.startOfCountdown - i, ...s };
     });
-    console.log(this.sneezes);
   }
 
   // TODO: Define the set method

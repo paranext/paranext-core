@@ -55,6 +55,10 @@ const helloSomeone = papi.commands.createSendCommandFunction<[string], string>(
   'hello-someone.hello-someone',
 );
 
+const getSneezes = papi.commands.createSendCommandFunction<[string], string>(
+  'sneeze-board.get-sneezes',
+);
+
 const throwError = papi.commands.createSendCommandFunction<[string], string>('throwError');
 
 const throwErrorExtensionHost = papi.commands.createSendCommandFunction<[string], string>(
@@ -353,6 +357,22 @@ function TestButtonsPanel() {
           }}
         >
           Hello Someone (Extension)
+        </papi.react.components.Button>
+        <papi.react.components.Button
+          className="test-button"
+          onClick={async () => {
+            const start = performance.now();
+            await runPromise(() => getSneezes('DummyArgument'));
+            logger.info(
+              `command:Printing sneezes to console.log took ${performance.now() - start} ms`,
+            );
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            executeMany(() => getSneezes('DummyArgument'));
+          }}
+        >
+          Print Sneezes (Extension)
         </papi.react.components.Button>
         <papi.react.components.Button
           className="test-button"
