@@ -9,7 +9,6 @@ import DataGrid, {
   RowsChangeData,
   SelectColumn,
   SortColumn,
-  textEditor,
 } from 'react-data-grid';
 import { Key, ReactElement, ReactNode, UIEvent } from 'react';
 
@@ -97,7 +96,12 @@ export type TablePasteEvent<T> = PasteEvent<T>;
 export type TableRowsChangeData<T> = RowsChangeData<T>;
 export const TableSelectColumn = SelectColumn;
 export type TableSortColumn = SortColumn;
-export const TableTextEditor = textEditor;
+export declare function TableTextEditor<T>({
+  row,
+  column,
+  onRowChange,
+  onClose,
+}: TableEditorProps<T>): ReactElement;
 
 // Subset of https://github.com/adazzle/react-data-grid#api
 export type TableProps<T> = {
