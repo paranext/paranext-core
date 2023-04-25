@@ -262,7 +262,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
  */
 async function registerEngine<TSelector, TGetData, TSetData>(
   providerName: string,
-  dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
+  dataProviderEngine: NetworkableObject<IDataProviderEngine<TSelector, TGetData, TSetData>>,
 ): Promise<DisposableDataProviderInfo<TSelector, TGetData, TSetData>> {
   await initialize();
 

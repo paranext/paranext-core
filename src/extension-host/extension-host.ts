@@ -105,6 +105,7 @@ setTimeout(async () => {
     },
     dispose: async () => {
       logger.info('Inside testDP dispose');
+      return Promise.resolve(true);
     },
   };
 
