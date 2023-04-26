@@ -22,12 +22,12 @@ export type UnsubPromise<T = unknown> = {
  * @returns function that unsubscribes from all passed in unsubscribers when run
  */
 export const aggregateUnsubscribers = (unsubscribers: Unsubscriber[]): Unsubscriber => {
-  return () => {
+  return (...args) => {
     // Run the unsubscriber for each handler
-    const unsubs = unsubscribers.map((unsubscriber) => unsubscriber());
+    const unsubs = unsubscribers.map((unsubscriber) => unsubscriber(...args));
 
-    // If any of the unsubscribers resolves to false, we did not succeed
-    return !unsubs.includes(false);
+    // If all the unsubscribers resolve to truthiness, we succeed
+    return unsubs.every((success) => success);
   };
 };
 
@@ -50,13 +50,12 @@ export type UnsubPromiseAsync<T = unknown> = {
 export const aggregateUnsubscriberAsyncs = (
   unsubscribers: UnsubscriberAsync[],
 ): UnsubscriberAsync => {
-  return async () => {
+  return async (...args) => {
     // Run the unsubscriber for each handler
-    const unsubPromises = unsubscribers.map((unsubscriber) => unsubscriber());
+    const unsubPromises = unsubscribers.map((unsubscriber) => unsubscriber(...args));
 
-    // If any of the unsubscribers resolves to false, we did not succeed
-    // TODO: make a util function to tune up this Promise.all so they all resolve even if one throws
-    return !(await Promise.all(unsubPromises)).includes(false);
+    // If all the unsubscribers resolve to truthiness, we succeed
+    return (await Promise.all(unsubPromises)).every((success) => success);
   };
 };
 

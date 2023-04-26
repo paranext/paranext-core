@@ -80,7 +80,7 @@ exports.activate = async () => {
           const dataProviderInfoPromise = papi.dataProvider.get('hello-someone.greetings');
 
           async function setupWebView() {
-            const { dataProvider: greetingsDataProvider } = await dataProviderInfoPromise;
+            const greetingsDataProvider = await dataProviderInfoPromise;
 
             // Attach handler for greetings-button
             const greetingsButton = document.getElementById("greetings-button");
