@@ -36,7 +36,7 @@ function getFileExtensionByModuleFormat(moduleFormat: ModuleFormat) {
     case 'es':
       return 'js';
     case 'cjs':
-      return 'cjs';
+      return 'js'; // 'cjs' if package.json has "type": "module", but Paranext uses commonjs modules
     case 'umd':
       return 'umd.cjs';
     default:
@@ -161,8 +161,9 @@ const extensionConfig = defineConfig(async () => {
         // The output file name for the extension (file extension is appended)
         fileName: (moduleFormat, entryName) =>
           path.join(entryName, `${entryName}.${getFileExtensionByModuleFormat(moduleFormat)}`),
-        // Output to es format as Paranext supports it
-        formats: ['es'],
+        // Output to cjs format as that's what Paranext supports. In production, es modules fail to
+        // shim over import and deliver papi for some reason.
+        formats: ['cjs'],
       },
       rollupOptions: {
         // Do not bundle papi because it will be imported in Paranext

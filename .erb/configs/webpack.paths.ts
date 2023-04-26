@@ -23,6 +23,9 @@ const distRendererPath = path.join(distPath, 'renderer');
 
 const buildPath = path.join(releasePath, 'build');
 
+const extensionsPath = path.join(rootPath, 'extensions');
+const extensionsDistPath = path.join(extensionsPath, 'dist');
+
 const webpackPaths = {
   rootPath,
   dllPath,
@@ -41,5 +44,6 @@ const webpackPaths = {
   distExtensionHostPath,
   distRendererPath,
   buildPath,
+  extensionsDistPath,
 };
 export default webpackPaths;
