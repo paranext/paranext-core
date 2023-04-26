@@ -453,8 +453,8 @@ const set = async <T>(
       revokeProxy: localProxy.revoke,
     });
 
-    // Remove onDidDispose from objectToShare because the NetworkableObject<T> had its onDidDispose
-    // removed in overrideOnDidDispose
+    // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's
+    // onDidDispose type because it had an onDidDispose added in overrideOnDidDispose.
     return objectToShare as Omit<
       typeof objectToShare,
       'onDidDispose'
