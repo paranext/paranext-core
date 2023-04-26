@@ -25,7 +25,8 @@
   "main": "",
   "types": "papi.d.ts",
   "scripts": {
-    "build": "tsc && npx prettier --write papi.d.ts && ts-node edit-papi-d-ts.ts"
+    "build": "tsc && npx prettier --write papi.d.ts && ts-node edit-papi-d-ts.ts",
+    "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx"
   },
   "dependencies": {},
   "typeScriptVersion": "4.9.5"
