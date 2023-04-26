@@ -357,9 +357,9 @@ const get = async <T>(
  * @returns INetworkObjectDisposer wrapping the object to share
  */
 
-const set = async <T extends NetworkableObject>(
+const set = async <T>(
   id: string,
-  objectToShare: T,
+  objectToShare: NetworkableObject<T>,
 ): Promise<DisposableNetworkObject<T>> => {
   await initialize();
 
@@ -453,8 +453,12 @@ const set = async <T extends NetworkableObject>(
       revokeProxy: localProxy.revoke,
     });
 
-    // Cast through "unknown" because objectToShare wasn't allowed to have onDidDispose originally
-    return objectToShare as DisposableNetworkObject<T>;
+    // Remove onDidDispose from objectToShare because the NetworkableObject<T> had its onDidDispose
+    // removed in overrideOnDidDispose
+    return objectToShare as Omit<
+      typeof objectToShare,
+      'onDidDispose'
+    > as DisposableNetworkObject<T>;
   });
 };
 
