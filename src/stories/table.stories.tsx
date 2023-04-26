@@ -4,7 +4,6 @@ import { useArgs } from '@storybook/client-api';
 import Table, {
   TableProps,
   TableTextEditor,
-  TableSelectColumn,
   TableSortColumn,
   TableCopyEvent,
   TablePasteEvent,
@@ -238,7 +237,6 @@ export const ColumnCallBackFunctions: Story = {
 export const CustomizedRows: Story = {
   args: {
     columns: [
-      TableSelectColumn,
       {
         key: 'id',
         name: 'ID',
@@ -258,6 +256,7 @@ export const CustomizedRows: Story = {
       { id: '5', title: 'Sed aliquet pulvinar neque' },
     ],
 
+    enableSelectColumn: true,
     rowHeight: 50,
     headerRowHeight: 100,
   },

@@ -11,7 +11,7 @@ import DataGrid, {
   SortColumn,
   textEditor,
 } from 'react-data-grid';
-import { Key, ReactElement, ReactNode, UIEvent } from 'react';
+import { Key, ReactElement, ReactNode, UIEvent, useMemo } from 'react';
 
 import 'react-data-grid/lib/styles.css';
 import '@renderer/components/papi-components/table.component.css';
@@ -95,7 +95,6 @@ export type TableEditorProps<T> = {
 export type TableFormatterProps<T> = FormatterProps<T>;
 export type TablePasteEvent<T> = PasteEvent<T>;
 export type TableRowsChangeData<T> = RowsChangeData<T>;
-export const TableSelectColumn = SelectColumn;
 export type TableSortColumn = SortColumn;
 export const TableTextEditor = textEditor;
 
@@ -105,6 +104,10 @@ export type TableProps<T> = {
    * An array of objects representing each column on the grid
    */
   columns: readonly TableColumn<T>[];
+  /**
+   * Whether or not a column with checkboxes is inserted that allows you to select rows
+   */
+  enableSelectColumn?: boolean;
   /**
    * An array of objects representing the currently sorted columns
    */
@@ -241,6 +244,7 @@ function Table<T>({
   defaultColumnSortable = true,
   defaultColumnResizable = true,
   rows,
+  enableSelectColumn,
   rowKeyGetter,
   rowHeight = 35,
   headerRowHeight = 35,
@@ -260,7 +264,9 @@ function Table<T>({
 }: TableProps<T>) {
   return (
     <DataGrid<T>
-      columns={columns}
+      columns={useMemo(() => {
+        return enableSelectColumn ? [SelectColumn, ...columns] : columns;
+      }, [enableSelectColumn, columns])}
       defaultColumnOptions={{
         width: defaultColumnWidth,
         minWidth: defaultColumnMinWidth,
