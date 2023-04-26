@@ -38,7 +38,7 @@
           const greetingsInput = document.getElementById('greetings-input');
           const greeting = await greetingsDataProvider.get(greetingsInput.value.toLowerCase());
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.innerHTML = greeting;
+          helloSomeoneOutput.textContent = papi.util.htmlEncode(greeting);
           print(greeting);
         });
         greetingsButton.addEventListener('contextmenu', async (e) => {
@@ -62,16 +62,16 @@
             setGreetingsInput.value,
           );
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.innerHTML = `${
-            success ? 'Successfully' : 'Unsuccessfully'
-          } set ${name}'s greeting!`;
+          helloSomeoneOutput.textContent = papi.util.htmlEncode(
+            `${success ? 'Successfully' : 'Unsuccessfully'} set ${name}'s greeting!`,
+          );
         });
 
         // Update the 'all greetings' display on load and on greetings updates
         greetingsDataProvider.subscribe('*', (greetings) => {
           const allGreetings = document.getElementById('all-greetings');
           const greetingsString = JSON.stringify(greetings, null, 2);
-          allGreetings.innerHTML = greetingsString;
+          allGreetings.textContent = papi.util.htmlEncode(greetingsString.replace(/"/g, '`'));
           print(greetingsString);
         });
 
@@ -84,7 +84,9 @@
             const anyGreetingsUpdateCountDiv = document.getElementById(
               'any-greetings-update-count',
             );
-            anyGreetingsUpdateCountDiv.innerHTML = `Any Greetings Updates: ${anyGreetingsUpdateCount}`;
+            anyGreetingsUpdateCountDiv.textContent = papi.util.htmlEncode(
+              `Any Greetings Updates: ${anyGreetingsUpdateCount}`,
+            );
           },
           { retrieveDataImmediately: false },
         );
@@ -98,7 +100,9 @@
             const billAnyGreetingsUpdateCountDiv = document.getElementById(
               'bill-any-greetings-update-count',
             );
-            billAnyGreetingsUpdateCountDiv.innerHTML = `Any Greetings Updates (via Bill): ${billAnyGreetingsUpdateCount}`;
+            billAnyGreetingsUpdateCountDiv.textContent = papi.util.htmlEncode(
+              `Any Greetings Updates (via Bill): ${billAnyGreetingsUpdateCount}`,
+            );
           },
           { retrieveDataImmediately: false, whichUpdates: 'all' },
         );
@@ -110,7 +114,9 @@
           const billGreetingsUpdateCountDiv = document.getElementById(
             'bill-greetings-update-count',
           );
-          billGreetingsUpdateCountDiv.innerHTML = `Bill Greetings Updates: ${billGreetingsUpdateCount}`;
+          billGreetingsUpdateCountDiv.textContent = papi.util.htmlEncode(
+            `Bill Greetings Updates: ${billGreetingsUpdateCount}`,
+          );
         });
       }
 

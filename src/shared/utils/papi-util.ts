@@ -207,3 +207,17 @@ export const deserializeRequestType = (requestType: string): RequestType => {
 export function deepEqual(a: unknown, b: unknown) {
   return equal(a, b);
 }
+
+/**
+ * HTML Encodes the provided string.
+ * Thanks to Pointy at https://stackoverflow.com/a/11561642/8535752
+ * @param str string to HTML encode
+ * @returns HTML-encoded string
+ */
+export const htmlEncode = (str: string): string =>
+  str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/'/g, '&#39;')
+    .replace(/"/g, '&#34;');

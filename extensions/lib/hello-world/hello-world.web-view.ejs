@@ -19,7 +19,7 @@
         logger,
       } = papi;
 
-      const NAME = 'Hello World React WebView in HTML'
+      const NAME = 'Hello World React WebView in HTML';
 
       // Test fetching
       papi
@@ -70,7 +70,7 @@
         echoRendererButton.addEventListener('click', () =>
           papi.commands.sendCommand('echoRenderer', 'From Hello World WebView').then((message) => {
             const echoRendererOutput = document.getElementById('echo-renderer-output');
-            echoRendererOutput.innerHTML = message;
+            echoRendererOutput.textContent = papi.util.htmlEncode(message);
             print(message);
           }),
         );
@@ -89,7 +89,7 @@
             .sendCommand('hello-someone.hello-someone', "'Hello World WebView'")
             .then((message) => {
               const helloSomeoneOutput = document.getElementById('hello-someone-output');
-              helloSomeoneOutput.innerHTML = message;
+              helloSomeoneOutput.textContent = papi.util.htmlEncode(message);
               print(message);
             }),
         );
