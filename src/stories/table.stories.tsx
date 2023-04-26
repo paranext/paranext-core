@@ -56,7 +56,9 @@ function TableDecorator(Story: (update?: { args: Partial<TableProps<Row>> }) => 
               return sort.direction === 'ASC' ? compResult : -compResult;
             }
           }
-          return 0; // What do we need this for?
+          // We expect the for loop to always return proper data, so this code
+          // should never be reached
+          throw new Error('An issue occurred while sorting table data');
         }),
       );
     }
