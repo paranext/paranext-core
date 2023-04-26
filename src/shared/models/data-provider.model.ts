@@ -6,7 +6,7 @@ import { IDispose, IOnDidDispose } from './disposal.model';
  * Returned from getting a data provider.
  */
 // Basically a layer over NetworkObject
-export type DataProviderInfo<TSelector, TGetData, TSetData> = IOnDidDispose &
+export type DataProvider<TSelector, TGetData, TSetData> = IOnDidDispose &
   IDataProvider<TSelector, TGetData, TSetData>;
 
 /**
@@ -14,5 +14,5 @@ export type DataProviderInfo<TSelector, TGetData, TSetData> = IOnDidDispose &
  * Returned from registering a data provider (only the process that set it up should dispose of it)
  */
 // Basically a layer over DisposableNetworkObject
-export type DisposableDataProviderInfo<TSelector, TGetData, TSetData> = IDispose &
-  DataProviderInfo<TSelector, TGetData, TSetData>;
+export type DisposableDataProvider<TSelector, TGetData, TSetData> = IDispose &
+  DataProvider<TSelector, TGetData, TSetData>;

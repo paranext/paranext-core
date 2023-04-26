@@ -50,7 +50,7 @@ const greetingsDataProviderEngine = {
 exports.activate = async () => {
   logger.info('Hello Someone is activating!');
 
-  const greetingsDataProviderInfoPromise = papi.dataProvider.registerEngine(
+  const greetingsDataProviderPromise = papi.dataProvider.registerEngine(
     'hello-someone.greetings',
     greetingsDataProviderEngine,
   );
@@ -77,10 +77,10 @@ exports.activate = async () => {
             papi.logger.info(input);
           }
 
-          const dataProviderInfoPromise = papi.dataProvider.get('hello-someone.greetings');
+          const dataProviderPromise = papi.dataProvider.get('hello-someone.greetings');
 
           async function setupWebView() {
-            const greetingsDataProvider = await dataProviderInfoPromise;
+            const greetingsDataProvider = await dataProviderPromise;
 
             // Attach handler for greetings-button
             const greetingsButton = document.getElementById("greetings-button");
@@ -171,14 +171,14 @@ exports.activate = async () => {
   ];
 
   // For now, let's just make things easy and await the data provider promise at the end so we don't hold everything else up
-  const greetingsDataProviderInfo = await greetingsDataProviderInfoPromise;
+  const greetingsDataProvider = await greetingsDataProviderPromise;
 
   return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
     logger.info('Hello Someone is finished activating!');
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises
         .map((unsubPromise) => unsubPromise.unsubscriber)
-        .concat([greetingsDataProviderInfo.dispose]),
+        .concat([greetingsDataProvider.dispose]),
     );
   });
 };

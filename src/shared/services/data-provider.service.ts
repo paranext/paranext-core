@@ -3,10 +3,7 @@
  * Exposed on the papi.
  */
 
-import {
-  DataProviderInfo,
-  DisposableDataProviderInfo,
-} from '@shared/models/data-provider-info.model';
+import { DataProvider, DisposableDataProvider } from '@shared/models/data-provider.model';
 import IDataProvider, {
   DataProviderSubscriber,
   DataProviderSubscriberOptions,
@@ -17,7 +14,7 @@ import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
 import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
 import { IContainer } from '@shared/utils/util';
-import { NetworkObject, NetworkableObject } from '@shared/models/network-object-info.model';
+import { NetworkObject, NetworkableObject } from '@shared/models/network-object.model';
 import networkObjectService from '@shared/services/network-object.service';
 import logger from './logger.service';
 
@@ -263,7 +260,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
 async function registerEngine<TSelector, TGetData, TSetData>(
   providerName: string,
   dataProviderEngine: NetworkableObject<IDataProviderEngine<TSelector, TGetData, TSetData>>,
-): Promise<DisposableDataProviderInfo<TSelector, TGetData, TSetData>> {
+): Promise<DisposableDataProvider<TSelector, TGetData, TSetData>> {
   await initialize();
 
   // There is a potential networking sync issue here. We check for a data provider, then we create a network event, then we create a network object.
@@ -322,7 +319,7 @@ function createLocalDataProviderToProxy<T extends IDataProvider<any, any, any>>(
 async function get<T extends IDataProvider<any, any, any>>(
   dataProviderName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<DataProviderInfo<any, any, any> | undefined> {
+): Promise<DataProvider<any, any, any> | undefined> {
   await initialize();
 
   // Get the object id for this data provider name

@@ -14,7 +14,7 @@ import {
   DisposableNetworkObject,
   NetworkableObject,
   LocalObjectToProxyCreator,
-} from '@shared/models/network-object-info.model';
+} from '@shared/models/network-object.model';
 import { Mutex } from 'async-mutex';
 import logger from './logger.service';
 

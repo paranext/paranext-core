@@ -115,7 +115,7 @@ class QuickVerseDataProviderEngine {
 exports.activate = async () => {
   logger.info('Quick Verse is activating!');
 
-  const quickVerseDataProviderInfo = await papi.dataProvider.registerEngine(
+  const quickVerseDataProvider = await papi.dataProvider.registerEngine(
     'quick-verse.quick-verse',
     new QuickVerseDataProviderEngine(),
   );
@@ -127,7 +127,7 @@ exports.activate = async () => {
     return papi.util.aggregateUnsubscriberAsyncs(
       unsubPromises
         .map((unsubPromise) => unsubPromise.unsubscriber)
-        .concat([quickVerseDataProviderInfo.dispose]),
+        .concat([quickVerseDataProvider.dispose]),
     );
   });
 };
