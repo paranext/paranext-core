@@ -3,6 +3,8 @@
 
 echo "Running Lint check..."
 
+# need to generate the .d.ts files for the extensions in the extensions/dist folder
+npm run build:extensions
 # -q enables quiet mode to show nothing unless it has an error
 npx lint-staged -q
 echo "Lint check finished"
