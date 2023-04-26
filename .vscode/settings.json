@@ -32,5 +32,12 @@
     "test/**/__snapshots__": true,
     "package-lock.json": true,
     "*.{css,sass,scss}.d.ts": true
-  }
+  },
+
+  "json.schemas": [
+    {
+      "fileMatch": ["*tsconfig*.json"],
+      "url": "http://json.schemastore.org/tsconfig"
+    }
+  ]
 }

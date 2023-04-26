@@ -4,6 +4,6 @@
   "description": "Simple quick verse extension for Paranext",
   "author": "TJ Couch",
   "license": "MIT",
-  "main": "quick-verse.js",
+  "main": "quick-verse.ts",
   "activationEvents": []
 }

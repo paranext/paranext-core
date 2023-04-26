@@ -1,0 +1,32 @@
+{
+  "name": "papi-dts",
+  "version": "0.0.1",
+  "description": "TypeScript definitions for Paranext's PAPI",
+  "homepage": "https://github.com/paranext/paranext-core/tree/main/lib/papi-dts",
+  "bugs": {
+    "url": "https://github.com/paranext/paranext-core/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paranext/paranext-core.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Paranext",
+    "url": "https://github.com/paranext/"
+  },
+  "contributors": [
+    {
+      "name": "TJ Couch",
+      "email": "tj_couch@sil.org",
+      "url": "https://github.com/tjcouch-sil"
+    }
+  ],
+  "main": "",
+  "types": "papi.d.ts",
+  "scripts": {
+    "build": "tsc && npx prettier --write papi.d.ts && ts-node edit-papi-d-ts.ts"
+  },
+  "dependencies": {},
+  "typeScriptVersion": "4.9.5"
+}
