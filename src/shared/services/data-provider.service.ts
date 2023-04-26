@@ -3,7 +3,7 @@
  * Exposed on the papi.
  */
 
-import { DataProvider, DisposableDataProvider } from '@shared/models/data-provider-info.model';
+import { DataProvider, DisposableDataProvider } from '@shared/models/data-provider.model';
 import IDataProvider, {
   DataProviderSubscriber,
   DataProviderSubscriberOptions,
@@ -14,7 +14,7 @@ import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
 import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
 import { IContainer } from '@shared/utils/util';
-import { NetworkObject, NetworkableObject } from '@shared/models/network-object-info.model';
+import { NetworkObject, NetworkableObject } from '@shared/models/network-object.model';
 import networkObjectService from '@shared/services/network-object.service';
 import logger from './logger.service';
 

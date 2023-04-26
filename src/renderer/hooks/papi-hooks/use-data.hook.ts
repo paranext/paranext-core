@@ -1,5 +1,5 @@
 import { DataProviderSubscriberOptions } from '@shared/models/data-provider.interface';
-import { DataProvider } from '@shared/models/data-provider-info.model';
+import { DataProvider } from '@shared/models/data-provider.model';
 import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
 import { useMemo, useState } from 'react';
 import { PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.model';

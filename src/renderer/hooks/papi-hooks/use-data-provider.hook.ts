@@ -1,5 +1,5 @@
 import dataProviderService from '@shared/services/data-provider.service';
-import { DataProvider } from '@shared/models/data-provider-info.model';
+import { DataProvider } from '@shared/models/data-provider.model';
 import { useCallback, useMemo, useState } from 'react';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
