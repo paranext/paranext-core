@@ -262,11 +262,12 @@ function Table<T>({
   onScroll,
   className,
 }: TableProps<T>) {
+  const cachedColumns = useMemo(() => {
+    return enableSelectColumn ? [SelectColumn, ...columns] : columns;
+  }, [enableSelectColumn, columns]);
   return (
     <DataGrid<T>
-      columns={useMemo(() => {
-        return enableSelectColumn ? [SelectColumn, ...columns] : columns;
-      }, [enableSelectColumn, columns])}
+      columns={cachedColumns}
       defaultColumnOptions={{
         width: defaultColumnWidth,
         minWidth: defaultColumnMinWidth,

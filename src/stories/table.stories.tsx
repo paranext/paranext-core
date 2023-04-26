@@ -118,12 +118,10 @@ export const Default: Story = {
       {
         key: 'id',
         name: 'ID',
-        editor: TableTextEditor,
       },
       {
         key: 'title',
         name: 'Title',
-        editor: TableTextEditor,
       },
     ],
     rows: [
@@ -134,6 +132,18 @@ export const Default: Story = {
       { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
       { id: '5', title: 'Sed aliquet pulvinar neque' },
     ],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "This is what the table looks like when only 'columns' and 'rows' are provided.\n" +
+          'These props are always required.\n' +
+          'Default behavior is:\n' +
+          '- Resizable, sortable, non-editable, non-frozen columns\n' +
+          '- Non-selectable rows',
+      },
+    },
   },
 };
 
@@ -150,6 +160,7 @@ export const CustomizedColumns: Story = {
         frozen: false,
         resizable: true,
         sortable: true,
+        editor: TableTextEditor,
       },
       {
         key: 'title',
@@ -172,6 +183,16 @@ export const CustomizedColumns: Story = {
       { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
       { id: '5', title: 'Sed aliquet pulvinar neque' },
     ],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "This story showcases all possible props that can be set on 'columns'.\n" +
+          "Note that the 'editable' prop is meaningless when the 'editor' prop is not set.\n" +
+          "When an 'editor' is provided, the 'editable' prop will default to 'true'",
+      },
+    },
   },
 };
 
@@ -202,6 +223,16 @@ export const CustomizedColumnDefaults: Story = {
     defaultColumnMaxWidth: 500,
     defaultColumnSortable: false,
     defaultColumnResizable: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "This story showcases all possible defaults for 'column' props that can be set.\n" +
+          'These defaults will be set to all columns and can be overridden by setting props' +
+          ' on the individual columns',
+      },
+    },
   },
 };
 
@@ -234,6 +265,15 @@ export const ColumnCallBackFunctions: Story = {
       console.log('Column resized');
     },
   },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "This story showcases the 'onColumnResize' callback function.\n" +
+          'Check the developer console for output.',
+      },
+    },
+  },
 };
 
 export const CustomizedRows: Story = {
@@ -262,9 +302,16 @@ export const CustomizedRows: Story = {
     rowHeight: 50,
     headerRowHeight: 100,
   },
+  parameters: {
+    docs: {
+      description: {
+        story: 'This story showcases how rows can be customized.',
+      },
+    },
+  },
 };
 
-export const CellCallbackFunction: Story = {
+export const CellCallbackFunctions: Story = {
   args: {
     columns: [
       {
@@ -318,6 +365,17 @@ export const CellCallbackFunction: Story = {
       console.log(event);
     },
   },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This story showcases all callback functions related to cells.\n' +
+          'It implements the following callback functions:\n' +
+          '- onCellClick \n- onCellDoubleClick \n- onCellContextMenu \n- onCellKeyDown \n\n' +
+          'Check the developer console for output',
+      },
+    },
+  },
 };
 
 export const Direction: Story = {
@@ -344,13 +402,22 @@ export const Direction: Story = {
 
     direction: 'rtl',
   },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "This story showcases the 'direction' prop. It can be set to either 'ltr' for left" +
+          " to right behavior or 'rtl' for right to left behavior.",
+      },
+    },
+  },
 };
 
 const generateRows = (): Row[] => {
   const rows: Row[] = [];
 
   for (let i = 0; i < 1000; i++) {
-    rows.push({ id: `i`, title: 'Lorem ipsum dolor sit amet' });
+    rows.push({ id: i.toString(), title: 'Lorem ipsum dolor sit amet' });
   }
   return rows;
 };
@@ -371,6 +438,13 @@ export const Virtualization: Story = {
     rows: generateRows(),
 
     enableVirtualization: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'This story showcases virtualization in large tables',
+      },
+    },
   },
 };
 
@@ -435,6 +509,17 @@ export const MiscellaneousFunctions: Story = {
       return { ...targetRow, [targetColumnKey]: sourceRow[sourceColumnKey as keyof Row] };
     },
   },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This story showcases miscellaneous callback functions.\n' +
+          'It implements the following callback functions:\n' +
+          '- onScroll \n- onCopy \n- onPaste \n\n' +
+          'Check the developer console for output',
+      },
+    },
+  },
 };
 
 export const CustomClassNames: Story = {
@@ -460,5 +545,12 @@ export const CustomClassNames: Story = {
     ],
 
     className: 'paratext',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'This story showcases how custom CSS classes can be used',
+      },
+    },
   },
 };
