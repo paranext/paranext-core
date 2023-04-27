@@ -27,6 +27,7 @@
     "papi-dts": "file:../lib/papi-dts",
     "rollup-plugin-import-manager": "^0.5.3",
     "rollup-plugin-string": "^3.0.0",
+    "sass": "^1.62.1",
     "vite": "^4.2.0",
     "vite-plugin-static-copy": "^0.14.0"
   }

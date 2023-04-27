@@ -4,6 +4,7 @@ import type { WebViewContentType } from 'shared/data/web-view.model';
 import { GreetingsDataProvider } from '@extensions/hello-someone/hello-someone';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloWorldReactWebView from './hello-world.web-view.js';
+import helloWorldReactWebViewStyles from './hello-world.web-view.scss?inline';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloWorldHtmlWebView from './hello-world.web-view.ejs';
 
@@ -39,6 +40,7 @@ export async function activate() {
   await papi.webViews.addWebView({
     componentName: 'HelloWorld',
     contents: helloWorldReactWebView,
+    styles: helloWorldReactWebViewStyles,
   });
 
   const greetingsDataProvider = await papi.dataProvider.get<GreetingsDataProvider>(

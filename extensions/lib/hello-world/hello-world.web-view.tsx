@@ -45,6 +45,9 @@ function HelloWorld() {
 
   return (
     <div>
+      <div className="title">
+        Hello World <span className="framework">React</span>
+      </div>
       <div>
         <Button
           onClick={() => {
