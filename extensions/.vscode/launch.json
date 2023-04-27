@@ -19,6 +19,23 @@
         "runtimeExecutable": "npm",
         "skipFiles": ["<node_internals>/**"],
         "runtimeArgs": ["run", "build"]
+      },
+      {
+        "name": "Debug Paranext Core",
+        "type": "node",
+        "request": "launch",
+        "runtimeExecutable": "npm",
+        "runtimeArgs": ["run", "start"],
+        "cwd": "${workspaceFolder}/..",
+        "env": {
+          "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
+          "IN_VSCODE": "true"
+        },
+        "presentation": {
+          "hidden": false,
+          "group": "",
+          "order": 1
+        }
       }
     ]
 }
