@@ -299,15 +299,15 @@ async function registerEngine<TSelector, TGetData, TSetData>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createLocalDataProviderToProxy<T extends IDataProvider<any, any, any>>(
   dataProviderObjectId: string,
-  dataProviderContainer: Container<NetworkObject<T>>,
-): Partial<NetworkableObject<T>> {
+  dataProviderContainer: Container<NetworkObject<Omit<T, 'onDidDispose'>>>,
+): Partial<T> {
   // Create a networked update event
   const onDidUpdate = networkService.getNetworkEvent<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
   return {
     subscribe: createDataProviderSubscriber(dataProviderContainer, onDidUpdate),
-  } as Partial<NetworkableObject<T>>;
+  } as Partial<T>;
 }
 
 /**
