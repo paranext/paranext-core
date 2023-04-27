@@ -1,0 +1,9 @@
+div.flex-container {
+  flex-direction: column;
+  flex-wrap: wrap;
+  border: 2px solid black;
+}
+
+.sneeze-record {
+  margin: 1px;
+}

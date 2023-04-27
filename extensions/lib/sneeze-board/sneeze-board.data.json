@@ -13250,67 +13250,67 @@
     {
       "userId": "944616bd-20a1-4659-87af-04563043ffde",
       "color": "Sienna",
-      "comment": "Nemo"
+      "name": "Nemo"
     },
     {
       "userId": "c897cd73-9100-4e6a-8a32-fe237f1e9928",
       "color": "Red",
-      "comment": "Tim"
+      "name": "Tim"
     },
     {
       "userId": "d00d0180-93e8-401c-9250-952ed11c5719",
       "color": "#FF80C0",
-      "comment": "Andrew"
+      "name": "Andrew"
     },
     {
       "userId": "8b55bd23-acbf-4a0b-be93-40f61dd47e09",
       "color": "Lime",
-      "comment": "Tom"
+      "name": "Tom"
     },
     {
       "userId": "e77fc6d0-dc9a-4878-89a2-cd23570fa1f6",
       "color": "Blue",
-      "comment": "Mike"
+      "name": "Mike"
     },
     {
       "userId": "cd2c5edf-f0bf-4439-a2bd-1d39d481de91",
       "color": "Black",
-      "comment": "Glenn"
+      "name": "Glenn"
     },
     {
       "userId": "04985025-1c86-4982-bffa-a76d9e70f8cc",
       "color": "#D7C231",
-      "comment": "Phil"
+      "name": "Phil"
     },
     {
       "userId": "c5c7b6a2-ed96-4449-a14b-e163c862f9a0",
       "color": "#FF8000",
-      "comment": "Visitor"
+      "name": "Visitor"
     },
     {
       "userId": "b762575d-a195-4152-9534-48193331bbb6",
       "color": "#784A1D",
-      "comment": "Grant"
+      "name": "Grant"
     },
     {
       "userId": "44121b64-b05e-451c-901c-020aa071d9d7",
       "color": "#808040",
-      "comment": "Rick"
+      "name": "Rick"
     },
     {
       "userId": "ef83bc25-99c0-44fa-9f0e-273f4e9d93fd",
       "color": "#9D78B6",
-      "comment": "Larry"
+      "name": "Larry"
     },
     {
       "userId": "e30d616e-6542-4ec9-a8bd-d17c752a8b4c",
       "color": "#663399",
-      "comment": "Katherine"
+      "name": "Katherine"
     },
     {
       "userId": "c8cf5c7f-bf43-4c0a-b7b8-90b0893e8861",
       "color": "#C362D2",
-      "comment": "Brad"
+      "name": "Brad"
     }
   ]
 }
