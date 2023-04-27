@@ -64,12 +64,12 @@ public class MessageConverterTests
 
         var msg = JsonSerializer.Deserialize<MessageType>(messageToDecode, so);
         Assert.That(msg, Is.Not.Null);
-        Assert.That(msg.Event, Is.Not.Null);
+        Assert.That(msg!.Event, Is.Not.Null);
 
         string reserializedMessage = JsonSerializer.Serialize(msg, so);
         var msg2 = JsonSerializer.Deserialize<MessageType>(reserializedMessage, so);
         Assert.That(msg2, Is.Not.Null);
-        Assert.That(msg2.Event, Is.Not.Null);
+        Assert.That(msg2!.Event, Is.Not.Null);
 
         // Make sure that we get the same event contents when doing a round trip through serialization/deserialization
         if (msg.GetType() == typeof(MessageEvent))

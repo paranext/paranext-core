@@ -1,19 +1,19 @@
-import { IContainer } from '@shared/utils/util';
-import { IDispose, IOnDidDispose, CannotHaveOnDidDispose } from './disposal.model';
+import { Container } from '@shared/utils/util';
+import { Dispose, OnDidDispose, CannotHaveOnDidDispose } from './disposal.model';
 
 /**
  * An object of this type is returned from {@link networkObjectService.get}.
  *
  * @see networkObjectService
  */
-export type NetworkObject<T> = T & IOnDidDispose;
+export type NetworkObject<T> = T & OnDidDispose;
 
 /**
  * An object of this type is returned from {@link networkObjectService.set}.
  *
  * @see networkObjectService
  */
-export type DisposableNetworkObject<T> = T & IOnDidDispose & IDispose;
+export type DisposableNetworkObject<T> = T & OnDidDispose & Dispose;
 
 /**
  * An object of this type is passed into {@link networkObjectService.set}.
@@ -45,5 +45,5 @@ export type NetworkableObject<T = object> = CannotHaveOnDidDispose<T>;
  */
 export type LocalObjectToProxyCreator<T> = (
   id: string,
-  networkObjectContainer: IContainer<NetworkObject<T>>,
+  networkObjectContainer: Container<NetworkObject<T>>,
 ) => Partial<NetworkableObject<T>>;

@@ -8,7 +8,7 @@ import {
 } from '@shared/utils/papi-util';
 import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
-import { IContainer, isString } from '@shared/utils/util';
+import { Container, isString } from '@shared/utils/util';
 import {
   NetworkObject,
   DisposableNetworkObject,
@@ -313,7 +313,7 @@ const get = async <T>(
 
     // The base object created below might need a reference to the final proxy. Since the proxy
     // doesn't exist yet, create a container now and fill it in after the proxy is created.
-    const proxyContainer: IContainer<NetworkObject<T>> = { contents: undefined };
+    const proxyContainer: Container<NetworkObject<T>> = { contents: undefined };
 
     // Create the base object that will be proxied for remote calls.
     // If a property exists on the base object, we use it and won't look for it on the remote object.

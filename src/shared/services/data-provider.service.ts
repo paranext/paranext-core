@@ -13,7 +13,7 @@ import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
 import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
-import { IContainer } from '@shared/utils/util';
+import { Container } from '@shared/utils/util';
 import { NetworkObject, NetworkableObject } from '@shared/models/network-object.model';
 import networkObjectService from '@shared/services/network-object.service';
 import logger from './logger.service';
@@ -70,7 +70,7 @@ async function has(providerName: string): Promise<boolean> {
  * @returns subscribe function for a data provider
  */
 function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
-  dataProviderContainer: IContainer<IDataProvider<TSelector, TGetData, TSetData>>,
+  dataProviderContainer: Container<IDataProvider<TSelector, TGetData, TSetData>>,
   onDidUpdate: PapiEvent<boolean>,
 ): DataProviderSubscriber<TSelector, TGetData> {
   return async (selector, callback, options?: DataProviderSubscriberOptions) => {
@@ -148,7 +148,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
   onDidUpdateEmitter: PapiEventEmitter<boolean>,
 ): IDataProvider<TSelector, TGetData, TSetData> {
   /** Container to hold a reference to the data provider so the local object can reference the network object in its functions */
-  const dataProviderContainer: IContainer<IDataProvider<TSelector, TGetData, TSetData>> = {
+  const dataProviderContainer: Container<IDataProvider<TSelector, TGetData, TSetData>> = {
     contents: undefined,
   };
 
@@ -299,7 +299,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createLocalDataProviderToProxy<T extends IDataProvider<any, any, any>>(
   dataProviderObjectId: string,
-  dataProviderContainer: IContainer<NetworkObject<T>>,
+  dataProviderContainer: Container<NetworkObject<T>>,
 ): Partial<NetworkableObject<T>> {
   // Create a networked update event
   const onDidUpdate = networkService.getNetworkEvent<boolean>(
