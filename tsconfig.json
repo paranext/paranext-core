@@ -31,7 +31,14 @@
     "outDir": ".erb/dll",
     "typeRoots": ["./node_modules/@types", "./extensions/dist"]
   },
-  "exclude": ["test", "release/build", "release/app/dist", ".erb/dll", "extensions"],
+  "exclude": [
+    "test",
+    "release/build",
+    "release/app/dist",
+    ".erb/dll",
+    "extensions",
+    "lib/papi-dts"
+  ],
   "ts-node": {
     "require": ["tsconfig-paths/register"]
   }
