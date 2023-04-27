@@ -210,7 +210,7 @@ export function deepEqual(a: unknown, b: unknown) {
 
 /**
  * HTML Encodes the provided string.
- * Thanks to Pointy at https://stackoverflow.com/a/11561642/8535752
+ * Thanks to ChatGPT
  * @param str string to HTML encode
  * @returns HTML-encoded string
  */
@@ -219,5 +219,6 @@ export const htmlEncode = (str: string): string =>
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/'/g, '&#39;')
-    .replace(/"/g, '&#34;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
