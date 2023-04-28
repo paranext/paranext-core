@@ -3,11 +3,11 @@
  * Exposed on the papi.
  */
 
-import { IDataProvider, IDisposableDataProvider } from '@shared/models/data-provider.model';
+import IDataProvider, { IDisposableDataProvider } from '@shared/models/data-provider.interface';
 import DataProviderInternal, {
   DataProviderSubscriber,
   DataProviderSubscriberOptions,
-} from '@shared/models/data-provider.interface';
+} from '@shared/models/data-provider.model';
 import IDataProviderEngine from '@shared/models/data-provider-engine.model';
 import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';

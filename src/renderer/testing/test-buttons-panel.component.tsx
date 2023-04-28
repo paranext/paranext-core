@@ -10,7 +10,7 @@ import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import { AddWebViewEvent } from '@shared/services/web-view.service';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
-import { IDataProvider } from '@shared/models/data-provider.model';
+import IDataProvider from '@shared/models/data-provider.interface';
 
 const testBase: (message: string) => Promise<string> =
   networkService.createRequestFunction('electronAPI.env.test');

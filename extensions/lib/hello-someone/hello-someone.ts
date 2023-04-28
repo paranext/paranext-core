@@ -1,7 +1,7 @@
 import papi from 'papi';
 import type { WebViewContentType } from 'shared/data/web-view.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
-import type { IDataProvider } from 'shared/models/data-provider.model';
+import type IDataProvider from 'shared/models/data-provider.interface';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
 
