@@ -23,12 +23,17 @@ let availableExtensions: ExtensionInfo[];
 /** Map of extension name to extension that is currently active and running */
 const activeExtensions = new Map<string, ActiveExtension>();
 
-/** Information about an extension provided by the extension developer */
-type ExtensionManifest = Readonly<{
+/** Extension manifest before it is finalized and frozen */
+
+/**
+ * Information about an extension provided by the extension developer.
+ * This will be transformed and frozen into an ExtensionInfo before use
+ */
+type ExtensionManifest = {
   name: string;
   main: string;
   activationEvents: string[];
-}>;
+};
 
 /** Information about an extension and extra metadata about it that we generate */
 type ExtensionInfo = Readonly<
@@ -44,9 +49,24 @@ type ActiveExtension = {
   deactivator: UnsubscriberAsync;
 };
 
-/** Get information for all the extensions present */
+/** Parse string extension manifest into an object and perform any transformations needed */
+function parseManifest(extensionManifestJson: string) {
+  const extensionManifest = JSON.parse(extensionManifestJson) as ExtensionManifest;
+  // Replace ts with js so people can list their source code ts name but run the transpiled js
+  if (extensionManifest.main.endsWith('.ts'))
+    extensionManifest.main = `${extensionManifest.main.slice(0, -3)}.js`;
+
+  return extensionManifest;
+}
+
+/**
+ * Get information for all the extensions present
+ * TODO: figure out if we can share this code with vite.config.ts
+ */
 const getExtensions = async (): Promise<ExtensionInfo[]> => {
-  const extensionFolders = (await readDir('resources://extensions'))[EntryType.Directory];
+  const extensionFolders = (
+    await readDir(`resources://extensions${globalThis.isPackaged ? '' : '/dist'}`)
+  )[EntryType.Directory];
 
   return Promise.all(
     extensionFolders.map(async (extensionFolder) => {
@@ -54,7 +74,7 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
         joinUriPaths(extensionFolder, 'manifest.json'),
       );
       return Object.freeze({
-        ...(JSON.parse(extensionManifestJson) as ExtensionManifest),
+        ...parseManifest(extensionManifestJson),
         dirUri: extensionFolder,
       });
     }),

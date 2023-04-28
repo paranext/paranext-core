@@ -177,7 +177,7 @@ export type CommandHandler<
   TParam extends Array<unknown> = any[],
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   TReturn = any,
-> = (...args: TParam) => Promise<TReturn>;
+> = (...args: TParam) => Promise<TReturn> | TReturn;
 
 /** Information about a request that tells us what to do with it */
 export type RequestType = {
@@ -207,3 +207,18 @@ export const deserializeRequestType = (requestType: string): RequestType => {
 export function deepEqual(a: unknown, b: unknown) {
   return equal(a, b);
 }
+
+/**
+ * HTML Encodes the provided string.
+ * Thanks to ChatGPT
+ * @param str string to HTML encode
+ * @returns HTML-encoded string
+ */
+export const htmlEncode = (str: string): string =>
+  str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');

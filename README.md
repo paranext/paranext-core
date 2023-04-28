@@ -55,6 +55,8 @@ Clone the repo and install dependencies:
 git clone https://github.com/paranext/paranext-core.git
 cd paranext-core
 npm install
+cd extensions
+npm install
 ```
 
 ## Starting Development

@@ -328,7 +328,7 @@
     buildResources: 'assets',
     output: 'release/build',
   },
-  extraResources: ['./assets/**', './extensions/**'],
+  extraResources: ['./assets/**', { from: './extensions/dist/', to: './extensions' }],
   publish: {
     provider: 'github',
     owner: 'paranext',

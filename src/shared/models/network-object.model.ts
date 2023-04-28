@@ -43,7 +43,7 @@ export type NetworkableObject<T = object> = CannotHaveOnDidDispose<T>;
  *
  * @returns the local object to proxy into a network object.
  */
-export type LocalObjectToProxyCreator<T> = (
+export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
   id: string,
-  networkObjectContainer: Container<NetworkObject<T>>,
-) => Partial<NetworkableObject<T>>;
+  networkObjectContainer: Container<NetworkObject<Omit<T, 'onDidDispose'>>>,
+) => Partial<T>;

@@ -4,7 +4,7 @@
   "description": "Simple hello someone extension for Paranext",
   "author": "TJ Couch",
   "license": "MIT",
-  "main": "hello-someone.js",
+  "main": "hello-someone.ts",
   "activationEvents": [
     "onCommand:hello-someone.hello-someone",
     "onCommand:hello-someone.echo-someone-renderer"

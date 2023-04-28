@@ -299,15 +299,15 @@ async function registerEngine<TSelector, TGetData, TSetData>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createLocalDataProviderToProxy<T extends IDataProvider<any, any, any>>(
   dataProviderObjectId: string,
-  dataProviderContainer: Container<NetworkObject<T>>,
-): Partial<NetworkableObject<T>> {
+  dataProviderContainer: Container<NetworkObject<Omit<T, 'onDidDispose'>>>,
+): Partial<T> {
   // Create a networked update event
   const onDidUpdate = networkService.getNetworkEvent<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
   return {
     subscribe: createDataProviderSubscriber(dataProviderContainer, onDidUpdate),
-  } as Partial<NetworkableObject<T>>;
+  } as Partial<T>;
 }
 
 /**
@@ -316,10 +316,10 @@ function createLocalDataProviderToProxy<T extends IDataProvider<any, any, any>>(
  * @returns The data provider with the given name if one exists, undefined otherwise
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function get<T extends IDataProvider<any, any, any>>(
+async function get<T extends DataProvider<any, any, any>>(
   dataProviderName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<DataProvider<any, any, any> | undefined> {
+): Promise<T | undefined> {
   await initialize();
 
   // Get the object id for this data provider name

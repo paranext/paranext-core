@@ -1,21 +1,24 @@
-'use strict';
-
-// eslint-disable-next-line import/no-unresolved
-const papi = require('papi');
+import papi from 'papi';
+import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
+import { UnsubPromiseAsync, UnsubscriberAsync } from 'shared/utils/papi-util';
 
 const { logger } = papi;
 
 logger.info('Quick Verse is importing!');
 
-const unsubscribers = [];
+const unsubscribers: UnsubscriberAsync[] = [];
 
-class QuickVerseDataProviderEngine {
+type QuickVerseSetData = string | { text: string; isHeresy: boolean };
+
+class QuickVerseDataProviderEngine
+  implements IDataProviderEngine<string, string | undefined, QuickVerseSetData>
+{
   /**
    * Verses stored by the Data Provider.
    * Keys are Scripture References.
    * Values are { text: '<verse_text>', isChanged?: boolean }
    */
-  verses = {};
+  verses: { [scrRef: string]: { text: string; isChanged?: boolean } } = {};
 
   /** Latest updated verse reference */
   latestVerseRef = 'john 11:35';
@@ -30,11 +33,11 @@ class QuickVerseDataProviderEngine {
   }
 
   /**
-   * @param {string} selector string Scripture reference
-   * @param {string} data { text: '<verse_text>', isHeresy: true } Must inform us that you are a heretic
+   * @param selector string Scripture reference
+   * @param data Must inform us that you are a heretic
    */
   // Note: this method gets layered over so that you can run `this.set` in the data provider engine, and it will notify update afterward.
-  async set(selector, data) {
+  async set(selector: string, data: QuickVerseSetData) {
     // Just get notifications of updates with the 'notify' selector. Nothing to change
     if (selector === 'notify') return false;
 
@@ -58,17 +61,17 @@ class QuickVerseDataProviderEngine {
 
   /**
    * Example of layering over set inside a data provider. This updates the verse text and sends an update event
-   * @param {*} verseRef verse reference to change
-   * @param {*} verseText text to update the verse to, you heretic
+   * @param verseRef verse reference to change
+   * @param verseText text to update the verse to, you heretic
    */
-  async setHeresy(verseRef, verseText) {
+  async setHeresy(verseRef: string, verseText: string) {
     return this.set(verseRef, { text: verseText, isHeresy: true });
   }
 
   /**
-   * @param {string} selector
+   * @param selector
    */
-  get = async (selector) => {
+  get = async (selector: string) => {
     // Just get notifications of updates with the 'notify' selector
     if (selector === 'notify') return undefined;
 
@@ -103,16 +106,16 @@ class QuickVerseDataProviderEngine {
    * - `'notify'` - informs the listener of any changes in quick verse text but does not carry data
    * - `'latest'` - the latest-updated quick verse text including pulling a verse from the server and a heretic changing the verse
    * - Scripture Reference strings. Ex: `'Romans 1:16'`
-   * @param {string} selector selector provided by user
+   * @param selector selector provided by user
    * @returns selector for use internally
    */
-  #getSelector(selector) {
+  #getSelector(selector: string) {
     const selectorL = selector.toLowerCase();
     return selectorL === 'latest' ? this.latestVerseRef : selectorL;
   }
 }
 
-exports.activate = async () => {
+export async function activate() {
   logger.info('Quick Verse is activating!');
 
   const quickVerseDataProvider = await papi.dataProvider.registerEngine(
@@ -120,7 +123,7 @@ exports.activate = async () => {
     new QuickVerseDataProviderEngine(),
   );
 
-  const unsubPromises = [];
+  const unsubPromises: UnsubPromiseAsync[] = [];
 
   return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
     logger.info('Quick Verse is finished activating!');
@@ -130,8 +133,8 @@ exports.activate = async () => {
         .concat([quickVerseDataProvider.dispose]),
     );
   });
-};
+}
 
-exports.deactivate = async () => {
+export async function deactivate() {
   return Promise.all(unsubscribers.map((unsubscriber) => unsubscriber()));
-};
+}

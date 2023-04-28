@@ -1,0 +1,48 @@
+{
+  "name": "papi-dts",
+  "version": "0.0.1",
+  "description": "TypeScript definitions for Paranext's PAPI",
+  "homepage": "https://github.com/paranext/paranext-core/tree/main/lib/papi-dts",
+  "bugs": {
+    "url": "https://github.com/paranext/paranext-core/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paranext/paranext-core.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Paranext",
+    "url": "https://github.com/paranext/"
+  },
+  "contributors": [
+    {
+      "name": "TJ Couch",
+      "email": "tj_couch@sil.org",
+      "url": "https://github.com/tjcouch-sil"
+    }
+  ],
+  "main": "",
+  "types": "papi.d.ts",
+  "scripts": {
+    "build": "tsc && npx prettier --write papi.d.ts && ts-node edit-papi-d-ts.ts",
+    "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:staged": "lint-staged -q"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "cross-env NODE_ENV=development eslint --cache"
+    ],
+    "*.json,.{eslintrc,prettierrc}": [
+      "prettier --ignore-path .eslintignore --parser json --write"
+    ],
+    "*.{css,scss}": [
+      "prettier --ignore-path .eslintignore --single-quote --write"
+    ],
+    "*.{html,md,yml}": [
+      "prettier --ignore-path .eslintignore --single-quote --write"
+    ]
+  },
+  "dependencies": {},
+  "typeScriptVersion": "4.9.5"
+}

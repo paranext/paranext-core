@@ -34,3 +34,7 @@ npm-debug.log.*
 !.storybook
 
 storybook-static
+
+# directories that have separate eslint project
+lib/papi-dts
+extensions
