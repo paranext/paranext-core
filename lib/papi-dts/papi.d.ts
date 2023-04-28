@@ -1347,15 +1347,19 @@ declare module 'shared/models/data-provider.interface' {
     options?: DataProviderSubscriberOptions,
   ) => Promise<UnsubscriberAsync>;
   /**
-   * An object on the papi that manages data and has methods for interacting with that data.
-   * Created by the papi and layers over an IDataProviderEngine provided by an extension.
+   * An internal object created locally when someone runs dataProviderService.registerEngine.
+   * This object layers over the data provider engine and runs its methods along with other methods.
+   * This object is transformed into an IDataProvider by networkObjectService.set.
+   *
    * @type `TSelector` - the type of selector used to get some data from this provider.
    *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
    *  Note: A selector must be stringifiable.
    * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
    * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
+   *
+   * @see IDataProvider
    */
-  interface IDataProvider<TSelector, TGetData, TSetData> extends NetworkableObject {
+  interface DataProviderInternal<TSelector, TGetData, TSetData> extends NetworkableObject {
     /**
      * Set a subset of data according to the selector.
      *
@@ -1387,10 +1391,10 @@ declare module 'shared/models/data-provider.interface' {
      */
     subscribe: DataProviderSubscriber<TSelector, TGetData>;
   }
-  export default IDataProvider;
+  export default DataProviderInternal;
 }
 declare module 'shared/models/data-provider.model' {
-  import IDataProvider from 'shared/models/data-provider.interface';
+  import DataProviderInternal from 'shared/models/data-provider.interface';
   import {
     DisposableNetworkObject,
     NetworkObject,
@@ -1398,19 +1402,28 @@ declare module 'shared/models/data-provider.model' {
   } from 'shared/models/network-object.model';
   import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
   /**
-   * Information about a data provider.
-   * Returned from getting a data provider.
+   * An object on the papi that manages data and has methods for interacting with that data.
+   * Created by the papi and layers over an IDataProviderEngine provided by an extension.
+   * Returned from getting a data provider with dataProviderService.get.
+   * @type `TSelector` - the type of selector used to get some data from this provider.
+   *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
+   *  Note: A selector must be stringifiable.
+   * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
+   * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
    */
-  export interface DataProvider<TSelector, TGetData, TSetData>
+  export interface IDataProvider<TSelector, TGetData, TSetData>
     extends NetworkObject<NetworkableObject>,
-      CanHaveOnDidDispose<IDataProvider<TSelector, TGetData, TSetData>> {}
+      CanHaveOnDidDispose<DataProviderInternal<TSelector, TGetData, TSetData>> {}
   /**
-   * Information about a data provider including control over disposing of it.
-   * Returned from registering a data provider (only the process that set it up should dispose of it)
+   * A data provider that has control over disposing of it with dispose.
+   * Returned from registering a data provider (only the service that set it up should dispose of it)
+   * with dataProviderService.registerEngine
+   *
+   * @see IDataProvider
    */
-  export interface DisposableDataProvider<TSelector, TGetData, TSetData>
+  export interface IDisposableDataProvider<TSelector, TGetData, TSetData>
     extends DisposableNetworkObject<NetworkableObject>,
-      Omit<DataProvider<TSelector, TGetData, TSetData>, 'dispose'> {}
+      Omit<IDataProvider<TSelector, TGetData, TSetData>, 'dispose'> {}
 }
 declare module 'shared/models/data-provider-engine.model' {
   import { NetworkableObject } from 'shared/models/network-object.model';
@@ -1461,7 +1474,7 @@ declare module 'shared/services/data-provider.service' {
    * Handles registering data providers and serving data around the papi.
    * Exposed on the papi.
    */
-  import { DataProvider, DisposableDataProvider } from 'shared/models/data-provider.model';
+  import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.model';
   import IDataProviderEngine from 'shared/models/data-provider-engine.model';
   /** Determine if a data provider with the given name exists anywhere on the network */
   function has(providerName: string): Promise<boolean>;
@@ -1482,14 +1495,14 @@ declare module 'shared/services/data-provider.service' {
   function registerEngine<TSelector, TGetData, TSetData>(
     providerName: string,
     dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
-  ): Promise<DisposableDataProvider<TSelector, TGetData, TSetData>>;
+  ): Promise<IDisposableDataProvider<TSelector, TGetData, TSetData>>;
   /**
    * Get a data provider that has previously been set up
-   * @param dataProviderName Name of the desired data provider
+   * @param providerName Name of the desired data provider
    * @returns The data provider with the given name if one exists, undefined otherwise
    */
-  function get<T extends DataProvider<any, any, any>>(
-    dataProviderName: string,
+  function get<T extends IDataProvider<any, any, any>>(
+    providerName: string,
   ): Promise<T | undefined>;
   const dataProviderService: {
     has: typeof has;
@@ -1927,7 +1940,7 @@ declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
   export default useEventAsync;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
-  import { DataProvider } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.model';
   /**
    * Gets a data provider with specified name
    * @param providerName name of the data provider to get
@@ -1938,7 +1951,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
    *  specifying your own types, or provide a custom data provider type
    */
-  function useDataProvider<T extends DataProvider<any, any, any>>(
+  function useDataProvider<T extends IDataProvider<any, any, any>>(
     providerName: string | undefined,
   ): T | undefined;
   /**
@@ -1951,7 +1964,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
    *  specifying your own types, or provide a custom data provider type
    */
-  function useDataProvider<T extends DataProvider<any, any, any>>(
+  function useDataProvider<T extends IDataProvider<any, any, any>>(
     dataProvider: T | undefined,
   ): T | undefined;
   /**
@@ -1965,14 +1978,14 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
    *  specifying your own types, or provide a custom data provider type
    */
-  function useDataProvider<T extends DataProvider<any, any, any>>(
+  function useDataProvider<T extends IDataProvider<any, any, any>>(
     dataProviderSource: string | T | undefined,
   ): T | undefined;
   export default useDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.interface';
-  import { DataProvider } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.model';
   /**
    * Subscribes to run a callback on a data provider's data with specified selector
    * @param providerName name of the data provider to subscribe to
@@ -2012,7 +2025,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
    */
   function useData<TSelector, TGetData, TSetData>(
-    dataProvider: DataProvider<TSelector, TGetData, TSetData> | undefined,
+    dataProvider: IDataProvider<TSelector, TGetData, TSetData> | undefined,
     selector: TSelector,
     defaultValue: TGetData,
     subscriberOptions?: DataProviderSubscriberOptions,
@@ -2124,14 +2137,14 @@ declare module 'papi' {
           TSetData
         >,
       ) => Promise<
-        import('shared/models/data-provider.model').DisposableDataProvider<
+        import('shared/models/data-provider.model').IDisposableDataProvider<
           TSelector,
           TGetData,
           TSetData
         >
       >;
-      get: <T_5 extends import('shared/models/data-provider.model').DataProvider<any, any, any>>(
-        dataProviderName: string,
+      get: <T_5 extends import('shared/models/data-provider.model').IDataProvider<any, any, any>>(
+        providerName: string,
       ) => Promise<T_5 | undefined>;
     };
   };

@@ -47,15 +47,19 @@ export type DataProviderSubscriber<TSelector, TGetData> = (
 ) => Promise<UnsubscriberAsync>;
 
 /**
- * An object on the papi that manages data and has methods for interacting with that data.
- * Created by the papi and layers over an IDataProviderEngine provided by an extension.
+ * An internal object created locally when someone runs dataProviderService.registerEngine.
+ * This object layers over the data provider engine and runs its methods along with other methods.
+ * This object is transformed into an IDataProvider by networkObjectService.set.
+ *
  * @type `TSelector` - the type of selector used to get some data from this provider.
  *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
  *  Note: A selector must be stringifiable.
  * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
  * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
+ *
+ * @see IDataProvider
  */
-interface IDataProvider<TSelector, TGetData, TSetData> extends NetworkableObject {
+interface DataProviderInternal<TSelector, TGetData, TSetData> extends NetworkableObject {
   /**
    * Set a subset of data according to the selector.
    *
@@ -88,4 +92,4 @@ interface IDataProvider<TSelector, TGetData, TSetData> extends NetworkableObject
   subscribe: DataProviderSubscriber<TSelector, TGetData>;
 }
 
-export default IDataProvider;
+export default DataProviderInternal;

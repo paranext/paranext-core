@@ -1,5 +1,5 @@
-import type { DataProvider } from 'shared/models/data-provider.model';
+import type { IDataProvider } from 'shared/models/data-provider.model';
 
-export interface GreetingsDataProvider extends DataProvider<string, string, string> {
+export interface GreetingsDataProvider extends IDataProvider<string, string, string> {
   testRandomMethod(things: string): Promise<string>;
 }
