@@ -5,7 +5,7 @@ import webpack from 'webpack';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import chalk from 'chalk';
 import { merge } from 'webpack-merge';
-import { execSync, spawn } from 'child_process';
+import { ChildProcess, execSync, spawn } from 'child_process';
 import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
 import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
@@ -183,12 +183,28 @@ const configuration: webpack.Configuration = {
       verbose: true,
     },
     setupMiddlewares(middlewares) {
+      let extensionsProcess: ChildProcess | undefined;
+
       console.log('Starting preload.js builder...');
       const preloadProcess = spawn('npm', ['run', 'start:preload'], {
         shell: true,
         stdio: 'inherit',
       })
-        .on('close', (code: number) => process.exit(code))
+        .on('close', (code: number) => {
+          extensionsProcess?.kill();
+          process.exit(code);
+        })
+        .on('error', (spawnError) => console.error(spawnError));
+
+      console.log('Starting extensions builder...');
+      extensionsProcess = spawn('npm', ['run', 'start:extensions'], {
+        shell: true,
+        stdio: 'inherit',
+      })
+        .on('close', (code: number) => {
+          preloadProcess.kill();
+          process.exit(code);
+        })
         .on('error', (spawnError) => console.error(spawnError));
 
       console.log('Starting Main Process...');
@@ -202,6 +218,7 @@ const configuration: webpack.Configuration = {
       })
         .on('close', (code: number) => {
           preloadProcess.kill();
+          extensionsProcess?.kill();
           process.exit(code);
         })
         .on('error', (spawnError) => console.error(spawnError));
@@ -210,4 +227,5 @@ const configuration: webpack.Configuration = {
   },
 };
 
-export default merge(baseConfig, configuration);
+const rendererConfig = merge(baseConfig, configuration);
+export default rendererConfig;

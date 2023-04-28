@@ -1,4 +1,6 @@
 {
+  "dotnet-test-explorer.testProjectPath": "c-sharp-tests/c-sharp-tests.csproj",
+
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "[csharp]": {
     "editor.defaultFormatter": "csharpier.csharpier-vscode"
@@ -30,5 +32,12 @@
     "test/**/__snapshots__": true,
     "package-lock.json": true,
     "*.{css,sass,scss}.d.ts": true
-  }
+  },
+
+  "json.schemas": [
+    {
+      "fileMatch": ["*tsconfig*.json"],
+      "url": "http://json.schemastore.org/tsconfig"
+    }
+  ]
 }

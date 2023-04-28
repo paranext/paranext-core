@@ -68,4 +68,5 @@ const configuration: webpack.Configuration = {
   watch: true,
 };
 
-export default merge(baseConfig, configuration);
+const preloadConfig = merge(baseConfig, configuration);
+export default preloadConfig;

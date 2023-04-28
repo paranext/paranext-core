@@ -19,8 +19,14 @@ public abstract class Message
 
     public const int UNKNOWN_SENDER_ID = -1;
 
+    /// <summary>
+    /// Message type
+    /// </summary>
     public abstract Enum<MessageType> Type { get; }
 
+    /// <summary>
+    /// ID (as assigned by the server) of the original sender of this message
+    /// </summary>
     public int SenderId { get; set; }
 
     public override string ToString()

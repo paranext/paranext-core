@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../../src",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outFile": "papi.d.ts",
+    "typeRoots": ["../node_modules/@types", "../extensions/dist"]
+  },
+  "files": ["../../src/shared/services/papi.service.ts"]
+}

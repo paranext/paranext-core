@@ -3,7 +3,7 @@ using PtxUtils;
 namespace Paranext.DataProvider.Messages;
 
 /// <summary>
-/// Message sent to the client to give it NetworkConnectorInfo
+/// Message sent to the client to give it ConnectorInfo
 /// </summary>
 public sealed class MessageInitClient : Message
 {
@@ -12,15 +12,35 @@ public sealed class MessageInitClient : Message
     /// </summary>
     private MessageInitClient()
     {
-        ConnectorInfo = new NetworkConnectorInfo(NetworkConnectorInfo.CLIENT_ID_UNSET);
+        ConnectorInfo = new(MessageInitClientConnectorInfo.CLIENT_ID_UNSET);
     }
 
-    public MessageInitClient(NetworkConnectorInfo connectorInfo)
+    public MessageInitClient(MessageInitClientConnectorInfo connectorInfo)
     {
         ConnectorInfo = connectorInfo;
     }
 
     public override Enum<MessageType> Type => MessageType.InitClient;
 
-    public NetworkConnectorInfo ConnectorInfo { get; set; }
+    public MessageInitClientConnectorInfo ConnectorInfo { get; set; }
+}
+
+public sealed class MessageInitClientConnectorInfo
+{
+    public const int CLIENT_ID_UNSET = -1;
+
+    /// <summary>
+    /// ONLY FOR DESERIALIZATION
+    /// </summary>
+    private MessageInitClientConnectorInfo()
+    {
+        ClientId = CLIENT_ID_UNSET;
+    }
+
+    public MessageInitClientConnectorInfo(int clientId)
+    {
+        ClientId = clientId;
+    }
+
+    public int ClientId { get; set; }
 }

@@ -12,7 +12,8 @@ public static class Program
     {
         Console.WriteLine("Paranext data provider starting up");
 
-        using (PapiClient papi = new())
+        using PapiClient papi = new();
+        try
         {
             if (!await papi.ConnectAsync())
             {
@@ -20,7 +21,7 @@ public static class Program
                 return;
             }
 
-            if (!await papi.RegisterRequestHandlerAsync(RequestType.AddOne, RequestAddOne))
+            if (!papi.RegisterRequestHandler(RequestType.AddOne, RequestAddOne))
             {
                 Console.WriteLine("Paranext data provider could not register request handler");
                 return;
@@ -29,11 +30,16 @@ public static class Program
             Console.WriteLine("Paranext data provider ready!");
             papi.BlockUntilMessageHandlingComplete();
         }
+        finally
+        {
+            await papi.DisconnectAsync();
+        }
 
         Console.WriteLine("Paranext data provider shutting down");
     }
 
     #region Request handlers
+
     private static ResponseToRequest RequestAddOne(dynamic val)
     {
         if (val is not JsonElement element || element.GetArrayLength() != 1)
@@ -48,5 +54,6 @@ public static class Program
 
         return new ResponseToRequest(intVal + 1);
     }
+
     #endregion
 }
