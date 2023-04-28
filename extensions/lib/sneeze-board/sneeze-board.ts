@@ -3,7 +3,7 @@ import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import IDataProviderEngine from 'shared/models/data-provider-engine.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import sneezeBoardReactWebView from './sneeze-board.web-view.tsx';
-import styles from './sneeze-board.web-view.css?inline';
+import styles from './sneeze-board.web-view.scss?inline';
 
 // TODO: Update the json file with the latest date from Darren (xml that needs to be run through a
 // json converter online and have accessors renamed to userId, date, and comment)
@@ -42,12 +42,13 @@ class AchYouDataProviderEngine
   async set(selector: string | number, data: Sneeze) {
     // Setting a sneeze by userId means that user just sneezed a new sneeze so add it to the data
     if (typeof selector === 'string') this.sneezes.push(data);
-    // You can't change scripture from just a string. You have to tell us you're a heretic
-    // TODO: Finish the update sneeze set commented out below
-    // if (typeof data === 'number'){
-    //   let changingSneeze = this.sneezes.find((s) => data.sneezeId === s.sneezeId);
-    //   // this.sneezes.
-    // }
+    // Selecting a sneeze by sneezeId means you are updating an existing sneeze, right now you can
+    // only update a sneeze comment. No rewriting history by changing dates :)
+    if (typeof selector === 'number') {
+      this.sneezes = this.sneezes.map((s) =>
+        s.sneezeId === selector ? { ...s, comment: data.comment } : s,
+      );
+    }
     return true;
   }
 
