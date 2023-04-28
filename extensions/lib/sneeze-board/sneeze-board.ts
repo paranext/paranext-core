@@ -82,7 +82,7 @@ class AchYouDataProviderEngine
 export async function activate() {
   logger.info('Sneeze Board is activating!');
 
-  const AchYouDataProviderEngineInfo = await papi.dataProvider.registerEngine(
+  const sneezeDataProvider = await papi.dataProvider.registerEngine(
     'sneeze-board.sneezes',
     new AchYouDataProviderEngine(),
   );
@@ -92,8 +92,6 @@ export async function activate() {
     contents: sneezeBoardReactWebView,
     styles,
   });
-
-  const sneezeDataProvider = AchYouDataProviderEngineInfo?.dataProvider;
 
   const unsubPromises = [
     papi.commands.registerCommand('sneeze-board.get-sneezes', () => {

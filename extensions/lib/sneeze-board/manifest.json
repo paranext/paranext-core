@@ -4,6 +4,6 @@
   "description": "Simple sneeze board extension for Paranext",
   "author": "Rolf Heij and Katherine Jensen",
   "license": "MIT",
-  "main": "sneeze-board.js",
+  "main": "sneeze-board.ts",
   "activationEvents": []
 }
