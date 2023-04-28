@@ -16,6 +16,7 @@ import {
   LocalObjectToProxyCreator,
 } from '@shared/models/network-object.model';
 import { Mutex } from 'async-mutex';
+import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
 import logger from './logger.service';
 
 // #endregion
@@ -92,7 +93,7 @@ type NetworkObjectRegistration = {
   /** Local or Remote */
   registrationType: NetworkObjectRegistrationType;
   /** Proxy object shared with services that don't own the actual object - returned by "get" */
-  networkObject: NetworkObject<unknown>;
+  networkObject: NetworkObject<NetworkableObject>;
   /** Emitter that indicates locally when the network object was disposed.
    *  Run when the network disposal emitter runs for this registration's ID.
    */
@@ -311,36 +312,42 @@ const get = async <T extends object>(
 
     // At this point, the object exists remotely but does not yet exist locally.
 
-    // The base object created below might need a reference to the final proxy. Since the proxy
-    // doesn't exist yet, create a container now and fill it in after the proxy is created.
-    const proxyContainer: Container<NetworkObject<Omit<T, 'onDidDispose'>>> = {
+    // The base object created below might need a reference to the final network object. Since the
+    // network object doesn't exist yet, create a container now and fill it in after the network
+    // object is created.
+    const proxyContainer: Container<NetworkObject<T>> = {
       contents: undefined,
     };
 
     // Create the base object that will be proxied for remote calls.
     // If a property exists on the base object, we use it and won't look for it on the remote object.
     // If a property does not exist on the base object, it is assumed to exist on the remote object.
-    const baseObject = createLocalObjectToProxy ? createLocalObjectToProxy(id, proxyContainer) : {};
+    const baseObject: Partial<T> = createLocalObjectToProxy
+      ? (createLocalObjectToProxy(id, proxyContainer) as Partial<T>)
+      : {};
 
     // Create a proxy with functions that will send requests to the remote object
     const remoteProxy = createRemoteProxy(id, baseObject);
-
-    // Store the proxy in the container so baseObject has a valid reference
-    proxyContainer.contents = remoteProxy.proxy as NetworkObject<T>;
 
     // Setup onDidDispose so that services will know when the proxy is dead
     const eventEmitter = new PapiEventEmitter<void>();
     overrideOnDidDispose(id, remoteProxy.proxy, eventEmitter.event);
 
+    // The network object is finished! Rename it so we know it is finished
+    const networkObject = remoteProxy.proxy as NetworkObject<T>;
+
+    // Store the network object in the container so baseObject has a valid reference
+    proxyContainer.contents = networkObject;
+
     // Save the network object for future lookups
     networkObjectRegistrations.set(id, {
       registrationType: NetworkObjectRegistrationType.Remote,
       onDidDisposeEmitter: eventEmitter,
-      networkObject: remoteProxy.proxy as NetworkObject<T>,
+      networkObject,
       revokeProxy: remoteProxy.revoke,
     });
 
-    return remoteProxy.proxy as NetworkObject<T>;
+    return networkObject;
   });
 };
 
@@ -359,9 +366,9 @@ const get = async <T extends object>(
  * @returns INetworkObjectDisposer wrapping the object to share
  */
 
-const set = async <T>(
+const set = async <T extends NetworkableObject>(
   id: string,
-  objectToShare: NetworkableObject<T>,
+  objectToShare: T,
 ): Promise<DisposableNetworkObject<T>> => {
   await initialize();
 
@@ -457,10 +464,7 @@ const set = async <T>(
 
     // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's
     // onDidDispose type because it had an onDidDispose added in overrideOnDidDispose.
-    return objectToShare as Omit<
-      typeof objectToShare,
-      'onDidDispose'
-    > as DisposableNetworkObject<T>;
+    return objectToShare as CanHaveOnDidDispose<T> as DisposableNetworkObject<T>;
   });
 };
 

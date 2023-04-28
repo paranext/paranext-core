@@ -1,5 +1,6 @@
 import { UnsubscriberAsync } from '@shared/utils/papi-util';
 import { PapiEventHandler } from '@shared/models/papi-event.model';
+import { NetworkableObject } from './network-object.model';
 
 /** Various options to adjust how the data provider subscriber emits updates */
 export type DataProviderSubscriberOptions = {
@@ -54,7 +55,7 @@ export type DataProviderSubscriber<TSelector, TGetData> = (
  * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
  * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
  */
-interface IDataProvider<TSelector, TGetData, TSetData> {
+interface IDataProvider<TSelector, TGetData, TSetData> extends NetworkableObject {
   /**
    * Set a subset of data according to the selector.
    *

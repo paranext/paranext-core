@@ -1,6 +1,8 @@
+import { NetworkableObject } from './network-object.model';
+
 /**
  * The object to register with the DataProviderService to create a data provider.
- * The DataProviderService creates a IDataProvider on the papi that layers over this engine, providing special functionality
+ * The DataProviderService creates an IDataProvider on the papi that layers over this engine, providing special functionality
  *
  * Note: methods on objects that implement this interface must be unbound functions, not arrow functions.
  * @type `TSelector` - the type of selector used to get some data from this provider.
@@ -8,7 +10,7 @@
  * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
  * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
  */
-interface IDataProviderEngine<TSelector, TGetData, TSetData> {
+interface IDataProviderEngine<TSelector, TGetData, TSetData> extends NetworkableObject {
   /**
    * Method to run to send clients updates outside of the `set` method.
    * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.

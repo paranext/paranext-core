@@ -1174,9 +1174,136 @@ declare module 'shared/services/internet.service' {
   };
   export default internetService;
 }
+declare module 'shared/models/disposal.model' {
+  import { PapiEvent } from 'shared/models/papi-event.model';
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  /** Require a `dispose` function */
+  export interface Dispose {
+    /** Release resources and notify dependent services when tearing down an object */
+    dispose: UnsubscriberAsync;
+  }
+  /** Require an `onDidDispose` event */
+  export interface OnDidDispose {
+    /** Event that emits when `dispose` is called on an object */
+    onDidDispose: PapiEvent<void>;
+  }
+  /** Indicates than an object cannot have an `onDidDispose` event.
+   *  Also allows an object to include a `dispose` function. */
+  export interface CannotHaveOnDidDispose {
+    /** Release resources and notify dependent services when tearing down an object */
+    dispose?: UnsubscriberAsync;
+    /** Event that emits when `dispose` is called on an object */
+    onDidDispose?: undefined;
+  }
+  /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
+  export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
+}
+declare module 'shared/services/network-object.service' {
+  import {
+    NetworkObject,
+    DisposableNetworkObject,
+    NetworkableObject,
+    LocalObjectToProxyCreator,
+  } from 'shared/models/network-object.model';
+  /**
+   * Network objects are distributed objects within PAPI for TS/JS objects.
+   * @see https://en.wikipedia.org/wiki/Distributed_object
+   *
+   * Objects registered via {@link networkObjectService.set} are retrievable using {@link networkObjectService.get}.
+   *
+   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied and
+   * sent to the original objects registered via {@link networkObjectService.set}.
+   *
+   * Functions on a network object will be called asynchronously by other processes regardless of
+   * whether the functions are synchronous or asynchronous, so it is best to make them all
+   * asynchronous. All shared functions' arguments and return values must be serializable to be
+   * called across processes.
+   *
+   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility of
+   * that service, and only that service, to call `dispose` on that object when it is no longer
+   * intended to be shared with other services.
+   *
+   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+   * event handler will be called. After an object is disposed, calls to its functions will no longer
+   * be proxied to the original object.
+   */
+  const networkObjectService: {
+    initialize: () => Promise<void>;
+    has: (id: string) => Promise<boolean>;
+    get: <T extends object>(
+      id: string,
+      createLocalObjectToProxy?: LocalObjectToProxyCreator<T> | undefined,
+    ) => Promise<NetworkObject<T> | undefined>;
+    set: <T_1 extends NetworkableObject<object>>(
+      id: string,
+      objectToShare: T_1,
+    ) => Promise<DisposableNetworkObject<T_1>>;
+  };
+  export default networkObjectService;
+}
+declare module 'shared/models/network-object.model' {
+  import { Container } from 'shared/utils/util';
+  import {
+    Dispose,
+    OnDidDispose,
+    CannotHaveOnDidDispose,
+    CanHaveOnDidDispose,
+  } from 'shared/models/disposal.model';
+  /**
+   * An object of this type is returned from {@link networkObjectService.get}.
+   *
+   * Override the NetworkableObject type's force-undefined onDidDispose to NetworkObject's
+   * onDidDispose type because it will have an onDidDispose added.
+   *
+   * @see networkObjectService
+   */
+  export type NetworkObject<T extends NetworkableObject> = CanHaveOnDidDispose<T> & OnDidDispose;
+  /**
+   * An object of this type is returned from {@link networkObjectService.set}.
+   *
+   * @see networkObjectService
+   */
+  export type DisposableNetworkObject<T extends NetworkableObject> = NetworkObject<T> & Dispose;
+  /**
+   * An object of this type is passed into {@link networkObjectService.set}.
+   *
+   * @see networkObjectService
+   */
+  export type NetworkableObject<T = object> = T & CannotHaveOnDidDispose;
+  /**
+   * If a network object with the provided ID exists remotely but has not been set up to use inside
+   * this process, this function is run in {@link networkObjectService.get}, and the returned object is used
+   * as a base on which to set up a NetworkObject for use on this process. All properties that are
+   * exposed in the base object will be used as-is, and all other properties will be assumed to exist
+   * on the remote network object.
+   *
+   * @see networkObjectService
+   *
+   * @param id ID of the network object to get
+   *
+   * @param networkObjectContainer Holds a reference to the NetworkObject that will be setup within
+   * {@link networkObjectService.get}. It is passed in to allow the return value to call functions on
+   * the NetworkObject.
+   * NOTE: networkObjectContainer.contents does not point to a real NetworkObject while this function
+   * is running. The real reference is assigned later, but before the NetworkObject will be used. The
+   * return value should always reference the NetworkObject as `networkObjectContainer.contents` to
+   * avoid acting upon an undefined NetworkObject.
+   *
+   * @returns the local object to proxy into a network object.
+   *
+   * Note: This function should return Partial<T>. For some reason, TypeScript can't infer the type
+   * (probably has to do with that it's a wrapped and layered type). Functions that implement this
+   * type should return Partial<T>
+   */
+  export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
+    id: string,
+    networkObjectContainer: Container<NetworkObject<T>>,
+  ) => Partial<NetworkableObject>;
+}
 declare module 'shared/models/data-provider.interface' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
   import { PapiEventHandler } from 'shared/models/papi-event.model';
+  import { NetworkableObject } from 'shared/models/network-object.model';
   /** Various options to adjust how the data provider subscriber emits updates */
   export type DataProviderSubscriberOptions = {
     /**
@@ -1228,7 +1355,7 @@ declare module 'shared/models/data-provider.interface' {
    * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
    * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
    */
-  interface IDataProvider<TSelector, TGetData, TSetData> {
+  interface IDataProvider<TSelector, TGetData, TSetData> extends NetworkableObject {
     /**
      * Set a subset of data according to the selector.
      *
@@ -1262,48 +1389,34 @@ declare module 'shared/models/data-provider.interface' {
   }
   export default IDataProvider;
 }
-declare module 'shared/models/disposal.model' {
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Require a `dispose` function */
-  export interface Dispose {
-    /** Release resources and notify dependent services when tearing down an object */
-    dispose: UnsubscriberAsync;
-  }
-  /** Require an `onDidDispose` event */
-  export interface OnDidDispose {
-    /** Event that emits when `dispose` is called on an object */
-    onDidDispose: PapiEvent<void>;
-  }
-  /** Indicates than an object cannot have an `onDidDispose` event.
-   *  Also allows an object to include a `dispose` function. */
-  export type CannotHaveOnDidDispose<T> = T & {
-    /** Release resources and notify dependent services when tearing down an object */
-    dispose?: UnsubscriberAsync;
-    /** Event that emits when `dispose` is called on an object */
-    onDidDispose?: undefined;
-  };
-}
 declare module 'shared/models/data-provider.model' {
   import IDataProvider from 'shared/models/data-provider.interface';
-  import { Dispose, OnDidDispose } from 'shared/models/disposal.model';
+  import {
+    DisposableNetworkObject,
+    NetworkObject,
+    NetworkableObject,
+  } from 'shared/models/network-object.model';
+  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
   /**
    * Information about a data provider.
    * Returned from getting a data provider.
    */
-  export type DataProvider<TSelector, TGetData, TSetData> = OnDidDispose &
-    IDataProvider<TSelector, TGetData, TSetData>;
+  export interface DataProvider<TSelector, TGetData, TSetData>
+    extends NetworkObject<NetworkableObject>,
+      CanHaveOnDidDispose<IDataProvider<TSelector, TGetData, TSetData>> {}
   /**
    * Information about a data provider including control over disposing of it.
    * Returned from registering a data provider (only the process that set it up should dispose of it)
    */
-  export type DisposableDataProvider<TSelector, TGetData, TSetData> = Dispose &
-    DataProvider<TSelector, TGetData, TSetData>;
+  export interface DisposableDataProvider<TSelector, TGetData, TSetData>
+    extends DisposableNetworkObject<NetworkableObject>,
+      Omit<DataProvider<TSelector, TGetData, TSetData>, 'dispose'> {}
 }
 declare module 'shared/models/data-provider-engine.model' {
+  import { NetworkableObject } from 'shared/models/network-object.model';
   /**
    * The object to register with the DataProviderService to create a data provider.
-   * The DataProviderService creates a IDataProvider on the papi that layers over this engine, providing special functionality
+   * The DataProviderService creates an IDataProvider on the papi that layers over this engine, providing special functionality
    *
    * Note: methods on objects that implement this interface must be unbound functions, not arrow functions.
    * @type `TSelector` - the type of selector used to get some data from this provider.
@@ -1311,7 +1424,7 @@ declare module 'shared/models/data-provider-engine.model' {
    * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
    * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
    */
-  interface IDataProviderEngine<TSelector, TGetData, TSetData> {
+  interface IDataProviderEngine<TSelector, TGetData, TSetData> extends NetworkableObject {
     /**
      * Method to run to send clients updates outside of the `set` method.
      * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
@@ -1343,96 +1456,6 @@ declare module 'shared/models/data-provider-engine.model' {
   }
   export default IDataProviderEngine;
 }
-declare module 'shared/models/network-object.model' {
-  import { Container } from 'shared/utils/util';
-  import { Dispose, OnDidDispose, CannotHaveOnDidDispose } from 'shared/models/disposal.model';
-  /**
-   * An object of this type is returned from {@link networkObjectService.get}.
-   *
-   * @see networkObjectService
-   */
-  export type NetworkObject<T> = T & OnDidDispose;
-  /**
-   * An object of this type is returned from {@link networkObjectService.set}.
-   *
-   * @see networkObjectService
-   */
-  export type DisposableNetworkObject<T> = T & OnDidDispose & Dispose;
-  /**
-   * An object of this type is passed into {@link networkObjectService.set}.
-   *
-   * @see networkObjectService
-   */
-  export type NetworkableObject<T = object> = CannotHaveOnDidDispose<T>;
-  /**
-   * If a network object with the provided ID exists remotely but has not been set up to use inside
-   * this process, this function is run in {@link networkObjectService.get}, and the returned object is used
-   * as a base on which to set up a NetworkObject for use on this process. All properties that are
-   * exposed in the base object will be used as-is, and all other properties will be assumed to exist
-   * on the remote network object.
-   *
-   * @see networkObjectService
-   *
-   * @param id ID of the network object to get
-   *
-   * @param networkObjectContainer Holds a reference to the NetworkObject that will be setup within
-   * {@link networkObjectService.get}. It is passed in to allow the return value to call functions on
-   * the NetworkObject.
-   * NOTE: networkObjectContainer.contents does not point to a real NetworkObject while this function
-   * is running. The real reference is assigned later, but before the NetworkObject will be used. The
-   * return value should always reference the NetworkObject as `networkObjectContainer.contents` to
-   * avoid acting upon an undefined NetworkObject.
-   *
-   * @returns the local object to proxy into a network object.
-   */
-  export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
-    id: string,
-    networkObjectContainer: Container<NetworkObject<Omit<T, 'onDidDispose'>>>,
-  ) => Partial<T>;
-}
-declare module 'shared/services/network-object.service' {
-  import {
-    NetworkObject,
-    DisposableNetworkObject,
-    NetworkableObject,
-    LocalObjectToProxyCreator,
-  } from 'shared/models/network-object.model';
-  /**
-   * Network objects are distributed objects within PAPI for TS/JS objects.
-   * @see https://en.wikipedia.org/wiki/Distributed_object
-   *
-   * Objects registered via {@link networkObjectService.set} are retrievable using {@link networkObjectService.get}.
-   *
-   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied and
-   * sent to the original objects registered via {@link networkObjectService.set}.
-   *
-   * Functions on a network object will be called asynchronously by other processes regardless of
-   * whether the functions are synchronous or asynchronous, so it is best to make them all
-   * asynchronous. All shared functions' arguments and return values must be serializable to be
-   * called across processes.
-   *
-   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility of
-   * that service, and only that service, to call `dispose` on that object when it is no longer
-   * intended to be shared with other services.
-   *
-   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
-   * event handler will be called. After an object is disposed, calls to its functions will no longer
-   * be proxied to the original object.
-   */
-  const networkObjectService: {
-    initialize: () => Promise<void>;
-    has: (id: string) => Promise<boolean>;
-    get: <T extends object>(
-      id: string,
-      createLocalObjectToProxy?: LocalObjectToProxyCreator<T> | undefined,
-    ) => Promise<NetworkObject<T> | undefined>;
-    set: <T_1>(
-      id: string,
-      objectToShare: NetworkableObject<T_1>,
-    ) => Promise<DisposableNetworkObject<T_1>>;
-  };
-  export default networkObjectService;
-}
 declare module 'shared/services/data-provider.service' {
   /**
    * Handles registering data providers and serving data around the papi.
@@ -1440,7 +1463,6 @@ declare module 'shared/services/data-provider.service' {
    */
   import { DataProvider, DisposableDataProvider } from 'shared/models/data-provider.model';
   import IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  import { NetworkableObject } from 'shared/models/network-object.model';
   /** Determine if a data provider with the given name exists anywhere on the network */
   function has(providerName: string): Promise<boolean>;
   /**
@@ -1459,7 +1481,7 @@ declare module 'shared/services/data-provider.service' {
    */
   function registerEngine<TSelector, TGetData, TSetData>(
     providerName: string,
-    dataProviderEngine: NetworkableObject<IDataProviderEngine<TSelector, TGetData, TSetData>>,
+    dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
   ): Promise<DisposableDataProvider<TSelector, TGetData, TSetData>>;
   /**
    * Get a data provider that has previously been set up
@@ -2096,8 +2118,10 @@ declare module 'papi' {
       has: (providerName: string) => Promise<boolean>;
       registerEngine: <TSelector, TGetData, TSetData>(
         providerName: string,
-        dataProviderEngine: import('shared/models/network-object.model').NetworkableObject<
-          import('shared/models/data-provider-engine.model').default<TSelector, TGetData, TSetData>
+        dataProviderEngine: import('shared/models/data-provider-engine.model').default<
+          TSelector,
+          TGetData,
+          TSetData
         >,
       ) => Promise<
         import('shared/models/data-provider.model').DisposableDataProvider<

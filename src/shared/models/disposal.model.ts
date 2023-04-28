@@ -15,10 +15,13 @@ export interface OnDidDispose {
 
 /** Indicates than an object cannot have an `onDidDispose` event.
  *  Also allows an object to include a `dispose` function. */
-export type CannotHaveOnDidDispose<T> = T & {
+export interface CannotHaveOnDidDispose {
   /** Release resources and notify dependent services when tearing down an object */
   // Include dispose optionally to avoid extra type casting later
   dispose?: UnsubscriberAsync;
   /** Event that emits when `dispose` is called on an object */
   onDidDispose?: undefined;
-};
+}
+
+/** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
+export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
