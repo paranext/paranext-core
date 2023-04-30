@@ -1,5 +1,8 @@
 import papi from 'papi';
+import React, { SyntheticEvent } from 'react';
 import { AchYouDataProvider, Sneeze, User } from './sneeze-board.d';
+
+const { useState } = React;
 
 const {
   react: {
@@ -9,13 +12,13 @@ const {
   logger,
 } = papi;
 
-// @ts-expect-error ts(6133) This function is called by the React web view container
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SneezeBoard() {
   logger.info('Preparing to display the Sneeze Board');
 
   const dataProvider = useDataProvider<AchYouDataProvider>('sneeze-board.sneezes');
 
+  const [selectedItem, setSelectedItem] = useState<string>('Select user');
   const [sneezes, , isLoading] = useData<string | number | Date, Sneeze[], Sneeze>(
     'sneeze-board.sneezes',
     '*',
@@ -25,15 +28,16 @@ function SneezeBoard() {
   const [users] = useData<string, User[], User>('sneeze-board.sneezes', 'users', []);
   // const [users, setUser] = useData<string, User[], User>('sneeze-board.sneezes', 'users', []);
   const names: string[] = [];
+  const userIds: { [userId: string]: string } = {};
   const userColor: { [userId: string]: string } = {};
   users.forEach((u) => {
     names.push(u.name);
+    userIds[u.name] = u.userId;
     userColor[u.userId] = u.color;
   });
 
-  const changeHandler = (event, value) => {
-    console.log(event);
-    console.log(value);
+  const changeHandler = (event: SyntheticEvent<Element, Event>, value: unknown) => {
+    setSelectedItem(value as string);
   };
 
   return (
@@ -51,7 +55,11 @@ function SneezeBoard() {
       )}
       <br />
       <Button
+        className="sneezed"
         onClick={() => {
+          if (selectedItem === 'Select user') return;
+          const userId: string = userIds[selectedItem];
+
           const currentDate: Date = new Date();
           const formattedDate: string = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1)
             .toString()
@@ -63,16 +71,16 @@ function SneezeBoard() {
             .toString()
             .padStart(2, '0')}.${currentDate.getMilliseconds().toString().padStart(3, '0')}`;
 
-          dataProvider?.set('944616bd-20a1-4659-87af-04563043ffde', {
+          dataProvider?.set(userId, {
             sneezeId: sneezes[sneezes.length - 1].sneezeId - 1,
-            userId: '944616bd-20a1-4659-87af-04563043ffde',
+            userId,
             date: formattedDate,
           });
         }}
       >
         I Sneezed
       </Button>
-      <ComboBox title="Sneezers" options={names} onChange={changeHandler} />
+      <ComboBox className="names" title="Sneezers" options={names} onChange={changeHandler} />
     </>
   );
 }
