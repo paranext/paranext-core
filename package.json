@@ -60,7 +60,7 @@
     "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && npm run build:data-release && electron-builder build --publish never",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "prepare": "husky install && npm run csharp:tool:restore",
-    "prettier": "npx prettier --write \"**/*.{ts,tsx,js,jsx,json,css,scss,html,md,yml}\"",
+    "prettier": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,scss,html,md,yml}\"",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "start": "ts-node ./.erb/scripts/check-port-in-use.js && npm run start:renderer",
     "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only .",

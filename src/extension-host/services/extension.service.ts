@@ -163,21 +163,21 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
   const fetchOriginal: typeof fetch | undefined = globalThis.fetch;
   // eslint-disable-next-line no-global-assign
   globalThis.fetch = function fetchForbidden() {
-    throw Error('Cannot use fetch! Try using papi.fetch');
+    throw new Error('Cannot use fetch! Try using papi.fetch');
   };
 
   const xmlHttpRequestOriginal: typeof XMLHttpRequest | undefined = globalThis.XMLHttpRequest;
   // @ts-expect-error we want to remove XMLHttpRequest
   // eslint-disable-next-line no-global-assign
   globalThis.XMLHttpRequest = function XMLHttpRequestForbidden() {
-    throw Error('Cannot use XMLHttpRequest! Try using papi.fetch');
+    throw new Error('Cannot use XMLHttpRequest! Try using papi.fetch');
   };
 
   const webSocketOriginal: typeof WebSocket | undefined = globalThis.WebSocket;
   // @ts-expect-error we want to remove WebSocket
   // eslint-disable-next-line no-global-assign
   globalThis.WebSocket = function WebSocketForbidden() {
-    throw Error('Cannot use WebSocket!');
+    throw new Error('Cannot use WebSocket!');
   };
 
   // Import the extensions and run their activate() functions
