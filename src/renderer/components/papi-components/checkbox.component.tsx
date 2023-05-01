@@ -1,6 +1,7 @@
 import { FormLabel, Checkbox as MuiCheckbox } from '@mui/material';
 import { ChangeEvent } from 'react';
-import '@renderer/components/papi-components/checkbox.css';
+import '@renderer/components/papi-components/checkbox.component.css';
+import LabelPosition from '@renderer/components/papi-components/label-position.model';
 
 export type CheckboxProps = {
   /**
@@ -12,6 +13,11 @@ export type CheckboxProps = {
    * @default '' (no label will be shown)
    */
   labelText?: string;
+  /**
+   * Indicates the position of the label relative to the checkbox.
+   * @default 'after'
+   */
+  labelPosition?: LabelPosition;
   /**
    * If `true`, the component is in the indeterminate state.
    * @default false
@@ -59,6 +65,7 @@ export type CheckboxProps = {
 function Checkbox({
   isChecked,
   labelText = '',
+  labelPosition = LabelPosition.After,
   isIndeterminate = false,
   isDefaultChecked = false,
   isDisabled = false,
@@ -77,16 +84,40 @@ function Checkbox({
     />
   );
 
-  return labelText ? (
-    <FormLabel disabled={isDisabled} error={hasError}>
-      {checkBox}
+  let result;
+
+  if (labelText) {
+    const preceding =
+      labelPosition === LabelPosition.Before || labelPosition === LabelPosition.Above;
+
+    const labelSpan = (
       <span className={`papi-checkbox-label ${hasError ? 'error' : ''} ${className ?? ''}`}>
         {labelText}
       </span>
-    </FormLabel>
-  ) : (
-    { checkBox }
-  );
+    );
+
+    const labelIsInline =
+      labelPosition === LabelPosition.Before || labelPosition === LabelPosition.After;
+
+    const label = labelIsInline ? labelSpan : <div>{labelSpan}</div>;
+
+    const checkBoxElement = labelIsInline ? checkBox : <div>{checkBox}</div>;
+
+    result = (
+      <FormLabel
+        className={`papi-checkbox ${labelPosition.toString()}`}
+        disabled={isDisabled}
+        error={hasError}
+      >
+        {preceding && label}
+        {checkBoxElement}
+        {!preceding && label}
+      </FormLabel>
+    );
+  } else {
+    result = checkBox;
+  }
+  return result;
 }
 
 export default Checkbox;

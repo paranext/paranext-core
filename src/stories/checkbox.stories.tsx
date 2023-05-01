@@ -1,11 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import Checkbox from '@renderer/components/papi-components/checkbox';
+import LabelPosition from '@renderer/components/papi-components/label-position.model';
+import Checkbox from '@renderer/components/papi-components/checkbox.component';
 
 const meta: Meta<typeof Checkbox> = {
   title: 'Basics/Checkbox',
   component: Checkbox,
   tags: ['autodocs'],
   argTypes: {
+    labelText: { control: 'text' },
+    labelPosition: { control: LabelPosition },
     isChecked: { control: 'boolean' },
     isDefaultChecked: { control: 'boolean' },
     isDisabled: { control: 'boolean' },
@@ -23,7 +26,11 @@ export const Default: Story = {
 };
 
 export const DefaultChecked: Story = {
-  args: { isDefaultChecked: true, labelText: 'Initially checked' },
+  args: {
+    isDefaultChecked: true,
+    labelText: 'Initially checked',
+    labelPosition: LabelPosition.After,
+  },
 };
 
 export const Indeterminate: Story = {
@@ -34,12 +41,16 @@ export const Indeterminate: Story = {
   },
 };
 
+export const LabelPositionAbove: Story = {
+  args: { labelText: 'Label position', labelPosition: LabelPosition.Above },
+};
+
 export const Disabled: Story = {
   args: { isDisabled: true, labelText: 'This is disabled' },
 };
 
 export const ErrorState: Story = {
-  args: { hasError: true, labelText: 'Bad!' },
+  args: { hasError: true, labelText: 'Bad!', labelPosition: LabelPosition.Below },
 };
 
 export const Paratext: Story = {
