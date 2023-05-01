@@ -1,6 +1,7 @@
 import papi from 'papi';
 import React, { ChangeEvent, SyntheticEvent } from 'react';
 import { AchYouDataProvider, Sneeze, User } from './sneeze-board.d';
+import { QuickVerseDataProvider } from '../quick-verse/quick-verse.d';
 
 const { useState } = React;
 
@@ -17,6 +18,7 @@ function SneezeBoard() {
   logger.info('Preparing to display the Sneeze Board');
 
   const dataProvider = useDataProvider<AchYouDataProvider>('sneeze-board.sneezes');
+  const verseProvider = useDataProvider<QuickVerseDataProvider>('quick-verse.quick-verse');
 
   const [selectedItem, setSelectedItem] = useState<string>('Select user');
   const [comment, setComment] = useState<string>('');
@@ -52,6 +54,58 @@ function SneezeBoard() {
     const sneezeDate: string = `\nDate: ${sneeze.date.substring(0, 10)}`;
     const sneezeComment: string = sneeze.comment ? `\nComment: ${sneeze.comment}` : '';
     return `${sneezeUser}${sneezeDate}${sneezeComment}`;
+  };
+
+  const squareStyle = (userId: string) => {
+    if (userColor[userId]) {
+      return {
+        width: '20px',
+        height: '20px',
+        backgroundColor: userColor[userId],
+      };
+    } else {
+      return {};
+    }
+  };
+
+  const parseDateTime = (dateTimeStr: string): Date => {
+    const [dateStr, timeStr] = dateTimeStr.split('T');
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const [hour, minute, second, ms] = timeStr.slice(0, -1).split(':').map(Number);
+    const dateTime = new Date();
+    dateTime.setUTCFullYear(year);
+    dateTime.setUTCMonth(month - 1);
+    dateTime.setUTCDate(day);
+    dateTime.setUTCHours(hour);
+    dateTime.setUTCMinutes(minute);
+    dateTime.setUTCSeconds(second);
+    dateTime.setUTCMilliseconds(ms);
+    return dateTime;
+  };
+
+  const finalSneezeDate = () => {
+    if (sneezes.length === 0) {
+      return '';
+    }
+    const firstSneezeTime = parseDateTime(sneezes[0].date);
+    const mostRecentSneezeTime = parseDateTime(sneezes[sneezes.length - 1].date);
+    const numberOfSneezes = sneezes.length;
+    const targetedNumberOfSneezes = sneezes[0].sneezeId;
+    const timeSpan = mostRecentSneezeTime.getTime() - firstSneezeTime.getTime();
+    console.log(timeSpan);
+    // return (timeSpan / numberOfSneezes) * targetedNumberOfSneezes + firstSneezeTime.getTime();
+  };
+
+  const getVerse = (ref: string): string => {
+    verseProvider
+      ?.get(ref)
+      .then((verse) => {
+        return verse;
+      })
+      .catch((err) => {
+        return `Invalid verse reference: ${ref} err: ${err}`;
+      });
+    return `Failed to load verse: ${ref}`;
   };
 
   return (
@@ -100,8 +154,15 @@ function SneezeBoard() {
       >
         I Sneezed
       </Button>
-      <ComboBox className="names" title="Sneezers" options={names} onChange={nameChangeHandler} />
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <ComboBox className="names" title="Sneezers" options={names} onChange={nameChangeHandler} />
+        <div style={squareStyle(userIds[selectedItem])} />
+      </div>
+
       <TextField label="Comment" onChange={commentChangeHandler} />
+      <p>Estimated final sneeze date: {finalSneezeDate()}</p>
+      <h3>Encouraging Verse:</h3>
+      <p>{getVerse('2 Kings 4:35')}</p>
     </>
   );
 }
