@@ -1,12 +1,12 @@
 import papi from 'papi';
-import React, { SyntheticEvent } from 'react';
+import React, { ChangeEvent, SyntheticEvent } from 'react';
 import { AchYouDataProvider, Sneeze, User } from './sneeze-board.d';
 
 const { useState } = React;
 
 const {
   react: {
-    components: { Button, ComboBox },
+    components: { Button, ComboBox, TextField },
     hooks: { useData, useDataProvider },
   },
   logger,
@@ -19,6 +19,7 @@ function SneezeBoard() {
   const dataProvider = useDataProvider<AchYouDataProvider>('sneeze-board.sneezes');
 
   const [selectedItem, setSelectedItem] = useState<string>('Select user');
+  const [comment, setComment] = useState<string>('');
   const [sneezes, , isLoading] = useData<string | number | Date, Sneeze[], Sneeze>(
     'sneeze-board.sneezes',
     '*',
@@ -36,8 +37,21 @@ function SneezeBoard() {
     userColor[u.userId] = u.color;
   });
 
-  const changeHandler = (event: SyntheticEvent<Element, Event>, value: unknown) => {
+  const nameChangeHandler = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
     setSelectedItem(value as string);
+  };
+
+  const commentChangeHandler = (event: ChangeEvent<HTMLInputElement>) => {
+    setComment(event.target.value);
+  };
+
+  const toolTip = (sneeze: Sneeze) => {
+    const sneezeUser: string = `Sneezer: ${Object.keys(userIds).find(
+      (key) => userIds[key] === sneeze.userId,
+    )}`;
+    const sneezeDate: string = `\nDate: ${sneeze.date.substring(0, 10)}`;
+    const sneezeComment: string = sneeze.comment ? `\nComment: ${sneeze.comment}` : '';
+    return `${sneezeUser}${sneezeDate}${sneezeComment}`;
   };
 
   return (
@@ -47,7 +61,12 @@ function SneezeBoard() {
       ) : (
         <div className="flex-container">
           {sneezes.map((s) => (
-            <div className="sneeze-record" style={{ color: userColor[s.userId] }}>
+            <div
+              key={s.sneezeId}
+              className={`sneeze-record${s.comment && ' comment'}`}
+              style={{ color: userColor[s.userId] }}
+              title={toolTip(s)}
+            >
               {s.sneezeId}
             </div>
           ))}
@@ -75,12 +94,14 @@ function SneezeBoard() {
             sneezeId: sneezes[sneezes.length - 1].sneezeId - 1,
             userId,
             date: formattedDate,
+            comment,
           });
         }}
       >
         I Sneezed
       </Button>
-      <ComboBox className="names" title="Sneezers" options={names} onChange={changeHandler} />
+      <ComboBox className="names" title="Sneezers" options={names} onChange={nameChangeHandler} />
+      <TextField label="Comment" onChange={commentChangeHandler} />
     </>
   );
 }
