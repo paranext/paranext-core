@@ -4,7 +4,9 @@
   "version": "0.0.1",
   "scripts": {
     "build": "vite build",
+    "build:types": "cd .. && npm run build:types",
     "start": "vite build --watch",
+    "start:core": "cd .. && npm start",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:staged": "lint-staged -q"
   },

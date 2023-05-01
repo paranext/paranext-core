@@ -41,8 +41,6 @@ jobs:
       - name: Install and build
         run: |
           npm install
-          cd extensions
-          npm install
           npm run build
 
       - name: Install DMG license

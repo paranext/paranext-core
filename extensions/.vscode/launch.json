@@ -25,8 +25,7 @@
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start"],
-      "cwd": "${workspaceFolder}/..",
+      "runtimeArgs": ["run", "start:core"],
       "env": {
         "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
         "IN_VSCODE": "true"
