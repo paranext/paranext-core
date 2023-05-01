@@ -490,7 +490,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
     const responderId = this.requestRouter(requestMessage.requestType);
     if (this.connectorInfo.clientId === responderId) {
       // This request is ours. Handle the request
-      if (!this.localRequestHandler) throw Error('Handling request without a requestHandler!');
+      if (!this.localRequestHandler) throw new Error('Handling request without a requestHandler!');
 
       // Run the request handler for this request
       const response = await this.localRequestHandler(requestMessage.requestType, requestMessage);

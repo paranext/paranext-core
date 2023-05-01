@@ -1,41 +1,41 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-      {
-        "name": "Watch and Build Extensions",
-        "type": "node",
-        "request": "launch",
-        "runtimeExecutable": "npm",
-        "skipFiles": ["<node_internals>/**"],
-        "runtimeArgs": ["run", "start"]
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Watch and Build Extensions",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "skipFiles": ["<node_internals>/**"],
+      "runtimeArgs": ["run", "start"]
+    },
+    {
+      "name": "Build Extensions",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "skipFiles": ["<node_internals>/**"],
+      "runtimeArgs": ["run", "build"]
+    },
+    {
+      "name": "Debug Paranext Core",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start"],
+      "cwd": "${workspaceFolder}/..",
+      "env": {
+        "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
+        "IN_VSCODE": "true"
       },
-      {
-        "name": "Build Extensions",
-        "type": "node",
-        "request": "launch",
-        "runtimeExecutable": "npm",
-        "skipFiles": ["<node_internals>/**"],
-        "runtimeArgs": ["run", "build"]
-      },
-      {
-        "name": "Debug Paranext Core",
-        "type": "node",
-        "request": "launch",
-        "runtimeExecutable": "npm",
-        "runtimeArgs": ["run", "start"],
-        "cwd": "${workspaceFolder}/..",
-        "env": {
-          "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
-          "IN_VSCODE": "true"
-        },
-        "presentation": {
-          "hidden": false,
-          "group": "",
-          "order": 1
-        }
+      "presentation": {
+        "hidden": false,
+        "group": "",
+        "order": 1
       }
-    ]
+    }
+  ]
 }
