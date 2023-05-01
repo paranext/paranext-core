@@ -1,7 +1,7 @@
 /**
  * Handles requests, responses, subscriptions, etc. to the backend.
  * Likely shouldn't need/want to expose this whole service on papi,
- * but there are a few things that are exposed
+ * but there are a few things that are exposed via papiExports
  */
 
 import {

@@ -1,5 +1,7 @@
 /**
  * Service that handles WebView-related operations
+ * Likely shouldn't need/want to expose this whole service on papi,
+ * but most things are exposed via papiExports
  */
 import { WebViewProps } from '@renderer/components/web-view.component';
 import { isRenderer } from '@shared/utils/internal-util';
@@ -30,11 +32,16 @@ export type AddWebViewEvent = {
   webView: WebViewProps;
 };
 
+export type LayoutSaver = () => void;
+
 /** Whether this service has finished setting up */
 let isInitialized = false;
 
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
+
+/** asdfasdfsadfasdfsadfsd */
+let layoutSaver: LayoutSaver | undefined;
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -279,4 +286,20 @@ export const initialize = () => {
   })();
 
   return initializePromise;
+};
+
+export const registerLayoutSave = (newLayoutSaver: LayoutSaver) => {
+  if (layoutSaver) throw new Error('WebviewService already has a layout saver defined');
+
+  layoutSaver = newLayoutSaver;
+  return () => {
+    layoutSaver = undefined;
+  };
+};
+
+/** All the exports in this service that are to be exposed on the PAPI */
+export const papiExports = {
+  onDidAddWebView,
+  addWebView,
+  initialize,
 };
