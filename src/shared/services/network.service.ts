@@ -519,7 +519,7 @@ const handleRequestLocal: RequestHandler = async <TParam, TReturn>(
         break;
       }
       default:
-        throw Error(
+        throw new Error(
           `RequestHandlerType.${registration.handlerType} not supported! On requestType ${requestType}`,
         );
     }

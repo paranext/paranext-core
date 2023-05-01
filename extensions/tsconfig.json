@@ -18,7 +18,7 @@
     "typeRoots": ["./node_modules/@types", "./dist"],
     "types": ["papi-dts"],
     "paths": {
-      "@extensions/*": ["./dist/*"],
+      "@extensions/*": ["./dist/*"]
     },
     "noUnusedLocals": true,
     "noUnusedParameters": true,
