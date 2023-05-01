@@ -1,7 +1,8 @@
-import { serializeTabId } from '@shared/utils/papi-util';
 import { LayoutBase } from 'rc-dock';
+import { TYPE_WEBVIEW } from '@shared/data/web-view.model';
+import { serializeTabId } from '@shared/utils/papi-util';
 
-export const WEBVIEW_PLACEHOLDER_TAB_ID = serializeTabId('webview', 'WebView Placeholder');
+export const WEBVIEW_PLACEHOLDER_TAB_ID = serializeTabId(TYPE_WEBVIEW, 'WebView Placeholder');
 const ABOUT_TAB_ID = serializeTabId('about', 'About');
 const TEST_TAB_TWO_ID = serializeTabId('tab', 'Test Tab Two');
 const TEST_TAB_ONE_ID = serializeTabId('tab', 'Test Tab One');

@@ -7,8 +7,6 @@ import {
 } from '@shared/data/web-view.model';
 import { deserializeTabId } from '@shared/utils/papi-util';
 
-export const TYPE_WEBVIEW = 'webview';
-
 export function getTitle({ id, title, contentType }: WebViewProps): string {
   const defaultTitle = id ? `${id} ${contentType}` : `${contentType} Web View`;
   return title || defaultTitle;

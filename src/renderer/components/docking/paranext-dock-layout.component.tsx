@@ -1,23 +1,23 @@
 import 'rc-dock/dist/rc-dock.css';
 import './paranext-dock-layout.component.css';
-import { useRef, useEffect, useCallback } from 'react';
-import { SavedTabInfo, TabCreator, TabInfo, TabType } from '@shared/data/web-view.model';
-import { AddWebViewEvent, registerLayoutSave } from '@shared/services/web-view.service';
+import { useRef, useCallback } from 'react';
 import DockLayout, { DropDirection, LayoutBase, LayoutData, TabData, TabGroup } from 'rc-dock';
-import testLayout, { WEBVIEW_PLACEHOLDER_TAB_ID } from '@renderer/testing/test-layout.data';
-import createAboutPanel from '@renderer/testing/about-panel.component';
-import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
-import createTabPanel from '@renderer/testing/test-panel.component';
-import * as commandService from '@shared/services/command.service';
-import { isRenderer } from '@shared/utils/internal-util';
 import createErrorTab from '@renderer/components/docking/error-tab.component';
 import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
-import createWebViewPanel, { TYPE_WEBVIEW } from '@renderer/components/web-view.component';
+import createWebViewPanel from '@renderer/components/web-view.component';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
+import createAboutPanel from '@renderer/testing/about-panel.component';
+import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
+import testLayout, { WEBVIEW_PLACEHOLDER_TAB_ID } from '@renderer/testing/test-layout.data';
+import createTabPanel from '@renderer/testing/test-panel.component';
 import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-heresy-panel.component';
+import { SavedTabInfo, TYPE_WEBVIEW, TabCreator, TabInfo } from '@shared/data/web-view.model';
 import papi from '@shared/services/papi.service';
+import { AddWebViewEvent } from '@shared/services/web-view.service';
 import { serializeTabId, deserializeTabId } from '@shared/utils/papi-util';
+
+type TabType = string;
 
 const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
@@ -41,19 +41,10 @@ const tabTypeCreationMap = new Map<TabType, TabCreator>([
   ['buttons', createButtonsPanel],
   ['quick-verse-heresy', createQuickVerseHeresyPanel],
   ['tab', createTabPanel],
-  ['webview', createWebViewPanel],
+  [TYPE_WEBVIEW, createWebViewPanel],
 ]);
 
 let previousTabId: string = WEBVIEW_PLACEHOLDER_TAB_ID;
-
-export function addTabHandlerDock(type: TabType, creator: TabCreator) {
-  tabTypeCreationMap.set(type, creator);
-}
-
-function saveTab(tab: TabData): SavedTabInfo {
-  const { id, data } = tab as SavedTabInfo;
-  return { id, data };
-}
 
 function getTabDataFromSavedInfo(tabInfo: SavedTabInfo): TabInfo {
   let tabCreator: TabCreator | undefined;
@@ -97,25 +88,26 @@ function loadTab(savedTabInfo: SavedTabInfo): TabData & SavedTabInfo {
   };
 }
 
+/**
+ * When rc-dock detects a changed layout, save it.
+ *
+ * TODO: We could filter whether we need to save based on the `direction` argument. - 2023-05-1 IJH
+ * @param newLayout the changed layout to save.
+ */
 function onLayoutChange(newLayout: LayoutBase): void {
   localStorage.setItem(DOCK_LAYOUT_KEY, JSON.stringify(newLayout));
 }
 
+/**
+ * Safely load a value from local storage.
+ * @param key of the value.
+ * @param defaultValue to return if the key is not found.
+ * @returns the value of the key fetched from local storage, or the default value if not found.
+ */
 function getStorageValue<T>(key: string, defaultValue: T): T {
   const saved = localStorage.getItem(key);
   const initial = saved ? JSON.parse(saved) : undefined;
   return initial || defaultValue;
-}
-
-export async function addTabHandler(type: TabType, creator: TabCreator) {
-  if (!isRenderer()) {
-    return commandService.sendCommand<[TabType, TabCreator], void>('addTabHandler', type, creator);
-  }
-
-  addTabHandlerDock(type, creator);
-
-  // Resolve this promise
-  return undefined;
 }
 
 function addWebViewToDock({ webView, layoutType }: AddWebViewEvent, dockLayout: DockLayout) {
@@ -138,8 +130,12 @@ function addWebViewToDock({ webView, layoutType }: AddWebViewEvent, dockLayout: 
       if (willRemoveTarget) dockLayout.dockMove(targetTab, null, 'remove');
       break;
 
+    case 'panel':
+    case 'float':
+      throw new Error(`Not yet implemented layoutType: '${layoutType}'`);
+
     default:
-      throw new Error(`Not yet implemented or unknown layoutType: '${layoutType}'`);
+      throw new Error(`Unknown layoutType: '${layoutType}'`);
   }
 }
 
@@ -147,16 +143,6 @@ export default function ParanextDockLayout() {
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const dockLayoutRef = useRef<DockLayout>(null!);
-
-  useEffect(() => {
-    const dockLayout = dockLayoutRef.current;
-    const unregister = registerLayoutSave(() => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const layout = dockLayout.saveLayout();
-      // TODO: Save layout
-    });
-    return () => unregister();
-  }, []);
 
   useEvent(
     papi.webViews.onDidAddWebView,
@@ -172,7 +158,6 @@ export default function ParanextDockLayout() {
       groups={groups}
       defaultLayout={savedLayout}
       dropMode="edge"
-      saveTab={saveTab}
       loadTab={loadTab}
       onLayoutChange={onLayoutChange}
     />

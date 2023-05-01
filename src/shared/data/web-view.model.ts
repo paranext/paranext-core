@@ -39,11 +39,6 @@ export type TabInfo = {
 };
 
 /**
- * The underlying tab type. Used to determine which extension owns it.
- */
-export type TabType = string;
-
-/**
  * For now all tab creators must do their own data type verification
  */
 export type TabCreator = (tabData: SavedTabInfo) => TabInfo;
@@ -70,3 +65,5 @@ export type WebViewContentsHtml = WebViewContentsBase & {
 
 /** WebView definition created by extensions to show web content */
 export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
+
+export const TYPE_WEBVIEW = 'webview';

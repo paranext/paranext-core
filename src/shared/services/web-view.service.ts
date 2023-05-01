@@ -24,9 +24,6 @@ import {
   WebViewProps,
 } from '@shared/data/web-view.model';
 
-/** Prefix on requests that indicates that the request is related to webView operations */
-const CATEGORY_WEB_VIEW = 'webView';
-
 type LayoutType = 'tab' | 'panel' | 'float';
 
 /** Event emitted when webViews are added */
@@ -35,16 +32,14 @@ export type AddWebViewEvent = {
   layoutType: LayoutType;
 };
 
-export type LayoutSaver = () => void;
+/** Prefix on requests that indicates that the request is related to webView operations */
+const CATEGORY_WEB_VIEW = 'webView';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
 
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
-
-/** asdfasdfsadfasdfsadfsd */
-let layoutSaver: LayoutSaver | undefined;
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -92,23 +87,26 @@ const getWebViewPapi = (webViewId: string) => {
  * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
  * @returns promise that resolves nothing if we successfully handled the webView
  */
-export const addWebView = async (webView: WebViewContents, layoutType: LayoutType = 'tab') => {
+export const addWebView = async (
+  webView: WebViewContents,
+  layoutType: LayoutType = 'tab',
+): Promise<void> => {
   if (!isRenderer()) {
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
     // TODO: This block should be removed when https://github.com/paranext/paranext-core/issues/51
     // is done. It can go back to just the `sendCommand` call without the loop.
     for (let attemptsRemaining = 20; attemptsRemaining > 0; attemptsRemaining--) {
-      let succeeded = true;
+      let success = true;
       // eslint-disable-next-line no-await-in-loop
       await commandService
         .sendCommand<[WebViewContents, LayoutType], void>('addWebView', webView, layoutType)
         .catch(async (error) => {
-          succeeded = false;
+          success = false;
           if (attemptsRemaining === 1) throw error;
           await wait(1000);
         });
 
-      if (succeeded) return undefined;
+      if (success) return;
     }
     throw new Error(`addWebView failed, but you should have seen a different error than this!`);
   }
@@ -244,9 +242,6 @@ export const addWebView = async (webView: WebViewContents, layoutType: LayoutTyp
   };
   // Inform web view consumers we added a web view
   onDidAddWebViewEmitter.emit({ webView: updatedWebView, layoutType });
-
-  // Resolve this promise
-  return undefined;
 };
 
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
@@ -289,15 +284,6 @@ export const initialize = () => {
   })();
 
   return initializePromise;
-};
-
-export const registerLayoutSave = (newLayoutSaver: LayoutSaver) => {
-  if (layoutSaver) throw new Error('WebviewService already has a layout saver defined');
-
-  layoutSaver = newLayoutSaver;
-  return () => {
-    layoutSaver = undefined;
-  };
 };
 
 /** All the exports in this service that are to be exposed on the PAPI */
