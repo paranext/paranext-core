@@ -55,8 +55,18 @@ Clone the repo and install dependencies:
 git clone https://github.com/paranext/paranext-core.git
 cd paranext-core
 npm install
-cd extensions
-npm install
+```
+
+To build extensions including the declaration type files for the core extensions, run the following:
+
+```bash
+npm run build:extensions
+```
+
+To build the declaration type file `papi.d.ts` for extensions to use, run the following:
+
+```bash
+npm run build:types
 ```
 
 ## Starting Development
@@ -68,6 +78,11 @@ npm start
 ```
 
 After you run `npm start` (or, in VSCode, launch `Debug Paranext Core`), you can edit the code, and the relevant processes will hot reload.
+
+### Developing Extensions
+
+Paranext Core extensions are found in the `extensions` folder. Please follow the instructions in
+`extensions/README.md` to develop extensions.
 
 ## Packaging for Production
 
