@@ -100,7 +100,7 @@ export const addWebView = async (webView: WebViewContents) => {
 
       if (succeeded) return undefined;
     }
-    throw Error(`addWebView failed, but you should have seen a different error than this!`);
+    throw new Error(`addWebView failed, but you should have seen a different error than this!`);
   }
 
   // Create a papi instance for this WebView

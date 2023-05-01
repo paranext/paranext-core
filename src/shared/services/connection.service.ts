@@ -57,7 +57,7 @@ export const request = async <TParam, TReturn>(
   requestType: string,
   contents: TParam,
 ): Promise<ComplexResponse<TReturn>> => {
-  if (!networkConnector) throw Error('request without a networkConnector!');
+  if (!networkConnector) throw new Error('request without a networkConnector!');
 
   // TODO: move the request and clientId code into the NetworkConnector? Leaving for now since it is currently shared between the implementations
   const requestId = nextRequestId;
@@ -90,7 +90,7 @@ export const request = async <TParam, TReturn>(
  * @param event event to emit on the network
  */
 export const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
-  if (!networkConnector) throw Error('emitEventOnNetwork without a networkConnector!');
+  if (!networkConnector) throw new Error('emitEventOnNetwork without a networkConnector!');
 
   await networkConnector.emitEventOnNetwork(eventType, {
     senderId: clientId,
@@ -126,7 +126,7 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
   requestType: string,
   incomingRequest: InternalRequest<TParam>,
 ) => {
-  if (!requestHandler) throw Error('Handling request without a requestHandler!');
+  if (!requestHandler) throw new Error('Handling request without a requestHandler!');
 
   // Not sure if it's really responsible to put the whole incomingRequest in. Might want to destructure and just pass ComplexRequest members
   const response = await requestHandler<TParam, TReturn>(requestType, incomingRequest);
@@ -147,7 +147,7 @@ const handleEventFromNetwork: InternalNetworkEventHandler = async <T>(
   eventType: string,
   incomingEvent: InternalEvent<T>,
 ) => {
-  if (!eventHandler) throw Error('Handling event without an eventHandler!');
+  if (!eventHandler) throw new Error('Handling event without an eventHandler!');
 
   eventHandler<T>(eventType, incomingEvent.event);
 };
