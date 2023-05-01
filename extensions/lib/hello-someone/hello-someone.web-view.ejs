@@ -63,7 +63,10 @@
           );
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
           helloSomeoneOutput.textContent = papi.util.htmlEncode(
-            `${success ? 'Successfully' : 'Unsuccessfully'} set ${name}'s greeting!`,
+            `${success ? 'Successfully' : 'Unsuccessfully'} set ${name}'s greeting!`.replace(
+              /'/g,
+              '`',
+            ),
           );
         });
 
