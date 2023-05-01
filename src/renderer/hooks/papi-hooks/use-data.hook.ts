@@ -1,5 +1,5 @@
-import { DataProviderSubscriberOptions } from '@shared/models/data-provider.interface';
-import { DataProvider } from '@shared/models/data-provider.model';
+import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
+import IDataProvider from '@shared/models/data-provider.interface';
 import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
 import { useMemo, useState } from 'react';
 import { PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.model';
@@ -44,7 +44,7 @@ function useData<TSelector, TGetData, TSetData>(
  *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
  */
 function useData<TSelector, TGetData, TSetData>(
-  dataProvider: DataProvider<TSelector, TGetData, TSetData> | undefined,
+  dataProvider: IDataProvider<TSelector, TGetData, TSetData> | undefined,
   selector: TSelector,
   defaultValue: TGetData,
   subscriberOptions?: DataProviderSubscriberOptions,
@@ -54,7 +54,7 @@ function useData<TSelector, TGetData, TSetData>(
  * want to consolidate and only get the data provider once)
  */
 function useData<TSelector, TGetData, TSetData>(
-  dataProviderSource: string | DataProvider<TSelector, TGetData, TSetData> | undefined,
+  dataProviderSource: string | IDataProvider<TSelector, TGetData, TSetData> | undefined,
   selector: TSelector,
   defaultValue: TGetData,
   subscriberOptions?: DataProviderSubscriberOptions,
@@ -64,7 +64,7 @@ function useData<TSelector, TGetData, TSetData>(
 
   // Get the data provider for this data provider name
   const dataProvider =
-    useDataProvider<DataProvider<TSelector, TGetData, TSetData>>(dataProviderSource);
+    useDataProvider<IDataProvider<TSelector, TGetData, TSetData>>(dataProviderSource);
 
   // Indicates if the data with the selector is awaiting retrieval from the data provider
   const [isLoading, setIsLoading] = useState<boolean>(true);

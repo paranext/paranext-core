@@ -10,7 +10,7 @@ function TestPanel({ content }: { content: string }) {
 }
 
 const createTabPanel = (tabInfo: SavedTabInfo): TabInfo => {
-  if (!tabInfo.data) throw Error('Tab creation data is missing');
+  if (!tabInfo.data) throw new Error('Tab creation data is missing');
 
   // We need to make sure that the data is of the correct type
   const data = tabInfo.data as TabData;

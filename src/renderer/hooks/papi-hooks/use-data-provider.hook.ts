@@ -1,5 +1,5 @@
 import dataProviderService from '@shared/services/data-provider.service';
-import { DataProvider } from '@shared/models/data-provider.model';
+import IDataProvider from '@shared/models/data-provider.interface';
 import { useCallback, useMemo, useState } from 'react';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
@@ -18,7 +18,7 @@ import { isString } from '@shared/utils/util';
 // User of this hook must provide types. Cannot use `unknown` here unfortunately because
 // TypeScript would think we want the implementing IDataProvider types to be unknown as well
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends DataProvider<any, any, any>>(
+function useDataProvider<T extends IDataProvider<any, any, any>>(
   providerName: string | undefined,
 ): T | undefined;
 /**
@@ -32,7 +32,7 @@ function useDataProvider<T extends DataProvider<any, any, any>>(
  *  specifying your own types, or provide a custom data provider type
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends DataProvider<any, any, any>>(
+function useDataProvider<T extends IDataProvider<any, any, any>>(
   dataProvider: T | undefined,
 ): T | undefined;
 /**
@@ -47,11 +47,11 @@ function useDataProvider<T extends DataProvider<any, any, any>>(
  *  specifying your own types, or provide a custom data provider type
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends DataProvider<any, any, any>>(
+function useDataProvider<T extends IDataProvider<any, any, any>>(
   dataProviderSource: string | T | undefined,
 ): T | undefined;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends DataProvider<any, any, any>>(
+function useDataProvider<T extends IDataProvider<any, any, any>>(
   dataProviderSource: string | T | undefined,
 ): T | undefined {
   // Check to see if they passed in the results of a useDataProvider hook or undefined

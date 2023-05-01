@@ -1,26 +1,37 @@
 import { Container } from '@shared/utils/util';
-import { Dispose, OnDidDispose, CannotHaveOnDidDispose } from './disposal.model';
+// This is used in @see comments in the JSDoc
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type networkObjectService from '@shared/services/network-object.service';
+import {
+  Dispose,
+  OnDidDispose,
+  CannotHaveOnDidDispose,
+  CanHaveOnDidDispose,
+} from './disposal.model';
 
 /**
  * An object of this type is returned from {@link networkObjectService.get}.
  *
+ * Override the NetworkableObject type's force-undefined onDidDispose to NetworkObject's
+ * onDidDispose type because it will have an onDidDispose added.
+ *
  * @see networkObjectService
  */
-export type NetworkObject<T> = T & OnDidDispose;
+export type NetworkObject<T extends NetworkableObject> = CanHaveOnDidDispose<T> & OnDidDispose;
 
 /**
  * An object of this type is returned from {@link networkObjectService.set}.
  *
  * @see networkObjectService
  */
-export type DisposableNetworkObject<T> = T & OnDidDispose & Dispose;
+export type DisposableNetworkObject<T extends NetworkableObject> = NetworkObject<T> & Dispose;
 
 /**
  * An object of this type is passed into {@link networkObjectService.set}.
  *
  * @see networkObjectService
  */
-export type NetworkableObject<T = object> = CannotHaveOnDidDispose<T>;
+export type NetworkableObject<T = object> = T & CannotHaveOnDidDispose;
 
 /**
  * If a network object with the provided ID exists remotely but has not been set up to use inside
@@ -42,8 +53,17 @@ export type NetworkableObject<T = object> = CannotHaveOnDidDispose<T>;
  * avoid acting upon an undefined NetworkObject.
  *
  * @returns the local object to proxy into a network object.
+ *
+ * Note: This function should return Partial<T>. For some reason, TypeScript can't infer the type
+ * (probably has to do with that it's a wrapped and layered type). Functions that implement this
+ * type should return Partial<T>
  */
 export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
   id: string,
-  networkObjectContainer: Container<NetworkObject<Omit<T, 'onDidDispose'>>>,
-) => Partial<T>;
+  networkObjectContainer: Container<NetworkObject<T>>,
+) => // TODO: This should be Partial<T> but TypeScript can't infer the type of T. Figure this out.
+// For example, in dataProviderService.get, it uses createLocalDataProviderToProxy (which does
+// return Partial<T> and matches signature with this function), but it was producing a type error
+// because its Partial<T> is different than this signature's Partial<T> even though T is generic
+// and extends NetworkableObject in both cases.
+Partial<NetworkableObject>;
