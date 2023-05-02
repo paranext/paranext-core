@@ -1159,7 +1159,7 @@ declare module 'shared/data/web-view.model' {
   };
   /** WebView definition created by extensions to show web content */
   export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
-  export const TYPE_WEBVIEW = 'webview';
+  export const TYPE_WEBVIEW = 'webView';
 }
 declare module 'shared/services/web-view.service' {
   import { WebViewContents, WebViewProps } from 'shared/data/web-view.model';

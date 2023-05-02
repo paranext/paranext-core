@@ -66,4 +66,4 @@ export type WebViewContentsHtml = WebViewContentsBase & {
 /** WebView definition created by extensions to show web content */
 export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
 
-export const TYPE_WEBVIEW = 'webview';
+export const TYPE_WEBVIEW = 'webView';

@@ -28,7 +28,7 @@ npm-debug.log.*
 *.sass.d.ts
 *.scss.d.ts
 
-# vite output
+# Vite (or any other packager) output
 dist
 
 # eslint ignores hidden directories by default:
