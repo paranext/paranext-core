@@ -22,7 +22,6 @@ function SneezeBoard() {
   const verseProvider = useDataProvider<QuickVerseDataProvider>('quick-verse.quick-verse');
 
   const [selectedItem, setSelectedItem] = useState<string>('Select user');
-  const [color, setColor] = useState<string>('black');
   const [comment, setComment] = useState<string>('');
   const [sneezes, , isLoading] = useData<string | number | Date, Sneeze[], Sneeze>(
     'sneeze-board.sneezes',
