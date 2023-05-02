@@ -15,11 +15,15 @@ import logger from '@shared/services/logger.service';
 import { isRenderer } from '@shared/utils/internal-util';
 import internetService from '@shared/services/internet.service';
 import dataProviderService from '@shared/services/data-provider.service';
+import type { ExtensionFileService } from '@node/services/extension-file.service';
 import type { PapiComponents } from '@renderer/components/papi-components';
 import type { PapiContext } from '@renderer/context/papi-context';
 import type { PapiHooks } from '@renderer/hooks/papi-hooks';
 
 // TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
+const extensionFileService: ExtensionFileService = isRenderer()
+  ? {}
+  : require('@node/services/extension-file.service').default;
 const papiComponents: PapiComponents = isRenderer()
   ? require('@renderer/components/papi-components').default
   : {};
@@ -48,6 +52,7 @@ const papi = {
   logger,
   internet: internetService,
   dataProvider: dataProviderService,
+  fileSystem: extensionFileService,
 };
 export default papi;
 

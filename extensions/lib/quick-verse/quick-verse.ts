@@ -1,6 +1,8 @@
 import papi from 'papi';
+import type { ExecutionToken } from 'node/models/execution-token.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import { UnsubPromiseAsync, UnsubscriberAsync } from 'shared/utils/papi-util';
+import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 
 const { logger } = papi;
 
@@ -22,6 +24,10 @@ class QuickVerseDataProviderEngine
 
   /** Latest updated verse reference */
   latestVerseRef = 'john 11:35';
+
+  /** String to prefix heretical data */
+  heresyWarning = '';
+  heresyCount = 0;
 
   // Note: this method does not have to be provided here for it to work properly because it is layered over on the papi.
   // But because we provide it here, we must return `true` to notify like in the set method.
@@ -46,9 +52,14 @@ class QuickVerseDataProviderEngine
 
     // Only heretics change Scripture, so you have to tell us you're a heretic
     if (!data.isHeresy) return false;
+    this.heresyCount += 1;
 
     // If there is no change in the verse text, don't update
     if (data.text === this.verses[this.#getSelector(selector)].text) return false;
+
+    // Make sure it is reported as heresy
+    if (!data.text.startsWith(`[${this.heresyWarning}`))
+      data.text = `[${this.heresyWarning} ${this.heresyCount}] ${data.text}`;
 
     // Update the verse text, track the latest change, and send an update
     this.verses[this.#getSelector(selector)] = {
@@ -115,13 +126,38 @@ class QuickVerseDataProviderEngine
   }
 }
 
-export async function activate() {
+export async function activate(context: ExecutionActivationContext) {
+  const token: ExecutionToken = context.executionToken;
+
+  // eslint-disable-next-line no-var
+  var storedHeresyCount: number = 0;
+
   logger.info('Quick Verse is activating!');
+
+  const engine = new QuickVerseDataProviderEngine();
+
+  const warning = await papi.fileSystem.readFileFromInstallDirectory(token, 'heresy-warning.txt');
+  [engine.heresyWarning] = warning.split(/\r?\n/);
+
+  // If a user has never been a heretic, this file won't exist
+  try {
+    const loadedData = await papi.fileSystem.readUserFile(token, 'heresyCount.txt');
+    if (loadedData) storedHeresyCount = Number(loadedData);
+  } catch (error) {
+    logger.debug(error);
+  }
+  engine.heresyCount = storedHeresyCount;
 
   const quickVerseDataProvider = await papi.dataProvider.registerEngine(
     'quick-verse.quick-verse',
-    new QuickVerseDataProviderEngine(),
+    engine,
   );
+
+  quickVerseDataProvider.subscribe('latest', () => {
+    if (storedHeresyCount === engine.heresyCount) return;
+    storedHeresyCount = engine.heresyCount;
+    papi.fileSystem.writeUserFile(token, 'heresyCount.txt', String(storedHeresyCount));
+  });
 
   const unsubPromises: UnsubPromiseAsync[] = [];
 

@@ -9,7 +9,10 @@ import { Uri } from '@shared/data/file-system.model';
 import { UnsubscriberAsync } from '@shared/utils/papi-util';
 import Module from 'module';
 import papi, { MODULE_SIMILAR_APIS } from '@shared/services/papi.service';
+import { setExtensionUris } from '@node/services/extension-file.service';
 import logger from '@shared/services/logger.service';
+import executionTokenService from '@node/services/execution-token.service';
+import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -97,15 +100,28 @@ const activateExtension = async (
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
   const extensionModule = (await import(/* webpackIgnore: true */ extensionFilePath)) as IExtension;
 
+  // IMPORTANT: Only give the token to the extension when it is activated. Don't store it or its
+  // nonce anywhere else. It is okay to give the token's getHash() value to something for purposes
+  // of unregistering the extension later.
+  const executionToken = executionTokenService.registerExtension(extension.name);
+  const tokenName: string = executionToken.name;
+  const tokenHash: string = executionToken.getHash();
+
+  // Build up the context for this particular extension
+  const context: ExecutionActivationContext = { executionToken };
+  Object.freeze(context);
+
   // Activate the extension
-  const extensionUnsubscriber = await extensionModule.activate();
+  const extensionUnsubscriber = await extensionModule.activate(context);
 
   const activeExtension: ActiveExtension = {
     info: extension,
     deactivator: async () => {
       let unsubResult = await extensionUnsubscriber();
-      if (extensionModule.deactivate)
+      if (extensionModule.deactivate) {
         unsubResult = (await extensionModule.deactivate()) && unsubResult;
+      }
+      unsubResult = executionTokenService.unregisterExtension(tokenName, tokenHash) && unsubResult;
       activeExtensions.delete(activeExtension.info.name);
       return unsubResult;
     },
@@ -217,6 +233,14 @@ export const initialize = () => {
     // Get a list of extensions
     availableExtensions = await getExtensions();
 
+    // Store their base URIs in the extension file service
+    const uriMap: Map<string, string> = new Map();
+    availableExtensions.forEach((extensionInfo) => {
+      uriMap.set(extensionInfo.name, extensionInfo.dirUri);
+    });
+    setExtensionUris(uriMap);
+
+    // And finally activate them
     await activateExtensions(availableExtensions);
 
     isInitialized = true;

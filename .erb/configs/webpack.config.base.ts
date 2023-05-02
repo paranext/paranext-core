@@ -57,6 +57,11 @@ const configuration: webpack.Configuration = {
     modules: [webpackPaths.srcPath, 'node_modules'],
     // There is no need to add aliases here, the paths in tsconfig get mirrored
     plugins: [new TsconfigPathsPlugins()],
+    fallback: {
+      crypto: false,
+      // We don't really need crypto in the browser/renderer at least for now, otherwise do:
+      // crypto: require.resolve('crypto-browserify'),
+    },
   },
 
   plugins: [

@@ -3,6 +3,7 @@
  */
 
 import fs from 'fs';
+import path from 'path';
 import { Uri } from '@shared/data/file-system.model';
 import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { groupBy } from '@shared/utils/util';
@@ -23,7 +24,10 @@ export function readFileText(uri: Uri): Promise<string> {
  * @returns promise that resolves after writing the file
  */
 export function writeFileText(uri: Uri, fileContents: string): Promise<void> {
-  return fs.promises.writeFile(getPathFromUri(uri), fileContents);
+  const directoryName = path.dirname(getPathFromUri(uri));
+  return fs.promises.mkdir(directoryName, { recursive: true }).then(() => {
+    return fs.promises.writeFile(getPathFromUri(uri), fileContents);
+  });
 }
 
 /** Type of file system item in a directory */
