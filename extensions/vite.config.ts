@@ -144,6 +144,14 @@ const extensionConfig = defineConfig(async () => {
           ),
         ),
       }),
+      viteStaticCopy({
+        targets: extensions.flatMap((extension): Target => {
+          return {
+            src: path.join(sourceFolder, extension.dirName, 'assets'),
+            dest: extension.dirName,
+          };
+        }),
+      }),
       // Import web view files as strings to pass on the papi
       // importString plugin must be after any other plugins that need to transpile these files
       {

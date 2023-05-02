@@ -1512,6 +1512,146 @@ declare module 'shared/services/data-provider.service' {
   };
   export default dataProviderService;
 }
+declare module 'shared/data/file-system.model' {
+  /**
+   * Types to use with file system operations
+   */
+  /**
+   * Represents a path in file system or other.
+   * Has a scheme followed by :// followed by a relative path.
+   * If no scheme is provided, the app scheme is used.
+   * Available schemes are as follows:
+   *  - app:// - goes to the app's data directory (platform-dependent)
+   *  - resources:// - goes to the resources directory installed in the app
+   */
+  export type Uri = string;
+}
+declare module 'node/utils/util' {
+  import { Uri } from 'shared/data/file-system.model';
+  export function resolveHtmlPath(htmlFileName: string): string;
+  /**
+   * Gets the platform-specific user appdata folder for this application
+   * Thanks to Luke at https://stackoverflow.com/a/26227660
+   */
+  export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
+  /**
+   * Resolves the uri to a path
+   * @param uri the uri to resolve
+   * @returns real path to the uri supplied
+   */
+  export function getPathFromUri(uri: Uri): string;
+  /**
+   * Combines the uri passed in with the paths passed in to make one uri
+   * @param uri uri to start from
+   * @param paths paths to combine into the uri
+   * @returns one uri that combines the uri and the paths in left-to-right order
+   */
+  export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
+}
+declare module 'node/services/node-file-system.service' {
+  import { Uri } from 'shared/data/file-system.model';
+  /**
+   * Reads a text file asynchronously
+   * @param uri Uri of file
+   * @returns promise that resolves to the contents of the file
+   */
+  export function readFileText(uri: Uri): Promise<string>;
+  /**
+   * Writes the string to a file asynchronously
+   * @param uri Uri of file
+   * @param fileContents string to write into the file
+   * @returns promise that resolves after writing the file
+   */
+  export function writeFileText(uri: Uri, fileContents: string): Promise<void>;
+  /** Type of file system item in a directory */
+  export enum EntryType {
+    File = 'file',
+    Directory = 'directory',
+    Unknown = 'unknown',
+  }
+  /** All entries in a directory, mapped from entry type to array of uris for the entries */
+  export type DirectoryEntries = Readonly<{
+    [entryType in EntryType]: Uri[];
+  }>;
+  /**
+   * Reads a directory and returns lists of entries in the directory by entry type
+   * @param uri uri of directory
+   * @returns map of entry type to list of uris for each entry in the directory with that type
+   */
+  export function readDir(uri: Uri): Promise<DirectoryEntries>;
+}
+declare module 'node/utils/crypto-util' {
+  export function createUuid(): string;
+  /**
+   * Create a cryptographically secure nonce that is at least 128 bits long
+   * See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
+   *
+   * @param encoding: "base64url" (HTML safe, shorter string) or "hex" (longer string)
+   * From https://base64.guru/standards/base64url, the purpose of this encoding is
+   * "the ability to use the encoding result as filename or URL address"
+   * @param numberOfBytes: number of bytes the resulting nonce should contain
+   * @returns cryptographically secure, pseudo-randomly generated value encoded as a string
+   */
+  export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
+}
+declare module 'node/models/execution-token.model' {
+  /** For now this is just for extensions, but maybe we will want to expand this in the future */
+  export type ExecutionTokenType = 'extension';
+  /** Execution tokens can be passed into API calls to provide context about their identity */
+  export class ExecutionToken {
+    type: Readonly<ExecutionTokenType>;
+    name: Readonly<string>;
+    nonce: Readonly<string>;
+    constructor(tokenType: ExecutionTokenType, name: string);
+    getHash(): string;
+  }
+}
+declare module 'node/services/execution-token.service' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  /** This should be called when extensions are being loaded
+   *  @param extensionName Name of the extension to register
+   *  @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers.
+   *  It is important that the token is not shared to avoid impersonation of API callers.
+   */
+  function registerExtension(extensionName: string): ExecutionToken;
+  /** Remove a registered token.  Note that a hash of a token is what is needed to unregister, not
+   *  the full token itself (notably not the nonce), so something can be delegated the ability to
+   *  unregister a token without having been given the full token itself.
+   *  @param extensionName Name of the extension that was originally registered
+   *  @param tokenHash Value of `getHash()` of the token that was originally registered.
+   *  @returns `true` if the token was successfully unregistered, `false` otherwise
+   */
+  function unregisterExtension(extensionName: string, tokenHash: string): boolean;
+  /** This should only be needed by services that need to contextualize the response for the caller
+   *  @param executionToken Token that was previously registered.
+   *  @returns `true` if the token matches a token that was previous registered, `false` otherwise.
+   */
+  function tokenIsValid(executionToken: ExecutionToken): boolean;
+  const executionTokenService: {
+    registerExtension: typeof registerExtension;
+    unregisterExtension: typeof unregisterExtension;
+    tokenIsValid: typeof tokenIsValid;
+  };
+  export default executionTokenService;
+}
+declare module 'node/services/extension-file.service' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  /** This is only intended to be called by the extension service.
+   *  This service cannot call into the extension service or it causes a circular dependency.
+   */
+  export function setExtensionUris(urisPerExtension: Map<string, string>): void;
+  export function sanitizeDirectoryName(str: string): string;
+  function readFileFromInstallDirectory(token: ExecutionToken, fileName: string): Promise<string>;
+  function readUserFile(token: ExecutionToken, fileName: string): Promise<string>;
+  function writeUserFile(token: ExecutionToken, fileName: string, data: string): Promise<void>;
+  const extensionFileService: {
+    readFileFromInstallDirectory: typeof readFileFromInstallDirectory;
+    readUserFile: typeof readUserFile;
+    writeUserFile: typeof writeUserFile;
+  };
+  export default extensionFileService;
+  export type ExtensionFileService = typeof extensionFileService;
+}
 declare module 'renderer/components/papi-components/button.component' {
   import { MouseEventHandler, PropsWithChildren } from 'react';
   import 'renderer/components/papi-components/button.component.css';
@@ -2148,6 +2288,21 @@ declare module 'papi' {
         providerName: string,
       ) => Promise<T_5 | undefined>;
     };
+    fileSystem: {
+      readFileFromInstallDirectory: (
+        token: import('node/models/execution-token.model').ExecutionToken,
+        fileName: string,
+      ) => Promise<string>;
+      readUserFile: (
+        token: import('node/models/execution-token.model').ExecutionToken,
+        fileName: string,
+      ) => Promise<string>;
+      writeUserFile: (
+        token: import('node/models/execution-token.model').ExecutionToken,
+        fileName: string,
+        data: string,
+      ) => Promise<void>;
+    };
   };
   export default papi;
   /**
@@ -2157,4 +2312,29 @@ declare module 'papi' {
   export const MODULE_SIMILAR_APIS: Readonly<{
     [moduleName: string]: string | undefined;
   }>;
+}
+declare module 'extension-host/extension-types/extension-activation-context.model' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  /** An object of this type is passed into `activate()` for each extension during initialization */
+  export type ExecutionActivationContext = {
+    executionToken: ExecutionToken;
+  };
+}
+declare module 'extension-host/extension-types/extension.interface' {
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+  /** Interface for all extensions to implement */
+  export interface IExtension {
+    /**
+     * Sets up this extension! Runs when paranext wants this extension to activate. For example, activate() should register commands for this extension
+     * @param context data and utilities that are specific to this particular extension
+     * @returns unsubscriber to run to deactivate this extension
+     */
+    activate: (context: ExecutionActivationContext) => Promise<UnsubscriberAsync>;
+    /**
+     * Deactivate anything in this extension that is not covered by the unsubscriber returned from the activate function, unsubscribing from things and such.
+     * @returns promise that resolves to true if successfully deactivated
+     */
+    deactivate?: UnsubscriberAsync;
+  }
 }
