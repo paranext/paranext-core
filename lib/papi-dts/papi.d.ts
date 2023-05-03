@@ -1170,10 +1170,13 @@ declare module 'shared/data/web-view.model' {
 declare module 'shared/services/web-view.service' {
   import { WebViewContents, WebViewProps } from 'shared/data/web-view.model';
   type LayoutType = 'tab' | 'panel' | 'float';
+  interface Layout {
+    type: LayoutType;
+  }
   /** Event emitted when webViews are added */
   export type AddWebViewEvent = {
     webView: WebViewProps;
-    layoutType: LayoutType;
+    layout: Layout;
   };
   /** Event that emits with webView info when a webView is added */
   export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
@@ -1182,13 +1185,13 @@ declare module 'shared/services/web-view.service' {
    * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
    * @returns promise that resolves nothing if we successfully handled the webView
    */
-  export const addWebView: (webView: WebViewContents, layoutType?: LayoutType) => Promise<void>;
+  export const addWebView: (webView: WebViewContents, layout?: Layout) => Promise<void>;
   /** Sets up the WebViewService. Runs only once */
   export const initialize: () => Promise<void>;
   /** All the exports in this service that are to be exposed on the PAPI */
   export const papiWebViewService: {
     onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
-    addWebView: (webView: WebViewContents, layoutType?: LayoutType) => Promise<void>;
+    addWebView: (webView: WebViewContents, layout?: Layout) => Promise<void>;
     initialize: () => Promise<void>;
   };
 }

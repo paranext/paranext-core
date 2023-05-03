@@ -15,7 +15,7 @@ const testLayout: LayoutBase = {
     children: [
       {
         mode: 'vertical',
-        size: 200,
+        size: 250,
         children: [
           {
             tabs: [{ id: WEBVIEW_PLACEHOLDER_TAB_ID }],
@@ -35,10 +35,10 @@ const testLayout: LayoutBase = {
     children: [
       {
         tabs: [{ id: TEST_QUICK_VERSE_TAB_ID }],
-        x: 360,
-        y: 60,
+        x: 300,
+        y: 170,
         w: 320,
-        h: 300,
+        h: 190,
       },
     ],
   },

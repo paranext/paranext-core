@@ -110,7 +110,7 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
   return initial || defaultValue;
 }
 
-function addWebViewToDock({ webView, layoutType }: AddWebViewEvent, dockLayout: DockLayout) {
+function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayout: DockLayout) {
   const tabId = serializeTabId(TYPE_WEBVIEW, webView.id);
   let targetTab = dockLayout.find(tabId) as TabData;
   let willRemoveTarget = false;
@@ -123,7 +123,7 @@ function addWebViewToDock({ webView, layoutType }: AddWebViewEvent, dockLayout: 
   const tab = loadTab({ id: tabId, data: webView });
   previousTabId = tabId;
 
-  switch (layoutType) {
+  switch (layout.type) {
     case 'tab':
       if (direction === 'update') dockLayout.updateTab(tabId, tab);
       else dockLayout.dockMove(tab, targetTab, direction);
@@ -132,10 +132,10 @@ function addWebViewToDock({ webView, layoutType }: AddWebViewEvent, dockLayout: 
 
     case 'panel':
     case 'float':
-      throw new Error(`Not yet implemented layoutType: '${layoutType}'`);
+      throw new Error(`Not yet implemented layoutType: '${layout.type}'`);
 
     default:
-      throw new Error(`Unknown layoutType: '${layoutType}'`);
+      throw new Error(`Unknown layoutType: '${layout.type}'`);
   }
 }
 

@@ -26,10 +26,14 @@ import {
 
 type LayoutType = 'tab' | 'panel' | 'float';
 
+interface Layout {
+  type: LayoutType;
+}
+
 /** Event emitted when webViews are added */
 export type AddWebViewEvent = {
   webView: WebViewProps;
-  layoutType: LayoutType;
+  layout: Layout;
 };
 
 /** Prefix on requests that indicates that the request is related to webView operations */
@@ -89,7 +93,7 @@ const getWebViewPapi = (webViewId: string) => {
  */
 export const addWebView = async (
   webView: WebViewContents,
-  layoutType: LayoutType = 'tab',
+  layout: Layout = { type: 'tab' },
 ): Promise<void> => {
   if (!isRenderer()) {
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
@@ -99,7 +103,7 @@ export const addWebView = async (
       let success = true;
       // eslint-disable-next-line no-await-in-loop
       await commandService
-        .sendCommand<[WebViewContents, LayoutType], void>('addWebView', webView, layoutType)
+        .sendCommand<[WebViewContents, Layout], void>('addWebView', webView, layout)
         .catch(async (error) => {
           success = false;
           if (attemptsRemaining === 1) throw error;
@@ -241,7 +245,7 @@ export const addWebView = async (
     content: webViewContent,
   };
   // Inform web view consumers we added a web view
-  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layoutType });
+  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layout });
 };
 
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
