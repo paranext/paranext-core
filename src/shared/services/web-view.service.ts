@@ -24,11 +24,20 @@ import {
   WebViewProps,
 } from '@shared/data/web-view.model';
 
-type LayoutType = 'tab' | 'panel' | 'float';
-
-interface Layout {
-  type: LayoutType;
+interface TabLayout {
+  type: 'tab';
 }
+
+export interface FloatLayout {
+  type: 'float';
+  floatSize: { width: number; height: number };
+}
+
+interface PanelLayout {
+  type: 'panel';
+}
+
+type Layout = TabLayout | FloatLayout | PanelLayout;
 
 /** Event emitted when webViews are added */
 export type AddWebViewEvent = {
