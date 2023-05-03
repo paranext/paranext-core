@@ -69,6 +69,17 @@ function getCommandLineArgumentsToForward() {
 }
 
 /**
+ * Get a list of all the external extension paths provided via command-line so we can watch them
+ * with nodemon
+ */
+function getExternalExtensionPaths() {
+  return [
+    ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS),
+    ...getCommandLineArgumentsGroup(ARG_EXTENSION_BASE_DIRS),
+  ];
+}
+
+/**
  * Starts the extension host process if it isn't already running.
  */
 function startExtensionHost() {
@@ -82,28 +93,48 @@ function startExtensionHost() {
     globalThis.resourcesPath,
     ...getCommandLineArgumentsToForward(),
   ];
-  extensionHost = app.isPackaged
-    ? fork(
-        path.join(__dirname, '../extension-host/extension-host.js'),
-        ['--packaged', ...sharedArgs],
-        {
-          stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-        },
-      )
-    : spawn(
-        'node',
-        [
-          'node_modules/nodemon/bin/nodemon.js',
-          '--transpile-only',
-          './src/extension-host/extension-host.ts',
-          '--',
-          ...sharedArgs,
-        ],
-        {
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: { ...process.env, NODE_ENV: 'development' },
-        },
-      );
+
+  if (app.isPackaged) {
+    extensionHost = fork(
+      path.join(__dirname, '../extension-host/extension-host.js'),
+      ['--packaged', ...sharedArgs],
+      {
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      },
+    );
+  } else {
+    // If we are in development, get the nodemon watch config so we can pass it in along with the
+    // external extension directories
+    // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
+    // For this dev-only code, it is useful to be able to synchronously get the nodemon.json file
+    // eslint-disable-next-line import/no-dynamic-require, global-require
+    const nodemonConfig = require(/* webpackIgnore: true */ path.join(
+      globalThis.resourcesPath,
+      'nodemon.json',
+    ));
+    const nodemonWatchPaths = nodemonConfig?.watch ? nodemonConfig.watch : [];
+
+    extensionHost = spawn(
+      'node',
+      [
+        'node_modules/nodemon/bin/nodemon.js',
+        // Provide the nodemon config paths and command-line argument extension paths as watch
+        // directories for nodemon
+        ...[...nodemonWatchPaths, ...getExternalExtensionPaths()].flatMap((extensionPath) => [
+          '--watch',
+          extensionPath,
+        ]),
+        '--transpile-only',
+        './src/extension-host/extension-host.ts',
+        '--',
+        ...sharedArgs,
+      ],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, NODE_ENV: 'development' },
+      },
+    );
+  }
 
   if (!extensionHost.stderr || !extensionHost.stdout)
     logger.error(
