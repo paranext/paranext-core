@@ -169,6 +169,7 @@ const extensionConfig = defineConfig(async () => {
         // Do not bundle papi because it will be imported in Paranext
         external: paranextProvidedModules,
       },
+      sourcemap: 'inline',
     },
   };
 });

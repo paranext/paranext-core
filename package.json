@@ -41,7 +41,7 @@
   ],
   "main": "./src/main/main.ts",
   "scripts": {
-    "build": "concurrently \"npm run build:main\" \"npm run build:extension-host\" \"npm run build:renderer\" \"npm run build:types\" \"npm run build:extensions\" \"npm run build:data-release\"",
+    "build": "concurrently \"npm:build:main\" \"npm:build:extension-host\" \"npm:build:renderer\" \"npm:build:types\" \"npm:build:extensions\" \"npm:build:data-release\"",
     "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.main.prod.ts",
     "build:extension-host": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.extension-host.prod.ts",
     "build:extensions": "cd extensions && npm run build",

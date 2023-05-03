@@ -2,6 +2,11 @@
  * Service that runs the extension-host process from the main file
  */
 
+import {
+  ARG_EXTENSION_BASE_DIRS,
+  ARG_EXTENSION_DIRS,
+  getCommandLineArgumentsGroup,
+} from '@node/utils/command-line.util';
 import logger, { formatLog } from '@shared/services/logger.service';
 import { waitForDuration } from '@shared/utils/util';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
@@ -52,6 +57,18 @@ function killExtensionHost() {
 }
 
 /**
+ * Returns an array of the command-line arguments to forward from main (when launching paranext)
+ * to the extension host process.
+ */
+function getCommandLineArgumentsToForward() {
+  // Pass through the relevant command-line arguments to the extension host
+  return [
+    ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS, true),
+    ...getCommandLineArgumentsGroup(ARG_EXTENSION_BASE_DIRS, true),
+  ];
+}
+
+/**
  * Starts the extension host process if it isn't already running.
  */
 function startExtensionHost() {
@@ -59,7 +76,12 @@ function startExtensionHost() {
 
   // In production, fork a new process for the extension host
   // In development, spawn nodemon to watch the extension-host
-  const sharedArgs = ['--resourcesPath', globalThis.resourcesPath];
+  /** Arguments that will be passed to the extension host no matter how we start the process */
+  const sharedArgs = [
+    '--resourcesPath',
+    globalThis.resourcesPath,
+    ...getCommandLineArgumentsToForward(),
+  ];
   extensionHost = app.isPackaged
     ? fork(
         path.join(__dirname, '../extension-host/extension-host.js'),
