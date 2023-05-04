@@ -1599,9 +1599,9 @@ declare module 'node/models/execution-token.model' {
   export type ExecutionTokenType = 'extension';
   /** Execution tokens can be passed into API calls to provide context about their identity */
   export class ExecutionToken {
-    type: Readonly<ExecutionTokenType>;
-    name: Readonly<string>;
-    nonce: Readonly<string>;
+    readonly type: ExecutionTokenType;
+    readonly name: string;
+    readonly nonce: string;
     constructor(tokenType: ExecutionTokenType, name: string);
     getHash(): string;
   }
@@ -1634,16 +1634,38 @@ declare module 'node/services/execution-token.service' {
   };
   export default executionTokenService;
 }
-declare module 'node/services/extension-file.service' {
+declare module 'extension-host/services/extension-file.service' {
   import { ExecutionToken } from 'node/models/execution-token.model';
   /** This is only intended to be called by the extension service.
    *  This service cannot call into the extension service or it causes a circular dependency.
    */
   export function setExtensionUris(urisPerExtension: Map<string, string>): void;
   export function sanitizeDirectoryName(str: string): string;
+  /** Read a file from within the `assets` subdirectory of the extension's installation directory
+   *  @param token ExecutionToken provided to the extension when `activate()` was called
+   *  @param fileName Name of the file to be read
+   *  @returns Promise for a string with the contents of the file
+   */
   function readFileFromInstallDirectory(token: ExecutionToken, fileName: string): Promise<string>;
+  /** Read a file in a location specific to the user (as identified by the OS) and extension (as
+   *  identified by the ExecutionToken)
+   *  @param token ExecutionToken provided to the extension when `activate()` was called
+   *  @param fileName Name of the file to be read
+   *  @returns Promise for a string with the contents of the file
+   */
   function readUserFile(token: ExecutionToken, fileName: string): Promise<string>;
+  /** Write a file to a location specific to the user (as identified by the OS) and extension (as
+   *  identified by the ExecutionToken)
+   *  @param token ExecutionToken provided to the extension when `activate()` was called
+   *  @param fileName Name of the file to be written
+   *  @param data Data to be written to the file
+   *  @returns Promise that will resolve if the file is written successfully
+   */
   function writeUserFile(token: ExecutionToken, fileName: string, data: string): Promise<void>;
+  /** This service provides extensions in the extension host the ability to read/write files
+   *  based on the extension identity and current user (as identified by the OS). This service will
+   *  not work within the renderer.
+   */
   const extensionFileService: {
     readFileFromInstallDirectory: typeof readFileFromInstallDirectory;
     readUserFile: typeof readUserFile;
