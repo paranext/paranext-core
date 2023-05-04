@@ -33,8 +33,24 @@ export interface FloatLayout {
   floatSize: { width: number; height: number };
 }
 
+type PanelDirection =
+  | 'left'
+  | 'right'
+  | 'bottom'
+  | 'top'
+  // TODO: The following produce a panel but probably aren't useful for panels - IJH 2023-05-5
+  | 'before-tab'
+  | 'after-tab'
+  | 'maximize'
+  | 'move'
+  | 'active'
+  | 'update';
+
 interface PanelLayout {
   type: 'panel';
+  direction: PanelDirection;
+  /** If undefined, it will add in the `direction` relative to the previously added tab. */
+  targetTabId?: string;
 }
 
 type Layout = TabLayout | FloatLayout | PanelLayout;

@@ -1179,8 +1179,22 @@ declare module 'shared/services/web-view.service' {
       height: number;
     };
   }
+  type PanelDirection =
+    | 'left'
+    | 'right'
+    | 'bottom'
+    | 'top'
+    | 'before-tab'
+    | 'after-tab'
+    | 'maximize'
+    | 'move'
+    | 'active'
+    | 'update';
   interface PanelLayout {
     type: 'panel';
+    direction: PanelDirection;
+    /** If undefined, it will add in the `direction` relative to the previously added tab. */
+    targetTabId?: string;
   }
   type Layout = TabLayout | FloatLayout | PanelLayout;
   /** Event emitted when webViews are added */

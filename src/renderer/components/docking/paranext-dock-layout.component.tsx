@@ -9,7 +9,7 @@ import createWebViewPanel from '@renderer/components/web-view.component';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import createAboutPanel from '@renderer/testing/about-panel.component';
 import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
-import testLayout, { WEBVIEW_PLACEHOLDER_TAB_ID } from '@renderer/testing/test-layout.data';
+import testLayout, { FIRST_TAB_ID } from '@renderer/testing/test-layout.data';
 import createTabPanel from '@renderer/testing/test-panel.component';
 import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import { SavedTabInfo, TYPE_WEBVIEW, TabCreator, TabInfo } from '@shared/data/web-view.model';
@@ -57,7 +57,7 @@ const tabTypeCreationMap = new Map<TabType, TabCreator>([
   [TYPE_WEBVIEW, createWebViewPanel],
 ]);
 
-let previousTabId: string = WEBVIEW_PLACEHOLDER_TAB_ID;
+let previousTabId: string = FIRST_TAB_ID;
 let floatPosition: DockFloatPosition = { left: 0, top: 0, width: 0, height: 0 };
 
 function getTabDataFromSavedInfo(tabInfo: SavedTabInfo): TabInfo {
@@ -184,13 +184,13 @@ function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayout: Dock
 
   // Add new WebView
   const unknownLayoutType = layout.type;
+  let targetTabId = previousTabId;
   switch (layout.type) {
     case 'tab':
       targetTab = dockLayout.find(previousTabId) as TabData;
-      dockLayout.dockMove(tab, targetTab, 'after-tab');
-      if (previousTabId === WEBVIEW_PLACEHOLDER_TAB_ID)
-        // remove placeholder
-        dockLayout.dockMove(targetTab, null, 'remove');
+      if (previousTabId === FIRST_TAB_ID)
+        dockLayout.dockMove(tab, targetTab.parent as PanelData, 'top');
+      else dockLayout.dockMove(tab, targetTab, 'after-tab');
       previousTabId = tabId;
       break;
 
@@ -200,7 +200,13 @@ function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayout: Dock
       break;
 
     case 'panel':
-      throw new Error(`Not yet implemented layoutType: '${layout.type}'`);
+      if (layout.targetTabId) targetTabId = layout.targetTabId;
+      targetTab = dockLayout.find(targetTabId);
+      if (!isTab(targetTab))
+        throw new Error(`When adding a panel, unknown target tab: '${targetTabId}'`);
+
+      dockLayout.dockMove(tab, targetTab.parent as PanelData, layout.direction);
+      break;
 
     default:
       throw new Error(`Unknown layoutType: '${unknownLayoutType}'`);

@@ -60,7 +60,7 @@ export async function activate() {
       contentType: 'html' as WebViewContentType.HTML,
       content: helloSomeoneHtmlWebView,
     },
-    { type: 'float', floatSize: { width: 320, height: 230 } },
+    { type: 'panel', direction: 'top' },
   );
 
   const unsubPromises = [
