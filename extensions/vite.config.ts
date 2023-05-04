@@ -100,7 +100,6 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
 
 /** List of static files to copy from each extension's source directory */
 const staticFiles = [
-  'assets',
   'manifest.json',
   'package.json',
   // TODO: check each extension's package.json -> "types" property for this instead of assuming
@@ -144,6 +143,14 @@ const extensionConfig = defineConfig(async () => {
             }),
           ),
         ),
+      }),
+      viteStaticCopy({
+        targets: extensions.flatMap((extension): Target => {
+          return {
+            src: path.join(sourceFolder, extension.dirName, 'assets'),
+            dest: extension.dirName,
+          };
+        }),
       }),
       // Import web view files as strings to pass on the papi
       // importString plugin must be after any other plugins that need to transpile these files

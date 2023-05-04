@@ -29,10 +29,6 @@ class QuickVerseDataProviderEngine
   heresyWarning = '';
   heresyCount = 0;
 
-  constructor(heresyWarning: string) {
-    this.heresyWarning = heresyWarning ?? this.heresyWarning;
-  }
-
   // Note: this method does not have to be provided here for it to work properly because it is layered over on the papi.
   // But because we provide it here, we must return `true` to notify like in the set method.
   // The contents of this method run before the update is emitted.
@@ -56,9 +52,14 @@ class QuickVerseDataProviderEngine
 
     // Only heretics change Scripture, so you have to tell us you're a heretic
     if (!data.isHeresy) return false;
+    this.heresyCount += 1;
 
     // If there is no change in the verse text, don't update
     if (data.text === this.verses[this.#getSelector(selector)].text) return false;
+
+    // Make sure it is reported as heresy
+    if (!data.text.startsWith(`[${this.heresyWarning}`))
+      data.text = `[${this.heresyWarning} ${this.heresyCount}] ${data.text}`;
 
     // Update the verse text, track the latest change, and send an update
     this.verses[this.#getSelector(selector)] = {
@@ -66,7 +67,6 @@ class QuickVerseDataProviderEngine
       isChanged: true,
     };
     if (selector !== 'latest') this.latestVerseRef = this.#getSelector(selector);
-    this.heresyCount += 1;
     return true;
   }
 
@@ -109,11 +109,6 @@ class QuickVerseDataProviderEngine
       }
     }
 
-    if (responseVerse.isChanged) {
-      // Remove any previous heresy warning from the beginning of the text so they don't stack
-      responseVerse.text = responseVerse.text.replace(/^\[.* \d*\] /, '');
-      return `[${this.heresyWarning} ${this.heresyCount}] ${responseVerse.text}`;
-    }
     return responseVerse.text;
   };
 
@@ -132,13 +127,18 @@ class QuickVerseDataProviderEngine
 }
 
 export async function activate(context: ExecutionActivationContext) {
+  const token: ExecutionToken = context.executionToken;
+
+  // eslint-disable-next-line no-var
+  var storedHeresyCount: number = 0;
+
   logger.info('Quick Verse is activating!');
 
-  const token: ExecutionToken = context.executionToken;
-  const warning = await papi.fileSystem.readFileFromInstallDirectory(token, 'heresy-warning.txt');
-  const engine = new QuickVerseDataProviderEngine(warning.trim());
+  const engine = new QuickVerseDataProviderEngine();
 
-  let storedHeresyCount: number = 0;
+  const warning = await papi.fileSystem.readFileFromInstallDirectory(token, 'heresy-warning.txt');
+  [engine.heresyWarning] = warning.split(/\r?\n/);
+
   // If a user has never been a heretic, this file won't exist
   try {
     const loadedData = await papi.fileSystem.readUserFile(token, 'heresyCount.txt');

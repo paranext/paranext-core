@@ -62,42 +62,20 @@ function buildUserDataPath(token: ExecutionToken, fileName: string): string {
 
 // #region Exports intended to be used by extensions
 
-/** Read a file from within the `assets` subdirectory of the extension's installation directory
- *  @param token ExecutionToken provided to the extension when `activate()` was called
- *  @param fileName Name of the file to be read
- *  @returns Promise for a string with the contents of the file
- */
 function readFileFromInstallDirectory(token: ExecutionToken, fileName: string): Promise<string> {
   return readFileText(buildExtensionPath(token, fileName));
 }
 
-/** Read a file in a location specific to the user (as identified by the OS) and extension (as
- *  identified by the ExecutionToken)
- *  @param token ExecutionToken provided to the extension when `activate()` was called
- *  @param fileName Name of the file to be read
- *  @returns Promise for a string with the contents of the file
- */
 function readUserFile(token: ExecutionToken, fileName: string): Promise<string> {
   return readFileText(buildUserDataPath(token, fileName));
 }
 
-/** Write a file to a location specific to the user (as identified by the OS) and extension (as
- *  identified by the ExecutionToken)
- *  @param token ExecutionToken provided to the extension when `activate()` was called
- *  @param fileName Name of the file to be written
- *  @param data Data to be written to the file
- *  @returns Promise that will resolve if the file is written successfully
- */
 function writeUserFile(token: ExecutionToken, fileName: string, data: string): Promise<void> {
   return writeFileText(buildUserDataPath(token, fileName), data);
 }
 
 // TODO: Add functions to read/write to project files once we have something to represent projects
 
-/** This service provides extensions in the extension host the ability to read/write files
- *  based on the extension identity and current user (as identified by the OS). This service will
- *  not work within the renderer.
- */
 const extensionFileService = {
   readFileFromInstallDirectory,
   readUserFile,
