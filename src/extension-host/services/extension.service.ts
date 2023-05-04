@@ -9,7 +9,7 @@ import { Uri } from '@shared/data/file-system.model';
 import { UnsubscriberAsync } from '@shared/utils/papi-util';
 import Module from 'module';
 import papi, { MODULE_SIMILAR_APIS } from '@shared/services/papi.service';
-import { setExtensionUris } from '@node/services/extension-file.service';
+import { setExtensionUris } from '@extension-host/services/extension-file.service';
 import logger from '@shared/services/logger.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
