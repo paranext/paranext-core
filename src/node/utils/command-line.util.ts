@@ -1,10 +1,10 @@
 /** Command-line argument that specifies extra individual extension folders */
-export const ARG_EXTENSION_DIRS = '--extensionDirs';
+export const ARG_EXTENSIONS = '--extensions';
 /**
  * Command-line argument that specifies extra extension directories in which to check all contained
  * folders for extensions
  */
-export const ARG_EXTENSION_BASE_DIRS = '--extensionBaseDirs';
+export const ARG_EXTENSION_DIRS = '--extensionDirs';
 
 /** Get the index of the next command-line argument after the startIndex */
 export function findNextCommandLineArgumentIndex(currentArgIndex: number) {

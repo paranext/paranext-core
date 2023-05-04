@@ -11,10 +11,16 @@ import Module from 'module';
 import papi, { MODULE_SIMILAR_APIS } from '@shared/services/papi.service';
 import logger from '@shared/services/logger.service';
 import {
-  ARG_EXTENSION_BASE_DIRS,
   ARG_EXTENSION_DIRS,
+  ARG_EXTENSIONS,
   getCommandLineArgumentsGroup,
 } from '@node/utils/command-line.util';
+
+/**
+ * Name of the file describing the extension and its capabilities. Provided by the extension
+ * developer
+ */
+const MANIFEST_FILE_NAME = 'manifest.json';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -73,40 +79,44 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
     await Promise.all(
       [
         `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
-        ...getCommandLineArgumentsGroup(ARG_EXTENSION_BASE_DIRS).map(
-          (extensionBaseDirPath) => `file://${extensionBaseDirPath}`,
+        ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
+          (extensionDirPath) => `file://${extensionDirPath}`,
         ),
-      ].map((extensionBaseDirUri) => readDir(extensionBaseDirUri)),
+      ].map((extensionDirUri) => readDir(extensionDirUri)),
     )
   )
     .flatMap((dirEntries) => dirEntries[EntryType.Directory])
-    .concat(
-      getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
-        (extensionDirPath) => `file://${extensionDirPath}`,
-      ),
-    )
     .filter((extensionDirUri) => extensionDirUri);
 
   return (
     await Promise.allSettled(
-      extensionFolders.map(async (extensionFolder) => {
-        try {
-          const extensionManifestJson = await readFileText(
-            joinUriPaths(extensionFolder, 'manifest.json'),
-          );
-          return Object.freeze({
-            ...parseManifest(extensionManifestJson),
-            dirUri: extensionFolder,
-          });
-        } catch (e) {
-          const error = new Error(
-            `Extension folder ${extensionFolder} failed to load. Reason: ${e}`,
-          );
-          logger.warn(error);
-          logger.warn('stuff');
-          throw error;
-        }
-      }),
+      extensionFolders
+        .concat(
+          getCommandLineArgumentsGroup(ARG_EXTENSIONS).map((extensionDirPath) => {
+            const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
+              ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
+              : extensionDirPath;
+            return `file://${extensionFolder}`;
+          }),
+        )
+        .map(async (extensionFolder) => {
+          try {
+            const extensionManifestJson = await readFileText(
+              joinUriPaths(extensionFolder, MANIFEST_FILE_NAME),
+            );
+            return Object.freeze({
+              ...parseManifest(extensionManifestJson),
+              dirUri: extensionFolder,
+            });
+          } catch (e) {
+            const error = new Error(
+              `Extension folder ${extensionFolder} failed to load. Reason: ${e}`,
+            );
+            logger.warn(error);
+            logger.warn('stuff');
+            throw error;
+          }
+        }),
     )
   )
     .filter((settled) => settled.status === 'fulfilled')

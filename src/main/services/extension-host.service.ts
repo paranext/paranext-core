@@ -3,8 +3,8 @@
  */
 
 import {
-  ARG_EXTENSION_BASE_DIRS,
   ARG_EXTENSION_DIRS,
+  ARG_EXTENSIONS,
   getCommandLineArgumentsGroup,
 } from '@node/utils/command-line.util';
 import logger, { formatLog } from '@shared/services/logger.service';
@@ -63,8 +63,8 @@ function killExtensionHost() {
 function getCommandLineArgumentsToForward() {
   // Pass through the relevant command-line arguments to the extension host
   return [
+    ...getCommandLineArgumentsGroup(ARG_EXTENSIONS, true),
     ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS, true),
-    ...getCommandLineArgumentsGroup(ARG_EXTENSION_BASE_DIRS, true),
   ];
 }
 
@@ -74,8 +74,8 @@ function getCommandLineArgumentsToForward() {
  */
 function getExternalExtensionPaths() {
   return [
+    ...getCommandLineArgumentsGroup(ARG_EXTENSIONS),
     ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS),
-    ...getCommandLineArgumentsGroup(ARG_EXTENSION_BASE_DIRS),
   ];
 }
 
