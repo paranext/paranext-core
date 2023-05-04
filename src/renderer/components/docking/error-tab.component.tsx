@@ -16,7 +16,6 @@ function ErrorTab({ errorMessage }: { errorMessage: string }) {
  */
 const createErrorTab = (errorMessage: string): TabInfo => {
   return {
-    type: 'error',
     title: 'Error',
     content: <ErrorTab errorMessage={errorMessage} />,
     minWidth: 150,
