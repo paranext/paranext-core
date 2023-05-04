@@ -6,9 +6,9 @@ export type ExecutionTokenType = 'extension';
 
 /** Execution tokens can be passed into API calls to provide context about their identity */
 export class ExecutionToken {
-  public type: Readonly<ExecutionTokenType>;
-  public name: Readonly<string>;
-  public nonce: Readonly<string>;
+  public readonly type: ExecutionTokenType;
+  public readonly name: string;
+  public readonly nonce: string;
 
   constructor(tokenType: ExecutionTokenType, name: string) {
     if (!tokenType) throw new Error('token type must be defined');
@@ -17,6 +17,7 @@ export class ExecutionToken {
     this.type = tokenType;
     this.name = name;
     this.nonce = createNonce('hex');
+    Object.freeze(this);
   }
 
   public getHash(): string {

@@ -17,7 +17,7 @@ function registerExtension(extensionName: string): ExecutionToken {
   const mapKey: string = getMapKey(extensionName);
   if (tokenMap.get(mapKey)) throw new Error(`${extensionName} is already registered!`);
 
-  const newToken = Object.freeze(new ExecutionToken('extension', extensionName));
+  const newToken = new ExecutionToken('extension', extensionName);
   tokenMap.set(mapKey, newToken);
   return newToken;
 }
