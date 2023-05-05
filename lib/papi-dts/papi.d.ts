@@ -1166,9 +1166,6 @@ declare module 'shared/data/web-view.model' {
   /** WebView definition created by extensions to show web content */
   export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
   export const TYPE_WEBVIEW = 'webView';
-}
-declare module 'shared/services/web-view.service' {
-  import { WebViewContents, WebViewProps } from 'shared/data/web-view.model';
   interface TabLayout {
     type: 'tab';
   }
@@ -1196,12 +1193,15 @@ declare module 'shared/services/web-view.service' {
     /** If undefined, it will add in the `direction` relative to the previously added tab. */
     targetTabId?: string;
   }
-  type Layout = TabLayout | FloatLayout | PanelLayout;
+  export type Layout = TabLayout | FloatLayout | PanelLayout;
   /** Event emitted when webViews are added */
   export type AddWebViewEvent = {
     webView: WebViewProps;
     layout: Layout;
   };
+}
+declare module 'shared/services/web-view.service' {
+  import { AddWebViewEvent, Layout, WebViewContents } from 'shared/data/web-view.model';
   /** Event that emits with webView info when a webView is added */
   export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
   /**

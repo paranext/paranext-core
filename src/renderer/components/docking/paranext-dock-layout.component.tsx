@@ -7,14 +7,21 @@ import ParanextPanel from '@renderer/components/docking/paranext-panel.component
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
 import createWebViewPanel from '@renderer/components/web-view.component';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
+import LogError from '@renderer/log-error.model';
 import createAboutPanel from '@renderer/testing/about-panel.component';
 import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
 import testLayout, { FIRST_TAB_ID } from '@renderer/testing/test-layout.data';
 import createTabPanel from '@renderer/testing/test-panel.component';
 import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-heresy-panel.component';
-import { SavedTabInfo, TYPE_WEBVIEW, TabCreator, TabInfo } from '@shared/data/web-view.model';
+import {
+  AddWebViewEvent,
+  FloatLayout,
+  SavedTabInfo,
+  TYPE_WEBVIEW,
+  TabCreator,
+  TabInfo,
+} from '@shared/data/web-view.model';
 import papi from '@shared/services/papi.service';
-import { AddWebViewEvent, FloatLayout } from '@shared/services/web-view.service';
 import { serializeTabId, deserializeTabId } from '@shared/utils/papi-util';
 
 interface DockLayoutSize {
@@ -81,10 +88,10 @@ function getTabDataFromSavedInfo(tabInfo: SavedTabInfo): TabInfo {
 /**
  * Creates tab data from the specified saved tab information by calling back to the
  * extension that registered the creation of the tab type
- * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock, typically from disk)
+ * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
  */
-function loadTab(savedTabInfo: SavedTabInfo): TabData & SavedTabInfo {
-  if (!savedTabInfo.id) throw new Error('loadTab: "id" is missing.');
+export function loadTab(savedTabInfo: SavedTabInfo): TabData & SavedTabInfo {
+  if (!savedTabInfo.id) throw new LogError('loadTab: "id" is missing.');
 
   const { id } = savedTabInfo;
   const newTabData = getTabDataFromSavedInfo(savedTabInfo);
@@ -131,10 +138,11 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  */
 function isTab(tab: PanelData | TabData | BoxData): boolean {
   if (
+    !tab ||
     (tab as PanelData).tabs ||
-    (tab as PanelData).x ||
     (tab as BoxData).mode ||
-    (tab.parent as PanelData).x
+    (tab as PanelData).x ||
+    (tab.parent as PanelData)?.x
   )
     return false;
   return true;
@@ -170,12 +178,12 @@ export function getFloatPosition(
   return { left, top, width, height };
 }
 
-function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayout: DockLayout) {
+export function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayout: DockLayout) {
   const tabId = serializeTabId(TYPE_WEBVIEW, webView.id);
   const tab = loadTab({ id: tabId, data: webView });
+  let targetTab = dockLayout.find(tabId);
 
   // Update existing WebView
-  let targetTab = dockLayout.find(tabId);
   if (targetTab) {
     dockLayout.updateTab(tabId, tab);
     if (isTab(targetTab)) previousTabId = tabId;
@@ -203,13 +211,13 @@ function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayout: Dock
       if (layout.targetTabId) targetTabId = layout.targetTabId;
       targetTab = dockLayout.find(targetTabId);
       if (!isTab(targetTab))
-        throw new Error(`When adding a panel, unknown target tab: '${targetTabId}'`);
+        throw new LogError(`When adding a panel, unknown target tab: '${targetTabId}'`);
 
       dockLayout.dockMove(tab, targetTab.parent as PanelData, layout.direction);
       break;
 
     default:
-      throw new Error(`Unknown layoutType: '${unknownLayoutType}'`);
+      throw new LogError(`Unknown layoutType: '${unknownLayoutType}'`);
   }
 }
 
