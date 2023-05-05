@@ -13,8 +13,17 @@ import { groupBy } from '@shared/utils/util';
  * @param uri Uri of file
  * @returns promise that resolves to the contents of the file
  */
-export function readFileText(uri: Uri): Promise<string> {
+export async function readFileText(uri: Uri): Promise<string> {
   return fs.promises.readFile(getPathFromUri(uri), 'utf8');
+}
+
+/**
+ * Reads a binary file asynchronously
+ * @param uri Uri of file
+ * @returns promise that resolves to the contents of the file
+ */
+export async function readFileBinary(uri: Uri): Promise<Buffer> {
+  return fs.promises.readFile(getPathFromUri(uri));
 }
 
 /**
@@ -23,11 +32,15 @@ export function readFileText(uri: Uri): Promise<string> {
  * @param fileContents string to write into the file
  * @returns promise that resolves after writing the file
  */
-export function writeFileText(uri: Uri, fileContents: string): Promise<void> {
-  const directoryName = path.dirname(getPathFromUri(uri));
-  return fs.promises.mkdir(directoryName, { recursive: true }).then(() => {
-    return fs.promises.writeFile(getPathFromUri(uri), fileContents);
-  });
+export async function writeFileText(uri: Uri, fileContents: string): Promise<void> {
+  const filePath: string = getPathFromUri(uri);
+  const directoryName: string = path.dirname(filePath);
+  await fs.promises.mkdir(directoryName, { recursive: true });
+  return fs.promises.writeFile(filePath, fileContents);
+}
+
+export async function deleteFile(uri: Uri): Promise<void> {
+  return fs.promises.rm(getPathFromUri(uri));
 }
 
 /** Type of file system item in a directory */

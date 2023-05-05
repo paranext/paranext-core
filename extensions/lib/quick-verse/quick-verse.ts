@@ -25,12 +25,12 @@ class QuickVerseDataProviderEngine
   /** Latest updated verse reference */
   latestVerseRef = 'john 11:35';
 
-  /** String to prefix heretical data */
-  heresyWarning = '';
+  /** Number of times any verse has been modified by a user this session */
   heresyCount = 0;
 
-  constructor(heresyWarning: string) {
-    this.heresyWarning = heresyWarning ?? this.heresyWarning;
+  /** @param heresyWarning string to prefix heretical data */
+  constructor(public heresyWarning: string) {
+    this.heresyWarning = this.heresyWarning ?? 'heresyCount =';
   }
 
   // Note: this method does not have to be provided here for it to work properly because it is layered over on the papi.
@@ -135,13 +135,16 @@ export async function activate(context: ExecutionActivationContext) {
   logger.info('Quick Verse is activating!');
 
   const token: ExecutionToken = context.executionToken;
-  const warning = await papi.fileSystem.readFileFromInstallDirectory(token, 'heresy-warning.txt');
+  const warning = await papi.storage.readTextFileFromInstallDirectory(
+    token,
+    'assets/heresy-warning.txt',
+  );
   const engine = new QuickVerseDataProviderEngine(warning.trim());
 
   let storedHeresyCount: number = 0;
-  // If a user has never been a heretic, this file won't exist
   try {
-    const loadedData = await papi.fileSystem.readUserFile(token, 'heresyCount.txt');
+    // If a user has never been a heretic, there is nothing to read
+    const loadedData = await papi.storage.readUserData(token, 'heresy-count');
     if (loadedData) storedHeresyCount = Number(loadedData);
   } catch (error) {
     logger.debug(error);
@@ -156,7 +159,7 @@ export async function activate(context: ExecutionActivationContext) {
   quickVerseDataProvider.subscribe('latest', () => {
     if (storedHeresyCount === engine.heresyCount) return;
     storedHeresyCount = engine.heresyCount;
-    papi.fileSystem.writeUserFile(token, 'heresyCount.txt', String(storedHeresyCount));
+    papi.storage.writeUserData(token, 'heresy-count', String(storedHeresyCount));
   });
 
   const unsubPromises: UnsubPromiseAsync[] = [];

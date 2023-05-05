@@ -1,4 +1,5 @@
 /// <reference types="react" />
+/// <reference types="node" />
 declare module 'shared/utils/papi-util' {
   /** Function to run to dispose of something. Returns true if successfully unsubscribed */
   export type Unsubscriber = () => boolean;
@@ -381,6 +382,11 @@ declare module 'shared/utils/internal-util' {
    * @returns Returns true if running on the renderer, false otherwise
    */
   export const isRenderer: () => boolean;
+  /**
+   * Determine if running on the extension host
+   * @returns Returns true if running on the extension host, false otherwise
+   */
+  export const isExtensionHost: () => boolean;
   /**
    * Gets which kind of process this is (main, renderer, extension-host)
    * @returns ProcessType for this process
@@ -1557,12 +1563,19 @@ declare module 'node/services/node-file-system.service' {
    */
   export function readFileText(uri: Uri): Promise<string>;
   /**
+   * Reads a binary file asynchronously
+   * @param uri Uri of file
+   * @returns promise that resolves to the contents of the file
+   */
+  export function readFileBinary(uri: Uri): Promise<Buffer>;
+  /**
    * Writes the string to a file asynchronously
    * @param uri Uri of file
    * @param fileContents string to write into the file
    * @returns promise that resolves after writing the file
    */
   export function writeFileText(uri: Uri, fileContents: string): Promise<void>;
+  export function deleteFile(uri: Uri): Promise<void>;
   /** Type of file system item in a directory */
   export enum EntryType {
     File = 'file',
@@ -1634,45 +1647,66 @@ declare module 'node/services/execution-token.service' {
   };
   export default executionTokenService;
 }
-declare module 'extension-host/services/extension-file.service' {
+declare module 'extension-host/services/extension-storage.service' {
   import { ExecutionToken } from 'node/models/execution-token.model';
+  import { Buffer } from 'buffer';
   /** This is only intended to be called by the extension service.
    *  This service cannot call into the extension service or it causes a circular dependency.
    */
   export function setExtensionUris(urisPerExtension: Map<string, string>): void;
-  export function sanitizeDirectoryName(str: string): string;
-  /** Read a file from within the `assets` subdirectory of the extension's installation directory
+  /** Read a text file from the the extension's installation directory
    *  @param token ExecutionToken provided to the extension when `activate()` was called
    *  @param fileName Name of the file to be read
    *  @returns Promise for a string with the contents of the file
    */
-  function readFileFromInstallDirectory(token: ExecutionToken, fileName: string): Promise<string>;
-  /** Read a file in a location specific to the user (as identified by the OS) and extension (as
-   *  identified by the ExecutionToken)
+  function readTextFileFromInstallDirectory(
+    token: ExecutionToken,
+    fileName: string,
+  ): Promise<string>;
+  /** Read a binary file from the the extension's installation directory
    *  @param token ExecutionToken provided to the extension when `activate()` was called
    *  @param fileName Name of the file to be read
-   *  @returns Promise for a string with the contents of the file
+   *  @returns Promise for a Buffer with the contents of the file
    */
-  function readUserFile(token: ExecutionToken, fileName: string): Promise<string>;
-  /** Write a file to a location specific to the user (as identified by the OS) and extension (as
-   *  identified by the ExecutionToken)
+  function readBinaryFileFromInstallDirectory(
+    token: ExecutionToken,
+    fileName: string,
+  ): Promise<Buffer>;
+  /** Read data specific to the user (as identified by the OS) and extension (as identified by
+   *  the ExecutionToken)
    *  @param token ExecutionToken provided to the extension when `activate()` was called
-   *  @param fileName Name of the file to be written
-   *  @param data Data to be written to the file
-   *  @returns Promise that will resolve if the file is written successfully
+   *  @param key Unique identifier of the data
+   *  @returns Promise for a string containing the data
    */
-  function writeUserFile(token: ExecutionToken, fileName: string, data: string): Promise<void>;
-  /** This service provides extensions in the extension host the ability to read/write files
+  function readUserData(token: ExecutionToken, key: string): Promise<string>;
+  /** Write data specific to the user (as identified by the OS) and extension (as identified by
+   *  the ExecutionToken)
+   *  @param token ExecutionToken provided to the extension when `activate()` was called
+   *  @param key Unique identifier of the data
+   *  @param data Data to be written
+   *  @returns Promise that will resolve if the data is written successfully
+   */
+  function writeUserData(token: ExecutionToken, key: string, data: string): Promise<void>;
+  /** Delete data previously written that is specific to the user (as identified by the OS)
+   *  and extension (as identified by the ExecutionToken)
+   *  @param token ExecutionToken provided to the extension when `activate()` was called
+   *  @param key Unique identifier of the data
+   *  @returns Promise that will resolve if the data is deleted successfully
+   */
+  function deleteUserData(token: ExecutionToken, key: string): Promise<void>;
+  /** This service provides extensions in the extension host the ability to read/write data
    *  based on the extension identity and current user (as identified by the OS). This service will
    *  not work within the renderer.
    */
-  const extensionFileService: {
-    readFileFromInstallDirectory: typeof readFileFromInstallDirectory;
-    readUserFile: typeof readUserFile;
-    writeUserFile: typeof writeUserFile;
+  const extensionStorageService: {
+    readTextFileFromInstallDirectory: typeof readTextFileFromInstallDirectory;
+    readBinaryFileFromInstallDirectory: typeof readBinaryFileFromInstallDirectory;
+    readUserData: typeof readUserData;
+    writeUserData: typeof writeUserData;
+    deleteUserData: typeof deleteUserData;
   };
-  export default extensionFileService;
-  export type ExtensionFileService = typeof extensionFileService;
+  export default extensionStorageService;
+  export type ExtensionStorageService = typeof extensionStorageService;
 }
 declare module 'renderer/components/papi-components/button.component' {
   import { MouseEventHandler, PropsWithChildren } from 'react';
@@ -2310,19 +2344,27 @@ declare module 'papi' {
         providerName: string,
       ) => Promise<T_5 | undefined>;
     };
-    fileSystem: {
-      readFileFromInstallDirectory: (
+    storage: {
+      readTextFileFromInstallDirectory: (
         token: import('node/models/execution-token.model').ExecutionToken,
         fileName: string,
       ) => Promise<string>;
-      readUserFile: (
+      readBinaryFileFromInstallDirectory: (
         token: import('node/models/execution-token.model').ExecutionToken,
         fileName: string,
+      ) => Promise<Buffer>;
+      readUserData: (
+        token: import('node/models/execution-token.model').ExecutionToken,
+        key: string,
       ) => Promise<string>;
-      writeUserFile: (
+      writeUserData: (
         token: import('node/models/execution-token.model').ExecutionToken,
-        fileName: string,
+        key: string,
         data: string,
+      ) => Promise<void>;
+      deleteUserData: (
+        token: import('node/models/execution-token.model').ExecutionToken,
+        key: string,
       ) => Promise<void>;
     };
   };
