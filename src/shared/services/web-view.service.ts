@@ -10,7 +10,7 @@ import {
   serializeRequestType,
 } from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';
-import { newNonce, wait } from '@shared/utils/util';
+import { getErrorMessage, newNonce, wait } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi.service';
@@ -108,16 +108,32 @@ export const addWebView = async (
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
     // TODO: This block should be removed when https://github.com/paranext/paranext-core/issues/51
     // is done. It can go back to just the `sendCommand` call without the loop.
+    // Try to run addWebView up to 20 times until the renderer is up
     for (let attemptsRemaining = 20; attemptsRemaining > 0; attemptsRemaining--) {
       let success = true;
-      // eslint-disable-next-line no-await-in-loop
-      await commandService
-        .sendCommand<[WebViewContents, Layout], void>('addWebView', webView, layout)
-        .catch(async (error) => {
-          success = false;
-          if (attemptsRemaining === 1) throw error;
-          await wait(1000);
-        });
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await commandService.sendCommand<[WebViewContents, Layout], void>(
+          'addWebView',
+          webView,
+          layout,
+        );
+      } catch (error) {
+        success = false;
+        // If we are out of tries or the error returned is not that the renderer is down, stop
+        // trying to resend and just throw
+        if (
+          attemptsRemaining === 1 ||
+          getErrorMessage(error) !==
+            `No handler was found to process the request of type ${serializeRequestType(
+              'command',
+              'addWebView',
+            )}`
+        )
+          throw error;
+        // eslint-disable-next-line no-await-in-loop
+        await wait(1000);
+      }
 
       if (success) return;
     }

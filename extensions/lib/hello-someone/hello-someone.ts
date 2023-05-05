@@ -53,7 +53,7 @@ export async function activate() {
     greetingsDataProviderEngine,
   );
 
-  papi.webViews.addWebView(
+  await papi.webViews.addWebView(
     {
       id: 'Hello Someone',
       title: 'Hello Someone HTML',
