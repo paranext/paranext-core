@@ -233,7 +233,7 @@ export const initialize = () => {
     // Get a list of extensions
     availableExtensions = await getExtensions();
 
-    // Store their base URIs in the extension file service
+    // Store their base URIs in the extension storage service
     const uriMap: Map<string, string> = new Map();
     availableExtensions.forEach((extensionInfo) => {
       uriMap.set(extensionInfo.name, extensionInfo.dirUri);
