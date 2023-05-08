@@ -1,7 +1,7 @@
 /* eslint-disable import/first */
 jest.mock('../../../shared/services/logger.service');
 
-import DockLayout, { TabData } from 'rc-dock';
+import DockLayout, { FloatPosition } from 'rc-dock';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import {
   AddWebViewEvent,
@@ -9,20 +9,15 @@ import {
   SavedTabInfo,
   WebViewProps,
 } from '@shared/data/web-view.model';
-import {
-  DockFloatPosition,
-  addWebViewToDock,
-  getFloatPosition,
-  loadTab,
-} from './paranext-dock-layout.component';
+import { addWebViewToDock, getFloatPosition, loadTab } from './paranext-dock-layout.component';
 
 describe('Dock Layout Component', () => {
   const mockDockLayout = mock(DockLayout);
 
-  describe('getFloatPosition', () => {
+  describe('getFloatPosition()', () => {
     it('should cascade from top-left of layout', () => {
       const layout: FloatLayout = { type: 'float', floatSize: { width: 20, height: 10 } };
-      const floatPosition: DockFloatPosition = { left: 0, top: 0, width: 0, height: 0 };
+      const floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
 
       let nextPosition = getFloatPosition(layout, floatPosition, { width: 100, height: 100 });
 
@@ -45,7 +40,7 @@ describe('Dock Layout Component', () => {
 
     it('should overflow right of layout', () => {
       const layout: FloatLayout = { type: 'float', floatSize: { width: 20, height: 10 } };
-      const floatPosition: DockFloatPosition = { left: 2 * 28, top: 2 * 28, width: 0, height: 0 };
+      const floatPosition: FloatPosition = { left: 2 * 28, top: 2 * 28, width: 0, height: 0 };
       // right = 2*28 + 20 + 28 = 104
       // bottom = 2*28 + 10 + 28 = 94
 
@@ -59,7 +54,7 @@ describe('Dock Layout Component', () => {
 
     it('should overflow bottom of layout', () => {
       const layout: FloatLayout = { type: 'float', floatSize: { width: 20, height: 10 } };
-      const floatPosition: DockFloatPosition = { left: 2 * 28, top: 2 * 28, width: 0, height: 0 };
+      const floatPosition: FloatPosition = { left: 2 * 28, top: 2 * 28, width: 0, height: 0 };
       // right = 2*28 + 20 + 28 = 104
       // bottom = 2*28 + 10 + 28 = 94
 
@@ -72,7 +67,7 @@ describe('Dock Layout Component', () => {
     });
   });
 
-  describe('loadTab', () => {
+  describe('loadTab()', () => {
     it('should throw when no id', () => {
       const savedTabInfo: SavedTabInfo = {};
 
@@ -80,7 +75,7 @@ describe('Dock Layout Component', () => {
     });
   });
 
-  describe('addWebViewToDock', () => {
+  describe('addWebViewToDock()', () => {
     it('should throw when no id', () => {
       const dockLayout = instance(mockDockLayout);
       const event: AddWebViewEvent = { webView: {} as WebViewProps, layout: { type: 'tab' } };
@@ -90,7 +85,7 @@ describe('Dock Layout Component', () => {
 
     it('should throw on unknown layout type', () => {
       // Ensure this is an add (rather than an update).
-      when(mockDockLayout.find(anything())).thenReturn(undefined as unknown as TabData);
+      when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
       const event: AddWebViewEvent = {
         webView: { id: 'myId', content: '' },
@@ -106,7 +101,7 @@ describe('Dock Layout Component', () => {
 
     it('should throw on unknown target tab when adding panel', () => {
       // Ensure this is an add (rather than an update).
-      when(mockDockLayout.find(anything())).thenReturn(undefined as unknown as TabData);
+      when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
       const event: AddWebViewEvent = {
         webView: { id: 'myId', content: '' },

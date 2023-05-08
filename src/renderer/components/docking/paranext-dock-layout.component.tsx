@@ -1,7 +1,16 @@
 import 'rc-dock/dist/rc-dock.css';
 import './paranext-dock-layout.component.css';
 import { useRef, useCallback } from 'react';
-import DockLayout, { BoxData, LayoutBase, LayoutData, PanelData, TabData, TabGroup } from 'rc-dock';
+import DockLayout, {
+  BoxData,
+  FloatPosition,
+  LayoutSize,
+  LayoutBase,
+  LayoutData,
+  PanelData,
+  TabData,
+  TabGroup,
+} from 'rc-dock';
 import createErrorTab from '@renderer/components/docking/error-tab.component';
 import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
@@ -23,18 +32,6 @@ import {
 } from '@shared/data/web-view.model';
 import papi from '@shared/services/papi.service';
 import { serializeTabId, deserializeTabId } from '@shared/utils/papi-util';
-
-interface DockLayoutSize {
-  width: number;
-  height: number;
-}
-
-export interface DockFloatPosition {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
 
 type TabType = string;
 
@@ -65,7 +62,7 @@ const tabTypeCreationMap = new Map<TabType, TabCreator>([
 ]);
 
 let previousTabId: string = FIRST_TAB_ID;
-let floatPosition: DockFloatPosition = { left: 0, top: 0, width: 0, height: 0 };
+let floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
 
 function getTabDataFromSavedInfo(tabInfo: SavedTabInfo): TabInfo {
   let tabCreator: TabCreator | undefined;
@@ -136,7 +133,7 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  * @param tab to check.
  * @returns `true` if its a tab or `false` otherwise.
  */
-function isTab(tab: PanelData | TabData | BoxData): boolean {
+function isTab(tab: PanelData | TabData | BoxData | undefined): boolean {
   if (
     !tab ||
     (tab as PanelData).tabs ||
@@ -168,9 +165,9 @@ function offsetOrOverflowAxis(
  */
 export function getFloatPosition(
   layout: FloatLayout,
-  previousPosition: DockFloatPosition,
-  layoutSize: DockLayoutSize,
-): DockFloatPosition {
+  previousPosition: FloatPosition,
+  layoutSize: LayoutSize,
+): FloatPosition {
   const { width, height } = layout.floatSize;
   let { left, top } = previousPosition;
   left = offsetOrOverflowAxis(left, width, layoutSize.width);
@@ -213,7 +210,7 @@ export function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayou
       if (!isTab(targetTab))
         throw new LogError(`When adding a panel, unknown target tab: '${targetTabId}'`);
 
-      dockLayout.dockMove(tab, targetTab.parent as PanelData, layout.direction);
+      dockLayout.dockMove(tab, targetTab?.parent as PanelData, layout.direction);
       break;
 
     default:
