@@ -54,8 +54,10 @@ export async function activate() {
   );
 
   papi.webViews.addWebView({
+    id: 'Hello Someone',
+    title: 'Hello Someone HTML',
     contentType: 'html' as WebViewContentType.HTML,
-    contents: helloSomeoneHtmlWebView,
+    content: helloSomeoneHtmlWebView,
   });
 
   const unsubPromises = [

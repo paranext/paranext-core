@@ -97,6 +97,8 @@ declare module 'shared/utils/papi-util' {
   export type CommandHandler<TParam extends Array<unknown> = any[], TReturn = any> = (
     ...args: TParam
   ) => Promise<TReturn> | TReturn;
+  /** Check that two objects are deeply equal, comparing members of each object and such */
+  export function deepEqual(a: unknown, b: unknown): boolean;
   /** Information about a request that tells us what to do with it */
   export type RequestType = {
     /** the general category of request */
@@ -110,11 +112,29 @@ declare module 'shared/utils/papi-util' {
    * @param directive specific identifier for this type of request
    * @returns full requestType for use in network calls
    */
-  export const serializeRequestType: (category: string, directive: string) => string;
+  export function serializeRequestType(category: string, directive: string): string;
   /** Split a request message requestType string into its parts */
-  export const deserializeRequestType: (requestType: string) => RequestType;
-  /** Check that two objects are deeply equal, comparing members of each object and such */
-  export function deepEqual(a: unknown, b: unknown): boolean;
+  export function deserializeRequestType(requestType: string): RequestType;
+  /** Parts of a Dock Tab ID */
+  export interface TabIdParts {
+    /** Type of the tab */
+    type: string;
+    /** ID of the particular tab type */
+    typeId: string;
+  }
+  /**
+   * Create a tab ID.
+   * @param type Type of the tab.
+   * @param typeId ID of the particular tab type.
+   * @returns a tab ID
+   */
+  export function serializeTabId(type: string, typeId: string): string;
+  /**
+   * Split the tab ID into its parts.
+   * @param id Tab ID.
+   * @returns The two parts of the tab ID
+   */
+  export function deserializeTabId(id: string): TabIdParts;
   /**
    * HTML Encodes the provided string.
    * Thanks to ChatGPT
@@ -928,7 +948,7 @@ declare module 'shared/services/network.service' {
   /**
    * Handles requests, responses, subscriptions, etc. to the backend.
    * Likely shouldn't need/want to expose this whole service on papi,
-   * but there are a few things that are exposed
+   * but there are a few things that are exposed via papiNetworkService
    */
   import { ClientConnectEvent, ClientDisconnectEvent } from 'shared/data/internal-connection.model';
   import {
@@ -1084,14 +1104,15 @@ declare module 'shared/services/command.service' {
 }
 declare module 'shared/data/web-view.model' {
   import { ReactNode } from 'react';
+  export type WebViewProps = Omit<WebViewContents, 'componentName'>;
   /**
    * Information used to recreate a tab
    */
   export type SavedTabInfo = {
     /**
-     * The underlying tab type. Used to determine which extension owns it.
+     * Tab ID - must be unique
      */
-    type: string;
+    id?: string;
     /**
      * Data needed to recreate the tab during load
      */
@@ -1101,10 +1122,6 @@ declare module 'shared/data/web-view.model' {
    * Information needed to create a tab inside of Paranext
    */
   export type TabInfo = {
-    /**
-     * The underlying tab type. Used to determine which extension owns it.
-     */
-    type: string;
     /**
      * Text to show on the title bar of the tab
      */
@@ -1132,7 +1149,8 @@ declare module 'shared/data/web-view.model' {
   }
   /** Base WebView properties that all WebViews share */
   type WebViewContentsBase = {
-    contents: string;
+    id: string;
+    content: string;
     title?: string;
   };
   /** WebView representation using React */
@@ -1147,21 +1165,15 @@ declare module 'shared/data/web-view.model' {
   };
   /** WebView definition created by extensions to show web content */
   export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
-}
-declare module 'renderer/components/web-view.component' {
-  import { WebViewContents } from 'shared/data/web-view.model';
-  export type WebViewProps = Omit<WebViewContents, 'componentName'>;
-  export function WebView({ contents, title, contentType }: WebViewProps): JSX.Element;
+  export const TYPE_WEBVIEW = 'webView';
 }
 declare module 'shared/services/web-view.service' {
-  /**
-   * Service that handles WebView-related operations
-   */
-  import { WebViewProps } from 'renderer/components/web-view.component';
-  import { WebViewContents } from 'shared/data/web-view.model';
+  import { WebViewContents, WebViewProps } from 'shared/data/web-view.model';
+  type LayoutType = 'tab' | 'panel' | 'float';
   /** Event emitted when webViews are added */
   export type AddWebViewEvent = {
     webView: WebViewProps;
+    layoutType: LayoutType;
   };
   /** Event that emits with webView info when a webView is added */
   export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
@@ -1170,9 +1182,15 @@ declare module 'shared/services/web-view.service' {
    * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
    * @returns promise that resolves nothing if we successfully handled the webView
    */
-  export const addWebView: (webView: WebViewContents) => Promise<undefined>;
+  export const addWebView: (webView: WebViewContents, layoutType?: LayoutType) => Promise<void>;
   /** Sets up the WebViewService. Runs only once */
   export const initialize: () => Promise<void>;
+  /** All the exports in this service that are to be exposed on the PAPI */
+  export const papiWebViewService: {
+    onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+    addWebView: (webView: WebViewContents, layoutType?: LayoutType) => Promise<void>;
+    initialize: () => Promise<void>;
+  };
 }
 declare module 'shared/services/internet.service' {
   const internetService: {

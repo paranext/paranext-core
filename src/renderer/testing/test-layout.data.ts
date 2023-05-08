@@ -1,12 +1,14 @@
-import { SavedTabInfo } from '@shared/data/web-view.model';
-import { LayoutBase, TabBase } from 'rc-dock';
+import { LayoutBase } from 'rc-dock';
+import { TYPE_WEBVIEW } from '@shared/data/web-view.model';
+import { serializeTabId } from '@shared/utils/papi-util';
 
-const createTab = (tabInfo: SavedTabInfo): TabBase => {
-  return tabInfo as TabBase;
-};
+export const WEBVIEW_PLACEHOLDER_TAB_ID = serializeTabId(TYPE_WEBVIEW, 'WebView Placeholder');
+const ABOUT_TAB_ID = serializeTabId('about', 'About');
+const TEST_TAB_TWO_ID = serializeTabId('tab', 'Test Tab Two');
+const TEST_TAB_ONE_ID = serializeTabId('tab', 'Test Tab One');
+const TEST_BUTTONS_TAB_ID = serializeTabId('buttons', 'Test Buttons');
+const TEST_QUICK_VERSE_TAB_ID = serializeTabId('quick-verse-heresy', 'Test Quick Verse Heresy');
 
-// NOTE: This structure represents what might be saved in a saved layout and
-// thus looks different than a normal rc-dock layout.
 const testLayout: LayoutBase = {
   dockbox: {
     mode: 'horizontal',
@@ -16,30 +18,15 @@ const testLayout: LayoutBase = {
         size: 200,
         children: [
           {
-            tabs: [
-              createTab({
-                type: 'tab',
-                data: { title: 'Bla', content: 'Random content!' },
-              }),
-            ],
+            tabs: [{ id: WEBVIEW_PLACEHOLDER_TAB_ID }],
           },
           {
-            tabs: [
-              createTab({ type: 'hello' }),
-              createTab({
-                type: 'tab',
-                data: { title: 'two', content: 'Content for tab two' },
-              }),
-              createTab({
-                type: 'tab',
-                data: { title: 'one', content: 'Content for tab one' },
-              }),
-            ],
+            tabs: [{ id: ABOUT_TAB_ID }, { id: TEST_TAB_TWO_ID }, { id: TEST_TAB_ONE_ID }],
           },
         ],
       },
       {
-        tabs: [createTab({ type: 'buttons' })],
+        tabs: [{ id: TEST_BUTTONS_TAB_ID }],
       },
     ],
   },
@@ -47,8 +34,8 @@ const testLayout: LayoutBase = {
     mode: 'float',
     children: [
       {
-        tabs: [createTab({ type: 'quick-verse-heresy' })],
-        x: 30,
+        tabs: [{ id: TEST_QUICK_VERSE_TAB_ID }],
+        x: 360,
         y: 60,
         w: 320,
         h: 300,
@@ -56,5 +43,4 @@ const testLayout: LayoutBase = {
     ],
   },
 };
-
 export default testLayout;

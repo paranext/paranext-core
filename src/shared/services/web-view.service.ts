@@ -1,7 +1,8 @@
 /**
  * Service that handles WebView-related operations
+ * Likely shouldn't need/want to expose this whole service on papi,
+ * but most things are exposed via papiWebViewService
  */
-import { WebViewProps } from '@renderer/components/web-view.component';
 import { isRenderer } from '@shared/utils/internal-util';
 import {
   aggregateUnsubscriberAsyncs,
@@ -9,7 +10,7 @@ import {
   serializeRequestType,
 } from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';
-import { newGuid, newNonce, wait } from '@shared/utils/util';
+import { newNonce, wait } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi.service';
@@ -20,15 +21,19 @@ import {
   WebViewContents,
   WebViewContentsReact,
   WebViewContentType,
+  WebViewProps,
 } from '@shared/data/web-view.model';
 
-/** Prefix on requests that indicates that the request is related to webView operations */
-const CATEGORY_WEB_VIEW = 'webView';
+type LayoutType = 'tab' | 'panel' | 'float';
 
 /** Event emitted when webViews are added */
 export type AddWebViewEvent = {
   webView: WebViewProps;
+  layoutType: LayoutType;
 };
+
+/** Prefix on requests that indicates that the request is related to webView operations */
+const CATEGORY_WEB_VIEW = 'webView';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -61,7 +66,7 @@ const setWebViewPapi = (webViewId: string, webViewPapi: typeof papi) =>
  */
 const getWebViewPapi = (webViewId: string) => {
   const webViewPapi = webViewPapis.get(webViewId);
-  if (!webViewPapi) throw new Error(`Cannot find papi for WebView with id ${webViewId}`);
+  if (!webViewPapi) throw new Error(`Cannot find papi for WebView with id: '${webViewId}'`);
 
   webViewPapis.delete(webViewId);
   return webViewPapi;
@@ -82,29 +87,32 @@ const getWebViewPapi = (webViewId: string) => {
  * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
  * @returns promise that resolves nothing if we successfully handled the webView
  */
-export const addWebView = async (webView: WebViewContents) => {
+export const addWebView = async (
+  webView: WebViewContents,
+  layoutType: LayoutType = 'tab',
+): Promise<void> => {
   if (!isRenderer()) {
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
     // TODO: This block should be removed when https://github.com/paranext/paranext-core/issues/51
     // is done. It can go back to just the `sendCommand` call without the loop.
     for (let attemptsRemaining = 20; attemptsRemaining > 0; attemptsRemaining--) {
-      let succeeded = true;
+      let success = true;
       // eslint-disable-next-line no-await-in-loop
       await commandService
-        .sendCommand<[WebViewContents], void>('addWebView', webView)
+        .sendCommand<[WebViewContents, LayoutType], void>('addWebView', webView, layoutType)
         .catch(async (error) => {
-          succeeded = false;
+          success = false;
           if (attemptsRemaining === 1) throw error;
           await wait(1000);
         });
 
-      if (succeeded) return undefined;
+      if (success) return;
     }
     throw new Error(`addWebView failed, but you should have seen a different error than this!`);
   }
 
   // Create a papi instance for this WebView
-  const webViewId = newGuid();
+  const webViewId = webView.id;
   setWebViewPapi(webViewId, papi);
 
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
@@ -127,15 +135,15 @@ export const addWebView = async (webView: WebViewContents) => {
   const srcNonce = newNonce();
 
   // Build the contents of the iframe
-  let webViewContents: string;
+  let webViewContent: string;
   /** CSP for allowing only certain scripts and styles */
   let specificSrcPolicy: string;
   switch (contentType) {
     case WebViewContentType.HTML:
       // Add wrapping to turn a plain string into an iframe
-      webViewContents = webView.contents.includes('<html')
-        ? webView.contents
-        : `<html><head></head><body>${webView.contents}</body></html>`;
+      webViewContent = webView.content.includes('<html')
+        ? webView.content
+        : `<html><head></head><body>${webView.content}</body></html>`;
       // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
@@ -143,7 +151,7 @@ export const addWebView = async (webView: WebViewContents) => {
       const reactWebView = webView as WebViewContentsReact;
 
       // Add the component as a script
-      webViewContents = `
+      webViewContent = `
         <html>
           <head>
             ${
@@ -161,7 +169,7 @@ export const addWebView = async (webView: WebViewContents) => {
               // Enable webview debugging
               console.debug('Debug ${reactWebView.componentName} Webview')
 
-              ${reactWebView.contents}
+              ${reactWebView.content}
 
               function initializeReact() {
                 const container = document.getElementById('root');
@@ -217,26 +225,23 @@ export const addWebView = async (webView: WebViewContents) => {
     ">`;
 
   // Add a script at the start of the head to give access to papi
-  const headStart = webViewContents.indexOf('<head');
-  const headEnd = webViewContents.indexOf('>', headStart);
+  const headStart = webViewContent.indexOf('<head');
+  const headEnd = webViewContent.indexOf('>', headStart);
 
   // Inject the import scripts into the html
-  webViewContents = `${webViewContents.substring(0, headEnd + 1)}
+  webViewContent = `${webViewContent.substring(0, headEnd + 1)}
     ${contentSecurityPolicy}
     <script nonce="${srcNonce}">
     ${imports}
-    </script>${webViewContents.substring(headEnd + 1)}`;
+    </script>${webViewContent.substring(headEnd + 1)}`;
 
   const updatedWebView: WebViewProps = {
     ...webView,
     contentType,
-    contents: webViewContents,
+    content: webViewContent,
   };
   // Inform web view consumers we added a web view
-  onDidAddWebViewEmitter.emit({ webView: updatedWebView });
-
-  // Resolve this promise
-  return undefined;
+  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layoutType });
 };
 
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
@@ -268,7 +273,7 @@ export const initialize = () => {
       await Promise.all(unsubPromises.map(({ promise }) => promise));
 
       // On closing, try to remove command listeners
-      // TODO: should do this on the server when the connection closes or when the server exists as well
+      // TODO: should do this on the server when the connection closes or when the server exits as well
       if (isRenderer())
         window.addEventListener('beforeunload', async () => {
           await unsubscribeCommands();
@@ -279,4 +284,11 @@ export const initialize = () => {
   })();
 
   return initializePromise;
+};
+
+/** All the exports in this service that are to be exposed on the PAPI */
+export const papiWebViewService = {
+  onDidAddWebView,
+  addWebView,
+  initialize,
 };
