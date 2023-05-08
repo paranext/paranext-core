@@ -36,6 +36,7 @@
       "protocol": "inspector",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start"],
+      "skipFiles": ["<node_internals>/**"],
       "env": {
         "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
         "IN_VSCODE": "true"
@@ -56,6 +57,7 @@
       "protocol": "inspector",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start:extension-host"],
+      "skipFiles": ["<node_internals>/**"],
       "env": {
         "IN_VSCODE": "true"
       }
@@ -67,6 +69,7 @@
       "protocol": "inspector",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "storybook"],
+      "skipFiles": ["<node_internals>/**"],
       "env": { "autoAttachChildProcesses": true }
     }
   ],

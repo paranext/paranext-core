@@ -100,6 +100,7 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
 
 /** List of static files to copy from each extension's source directory */
 const staticFiles = [
+  'assets',
   'manifest.json',
   'package.json',
   // TODO: check each extension's package.json -> "types" property for this instead of assuming

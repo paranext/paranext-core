@@ -23,6 +23,12 @@ export const isServer = () => !isClient();
 export const isRenderer = () => globalThis.processType === ProcessType.Renderer;
 
 /**
+ * Determine if running on the extension host
+ * @returns Returns true if running on the extension host, false otherwise
+ */
+export const isExtensionHost = () => globalThis.processType === ProcessType.ExtensionHost;
+
+/**
  * Gets which kind of process this is (main, renderer, extension-host)
  * @returns ProcessType for this process
  */
