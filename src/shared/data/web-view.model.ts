@@ -74,10 +74,10 @@ interface TabLayout {
 
 export interface FloatLayout {
   type: 'float';
-  floatSize: { width: number; height: number };
+  floatSize?: { width: number; height: number };
 }
 
-type PanelDirection =
+export type PanelDirection =
   | 'left'
   | 'right'
   | 'bottom'
@@ -92,7 +92,7 @@ type PanelDirection =
 
 interface PanelLayout {
   type: 'panel';
-  direction: PanelDirection;
+  direction?: PanelDirection;
   /** If undefined, it will add in the `direction` relative to the previously added tab. */
   targetTabId?: string;
 }

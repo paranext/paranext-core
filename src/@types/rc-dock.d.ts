@@ -2,17 +2,17 @@ import { BoxData, DropDirection, PanelData, TabData } from 'rc-dock';
 import * as Algorithm from 'rc-dock/lib/Algorithm';
 
 declare module 'rc-dock' {
-  export interface LayoutSize {
+  export interface FloatSize {
     width: number;
     height: number;
   }
 
-  export interface FloatPosition {
+  export interface FloatPosition extends FloatSize {
     left: number;
     top: number;
-    width: number;
-    height: number;
   }
+
+  type LayoutSize = FloatSize;
 
   export default class DockLayout {
     dockMove(

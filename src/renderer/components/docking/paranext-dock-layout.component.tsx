@@ -4,9 +4,10 @@ import { useRef, useCallback } from 'react';
 import DockLayout, {
   BoxData,
   FloatPosition,
-  LayoutSize,
+  FloatSize,
   LayoutBase,
   LayoutData,
+  LayoutSize,
   PanelData,
   TabData,
   TabGroup,
@@ -25,6 +26,7 @@ import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-here
 import {
   AddWebViewEvent,
   FloatLayout,
+  PanelDirection,
   SavedTabInfo,
   TYPE_WEBVIEW,
   TabCreator,
@@ -35,6 +37,8 @@ import { serializeTabId, deserializeTabId } from '@shared/utils/papi-util';
 
 type TabType = string;
 
+const DEFAULT_FLOAT_SIZE: FloatSize = { width: 300, height: 150 };
+const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
 const DOCK_FLOAT_OFFSET = 28;
 const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
@@ -168,7 +172,7 @@ export function getFloatPosition(
   previousPosition: FloatPosition,
   layoutSize: LayoutSize,
 ): FloatPosition {
-  const { width, height } = layout.floatSize;
+  const { width, height } = layout.floatSize ?? DEFAULT_FLOAT_SIZE;
   let { left, top } = previousPosition;
   left = offsetOrOverflowAxis(left, width, layoutSize.width);
   top = offsetOrOverflowAxis(top, height, layoutSize.height);
@@ -210,7 +214,11 @@ export function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayou
       if (!isTab(targetTab))
         throw new LogError(`When adding a panel, unknown target tab: '${targetTabId}'`);
 
-      dockLayout.dockMove(tab, targetTab?.parent as PanelData, layout.direction);
+      dockLayout.dockMove(
+        tab,
+        targetTab?.parent as PanelData,
+        layout.direction ?? DEFAULT_PANEL_DIRECTION,
+      );
       break;
 
     default:

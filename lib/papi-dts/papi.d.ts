@@ -1171,12 +1171,12 @@ declare module 'shared/data/web-view.model' {
   }
   export interface FloatLayout {
     type: 'float';
-    floatSize: {
+    floatSize?: {
       width: number;
       height: number;
     };
   }
-  type PanelDirection =
+  export type PanelDirection =
     | 'left'
     | 'right'
     | 'bottom'
@@ -1189,7 +1189,7 @@ declare module 'shared/data/web-view.model' {
     | 'update';
   interface PanelLayout {
     type: 'panel';
-    direction: PanelDirection;
+    direction?: PanelDirection;
     /** If undefined, it will add in the `direction` relative to the previously added tab. */
     targetTabId?: string;
   }
