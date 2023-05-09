@@ -23,8 +23,9 @@ const sourceFolder = 'lib';
 
 /**
  * Gets a file extension based on the moduleFormat input.
- * Vite does this better automatically for us if `fileName` is a string,
- * but we need to do this since fileName is a function. :(
+ * Vite does this automatically for us if `fileName` is a string,
+ * but we want our cjs module to be '.js' while still using ES Module
+ * imports in our vite config.
  *
  * If package.json does not contain 'type': 'module', Vite swaps some file extensions out.
  * Short explanation in a note at https://vitejs.dev/guide/build.html#library-mode
@@ -36,7 +37,7 @@ function getFileExtensionByModuleFormat(moduleFormat: ModuleFormat) {
     case 'es':
       return 'js';
     case 'cjs':
-      return 'js'; // 'cjs' if package.json has "type": "module", but Paranext uses commonjs modules
+      return 'js'; // Vite uses '.cjs' if package.json has "type": "module", but Paranext uses commonjs modules, so let's just use 'js'
     case 'umd':
       return 'umd.cjs';
     default:
