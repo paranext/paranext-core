@@ -143,6 +143,8 @@ export const addWebView = async (webView: WebViewContents) => {
       const reactWebView = webView as WebViewContentsReact;
 
       // Add the component as a script
+      // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
+      // reactWebView.contents. Doing so would mess up debugging web views
       webViewContents = `
         <html>
           <head>
@@ -157,16 +159,12 @@ export const addWebView = async (webView: WebViewContents) => {
           <body>
             <div id="root">
             </div>
-            <script nonce="${srcNonce}">
-              // Enable webview debugging
-              console.debug('Debug ${reactWebView.componentName} Webview')
-
-              ${reactWebView.contents}
+            <script nonce="${srcNonce}">${reactWebView.contents}
 
               function initializeReact() {
                 const container = document.getElementById('root');
                 const root = createRoot(container);
-                root.render(React.createElement(${reactWebView.componentName}, null));
+                root.render(React.createElement(globalThis.webViewComponent, null));
               }
 
               if (document.readyState === 'loading')

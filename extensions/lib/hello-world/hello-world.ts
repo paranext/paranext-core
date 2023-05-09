@@ -38,7 +38,6 @@ export async function activate() {
   });
 
   await papi.webViews.addWebView({
-    componentName: 'HelloWorld',
     contents: helloWorldReactWebView,
     styles: helloWorldReactWebViewStyles,
   });

@@ -56,7 +56,6 @@ type WebViewContentsBase = { contents: string; title?: string };
 /** WebView representation using React */
 export type WebViewContentsReact = WebViewContentsBase & {
   contentType?: WebViewContentType.React;
-  componentName: string;
   styles?: string;
 };
 
