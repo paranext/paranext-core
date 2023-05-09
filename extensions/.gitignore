@@ -20,3 +20,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vite-built temp WebView files
+temp-vite
