@@ -39,5 +39,14 @@
       "fileMatch": ["*tsconfig*.json"],
       "url": "http://json.schemastore.org/tsconfig"
     }
+  ],
+
+  "todohighlight.keywords": [
+    {
+      "text": "WARNING:",
+      "isWholeLine": true,
+      "color": "#FF0000",
+      "backgroundColor": "none"
+    }
   ]
 }
