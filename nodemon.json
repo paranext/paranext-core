@@ -7,5 +7,5 @@
     "extensions/dist/**"
   ],
   "ext": "ts,js,json",
-  "delay": 250
+  "delay": 500
 }
