@@ -158,7 +158,9 @@ const extensionConfig = defineConfig(async () => {
       // This project is a library as it is being used in Paranext
       lib: {
         // The main entry file of each extension to build
-        entry: extensions.map((extension) => path.resolve(__dirname, extension.entryFilePath)),
+        entry: extensions.map((extension) =>
+          path.resolve(__dirname, '..', extension.entryFilePath),
+        ),
         // The output file name for the extension (file extension is appended)
         fileName: (moduleFormat, entryName) =>
           path.join(entryName, `${entryName}.${getFileExtensionByModuleFormat(moduleFormat)}`),

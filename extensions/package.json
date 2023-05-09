@@ -4,9 +4,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build --config vite/vite.config.ts",
     "build:types": "cd .. && npm run build:types",
-    "start": "vite build --watch",
+    "start": "vite build --watch --config vite/vite.config.ts",
     "start:core": "cd .. && npm start",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:staged": "lint-staged -q"
