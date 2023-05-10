@@ -4,7 +4,6 @@ import { useRef, useCallback } from 'react';
 import DockLayout, {
   BoxData,
   FloatPosition,
-  FloatSize,
   LayoutBase,
   LayoutData,
   LayoutSize,
@@ -17,7 +16,6 @@ import ParanextPanel from '@renderer/components/docking/paranext-panel.component
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
 import createWebViewPanel from '@renderer/components/web-view.component';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
-import LogError from '@renderer/log-error.model';
 import createAboutPanel from '@renderer/testing/about-panel.component';
 import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
 import testLayout, { FIRST_TAB_ID } from '@renderer/testing/test-layout.data';
@@ -26,19 +24,17 @@ import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-here
 import {
   AddWebViewEvent,
   FloatLayout,
-  PanelDirection,
   SavedTabInfo,
   TYPE_WEBVIEW,
   TabCreator,
   TabInfo,
 } from '@shared/data/web-view.model';
+import LogError from '@shared/log-error.model';
 import papi from '@shared/services/papi.service';
 import { serializeTabId, deserializeTabId } from '@shared/utils/papi-util';
 
 type TabType = string;
 
-const DEFAULT_FLOAT_SIZE: FloatSize = { width: 300, height: 150 };
-const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
 const DOCK_FLOAT_OFFSET = 28;
 const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
@@ -172,7 +168,9 @@ export function getFloatPosition(
   previousPosition: FloatPosition,
   layoutSize: LayoutSize,
 ): FloatPosition {
-  const { width, height } = layout.floatSize ?? DEFAULT_FLOAT_SIZE;
+  // Defaults are added in `web-view.service.ts`.
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const { width, height } = layout.floatSize!;
   let { left, top } = previousPosition;
   left = offsetOrOverflowAxis(left, width, layoutSize.width);
   top = offsetOrOverflowAxis(top, height, layoutSize.height);
@@ -214,11 +212,9 @@ export function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayou
       if (!isTab(targetTab))
         throw new LogError(`When adding a panel, unknown target tab: '${targetTabId}'`);
 
-      dockLayout.dockMove(
-        tab,
-        targetTab?.parent as PanelData,
-        layout.direction ?? DEFAULT_PANEL_DIRECTION,
-      );
+      // Defaults are added in `web-view.service.ts`.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      dockLayout.dockMove(tab, targetTab?.parent as PanelData, layout.direction!);
       break;
 
     default:

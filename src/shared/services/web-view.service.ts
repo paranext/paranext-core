@@ -3,6 +3,7 @@
  * Likely shouldn't need/want to expose this whole service on papi,
  * but most things are exposed via papiWebViewService
  */
+import cloneDeep from 'lodash/cloneDeep';
 import { isRenderer } from '@shared/utils/internal-util';
 import {
   aggregateUnsubscriberAsyncs,
@@ -20,6 +21,7 @@ import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   AddWebViewEvent,
   Layout,
+  PanelDirection,
   WebViewContents,
   WebViewContentsReact,
   WebViewContentType,
@@ -28,6 +30,8 @@ import {
 
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
+const DEFAULT_FLOAT_SIZE = { width: 300, height: 150 };
+const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -75,6 +79,22 @@ const getWebViewPapi = (webViewId: string) => {
 (globalThis as any).createRoot = createRoot;
 
 // #endregion
+
+function layoutDefaults(layout: Layout): Layout {
+  const layoutDefaulted = cloneDeep(layout);
+  switch (layoutDefaulted.type) {
+    case 'float':
+      if (!layoutDefaulted.floatSize) layoutDefaulted.floatSize = DEFAULT_FLOAT_SIZE;
+      break;
+    case 'panel':
+      if (!layoutDefaulted.direction) layoutDefaulted.direction = DEFAULT_PANEL_DIRECTION;
+      break;
+    case 'tab':
+    default:
+    // do nothing
+  }
+  return layoutDefaulted;
+}
 
 /**
  * Adds a WebView and runs all event handlers who are listening to this event
@@ -250,8 +270,9 @@ export const addWebView = async (
     contentType,
     content: webViewContent,
   };
+  const updatedLayout = layoutDefaults(layout);
   // Inform web view consumers we added a web view
-  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layout });
+  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layout: updatedLayout });
 };
 
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
