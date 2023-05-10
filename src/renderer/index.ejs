@@ -10,11 +10,13 @@
       default-src 'none' so things can't happen unless we allow them
       script-src allows them to use script tags and in-line attribute scripts
         'self' so scripts can be loaded from us
+        'paranextension:' so scripts can be loaded from installed extensions
         'unsafe-inline' because web view iframes use srcdoc right now, which inherits CSP from parent frames
           TODO: PLEASE FIX THIS - Move web views to be retrieved from the backend, and remove this. paranext-core#89
         TODO: change to script-src-elem so in-line attribute scripts like event handlers don't run? If this is actually more secure. paranext-core#89
       style-src allows them to use style/link tags and style attributes on tags
         'self' so styles can be loaded from us
+        'paranextension:' so styles can be loaded from installed extensions
         'unsafe-inline' because that's how our styles are currently loaded in by hot reloading
           TODO: PLEASE FIX THIS IN PRODUCTION. paranext-core#89
       frame-src 'self' so frame contents can be loaded from us
@@ -26,9 +28,18 @@
         https: communicate with secure networks
         ws: communicate with webSockets
           TODO: try to template the specific url from ClientNetworkConnector in. paranext-core#89
-      img-src 'self' and https: so they can load images from us and over secure connections
-      media-src 'self' and https: so they can load audio, video, etc from us and over secure connections
-      font-src 'self' and https: so they can load fonts from us and over secure connections
+      img-src load images
+        'self' so images can be loaded from us
+        'paranextension:' so images can be loaded from installed extensions
+        https: so they can load images from us and over secure connections
+      media-src load audio, video, etc
+        'self' so media can be loaded from us
+        'paranextension:' so media can be loaded from installed extensions
+        https: so media can be loaded over secure connections
+      font-src load fonts
+        'self' so fonts can be loaded from us
+        'paranextension:' so fonts can be loaded from installed extensions
+        https: so fonts can be loaded over secure connections
       form-action 'self' lets the form submit to us
         TODO: not sure if this is needed. If we can attach handlers to forms, we might be able to remove this
     -->
@@ -36,15 +47,15 @@
       http-equiv="Content-Security-Policy"
       content="
         default-src 'none';
-        script-src 'self' 'unsafe-inline';
-        style-src 'self' 'unsafe-inline';
+        script-src 'self' paranextension: 'unsafe-inline';
+        style-src 'self' paranextension: 'unsafe-inline';
         frame-src 'self';
         worker-src 'self';
         manifest-src 'self';
         connect-src 'self' https: ws:;
-        img-src 'self' https:;
-        media-src 'self' https:;
-        font-src 'self' https:;
+        img-src 'self' paranextension: https:;
+        media-src 'self' paranextension: https:;
+        font-src 'self' paranextension: https:;
         form-action 'self';"
     />
     <title>Hello Paranext!</title>

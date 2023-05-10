@@ -21,6 +21,7 @@ import { resolveHtmlPath } from '@node/utils/util';
 import MenuBuilder from '@main/menu.model';
 import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/network-object.service';
+import extensionAssetProtocolService from '@shared/services/extension-asset-protocol.service';
 import { wait } from '@shared/utils/util';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
@@ -28,6 +29,27 @@ const PROCESS_CLOSE_TIME_OUT = 2000;
 let isClosing = false;
 
 logger.info('Starting main');
+
+// #region Network and .NET data provider
+
+(async () => {
+  await networkService.initialize();
+
+  // Start the dotnet data provider early so its ready when needed once the WebSocket is up.
+  dotnetDataProvider.start();
+})().catch(logger.error);
+
+// #endregion
+
+// #region Extension Host
+
+extensionHostService.start();
+
+setTimeout(async () => {
+  logger.info(`Add Many (from EH): ${await papi.commands.sendCommand('addMany', 2, 5, 9, 7)}`);
+}, 20000);
+
+// #endregion
 
 // #region ELECTRON SETUP
 
@@ -100,6 +122,9 @@ const createWindow = async () => {
         : path.join(__dirname, '../../.erb/dll/preload.js'),
     },
   });
+
+  // Set our custom protocol handler to load assets from extensions
+  extensionAssetProtocolService.initialize();
 
   // Register listeners on the window, so the state is updated automatically
   // (the listeners will be removed when the window is closed)
@@ -231,7 +256,6 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 };
 
 (async () => {
-  await networkService.initialize();
   // Set up test handlers
   Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
     networkService.registerRequestHandler(ipcHandle, async (...args: unknown[]) =>
@@ -242,23 +266,9 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
     papi.commands.registerCommand(commandName, handler);
   });
 
-  // Start the dotnet data provider early so its ready when needed once the
-  // WebSocket is up.
-  dotnetDataProvider.start();
-
   // TODO: Probably should return Promise.all of these registrations
   return undefined;
 })().catch(logger.error);
-
-// #endregion
-
-// #region Extension Host
-
-extensionHostService.start();
-
-setTimeout(async () => {
-  logger.info(`Add Many (from EH): ${await papi.commands.sendCommand('addMany', 2, 5, 9, 7)}`);
-}, 20000);
 
 // #endregion
 
