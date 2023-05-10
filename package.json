@@ -105,6 +105,9 @@
     "react-data-grid": "^7.0.0-beta.28",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.9.0",
+    "slate": "^0.94.1",
+    "slate-history": "^0.93.0",
+    "slate-react": "^0.94.0",
     "ws": "^8.13.0"
   },
   "devDependencies": {
