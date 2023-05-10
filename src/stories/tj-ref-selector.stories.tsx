@@ -39,9 +39,6 @@ type Story = StoryObj<typeof TJRefSelector>;
 
 export const Default: Story = {
   args: {
-    scrRef: { book: 1, chapter: 1, verse: 1 },
-    handleSubmit: (ref) => {
-      console.log(ref);
-    },
+    scrRef: { book: 5, chapter: 4, verse: 3 },
   },
 };
