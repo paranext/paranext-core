@@ -12,7 +12,7 @@ function TJRefSelectorDecorator(
 ) {
   const [args, updateArgs] = useArgs();
 
-  const submitHandler = (ref: Ref) => {
+  const handleSubmit = (ref: Ref) => {
     updateArgs({ scrRef: ref });
   };
 
@@ -20,7 +20,7 @@ function TJRefSelectorDecorator(
     <Story
       args={{
         ...args,
-        handleSubmit: submitHandler,
+        handleSubmit,
       }}
     />
   );
