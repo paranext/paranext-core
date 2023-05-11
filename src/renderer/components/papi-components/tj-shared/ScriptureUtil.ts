@@ -129,9 +129,9 @@ export const parseChapter = (chapterText: string): number | undefined => {
   return parseVerse(chapterText);
 };
 
-const regexpScrRefFull = /([^ ]+) ([^:]+):(.+)/;
+const regexpScrRefFull = /(\d )?([a-zA-Z ]+) ([^:]+):(.+)/;
 const regexpScrRefChapter = /([^ ]+) ([^:]+)/;
-const regexpScrRefBook = /([^ ]+)/;
+const regexpScrRefBook = /(\d )?([a-zA-Z ]+)/;
 export const getScrRefFromText = (
   refText: string,
   defaultChapter = 1,
@@ -140,20 +140,25 @@ export const getScrRefFromText = (
   // No text entered. Return error
   if (!refText) return { book: -1, chapter: -1, verse: -1 };
   const scrRefMatchFull = refText.match(regexpScrRefFull);
+
   // If we have the whole reference, use it
-  if (scrRefMatchFull && scrRefMatchFull.length === 4)
+  if (scrRefMatchFull && scrRefMatchFull.length === 5)
     return {
-      book: getBookNumFromName(scrRefMatchFull[1]),
-      chapter: parseInt(scrRefMatchFull[2], 10),
-      verse: parseInt(scrRefMatchFull[3], 10),
+      book: getBookNumFromName(
+        `${scrRefMatchFull[1] ? scrRefMatchFull[1] : ''}${scrRefMatchFull[2]}`,
+      ),
+      chapter: parseInt(scrRefMatchFull[3], 10),
+      verse: parseInt(scrRefMatchFull[4], 10),
     };
 
   const scrRefMatchChapter = refText.match(regexpScrRefChapter);
   // If we have the reference to the chapter, use it
   if (scrRefMatchChapter && scrRefMatchChapter.length === 3)
     return {
-      book: getBookNumFromName(scrRefMatchChapter[1]),
-      chapter: parseInt(scrRefMatchChapter[2], 10),
+      book: getBookNumFromName(
+        `${scrRefMatchChapter[1] ? scrRefMatchChapter[1] : ''}${scrRefMatchChapter[2]}`,
+      ),
+      chapter: parseInt(scrRefMatchChapter[3], 10),
       verse: defaultVerse,
     };
 
@@ -161,7 +166,9 @@ export const getScrRefFromText = (
   // If we have the reference to the book, use it
   if (scrRefMatchBook && scrRefMatchBook.length === 2)
     return {
-      book: getBookNumFromName(scrRefMatchBook[1]),
+      book: getBookNumFromName(
+        `${scrRefMatchBook[1] ? scrRefMatchBook[1] : ''}${scrRefMatchBook[2]}`,
+      ),
       chapter: defaultChapter,
       verse: defaultVerse,
     };
