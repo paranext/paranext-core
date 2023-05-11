@@ -1,8 +1,7 @@
 import logger from '@shared/services/logger.service';
 
 /**
- * Should only be used in the renderer to alert developers in the browser console since it also
- * doubles up messages in the logs.
+ * Error that force logs the error message before throwing. Useful for debugging in some situations.
  */
 export default class LogError extends Error {
   constructor(message?: string) {
