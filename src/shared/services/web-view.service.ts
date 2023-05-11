@@ -3,6 +3,7 @@
  * Likely shouldn't need/want to expose this whole service on papi,
  * but most things are exposed via papiWebViewService
  */
+import cloneDeep from 'lodash/cloneDeep';
 import { isRenderer } from '@shared/utils/internal-util';
 import {
   aggregateUnsubscriberAsyncs,
@@ -10,7 +11,7 @@ import {
   serializeRequestType,
 } from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';
-import { newNonce, wait } from '@shared/utils/util';
+import { getErrorMessage, newNonce, wait } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi.service';
@@ -18,22 +19,19 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
+  AddWebViewEvent,
+  Layout,
+  PanelDirection,
   WebViewContents,
   WebViewContentsReact,
   WebViewContentType,
   WebViewProps,
 } from '@shared/data/web-view.model';
 
-type LayoutType = 'tab' | 'panel' | 'float';
-
-/** Event emitted when webViews are added */
-export type AddWebViewEvent = {
-  webView: WebViewProps;
-  layoutType: LayoutType;
-};
-
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
+const DEFAULT_FLOAT_SIZE = { width: 300, height: 150 };
+const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -82,6 +80,22 @@ const getWebViewPapi = (webViewId: string) => {
 
 // #endregion
 
+function layoutDefaults(layout: Layout): Layout {
+  const layoutDefaulted = cloneDeep(layout);
+  switch (layoutDefaulted.type) {
+    case 'float':
+      if (!layoutDefaulted.floatSize) layoutDefaulted.floatSize = DEFAULT_FLOAT_SIZE;
+      break;
+    case 'panel':
+      if (!layoutDefaulted.direction) layoutDefaulted.direction = DEFAULT_PANEL_DIRECTION;
+      break;
+    case 'tab':
+    default:
+    // do nothing
+  }
+  return layoutDefaulted;
+}
+
 /**
  * Adds a WebView and runs all event handlers who are listening to this event
  * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
@@ -89,22 +103,38 @@ const getWebViewPapi = (webViewId: string) => {
  */
 export const addWebView = async (
   webView: WebViewContents,
-  layoutType: LayoutType = 'tab',
+  layout: Layout = { type: 'tab' },
 ): Promise<void> => {
   if (!isRenderer()) {
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
     // TODO: This block should be removed when https://github.com/paranext/paranext-core/issues/51
     // is done. It can go back to just the `sendCommand` call without the loop.
+    // Try to run addWebView up to 20 times until the renderer is up
     for (let attemptsRemaining = 20; attemptsRemaining > 0; attemptsRemaining--) {
       let success = true;
-      // eslint-disable-next-line no-await-in-loop
-      await commandService
-        .sendCommand<[WebViewContents, LayoutType], void>('addWebView', webView, layoutType)
-        .catch(async (error) => {
-          success = false;
-          if (attemptsRemaining === 1) throw error;
-          await wait(1000);
-        });
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await commandService.sendCommand<[WebViewContents, Layout], void>(
+          'addWebView',
+          webView,
+          layout,
+        );
+      } catch (error) {
+        success = false;
+        // If we are out of tries or the error returned is not that the renderer is down, stop
+        // trying to resend and just throw
+        if (
+          attemptsRemaining === 1 ||
+          getErrorMessage(error) !==
+            `No handler was found to process the request of type ${serializeRequestType(
+              'command',
+              'addWebView',
+            )}`
+        )
+          throw error;
+        // eslint-disable-next-line no-await-in-loop
+        await wait(1000);
+      }
 
       if (success) return;
     }
@@ -240,8 +270,9 @@ export const addWebView = async (
     contentType,
     content: webViewContent,
   };
+  const updatedLayout = layoutDefaults(layout);
   // Inform web view consumers we added a web view
-  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layoutType });
+  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layout: updatedLayout });
 };
 
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */

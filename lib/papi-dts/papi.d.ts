@@ -1166,15 +1166,42 @@ declare module 'shared/data/web-view.model' {
   /** WebView definition created by extensions to show web content */
   export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
   export const TYPE_WEBVIEW = 'webView';
-}
-declare module 'shared/services/web-view.service' {
-  import { WebViewContents, WebViewProps } from 'shared/data/web-view.model';
-  type LayoutType = 'tab' | 'panel' | 'float';
+  interface TabLayout {
+    type: 'tab';
+  }
+  export interface FloatLayout {
+    type: 'float';
+    floatSize?: {
+      width: number;
+      height: number;
+    };
+  }
+  export type PanelDirection =
+    | 'left'
+    | 'right'
+    | 'bottom'
+    | 'top'
+    | 'before-tab'
+    | 'after-tab'
+    | 'maximize'
+    | 'move'
+    | 'active'
+    | 'update';
+  interface PanelLayout {
+    type: 'panel';
+    direction?: PanelDirection;
+    /** If undefined, it will add in the `direction` relative to the previously added tab. */
+    targetTabId?: string;
+  }
+  export type Layout = TabLayout | FloatLayout | PanelLayout;
   /** Event emitted when webViews are added */
   export type AddWebViewEvent = {
     webView: WebViewProps;
-    layoutType: LayoutType;
+    layout: Layout;
   };
+}
+declare module 'shared/services/web-view.service' {
+  import { AddWebViewEvent, Layout, WebViewContents } from 'shared/data/web-view.model';
   /** Event that emits with webView info when a webView is added */
   export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
   /**
@@ -1182,13 +1209,13 @@ declare module 'shared/services/web-view.service' {
    * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
    * @returns promise that resolves nothing if we successfully handled the webView
    */
-  export const addWebView: (webView: WebViewContents, layoutType?: LayoutType) => Promise<void>;
+  export const addWebView: (webView: WebViewContents, layout?: Layout) => Promise<void>;
   /** Sets up the WebViewService. Runs only once */
   export const initialize: () => Promise<void>;
   /** All the exports in this service that are to be exposed on the PAPI */
   export const papiWebViewService: {
     onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
-    addWebView: (webView: WebViewContents, layoutType?: LayoutType) => Promise<void>;
+    addWebView: (webView: WebViewContents, layout?: Layout) => Promise<void>;
     initialize: () => Promise<void>;
   };
 }
