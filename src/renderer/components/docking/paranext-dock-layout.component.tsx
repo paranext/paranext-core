@@ -134,14 +134,7 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  * @returns `true` if its a tab or `false` otherwise.
  */
 function isTab(tab: PanelData | TabData | BoxData | undefined): boolean {
-  if (
-    !tab ||
-    (tab as PanelData).tabs ||
-    (tab as BoxData).mode ||
-    (tab as PanelData).x ||
-    (tab.parent as PanelData)?.x
-  )
-    return false;
+  if (!tab || (tab as TabData).title == null) return false;
   return true;
 }
 
