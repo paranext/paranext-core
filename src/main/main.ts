@@ -31,7 +31,7 @@ async function main() {
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
 
-  // TODO: Wait for signal from the .NET data provider process that it is ready
+  // TODO (maybe): Wait for signal from the .NET data provider process that it is ready
 
   // The extension host service relies on the network service.
   // Extensions inside the extension host might rely on the .NET data provider and each other
@@ -40,7 +40,7 @@ async function main() {
   // For now, the dependency loop is broken by retrying 'addWebView' in a loop for a while.
   extensionHostService.start();
 
-  // TODO: Wait for signal from the extension host process that it is ready (except 'addWebView')
+  // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'addWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
   // Extension host test
