@@ -1,6 +1,6 @@
 import { protocol } from 'electron';
 import httpStatusCode from '@shared/utils/http-status-codes';
-import * as commandService from '@shared/services/command.service';
+import * as networkService from '@shared/services/network.service';
 
 /** The real list of Chromium error codes is really big.  We're just using a small subset. */
 // https://source.chromium.org/chromium/chromium/src/+/main:net/base/net_error_list.h
@@ -99,7 +99,7 @@ const initialize = () => {
       }
 
       // Actually get the data
-      const base64Data: string = await commandService.sendCommand(
+      const base64Data: string = await networkService.request(
         'getExtensionAsset',
         extension,
         asset,

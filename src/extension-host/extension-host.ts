@@ -33,14 +33,6 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
   throwErrorExtensionHost: async (message: string) => {
     throw new Error(`Test Error thrown in throwErrorExtensionHost command: ${message}`);
   },
-  getExtensionAsset: async (extensionName: string, assetName: string) => {
-    try {
-      return (await getAsset(extensionName, assetName)).toString('base64');
-    } catch (error) {
-      logger.error(`Could not get asset "${assetName}" from "${extensionName}": ${error}`);
-      return undefined;
-    }
-  },
 };
 
 networkService
@@ -50,6 +42,19 @@ networkService
     Object.entries(commandHandlers).forEach(([commandName, handler]) => {
       papi.commands.registerCommand(commandName, handler);
     });
+
+    // Set up network requests
+    networkService.registerRequestHandler(
+      'getExtensionAsset',
+      async (extensionName: string, assetName: string) => {
+        try {
+          return (await getAsset(extensionName, assetName)).toString('base64');
+        } catch (error) {
+          logger.error(`Could not get asset "${assetName}" from "${extensionName}": ${error}`);
+          return undefined;
+        }
+      },
+    );
 
     // TODO: Probably should return Promise.all of these registrations
     return undefined;

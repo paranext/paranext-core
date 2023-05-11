@@ -2249,24 +2249,6 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   ): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
   export default useData;
 }
-declare module 'renderer/hooks/papi-hooks/use-extension-asset' {
-  /** Ask the extension host for the asset from the given extension
-   *  @param extensionName Name of the extension that packaged the asset in its installation directory
-   *  @param assetName File name of the asset that was packaged
-   *  @param defaultValue Value to provide for the asset while it is loading
-   *  @param prefix Value to prepend to the asset after it has loaded, defaults to an empty string
-   *  @param suffix Value to append to the asset after it has loaded, defaults to an empty string
-   *  @returns If found, base64 encoded value of the requested asset with the prefix and suffix included. If not found, undefined.
-   */
-  const useExtensionAsset: (
-    extensionName: string,
-    assetName: string,
-    defaultValue: string,
-    prefix?: string,
-    suffix?: string,
-  ) => string | undefined;
-  export default useExtensionAsset;
-}
 declare module 'renderer/hooks/papi-hooks/index' {
   import useDataProvider from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   import useData from 'renderer/hooks/papi-hooks/use-data.hook';
@@ -2291,13 +2273,6 @@ declare module 'renderer/hooks/papi-hooks/index' {
     ) => void;
     useDataProvider: typeof useDataProvider;
     useData: typeof useData;
-    useExtensionAsset: (
-      extensionName: string,
-      assetName: string,
-      defaultValue: string,
-      prefix?: string,
-      suffix?: string,
-    ) => string | undefined;
   };
   export default papiHooks;
   export type PapiHooks = typeof papiHooks;
@@ -2349,13 +2324,6 @@ declare module 'papi' {
         ) => void;
         useDataProvider: typeof import('renderer/hooks/papi-hooks/use-data-provider.hook').default;
         useData: typeof import('renderer/hooks/papi-hooks/use-data.hook').default;
-        useExtensionAsset: (
-          extensionName: string,
-          assetName: string,
-          defaultValue: string,
-          prefix?: string,
-          suffix?: string,
-        ) => string | undefined;
       };
     };
     network: {
