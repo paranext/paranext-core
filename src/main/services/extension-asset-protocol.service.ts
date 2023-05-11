@@ -35,7 +35,7 @@ const knownMimeTypes = {
 };
 
 /** Lookup the MIME type to pass back to the renderer */
-function getMimeTimeForFileName(fileName: string): string {
+function getMimeTypeForFileName(fileName: string): string {
   const dotIndex = fileName.lastIndexOf('.');
   if (dotIndex > 0) {
     const fileType: string = fileName.substring(dotIndex);
@@ -84,7 +84,7 @@ const initialize = () => {
       const slash = uri.indexOf('/');
       let extension = uri.substring(0, slash);
       let asset = uri.substring(slash + 1);
-      if (!extension || extension.length === 0 || !asset || asset.length === 0) {
+      if (!extension || !asset) {
         callback(errorObject(request.url, httpStatusCode.BAD_REQUEST));
         return;
       }
@@ -112,7 +112,7 @@ const initialize = () => {
       // Pass back the data to the renderer
       callback({
         statusCode: httpStatusCode.OK,
-        mimeType: getMimeTimeForFileName(asset),
+        mimeType: getMimeTypeForFileName(asset),
         data: Buffer.from(base64Data, 'base64'),
       });
     });
