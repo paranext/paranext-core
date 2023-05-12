@@ -7,6 +7,7 @@ import * as ExtensionService from '@extension-host/services/extension.service';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
+import extensionAssetService from '@shared/services/extension-asset.service';
 import getAsset from '@extension-host/services/asset-retrieval.service';
 
 // #region Test logs
@@ -37,24 +38,14 @@ const commandHandlers: { [commandName: string]: CommandHandler } = {
 
 networkService
   .initialize()
-  .then(() => {
+  .then(async () => {
     // Set up network commands
     Object.entries(commandHandlers).forEach(([commandName, handler]) => {
       papi.commands.registerCommand(commandName, handler);
     });
 
-    // Set up network requests
-    networkService.registerRequestHandler(
-      'getExtensionAsset',
-      async (extensionName: string, assetName: string) => {
-        try {
-          return (await getAsset(extensionName, assetName)).toString('base64');
-        } catch (error) {
-          logger.error(`Could not get asset "${assetName}" from "${extensionName}": ${error}`);
-          return undefined;
-        }
-      },
-    );
+    // The extension host is the only one that can initialize the extensionAssetService
+    await extensionAssetService.initialize(getAsset);
 
     // TODO: Probably should return Promise.all of these registrations
     return undefined;

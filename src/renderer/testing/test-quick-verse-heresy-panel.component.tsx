@@ -36,7 +36,7 @@ function TestQuickVerseHeresyPanel() {
     <div className="buttons-panel">
       <div className="hello">
         <img
-          src="papi-extension://quick-verse/letter-q.png"
+          src="papi-extension://quick-verse/assets/letter-q.png"
           alt="Q icon"
           style={{
             maxHeight: '40px',
