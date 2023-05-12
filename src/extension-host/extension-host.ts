@@ -8,7 +8,6 @@ import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
-import getAsset from '@extension-host/services/asset-retrieval.service';
 
 // #region Test logs
 
@@ -40,26 +39,20 @@ networkService
   .initialize()
   .then(async () => {
     // Set up network commands
-    Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-      papi.commands.registerCommand(commandName, handler);
+    Object.entries(commandHandlers).forEach(async ([commandName, handler]) => {
+      await papi.commands.registerCommand(commandName, handler).promise;
     });
 
     // The extension host is the only one that can initialize the extensionAssetService
-    await extensionAssetService.initialize(getAsset);
+    await extensionAssetService.initialize();
+
+    // The extension service locks down importing other modules, so be careful what runs after it
+    await ExtensionService.initialize();
 
     // TODO: Probably should return Promise.all of these registrations
     return undefined;
   })
   .catch(logger.error);
-
-// Need to wait a bit to initialize extensions in production because the extension host launches faster than the renderer.
-// TODO: Fix this so we can await renderer connecting event or something
-setTimeout(
-  () => {
-    ExtensionService.initialize();
-  },
-  globalThis.isPackaged ? 3000 : 0,
-);
 
 // #endregion
 

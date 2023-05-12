@@ -31,13 +31,13 @@ const getExtensionAsset = async (
 };
 
 /** This should only be called by the extension host. */
-const initialize = async (getAssetFunction: typeof GetAsset) => {
+const initialize = async () => {
   if (initializePromise) return initializePromise;
   if (!isExtensionHost()) return undefined;
 
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
-    getAsset = getAssetFunction;
+    getAsset = (await import('@extension-host/services/asset-retrieval.service')).default;
     await networkService.registerRequestHandler(
       'getExtensionAsset',
       async (extensionName: string, assetName: string) => {
