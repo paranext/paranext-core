@@ -1,5 +1,5 @@
 import { protocol } from 'electron';
-import httpStatusCode from '@shared/utils/http-status-codes';
+import { StatusCodes } from 'http-status-codes';
 import * as networkService from '@shared/services/network.service';
 
 /** The real list of Chromium error codes is really big.  We're just using a small subset. */
@@ -60,6 +60,8 @@ function errorObject(
   };
 }
 
+const protocolName: string = 'papi-extension';
+
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
 
@@ -68,16 +70,17 @@ const initialize = () => {
   if (initializePromise) return initializePromise;
 
   initializePromise = (async (): Promise<void> => {
-    protocol.registerBufferProtocol('paranextension', async (request, callback) => {
-      // TO CONSIDER: Check the referer for localhost? This would block arbitrary internet content
-      // from getting extension assets.
+    protocol.registerBufferProtocol(protocolName, async (request, callback) => {
+      // Ideas to consider:
+      // 1) Check the referer for localhost to block arbitrary internet content from getting extension assets.
+      // 2) Use request headers to pass along the extension name so extension code doesn't have to embed its name in URLs.
 
-      // "paranextension://" is 17 characters long
-      const uri: string = request.url.substring(17);
+      // Remove "papi-extension://" from the front of the URL
+      const uri: string = request.url.substring(`${protocolName}://`.length);
 
       // There have to be at least 2 parts to the URI divided by a slash
       if (!uri.includes('/')) {
-        callback(errorObject(request.url, httpStatusCode.BAD_REQUEST));
+        callback(errorObject(request.url, StatusCodes.BAD_REQUEST));
         return;
       }
 
@@ -85,7 +88,7 @@ const initialize = () => {
       let extension = uri.substring(0, slash);
       let asset = uri.substring(slash + 1);
       if (!extension || !asset) {
-        callback(errorObject(request.url, httpStatusCode.BAD_REQUEST));
+        callback(errorObject(request.url, StatusCodes.BAD_REQUEST));
         return;
       }
 
@@ -94,7 +97,7 @@ const initialize = () => {
       extension = decodeURIComponent(extension);
       asset = decodeURIComponent(asset);
       if (extension.length > 100 || asset.length > 100) {
-        callback(errorObject(request.url, httpStatusCode.BAD_REQUEST));
+        callback(errorObject(request.url, StatusCodes.BAD_REQUEST));
         return;
       }
 
@@ -105,13 +108,13 @@ const initialize = () => {
         asset,
       );
       if (!base64Data) {
-        callback(errorObject(request.url, httpStatusCode.NOT_FOUND, netErrors.FILE_NOT_FOUND));
+        callback(errorObject(request.url, StatusCodes.NOT_FOUND, netErrors.FILE_NOT_FOUND));
         return;
       }
 
       // Pass back the data to the renderer
       callback({
-        statusCode: httpStatusCode.OK,
+        statusCode: StatusCodes.OK,
         mimeType: getMimeTypeForFileName(asset),
         data: Buffer.from(base64Data, 'base64'),
       });
@@ -122,8 +125,8 @@ const initialize = () => {
 };
 
 /** Initialize a handler for protocol strings like the following:
- *  paranextension://extension-name/asset.xyz -> load "asset.xyz" from "assets" directory in "extension-name"
- *  paranextension://extension-name/subdirectory/asset.xyz -> load "asset.xyz" from "assets/subdirectory" directory in "extension-name"
+ *  papi-extension://extension-name/asset.xyz -> load "asset.xyz" from "assets" directory in "extension-name"
+ *  papi-extension://extension-name/subdirectory/asset.xyz -> load "asset.xyz" from "assets/subdirectory" directory in "extension-name"
  */
 const extensionAssetProtocolService = {
   initialize,

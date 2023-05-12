@@ -264,30 +264,28 @@ async function main() {
 
   // #region Test network objects
 
-  (async () => {
-    const testMain = {
-      doStuff: (stuff: string) => {
-        const result = `test-main did stuff: ${stuff}!`;
-        logger.info(result);
-        return result;
-      },
-      dispose: () => {
-        logger.info('testMain.dispose() ran in test-main');
-        return Promise.resolve(true);
-      },
-    };
+  const testMain = {
+    doStuff: (stuff: string) => {
+      const result = `test-main did stuff: ${stuff}!`;
+      logger.info(result);
+      return result;
+    },
+    dispose: () => {
+      logger.info('testMain.dispose() ran in test-main');
+      return Promise.resolve(true);
+    },
+  };
 
-    const testMainDisposer = await networkObjectService.set('test-main', testMain);
-    testMain.doStuff('main things');
-    testMainDisposer.onDidDispose(() => {
-      logger.info('test-main disposed in main message #1');
-    });
-    testMainDisposer.onDidDispose(() => {
-      logger.info('test-main disposed in main message #2');
-    });
+  const testMainDisposer = await networkObjectService.set('test-main', testMain);
+  testMain.doStuff('main things');
+  testMainDisposer.onDidDispose(() => {
+    logger.info('test-main disposed in main message #1');
+  });
+  testMainDisposer.onDidDispose(() => {
+    logger.info('test-main disposed in main message #2');
+  });
 
-    setTimeout(testMainDisposer.dispose, 10000);
-  })();
+  setTimeout(testMainDisposer.dispose, 10000);
 
   setTimeout(async () => {
     let testExtensionHost = await networkObjectService.get<{
