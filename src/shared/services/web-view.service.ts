@@ -9,7 +9,7 @@ import {
   serializeRequestType,
 } from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';
-import { newGuid, newNonce, wait } from '@shared/utils/util';
+import { newNonce, wait } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi.service';
@@ -44,36 +44,26 @@ const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
 export const onDidAddWebView = onDidAddWebViewEmitter.event;
 
 // #region Renderer-only stuff
-
-/** Map of WebView id to its corresponding papi instance */
-const webViewPapis = new Map<string, typeof papi>();
 /**
- * Sets a papi instance associated with the specified WebView.
- * @param webViewId id for the WebView whose papi to set
- * @param webViewPapi papi for the webView in question
+ * Provide a require implementation so we can provide some needed packages for extensions or
+ * for packages that extensions import
  */
-const setWebViewPapi = (webViewId: string, webViewPapi: typeof papi) =>
-  webViewPapis.set(webViewId, webViewPapi);
-/**
- * Gets the papi instance associated with the specified WebView. Can only be run once per WebView so other WebViews don't try to access
- * @param webViewId id for the webView whose papi to get
- * @returns papi for the webView in question
- */
-const getWebViewPapi = (webViewId: string) => {
-  const webViewPapi = webViewPapis.get(webViewId);
-  if (!webViewPapi) throw new Error(`Cannot find papi for WebView with id ${webViewId}`);
-
-  webViewPapis.delete(webViewId);
-  return webViewPapi;
+const webViewRequire = (module: string) => {
+  if (module === 'papi') return papi;
+  if (module === 'react') return React;
+  if (module === 'react-dom/client') return { createRoot };
+  throw new Error(`Cannot require module ${module}`);
 };
 
-// TODO: Hacking in React, createRoot, and getWebViewPapi onto window for now so webViews can access it. Make this TypeScript-y
+// TODO: Hacking in React, createRoot, and papi onto window for now so webViews can access it. Make this TypeScript-y
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).getWebViewPapi = getWebViewPapi;
+(globalThis as any).papi = papi;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).React = React;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).createRoot = createRoot;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).webViewRequire = webViewRequire;
 
 // #endregion
 
@@ -103,17 +93,14 @@ export const addWebView = async (webView: WebViewContents) => {
     throw new Error(`addWebView failed, but you should have seen a different error than this!`);
   }
 
-  // Create a papi instance for this WebView
-  const webViewId = newGuid();
-  setWebViewPapi(webViewId, papi);
-
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
   const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
 
   /** String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such */
   const imports = `
-  var papi = window.parent.getWebViewPapi('${webViewId}');
+  var papi = window.parent.papi;
   var React = window.parent.React;
+  var require = window.parent.webViewRequire;
   var createRoot = window.parent.createRoot;
   delete window.parent;
   delete window.top;
@@ -190,7 +177,8 @@ export const addWebView = async (webView: WebViewContents) => {
   //    TODO: change to script-src-elem so in-line attribute scripts like event handlers don't run? If this is actually more secure
   // style-src allows them to use style/link tags and style attributes on tags
   //    'self' so styles can be loaded from us
-  //    ${specificSrcPolicy} so we can load the specific styles needed from the iframe
+  //    'unsafe-inline' because that's how our styles are currently loaded in by hot reloading
+  //      TODO: PLEASE FIX THIS?
   // connect-src 'self' so the iframe can only communicate over the internet with us and not outside the iframe
   //    Note: they can still use things that are imported to their script via the imports string above.
   //    Objects passed through from the parent window still have full internet access. We must be very careful
@@ -205,7 +193,7 @@ export const addWebView = async (webView: WebViewContents) => {
     content="
       default-src 'none';
       script-src 'self' ${specificSrcPolicy};
-      style-src 'self' ${specificSrcPolicy};
+      style-src 'self' 'unsafe-inline';
       connect-src 'self';
       img-src 'self';
       media-src 'self';
