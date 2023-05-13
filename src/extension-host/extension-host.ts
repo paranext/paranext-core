@@ -39,9 +39,11 @@ networkService
   .initialize()
   .then(async () => {
     // Set up network commands
-    Object.entries(commandHandlers).forEach(async ([commandName, handler]) => {
-      await papi.commands.registerCommand(commandName, handler).promise;
-    });
+    await Promise.all(
+      Object.entries(commandHandlers).map(async ([commandName, handler]) => {
+        await papi.commands.registerCommand(commandName, handler).promise;
+      }),
+    );
 
     // The extension host is the only one that can initialize the extensionAssetService
     await extensionAssetService.initialize();
