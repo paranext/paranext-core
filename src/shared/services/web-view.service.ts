@@ -223,7 +223,7 @@ export const addWebView = async (
   // style-src allows them to use style/link tags and style attributes on tags
   //    'self' so styles can be loaded from us
   //    papi-extension: so scripts can be loaded from installed extensions
-  //    'unsafe-inline' because that's how our styles are currently loaded in by hot reloading
+  //    'unsafe-inline' because that's how bundled libraries' styles are loaded in
   //      TODO: PLEASE FIX THIS?
   // connect-src 'self' so the iframe can only communicate over the internet with us and not outside the iframe
   //    Note: they can still use things that are imported to their script via the imports string above.

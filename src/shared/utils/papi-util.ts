@@ -1,7 +1,9 @@
 // There is a React version 'fast-deep-equal/react' that I think allows comparing refs
 // (which have circular references in particular places that this library would ignore).
 // Maybe we can change to that version sometime if needed.
+import { ProcessType } from '@shared/global-this.model';
 import equal from 'fast-deep-equal';
+import { isString } from '@shared/utils/util';
 
 // #region Unsubscriber stuff
 
@@ -262,10 +264,14 @@ export const htmlEncode = (str: string): string =>
  * When an extension requires these modules, an error throws that lets them know about our similar api.
  */
 export const MODULE_SIMILAR_APIS: Readonly<{
-  [moduleName: string]: string | undefined;
+  [moduleName: string]: string | { [process in ProcessType | 'default']?: string } | undefined;
 }> = Object.freeze({
-  http: 'fetch',
-  https: 'fetch',
+  http: 'papi.fetch',
+  https: 'papi.fetch',
+  fs: {
+    [ProcessType.Renderer]: 'the papi-extension: protocol',
+    [ProcessType.ExtensionHost]: 'papi.storage',
+  },
 });
 
 /**
@@ -275,7 +281,14 @@ export const MODULE_SIMILAR_APIS: Readonly<{
  */
 export function getModuleSimilarApiMessage(moduleName: string) {
   const similarApi = MODULE_SIMILAR_APIS[moduleName] || MODULE_SIMILAR_APIS[`node:${moduleName}`];
+  let similarApiName: string | undefined;
+  if (similarApi)
+    if (isString(similarApi)) {
+      similarApiName = similarApi;
+    } else {
+      similarApiName = similarApi[globalThis.processType] || similarApi.default;
+    }
   return `Rejected require('${moduleName}'). Try${
-    similarApi ? ` using papi.${similarApi} or` : ''
+    similarApiName ? ` using ${similarApiName} or` : ''
   } bundling the module into your code with a build tool like Vite`;
 }
