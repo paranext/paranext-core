@@ -1,0 +1,26 @@
+diff --git a/node_modules/rollup-plugin-import-manager/README.md b/node_modules/rollup-plugin-import-manager/README.md
+index f1bbebd..b13192a 100644
+--- a/node_modules/rollup-plugin-import-manager/README.md
++++ b/node_modules/rollup-plugin-import-manager/README.md
+@@ -162,7 +162,7 @@ This is where the plugin comes to life. Here is the place where units are gettin
+ ---
+ 
+ #### `module` <samp>[option for units]</samp>
+-Type: `String`  
++Type: `String` | `RexExp`  
+ Default: `null`  
+ 
+ Selects a unit by its module name. Each import has a name object. This is constructed from the module.
+@@ -353,10 +353,10 @@ An option to target an alias of a [selected](#select-option-for-actions) `defaul
+ 
+ 
+ ##### `rename` <samp>[option for actions]</samp>
+-Type: `String`  
++Type: `String` | `(moduleSourceRaw: string) => string`  
+ Default: `null`  
+ 
+-This option is used to rename a [selected](#select-option-for-actions) specific part (`defaultMember`, `member`, `module`). The value is the new name of the selected part. See this [example](#changing-the-module).
++This option is used to rename a [selected](#select-option-for-actions) specific part (`defaultMember`, `member`, `module`). The value is a string of the new name of the selected part. See this [example](#changing-the-module). If the selected part is `module`, the value could alternatively be a function accepting the whole raw module source (ex: `"./module-name"` including quotes) and returning the whole new name (ex: `"./newmodule-name"` including quotes).
+ 
+ 
+ ##### `modType` <samp>[option for actions]</samp>

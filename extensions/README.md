@@ -41,7 +41,7 @@ To watch extension files (in `lib`) for changes:
 
 To build the extensions once:
 
-`npm run build:vite`
+`npm run build:vite` or `npm run build`
 
 ## Vite Build Explanation
 

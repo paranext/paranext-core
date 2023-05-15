@@ -3,7 +3,7 @@ import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type { WebViewContentType } from 'shared/data/web-view.model';
 import { GreetingsDataProvider } from '@extensions/hello-someone/hello-someone';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
-import helloWorldReactWebView from './hello-world.web-view.js';
+import helloWorldReactWebView from './hello-world.web-view';
 import helloWorldReactWebViewStyles from './hello-world.web-view.scss?inline';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloWorldHtmlWebView from './hello-world.web-view.ejs';
