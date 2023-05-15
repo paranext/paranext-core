@@ -22,6 +22,7 @@ logger.warn('Extension host example warning');
 // #region Services setup
 
 const commandHandlers: { [commandName: string]: CommandHandler } = {
+  // Set up test handlers
   addMany: async (...nums: number[]) => {
     /* const start = performance.now(); */
     /* const result = await papi.commands.sendCommand('addThree', 1, 4, 9); */
@@ -41,7 +42,7 @@ networkService
     // Set up network commands
     await Promise.all(
       Object.entries(commandHandlers).map(async ([commandName, handler]) => {
-        await papi.commands.registerCommand(commandName, handler).promise;
+        await papi.commands.registerCommand(commandName, handler);
       }),
     );
 
