@@ -222,3 +222,26 @@ export const htmlEncode = (str: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;')
     .replace(/\//g, '&#x2F;');
+
+/**
+ * Modules that someone might try to require in their extensions that we have similar apis for.
+ * When an extension requires these modules, an error throws that lets them know about our similar api.
+ */
+export const MODULE_SIMILAR_APIS: Readonly<{
+  [moduleName: string]: string | undefined;
+}> = Object.freeze({
+  http: 'fetch',
+  https: 'fetch',
+});
+
+/**
+ * Get a message that says the module import was rejected and to try a similar api if available.
+ * @param moduleName name of `require`d module that was rejected
+ * @returns string that says the import was rejected and a similar api to try
+ */
+export function getModuleSimilarApiMessage(moduleName: string) {
+  const similarApi = MODULE_SIMILAR_APIS[moduleName] || MODULE_SIMILAR_APIS[`node:${moduleName}`];
+  return `Rejected require('${moduleName}'). Try${
+    similarApi ? ` using papi.${similarApi} or` : ''
+  } bundling the module into your code with a build tool like Vite`;
+}

@@ -18,7 +18,7 @@ import {
 } from './vite.util';
 
 // https://vitejs.dev/config/
-const viteConfig = defineConfig(async () => {
+const webViewConfig = defineConfig(async () => {
   /** List of TypeScript WebView files to transpile */
   const tsxWebViews = await getWebViewTsxPaths();
 
@@ -94,6 +94,6 @@ const viteConfig = defineConfig(async () => {
   };
 });
 
-export default viteConfig;
+export default webViewConfig;
 
 // #endregion

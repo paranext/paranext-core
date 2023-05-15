@@ -6,9 +6,9 @@ import { IExtension } from '@extension-host/extension-types/extension.interface'
 import { EntryType, readDir, readFileText } from '@node/services/node-file-system.service';
 import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
-import { UnsubscriberAsync } from '@shared/utils/papi-util';
+import { UnsubscriberAsync, getModuleSimilarApiMessage } from '@shared/utils/papi-util';
 import Module from 'module';
-import papi, { MODULE_SIMILAR_APIS } from '@shared/services/papi.service';
+import papi from '@shared/services/papi.service';
 import logger from '@shared/services/logger.service';
 import {
   ARG_EXTENSION_DIRS,
@@ -194,10 +194,9 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
 
     // Disallow any imports within the extension
     // Tell the extension dev if there is an api similar to what they want to import
-    const similarApi = MODULE_SIMILAR_APIS[fileName] || MODULE_SIMILAR_APIS[`node:${fileName}`];
-    const message = `Requiring other than papi is not allowed in extensions! Rejected require('${fileName}').${
-      similarApi ? ` Try using papi.${similarApi}` : ''
-    }`;
+    const message = `Requiring other than papi is not allowed in extensions! ${getModuleSimilarApiMessage(
+      fileName,
+    )}`;
     throw new Error(message);
   }) as typeof Module.prototype.require;
 

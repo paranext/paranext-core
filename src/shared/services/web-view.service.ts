@@ -6,6 +6,7 @@ import { isRenderer } from '@shared/utils/internal-util';
 import {
   aggregateUnsubscriberAsyncs,
   CommandHandler,
+  getModuleSimilarApiMessage,
   serializeRequestType,
 } from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';
@@ -44,6 +45,7 @@ const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
 export const onDidAddWebView = onDidAddWebViewEmitter.event;
 
 // #region Renderer-only stuff
+
 /**
  * Provide a require implementation so we can provide some needed packages for extensions or
  * for packages that extensions import
@@ -52,7 +54,11 @@ const webViewRequire = (module: string) => {
   if (module === 'papi') return papi;
   if (module === 'react') return React;
   if (module === 'react-dom/client') return { createRoot };
-  throw new Error(`Cannot require module ${module}`);
+  // Tell the extension dev if there is an api similar to what they want to import
+  const message = `Requiring other than papi, react, and react-dom/client > createRoot is not allowed in WebViews! ${getModuleSimilarApiMessage(
+    module,
+  )}`;
+  throw new Error(message);
 };
 
 // TODO: Hacking in React, createRoot, and papi onto window for now so webViews can access it. Make this TypeScript-y
@@ -100,8 +106,8 @@ export const addWebView = async (webView: WebViewContents) => {
   const imports = `
   var papi = window.parent.papi;
   var React = window.parent.React;
-  var require = window.parent.webViewRequire;
   var createRoot = window.parent.createRoot;
+  var require = window.parent.webViewRequire;
   delete window.parent;
   delete window.top;
   delete window.frameElement;

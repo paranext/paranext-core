@@ -121,6 +121,19 @@ declare module 'shared/utils/papi-util' {
    * @returns HTML-encoded string
    */
   export const htmlEncode: (str: string) => string;
+  /**
+   * Modules that someone might try to require in their extensions that we have similar apis for.
+   * When an extension requires these modules, an error throws that lets them know about our similar api.
+   */
+  export const MODULE_SIMILAR_APIS: Readonly<{
+    [moduleName: string]: string | undefined;
+  }>;
+  /**
+   * Get a message that says the module import was rejected and to try a similar api if available.
+   * @param moduleName name of `require`d module that was rejected
+   * @returns string that says the import was rejected and a similar api to try
+   */
+  export function getModuleSimilarApiMessage(moduleName: string): string;
 }
 declare module 'shared/data/internal-connection.model' {
   /**
@@ -2155,11 +2168,4 @@ declare module 'papi' {
     };
   };
   export default papi;
-  /**
-   * Modules that someone might try to require in their extensions that we have similar apis for.
-   * When an extension requires these modules, an error throws that lets them know about our similar api.
-   */
-  export const MODULE_SIMILAR_APIS: Readonly<{
-    [moduleName: string]: string | undefined;
-  }>;
 }
