@@ -65,3 +65,9 @@ Vite packages the extensions together into the `dist` folder:
 - Packages dependencies into the main files
 - Generates sourcemaps for the files
 - Packages everything up into each extension folder in `dist`
+
+Note: When performing the second build step, the following line may occur in your console. Please feel free to ignore it as it is a false positive. It is likely showing because WebViews are embedded in the entry file:
+
+```bash
+transforming (1) lib\main.ts[plugin:ImportManager] It seems like there are multiple imports of module 'react'. You should examine that.
+```

@@ -93,6 +93,7 @@ const extensionConfig = defineConfig(async () => {
         // Do not bundle papi because it will be imported in Paranext
         external: paranextProvidedModules,
       },
+      // If watching, debounce building so we don't build off a build that was partially finished
       watch: process.argv.includes('--watch') ? { buildDelay: 1000 } : null,
       // Generate sourcemaps as separate files since VSCode can load them directly
       sourcemap: true,
