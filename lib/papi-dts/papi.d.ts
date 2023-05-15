@@ -1699,6 +1699,8 @@ declare module 'extension-host/services/extension-storage.service' {
    *  This service cannot call into the extension service or it causes a circular dependency.
    */
   export function setExtensionUris(urisPerExtension: Map<string, string>): void;
+  /** Return a path to the specified file within the extension's installation directory */
+  export function buildExtensionPathFromName(extensionName: string, fileName: string): string;
   /** Read a text file from the the extension's installation directory
    *  @param token ExecutionToken provided to the extension when `activate()` was called
    *  @param fileName Name of the file to be read

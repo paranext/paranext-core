@@ -226,30 +226,38 @@ export const addWebView = async (
   // default-src 'none' so things can't happen unless we allow them
   // script-src allows them to use script tags and in-line attribute scripts
   //    'self' so scripts can be loaded from us
+  //    papi-extension: so scripts can be loaded from installed extensions
   //    ${specificSrcPolicy} so we can load the specific styles needed from the iframe
   //    TODO: change to script-src-elem so in-line attribute scripts like event handlers don't run? If this is actually more secure
   // style-src allows them to use style/link tags and style attributes on tags
   //    'self' so styles can be loaded from us
+  //    papi-extension: so scripts can be loaded from installed extensions
   //    ${specificSrcPolicy} so we can load the specific styles needed from the iframe
   // connect-src 'self' so the iframe can only communicate over the internet with us and not outside the iframe
   //    Note: they can still use things that are imported to their script via the imports string above.
   //    Objects passed through from the parent window still have full internet access. We must be very careful
   //    to control their access to the parent windows's stuff like papi
-  // img-src 'self' so they can load images from us
-  // media-src 'self' so they can load audio, video, etc from us
-  // font-src 'self' so they can load fonts from us
+  // img-src load images
+  //   'self' so images can be loaded from us
+  //   papi-extension: so images can be loaded from installed extensions
+  // media-src load audio, video, etc
+  //   'self' so media can be loaded from us
+  //   papi-extension: so media can be loaded from installed extensions
+  // font-src load fonts
+  //   'self' so fonts can be loaded from us
+  //   papi-extension: so fonts can be loaded from installed extensions
   // form-action 'self' lets the form submit to us
   //    TODO: not sure if this is needed. If we can attach handlers to forms, we can probably remove this
   // navigate-to 'none' prevents them from redirecting this iframe somewhere else
   const contentSecurityPolicy = `<meta http-equiv="Content-Security-Policy"
     content="
       default-src 'none';
-      script-src 'self' ${specificSrcPolicy};
-      style-src 'self' ${specificSrcPolicy};
+      script-src 'self' papi-extension: ${specificSrcPolicy};
+      style-src 'self' papi-extension: ${specificSrcPolicy};
       connect-src 'self';
-      img-src 'self';
-      media-src 'self';
-      font-src 'self';
+      img-src 'self' papi-extension:;
+      media-src 'self' papi-extension:;
+      font-src 'self' papi-extension:;
       form-action 'self';
       navigate-to 'none';
     ">`;
