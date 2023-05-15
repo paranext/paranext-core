@@ -7,14 +7,11 @@
 import { defineConfig } from 'vite';
 import path from 'path';
 import react from '@vitejs/plugin-react';
-import { importManager } from 'rollup-plugin-import-manager';
-import escapeStringRegexp from 'escape-string-regexp';
 import {
   getFileExtensionByModuleFormat,
   getWebViewTsxPaths,
   paranextProvidedModules,
   webViewTempDir,
-  webViewTsxGlob,
 } from './vite.util';
 
 // https://vitejs.dev/config/
@@ -29,15 +26,6 @@ const webViewConfig = defineConfig(async () => {
     plugins: [
       // use React.createElement
       react({ jsxRuntime: 'classic' }),
-      // Remove the Paranext global modules from the imports in React web views because they are provided globally
-      importManager({
-        include: webViewTsxGlob,
-        units: paranextProvidedModules.map((module) => ({
-          // Match the whole module name, nothing more, nothing less
-          module: new RegExp(`^${escapeStringRegexp(module)}$`),
-          actions: 'remove',
-        })),
-      }),
     ],
     build: {
       // This project is a library as it is being used in Paranext

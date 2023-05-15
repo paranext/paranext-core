@@ -1,7 +1,6 @@
 import papi from 'papi';
-import React from 'react';
+import { useCallback, useContext, useState } from 'react';
 
-const { useCallback, useContext, useState } = React;
 const {
   react: {
     context: { TestContext },
