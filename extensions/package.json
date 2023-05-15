@@ -15,8 +15,7 @@
     "start:core": "npm start",
     "start": "cd .. && npm start",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
-    "lint:staged": "lint-staged -q",
-    "postinstall": "patch-package"
+    "lint:staged": "lint-staged -q"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
@@ -38,7 +37,7 @@
     "glob": "^10.2.2",
     "papi-dts": "file:../lib/papi-dts",
     "patch-package": "^7.0.0",
-    "rollup-plugin-import-manager": "^0.5.3",
+    "rollup-plugin-import-manager": "^0.6.1",
     "rollup-plugin-string": "^3.0.0",
     "sass": "^1.62.1",
     "vite": "^4.2.0",
