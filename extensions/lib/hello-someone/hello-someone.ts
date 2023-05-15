@@ -53,10 +53,15 @@ export async function activate() {
     greetingsDataProviderEngine,
   );
 
-  papi.webViews.addWebView({
-    contentType: 'html' as WebViewContentType.HTML,
-    contents: helloSomeoneHtmlWebView,
-  });
+  await papi.webViews.addWebView(
+    {
+      id: 'Hello Someone',
+      title: 'Hello Someone HTML',
+      contentType: 'html' as WebViewContentType.HTML,
+      content: helloSomeoneHtmlWebView,
+    },
+    { type: 'panel', direction: 'top' },
+  );
 
   const unsubPromises = [
     papi.commands.registerCommand('hello-someone.hello-someone', (someone) => {

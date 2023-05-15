@@ -15,6 +15,9 @@ import {
   ARG_EXTENSIONS,
   getCommandLineArgumentsGroup,
 } from '@node/utils/command-line.util';
+import { setExtensionUris } from '@extension-host/services/extension-storage.service';
+import executionTokenService from '@node/services/execution-token.service';
+import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 
 /**
  * Name of the file describing the extension and its capabilities. Provided by the extension
@@ -139,15 +142,28 @@ const activateExtension = async (
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
   const extensionModule = (await import(/* webpackIgnore: true */ extensionFilePath)) as IExtension;
 
+  // IMPORTANT: Only give the token to the extension when it is activated. Don't store it or its
+  // nonce anywhere else. It is okay to give the token's getHash() value to something for purposes
+  // of unregistering the extension later.
+  const executionToken = executionTokenService.registerExtension(extension.name);
+  const tokenName: string = executionToken.name;
+  const tokenHash: string = executionToken.getHash();
+
+  // Build up the context for this particular extension
+  const context: ExecutionActivationContext = { executionToken };
+  Object.freeze(context);
+
   // Activate the extension
-  const extensionUnsubscriber = await extensionModule.activate();
+  const extensionUnsubscriber = await extensionModule.activate(context);
 
   const activeExtension: ActiveExtension = {
     info: extension,
     deactivator: async () => {
       let unsubResult = await extensionUnsubscriber();
-      if (extensionModule.deactivate)
+      if (extensionModule.deactivate) {
         unsubResult = (await extensionModule.deactivate()) && unsubResult;
+      }
+      unsubResult = executionTokenService.unregisterExtension(tokenName, tokenHash) && unsubResult;
       activeExtensions.delete(activeExtension.info.name);
       return unsubResult;
     },
@@ -258,6 +274,14 @@ export const initialize = () => {
     // Get a list of extensions
     availableExtensions = await getExtensions();
 
+    // Store their base URIs in the extension storage service
+    const uriMap: Map<string, string> = new Map();
+    availableExtensions.forEach((extensionInfo) => {
+      uriMap.set(extensionInfo.name, extensionInfo.dirUri);
+    });
+    setExtensionUris(uriMap);
+
+    // And finally activate them
     await activateExtensions(availableExtensions);
 
     isInitialized = true;

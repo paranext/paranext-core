@@ -1,6 +1,8 @@
 import papi from 'papi';
+import type { ExecutionToken } from 'node/models/execution-token.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import { UnsubPromiseAsync, UnsubscriberAsync } from 'shared/utils/papi-util';
+import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 
 const { logger } = papi;
 
@@ -22,6 +24,14 @@ class QuickVerseDataProviderEngine
 
   /** Latest updated verse reference */
   latestVerseRef = 'john 11:35';
+
+  /** Number of times any verse has been modified by a user this session */
+  heresyCount = 0;
+
+  /** @param heresyWarning string to prefix heretical data */
+  constructor(public heresyWarning: string) {
+    this.heresyWarning = this.heresyWarning ?? 'heresyCount =';
+  }
 
   // Note: this method does not have to be provided here for it to work properly because it is layered over on the papi.
   // But because we provide it here, we must return `true` to notify like in the set method.
@@ -56,6 +66,7 @@ class QuickVerseDataProviderEngine
       isChanged: true,
     };
     if (selector !== 'latest') this.latestVerseRef = this.#getSelector(selector);
+    this.heresyCount += 1;
     return true;
   }
 
@@ -98,6 +109,11 @@ class QuickVerseDataProviderEngine
       }
     }
 
+    if (responseVerse.isChanged) {
+      // Remove any previous heresy warning from the beginning of the text so they don't stack
+      responseVerse.text = responseVerse.text.replace(/^\[.* \d*\] /, '');
+      return `[${this.heresyWarning} ${this.heresyCount}] ${responseVerse.text}`;
+    }
     return responseVerse.text;
   };
 
@@ -115,13 +131,36 @@ class QuickVerseDataProviderEngine
   }
 }
 
-export async function activate() {
+export async function activate(context: ExecutionActivationContext) {
   logger.info('Quick Verse is activating!');
+
+  const token: ExecutionToken = context.executionToken;
+  const warning = await papi.storage.readTextFileFromInstallDirectory(
+    token,
+    'assets/heresy-warning.txt',
+  );
+  const engine = new QuickVerseDataProviderEngine(warning.trim());
+
+  let storedHeresyCount: number = 0;
+  try {
+    // If a user has never been a heretic, there is nothing to read
+    const loadedData = await papi.storage.readUserData(token, 'heresy-count');
+    if (loadedData) storedHeresyCount = Number(loadedData);
+  } catch (error) {
+    logger.debug(error);
+  }
+  engine.heresyCount = storedHeresyCount;
 
   const quickVerseDataProvider = await papi.dataProvider.registerEngine(
     'quick-verse.quick-verse',
-    new QuickVerseDataProviderEngine(),
+    engine,
   );
+
+  quickVerseDataProvider.subscribe('latest', () => {
+    if (storedHeresyCount === engine.heresyCount) return;
+    storedHeresyCount = engine.heresyCount;
+    papi.storage.writeUserData(token, 'heresy-count', String(storedHeresyCount));
+  });
 
   const unsubPromises: UnsubPromiseAsync[] = [];
 
