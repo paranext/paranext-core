@@ -21,6 +21,11 @@ export type ComboBoxProps = {
    */
   isDisabled?: boolean;
   /**
+   * If `true`, the component can be cleared, and will have a button to do so
+   * @default true
+   */
+  isClearable?: boolean;
+  /**
    * True when (input related to) switch is erroneous
    * @default false
    */
@@ -39,12 +44,16 @@ export type ComboBoxProps = {
    */
   className?: string;
   /**
+   * The selected value that the combo box currently holds
+   */
+  value?: string;
+  /**
    * Triggers when content of textfield is changed
    */
   onChange?: (
     event: SyntheticEvent<Element, Event>,
     value: unknown,
-    reason: ComboBoxChangeReason,
+    reason?: ComboBoxChangeReason,
     details?: ComboBoxChangeDetails<unknown> | undefined,
   ) => void;
   /**
@@ -66,10 +75,12 @@ export type ComboBoxProps = {
 function ComboBox({
   title,
   isDisabled = false,
+  isClearable = true,
   hasError = false,
   isFullWidth = false,
   options = [],
   className,
+  value,
   onChange,
   onFocus,
   onBlur,
@@ -78,9 +89,11 @@ function ComboBox({
     <MuiComboBox
       disablePortal
       disabled={isDisabled}
+      disableClearable={!isClearable}
       fullWidth={isFullWidth}
       options={options}
       className={`papi-combo-box ${hasError ? 'error' : ''} ${className ?? ''}`}
+      value={value}
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}

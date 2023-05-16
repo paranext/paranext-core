@@ -100,6 +100,17 @@ export const getBookLongNameFromNum = (bookNum: number): string => {
   return scrBookNames[bookNum < FIRST_SCR_BOOK_NUM || bookNum > LAST_SCR_BOOK_NUM ? 0 : bookNum][1];
 };
 
+export const getAllBookNames = (): string[] => {
+  const bookNames: string[] = [];
+
+  scrBookNames.slice(1).forEach((books) => {
+    const fullName = books[1];
+    bookNames.push(fullName);
+  });
+
+  return bookNames;
+};
+
 export const offsetBook = (scrRef: ScriptureReference, offset: number): ScriptureReference => ({
   book: Math.max(FIRST_SCR_BOOK_NUM, Math.min(scrRef.book + offset, LAST_SCR_BOOK_NUM)),
   chapter: 1,

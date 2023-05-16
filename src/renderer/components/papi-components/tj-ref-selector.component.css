@@ -2,26 +2,27 @@
   outline: 0px solid transparent;
 }
 
-button {
+/* change-btns {
   padding: 5px 10px;
-  background-color: #505070;
+  background-color: #ff0303;
   color: white;
   border-radius: 5px;
   font-size: 11pt;
 }
 
-button:enabled {
+change-btns:enabled {
   cursor: pointer;
 }
 
-button:hover:enabled {
+change-btns:hover:enabled {
   transform: scale(1.05);
   opacity: 1;
-}
+} */
 
 .scr-toolbar {
   padding: 7px;
-  background-color: #1c1c2a;
+  background-color: #e0e0ec;
+  height: 200px;
 }
 
 .scr-toolbar .selector-area,
@@ -33,17 +34,19 @@ button:hover:enabled {
 
 .scr-toolbar .selector-area span {
   margin: 0px 5px;
-  display: inline-block;
   width: 3ch;
+  display: inline-block;
   text-align: right;
 }
 
-.scr-toolbar .selector-area span.book {
-  width: 10ch;
+.scr-toolbar .selector-area .book {
+  width: 20ch;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .scr-toolbar .selector-area span.chapter {
-  width: 4ch;
+  width: auto;
 }
 
 .scr-toolbar .selector-area .change-btns {
@@ -57,7 +60,7 @@ button:hover:enabled {
   border-top: 1px solid #505070;
   border-bottom: 1px solid #505070;
   border-radius: 0px 5px 5px 0px;
-  background-color: #505070;
+  background-color: #04f504;
   color: #1c1c2a;
   box-sizing: border-box;
   font-size: 11pt;
@@ -81,39 +84,44 @@ button:hover:enabled {
   display: inline;
 }
 
-.scr-toolbar input {
-  width: 120px;
+.scr-toolbar .input-area .enter-button {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.scr-toolbar .input-area .input-reference {
+  width: 180px;
   margin: 4px;
   padding: 4px;
   border-radius: 5px;
   transition: all ease-in 0.1s;
 }
 
-.scr-toolbar input:focus,
+/* .scr-toolbar input:focus,
 .scr-toolbar input:hover,
 .scr-toolbar input.changed {
   background-color: #505070;
   color: white;
-}
+} */
 
-.scr-toolbar input:focus {
+/* .scr-toolbar input:focus {
   outline: 1px solid white;
-}
+} */
 
-.scr-toolbar input,
-button:disabled,
+/* .scr-toolbar input, */
+change-btns:disabled,
 .scr-toolbar .selector-area .change-btn:disabled {
   background-color: #1c1c2a;
   color: #505070;
 }
 
-.scr-toolbar input,
-button:disabled {
+/* .scr-toolbar input, */
+change-btns:disabled {
   border: 1px solid #505070;
 }
 
 .scr-toolbar .selector-area .change-btn:hover:enabled,
-button:hover:enabled {
+change-btns:hover:enabled {
   background-color: #8a8aac;
   color: white;
 }
