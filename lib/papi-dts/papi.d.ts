@@ -1780,6 +1780,11 @@ declare module 'renderer/components/papi-components/combo-box.component' {
      */
     isDisabled?: boolean;
     /**
+     * If `true`, the component can be cleared, and will have a button to do so
+     * @default true
+     */
+    isClearable?: boolean;
+    /**
      * True when (input related to) switch is erroneous
      * @default false
      */
@@ -1803,12 +1808,16 @@ declare module 'renderer/components/papi-components/combo-box.component' {
      */
     className?: string;
     /**
+     * The selected value that the combo box currently holds
+     */
+    value?: string;
+    /**
      * Triggers when content of textfield is changed
      */
     onChange?: (
       event: SyntheticEvent<Element, Event>,
       value: unknown,
-      reason: ComboBoxChangeReason,
+      reason?: ComboBoxChangeReason,
       details?: ComboBoxChangeDetails<unknown> | undefined,
     ) => void;
     /**
@@ -1829,10 +1838,12 @@ declare module 'renderer/components/papi-components/combo-box.component' {
   function ComboBox({
     title,
     isDisabled,
+    isClearable,
     hasError,
     isFullWidth,
     options,
     className,
+    value,
     onChange,
     onFocus,
     onBlur,
