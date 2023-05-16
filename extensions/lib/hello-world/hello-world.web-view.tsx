@@ -1,7 +1,6 @@
 import papi from 'papi';
-import React from 'react';
+import { useCallback, useContext, useState } from 'react';
 
-const { useCallback, useContext, useState } = React;
 const {
   react: {
     context: { TestContext },
@@ -20,9 +19,7 @@ papi
   .then((scr) => logger.info(scr.text.replace(/\\n/g, '')))
   .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
 
-// @ts-expect-error ts(6133) This function is called by the React web view container
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function HelloWorld() {
+globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
   const [myState, setMyState] = useState(0);
@@ -77,4 +74,4 @@ function HelloWorld() {
       <div>{latestVerseText}</div>
     </div>
   );
-}
+};

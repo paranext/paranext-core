@@ -8,6 +8,7 @@ import { isRenderer } from '@shared/utils/internal-util';
 import {
   aggregateUnsubscriberAsyncs,
   CommandHandler,
+  getModuleSimilarApiMessage,
   serializeRequestType,
 } from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';
@@ -48,35 +49,30 @@ export const onDidAddWebView = onDidAddWebViewEmitter.event;
 
 // #region Renderer-only stuff
 
-/** Map of WebView id to its corresponding papi instance */
-const webViewPapis = new Map<string, typeof papi>();
 /**
- * Sets a papi instance associated with the specified WebView.
- * @param webViewId id for the WebView whose papi to set
- * @param webViewPapi papi for the webView in question
+ * Provide a require implementation so we can provide some needed packages for extensions or
+ * for packages that extensions import
  */
-const setWebViewPapi = (webViewId: string, webViewPapi: typeof papi) =>
-  webViewPapis.set(webViewId, webViewPapi);
-/**
- * Gets the papi instance associated with the specified WebView. Can only be run once per WebView so other WebViews don't try to access
- * @param webViewId id for the webView whose papi to get
- * @returns papi for the webView in question
- */
-const getWebViewPapi = (webViewId: string) => {
-  const webViewPapi = webViewPapis.get(webViewId);
-  if (!webViewPapi) throw new Error(`Cannot find papi for WebView with id: '${webViewId}'`);
-
-  webViewPapis.delete(webViewId);
-  return webViewPapi;
+const webViewRequire = (module: string) => {
+  if (module === 'papi') return papi;
+  if (module === 'react') return React;
+  if (module === 'react-dom/client') return { createRoot };
+  // Tell the extension dev if there is an api similar to what they want to import
+  const message = `Requiring other than papi, react, and react-dom/client > createRoot is not allowed in WebViews! ${getModuleSimilarApiMessage(
+    module,
+  )}`;
+  throw new Error(message);
 };
 
-// TODO: Hacking in React, createRoot, and getWebViewPapi onto window for now so webViews can access it. Make this TypeScript-y
+// TODO: Hacking in React, createRoot, and papi onto window for now so webViews can access it. Make this TypeScript-y
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).getWebViewPapi = getWebViewPapi;
+(globalThis as any).papi = papi;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).React = React;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).createRoot = createRoot;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).webViewRequire = webViewRequire;
 
 // #endregion
 
@@ -141,18 +137,15 @@ export const addWebView = async (
     throw new Error(`addWebView failed, but you should have seen a different error than this!`);
   }
 
-  // Create a papi instance for this WebView
-  const webViewId = webView.id;
-  setWebViewPapi(webViewId, papi);
-
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
   const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
 
   /** String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such */
   const imports = `
-  var papi = window.parent.getWebViewPapi('${webViewId}');
+  var papi = window.parent.papi;
   var React = window.parent.React;
   var createRoot = window.parent.createRoot;
+  var require = window.parent.webViewRequire;
   delete window.parent;
   delete window.top;
   delete window.frameElement;
@@ -181,6 +174,8 @@ export const addWebView = async (
       const reactWebView = webView as WebViewContentsReact;
 
       // Add the component as a script
+      // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
+      // reactWebView.contents. Doing so would mess up debugging web views
       webViewContent = `
         <html>
           <head>
@@ -195,16 +190,12 @@ export const addWebView = async (
           <body>
             <div id="root">
             </div>
-            <script nonce="${srcNonce}">
-              // Enable webview debugging
-              console.debug('Debug ${reactWebView.componentName} Webview')
-
-              ${reactWebView.content}
+            <script nonce="${srcNonce}">${reactWebView.content}
 
               function initializeReact() {
                 const container = document.getElementById('root');
                 const root = createRoot(container);
-                root.render(React.createElement(${reactWebView.componentName}, null));
+                root.render(React.createElement(globalThis.webViewComponent, null));
               }
 
               if (document.readyState === 'loading')
@@ -232,7 +223,8 @@ export const addWebView = async (
   // style-src allows them to use style/link tags and style attributes on tags
   //    'self' so styles can be loaded from us
   //    papi-extension: so scripts can be loaded from installed extensions
-  //    ${specificSrcPolicy} so we can load the specific styles needed from the iframe
+  //    'unsafe-inline' because that's how bundled libraries' styles are loaded in
+  //      TODO: PLEASE FIX THIS?
   // connect-src 'self' so the iframe can only communicate over the internet with us and not outside the iframe
   //    Note: they can still use things that are imported to their script via the imports string above.
   //    Objects passed through from the parent window still have full internet access. We must be very careful
@@ -253,7 +245,7 @@ export const addWebView = async (
     content="
       default-src 'none';
       script-src 'self' papi-extension: ${specificSrcPolicy};
-      style-src 'self' papi-extension: ${specificSrcPolicy};
+      style-src 'self' papi-extension: 'unsafe-inline';
       connect-src 'self';
       img-src 'self' papi-extension:;
       media-src 'self' papi-extension:;

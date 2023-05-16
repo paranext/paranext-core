@@ -286,6 +286,23 @@ async function registerEngine<TSelector, TGetData, TSetData>(
     onDidUpdateEmitter,
   );
 
+  // Temporarily fix a race condition where we register dataProviderInternal as a network object,
+  // then we get the network object in order to get the local proxy that doesn't have dispose on it,
+  // then we set the container to the local network object. If a process tries to call something on
+  // this data provider after it is set and before dataProviderContainer is properly set after the
+  // get below, an error occurred that the dataProviderContainer.contents was undefined. So we set
+  // dataProviderContainer.contents here to have a temporary fix where the container will have
+  // something in it immediately once it is set as a network object.
+  // TODO: Fix this issue - having contents set here essentially opens up data providers to be
+  // disposed by other things for a fraction of a second. Maybe we could set the container's
+  // contents in networkObjectService.set
+  // https://github.com/paranext/paranext-core/issues/185
+  dataProviderContainer.contents = dataProviderInternal as unknown as IDataProvider<
+    TSelector,
+    TGetData,
+    TSetData
+  >;
+
   // Set up the data provider to be a network object so other processes can use it
   const disposableDataProvider = (await networkObjectService.set(
     dataProviderObjectId,

@@ -6,13 +6,24 @@ import { IExtension } from '@extension-host/extension-types/extension.interface'
 import { EntryType, readDir, readFileText } from '@node/services/node-file-system.service';
 import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
-import { UnsubscriberAsync } from '@shared/utils/papi-util';
+import { UnsubscriberAsync, getModuleSimilarApiMessage } from '@shared/utils/papi-util';
 import Module from 'module';
-import papi, { MODULE_SIMILAR_APIS } from '@shared/services/papi.service';
-import { setExtensionUris } from '@extension-host/services/extension-storage.service';
+import papi from '@shared/services/papi.service';
 import logger from '@shared/services/logger.service';
+import {
+  ARG_EXTENSION_DIRS,
+  ARG_EXTENSIONS,
+  getCommandLineArgumentsGroup,
+} from '@node/utils/command-line.util';
+import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
+
+/**
+ * Name of the file describing the extension and its capabilities. Provided by the extension
+ * developer
+ */
+const MANIFEST_FILE_NAME = 'manifest.json';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -67,21 +78,52 @@ function parseManifest(extensionManifestJson: string) {
  * TODO: figure out if we can share this code with vite.config.ts
  */
 const getExtensions = async (): Promise<ExtensionInfo[]> => {
-  const extensionFolders = (
-    await readDir(`resources://extensions${globalThis.isPackaged ? '' : '/dist'}`)
-  )[EntryType.Directory];
+  const extensionFolders: Uri[] = (
+    await Promise.all(
+      [
+        `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
+        ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
+          (extensionDirPath) => `file://${extensionDirPath}`,
+        ),
+      ].map((extensionDirUri) => readDir(extensionDirUri)),
+    )
+  )
+    .flatMap((dirEntries) => dirEntries[EntryType.Directory])
+    .filter((extensionDirUri) => extensionDirUri);
 
-  return Promise.all(
-    extensionFolders.map(async (extensionFolder) => {
-      const extensionManifestJson = await readFileText(
-        joinUriPaths(extensionFolder, 'manifest.json'),
-      );
-      return Object.freeze({
-        ...parseManifest(extensionManifestJson),
-        dirUri: extensionFolder,
-      });
-    }),
-  );
+  return (
+    await Promise.allSettled(
+      extensionFolders
+        .concat(
+          getCommandLineArgumentsGroup(ARG_EXTENSIONS).map((extensionDirPath) => {
+            const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
+              ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
+              : extensionDirPath;
+            return `file://${extensionFolder}`;
+          }),
+        )
+        .map(async (extensionFolder) => {
+          try {
+            const extensionManifestJson = await readFileText(
+              joinUriPaths(extensionFolder, MANIFEST_FILE_NAME),
+            );
+            return Object.freeze({
+              ...parseManifest(extensionManifestJson),
+              dirUri: extensionFolder,
+            });
+          } catch (e) {
+            const error = new Error(
+              `Extension folder ${extensionFolder} failed to load. Reason: ${e}`,
+            );
+            logger.warn(error);
+            logger.warn('stuff');
+            throw error;
+          }
+        }),
+    )
+  )
+    .filter((settled) => settled.status === 'fulfilled')
+    .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value);
 };
 
 /**
@@ -168,10 +210,9 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
 
     // Disallow any imports within the extension
     // Tell the extension dev if there is an api similar to what they want to import
-    const similarApi = MODULE_SIMILAR_APIS[fileName] || MODULE_SIMILAR_APIS[`node:${fileName}`];
-    const message = `Requiring other than papi is not allowed in extensions! Rejected require('${fileName}').${
-      similarApi ? ` Try using papi.${similarApi}` : ''
-    }`;
+    const message = `Requiring other than papi is not allowed in extensions! ${getModuleSimilarApiMessage(
+      fileName,
+    )}`;
     throw new Error(message);
   }) as typeof Module.prototype.require;
 

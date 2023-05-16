@@ -37,6 +37,7 @@ export const getAppDir = memoizeOne((): string => {
 
 const APP_SCHEME = 'app';
 const RESOURCES_SCHEME = 'resources';
+const FILE_SCHEME = 'file';
 
 /**
  * Get a mapping from scheme to the absolute path to that scheme.
@@ -46,6 +47,7 @@ const RESOURCES_SCHEME = 'resources';
 const getSchemePaths = memoizeOne((): { [scheme: string]: string } => ({
   [APP_SCHEME]: getAppDir(),
   [RESOURCES_SCHEME]: globalThis.resourcesPath,
+  [FILE_SCHEME]: '',
 }));
 
 /**

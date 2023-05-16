@@ -2,6 +2,11 @@
  * Service that runs the extension-host process from the main file
  */
 
+import {
+  ARG_EXTENSION_DIRS,
+  ARG_EXTENSIONS,
+  getCommandLineArgumentsGroup,
+} from '@node/utils/command-line.util';
 import logger, { formatLog } from '@shared/services/logger.service';
 import { waitForDuration } from '@shared/utils/util';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
@@ -52,6 +57,29 @@ function killExtensionHost() {
 }
 
 /**
+ * Returns an array of the command-line arguments to forward from main (when launching paranext)
+ * to the extension host process.
+ */
+function getCommandLineArgumentsToForward() {
+  // Pass through the relevant command-line arguments to the extension host
+  return [
+    ...getCommandLineArgumentsGroup(ARG_EXTENSIONS, true),
+    ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS, true),
+  ];
+}
+
+/**
+ * Get a list of all the external extension paths provided via command-line so we can watch them
+ * with nodemon
+ */
+function getExternalExtensionPaths() {
+  return [
+    ...getCommandLineArgumentsGroup(ARG_EXTENSIONS),
+    ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS),
+  ];
+}
+
+/**
  * Starts the extension host process if it isn't already running.
  */
 function startExtensionHost() {
@@ -59,29 +87,54 @@ function startExtensionHost() {
 
   // In production, fork a new process for the extension host
   // In development, spawn nodemon to watch the extension-host
-  const sharedArgs = ['--resourcesPath', globalThis.resourcesPath];
-  extensionHost = app.isPackaged
-    ? fork(
-        path.join(__dirname, '../extension-host/extension-host.js'),
-        ['--packaged', ...sharedArgs],
-        {
-          stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-        },
-      )
-    : spawn(
-        'node',
-        [
-          'node_modules/nodemon/bin/nodemon.js',
-          '--transpile-only',
-          './src/extension-host/extension-host.ts',
-          '--',
-          ...sharedArgs,
-        ],
-        {
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: { ...process.env, NODE_ENV: 'development' },
-        },
-      );
+  /** Arguments that will be passed to the extension host no matter how we start the process */
+  const sharedArgs = [
+    '--resourcesPath',
+    globalThis.resourcesPath,
+    ...getCommandLineArgumentsToForward(),
+  ];
+
+  if (app.isPackaged) {
+    extensionHost = fork(
+      path.join(__dirname, '../extension-host/extension-host.js'),
+      ['--packaged', ...sharedArgs],
+      {
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      },
+    );
+  } else {
+    // If we are in development, get the nodemon watch config so we can pass it in along with the
+    // external extension directories
+    // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
+    // For this dev-only code, it is useful to be able to synchronously get the nodemon.json file
+    // eslint-disable-next-line import/no-dynamic-require, global-require
+    const nodemonConfig = require(/* webpackIgnore: true */ path.join(
+      globalThis.resourcesPath,
+      'nodemon.json',
+    ));
+    const nodemonWatchPaths = nodemonConfig?.watch ? nodemonConfig.watch : [];
+
+    extensionHost = spawn(
+      'node',
+      [
+        'node_modules/nodemon/bin/nodemon.js',
+        // Provide the nodemon config paths and command-line argument extension paths as watch
+        // directories for nodemon
+        ...[...nodemonWatchPaths, ...getExternalExtensionPaths()].flatMap((extensionPath) => [
+          '--watch',
+          extensionPath,
+        ]),
+        '--transpile-only',
+        './src/extension-host/extension-host.ts',
+        '--',
+        ...sharedArgs,
+      ],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, NODE_ENV: 'development' },
+      },
+    );
+  }
 
   if (!extensionHost.stderr || !extensionHost.stdout)
     logger.error(
