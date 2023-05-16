@@ -37,7 +37,7 @@
     "glob": "^10.2.2",
     "papi-dts": "file:../lib/papi-dts",
     "patch-package": "^7.0.0",
-    "rollup-plugin-import-manager": "^0.6.1",
+    "rollup-plugin-import-manager": "^0.6.2",
     "rollup-plugin-string": "^3.0.0",
     "sass": "^1.62.1",
     "vite": "^4.2.0",
