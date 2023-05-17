@@ -1795,6 +1795,10 @@ declare module 'renderer/components/papi-components/combo-box.component' {
      */
     isFullWidth?: boolean;
     /**
+     * Width of the combobox in pixels. Setting this prop overrides the `isFullWidth` prop
+     */
+    width?: number;
+    /**
      * List of available options for the dropdown menu
      */
     options?: readonly (
@@ -1841,6 +1845,7 @@ declare module 'renderer/components/papi-components/combo-box.component' {
     isClearable,
     hasError,
     isFullWidth,
+    width,
     options,
     className,
     value,
