@@ -1,7 +1,16 @@
 import 'rc-dock/dist/rc-dock.css';
 import './paranext-dock-layout.component.css';
 import { useRef, useCallback } from 'react';
-import DockLayout, { DropDirection, LayoutBase, LayoutData, TabData, TabGroup } from 'rc-dock';
+import DockLayout, {
+  BoxData,
+  FloatPosition,
+  LayoutBase,
+  LayoutData,
+  LayoutSize,
+  PanelData,
+  TabData,
+  TabGroup,
+} from 'rc-dock';
 import createErrorTab from '@renderer/components/docking/error-tab.component';
 import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
@@ -9,16 +18,24 @@ import createWebViewPanel from '@renderer/components/web-view.component';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import createAboutPanel from '@renderer/testing/about-panel.component';
 import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
-import testLayout, { WEBVIEW_PLACEHOLDER_TAB_ID } from '@renderer/testing/test-layout.data';
+import testLayout, { FIRST_TAB_ID } from '@renderer/testing/test-layout.data';
 import createTabPanel from '@renderer/testing/test-panel.component';
 import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-heresy-panel.component';
-import { SavedTabInfo, TYPE_WEBVIEW, TabCreator, TabInfo } from '@shared/data/web-view.model';
+import {
+  AddWebViewEvent,
+  FloatLayout,
+  SavedTabInfo,
+  TYPE_WEBVIEW,
+  TabCreator,
+  TabInfo,
+} from '@shared/data/web-view.model';
+import LogError from '@shared/log-error.model';
 import papi from '@shared/services/papi.service';
-import { AddWebViewEvent } from '@shared/services/web-view.service';
 import { serializeTabId, deserializeTabId } from '@shared/utils/papi-util';
 
 type TabType = string;
 
+const DOCK_FLOAT_OFFSET = 28;
 const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
 // Paranext.
@@ -44,7 +61,8 @@ const tabTypeCreationMap = new Map<TabType, TabCreator>([
   [TYPE_WEBVIEW, createWebViewPanel],
 ]);
 
-let previousTabId: string = WEBVIEW_PLACEHOLDER_TAB_ID;
+let previousTabId: string = FIRST_TAB_ID;
+let floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
 
 function getTabDataFromSavedInfo(tabInfo: SavedTabInfo): TabInfo {
   let tabCreator: TabCreator | undefined;
@@ -67,10 +85,10 @@ function getTabDataFromSavedInfo(tabInfo: SavedTabInfo): TabInfo {
 /**
  * Creates tab data from the specified saved tab information by calling back to the
  * extension that registered the creation of the tab type
- * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock, typically from disk)
+ * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
  */
-function loadTab(savedTabInfo: SavedTabInfo): TabData & SavedTabInfo {
-  if (!savedTabInfo.id) throw new Error('loadTab: "id" is missing.');
+export function loadTab(savedTabInfo: SavedTabInfo): TabData & SavedTabInfo {
+  if (!savedTabInfo.id) throw new LogError('loadTab: "id" is missing.');
 
   const { id } = savedTabInfo;
   const newTabData = getTabDataFromSavedInfo(savedTabInfo);
@@ -91,7 +109,7 @@ function loadTab(savedTabInfo: SavedTabInfo): TabData & SavedTabInfo {
 /**
  * When rc-dock detects a changed layout, save it.
  *
- * TODO: We could filter whether we need to save based on the `direction` argument. - 2023-05-1 IJH
+ * TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
  * @param newLayout the changed layout to save.
  */
 function onLayoutChange(newLayout: LayoutBase): void {
@@ -110,32 +128,90 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
   return initial || defaultValue;
 }
 
-function addWebViewToDock({ webView, layoutType }: AddWebViewEvent, dockLayout: DockLayout) {
-  const tabId = serializeTabId(TYPE_WEBVIEW, webView.id);
-  let targetTab = dockLayout.find(tabId) as TabData;
-  let willRemoveTarget = false;
-  let direction: DropDirection = 'update';
-  if (!targetTab) {
-    targetTab = dockLayout.find(previousTabId) as TabData;
-    direction = 'after-tab';
-    if (previousTabId === WEBVIEW_PLACEHOLDER_TAB_ID) willRemoveTarget = true;
-  }
-  const tab = loadTab({ id: tabId, data: webView });
-  previousTabId = tabId;
+/**
+ * Check if the input item is just a tab, i.e. not a panel, box, or float.
+ * @param tab to check.
+ * @returns `true` if its a tab or `false` otherwise.
+ */
+function isTab(tab: PanelData | TabData | BoxData | undefined): boolean {
+  if (!tab || (tab as TabData).title == null) return false;
+  return true;
+}
 
-  switch (layoutType) {
+function offsetOrOverflowAxis(
+  axis: number,
+  size: number,
+  max: number,
+  offset = DOCK_FLOAT_OFFSET,
+): number {
+  if (axis + size + offset >= max) return offset;
+  return axis + offset;
+}
+
+/**
+ * Get left & top so float windows cascade their position. Float window should not overflow the
+ * layout but start cascading again.
+ * @param layout specified by the WebView.
+ * @param previousPosition used with the previous float window.
+ * @param layoutSize of the whole dock layout.
+ * @returns cascaded position.
+ */
+export function getFloatPosition(
+  layout: FloatLayout,
+  previousPosition: FloatPosition,
+  layoutSize: LayoutSize,
+): FloatPosition {
+  // Defaults are added in `web-view.service.ts`.
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const { width, height } = layout.floatSize!;
+  let { left, top } = previousPosition;
+  left = offsetOrOverflowAxis(left, width, layoutSize.width);
+  top = offsetOrOverflowAxis(top, height, layoutSize.height);
+  return { left, top, width, height };
+}
+
+export function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayout: DockLayout) {
+  const tabId = serializeTabId(TYPE_WEBVIEW, webView.id);
+  const tab = loadTab({ id: tabId, data: webView });
+  let targetTab = dockLayout.find(tabId);
+
+  // Update existing WebView
+  if (targetTab) {
+    dockLayout.updateTab(tabId, tab);
+    if (isTab(targetTab)) previousTabId = tabId;
+    return;
+  }
+
+  // Add new WebView
+  const unknownLayoutType = layout.type;
+  let targetTabId = previousTabId;
+  switch (layout.type) {
     case 'tab':
-      if (direction === 'update') dockLayout.updateTab(tabId, tab);
-      else dockLayout.dockMove(tab, targetTab, direction);
-      if (willRemoveTarget) dockLayout.dockMove(targetTab, null, 'remove');
+      targetTab = dockLayout.find(previousTabId) as TabData;
+      if (previousTabId === FIRST_TAB_ID)
+        dockLayout.dockMove(tab, targetTab.parent as PanelData, 'top');
+      else dockLayout.dockMove(tab, targetTab, 'after-tab');
+      previousTabId = tabId;
+      break;
+
+    case 'float':
+      floatPosition = getFloatPosition(layout, floatPosition, dockLayout.getLayoutSize());
+      dockLayout.dockMove(tab, null, 'float', floatPosition);
       break;
 
     case 'panel':
-    case 'float':
-      throw new Error(`Not yet implemented layoutType: '${layoutType}'`);
+      if (layout.targetTabId) targetTabId = layout.targetTabId;
+      targetTab = dockLayout.find(targetTabId);
+      if (!isTab(targetTab))
+        throw new LogError(`When adding a panel, unknown target tab: '${targetTabId}'`);
+
+      // Defaults are added in `web-view.service.ts`.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      dockLayout.dockMove(tab, targetTab?.parent as PanelData, layout.direction!);
+      break;
 
     default:
-      throw new Error(`Unknown layoutType: '${layoutType}'`);
+      throw new LogError(`Unknown layoutType: '${unknownLayoutType}'`);
   }
 }
 

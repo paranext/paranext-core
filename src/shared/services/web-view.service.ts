@@ -3,14 +3,16 @@
  * Likely shouldn't need/want to expose this whole service on papi,
  * but most things are exposed via papiWebViewService
  */
+import cloneDeep from 'lodash/cloneDeep';
 import { isRenderer } from '@shared/utils/internal-util';
 import {
   aggregateUnsubscriberAsyncs,
   CommandHandler,
+  getModuleSimilarApiMessage,
   serializeRequestType,
 } from '@shared/utils/papi-util';
 import * as commandService from '@shared/services/command.service';
-import { newNonce, wait } from '@shared/utils/util';
+import { getErrorMessage, newNonce, wait } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi.service';
@@ -18,22 +20,19 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
+  AddWebViewEvent,
+  Layout,
+  PanelDirection,
   WebViewContents,
   WebViewContentsReact,
   WebViewContentType,
   WebViewProps,
 } from '@shared/data/web-view.model';
 
-type LayoutType = 'tab' | 'panel' | 'float';
-
-/** Event emitted when webViews are added */
-export type AddWebViewEvent = {
-  webView: WebViewProps;
-  layoutType: LayoutType;
-};
-
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
+const DEFAULT_FLOAT_SIZE = { width: 300, height: 150 };
+const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -50,37 +49,48 @@ export const onDidAddWebView = onDidAddWebViewEmitter.event;
 
 // #region Renderer-only stuff
 
-/** Map of WebView id to its corresponding papi instance */
-const webViewPapis = new Map<string, typeof papi>();
 /**
- * Sets a papi instance associated with the specified WebView.
- * @param webViewId id for the WebView whose papi to set
- * @param webViewPapi papi for the webView in question
+ * Provide a require implementation so we can provide some needed packages for extensions or
+ * for packages that extensions import
  */
-const setWebViewPapi = (webViewId: string, webViewPapi: typeof papi) =>
-  webViewPapis.set(webViewId, webViewPapi);
-/**
- * Gets the papi instance associated with the specified WebView. Can only be run once per WebView so other WebViews don't try to access
- * @param webViewId id for the webView whose papi to get
- * @returns papi for the webView in question
- */
-const getWebViewPapi = (webViewId: string) => {
-  const webViewPapi = webViewPapis.get(webViewId);
-  if (!webViewPapi) throw new Error(`Cannot find papi for WebView with id: '${webViewId}'`);
-
-  webViewPapis.delete(webViewId);
-  return webViewPapi;
+const webViewRequire = (module: string) => {
+  if (module === 'papi') return papi;
+  if (module === 'react') return React;
+  if (module === 'react-dom/client') return { createRoot };
+  // Tell the extension dev if there is an api similar to what they want to import
+  const message = `Requiring other than papi, react, and react-dom/client > createRoot is not allowed in WebViews! ${getModuleSimilarApiMessage(
+    module,
+  )}`;
+  throw new Error(message);
 };
 
-// TODO: Hacking in React, createRoot, and getWebViewPapi onto window for now so webViews can access it. Make this TypeScript-y
+// TODO: Hacking in React, createRoot, and papi onto window for now so webViews can access it. Make this TypeScript-y
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).getWebViewPapi = getWebViewPapi;
+(globalThis as any).papi = papi;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).React = React;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).createRoot = createRoot;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).webViewRequire = webViewRequire;
 
 // #endregion
+
+function layoutDefaults(layout: Layout): Layout {
+  const layoutDefaulted = cloneDeep(layout);
+  switch (layoutDefaulted.type) {
+    case 'float':
+      if (!layoutDefaulted.floatSize) layoutDefaulted.floatSize = DEFAULT_FLOAT_SIZE;
+      break;
+    case 'panel':
+      if (!layoutDefaulted.direction) layoutDefaulted.direction = DEFAULT_PANEL_DIRECTION;
+      break;
+    case 'tab':
+    default:
+    // do nothing
+  }
+  return layoutDefaulted;
+}
 
 /**
  * Adds a WebView and runs all event handlers who are listening to this event
@@ -89,40 +99,53 @@ const getWebViewPapi = (webViewId: string) => {
  */
 export const addWebView = async (
   webView: WebViewContents,
-  layoutType: LayoutType = 'tab',
+  layout: Layout = { type: 'tab' },
 ): Promise<void> => {
   if (!isRenderer()) {
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
     // TODO: This block should be removed when https://github.com/paranext/paranext-core/issues/51
     // is done. It can go back to just the `sendCommand` call without the loop.
+    // Try to run addWebView up to 20 times until the renderer is up
     for (let attemptsRemaining = 20; attemptsRemaining > 0; attemptsRemaining--) {
       let success = true;
-      // eslint-disable-next-line no-await-in-loop
-      await commandService
-        .sendCommand<[WebViewContents, LayoutType], void>('addWebView', webView, layoutType)
-        .catch(async (error) => {
-          success = false;
-          if (attemptsRemaining === 1) throw error;
-          await wait(1000);
-        });
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await commandService.sendCommand<[WebViewContents, Layout], void>(
+          'addWebView',
+          webView,
+          layout,
+        );
+      } catch (error) {
+        success = false;
+        // If we are out of tries or the error returned is not that the renderer is down, stop
+        // trying to resend and just throw
+        if (
+          attemptsRemaining === 1 ||
+          getErrorMessage(error) !==
+            `No handler was found to process the request of type ${serializeRequestType(
+              'command',
+              'addWebView',
+            )}`
+        )
+          throw error;
+        // eslint-disable-next-line no-await-in-loop
+        await wait(1000);
+      }
 
       if (success) return;
     }
     throw new Error(`addWebView failed, but you should have seen a different error than this!`);
   }
 
-  // Create a papi instance for this WebView
-  const webViewId = webView.id;
-  setWebViewPapi(webViewId, papi);
-
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
   const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
 
   /** String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such */
   const imports = `
-  var papi = window.parent.getWebViewPapi('${webViewId}');
+  var papi = window.parent.papi;
   var React = window.parent.React;
   var createRoot = window.parent.createRoot;
+  var require = window.parent.webViewRequire;
   delete window.parent;
   delete window.top;
   delete window.frameElement;
@@ -151,6 +174,8 @@ export const addWebView = async (
       const reactWebView = webView as WebViewContentsReact;
 
       // Add the component as a script
+      // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
+      // reactWebView.contents. Doing so would mess up debugging web views
       webViewContent = `
         <html>
           <head>
@@ -165,16 +190,12 @@ export const addWebView = async (
           <body>
             <div id="root">
             </div>
-            <script nonce="${srcNonce}">
-              // Enable webview debugging
-              console.debug('Debug ${reactWebView.componentName} Webview')
-
-              ${reactWebView.content}
+            <script nonce="${srcNonce}">${reactWebView.content}
 
               function initializeReact() {
                 const container = document.getElementById('root');
                 const root = createRoot(container);
-                root.render(React.createElement(${reactWebView.componentName}, null));
+                root.render(React.createElement(globalThis.webViewComponent, null));
               }
 
               if (document.readyState === 'loading')
@@ -196,30 +217,39 @@ export const addWebView = async (
   // default-src 'none' so things can't happen unless we allow them
   // script-src allows them to use script tags and in-line attribute scripts
   //    'self' so scripts can be loaded from us
+  //    papi-extension: so scripts can be loaded from installed extensions
   //    ${specificSrcPolicy} so we can load the specific styles needed from the iframe
   //    TODO: change to script-src-elem so in-line attribute scripts like event handlers don't run? If this is actually more secure
   // style-src allows them to use style/link tags and style attributes on tags
   //    'self' so styles can be loaded from us
-  //    ${specificSrcPolicy} so we can load the specific styles needed from the iframe
+  //    papi-extension: so scripts can be loaded from installed extensions
+  //    'unsafe-inline' because that's how bundled libraries' styles are loaded in
+  //      TODO: PLEASE FIX THIS?
   // connect-src 'self' so the iframe can only communicate over the internet with us and not outside the iframe
   //    Note: they can still use things that are imported to their script via the imports string above.
   //    Objects passed through from the parent window still have full internet access. We must be very careful
   //    to control their access to the parent windows's stuff like papi
-  // img-src 'self' so they can load images from us
-  // media-src 'self' so they can load audio, video, etc from us
-  // font-src 'self' so they can load fonts from us
+  // img-src load images
+  //   'self' so images can be loaded from us
+  //   papi-extension: so images can be loaded from installed extensions
+  // media-src load audio, video, etc
+  //   'self' so media can be loaded from us
+  //   papi-extension: so media can be loaded from installed extensions
+  // font-src load fonts
+  //   'self' so fonts can be loaded from us
+  //   papi-extension: so fonts can be loaded from installed extensions
   // form-action 'self' lets the form submit to us
   //    TODO: not sure if this is needed. If we can attach handlers to forms, we can probably remove this
   // navigate-to 'none' prevents them from redirecting this iframe somewhere else
   const contentSecurityPolicy = `<meta http-equiv="Content-Security-Policy"
     content="
       default-src 'none';
-      script-src 'self' ${specificSrcPolicy};
-      style-src 'self' ${specificSrcPolicy};
+      script-src 'self' papi-extension: ${specificSrcPolicy};
+      style-src 'self' papi-extension: 'unsafe-inline';
       connect-src 'self';
-      img-src 'self';
-      media-src 'self';
-      font-src 'self';
+      img-src 'self' papi-extension:;
+      media-src 'self' papi-extension:;
+      font-src 'self' papi-extension:;
       form-action 'self';
       navigate-to 'none';
     ">`;
@@ -240,8 +270,9 @@ export const addWebView = async (
     contentType,
     content: webViewContent,
   };
+  const updatedLayout = layoutDefaults(layout);
   // Inform web view consumers we added a web view
-  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layoutType });
+  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layout: updatedLayout });
 };
 
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */

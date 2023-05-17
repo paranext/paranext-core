@@ -55,14 +55,3 @@ const papi = {
   storage: extensionStorageService,
 };
 export default papi;
-
-/**
- * Modules that someone might try to require in their extensions that we have similar apis for.
- * When an extension requires these modules, an error throws that lets them know about our similar api.
- */
-export const MODULE_SIMILAR_APIS: Readonly<{
-  [moduleName: string]: string | undefined;
-}> = Object.freeze({
-  http: 'fetch',
-  https: 'fetch',
-});

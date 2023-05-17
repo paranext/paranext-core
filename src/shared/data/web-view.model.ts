@@ -54,7 +54,6 @@ type WebViewContentsBase = { id: string; content: string; title?: string };
 /** WebView representation using React */
 export type WebViewContentsReact = WebViewContentsBase & {
   contentType?: WebViewContentType.React;
-  componentName: string;
   styles?: string;
 };
 
@@ -67,3 +66,40 @@ export type WebViewContentsHtml = WebViewContentsBase & {
 export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
 
 export const TYPE_WEBVIEW = 'webView';
+
+interface TabLayout {
+  type: 'tab';
+}
+
+export interface FloatLayout {
+  type: 'float';
+  floatSize?: { width: number; height: number };
+}
+
+export type PanelDirection =
+  | 'left'
+  | 'right'
+  | 'bottom'
+  | 'top'
+  // TODO: The following produce a panel but probably aren't useful for panels - IJH 2023-05-5
+  | 'before-tab'
+  | 'after-tab'
+  | 'maximize'
+  | 'move'
+  | 'active'
+  | 'update';
+
+interface PanelLayout {
+  type: 'panel';
+  direction?: PanelDirection;
+  /** If undefined, it will add in the `direction` relative to the previously added tab. */
+  targetTabId?: string;
+}
+
+export type Layout = TabLayout | FloatLayout | PanelLayout;
+
+/** Event emitted when webViews are added */
+export type AddWebViewEvent = {
+  webView: WebViewProps;
+  layout: Layout;
+};

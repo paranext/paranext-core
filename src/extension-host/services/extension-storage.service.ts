@@ -35,10 +35,15 @@ function sanitizeDirectoryName(str: string): string {
 }
 
 /** Return a path to the specified file within the extension's installation directory */
-function buildExtensionPath(token: ExecutionToken, fileName: string): string {
+function buildExtensionPathFromToken(token: ExecutionToken, fileName: string): string {
   if (!executionTokenService.tokenIsValid(token)) throw new Error('Invalid token');
-  const baseUri: string | undefined = registeredUrisPerExtension.get(token.name);
-  if (!baseUri) throw new Error(`Extension directory for ${token.name} is not known`);
+  return buildExtensionPathFromName(token.name, fileName);
+}
+
+/** Return a path to the specified file within the extension's installation directory */
+export function buildExtensionPathFromName(extensionName: string, fileName: string): string {
+  const baseUri: string | undefined = registeredUrisPerExtension.get(extensionName);
+  if (!baseUri) throw new Error(`Extension directory for ${extensionName} is not known`);
 
   // TODO: If we really care about the potential to jump into other directories, this probably
   // needs some work. For example, this doesn't detect symlinks. There might be many other holes.
@@ -80,7 +85,7 @@ async function readTextFileFromInstallDirectory(
   token: ExecutionToken,
   fileName: string,
 ): Promise<string> {
-  return readFileText(buildExtensionPath(token, fileName));
+  return readFileText(buildExtensionPathFromToken(token, fileName));
 }
 
 /** Read a binary file from the the extension's installation directory
@@ -92,7 +97,7 @@ async function readBinaryFileFromInstallDirectory(
   token: ExecutionToken,
   fileName: string,
 ): Promise<Buffer> {
-  return readFileBinary(buildExtensionPath(token, fileName));
+  return readFileBinary(buildExtensionPathFromToken(token, fileName));
 }
 
 /** Read data specific to the user (as identified by the OS) and extension (as identified by

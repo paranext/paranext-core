@@ -1,6 +1,102 @@
 /// <reference types="react" />
 /// <reference types="node" />
+declare module 'shared/global-this.model' {
+  import { FunctionComponent } from 'react';
+  /**
+   * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts (renderer), and extension-host.ts (extension host)
+   */
+  global {
+    /** Type of process this is. Helps with running specific code based on which process you're in */
+    var processType: ProcessType;
+    /** Whether this process is packaged or running from sources */
+    var isPackaged: boolean;
+    /** Path to the app's resources directory. This is a string representation of the resources uri on frontend */
+    var resourcesPath: string;
+    /**
+     * A function that each React WebView extension must provide for Paranext to display it.
+     * Only used in WebView iframes
+     */
+    var webViewComponent: FunctionComponent;
+  }
+  /** Type of Paranext process */
+  export enum ProcessType {
+    Main = 'main',
+    Renderer = 'renderer',
+    ExtensionHost = 'extension-host',
+  }
+}
+declare module 'shared/utils/util' {
+  export function newGuid(): string;
+  /**
+   * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically random.
+   * See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
+   *
+   * WARNING: THIS IS NOT CURRENTLY CRYPTOGRAPHICALLY SECURE!
+   * TODO: Make this cryptographically random! Use some polymorphic library that works in all contexts?
+   * https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues only works in browser
+   */
+  export function newNonce(): string;
+  /**
+   * Determine whether the object is a string
+   * @param o object to determine if it is a string
+   * @returns true if the object is a string; false otherwise
+   */
+  export function isString(o: unknown): o is string;
+  /**
+   * Get a function that reduces calls to the function passed in
+   * @param fn The function to debounce
+   * @param delay How much delay in milliseconds after the most recent call to the debounced function to call the function
+   * @returns function that, when called, only calls the function passed in at maximum every delay ms
+   */
+  export function debounce<T extends (...args: any[]) => void>(fn: T, delay?: number): T;
+  /**
+   * Groups each item in the array of items into a map according to the keySelector
+   * @param items array of items to group by
+   * @param keySelector function to run on each item to get the key for the group to which it belongs
+   * @param valueSelector function to run on each item to get the value it should have in the group (like map function). If not provided, uses the item itself
+   * @returns map of keys to groups of values corresponding to each item
+   */
+  export function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
+  export function groupBy<T, K, V>(
+    items: T[],
+    keySelector: (item: T) => K,
+    valueSelector: (item: T) => V,
+  ): Map<K, Array<V>>;
+  /**
+   * Function to get an error message from the object (useful for getting error message in a catch block)
+   * @param error error object whose message to get
+   * @returns message of the error - if object has message, returns message. Otherwise tries to stringify
+   * @example
+   *  try {...}
+   *  catch (e) { logger.info(getErrorMessage(e)) }
+   */
+  export function getErrorMessage(error: unknown): string;
+  /**
+   * Asynchronously waits for the specified number of milliseconds.
+   * (wraps setTimeout in a promise)
+   */
+  export function wait(ms: number): Promise<void>;
+  /**
+   * Runs the specified function and will timeout if it takes longer than the specified wait time
+   * @param fn The function to run
+   * @param maxWaitTimeInMS The maximum amount of time to wait for the function to resolve
+   * @returns Promise that resolves to the resolved value of the function or null if it
+   * ran longer than the specified wait time
+   */
+  export function waitForDuration<TResult>(
+    fn: () => Promise<TResult>,
+    maxWaitTimeInMS: number,
+  ): Promise<Awaited<TResult> | null>;
+  /**
+   * Generic container so we don't need to have XYZContainer types whenever we need to wrap something.
+   * This type is basically a pointer to an object.
+   */
+  export interface Container<T> {
+    contents: T | undefined;
+  }
+}
 declare module 'shared/utils/papi-util' {
+  import { ProcessType } from 'shared/global-this.model';
   /** Function to run to dispose of something. Returns true if successfully unsubscribed */
   export type Unsubscriber = () => boolean;
   /** Object containing both a function to run to dispose of something and a promise that resolves when that thing is done subscribing */
@@ -142,6 +238,24 @@ declare module 'shared/utils/papi-util' {
    * @returns HTML-encoded string
    */
   export const htmlEncode: (str: string) => string;
+  /**
+   * Modules that someone might try to require in their extensions that we have similar apis for.
+   * When an extension requires these modules, an error throws that lets them know about our similar api.
+   */
+  export const MODULE_SIMILAR_APIS: Readonly<{
+    [moduleName: string]:
+      | string
+      | {
+          [process in ProcessType | 'default']?: string;
+        }
+      | undefined;
+  }>;
+  /**
+   * Get a message that says the module import was rejected and to try a similar api if available.
+   * @param moduleName name of `require`d module that was rejected
+   * @returns string that says the import was rejected and a similar api to try
+   */
+  export function getModuleSimilarApiMessage(moduleName: string): string;
 }
 declare module 'shared/data/internal-connection.model' {
   /**
@@ -229,76 +343,6 @@ declare module 'shared/data/internal-connection.model' {
   /** Handler for events from on the network */
   export type NetworkEventHandler = <T>(eventType: string, event: T) => void;
 }
-declare module 'shared/utils/util' {
-  export function newGuid(): string;
-  /**
-   * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically random.
-   * See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
-   *
-   * WARNING: THIS IS NOT CURRENTLY CRYPTOGRAPHICALLY SECURE!
-   * TODO: Make this cryptographically random! Use some polymorphic library that works in all contexts?
-   * https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues only works in browser
-   */
-  export function newNonce(): string;
-  /**
-   * Determine whether the object is a string
-   * @param o object to determine if it is a string
-   * @returns true if the object is a string; false otherwise
-   */
-  export function isString(o: unknown): o is string;
-  /**
-   * Get a function that reduces calls to the function passed in
-   * @param fn The function to debounce
-   * @param delay How much delay in milliseconds after the most recent call to the debounced function to call the function
-   * @returns function that, when called, only calls the function passed in at maximum every delay ms
-   */
-  export function debounce<T extends (...args: any[]) => void>(fn: T, delay?: number): T;
-  /**
-   * Groups each item in the array of items into a map according to the keySelector
-   * @param items array of items to group by
-   * @param keySelector function to run on each item to get the key for the group to which it belongs
-   * @param valueSelector function to run on each item to get the value it should have in the group (like map function). If not provided, uses the item itself
-   * @returns map of keys to groups of values corresponding to each item
-   */
-  export function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
-  export function groupBy<T, K, V>(
-    items: T[],
-    keySelector: (item: T) => K,
-    valueSelector: (item: T) => V,
-  ): Map<K, Array<V>>;
-  /**
-   * Function to get an error message from the object (useful for getting error message in a catch block)
-   * @param error error object whose message to get
-   * @returns message of the error - if object has message, returns message. Otherwise tries to stringify
-   * @example
-   *  try {...}
-   *  catch (e) { logger.info(getErrorMessage(e)) }
-   */
-  export function getErrorMessage(error: unknown): string;
-  /**
-   * Asynchronously waits for the specified number of milliseconds.
-   * (wraps setTimeout in a promise)
-   */
-  export function wait(ms: number): Promise<void>;
-  /**
-   * Runs the specified function and will timeout if it takes longer than the specified wait time
-   * @param fn The function to run
-   * @param maxWaitTimeInMS The maximum amount of time to wait for the function to resolve
-   * @returns Promise that resolves to the resolved value of the function or null if it
-   * ran longer than the specified wait time
-   */
-  export function waitForDuration<TResult>(
-    fn: () => Promise<TResult>,
-    maxWaitTimeInMS: number,
-  ): Promise<Awaited<TResult> | null>;
-  /**
-   * Generic container so we don't need to have XYZContainer types whenever we need to wrap something.
-   * This type is basically a pointer to an object.
-   */
-  export interface Container<T> {
-    contents: T | undefined;
-  }
-}
 declare module 'shared/services/network-connector.interface' {
   import {
     ConnectionStatus,
@@ -361,25 +405,6 @@ declare module 'shared/services/network-connector.interface' {
      * @param event event to emit on the network
      */
     emitEventOnNetwork: <T>(eventType: string, event: InternalEvent<T>) => Promise<void>;
-  }
-}
-declare module 'shared/global-this.model' {
-  /**
-   * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts (renderer), and extension-host.ts (extension host)
-   */
-  global {
-    /** Type of process this is. Helps with running specific code based on which process you're in */
-    var processType: ProcessType;
-    /** Whether this process is packaged or running from sources */
-    var isPackaged: boolean;
-    /** Path to the app's resources directory. This is a string representation of the resources uri on frontend */
-    var resourcesPath: string;
-  }
-  /** Type of Paranext process */
-  export enum ProcessType {
-    Main = 'main',
-    Renderer = 'renderer',
-    ExtensionHost = 'extension-host',
   }
 }
 declare module 'shared/utils/internal-util' {
@@ -1156,7 +1181,6 @@ declare module 'shared/data/web-view.model' {
   /** WebView representation using React */
   export type WebViewContentsReact = WebViewContentsBase & {
     contentType?: WebViewContentType.React;
-    componentName: string;
     styles?: string;
   };
   /** WebView representation using HTML */
@@ -1166,15 +1190,42 @@ declare module 'shared/data/web-view.model' {
   /** WebView definition created by extensions to show web content */
   export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
   export const TYPE_WEBVIEW = 'webView';
-}
-declare module 'shared/services/web-view.service' {
-  import { WebViewContents, WebViewProps } from 'shared/data/web-view.model';
-  type LayoutType = 'tab' | 'panel' | 'float';
+  interface TabLayout {
+    type: 'tab';
+  }
+  export interface FloatLayout {
+    type: 'float';
+    floatSize?: {
+      width: number;
+      height: number;
+    };
+  }
+  export type PanelDirection =
+    | 'left'
+    | 'right'
+    | 'bottom'
+    | 'top'
+    | 'before-tab'
+    | 'after-tab'
+    | 'maximize'
+    | 'move'
+    | 'active'
+    | 'update';
+  interface PanelLayout {
+    type: 'panel';
+    direction?: PanelDirection;
+    /** If undefined, it will add in the `direction` relative to the previously added tab. */
+    targetTabId?: string;
+  }
+  export type Layout = TabLayout | FloatLayout | PanelLayout;
   /** Event emitted when webViews are added */
   export type AddWebViewEvent = {
     webView: WebViewProps;
-    layoutType: LayoutType;
+    layout: Layout;
   };
+}
+declare module 'shared/services/web-view.service' {
+  import { AddWebViewEvent, Layout, WebViewContents } from 'shared/data/web-view.model';
   /** Event that emits with webView info when a webView is added */
   export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
   /**
@@ -1182,13 +1233,13 @@ declare module 'shared/services/web-view.service' {
    * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
    * @returns promise that resolves nothing if we successfully handled the webView
    */
-  export const addWebView: (webView: WebViewContents, layoutType?: LayoutType) => Promise<void>;
+  export const addWebView: (webView: WebViewContents, layout?: Layout) => Promise<void>;
   /** Sets up the WebViewService. Runs only once */
   export const initialize: () => Promise<void>;
   /** All the exports in this service that are to be exposed on the PAPI */
   export const papiWebViewService: {
     onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
-    addWebView: (webView: WebViewContents, layoutType?: LayoutType) => Promise<void>;
+    addWebView: (webView: WebViewContents, layout?: Layout) => Promise<void>;
     initialize: () => Promise<void>;
   };
 }
@@ -1672,6 +1723,8 @@ declare module 'extension-host/services/extension-storage.service' {
    *  This service cannot call into the extension service or it causes a circular dependency.
    */
   export function setExtensionUris(urisPerExtension: Map<string, string>): void;
+  /** Return a path to the specified file within the extension's installation directory */
+  export function buildExtensionPathFromName(extensionName: string, fileName: string): string;
   /** Read a text file from the the extension's installation directory
    *  @param token ExecutionToken provided to the extension when `activate()` was called
    *  @param fileName Name of the file to be read
@@ -2403,13 +2456,6 @@ declare module 'papi' {
     };
   };
   export default papi;
-  /**
-   * Modules that someone might try to require in their extensions that we have similar apis for.
-   * When an extension requires these modules, an error throws that lets them know about our similar api.
-   */
-  export const MODULE_SIMILAR_APIS: Readonly<{
-    [moduleName: string]: string | undefined;
-  }>;
 }
 declare module 'extension-host/extension-types/extension-activation-context.model' {
   import { ExecutionToken } from 'node/models/execution-token.model';
