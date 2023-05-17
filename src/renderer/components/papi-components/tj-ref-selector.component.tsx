@@ -1,10 +1,7 @@
-import React, { SyntheticEvent, useCallback, useEffect, useState } from 'react';
+import { SyntheticEvent, useState } from 'react';
 import {
-  getTextFromScrRef,
-  getScrRefFromText,
   getAllBookNames,
   getBookNumFromName,
-  areScrRefsEqual,
   offsetBook,
   offsetChapter,
   offsetVerse,
@@ -12,12 +9,14 @@ import {
   FIRST_SCR_CHAPTER_NUM,
   FIRST_SCR_VERSE_NUM,
   getBookLongNameFromNum,
+  getChaptersForBook,
 } from './tj-shared/ScriptureUtil';
 import { ScriptureReference } from './tj-shared/ScriptureTypes';
 import './tj-ref-selector.component.css';
 import ComboBox from './combo-box.component';
 import Button from './button.component';
 import TextField from './text-field.component';
+// import TextField from './text-field.component';
 
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
@@ -25,14 +24,9 @@ export interface ScrRefSelectorProps {
 }
 
 function TJRefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
-  const [currentRefText, setCurrentRefText] = useState<string>(getTextFromScrRef(scrRef));
   const [currentBookName, setCurrentBookName] = useState<string>(
     getBookLongNameFromNum(scrRef.book),
   );
-
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setCurrentRefText(e.target.value);
-  }, []);
 
   const onChangeBook = (newRef: ScriptureReference) => {
     setCurrentBookName(getBookLongNameFromNum(newRef.book));
@@ -41,101 +35,74 @@ function TJRefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
 
   const onSelectBook = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
     const bookNum: number = getBookNumFromName(value as string);
-    const newRef: ScriptureReference = { ...scrRef, book: bookNum };
+    const newRef: ScriptureReference = { book: bookNum, chapter: 1, verse: 1 };
 
-    handleSubmit(newRef);
+    onChangeBook(newRef);
   };
 
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const currentRef = getScrRefFromText(currentRefText);
-    setCurrentBookName(getBookLongNameFromNum(currentRef.book));
-    handleSubmit(currentRef);
+  const onChangeChapter = (event: { target: { value: number | string } }) => {
+    handleSubmit({ ...scrRef, chapter: +event.target.value });
   };
 
-  useEffect(() => {
-    setCurrentRefText(getTextFromScrRef(scrRef));
-  }, [scrRef]);
-
-  const isScrRefChanged = !areScrRefsEqual(currentRefText, scrRef);
+  const onChangeVerse = (event: { target: { value: number | string } }) => {
+    handleSubmit({ ...scrRef, verse: +event.target.value });
+  };
 
   return (
-    <form className="scr-toolbar" onSubmit={onSubmit}>
-      <span className={`selector-area${isScrRefChanged ? ' changed' : ''}`}>
-        {/* <span className="book">{getBookLongNameFromNum(scrRef.book)}</span> */}
-        <ComboBox
-          className="book"
-          options={getAllBookNames()}
-          onChange={onSelectBook}
-          value={currentBookName}
-          isFullWidth
-          isClearable={false}
-        />
-        <span className="change-btns">
-          <Button
-            className="change-btn left"
-            onClick={() => onChangeBook(offsetBook(scrRef, -1))}
-            isDisabled={isScrRefChanged || scrRef.book <= FIRST_SCR_BOOK_NUM}
-          >
-            &lt;
-          </Button>
-          <span className={`splitter${isScrRefChanged ? ' changed' : ''}`} />
-          <Button
-            className="change-btn"
-            onClick={() => onChangeBook(offsetBook(scrRef, 1))}
-            isDisabled={isScrRefChanged}
-          >
-            &gt;
-          </Button>
-        </span>
-        <span className="chapter">{scrRef.chapter}:</span>
-        <span className="change-btns">
-          <Button
-            className="change-btn left"
-            onClick={() => handleSubmit(offsetChapter(scrRef, -1))}
-            isDisabled={isScrRefChanged || scrRef.chapter <= FIRST_SCR_CHAPTER_NUM}
-          >
-            &lt;
-          </Button>
-          <span className={`splitter${isScrRefChanged ? ' changed' : ''}`} />
-          <Button
-            className="change-btn"
-            onClick={() => handleSubmit(offsetChapter(scrRef, 1))}
-            isDisabled={isScrRefChanged}
-          >
-            &gt;
-          </Button>
-        </span>
-        <span>{scrRef.verse}</span>
-        <span className="change-btns">
-          <Button
-            className="change-btn left"
-            onClick={() => handleSubmit(offsetVerse(scrRef, -1))}
-            isDisabled={isScrRefChanged || scrRef.verse <= FIRST_SCR_VERSE_NUM}
-          >
-            &lt;
-          </Button>
-          <span className={`splitter${isScrRefChanged ? ' changed' : ''}`} />
-          <Button
-            className="change-btn"
-            onClick={() => handleSubmit(offsetVerse(scrRef, 1))}
-            isDisabled={isScrRefChanged}
-          >
-            &gt;
-          </Button>
-        </span>
-      </span>
-      <span className="input-area">
-        <TextField
-          className={`input-reference ${isScrRefChanged ? 'changed' : ''}`}
-          value={currentRefText}
-          onChange={handleChange}
-        />
-        <Button className="enter-button" onClick={onSubmit} isDisabled={!isScrRefChanged}>
-          Go!
-        </Button>
-      </span>
-    </form>
+    <>
+      <ComboBox
+        title="Book"
+        className="book"
+        options={getAllBookNames()}
+        onChange={onSelectBook}
+        value={currentBookName}
+        isClearable={false}
+        width={200}
+      />
+      <Button
+        onClick={() => onChangeBook(offsetBook(scrRef, -1))}
+        isDisabled={scrRef.book <= FIRST_SCR_BOOK_NUM}
+      >
+        &lt;
+      </Button>
+      <Button
+        onClick={() => onChangeBook(offsetBook(scrRef, 1))}
+        isDisabled={scrRef.book >= getAllBookNames().length}
+      >
+        &gt;
+      </Button>
+      <TextField
+        className="text-field"
+        label="Chapter"
+        value={scrRef.chapter}
+        onChange={onChangeChapter}
+      />
+      <Button
+        onClick={() => handleSubmit(offsetChapter(scrRef, -1))}
+        isDisabled={scrRef.chapter <= FIRST_SCR_CHAPTER_NUM}
+      >
+        &lt;
+      </Button>
+      <Button
+        onClick={() => handleSubmit(offsetChapter(scrRef, 1))}
+        isDisabled={scrRef.chapter >= getChaptersForBook(scrRef.book)}
+      >
+        &gt;
+      </Button>
+      <TextField
+        className="text-field"
+        label="Verse"
+        value={scrRef.verse}
+        onChange={onChangeVerse}
+      />
+      <Button
+        onClick={() => handleSubmit(offsetVerse(scrRef, -1))}
+        isDisabled={scrRef.verse <= FIRST_SCR_VERSE_NUM}
+      >
+        &lt;
+      </Button>
+      <Button onClick={() => handleSubmit(offsetVerse(scrRef, 1))}>&gt;</Button>
+    </>
   );
 }
 

@@ -36,6 +36,10 @@ export type ComboBoxProps = {
    */
   isFullWidth?: boolean;
   /**
+   * Width of the combobox in pixels. Setting this prop overrides the `isFullWidth` prop
+   */
+  width?: number;
+  /**
    * List of available options for the dropdown menu
    */
   options?: readonly (string | { label: string })[];
@@ -78,6 +82,7 @@ function ComboBox({
   isClearable = true,
   hasError = false,
   isFullWidth = false,
+  width,
   options = [],
   className,
   value,
@@ -104,6 +109,7 @@ function ComboBox({
           fullWidth={isFullWidth}
           disabled={isDisabled}
           label={title}
+          style={{ width }}
         />
       )}
     />
