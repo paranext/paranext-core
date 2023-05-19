@@ -594,7 +594,7 @@ declare module 'shared/models/papi-event-emitter.model' {
     protected disposeFn(): void;
   }
 }
-declare module 'client/services/web-socket.interface' {
+declare module 'shared/models/web-socket.interface' {
   /**
    * Interface that defines the webSocket functionality the extension host and the renderer must implement.
    * Used by WebSocketFactory to supply the right kind of WebSocket to ClientNetworkConnector.
@@ -602,27 +602,17 @@ declare module 'client/services/web-socket.interface' {
    * line up between the ws library's implementation and the browser implementation. We can adjust as needed at that point.
    */
   export type IWebSocket = WebSocket;
+  export interface IWebSocketConstructor {
+    new (...args: ConstructorParameters<typeof WebSocket>): IWebSocket;
+  }
 }
-declare module 'renderer/services/renderer-web-socket.model' {
-  /**
-   * The renderer's implementation of WebSocket is the browser-supplied WebSocket, which doesn't work in Node
-   */
-  export default WebSocket;
-}
-declare module 'extension-host/services/extension-host-web-socket.model' {
-  import ws from 'ws';
+declare module 'extension-host/process-implementations/models/web-socket.model' {
+  import { IWebSocketConstructor } from 'shared/models/web-socket.interface';
   /**
    * extension-host client uses ws as its WebSocket client, but the renderer can't use it. So we need to exclude it from the renderer webpack bundle like this.
    */
-  export default ws;
-}
-declare module 'client/services/web-socket.factory' {
-  import { IWebSocket } from 'client/services/web-socket.interface';
-  /**
-   * Creates a WebSocket for the renderer or extension host depending on where you're running
-   * @returns WebSocket
-   */
-  export const createWebSocket: (url: string) => Promise<IWebSocket>;
+  const Ws: IWebSocketConstructor;
+  export default Ws;
 }
 declare module 'client/services/client-network-connector.service' {
   import {
