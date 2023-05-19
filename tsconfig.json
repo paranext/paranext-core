@@ -17,7 +17,15 @@
       "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
-      "@node_modules/*": ["../node_modules/*"]
+      "@node_modules/*": ["../node_modules/*"],
+      "@process/*": [
+        "./main/process-implementations/*",
+        "./node/process-implementations/*",
+        "./electron/process-implementations/*",
+        "./extension-host/process-implementations/*",
+        "./renderer/process-implementations/*",
+        "./client/process-implementations/*"
+      ]
     },
     "noUnusedLocals": true,
     "noUnusedParameters": true,

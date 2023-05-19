@@ -1,6 +1,6 @@
 import { protocol } from 'electron';
 import { StatusCodes } from 'http-status-codes';
-import extensionAssetService from '@shared/services/extension-asset.service';
+import extensionAssetService from '@process/services/extension-asset.service';
 
 /** The real list of Chromium error codes is really big.  We're just using a small subset. */
 // https://source.chromium.org/chromium/chromium/src/+/main:net/base/net_error_list.h

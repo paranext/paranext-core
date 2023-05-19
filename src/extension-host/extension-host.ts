@@ -7,7 +7,7 @@ import * as ExtensionService from '@extension-host/services/extension.service';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
-import extensionAssetService from '@shared/services/extension-asset.service';
+import extensionAssetService from '@process/services/extension-asset.service';
 
 // #region Test logs
 

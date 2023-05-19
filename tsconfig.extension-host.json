@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@assets/*": ["../assets/*"],
+      "@client/*": ["./client/*"],
+      "@extension-host/*": ["./extension-host/*"],
+      "@extensions/*": ["../extensions/dist/*"],
+      "@main/*": ["./main/*"],
+      "@node/*": ["./node/*"],
+      "@renderer/*": ["./renderer/*"],
+      "@shared/*": ["./shared/*"],
+      "@node_modules/*": ["../node_modules/*"],
+      "@process/*": [
+        "./extension-host/process-implementations/*",
+        "./node/process-implementations/*",
+        "./client/process-implementations/*"
+      ]
+    }
+  }
+}

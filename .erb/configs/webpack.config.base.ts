@@ -17,6 +17,8 @@ else if (process.env.npm_lifecycle_script?.includes('webpack.config.extension-ho
   processType = 'extension-host';
 else processType = 'main';
 
+const tsconfig = processType === 'main' ? 'tsconfig.json' : `tsconfig.${processType}.json`;
+
 const configuration: webpack.Configuration = {
   externals: [...Object.keys(externals || {})],
 
@@ -35,6 +37,7 @@ const configuration: webpack.Configuration = {
             compilerOptions: {
               module: 'esnext',
             },
+            configFile: tsconfig,
           },
         },
       },
@@ -56,7 +59,7 @@ const configuration: webpack.Configuration = {
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
     modules: [webpackPaths.srcPath, 'node_modules'],
     // There is no need to add aliases here, the paths in tsconfig get mirrored
-    plugins: [new TsconfigPathsPlugins()],
+    plugins: [new TsconfigPathsPlugins({ configFile: tsconfig })],
     fallback: {
       crypto: false,
       // We don't really need crypto in the browser/renderer at least for now, otherwise do:

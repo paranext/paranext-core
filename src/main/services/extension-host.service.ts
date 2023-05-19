@@ -126,6 +126,8 @@ function startExtensionHost() {
         ]),
         '--transpile-only',
         './src/extension-host/extension-host.ts',
+        '--project',
+        'tsconfig.extension-host.json',
         '--',
         ...sharedArgs,
       ],
