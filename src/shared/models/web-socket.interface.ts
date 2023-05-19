@@ -5,3 +5,6 @@
  * line up between the ws library's implementation and the browser implementation. We can adjust as needed at that point.
  */
 export type IWebSocket = WebSocket;
+export interface IWebSocketConstructor {
+  new (...args: ConstructorParameters<typeof WebSocket>): IWebSocket;
+}

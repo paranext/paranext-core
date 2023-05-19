@@ -25,8 +25,8 @@ import {
 import { getErrorMessage } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
-import { createWebSocket } from '@client/services/web-socket.factory';
-import { IWebSocket } from '@client/services/web-socket.interface';
+import { IWebSocket } from '@shared/models/web-socket.interface';
+import Ws from '@process/models/web-socket.model';
 
 // #region local variables
 
@@ -168,7 +168,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     const tryConnectWebSocket = async () => {
       if (attempts < WEBSOCKET_ATTEMPTS_MAX) {
         attempts += 1;
-        this.webSocket = await createWebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
+        this.webSocket = new Ws(`ws://localhost:${WEBSOCKET_PORT}`);
 
         // Attach event listeners
         this.webSocket.addEventListener('message', this.onMessage);
