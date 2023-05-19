@@ -4,7 +4,7 @@ import logger from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import * as extensionService from '@extension-host/services/extension.service';
 
-class ExtensionAssetService extends ExtensionAssetServiceCommon {
+export default class ExtensionAssetService extends ExtensionAssetServiceCommon {
   initializePromise: Promise<void> | undefined;
 
   /** Load an asset from the given extension's installation directory
@@ -42,7 +42,3 @@ class ExtensionAssetService extends ExtensionAssetServiceCommon {
     return this.initializePromise;
   }
 }
-
-const extensionAssetService = new ExtensionAssetService();
-
-export default extensionAssetService;
