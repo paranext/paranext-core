@@ -105,10 +105,11 @@ export const addWebView = async (
 ): Promise<void> => {
   if (!isRenderer()) {
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
-    // TODO: This block should be removed when https://github.com/paranext/paranext-core/issues/51
-    // is done. It can go back to just the `sendCommand` call without the loop.
-    // Try to run addWebView up to 20 times until the renderer is up
-    for (let attemptsRemaining = 20; attemptsRemaining > 0; attemptsRemaining--) {
+    // Try to run addWebView several times until the renderer is up
+    // Once we implement a way to track dependencies across processes, this can go away
+    // Note that commands turn into requests, and requests are retried, so there is another loop
+    // within this loop deeper down.
+    for (let attemptsRemaining = 5; attemptsRemaining > 0; attemptsRemaining--) {
       let success = true;
       try {
         // eslint-disable-next-line no-await-in-loop

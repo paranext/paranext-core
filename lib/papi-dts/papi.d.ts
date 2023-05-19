@@ -1019,12 +1019,22 @@ declare module 'shared/services/network.service' {
   /** Sets up the NetworkService. Runs only once */
   export const initialize: () => Promise<void>;
   /**
-   * Send a request on the network and resolve the response contents
+   * Send a request on the network and resolve the response contents. This will retry if the request fails.
    * @param requestType the type of request
    * @param args arguments to send in the request (put in request.contents)
    * @returns promise that resolves with the response message
    */
   export const request: <TParam extends unknown[], TReturn>(
+    requestType: string,
+    ...args: TParam
+  ) => Promise<TReturn>;
+  /**
+   * Send a request on the network and resolve the response contents. This will not retry if the request fails.
+   * @param requestType the type of request
+   * @param args arguments to send in the request (put in request.contents)
+   * @returns promise that resolves with the response message
+   */
+  export const requestWithoutRetrying: <TParam extends unknown[], TReturn>(
     requestType: string,
     ...args: TParam
   ) => Promise<TReturn>;

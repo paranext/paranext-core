@@ -67,12 +67,20 @@ enum NetworkObjectRequestSubtype {
 /**
  * Determine if a network object with the specified id exists remotely (does not check locally)
  * @param id id of the network object - all processes must use this id to look up this network object
+ * @param retry whether or not the network service should retry failed requests several times
  * @returns empty array if there is a remote network object with this id, undefined otherwise.
  * TODO: return array of all eligible functions
  */
-const getRemoteNetworkObjectFunctions = async (id: string): Promise<string[] | undefined> => {
+const getRemoteNetworkObjectFunctions = async (
+  id: string,
+  retry: boolean,
+): Promise<string[] | undefined> => {
   try {
-    return await networkService.request<[], string[]>(
+    if (retry)
+      return await networkService.request<[], string[]>(
+        getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
+      );
+    return await networkService.requestWithoutRetrying<[], string[]>(
       getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
     );
   } catch (e) {
@@ -150,7 +158,7 @@ const has = async (id: string): Promise<boolean> => {
   // We don't already have this network object. See if other processes have this network object
   // If we get truthy from the request for network object functions, we do have that id
   // TODO: Mark this network object id as available but the object not yet generated so we don't have to run get multiple times
-  return !!(await getRemoteNetworkObjectFunctions(id));
+  return !!(await getRemoteNetworkObjectFunctions(id, false));
 };
 
 // #endregion
@@ -307,7 +315,7 @@ const get = async <T extends object>(
       return networkObjectRegistration.networkObject as NetworkObject<T>;
 
     // We don't already have this network object. See if it exists somewhere else.
-    const networkObjectFunctions = await getRemoteNetworkObjectFunctions(id);
+    const networkObjectFunctions = await getRemoteNetworkObjectFunctions(id, true);
     if (!networkObjectFunctions) return undefined;
 
     // At this point, the object exists remotely but does not yet exist locally.
