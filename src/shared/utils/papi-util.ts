@@ -10,14 +10,6 @@ import { isString } from '@shared/utils/util';
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
 
-/** Object containing both a function to run to dispose of something and a promise that resolves when that thing is done subscribing */
-export type UnsubPromise<T = unknown> = {
-  /** Promise that resolves when done registering */
-  promise: Promise<T>;
-  /** Unsubscriber function that unregisters */
-  unsubscriber: Unsubscriber;
-};
-
 /**
  * Returns an Unsubscriber function that combines all the unsubscribers passed in.
  * @param unsubscribers all unsubscribers to aggregate into one unsubscriber
@@ -35,14 +27,6 @@ export const aggregateUnsubscribers = (unsubscribers: Unsubscriber[]): Unsubscri
 
 /** Function to run to dispose of something that runs asynchronously. The promise resolves to true if successfully unsubscribed */
 export type UnsubscriberAsync = () => Promise<boolean>;
-
-/** Object containing both a function to run to dispose of something and a promise that resolves when that thing is done subscribing */
-export type UnsubPromiseAsync<T = unknown> = {
-  /** Promise that resolves when done registering */
-  promise: Promise<T>;
-  /** Unsubscriber function that unregisters */
-  unsubscriber: UnsubscriberAsync;
-};
 
 /**
  * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
@@ -62,65 +46,20 @@ export const aggregateUnsubscriberAsyncs = (
 };
 
 /**
- * Creates a safe version of a register function that returns an UnsubPromiseAsync.
- * This is a challenge because we want to provide an unsubscriber that functions
- * even before the UnsubPromise.promise resolves.
- * TODO: This isn't quite fully safe yet. See TODO below. Basically, if you run this
- * before initializing, the unsubscriber returned may not work if you call it
- * immediately, but it will also throw an exception (we can remove this if we
- * actually run into this case and it seems to work fine). You should wait to call the unsubscriber later
+ * Creates a safe version of a register function that returns a Promise<UnsubscriberAsync>.
  * @param unsafeRegisterFn function that does some kind of async registration and returns an unsubscriber and a promise that resolves when the registration is finished
- * @param isInitialized whether the service associated with this safe unsubPromiseAsync function is initialized
+ * @param isInitialized whether the service associated with this safe UnsubscriberAsync function is initialized
  * @param initialize promise that resolves when the service is finished initializing
- * @param backupUnregisterFn a backup unsubscriber function that should attempt to unsubscribe whatever the unsafeRegisterFn is subscribing before unsafeRegisterFn finishes subscribing and resolves. Will be overwritten with the actual unsubscriber once the unsafeRegisterFn promise resolves. See TODO above for more info
- * @returns safe version of an unsafe function that returns an UnsubPromiseAsync (meaning it will wait to register until the service is initialized)
+ * @returns safe version of an unsafe function that returns a promise to an UnsubscriberAsync (meaning it will wait to register until the service is initialized)
  */
-export const createSafeRegisterFn = <TParam extends Array<unknown>, TReturn>(
-  unsafeRegisterFn: (...args: TParam) => UnsubPromiseAsync<TReturn>,
+export const createSafeRegisterFn = <TParam extends Array<unknown>>(
+  unsafeRegisterFn: (...args: TParam) => Promise<UnsubscriberAsync>,
   isInitialized: boolean,
   initialize: () => Promise<void>,
-  backupUnregisterFn?: (...args: TParam) => Promise<boolean>,
-): ((...args: TParam) => UnsubPromiseAsync<TReturn>) => {
-  return (...args: TParam) => {
-    // If we're already initialized, run registerRequestHandler almost like normal but with an initialize check in the unsubscriber
-    if (isInitialized) {
-      const { promise, unsubscriber: regUnsubscriber } = unsafeRegisterFn(...args);
-      // Use the returned unsubPromise's unsubscriber to make a safe unregisterRequestHandler
-      return {
-        promise,
-        unsubscriber: async () => {
-          await initialize();
-          return regUnsubscriber();
-        },
-      };
-    }
-
-    // Create an object with a stable unsubscriber reference that we can change when we get the real unsubscriber after awaiting intialize
-    const unsubRef: { unsubscriber: UnsubscriberAsync } = {
-      unsubscriber: async () => {
-        // TODO: The unsubscriber we return might not actually do anything meaningful at first (it attempts to call a backup unsubscriber function, which is probably not what we want), so it throws an exception. Refactor this mess so we aren't giving a stunted unsubscriber at first and then subsequently empowering it after initialize is finished
-        // TODO: Should the unsubscriber await initialize first, or should it just go ahead and run it? Also below
-        const didUnregister = backupUnregisterFn ? await backupUnregisterFn(...args) : false;
-        throw new Error(
-          `unsubscribe run from safeRegisterFn before service finished initializing! unsubscribe was${
-            didUnregister ? '' : ' not'
-          } successful.`,
-        );
-      },
-    };
-    return {
-      promise: initialize().then(() => {
-        const newUnsubAndPromise = unsafeRegisterFn(...args);
-        // Change the returned unsubAndPromise's unsubscriber to be a safe unregisterRequestHandler
-        unsubRef.unsubscriber = async () => {
-          // TODO: Should the unsubscriber await initialize first, or should it just go ahead and run it? Also above
-          await initialize();
-          return newUnsubAndPromise.unsubscriber();
-        };
-        return newUnsubAndPromise.promise;
-      }),
-      unsubscriber: () => unsubRef.unsubscriber(),
-    };
+): ((...args: TParam) => Promise<UnsubscriberAsync>) => {
+  return async (...args: TParam) => {
+    if (!isInitialized) await initialize();
+    return unsafeRegisterFn(...args);
   };
 };
 

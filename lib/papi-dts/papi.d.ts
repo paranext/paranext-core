@@ -99,13 +99,6 @@ declare module 'shared/utils/papi-util' {
   import { ProcessType } from 'shared/global-this.model';
   /** Function to run to dispose of something. Returns true if successfully unsubscribed */
   export type Unsubscriber = () => boolean;
-  /** Object containing both a function to run to dispose of something and a promise that resolves when that thing is done subscribing */
-  export type UnsubPromise<T = unknown> = {
-    /** Promise that resolves when done registering */
-    promise: Promise<T>;
-    /** Unsubscriber function that unregisters */
-    unsubscriber: Unsubscriber;
-  };
   /**
    * Returns an Unsubscriber function that combines all the unsubscribers passed in.
    * @param unsubscribers all unsubscribers to aggregate into one unsubscriber
@@ -114,13 +107,6 @@ declare module 'shared/utils/papi-util' {
   export const aggregateUnsubscribers: (unsubscribers: Unsubscriber[]) => Unsubscriber;
   /** Function to run to dispose of something that runs asynchronously. The promise resolves to true if successfully unsubscribed */
   export type UnsubscriberAsync = () => Promise<boolean>;
-  /** Object containing both a function to run to dispose of something and a promise that resolves when that thing is done subscribing */
-  export type UnsubPromiseAsync<T = unknown> = {
-    /** Promise that resolves when done registering */
-    promise: Promise<T>;
-    /** Unsubscriber function that unregisters */
-    unsubscriber: UnsubscriberAsync;
-  };
   /**
    * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
    * @param unsubscribers all unsubscribers to aggregate into one unsubscriber
@@ -130,25 +116,17 @@ declare module 'shared/utils/papi-util' {
     unsubscribers: UnsubscriberAsync[],
   ) => UnsubscriberAsync;
   /**
-   * Creates a safe version of a register function that returns an UnsubPromiseAsync.
-   * This is a challenge because we want to provide an unsubscriber that functions
-   * even before the UnsubPromise.promise resolves.
-   * TODO: This isn't quite fully safe yet. See TODO below. Basically, if you run this
-   * before initializing, the unsubscriber returned may not work if you call it
-   * immediately, but it will also throw an exception (we can remove this if we
-   * actually run into this case and it seems to work fine). You should wait to call the unsubscriber later
+   * Creates a safe version of a register function that returns a Promise<UnsubscriberAsync>.
    * @param unsafeRegisterFn function that does some kind of async registration and returns an unsubscriber and a promise that resolves when the registration is finished
-   * @param isInitialized whether the service associated with this safe unsubPromiseAsync function is initialized
+   * @param isInitialized whether the service associated with this safe UnsubscriberAsync function is initialized
    * @param initialize promise that resolves when the service is finished initializing
-   * @param backupUnregisterFn a backup unsubscriber function that should attempt to unsubscribe whatever the unsafeRegisterFn is subscribing before unsafeRegisterFn finishes subscribing and resolves. Will be overwritten with the actual unsubscriber once the unsafeRegisterFn promise resolves. See TODO above for more info
-   * @returns safe version of an unsafe function that returns an UnsubPromiseAsync (meaning it will wait to register until the service is initialized)
+   * @returns safe version of an unsafe function that returns a promise to an UnsubscriberAsync (meaning it will wait to register until the service is initialized)
    */
-  export const createSafeRegisterFn: <TParam extends unknown[], TReturn>(
-    unsafeRegisterFn: (...args: TParam) => UnsubPromiseAsync<TReturn>,
+  export const createSafeRegisterFn: <TParam extends unknown[]>(
+    unsafeRegisterFn: (...args: TParam) => Promise<UnsubscriberAsync>,
     isInitialized: boolean,
     initialize: () => Promise<void>,
-    backupUnregisterFn?: ((...args: TParam) => Promise<boolean>) | undefined,
-  ) => (...args: TParam) => UnsubPromiseAsync<TReturn>;
+  ) => (...args: TParam) => Promise<UnsubscriberAsync>;
   /**
    * Type of object passed to a complex request handler that provides information about the request.
    * This type is used as the public-facing interface for requests
@@ -981,7 +959,7 @@ declare module 'shared/services/network.service' {
     ComplexRequest,
     ComplexResponse,
     RequestHandlerType,
-    UnsubPromiseAsync,
+    UnsubscriberAsync,
   } from 'shared/utils/papi-util';
   import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
   import { PapiEvent } from 'shared/models/papi-event.model';
@@ -1039,17 +1017,17 @@ declare module 'shared/services/network.service' {
     requestType: string,
     handler: ArgsRequestHandler,
     handlerType?: RequestHandlerType,
-  ): UnsubPromiseAsync<void>;
+  ): Promise<UnsubscriberAsync>;
   export function registerRequestHandler(
     requestType: string,
     handler: ContentsRequestHandler,
     handlerType?: RequestHandlerType,
-  ): UnsubPromiseAsync<void>;
+  ): Promise<UnsubscriberAsync>;
   export function registerRequestHandler(
     requestType: string,
     handler: ComplexRequestHandler,
     handlerType?: RequestHandlerType,
-  ): UnsubPromiseAsync<void>;
+  ): Promise<UnsubscriberAsync>;
   /**
    * Creates an event emitter that works properly over the network.
    * Other connections receive this event when it is emitted.
@@ -1085,7 +1063,7 @@ declare module 'shared/services/network.service' {
   };
 }
 declare module 'shared/services/command.service' {
-  import { CommandHandler, UnsubPromiseAsync } from 'shared/utils/papi-util';
+  import { CommandHandler, UnsubscriberAsync } from 'shared/utils/papi-util';
   /**
    * Register a command on the papi to be handled here.
    *
@@ -1097,7 +1075,7 @@ declare module 'shared/services/command.service' {
   export const registerCommandUnsafe: (
     commandName: string,
     handler: CommandHandler,
-  ) => UnsubPromiseAsync<void>;
+  ) => Promise<UnsubscriberAsync>;
   /** Sets up the CommandService. Only runs once and always returns the same promise after that */
   export const initialize: () => Promise<void>;
   /**
@@ -1125,7 +1103,7 @@ declare module 'shared/services/command.service' {
   export const registerCommand: (
     commandName: string,
     handler: CommandHandler,
-  ) => UnsubPromiseAsync<void>;
+  ) => Promise<UnsubscriberAsync>;
 }
 declare module 'shared/data/web-view.model' {
   import { ReactNode } from 'react';

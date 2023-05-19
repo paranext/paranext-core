@@ -298,19 +298,14 @@ export const initialize = () => {
         commandService.registerCommand(commandName, handler),
       );
 
-      const unsubscribeCommands = aggregateUnsubscriberAsyncs(
-        unsubPromises.map(({ unsubscriber }) => unsubscriber),
-      );
-
       // Wait to successfully register all commands
-      await Promise.all(unsubPromises.map(({ promise }) => promise));
+      const unsubscribeCommands = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
 
       // On closing, try to remove command listeners
       // TODO: should do this on the server when the connection closes or when the server exits as well
-      if (isRenderer())
-        window.addEventListener('beforeunload', async () => {
-          await unsubscribeCommands();
-        });
+      window.addEventListener('beforeunload', async () => {
+        await unsubscribeCommands();
+      });
     }
 
     isInitialized = true;

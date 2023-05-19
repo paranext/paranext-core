@@ -397,10 +397,7 @@ const set = async <T extends NetworkableObject>(
     ];
 
     // Await all of the registrations finishing, successful or not
-    const registrationResponses = await Promise.allSettled(
-      unsubPromises.map((unsubPromise) => unsubPromise.promise),
-    );
-
+    const registrationResponses = await Promise.allSettled(unsubPromises);
     const didSuccessfullyRegister = registrationResponses.every(
       (response) => response.status === 'fulfilled',
     );
@@ -409,11 +406,11 @@ const set = async <T extends NetworkableObject>(
       // Clean up by unregistering any successful request handlers
       const unregisterRequestHandlerPromises: Promise<boolean>[] = [];
       const rejectedRequestHandlerReasons: string[] = [];
-      registrationResponses.forEach((response, registrationIndex) => {
+      registrationResponses.forEach(async (response, registrationIndex) => {
         if (response.status === 'fulfilled')
           unregisterRequestHandlerPromises.push(
             // Run the unsubscriber for this registration
-            unsubPromises[registrationIndex].unsubscriber(),
+            (await unsubPromises[registrationIndex])(),
           );
         // Collect the reasons for failure so we can throw a useful error
         else rejectedRequestHandlerReasons.push(response.reason);
@@ -439,11 +436,8 @@ const set = async <T extends NetworkableObject>(
     // Override dispose on the object passed in to clean up the network object
     overrideDispose(objectToShare, async (): Promise<boolean> => {
       // Unsubscribe all requests for this network object
-      if (
-        !(await aggregateUnsubscriberAsyncs(
-          unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
-        )())
-      ) {
+      const unsubscribers = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
+      if (!(await unsubscribers())) {
         logger.error(`Failed to unsubscribe all requests for ${id}`);
         return false;
       }

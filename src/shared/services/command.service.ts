@@ -9,7 +9,7 @@ import {
   CommandHandler,
   createSafeRegisterFn,
   serializeRequestType,
-  UnsubPromiseAsync,
+  UnsubscriberAsync,
 } from '@shared/utils/papi-util';
 import { isClient, isRenderer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
@@ -58,7 +58,7 @@ const sendCommandUnsafe = async <TParam extends Array<unknown>, TReturn>(
 export const registerCommandUnsafe = (
   commandName: string,
   handler: CommandHandler,
-): UnsubPromiseAsync<void> => {
+): Promise<UnsubscriberAsync> => {
   return networkService.registerRequestHandler(
     serializeRequestType(CATEGORY_COMMAND, commandName),
     handler,
@@ -84,19 +84,14 @@ export const initialize = () => {
         registerCommandUnsafe(commandName, handler),
       );
 
-      const unsubscribeCommands = aggregateUnsubscriberAsyncs(
-        unsubPromises.map(({ unsubscriber }) => unsubscriber),
-      );
-
       // Wait to successfully register all commands
-      await Promise.all(unsubPromises.map(({ promise }) => promise));
+      const unsubscribeCommands = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
 
       // On closing, try to remove command listeners
       // TODO: should do this on the server when the connection closes or when the server exists as well
-      if (isRenderer())
-        window.addEventListener('beforeunload', async () => {
-          await unsubscribeCommands();
-        });
+      window.addEventListener('beforeunload', async () => {
+        await unsubscribeCommands();
+      });
     }
 
     isInitialized = true;
@@ -151,7 +146,7 @@ export const createSendCommandFunction = <TParam extends Array<unknown>, TReturn
 export const registerCommand: (
   commandName: string,
   handler: CommandHandler,
-) => UnsubPromiseAsync<void> = createSafeRegisterFn(
+) => Promise<UnsubscriberAsync> = createSafeRegisterFn(
   registerCommandUnsafe,
   isInitialized,
   initialize,
