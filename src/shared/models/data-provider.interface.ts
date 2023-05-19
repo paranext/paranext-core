@@ -1,6 +1,6 @@
-import DataProviderInternal from '@shared/models/data-provider.model';
-import { DisposableNetworkObject, NetworkObject, NetworkableObject } from './network-object.model';
-import { CanHaveOnDidDispose } from './disposal.model';
+import DataProviderInternal, { DataProviderDataTypes } from '@shared/models/data-provider.model';
+import { DisposableNetworkObject, NetworkObject } from '@shared/models/network-object.model';
+import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
 
 /**
  * An object on the papi that manages data and has methods for interacting with that data.
@@ -13,9 +13,8 @@ import { CanHaveOnDidDispose } from './disposal.model';
  * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
  */
 // Basically a layer over NetworkObject
-interface IDataProvider<TSelector, TGetData, TSetData>
-  extends NetworkObject<NetworkableObject>,
-    CanHaveOnDidDispose<DataProviderInternal<TSelector, TGetData, TSetData>> {}
+type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+  NetworkObject<CanHaveOnDidDispose<DataProviderInternal<TDataTypes>>>;
 
 export default IDataProvider;
 
@@ -27,7 +26,8 @@ export default IDataProvider;
  * @see IDataProvider
  */
 // Basically a layer over DisposableNetworkObject
-export interface IDisposableDataProvider<TSelector, TGetData, TSetData>
-  extends DisposableNetworkObject<NetworkableObject>,
-    // Need to omit dispose here because it is optional on IDataProvider but is required on DisposableNetworkObject
-    Omit<IDataProvider<TSelector, TGetData, TSetData>, 'dispose'> {}
+export type IDisposableDataProvider<
+  TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
+> =
+  // Need to omit dispose here because it is optional on IDataProvider but is required on DisposableNetworkObject
+  DisposableNetworkObject<Omit<IDataProvider<TDataTypes>, 'dispose'>>;

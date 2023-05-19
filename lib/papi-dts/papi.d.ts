@@ -1405,6 +1405,11 @@ declare module 'shared/models/data-provider.model' {
      */
     whichUpdates?: 'deeply-equal' | 'all';
   };
+  export type DataProviderSetter<TSelector, TSetData> = (
+    selector: TSelector,
+    data: TSetData,
+  ) => Promise<boolean>;
+  export type DataProviderGetter<TSelector, TGetData> = (selector: TSelector) => Promise<TGetData>;
   /**
    * Subscribe to receive updates from this data provider that are relevant to the provided selector.
    *
@@ -1443,7 +1448,6 @@ declare module 'shared/models/data-provider.model' {
      * @param data the data that determines what to set at the selector
      * @returns true if successfully set (will send updates), false otherwise (will not send updates)
      */
-    set: (selector: TSelector, data: TSetData) => Promise<boolean>;
     /**
      * Get a subset of data from the provider according to the selector.
      *
@@ -1452,7 +1456,8 @@ declare module 'shared/models/data-provider.model' {
      * @param selector tells the provider what subset of data to get
      * @returns the subset of data represented by the selector
      */
-    get: (selector: TSelector) => Promise<TGetData>;
+    set: DataProviderSetter<TSelector, TSetData>;
+    get: DataProviderGetter<TSelector, TGetData>;
     /**
      * Subscribe to receive updates from this data provider that are relevant to the provided selector.
      *

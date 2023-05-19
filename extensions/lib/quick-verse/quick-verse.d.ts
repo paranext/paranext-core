@@ -8,3 +8,8 @@ export interface QuickVerseDataProvider
   extends IDataProvider<string, string | undefined, QuickVerseSetData> {
   setHeresy(verseRef: string, verseText: string): Promise<boolean>;
 }
+
+export type QuickVerseDataProvider = IDataProvider<{
+  verse: DataProviderDataType<string, string | undefined, QuickVerseSetData>;
+  heresy: DataProviderDataType<string, string | undefined, string>;
+}>;

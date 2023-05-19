@@ -29,8 +29,13 @@ function TestQuickVerseHeresyPanel() {
 
   // Test a custom setter method on a data provider engine that isn't on the interface to see if you can actually do this
   const quickVerseDataProvider = useDataProvider<QuickVerseDataProvider>('quick-verse.quick-verse');
-
+  const stuff: QuickVerseDataProvider['get'] | undefined;
   const [verseText] = useData(quickVerseDataProvider, verseRef, 'Verse text goes here');
+  const [verseText] = useData.Heresy<QuickVerseHeresyHook>(
+    quickVerseDataProvider,
+    verseRef,
+    'Verse text goes here',
+  );
 
   return (
     <div className="buttons-panel">
