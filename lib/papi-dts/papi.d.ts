@@ -43,6 +43,12 @@ declare module 'shared/utils/util' {
    */
   export function isString(o: unknown): o is string;
   /**
+   * Evaluates if the value is truthy, false, or 0
+   * @param val value to evaluate
+   * @returns whether the value is truthy, false, or 0
+   */
+  export function isValidValue(val: unknown): val is NonNullable<unknown>;
+  /**
    * Get a function that reduces calls to the function passed in
    * @param fn The function to debounce
    * @param delay How much delay in milliseconds after the most recent call to the debounced function to call the function

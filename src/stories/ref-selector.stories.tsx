@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useArgs } from '@storybook/client-api';
-import TJRefSelector, {
+import RefSelector, {
   ScrRefSelectorProps,
-} from '@renderer/components/papi-components/tj-ref-selector.component';
+} from '@renderer/components/papi-components/ref-selector.component';
 import { ReactElement } from 'react';
 
 type Ref = { book: number; chapter: number; verse: number };
 
-function TJRefSelectorDecorator(
+function RefSelectorDecorator(
   Story: (update?: { args: Partial<ScrRefSelectorProps> }) => ReactElement,
 ) {
   const [args, updateArgs] = useArgs();
@@ -26,16 +26,16 @@ function TJRefSelectorDecorator(
   );
 }
 
-const meta: Meta<typeof TJRefSelector> = {
-  title: 'Scripture/TJRefSelector',
-  component: TJRefSelector,
+const meta: Meta<typeof RefSelector> = {
+  title: 'Scripture/RefSelector',
+  component: RefSelector,
   tags: ['autodocs'],
   argTypes: {},
-  decorators: [TJRefSelectorDecorator],
+  decorators: [RefSelectorDecorator],
 };
 export default meta;
 
-type Story = StoryObj<typeof TJRefSelector>;
+type Story = StoryObj<typeof RefSelector>;
 
 export const Default: Story = {
   args: {

@@ -10,9 +10,9 @@ import {
   FIRST_SCR_VERSE_NUM,
   getBookLongNameFromNum,
   getChaptersForBook,
-} from './tj-shared/ScriptureUtil';
-import { ScriptureReference } from './tj-shared/ScriptureTypes';
-import './tj-ref-selector.component.css';
+} from './shared/scripture-util';
+import { ScriptureReference } from './shared/scripture-types';
+import './ref-selector.component.css';
 import ComboBox from './combo-box.component';
 import Button from './button.component';
 import TextField from './text-field.component';
@@ -52,7 +52,7 @@ function TJRefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
     <>
       <ComboBox
         title="Book"
-        className="book"
+        className="papi-ref-selector book"
         options={getAllBookNames()}
         onChange={onSelectBook}
         value={currentBookName}
@@ -72,7 +72,7 @@ function TJRefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
         &gt;
       </Button>
       <TextField
-        className="text-field"
+        className="papi-ref-selector chapter-verse"
         label="Chapter"
         value={scrRef.chapter}
         onChange={onChangeChapter}
@@ -90,7 +90,7 @@ function TJRefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
         &gt;
       </Button>
       <TextField
-        className="text-field"
+        className="papi-ref-selector chapter-verse"
         label="Verse"
         value={scrRef.verse}
         onChange={onChangeVerse}
