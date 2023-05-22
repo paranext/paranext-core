@@ -65,8 +65,10 @@ const webViewRequire = (module: string) => {
 };
 
 // TODO: Hacking in React, createRoot, and papi onto window for now so webViews can access it. Make this TypeScript-y
+// getPapi must be a function because this service cannot immediately access papi since it is a
+// circular dependency
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).papi = papi;
+(globalThis as any).getPapi = () => papi;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).React = React;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,7 +144,7 @@ export const addWebView = async (
 
   /** String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such */
   const imports = `
-  var papi = window.parent.papi;
+  var papi = window.parent.getPapi();
   var React = window.parent.React;
   var createRoot = window.parent.createRoot;
   var require = window.parent.webViewRequire;

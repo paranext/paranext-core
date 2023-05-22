@@ -15,7 +15,7 @@ import {
 } from './vite.util';
 
 // https://vitejs.dev/config/
-const webViewConfig = defineConfig(async () => {
+const webViewConfig = defineConfig(async ({ mode }) => {
   /** List of TypeScript WebView files to transpile */
   const tsxWebViews = await getWebViewTsxPaths();
 
@@ -27,6 +27,9 @@ const webViewConfig = defineConfig(async () => {
       // use React.createElement
       react({ jsxRuntime: 'classic' }),
     ],
+    // Since Vite is in library mode `process` is not replaced by default and that won't work in the
+    // renderer.
+    define: { 'process.env.NODE_ENV': JSON.stringify(mode) },
     build: {
       // This project is a library as it is being used in Paranext
       lib: {
