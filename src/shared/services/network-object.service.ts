@@ -71,16 +71,9 @@ enum NetworkObjectRequestSubtype {
  * @returns empty array if there is a remote network object with this id, undefined otherwise.
  * TODO: return array of all eligible functions
  */
-const getRemoteNetworkObjectFunctions = async (
-  id: string,
-  retry: boolean,
-): Promise<string[] | undefined> => {
+const getRemoteNetworkObjectFunctions = async (id: string): Promise<string[] | undefined> => {
   try {
-    if (retry)
-      return await networkService.request<[], string[]>(
-        getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
-      );
-    return await networkService.requestWithoutRetrying<[], string[]>(
+    return await networkService.request<[], string[]>(
       getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
     );
   } catch (e) {
@@ -113,6 +106,10 @@ type NetworkObjectRegistration = {
 /** Map of id to network object */
 const networkObjectRegistrations = new Map<string, NetworkObjectRegistration>();
 
+/** Search locally known network objects for the given ID. Don't look on the network for more objects.
+ *  @returns whether we know of an existing network object with the provided id already on the network */
+const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
+
 /**
  * Emitter for when a network object is disposed. Provides the id so that the local emitter specific to that object can be run.
  *
@@ -140,26 +137,6 @@ onDidDisposeNetworkObject((id: string) => {
     networkObjectRegistration.revokeProxy();
   }
 });
-
-// #endregion
-
-// #region has
-
-/** Determine whether or not we know locally if a network object with the provided id exists anywhere on the network */
-const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
-
-/** Determine whether or not a network object with the provided id exists anywhere on the network */
-const has = async (id: string): Promise<boolean> => {
-  await initialize();
-
-  // Check if we already have this network object
-  if (hasKnown(id)) return true;
-
-  // We don't already have this network object. See if other processes have this network object
-  // If we get truthy from the request for network object functions, we do have that id
-  // TODO: Mark this network object id as available but the object not yet generated so we don't have to run get multiple times
-  return !!(await getRemoteNetworkObjectFunctions(id, false));
-};
 
 // #endregion
 
@@ -315,7 +292,7 @@ const get = async <T extends object>(
       return networkObjectRegistration.networkObject as NetworkObject<T>;
 
     // We don't already have this network object. See if it exists somewhere else.
-    const networkObjectFunctions = await getRemoteNetworkObjectFunctions(id, true);
+    const networkObjectFunctions = await getRemoteNetworkObjectFunctions(id);
     if (!networkObjectFunctions) return undefined;
 
     // At this point, the object exists remotely but does not yet exist locally.
@@ -502,7 +479,7 @@ const set = async <T extends NetworkableObject>(
  */
 const networkObjectService = {
   initialize,
-  has,
+  hasKnown,
   get,
   set,
 };

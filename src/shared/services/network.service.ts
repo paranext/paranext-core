@@ -132,13 +132,11 @@ type RoutedRequestHandler<TParam = any, TReturn = any> =
  *
  * WARNING: THIS THROWS IF NOT INITIALIZED. DO NOT USE OUTSIDE OF INITIALIZATION. Use requestRaw
  * @param requestType the type of request
- * @param retryIfNoHandler whether to retry sending the request if no handler for requestType was found
  * @param contents contents to send in the request
  * @returns promise that resolves with the response message
  */
 const requestRawUnsafe = async <TParam, TReturn>(
   requestType: string,
-  retryIfNoHandler: boolean,
   contents: TParam,
 ): Promise<ComplexResponse<TReturn>> => {
   if (!isInitialized)
@@ -150,7 +148,7 @@ const requestRawUnsafe = async <TParam, TReturn>(
   // If the request type doesn't have a registered handler yet, retry a few times to help with race conditions
   // This approach is hacky but works well enough for now
   const expectedErrorMsg: string = `No handler was found to process the request of type ${requestType}`;
-  const maxAttempts: number = retryIfNoHandler ? 5 : 1;
+  const maxAttempts: number = 5;
   for (let attemptsRemaining = maxAttempts; attemptsRemaining > 0; attemptsRemaining--) {
     // eslint-disable-next-line no-await-in-loop
     const response = await connectionService.request<TParam, TReturn>(requestType, contents);
@@ -171,20 +169,18 @@ const requestRawUnsafe = async <TParam, TReturn>(
  *
  * WARNING: THIS THROWS IF NOT INITIALIZED. DO NOT USE OUTSIDE OF INITIALIZATION. Use request
  * @param requestType the type of request
- * @param retryIfNoHandler whether to retry sending the request if no handler for requestType was found
  * @param args arguments to send in the request (put in request.contents)
  * @returns promise that resolves with the response message
  */
 const requestUnsafe = async <TParam extends Array<unknown>, TReturn>(
   requestType: string,
-  retryIfNoHandler: boolean,
   ...args: TParam
 ) => {
   if (!isInitialized)
     throw new Error(
       `Cannot perform request ${requestType} as the NetworkService is not initialized`,
     );
-  const response = await requestRawUnsafe<TParam, TReturn>(requestType, retryIfNoHandler, args);
+  const response = await requestRawUnsafe<TParam, TReturn>(requestType, args);
   if (!response.success) throw new Error(response.errorMessage);
   return response.contents;
 };
@@ -223,7 +219,6 @@ async function unregisterRequestHandlerUnsafe(
   const remoteUnregisterSuccessful = isClient()
     ? await requestUnsafe(
         serializeRequestType(CATEGORY_SERVER, 'unregisterRequest'),
-        false,
         requestType,
         connectionService.getClientId(),
       )
@@ -294,7 +289,6 @@ function registerRequestHandlerUnsafe(
     ? // If we are the client, try to register with the server because server has all registrations
       requestUnsafe(
         serializeRequestType(CATEGORY_SERVER, 'registerRequest'),
-        false,
         requestType,
         connectionService.getClientId(),
       )
@@ -660,7 +654,7 @@ export const initialize = () => {
 // #region Public safe functions (call these, not the private unsafe functions above)
 
 /**
- * Send a request on the network and resolve the response contents. This will retry if the request fails.
+ * Send a request on the network and resolve the response contents.
  * @param requestType the type of request
  * @param args arguments to send in the request (put in request.contents)
  * @returns promise that resolves with the response message
@@ -670,21 +664,7 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   ...args: TParam
 ) => {
   await initialize();
-  return requestUnsafe<TParam, TReturn>(requestType, true, ...args);
-};
-
-/**
- * Send a request on the network and resolve the response contents. This will not retry if the request fails.
- * @param requestType the type of request
- * @param args arguments to send in the request (put in request.contents)
- * @returns promise that resolves with the response message
- */
-export const requestWithoutRetrying = async <TParam extends Array<unknown>, TReturn>(
-  requestType: string,
-  ...args: TParam
-) => {
-  await initialize();
-  return requestUnsafe<TParam, TReturn>(requestType, false, ...args);
+  return requestUnsafe<TParam, TReturn>(requestType, ...args);
 };
 
 /** Helper function so we can overload registerRequestHandler */

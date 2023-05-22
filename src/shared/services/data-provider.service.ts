@@ -56,11 +56,14 @@ const initialize = () => {
   return initializePromise;
 };
 
-/** Determine if a data provider with the given name exists anywhere on the network */
-async function has(providerName: string): Promise<boolean> {
+/** Indicate if we are aware of an existing data provider with the given name. If a data provider
+ *  with the given name is someone else on the network, this function won't tell you about it
+ *  unless something else in the existing process is subscribed to it.
+ */
+async function hasKnown(providerName: string): Promise<boolean> {
   await initialize();
 
-  return networkObjectService.has(getDataProviderObjectId(providerName));
+  return networkObjectService.hasKnown(getDataProviderObjectId(providerName));
 }
 
 /**
@@ -255,7 +258,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   // There is a potential networking sync issue here. We check for a data provider, then we create a network event, then we create a network object.
   // If someone else registers an engine with the same data provider name at the same time, the two registrations could get intermixed and mess stuff up
   // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
-  if (await has(providerName))
+  if (await hasKnown(providerName))
     throw new Error(`Data provider with type ${providerName} is already registered`);
 
   // Validate that the data provider engine has what it needs
@@ -373,7 +376,7 @@ async function get<T extends IDataProvider<any, any, any>>(
 }
 
 const dataProviderService = {
-  has,
+  hasKnown,
   registerEngine,
   get,
 };
