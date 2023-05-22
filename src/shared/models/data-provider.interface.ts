@@ -1,6 +1,5 @@
 import DataProviderInternal, { DataProviderDataTypes } from '@shared/models/data-provider.model';
 import { DisposableNetworkObject, NetworkObject } from '@shared/models/network-object.model';
-import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
 
 /**
  * An object on the papi that manages data and has methods for interacting with that data.
@@ -14,7 +13,7 @@ import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
  */
 // Basically a layer over NetworkObject
 type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-  NetworkObject<CanHaveOnDidDispose<DataProviderInternal<TDataTypes>>>;
+  NetworkObject<DataProviderInternal<TDataTypes>>;
 
 export default IDataProvider;
 

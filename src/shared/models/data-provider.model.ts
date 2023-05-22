@@ -125,45 +125,11 @@ export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = 
  * @see IDataProvider
  */
 type DataProviderInternal<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-  NetworkableObject &
+  NetworkableObject<
     DataProviderSetters<TDataTypes> &
-    DataProviderGetters<TDataTypes> &
-    DataProviderSubscribers<TDataTypes>;
-
-const thing: DataProviderInternal<{
-  stuff: DataProviderDataType<string, string, string>;
-  things: DataProviderDataType<number>;
-}> = {
-  setStuff: async (sel, data) => true,
-  async getStuff(sel) {
-    return 'wow this works';
-  },
-  subscribeStuff: async (sel, callback) => {
-    return async () => true;
-  },
-  setThings: async (sel, data) => true,
-  async getThings(sel) {
-    return 3;
-  },
-  subscribeThings: async (sel, callback) => {
-    return async () => true;
-  },
-};
-
-thing.getApples('asdf');
-
-thing.setStuff('thing', 'stuff');
-thing.setThings(3, 4);
-
-const thing2: DataProviderInternal = {
-  getStuff: async (num) => {},
-};
-
-thing2.getStuff(1);
-thing2.getBlah(1);
-
-console.log(thing);
-console.log(thing2);
+      DataProviderGetters<TDataTypes> &
+      DataProviderSubscribers<TDataTypes>
+  >;
 
 const dataProviderFunctionPrefixes = ['set', 'get', 'subscribe'];
 

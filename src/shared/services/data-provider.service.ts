@@ -6,6 +6,7 @@
 import IDataProvider, { IDisposableDataProvider } from '@shared/models/data-provider.interface';
 import DataProviderInternal, {
   DataProviderDataTypes,
+  DataProviderGetter,
   DataProviderSetter,
   DataProviderSubscriber,
   DataProviderSubscriberOptions,
@@ -18,9 +19,10 @@ import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
 import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
 import { Container, getAllObjectFunctionNames, groupBy, isString } from '@shared/utils/util';
-import { NetworkObject } from '@shared/models/network-object.model';
+import { LocalObjectToProxyCreator, NetworkObject } from '@shared/models/network-object.model';
 import networkObjectService from '@shared/services/network-object.service';
-import logger from './logger.service';
+import { CannotHaveOnDidDispose } from '@shared/models/disposal.model';
+import logger from '@shared/services/logger.service';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -105,7 +107,14 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
         throw new Error("onDidUpdate: Somehow the data provider doesn't exist! Investigate");
       // Get the data at our selector when we receive notification that the data updated
       // TODO: Implement selector events so we can receive the new data with the update instead of reaching back out for it
-      const data = await dataProviderContainer.contents[`get${dataType}`](selector);
+      // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
+      // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
+      // to specify the specific types
+      const data = (
+        (await (dataProviderContainer.contents as unknown as DataProviderInternal<TDataTypes>)[
+          `get${dataType}`
+        ]) as DataProviderGetter<TDataTypes[typeof dataType]>
+      )(selector);
       // Take note that we have received an update so we don't run the callback with the old data below in the `retrieveDataImmediately` code
       receivedUpdate = true;
 
@@ -125,7 +134,14 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
     // If the subscriber wants to get the data as soon as possible in addition to running the callback on updates, get the data
     if (retrieveDataImmediately) {
       // Get the data to run the callback immediately so it has the data
-      const data = await dataProviderContainer.contents[`get${dataType}`](selector);
+      // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
+      // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
+      // to specify the specific types
+      const data = (
+        (await (dataProviderContainer.contents as unknown as DataProviderInternal<TDataTypes>)[
+          `get${dataType}`
+        ]) as DataProviderGetter<TDataTypes[typeof dataType]>
+      )(selector);
       // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
       if (!receivedUpdate) {
         receivedUpdate = true;
@@ -137,6 +153,96 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
     // Forcing the unsubscribe to be asynchronous to support selector events in the future
     return async () => unsubscribe();
   };
+}
+
+function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
+  dataProviderEngine: IDataProviderEngine<TDataTypes> | undefined,
+  dataProviderContainer: Container<IDataProvider<TDataTypes>>,
+  onDidUpdate: PapiEvent<boolean>,
+): DataProviderInternal<TDataTypes> {
+  // Object whose methods to run first when the data provider's method is called if they exist here
+  // before falling back to the dataProviderEngine's methods. Caches subscribe functions and bound
+  // data provider engine methods.
+  // TODO: update network objects so remote objects know when methods do not exist, then make IDataProvider.set optional
+  const dataProviderInternal: Partial<DataProviderInternal<TDataTypes>> = {};
+
+  // Create a proxy that runs the data provider method if it exists or runs the engine method otherwise
+  const dataProvider = new Proxy(
+    dataProviderEngine ?? (dataProviderInternal as IDataProviderEngine<TDataTypes>),
+    {
+      get(obj, prop) {
+        // Pass promises through
+        if (prop === 'then') return obj[prop as keyof typeof obj];
+
+        // Do not let anyone but the data provider engine send updates
+        if (prop === 'notifyUpdate')
+          throw new Error('Cannot run notifyUpdate outside of data provider engine');
+
+        // If the data provider already has the method, run it
+        if (prop in dataProviderInternal)
+          return dataProviderInternal[prop as keyof typeof dataProviderInternal];
+
+        /** Figure out the method that will go on the data provider to run */
+        // Any because we want this method to be any method on the data provider type
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let newDataProviderMethod: DataProviderInternal<TDataTypes>[any] | undefined;
+
+        // If they want a subscriber, build a subscribe function specific to the data type used
+        if (isString(prop) && prop.startsWith('subscribe')) {
+          const dataType = getDataProviderDataTypeFromFunctionName(prop);
+          // Subscribe to run the callback when data changes. Also immediately calls callback with the current value
+          newDataProviderMethod = createDataProviderSubscriber<TDataTypes>(
+            dataProviderContainer,
+            onDidUpdate,
+            dataType,
+          );
+        }
+        // If it's not a subscribe and the data provider engine is provided (meaning this proxy is
+        // being created for a local data provider), try to get the engine method
+        else if (dataProviderEngine) {
+          // Otherwise, get the engine method and bind it
+          // There isn't indexing on IDataProviderEngine so normal objects could be used,
+          // but now members can't be accessed by indexing in DataProviderService
+          // TODO: fix it so it is indexable but can have specific members
+          newDataProviderMethod = // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (obj[prop as keyof typeof obj] as IDataProviderEngine<TDataTypes>[any])?.bind(
+              dataProviderEngine,
+            );
+        }
+
+        // Save the bound engine method on the data provider to be run later
+        if (newDataProviderMethod) {
+          // There isn't indexing on IDataProviderEngine so normal objects could be used,
+          // but now members can't be accessed by indexing in DataProviderService
+          // TODO: fix it so it is indexable but can have specific members
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (dataProviderInternal as any)[prop] = newDataProviderMethod;
+        }
+        return newDataProviderMethod;
+      },
+      set(obj, prop, value) {
+        // We create `subscribe` and `notifyUpdate` for extensions, and `subscribe` uses `get`
+        // internally, so those 3 properties can't change after the data provider has been created or
+        // bad things will happen.
+        if (
+          isString(prop) &&
+          (prop === 'get' || prop.startsWith('subscribe') || prop === 'notifyUpdate')
+        )
+          return false;
+
+        // If we cached a property previously, purge the cache for that property since it is changing.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((dataProviderInternal as any)[prop]) delete (dataProviderInternal as any)[prop];
+
+        // Actually set the provided property
+        Reflect.set(obj, prop, value);
+        return true;
+      },
+      // Type assert the data provider engine proxy because it is a DataProviderInternal
+    },
+  ) as DataProviderInternal<TDataTypes>;
+
+  return dataProvider;
 }
 
 /**
@@ -204,72 +310,11 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
     }
   });
 
-  // Object whose methods to run first when the data provider's method is called if they exist here
-  // before falling back to the dataProviderEngine's methods. Caches subscribe functions and bound
-  // data provider engine methods.
-  // TODO: update network objects so remote objects know when methods do not exist, then make IDataProvider.set optional
-  const dataProviderInternal: Partial<DataProviderInternal<TDataTypes>> = {};
-
-  // Create a proxy that runs the data provider method if it exists or runs the engine method otherwise
-  const dataProvider = new Proxy(dataProviderEngine, {
-    get(obj, prop) {
-      // Pass promises through
-      if (prop === 'then') return obj[prop as keyof typeof obj];
-
-      // Do not let anyone but the data provider engine send updates
-      if (prop === 'notifyUpdate')
-        throw new Error('Cannot run notifyUpdate outside of data provider engine');
-
-      // If the data provider already has the method, run it
-      if (prop in dataProviderInternal)
-        return dataProviderInternal[prop as keyof typeof dataProviderInternal];
-
-      /** Method that will go on the data provider to run */
-      // Any because we want this method to be any method on the data provider type
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let newDataProviderMethod: DataProviderInternal<TDataTypes>[any] | undefined;
-
-      // If they want a subscriber, build a subscribe function specific to the data type used
-      if (isString(prop) && prop.startsWith('subscribe')) {
-        const dataType = getDataProviderDataTypeFromFunctionName(prop);
-        // Subscribe to run the callback when data changes. Also immediately calls callback with the current value
-        newDataProviderMethod = createDataProviderSubscriber<TDataTypes>(
-          dataProviderContainer,
-          onDidUpdateEmitter.event,
-          dataType,
-        );
-      }
-
-      // Otherwise, get the engine method and bind it
-      newDataProviderMethod = obj[prop as keyof typeof obj]?.bind(dataProviderEngine);
-
-      // Save the bound engine method on the data provider to be run later
-      if (newDataProviderMethod) {
-        // There isn't indexing on IDataProviderEngine so normal objects could be used,
-        // but now members can't be accessed by indexing in DataProviderService
-        // TODO: fix it so it is indexable but can have specific members
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (dataProviderInternal as any)[prop] = newDataProviderMethod;
-      }
-      return newDataProviderMethod;
-    },
-    set(obj, prop, value) {
-      // We create `subscribe` for extensions, and `subscribe` uses `get` internally, so those 2
-      // properties can't change after the data provider has been created or bad things will happen.
-      if (prop === 'get' || prop === 'subscribe') return false;
-
-      // If we cached a property previously, purge the cache for that property since it is changing.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((dataProviderInternal as any)[prop]) delete (dataProviderInternal as any)[prop];
-
-      // Actually set the provided property
-      Reflect.set(obj, prop, value);
-      return true;
-    },
-    // Type assert the data provider engine proxy because it is a DataProviderInternal
-  }) as DataProviderInternal<TDataTypes>;
-
-  return dataProvider;
+  return createDataProviderProxy(
+    dataProviderEngine,
+    dataProviderContainer,
+    onDidUpdateEmitter.event,
+  );
 }
 
 /**
@@ -365,8 +410,7 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
  * @returns local data provider object that represents a remote data provider
  */
 // This generic type should be DataProviderInternal because we are making part of a local/internal data provider
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createLocalDataProviderToProxy<T extends DataProviderInternal<any, any, any>>(
+function createLocalDataProviderToProxy<T extends DataProviderInternal>(
   dataProviderObjectId: string,
   // NetworkObject<DataProviderInternal> is our way to convert from DataProviderInternal to IDataProvider without specifying generics
   dataProviderContainer: Container<NetworkObject<T>>,
@@ -375,9 +419,7 @@ function createLocalDataProviderToProxy<T extends DataProviderInternal<any, any,
   const onDidUpdate = networkService.getNetworkEvent<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
-  return {
-    subscribe: createDataProviderSubscriber(dataProviderContainer, onDidUpdate),
-  } as Partial<T>;
+  return createDataProviderProxy(undefined, dataProviderContainer, onDidUpdate) as Partial<T>;
 }
 
 /**
@@ -385,8 +427,7 @@ function createLocalDataProviderToProxy<T extends DataProviderInternal<any, any,
  * @param providerName Name of the desired data provider
  * @returns The data provider with the given name if one exists, undefined otherwise
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function get<T extends IDataProvider<any, any, any>>(
+async function get<T extends IDataProvider<TDataTypes>, TDataTypes extends DataProviderDataTypes>(
   providerName: string,
 ): Promise<T | undefined> {
   await initialize();
@@ -395,10 +436,10 @@ async function get<T extends IDataProvider<any, any, any>>(
   const dataProviderObjectId = getDataProviderObjectId(providerName);
 
   // Get the network object for this data provider
-  const dataProvider = (await networkObjectService.get<T>(
+  const dataProvider = (await networkObjectService.get<CannotHaveOnDidDispose & T>(
     dataProviderObjectId,
-    createLocalDataProviderToProxy,
-  )) as T;
+    createLocalDataProviderToProxy as LocalObjectToProxyCreator<CannotHaveOnDidDispose & T>,
+  )) as T | undefined;
 
   if (!dataProvider) {
     logger.info(`No data provider found with name = ${providerName}`);
