@@ -59,8 +59,11 @@ export async function activate(): Promise<UnsubscriberAsync> {
     unsubscribers.push(unsubGreetings);
   }
 
+  const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
+    await Promise.all(unsubPromises),
+  );
   logger.info('Hello World is finished activating!');
-  return papi.util.aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
+  return combinedUnsubscriber;
 }
 
 export async function deactivate() {

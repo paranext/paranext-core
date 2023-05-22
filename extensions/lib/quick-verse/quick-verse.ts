@@ -164,11 +164,11 @@ export async function activate(context: ExecutionActivationContext): Promise<Uns
     papi.storage.writeUserData(token, 'heresy-count', String(storedHeresyCount));
   });
 
-  logger.info('Quick Verse is finished activating!');
-
-  return papi.util.aggregateUnsubscriberAsyncs(
+  const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
     (await Promise.all(unsubPromises)).concat([quickVerseDataProvider.dispose]),
   );
+  logger.info('Quick Verse is finished activating!');
+  return combinedUnsubscriber;
 }
 
 export async function deactivate() {
