@@ -4,7 +4,7 @@ import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import { TabInfo } from '@shared/data/web-view.model';
 import { debounce } from '@shared/utils/util';
 import { useState, useMemo, useCallback } from 'react';
-import { QuickVerseDataProvider } from '@extensions/quick-verse/quick-verse';
+import { QuickVerseDataProvider, QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import TextField from '@renderer/components/papi-components/text-field.component';
 
 function TestQuickVerseHeresyPanel() {
@@ -29,9 +29,7 @@ function TestQuickVerseHeresyPanel() {
 
   // Test a custom setter method on a data provider engine that isn't on the interface to see if you can actually do this
   const quickVerseDataProvider = useDataProvider<QuickVerseDataProvider>('quick-verse.quick-verse');
-  const stuff: QuickVerseDataProvider['get'] | undefined;
-  const [verseText] = useData(quickVerseDataProvider, verseRef, 'Verse text goes here');
-  const [verseText] = useData.Heresy<QuickVerseHeresyHook>(
+  const [verseText] = useData.Verse<QuickVerseDataTypes['verse']>(
     quickVerseDataProvider,
     verseRef,
     'Verse text goes here',

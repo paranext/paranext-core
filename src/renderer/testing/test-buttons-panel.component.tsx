@@ -176,7 +176,7 @@ function TestButtonsPanel() {
     })();
   }
 
-  const [verseText, setVerseText, verseTextIsLoading] = useData<
+  const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<
     string,
     string,
     string | { text: string; isHeresy: boolean }
