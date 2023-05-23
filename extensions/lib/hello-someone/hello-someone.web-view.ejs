@@ -36,7 +36,9 @@
         const greetingsButton = document.getElementById('greetings-button');
         greetingsButton.addEventListener('click', async () => {
           const greetingsInput = document.getElementById('greetings-input');
-          const greeting = await greetingsDataProvider.get(greetingsInput.value.toLowerCase());
+          const greeting = await greetingsDataProvider.getGreeting(
+            greetingsInput.value.toLowerCase(),
+          );
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
           helloSomeoneOutput.textContent = papi.util.htmlEncode(greeting);
           print(greeting);
@@ -46,7 +48,7 @@
           const greetingsInput = document.getElementById('greetings-input');
           const name = greetingsInput.value.toLowerCase();
           const promises = new Array(10000);
-          for (let i = 0; i < 10000; i += 1) promises[i] = greetingsDataProvider.get(name);
+          for (let i = 0; i < 10000; i += 1) promises[i] = greetingsDataProvider.getGreeting(name);
           await Promise.all(promises);
           print('Done');
         });
@@ -57,7 +59,7 @@
           const greetingsInput = document.getElementById('greetings-input');
           const name = greetingsInput.value;
           const setGreetingsInput = document.getElementById('set-greetings-input');
-          const success = await greetingsDataProvider.set(
+          const success = await greetingsDataProvider.setGreeting(
             name.toLowerCase(),
             setGreetingsInput.value,
           );
@@ -71,7 +73,7 @@
         });
 
         // Update the 'all greetings' display on load and on greetings updates
-        greetingsDataProvider.subscribe('*', (greetings) => {
+        greetingsDataProvider.subscribeAll(undefined, (greetings) => {
           const allGreetings = document.getElementById('all-greetings');
           const greetingsString = JSON.stringify(greetings, null, 2);
           allGreetings.textContent = papi.util.htmlEncode(greetingsString.replace(/"/g, '`'));
@@ -80,8 +82,8 @@
 
         // Update the greetings count on any greeting update
         let anyGreetingsUpdateCount = 0;
-        greetingsDataProvider.subscribe(
-          '*',
+        greetingsDataProvider.subscribeAll(
+          undefined,
           () => {
             anyGreetingsUpdateCount += 1;
             const anyGreetingsUpdateCountDiv = document.getElementById(
@@ -96,7 +98,7 @@
 
         // Update the greetings count on greetings updates
         let billAnyGreetingsUpdateCount = 0;
-        greetingsDataProvider.subscribe(
+        greetingsDataProvider.subscribeGreeting(
           'BiLl',
           () => {
             billAnyGreetingsUpdateCount += 1;
@@ -112,7 +114,7 @@
 
         // Update the greetings count on greetings updates
         let billGreetingsUpdateCount = -1;
-        greetingsDataProvider.subscribe('bIlL', () => {
+        greetingsDataProvider.subscribeGreeting('bIlL', () => {
           billGreetingsUpdateCount += 1;
           const billGreetingsUpdateCountDiv = document.getElementById(
             'bill-greetings-update-count',

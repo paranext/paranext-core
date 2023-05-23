@@ -3,6 +3,7 @@ import type { ExecutionToken } from 'node/models/execution-token.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import { UnsubPromiseAsync, UnsubscriberAsync } from 'shared/utils/papi-util';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 
 const { logger } = papi;
 
@@ -12,9 +13,7 @@ const unsubscribers: UnsubscriberAsync[] = [];
 
 type QuickVerseSetData = string | { text: string; isHeresy: boolean };
 
-class QuickVerseDataProviderEngine
-  implements IDataProviderEngine<string, string | undefined, QuickVerseSetData>
-{
+class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseDataTypes> {
   /**
    * Verses stored by the Data Provider.
    * Keys are Scripture References.
@@ -47,7 +46,7 @@ class QuickVerseDataProviderEngine
    * @param data Must inform us that you are a heretic
    */
   // Note: this method gets layered over so that you can run `this.set` in the data provider engine, and it will notify update afterward.
-  async set(selector: string, data: QuickVerseSetData) {
+  async internalSet(selector: string, data: QuickVerseSetData) {
     // Just get notifications of updates with the 'notify' selector. Nothing to change
     if (selector === 'notify') return false;
 
@@ -70,19 +69,23 @@ class QuickVerseDataProviderEngine
     return true;
   }
 
+  async setVerse(selector: string, data: QuickVerseSetData) {
+    return this.internalSet(selector, data);
+  }
+
   /**
    * Example of layering over set inside a data provider. This updates the verse text and sends an update event
    * @param verseRef verse reference to change
    * @param verseText text to update the verse to, you heretic
    */
   async setHeresy(verseRef: string, verseText: string) {
-    return this.set(verseRef, { text: verseText, isHeresy: true });
+    return this.internalSet(verseRef, { text: verseText, isHeresy: true });
   }
 
   /**
    * @param selector
    */
-  get = async (selector: string) => {
+  getVerse = async (selector: string) => {
     // Just get notifications of updates with the 'notify' selector
     if (selector === 'notify') return undefined;
 
@@ -116,6 +119,10 @@ class QuickVerseDataProviderEngine
     }
     return responseVerse.text;
   };
+
+  async getHeresy(selector: string) {
+    return this.getVerse(selector);
+  }
 
   /**
    * Valid selectors:
@@ -151,12 +158,12 @@ export async function activate(context: ExecutionActivationContext) {
   }
   engine.heresyCount = storedHeresyCount;
 
-  const quickVerseDataProvider = await papi.dataProvider.registerEngine(
+  const quickVerseDataProvider = await papi.dataProvider.registerEngine<QuickVerseDataTypes>(
     'quick-verse.quick-verse',
     engine,
   );
 
-  quickVerseDataProvider.subscribe('latest', () => {
+  quickVerseDataProvider.subscribeVerse('latest', () => {
     if (storedHeresyCount === engine.heresyCount) return;
     storedHeresyCount = engine.heresyCount;
     papi.storage.writeUserData(token, 'heresy-count', String(storedHeresyCount));

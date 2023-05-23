@@ -1,5 +1,6 @@
 import papi from 'papi';
 import { useCallback, useContext, useState } from 'react';
+import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 
 const {
   react: {
@@ -34,7 +35,7 @@ globalThis.webViewComponent = function HelloWorld() {
     'retrieving',
   );
 
-  const [latestVerseText] = useData(
+  const [latestVerseText] = useData.Verse<QuickVerseDataTypes['verse']>(
     'quick-verse.quick-verse',
     'latest',
     'Loading latest Scripture text...',

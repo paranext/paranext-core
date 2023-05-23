@@ -8,7 +8,8 @@ import { TabInfo } from '@shared/data/web-view.model';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
-import IDataProvider from '@shared/models/data-provider.interface';
+import { GreetingsDataProvider } from '@extensions/hello-someone/hello-someone';
+import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 
 const testBase: (message: string) => Promise<string> =
   networkService.createRequestFunction('electronAPI.env.test');
@@ -150,8 +151,7 @@ function TestButtonsPanel() {
 
   // Test a method on a data provider engine that isn't on the interface to see if you can actually do this
   const [hasTestedRandomMethod, setHasTestedRandomMethod] = useState(false);
-  const greetingsDataProvider =
-    useDataProvider<IDataProvider<string, string, string>>('hello-someone.greetings');
+  const greetingsDataProvider = useDataProvider<GreetingsDataProvider>('hello-someone.greetings');
   if (!hasTestedRandomMethod && greetingsDataProvider) {
     setHasTestedRandomMethod(true);
     (async () => {
@@ -176,11 +176,11 @@ function TestButtonsPanel() {
     })();
   }
 
-  const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<
-    string,
-    string,
-    string | { text: string; isHeresy: boolean }
-  >('quick-verse.quick-verse', verseRef, 'Verse text goes here');
+  const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes['verse']>(
+    'quick-verse.quick-verse',
+    verseRef,
+    'Verse text goes here',
+  );
 
   return (
     <div className="buttons-panel">

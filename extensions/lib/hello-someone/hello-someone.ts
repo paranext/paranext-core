@@ -1,29 +1,22 @@
 import papi from 'papi';
 import type { WebViewContentType } from 'shared/data/web-view.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
-import type IDataProvider from 'shared/models/data-provider.interface';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
+import { AllGreetingsData, GreetingsDataTypes } from '@extensions/hello-someone/hello-someone';
 
 const { logger } = papi;
 logger.info('Hello Someone is importing!');
 
 const unsubscribers: UnsubscriberAsync[] = [];
 
-export interface GreetingsDataProvider extends IDataProvider<string, string, string> {
-  testRandomMethod(things: string): Promise<string>;
-}
-
 const greetingsDataProviderEngine = {
   people: {
     bill: 'Hi, my name is Bill!',
     kathy: 'Hello. My name is Kathy.',
-  } as { [name: string]: string },
+  } as AllGreetingsData,
 
-  set: async (selector: string, data: string) => {
-    // Don't change everyone's greeting, you heathen!
-    if (selector === '*') return false;
-
+  setGreeting: async (selector: string, data: string) => {
     // If there is no change in the greeting, don't update
     if (data === greetingsDataProviderEngine.people[selector.toLowerCase()]) return false;
 
@@ -32,9 +25,17 @@ const greetingsDataProviderEngine = {
     return true;
   },
 
-  async get(selector: string) {
-    if (selector === '*') return this.people;
+  async getGreeting(selector: string) {
     return this.people[selector.toLowerCase()];
+  },
+
+  async setAll() {
+    // Don't change everyone's greeting, you heathen!
+    return false;
+  },
+
+  async getAll() {
+    return this.people;
   },
 
   /** Test method to make sure people can use data providers' custom methods */
@@ -48,7 +49,7 @@ const greetingsDataProviderEngine = {
 export async function activate() {
   logger.info('Hello Someone is activating!');
 
-  const greetingsDataProviderPromise = papi.dataProvider.registerEngine(
+  const greetingsDataProviderPromise = papi.dataProvider.registerEngine<GreetingsDataTypes>(
     'hello-someone.greetings',
     greetingsDataProviderEngine,
   );

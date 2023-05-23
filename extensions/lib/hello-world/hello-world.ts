@@ -52,7 +52,10 @@ export async function activate() {
 
   if (greetingsDataProvider) {
     // Test subscribing to a data provider
-    const unsubGreetings = await greetingsDataProvider.subscribe('Bill', (billGreeting) =>
+    const unsubGreetings = await greetingsDataProvider.subscribeGreeting('Bill', (billGreeting) =>
+      logger.info(`Bill's greeting: ${billGreeting}`),
+    );
+    const unsubAll = await greetingsDataProvider.subscribeAll(undefined, (billGreeting) =>
       logger.info(`Bill's greeting: ${billGreeting}`),
     );
 

@@ -1,10 +1,9 @@
 import './test-buttons-panel.component.css';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
-import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import { TabInfo } from '@shared/data/web-view.model';
 import { debounce } from '@shared/utils/util';
 import { useState, useMemo, useCallback } from 'react';
-import { QuickVerseDataProvider, QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
+import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import TextField from '@renderer/components/papi-components/text-field.component';
 
 function TestQuickVerseHeresyPanel() {
@@ -27,10 +26,8 @@ function TestQuickVerseHeresyPanel() {
     [setVerseRefDebounced],
   );
 
-  // Test a custom setter method on a data provider engine that isn't on the interface to see if you can actually do this
-  const quickVerseDataProvider = useDataProvider<QuickVerseDataProvider>('quick-verse.quick-verse');
-  const [verseText] = useData.Verse<QuickVerseDataTypes['verse']>(
-    quickVerseDataProvider,
+  const [heresyText, setHeresyText] = useData.Heresy<QuickVerseDataTypes['heresy']>(
+    'quick-verse.quick-verse',
     verseRef,
     'Verse text goes here',
   );
@@ -56,9 +53,9 @@ function TestQuickVerseHeresyPanel() {
         />
         <textarea
           className="scr-verse-text-area"
-          value={verseText}
+          value={heresyText}
           onChange={(e) => {
-            if (quickVerseDataProvider) quickVerseDataProvider.setHeresy(verseRef, e.target.value);
+            if (setHeresyText) setHeresyText(e.target.value);
           }}
         />
       </div>
