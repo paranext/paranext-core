@@ -57,7 +57,7 @@ internal class MessageHandlerEvent : IMessageHandler
         if (message.Type != MessageType.Event)
             throw new ArgumentException("Incorrect message type", nameof(message));
 
-        Console.WriteLine($"Event received: {message}");
+        Console.WriteLine($"Event received: {StringUtils.LimitLength(message.ToString(), 180)}");
 
         MessageEvent evt = (MessageEvent)message;
         Delegate[]? handlersToRun = null;
