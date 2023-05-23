@@ -389,17 +389,16 @@ const set = async <T extends NetworkableObject>(
 
     if (!didSuccessfullyRegister) {
       // Clean up by unregistering any successful request handlers
-      const unregisterRequestHandlerPromises: Promise<boolean>[] = [];
       const rejectedRequestHandlerReasons: string[] = [];
-      registrationResponses.forEach(async (response, registrationIndex) => {
-        if (response.status === 'fulfilled')
-          unregisterRequestHandlerPromises.push(
+      await Promise.all(
+        registrationResponses.map(async (response, registrationIndex) => {
+          if (response.status === 'fulfilled')
             // Run the unsubscriber for this registration
-            (await unsubPromises[registrationIndex])(),
-          );
-        // Collect the reasons for failure so we can throw a useful error
-        else rejectedRequestHandlerReasons.push(response.reason);
-      });
+            (await unsubPromises[registrationIndex])();
+          // Collect the reasons for failure so we can throw a useful error
+          else rejectedRequestHandlerReasons.push(response.reason);
+        }),
+      );
 
       throw new Error(
         `Unable to register network object with id ${id}:\n\t${rejectedRequestHandlerReasons.join(
