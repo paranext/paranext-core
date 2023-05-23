@@ -10,13 +10,12 @@ import {
   FIRST_SCR_VERSE_NUM,
   getBookLongNameFromNum,
   getChaptersForBook,
-} from './shared/scripture-util';
-import { ScriptureReference } from './shared/scripture-types';
-import './ref-selector.component.css';
-import ComboBox from './combo-box.component';
-import Button from './button.component';
-import TextField from './text-field.component';
-// import TextField from './text-field.component';
+} from '@shared/scripture/scripture-util';
+import { ScriptureReference } from '@shared/scripture/scripture-types';
+import '@renderer/components/papi-components/ref-selector.component.css';
+import ComboBox from '@renderer/components/papi-components/combo-box.component';
+import Button from '@renderer/components/papi-components/button.component';
+import TextField from '@renderer/components/papi-components/text-field.component';
 
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;

@@ -80,13 +80,6 @@ export const getBookNumFromName = (bookName: string): number => {
   return scrBookData.findIndex((bookNames) => bookNames.fullNames.includes(bookName));
 };
 
-export const getAllBookNamesFromNum = (bookNum: number): string[] => {
-  return [
-    ...scrBookData[bookNum < FIRST_SCR_BOOK_NUM || bookNum > LAST_SCR_BOOK_NUM ? 0 : bookNum]
-      .fullNames,
-  ];
-};
-
 export const getBookShortNameFromNum = (bookNum: number): string => {
   return scrBookData[bookNum < FIRST_SCR_BOOK_NUM || bookNum > LAST_SCR_BOOK_NUM ? 0 : bookNum]
     .shortName;
