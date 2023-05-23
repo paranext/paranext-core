@@ -285,7 +285,7 @@ async function main() {
     logger.info('test-main disposed in main message #2');
   });
 
-  setTimeout(testMainDisposer.dispose, 10000);
+  setTimeout(testMainDisposer.dispose, 20000);
 
   setTimeout(async () => {
     let testExtensionHost = await networkObjectService.get<{

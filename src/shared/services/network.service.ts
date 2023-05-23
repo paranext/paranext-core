@@ -23,7 +23,7 @@ import {
   UnsubPromiseAsync,
   UnsubscriberAsync,
 } from '@shared/utils/papi-util';
-import { getErrorMessage } from '@shared/utils/util';
+import { getErrorMessage, wait } from '@shared/utils/util';
 import * as connectionService from '@shared/services/connection.service';
 import { isClient, isRenderer, isServer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
@@ -143,7 +143,25 @@ const requestRawUnsafe = async <TParam, TReturn>(
     throw new Error(
       `Cannot perform raw request ${requestType} as the NetworkService is not initialized`,
     );
-  return connectionService.request<TParam, TReturn>(requestType, contents);
+
+  // https://github.com/paranext/paranext-core/issues/51
+  // If the request type doesn't have a registered handler yet, retry a few times to help with race conditions
+  // This approach is hacky but works well enough for now
+  const expectedErrorMsg: string = `No handler was found to process the request of type ${requestType}`;
+  const maxAttempts: number = 5;
+  for (let attemptsRemaining = maxAttempts; attemptsRemaining > 0; attemptsRemaining--) {
+    // eslint-disable-next-line no-await-in-loop
+    const response = await connectionService.request<TParam, TReturn>(requestType, contents);
+    if (response.success || attemptsRemaining === 1 || response.errorMessage !== expectedErrorMsg)
+      return response;
+
+    // eslint-disable-next-line no-await-in-loop
+    await wait(1000);
+
+    logger.debug(`Retrying network service request of type ${requestType}`);
+  }
+
+  throw new Error(`Raw request ${requestType} failed`);
 };
 
 /**
@@ -636,7 +654,7 @@ export const initialize = () => {
 // #region Public safe functions (call these, not the private unsafe functions above)
 
 /**
- * Send a request on the network and resolve the response contents
+ * Send a request on the network and resolve the response contents.
  * @param requestType the type of request
  * @param args arguments to send in the request (put in request.contents)
  * @returns promise that resolves with the response message

@@ -1019,7 +1019,7 @@ declare module 'shared/services/network.service' {
   /** Sets up the NetworkService. Runs only once */
   export const initialize: () => Promise<void>;
   /**
-   * Send a request on the network and resolve the response contents
+   * Send a request on the network and resolve the response contents.
    * @param requestType the type of request
    * @param args arguments to send in the request (put in request.contents)
    * @returns promise that resolves with the response message
@@ -1304,7 +1304,7 @@ declare module 'shared/services/network-object.service' {
    */
   const networkObjectService: {
     initialize: () => Promise<void>;
-    has: (id: string) => Promise<boolean>;
+    hasKnown: (id: string) => boolean;
     get: <T extends object>(
       id: string,
       createLocalObjectToProxy?: LocalObjectToProxyCreator<T> | undefined,
@@ -1552,8 +1552,11 @@ declare module 'shared/services/data-provider.service' {
    */
   import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
   import IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  /** Determine if a data provider with the given name exists anywhere on the network */
-  function has(providerName: string): Promise<boolean>;
+  /** Indicate if we are aware of an existing data provider with the given name. If a data provider
+   *  with the given name is someone else on the network, this function won't tell you about it
+   *  unless something else in the existing process is subscribed to it.
+   */
+  function hasKnown(providerName: string): Promise<boolean>;
   /**
    * Creates a data provider to be shared on the network layering over the provided data provider engine.
    * @param providerName name this data provider should be called on the network
@@ -1581,7 +1584,7 @@ declare module 'shared/services/data-provider.service' {
     providerName: string,
   ): Promise<T | undefined>;
   const dataProviderService: {
-    has: typeof has;
+    hasKnown: typeof hasKnown;
     registerEngine: typeof registerEngine;
     get: typeof get;
   };
@@ -2396,7 +2399,7 @@ declare module 'papi' {
       fetch: typeof fetch;
     };
     dataProvider: {
-      has: (providerName: string) => Promise<boolean>;
+      hasKnown: (providerName: string) => Promise<boolean>;
       registerEngine: <TSelector, TGetData, TSetData>(
         providerName: string,
         dataProviderEngine: import('shared/models/data-provider-engine.model').default<
