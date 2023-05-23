@@ -40,18 +40,6 @@ type UseDataHook = {
     boolean,
   ];
 };
-/* type UseDataHook<TDataTypes extends DataProviderDataTypes> = {
-  [DataType in keyof TDataTypes as Capitalize<DataType & string>]: (
-    dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
-    selector: TDataTypes[DataType]['selector'],
-    defaultValue: TDataTypes[DataType]['getData'],
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ) => [
-    TDataTypes[DataType]['getData'],
-    ((newData: TDataTypes[DataType]['setData']) => Promise<boolean>) | undefined,
-    boolean,
-  ];
-}; */
 
 function createUseDataHook(dataType: string) {
   return <TDataType extends DataProviderDataType>(
@@ -132,6 +120,9 @@ const useData: UseDataHook = new Proxy(useDataCachedHooks, {
   get(obj, prop) {
     // Pass promises through
     if (prop === 'then') return obj[prop as keyof typeof obj];
+
+    // Special react prop to tell if it's a component
+    if (prop === '$$typeof') return undefined;
 
     // If we have already generated the hook, return the cached version
     if (prop in useDataCachedHooks)

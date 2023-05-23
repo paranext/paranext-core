@@ -110,10 +110,10 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
       // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
       // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
       // to specify the specific types
-      const data = (
-        (await (dataProviderContainer.contents as unknown as DataProviderInternal<TDataTypes>)[
+      const data = await (
+        (dataProviderContainer.contents as unknown as DataProviderInternal<TDataTypes>)[
           `get${dataType}`
-        ]) as DataProviderGetter<TDataTypes[typeof dataType]>
+        ] as DataProviderGetter<TDataTypes[typeof dataType]>
       )(selector);
       // Take note that we have received an update so we don't run the callback with the old data below in the `retrieveDataImmediately` code
       receivedUpdate = true;
@@ -137,10 +137,10 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
       // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
       // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
       // to specify the specific types
-      const data = (
-        (await (dataProviderContainer.contents as unknown as DataProviderInternal<TDataTypes>)[
+      const data = await (
+        (dataProviderContainer.contents as unknown as DataProviderInternal<TDataTypes>)[
           `get${dataType}`
-        ]) as DataProviderGetter<TDataTypes[typeof dataType]>
+        ] as DataProviderGetter<TDataTypes[typeof dataType]>
       )(selector);
       // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
       if (!receivedUpdate) {
@@ -238,8 +238,14 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
         Reflect.set(obj, prop, value);
         return true;
       },
-      // Type assert the data provider engine proxy because it is a DataProviderInternal
+      has(obj, prop) {
+        if (prop in dataProviderInternal) return true;
+        // This proxy provides subscribe methods, so make sure they seem to exist
+        if (isString(prop) && prop.startsWith('subscribe')) return true;
+        return prop in obj;
+      },
     },
+    // Type assert the data provider engine proxy because it is a DataProviderInternal
   ) as DataProviderInternal<TDataTypes>;
 
   return dataProvider;
@@ -292,6 +298,13 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
     },
   );
 
+  // Validate that the data provider engine has matching get and set functions
+  if (
+    dataTypes.get('get')?.length !== dataTypes.get('set')?.length ||
+    dataTypes.get('get')?.some((getDataType) => !dataTypes.get('set')?.includes(getDataType))
+  )
+    throw new Error('Data provider engine does not have matching get and set functions!');
+
   // Layer over the data provider engine's set methods with set methods that actually emit an update
   // if they return true
   dataTypes.get('set')?.forEach((dataType) => {
@@ -342,10 +355,6 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
   // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
   if (await has(providerName))
     throw new Error(`Data provider with type ${providerName} is already registered`);
-
-  // Validate that the data provider engine has what it needs
-  if (!dataProviderEngine.get || typeof dataProviderEngine.get !== 'function')
-    throw new Error('Data provider engine does not have a get function');
 
   // We are good to go! Create the data provider
 
@@ -427,9 +436,9 @@ function createLocalDataProviderToProxy<T extends DataProviderInternal>(
  * @param providerName Name of the desired data provider
  * @returns The data provider with the given name if one exists, undefined otherwise
  */
-async function get<T extends IDataProvider<TDataTypes>, TDataTypes extends DataProviderDataTypes>(
-  providerName: string,
-): Promise<T | undefined> {
+// Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function get<T extends IDataProvider<any>>(providerName: string): Promise<T | undefined> {
   await initialize();
 
   // Get the object id for this data provider name

@@ -4,5 +4,5 @@
 echo "Running Lint check..."
 
 # need to generate the .d.ts files for the extensions in the extensions/dist folder
-#npm run lint:staged
+npm run lint:staged
 echo "Lint check finished"

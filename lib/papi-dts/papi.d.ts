@@ -60,7 +60,7 @@ declare module 'shared/utils/util' {
   export function groupBy<T, K, V>(
     items: T[],
     keySelector: (item: T) => K,
-    valueSelector: (item: T) => V,
+    valueSelector: (item: T, key: K) => V,
   ): Map<K, Array<V>>;
   /**
    * Function to get an error message from the object (useful for getting error message in a catch block)
@@ -94,6 +94,18 @@ declare module 'shared/utils/util' {
   export interface Container<T> {
     contents: T | undefined;
   }
+  /**
+   * Get all functions on an object and its prototype (so we don't miss any class methods or any
+   * object methods).
+   *
+   * Note: this does return some potentially unexpected function names. For example:
+   * `getAllObjectFunctionNames({})` returns `[constructor,__defineGetter__,__defineSetter__,
+   * hasOwnProperty,__lookupGetter__,__lookupSetter__,isPrototypeOf,propertyIsEnumerable,toString,
+   * valueOf,toLocaleString]`
+   * @param obj object whose functions to get
+   * @returns array of all function names on an object
+   */
+  export function getAllObjectFunctionNames(obj: NonNullable<any>): string[];
 }
 declare module 'shared/utils/papi-util' {
   import { ProcessType } from 'shared/global-this.model';
@@ -1405,11 +1417,13 @@ declare module 'shared/models/data-provider.model' {
      */
     whichUpdates?: 'deeply-equal' | 'all';
   };
-  export type DataProviderSetter<TSelector, TSetData> = (
-    selector: TSelector,
-    data: TSetData,
+  export type DataProviderSetter<TDataType extends DataProviderDataType> = (
+    selector: TDataType['selector'],
+    data: TDataType['setData'],
   ) => Promise<boolean>;
-  export type DataProviderGetter<TSelector, TGetData> = (selector: TSelector) => Promise<TGetData>;
+  export type DataProviderGetter<TDataType extends DataProviderDataType> = (
+    selector: TDataType['selector'],
+  ) => Promise<TDataType['getData']>;
   /**
    * Subscribe to receive updates from this data provider that are relevant to the provided selector.
    *
@@ -1421,11 +1435,40 @@ declare module 'shared/models/data-provider.model' {
    * @param options various options to adjust how the subscriber emits updates
    * @returns unsubscriber to stop listening for updates
    */
-  export type DataProviderSubscriber<TSelector, TGetData> = (
-    selector: TSelector,
-    callback: PapiEventHandler<TGetData>,
+  export type DataProviderSubscriber<TDataType extends DataProviderDataType> = (
+    selector: TDataType['selector'],
+    callback: PapiEventHandler<TDataType['getData']>,
     options?: DataProviderSubscriberOptions,
   ) => Promise<UnsubscriberAsync>;
+  export type DataProviderDataType<
+    TSelector = unknown,
+    TGetData = TSelector,
+    TSetData = TGetData,
+  > = {
+    selector: TSelector;
+    getData: TGetData;
+    setData: TSetData;
+  };
+  export type DataProviderDataTypes = {
+    [dataType: string]: DataProviderDataType;
+  };
+  export type DataTypeNames<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    Capitalize<keyof TDataTypes & string>;
+  export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
+    [DataType in keyof TDataTypes as `set${Capitalize<DataType & string>}`]: DataProviderSetter<
+      TDataTypes[DataType]
+    >;
+  };
+  export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {
+    [DataType in keyof TDataTypes as `get${Capitalize<DataType & string>}`]: DataProviderGetter<
+      TDataTypes[DataType]
+    >;
+  };
+  export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = {
+    [DataType in keyof TDataTypes as `subscribe${Capitalize<
+      DataType & string
+    >}`]: DataProviderSubscriber<TDataTypes[DataType]>;
+  };
   /**
    * An internal object created locally when someone runs dataProviderService.registerEngine.
    * This object layers over the data provider engine and runs its methods along with other methods.
@@ -1439,48 +1482,20 @@ declare module 'shared/models/data-provider.model' {
    *
    * @see IDataProvider
    */
-  interface DataProviderInternal<TSelector, TGetData, TSetData> extends NetworkableObject {
-    /**
-     * Set a subset of data according to the selector.
-     *
-     * Note: if a data provider engine does not provide `set` (possibly indicating it is read-only), this will throw an exception.
-     * @param selector tells the provider what subset of data is being set
-     * @param data the data that determines what to set at the selector
-     * @returns true if successfully set (will send updates), false otherwise (will not send updates)
-     */
-    /**
-     * Get a subset of data from the provider according to the selector.
-     *
-     * Note: This is good for retrieving data from a provider once. If you want to keep the data up-to-date,
-     * use `subscribe` instead, which can immediately give you the data and keep it up-to-date.
-     * @param selector tells the provider what subset of data to get
-     * @returns the subset of data represented by the selector
-     */
-    set: DataProviderSetter<TSelector, TSetData>;
-    get: DataProviderGetter<TSelector, TGetData>;
-    /**
-     * Subscribe to receive updates from this data provider that are relevant to the provided selector.
-     *
-     * Note: By default, this `subscribe` function automatically retrieves the current state of the data
-     * and runs the provided callback as soon as possible. That way, if you want to keep your data up-to-date,
-     * you do not also have to run `get`. You can turn this functionality off in the `options` parameter.
-     * @param selector tells the provider what data this listener is listening for
-     * @param callback function to run with the updated data for this selector
-     * @param options various options to adjust how the subscriber emits updates
-     * @returns unsubscriber to stop listening for updates
-     */
-    subscribe: DataProviderSubscriber<TSelector, TGetData>;
-  }
+  type DataProviderInternal<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    NetworkableObject<
+      DataProviderSetters<TDataTypes> &
+        DataProviderGetters<TDataTypes> &
+        DataProviderSubscribers<TDataTypes>
+    >;
+  export function getDataProviderDataTypeFromFunctionName<
+    TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
+  >(fnName: string): Capitalize<keyof TDataTypes & string>;
   export default DataProviderInternal;
 }
 declare module 'shared/models/data-provider.interface' {
-  import DataProviderInternal from 'shared/models/data-provider.model';
-  import {
-    DisposableNetworkObject,
-    NetworkObject,
-    NetworkableObject,
-  } from 'shared/models/network-object.model';
-  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
+  import DataProviderInternal, { DataProviderDataTypes } from 'shared/models/data-provider.model';
+  import { DisposableNetworkObject, NetworkObject } from 'shared/models/network-object.model';
   /**
    * An object on the papi that manages data and has methods for interacting with that data.
    * Created by the papi and layers over an IDataProviderEngine provided by an extension.
@@ -1491,9 +1506,8 @@ declare module 'shared/models/data-provider.interface' {
    * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
    * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
    */
-  interface IDataProvider<TSelector, TGetData, TSetData>
-    extends NetworkObject<NetworkableObject>,
-      CanHaveOnDidDispose<DataProviderInternal<TSelector, TGetData, TSetData>> {}
+  type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    NetworkObject<DataProviderInternal<TDataTypes>>;
   export default IDataProvider;
   /**
    * A data provider that has control over disposing of it with dispose.
@@ -1502,11 +1516,16 @@ declare module 'shared/models/data-provider.interface' {
    *
    * @see IDataProvider
    */
-  export interface IDisposableDataProvider<TSelector, TGetData, TSetData>
-    extends DisposableNetworkObject<NetworkableObject>,
-      Omit<IDataProvider<TSelector, TGetData, TSetData>, 'dispose'> {}
+  export type IDisposableDataProvider<
+    TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
+  > = DisposableNetworkObject<Omit<IDataProvider<TDataTypes>, 'dispose'>>;
 }
 declare module 'shared/models/data-provider-engine.model' {
+  import {
+    DataProviderDataTypes,
+    DataProviderGetters,
+    DataProviderSetters,
+  } from 'shared/models/data-provider.model';
   import { NetworkableObject } from 'shared/models/network-object.model';
   /**
    * The object to register with the DataProviderService to create a data provider.
@@ -1518,36 +1537,37 @@ declare module 'shared/models/data-provider-engine.model' {
    * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
    * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
    */
-  interface IDataProviderEngine<TSelector, TGetData, TSetData> extends NetworkableObject {
-    /**
-     * Method to run to send clients updates outside of the `set` method.
-     * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
-     *
-     * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
-     *
-     * @returns true if we should send updates, false otherwise (will not send updates). Same return as `set`
-     */
-    notifyUpdate?(): boolean;
-    /**
-     * Set a subset of data according to the selector.
-     * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `set` method in the DataProviderEngine.
-     *
-     * Note: you could consider this data provider to be read-only if this method is not provided.
-     *
-     * WARNING: Do not run this recursively in its own `set` method! It will create as many updates as you run `set` methods.
-     * @param selector tells the provider what subset of data is being set
-     * @param data the data that determines what to set at the selector
-     * @returns true if successfully set (will send updates), false otherwise (will not send updates)
-     */
-    set?(selector: TSelector, data: TSetData): Promise<boolean>;
-    /**
-     * Get a subset of data from the provider according to the selector.
-     * Run by the data provider on get
-     * @param selector tells the provider what subset of data to get
-     * @returns the subset of data represented by the selector
-     */
-    get(selector: TSelector): Promise<TGetData>;
-  }
+  type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    NetworkableObject &
+      /**
+       * Set a subset of data according to the selector.
+       * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `set` method in the DataProviderEngine.
+       *
+       * Note: you could consider this data provider to be read-only if this method is not provided.
+       *
+       * WARNING: Do not run this recursively in its own `set` method! It will create as many updates as you run `set` methods.
+       * @param selector tells the provider what subset of data is being set
+       * @param data the data that determines what to set at the selector
+       * @returns true if successfully set (will send updates), false otherwise (will not send updates)
+       */
+      DataProviderSetters<TDataTypes> &
+      /**
+       * Get a subset of data from the provider according to the selector.
+       * Run by the data provider on get
+       * @param selector tells the provider what subset of data to get
+       * @returns the subset of data represented by the selector
+       */
+      DataProviderGetters<TDataTypes> & {
+        /**
+         * Method to run to send clients updates outside of the `set` method.
+         * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
+         *
+         * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
+         *
+         * @returns true if we should send updates, false otherwise (will not send updates). Same return as `set`
+         */
+        notifyUpdate?(): boolean;
+      };
   export default IDataProviderEngine;
 }
 declare module 'shared/services/data-provider.service' {
@@ -1556,6 +1576,7 @@ declare module 'shared/services/data-provider.service' {
    * Exposed on the papi.
    */
   import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
+  import { DataProviderDataTypes } from 'shared/models/data-provider.model';
   import IDataProviderEngine from 'shared/models/data-provider-engine.model';
   /** Determine if a data provider with the given name exists anywhere on the network */
   function has(providerName: string): Promise<boolean>;
@@ -1573,18 +1594,16 @@ declare module 'shared/services/data-provider.service' {
    *  Note: A selector must be stringifiable.
    * @type `TData` - the type of data provided by this data provider based on a provided selector
    */
-  function registerEngine<TSelector, TGetData, TSetData>(
+  function registerEngine<TDataTypes extends DataProviderDataTypes>(
     providerName: string,
-    dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
-  ): Promise<IDisposableDataProvider<TSelector, TGetData, TSetData>>;
+    dataProviderEngine: IDataProviderEngine<TDataTypes>,
+  ): Promise<IDisposableDataProvider<TDataTypes>>;
   /**
    * Get a data provider that has previously been set up
    * @param providerName Name of the desired data provider
    * @returns The data provider with the given name if one exists, undefined otherwise
    */
-  function get<T extends IDataProvider<any, any, any>>(
-    providerName: string,
-  ): Promise<T | undefined>;
+  function get<T extends IDataProvider<any>>(providerName: string): Promise<T | undefined>;
   const dataProviderService: {
     has: typeof has;
     registerEngine: typeof registerEngine;
@@ -2224,7 +2243,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
    *  specifying your own types, or provide a custom data provider type
    */
-  function useDataProvider<T extends IDataProvider<any, any, any>>(
+  function useDataProvider<T extends IDataProvider<any>>(
     providerName: string | undefined,
   ): T | undefined;
   /**
@@ -2237,7 +2256,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
    *  specifying your own types, or provide a custom data provider type
    */
-  function useDataProvider<T extends IDataProvider<any, any, any>>(
+  function useDataProvider<T extends IDataProvider<any>>(
     dataProvider: T | undefined,
   ): T | undefined;
   /**
@@ -2251,17 +2270,21 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
    *  specifying your own types, or provide a custom data provider type
    */
-  function useDataProvider<T extends IDataProvider<any, any, any>>(
+  function useDataProvider<T extends IDataProvider<any>>(
     dataProviderSource: string | T | undefined,
   ): T | undefined;
   export default useDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-data.hook' {
-  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+  } from 'shared/models/data-provider.model';
   import IDataProvider from 'shared/models/data-provider.interface';
   /**
    * Subscribes to run a callback on a data provider's data with specified selector
-   * @param providerName name of the data provider to subscribe to
+   * @param dataProviderSource string name of data provider to get OR dataProvider (result of useDataProvider if you
+   * want to consolidate and only get the data provider once)
    * @param selector tells the provider what data this listener is listening for
    * @param defaultValue the initial value to return while first awaiting the data
    *
@@ -2275,39 +2298,23 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
    *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
    */
-  function useData<TSelector, TGetData, TSetData>(
-    providerName: string | undefined,
-    selector: TSelector,
-    defaultValue: TGetData,
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
-  /**
-   * Subscribes to run a callback on a data provider's data with specified selector
-   * @param dataProvider result of useDataProvider if you want to consolidate and only get the data provider once
-   * @param selector tells the provider what data this listener is listening for
-   * @param defaultValue the initial value to return while first awaiting the data
-   *
-   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-   * @param subscriberOptions various options to adjust how the subscriber emits updates
-   *
-   *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-   * @returns [data, setData, isLoading]
-   *  - `data`: the current value for the data from the data provider with the specified selector, either the defaultValue or the resolved data
-   *  - `setData`: asynchronous function to request that the data provider update the data at this selector. Returns true if successful.
-   *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
-   *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
-   */
-  function useData<TSelector, TGetData, TSetData>(
-    dataProvider: IDataProvider<TSelector, TGetData, TSetData> | undefined,
-    selector: TSelector,
-    defaultValue: TGetData,
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
+  type UseDataHook = {
+    [DataType: Capitalize<string>]: <TDataType extends DataProviderDataType>(
+      dataProviderSource: string | IDataProvider<any> | undefined,
+      selector: TDataType['selector'],
+      defaultValue: TDataType['getData'],
+      subscriberOptions?: DataProviderSubscriberOptions,
+    ) => [
+      TDataType['getData'],
+      ((newData: TDataType['setData']) => Promise<boolean>) | undefined,
+      boolean,
+    ];
+  };
+  const useData: UseDataHook;
   export default useData;
 }
 declare module 'renderer/hooks/papi-hooks/index' {
   import useDataProvider from 'renderer/hooks/papi-hooks/use-data-provider.hook';
-  import useData from 'renderer/hooks/papi-hooks/use-data.hook';
   /** All React hooks to be exposed on the papi */
   const papiHooks: {
     usePromise: <T>(
@@ -2328,7 +2335,29 @@ declare module 'renderer/hooks/papi-hooks/index' {
       eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_2>,
     ) => void;
     useDataProvider: typeof useDataProvider;
-    useData: typeof useData;
+    useData: {
+      [DataType: Capitalize<string>]: <
+        TDataType extends import('shared/models/data-provider.model').DataProviderDataType<
+          unknown,
+          unknown,
+          unknown
+        >,
+      >(
+        dataProviderSource:
+          | string
+          | import('shared/models/data-provider.interface').default<any>
+          | undefined,
+        selector: TDataType['selector'],
+        defaultValue: TDataType['getData'],
+        subscriberOptions?:
+          | import('shared/models/data-provider.model').DataProviderSubscriberOptions
+          | undefined,
+      ) => [
+        TDataType['getData'],
+        ((newData: TDataType['setData']) => Promise<boolean>) | undefined,
+        boolean,
+      ];
+    };
   };
   export default papiHooks;
   export type PapiHooks = typeof papiHooks;
@@ -2379,7 +2408,29 @@ declare module 'papi' {
           eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_2>,
         ) => void;
         useDataProvider: typeof import('renderer/hooks/papi-hooks/use-data-provider.hook').default;
-        useData: typeof import('renderer/hooks/papi-hooks/use-data.hook').default;
+        useData: {
+          [DataType: Capitalize<string>]: <
+            TDataType extends import('shared/models/data-provider.model').DataProviderDataType<
+              unknown,
+              unknown,
+              unknown
+            >,
+          >(
+            dataProviderSource:
+              | string
+              | import('shared/models/data-provider.interface').default<any>
+              | undefined,
+            selector: TDataType['selector'],
+            defaultValue: TDataType['getData'],
+            subscriberOptions?:
+              | import('shared/models/data-provider.model').DataProviderSubscriberOptions
+              | undefined,
+          ) => [
+            TDataType['getData'],
+            ((newData: TDataType['setData']) => Promise<boolean>) | undefined,
+            boolean,
+          ];
+        };
       };
     };
     network: {
@@ -2402,21 +2453,15 @@ declare module 'papi' {
     };
     dataProvider: {
       has: (providerName: string) => Promise<boolean>;
-      registerEngine: <TSelector, TGetData, TSetData>(
+      registerEngine: <
+        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >(
         providerName: string,
-        dataProviderEngine: import('shared/models/data-provider-engine.model').default<
-          TSelector,
-          TGetData,
-          TSetData
-        >,
+        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes>,
       ) => Promise<
-        import('shared/models/data-provider.interface').IDisposableDataProvider<
-          TSelector,
-          TGetData,
-          TSetData
-        >
+        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes>
       >;
-      get: <T_5 extends import('shared/models/data-provider.interface').default<any, any, any>>(
+      get: <T_5 extends import('shared/models/data-provider.interface').default<any>>(
         providerName: string,
       ) => Promise<T_5 | undefined>;
     };
