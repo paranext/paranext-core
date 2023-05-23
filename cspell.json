@@ -41,7 +41,8 @@
     "unsub",
     "unsubs",
     "unsubscriber",
-    "unsubscribers"
+    "unsubscribers",
+    "waitable"
   ],
   "ignoreWords": [],
   "import": []

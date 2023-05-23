@@ -13,7 +13,7 @@ import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
 import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
-import { Container } from '@shared/utils/util';
+import AsyncVariable from '@shared/utils/async-variable';
 import { NetworkObject } from '@shared/models/network-object.model';
 import networkObjectService from '@shared/services/network-object.service';
 import logger from './logger.service';
@@ -60,25 +60,22 @@ const initialize = () => {
  *  with the given name is someone else on the network, this function won't tell you about it
  *  unless something else in the existing process is subscribed to it.
  */
-async function hasKnown(providerName: string): Promise<boolean> {
-  await initialize();
-
+function hasKnown(providerName: string): boolean {
   return networkObjectService.hasKnown(getDataProviderObjectId(providerName));
 }
 
 /**
  * Creates a subscribe function for a data provider to allow subscribing to updates on the data
- * @param dataProviderContainer container that holds a reference to the network object data provider so this subscribe function can reference the data provider
+ * @param dataProviderPromise promise to the data provider's network object
  * @param onDidUpdate the event to listen to for updates on the data
  * @returns subscribe function for a data provider
  */
 function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
-  dataProviderContainer: Container<IDataProvider<TSelector, TGetData, TSetData>>,
+  dataProviderPromise: Promise<IDataProvider<TSelector, TGetData, TSetData>>,
   onDidUpdate: PapiEvent<boolean>,
 ): DataProviderSubscriber<TSelector, TGetData> {
   return async (selector, callback, options?: DataProviderSubscriberOptions) => {
-    if (!dataProviderContainer.contents)
-      throw new Error("subscribe: Somehow the data provider doesn't exist! Investigate");
+    const dataProvider: IDataProvider<TSelector, TGetData, TSetData> = await dataProviderPromise;
 
     // Default options
     const subscriberOptions: DataProviderSubscriberOptions = {
@@ -98,11 +95,9 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
     /** Whether we have already received an update event, meaning our initial `get` will return old data */
     let receivedUpdate = false;
     const callbackWithUpdate = async () => {
-      if (!dataProviderContainer.contents)
-        throw new Error("onDidUpdate: Somehow the data provider doesn't exist! Investigate");
       // Get the data at our selector when we receive notification that the data updated
       // TODO: Implement selector events so we can receive the new data with the update instead of reaching back out for it
-      const data = await dataProviderContainer.contents.get(selector);
+      const data = await dataProvider.get(selector);
       // Take note that we have received an update so we don't run the callback with the old data below in the `retrieveDataImmediately` code
       receivedUpdate = true;
 
@@ -122,7 +117,7 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
     // If the subscriber wants to get the data as soon as possible in addition to running the callback on updates, get the data
     if (retrieveDataImmediately) {
       // Get the data to run the callback immediately so it has the data
-      const data = await dataProviderContainer.contents.get(selector);
+      const data = await dataProvider.get(selector);
       // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
       if (!receivedUpdate) {
         receivedUpdate = true;
@@ -143,13 +138,13 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
  *
  * WARNING: this function mutates the provided object. Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
  * @param dataProviderEngine provider engine that handles setting and getting data as well as informing which listeners should get what updates
- * @param dataProviderContainer container that holds a reference to the network object data provider so the subscribe function can reference the data provider
+ * @param dataProviderPromise promise to the data provider's network object
  * @param onDidUpdateEmitter event emitter to use for informing subscribers of updates. The event just returns what set returns (should be true according to IDataProviderEngine)
  * @returns data provider layering over the provided data provider engine
  */
 function buildDataProvider<TSelector, TGetData, TSetData>(
   dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
-  dataProviderContainer: Container<IDataProvider<TSelector, TGetData, TSetData>>,
+  dataProviderPromise: Promise<IDataProvider<TSelector, TGetData, TSetData>>,
   onDidUpdateEmitter: PapiEventEmitter<boolean>,
 ): DataProviderInternal<TSelector, TGetData, TSetData> {
   // Layer over data provider engine methods to give it control over emitting updates
@@ -187,7 +182,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
     /** Layered get that runs the engine's get */
     get: dataProviderEngine.get.bind(dataProviderEngine),
     /** Subscribe to run the callback when data changes. Also immediately calls callback with the current value */
-    subscribe: createDataProviderSubscriber(dataProviderContainer, onDidUpdateEmitter.event),
+    subscribe: createDataProviderSubscriber(dataProviderPromise, onDidUpdateEmitter.event),
   };
 
   // Create a proxy that runs the data provider method if it exists or runs the engine method otherwise
@@ -258,7 +253,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   // There is a potential networking sync issue here. We check for a data provider, then we create a network event, then we create a network object.
   // If someone else registers an engine with the same data provider name at the same time, the two registrations could get intermixed and mess stuff up
   // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
-  if (await hasKnown(providerName))
+  if (hasKnown(providerName))
     throw new Error(`Data provider with type ${providerName} is already registered`);
 
   // Validate that the data provider engine has what it needs
@@ -270,12 +265,12 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   // Get the object id for this data provider name
   const dataProviderObjectId = getDataProviderObjectId(providerName);
 
-  /** Container to hold a reference to the final network object data provider so the local object
-   * can reference the network object in its functions
+  /** Variable to hold a promise to the final data provider's network object so the local object
+   *  can reference the network object in its functions
    */
-  const dataProviderContainer: Container<IDataProvider<TSelector, TGetData, TSetData>> = {
-    contents: undefined,
-  };
+  const dataProviderVariable = new AsyncVariable<IDataProvider<TSelector, TGetData, TSetData>>(
+    `DataProvider-${providerName}`,
+  );
 
   // Create a networked update event
   const onDidUpdateEmitter = networkService.createNetworkEventEmitter<boolean>(
@@ -285,26 +280,9 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   // Build the data provider
   const dataProviderInternal = buildDataProvider(
     dataProviderEngine,
-    dataProviderContainer,
+    dataProviderVariable.getPromise(),
     onDidUpdateEmitter,
   );
-
-  // Temporarily fix a race condition where we register dataProviderInternal as a network object,
-  // then we get the network object in order to get the local proxy that doesn't have dispose on it,
-  // then we set the container to the local network object. If a process tries to call something on
-  // this data provider after it is set and before dataProviderContainer is properly set after the
-  // get below, an error occurred that the dataProviderContainer.contents was undefined. So we set
-  // dataProviderContainer.contents here to have a temporary fix where the container will have
-  // something in it immediately once it is set as a network object.
-  // TODO: Fix this issue - having contents set here essentially opens up data providers to be
-  // disposed by other things for a fraction of a second. Maybe we could set the container's
-  // contents in networkObjectService.set
-  // https://github.com/paranext/paranext-core/issues/185
-  dataProviderContainer.contents = dataProviderInternal as unknown as IDataProvider<
-    TSelector,
-    TGetData,
-    TSetData
-  >;
 
   // Set up the data provider to be a network object so other processes can use it
   const disposableDataProvider = (await networkObjectService.set(
@@ -312,15 +290,15 @@ async function registerEngine<TSelector, TGetData, TSetData>(
     dataProviderInternal,
   )) as IDisposableDataProvider<TSelector, TGetData, TSetData>;
 
-  // Get the local network object proxy for the data provider so you can't call
-  // dataProviderContainer.contents.dispose
+  // Get the local network object proxy for the data provider so the provider can't be disposed by extensions
   const dataProvider = await networkObjectService.get<IDataProvider<TSelector, TGetData, TSetData>>(
     dataProviderObjectId,
   );
 
-  // Update the dataProviderContainer so the internal data provider (specifically its subscribe
+  // Update the dataProviderVariable so the internal data provider (specifically its subscribe
   // function) can access the dataProvider appropriately
-  dataProviderContainer.contents = dataProvider;
+  if (dataProvider) dataProviderVariable.resolveToValue(dataProvider);
+  else throw Error(`Unable to get network object for data provider: ${dataProviderObjectId}`);
 
   return disposableDataProvider;
 }
@@ -336,14 +314,14 @@ async function registerEngine<TSelector, TGetData, TSetData>(
 function createLocalDataProviderToProxy<T extends DataProviderInternal<any, any, any>>(
   dataProviderObjectId: string,
   // NetworkObject<DataProviderInternal> is our way to convert from DataProviderInternal to IDataProvider without specifying generics
-  dataProviderContainer: Container<NetworkObject<T>>,
+  dataProviderPromise: Promise<NetworkObject<T>>,
 ): Partial<T> {
   // Create a networked update event
   const onDidUpdate = networkService.getNetworkEvent<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
   return {
-    subscribe: createDataProviderSubscriber(dataProviderContainer, onDidUpdate),
+    subscribe: createDataProviderSubscriber(dataProviderPromise, onDidUpdate),
   } as Partial<T>;
 }
 
