@@ -6,7 +6,7 @@ import Table, {
   TableSortColumn,
   TableCopyEvent,
   TablePasteEvent,
-} from '@lib/papi-components/src/table.component';
+} from 'papi-components/src/table.component';
 import { Key, ReactElement, UIEvent } from 'react';
 
 type Row = {

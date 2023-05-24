@@ -13,7 +13,6 @@
       "@client/*": ["./client/*"],
       "@extension-host/*": ["./extension-host/*"],
       "@extensions/*": ["../extensions/dist/*"],
-      "@lib/*": ["../lib/*"],
       "@main/*": ["./main/*"],
       "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],

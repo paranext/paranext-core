@@ -41,7 +41,7 @@ export declare function Button({
   onClick,
   onContextMenu,
   children,
-}: ButtonProps): JSX.Element;
+}: ButtonProps): import('react/jsx-runtime').JSX.Element;
 declare enum LabelPosition {
   After = 'after',
   Before = 'before',
@@ -107,7 +107,7 @@ export declare function Checkbox({
   hasError,
   className,
   onChange,
-}: CheckboxProps): JSX.Element;
+}: CheckboxProps): import('react/jsx-runtime').JSX.Element;
 export type ComboBoxChangeDetails<T = string> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
 export type ComboBoxProps = {
@@ -193,7 +193,7 @@ export declare function ComboBox({
   onChange,
   onFocus,
   onBlur,
-}: ComboBoxProps): JSX.Element;
+}: ComboBoxProps): import('react/jsx-runtime').JSX.Element;
 export type SliderProps = {
   /**
    * If `true`, the component is disabled.
@@ -283,7 +283,7 @@ export declare function Slider({
   className,
   onChange,
   onChangeCommitted,
-}: SliderProps): JSX.Element;
+}: SliderProps): import('react/jsx-runtime').JSX.Element;
 export type SwitchProps = {
   /**
    * If `true`, the component is checked.
@@ -322,7 +322,7 @@ export declare function Switch({
   hasError,
   className,
   onChange,
-}: SwitchProps): JSX.Element;
+}: SwitchProps): import('react/jsx-runtime').JSX.Element;
 export type TextFieldProps = {
   /**
    * The variant to use.
@@ -407,7 +407,7 @@ export declare function TextField({
   onChange,
   onFocus,
   onBlur,
-}: TextFieldProps): JSX.Element;
+}: TextFieldProps): import('react/jsx-runtime').JSX.Element;
 export interface ScriptureReference {
   book: number;
   chapter: number;
@@ -417,7 +417,10 @@ export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
 }
-export declare function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps): JSX.Element;
+export declare function RefSelector({
+  scrRef,
+  handleSubmit,
+}: ScrRefSelectorProps): import('react/jsx-runtime').JSX.Element;
 /** All React components to be exposed on the papi */
 export declare const papiComponents: {
   Button: typeof Button;

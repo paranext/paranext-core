@@ -1,4 +1,3 @@
-/// <reference types="react" />
 /// <reference types="node" />
 declare module 'shared/global-this.model' {
   import { FunctionComponent } from 'react';
@@ -2007,12 +2006,12 @@ declare module 'papi' {
     webViews: typeof webViewService;
     react: {
       components: {
-        Button: typeof import('lib/papi-components').Button;
-        Checkbox: typeof import('lib/papi-components').Checkbox;
-        ComboBox: typeof import('lib/papi-components').ComboBox;
-        Slider: typeof import('lib/papi-components').Slider;
-        Switch: typeof import('lib/papi-components').Switch;
-        TextField: typeof import('lib/papi-components').TextField;
+        Button: typeof import('papi-components').Button;
+        Checkbox: typeof import('papi-components').Checkbox;
+        ComboBox: typeof import('papi-components').ComboBox;
+        Slider: typeof import('papi-components').Slider;
+        Switch: typeof import('papi-components').Switch;
+        TextField: typeof import('papi-components').TextField;
       };
       context: {
         TestContext: import('react').Context<string>;

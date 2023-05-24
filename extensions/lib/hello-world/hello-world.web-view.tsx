@@ -1,11 +1,11 @@
 import papi from 'papi';
+import { Button } from 'papi-components';
 import { useCallback, useContext, useState } from 'react';
 
 const {
   react: {
     context: { TestContext },
     hooks: { useData, usePromise },
-    components: { Button },
   },
   logger,
 } = papi;
