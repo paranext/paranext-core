@@ -10,8 +10,8 @@ import {
   FIRST_SCR_VERSE_NUM,
   getBookLongNameFromNum,
   getChaptersForBook,
-} from '@shared/scripture/scripture-util';
-import { ScriptureReference } from '@shared/scripture/scripture-types';
+} from '@shared/scripture/scripture.util';
+import { ScriptureReference } from '@shared/scripture/scripture-types.model';
 import '@renderer/components/papi-components/ref-selector.component.css';
 import ComboBox from '@renderer/components/papi-components/combo-box.component';
 import Button from '@renderer/components/papi-components/button.component';

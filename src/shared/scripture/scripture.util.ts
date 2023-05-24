@@ -1,5 +1,5 @@
 import { isString, isValidValue } from '@shared/utils/util';
-import { BookInfo, ScriptureReference } from './scripture-types';
+import { BookInfo, ScriptureReference } from './scripture-types.model';
 
 const scrBookData: BookInfo[] = [
   { shortName: 'ERR', fullNames: ['ERROR'], chapters: -1 },
