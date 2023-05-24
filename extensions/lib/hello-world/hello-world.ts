@@ -14,14 +14,14 @@ logger.info('Hello world is importing!');
 
 const unsubscribers: UnsubscriberAsync[] = [];
 
-export async function activate() {
+export async function activate(): Promise<UnsubscriberAsync> {
   logger.info('Hello world is activating!');
 
-  const unsubPromises = [
+  const unsubPromises: Promise<UnsubscriberAsync>[] = [
     papi.commands.registerCommand('hello-world.hello-world', () => {
       return 'Hello world!';
     }),
-    papi.commands.registerCommand('hello-world.hello-exception', (message) => {
+    papi.commands.registerCommand('hello-world.hello-exception', (message: string) => {
       throw new Error(`Hello World Exception! ${message}`);
     }),
   ];
@@ -52,19 +52,18 @@ export async function activate() {
 
   if (greetingsDataProvider) {
     // Test subscribing to a data provider
-    const unsubGreetings = await greetingsDataProvider.subscribe('Bill', (billGreeting) =>
+    const unsubGreetings = await greetingsDataProvider.subscribe('Bill', (billGreeting: string) =>
       logger.info(`Bill's greeting: ${billGreeting}`),
     );
 
     unsubscribers.push(unsubGreetings);
   }
 
-  return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
-    logger.info('Hello World is finished activating!');
-    return papi.util.aggregateUnsubscriberAsyncs(
-      unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
-    );
-  });
+  const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
+    await Promise.all(unsubPromises),
+  );
+  logger.info('Hello World is finished activating!');
+  return combinedUnsubscriber;
 }
 
 export async function deactivate() {

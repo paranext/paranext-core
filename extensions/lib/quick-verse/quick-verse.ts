@@ -1,7 +1,7 @@
 import papi from 'papi';
 import type { ExecutionToken } from 'node/models/execution-token.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
-import { UnsubPromiseAsync, UnsubscriberAsync } from 'shared/utils/papi-util';
+import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 
 const { logger } = papi;
@@ -131,8 +131,10 @@ class QuickVerseDataProviderEngine
   }
 }
 
-export async function activate(context: ExecutionActivationContext) {
+export async function activate(context: ExecutionActivationContext): Promise<UnsubscriberAsync> {
   logger.info('Quick Verse is activating!');
+
+  const unsubPromises: Promise<UnsubscriberAsync>[] = [];
 
   const token: ExecutionToken = context.executionToken;
   const warning = await papi.storage.readTextFileFromInstallDirectory(
@@ -162,16 +164,11 @@ export async function activate(context: ExecutionActivationContext) {
     papi.storage.writeUserData(token, 'heresy-count', String(storedHeresyCount));
   });
 
-  const unsubPromises: UnsubPromiseAsync[] = [];
-
-  return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
-    logger.info('Quick Verse is finished activating!');
-    return papi.util.aggregateUnsubscriberAsyncs(
-      unsubPromises
-        .map((unsubPromise) => unsubPromise.unsubscriber)
-        .concat([quickVerseDataProvider.dispose]),
-    );
-  });
+  const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
+    (await Promise.all(unsubPromises)).concat([quickVerseDataProvider.dispose]),
+  );
+  logger.info('Quick Verse is finished activating!');
+  return combinedUnsubscriber;
 }
 
 export async function deactivate() {

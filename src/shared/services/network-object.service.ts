@@ -67,6 +67,7 @@ enum NetworkObjectRequestSubtype {
 /**
  * Determine if a network object with the specified id exists remotely (does not check locally)
  * @param id id of the network object - all processes must use this id to look up this network object
+ * @param retry whether or not the network service should retry failed requests several times
  * @returns empty array if there is a remote network object with this id, undefined otherwise.
  * TODO: return array of all eligible functions
  */
@@ -105,6 +106,10 @@ type NetworkObjectRegistration = {
 /** Map of id to network object */
 const networkObjectRegistrations = new Map<string, NetworkObjectRegistration>();
 
+/** Search locally known network objects for the given ID. Don't look on the network for more objects.
+ *  @returns whether we know of an existing network object with the provided id already on the network */
+const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
+
 /**
  * Emitter for when a network object is disposed. Provides the id so that the local emitter specific to that object can be run.
  *
@@ -132,26 +137,6 @@ onDidDisposeNetworkObject((id: string) => {
     networkObjectRegistration.revokeProxy();
   }
 });
-
-// #endregion
-
-// #region has
-
-/** Determine whether or not we know locally if a network object with the provided id exists anywhere on the network */
-const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
-
-/** Determine whether or not a network object with the provided id exists anywhere on the network */
-const has = async (id: string): Promise<boolean> => {
-  await initialize();
-
-  // Check if we already have this network object
-  if (hasKnown(id)) return true;
-
-  // We don't already have this network object. See if other processes have this network object
-  // If we get truthy from the request for network object functions, we do have that id
-  // TODO: Mark this network object id as available but the object not yet generated so we don't have to run get multiple times
-  return !!(await getRemoteNetworkObjectFunctions(id));
-};
 
 // #endregion
 
@@ -397,27 +382,23 @@ const set = async <T extends NetworkableObject>(
     ];
 
     // Await all of the registrations finishing, successful or not
-    const registrationResponses = await Promise.allSettled(
-      unsubPromises.map((unsubPromise) => unsubPromise.promise),
-    );
-
+    const registrationResponses = await Promise.allSettled(unsubPromises);
     const didSuccessfullyRegister = registrationResponses.every(
       (response) => response.status === 'fulfilled',
     );
 
     if (!didSuccessfullyRegister) {
       // Clean up by unregistering any successful request handlers
-      const unregisterRequestHandlerPromises: Promise<boolean>[] = [];
       const rejectedRequestHandlerReasons: string[] = [];
-      registrationResponses.forEach((response, registrationIndex) => {
-        if (response.status === 'fulfilled')
-          unregisterRequestHandlerPromises.push(
+      await Promise.all(
+        registrationResponses.map(async (response, registrationIndex) => {
+          if (response.status === 'fulfilled')
             // Run the unsubscriber for this registration
-            unsubPromises[registrationIndex].unsubscriber(),
-          );
-        // Collect the reasons for failure so we can throw a useful error
-        else rejectedRequestHandlerReasons.push(response.reason);
-      });
+            (await unsubPromises[registrationIndex])();
+          // Collect the reasons for failure so we can throw a useful error
+          else rejectedRequestHandlerReasons.push(response.reason);
+        }),
+      );
 
       throw new Error(
         `Unable to register network object with id ${id}:\n\t${rejectedRequestHandlerReasons.join(
@@ -439,11 +420,8 @@ const set = async <T extends NetworkableObject>(
     // Override dispose on the object passed in to clean up the network object
     overrideDispose(objectToShare, async (): Promise<boolean> => {
       // Unsubscribe all requests for this network object
-      if (
-        !(await aggregateUnsubscriberAsyncs(
-          unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
-        )())
-      ) {
+      const unsubscribers = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
+      if (!(await unsubscribers())) {
         logger.error(`Failed to unsubscribe all requests for ${id}`);
         return false;
       }
@@ -494,7 +472,7 @@ const set = async <T extends NetworkableObject>(
  */
 const networkObjectService = {
   initialize,
-  has,
+  hasKnown,
   get,
   set,
 };
