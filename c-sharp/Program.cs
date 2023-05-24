@@ -3,6 +3,7 @@ using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.NetworkObjects;
+using Paratext.Data;
 using PtxUtils;
 
 namespace Paranext.DataProvider;
@@ -12,6 +13,9 @@ public static class Program
     public static async Task Main()
     {
         Console.WriteLine("Paranext data provider starting up");
+
+        ParatextData.Initialize("assets");
+        ScrText scrText = ScrTextCollection.Get("WEB");
 
         using PapiClient papi = new();
         try
