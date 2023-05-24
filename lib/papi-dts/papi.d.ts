@@ -1417,10 +1417,18 @@ declare module 'shared/models/data-provider.model' {
      */
     whichUpdates?: 'deeply-equal' | 'all';
   };
-  export type DataProviderSetter<TDataType extends DataProviderDataType> = (
-    selector: TDataType['selector'],
-    data: TDataType['setData'],
-  ) => Promise<boolean>;
+  export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTypes> =
+    | true
+    | false
+    | (keyof TDataTypes)[]
+    | 'all';
+  export type DataProviderSetter<
+    TDataTypes extends DataProviderDataTypes,
+    DataType extends keyof TDataTypes,
+  > = (
+    selector: TDataTypes[DataType]['selector'],
+    data: TDataTypes[DataType]['setData'],
+  ) => Promise<DataProviderUpdateInstructions<TDataTypes>>;
   export type DataProviderGetter<TDataType extends DataProviderDataType> = (
     selector: TDataType['selector'],
   ) => Promise<TDataType['getData']>;
@@ -1456,7 +1464,8 @@ declare module 'shared/models/data-provider.model' {
     Capitalize<keyof TDataTypes & string>;
   export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
     [DataType in keyof TDataTypes as `set${Capitalize<DataType & string>}`]: DataProviderSetter<
-      TDataTypes[DataType]
+      TDataTypes,
+      DataType
     >;
   };
   export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {
@@ -1524,9 +1533,26 @@ declare module 'shared/models/data-provider-engine.model' {
   import {
     DataProviderDataTypes,
     DataProviderGetters,
+    DataProviderUpdateInstructions,
     DataProviderSetters,
+    DataTypeNames,
   } from 'shared/models/data-provider.model';
   import { NetworkableObject } from 'shared/models/network-object.model';
+  export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTypes> = (
+    updateInstructions?: DataProviderUpdateInstructions<TDataTypes>,
+  ) => DataProviderUpdateInstructions<TDataTypes> | undefined;
+  /**
+   * Method to run to send clients updates outside of the `set` method.
+   * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
+   *
+   * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
+   *
+   * @returns true if we should send updates, false otherwise (will not send updates). Same return as `set`
+   */
+  export type DataProviderEngineNotifyUpdates<TDataTypes extends DataProviderDataTypes> = Record<
+    `notifyUpdate${DataTypeNames<TDataTypes>}`,
+    DataProviderEngineNotifyUpdate<TDataTypes>
+  >;
   /**
    * The object to register with the DataProviderService to create a data provider.
    * The DataProviderService creates an IDataProvider on the papi that layers over this engine, providing special functionality
@@ -1557,17 +1583,8 @@ declare module 'shared/models/data-provider-engine.model' {
        * @param selector tells the provider what subset of data to get
        * @returns the subset of data represented by the selector
        */
-      DataProviderGetters<TDataTypes> & {
-        /**
-         * Method to run to send clients updates outside of the `set` method.
-         * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
-         *
-         * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
-         *
-         * @returns true if we should send updates, false otherwise (will not send updates). Same return as `set`
-         */
-        notifyUpdate?(): boolean;
-      };
+      DataProviderGetters<TDataTypes> &
+      Partial<DataProviderEngineNotifyUpdates<TDataTypes>>;
   export default IDataProviderEngine;
 }
 declare module 'shared/services/data-provider.service' {
@@ -2279,6 +2296,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   import {
     DataProviderDataType,
     DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import IDataProvider from 'shared/models/data-provider.interface';
   /**
@@ -2306,7 +2324,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
       subscriberOptions?: DataProviderSubscriberOptions,
     ) => [
       TDataType['getData'],
-      ((newData: TDataType['setData']) => Promise<boolean>) | undefined,
+      ((newData: TDataType['setData']) => Promise<DataProviderUpdateInstructions<any>>) | undefined,
       boolean,
     ];
   };
@@ -2354,7 +2372,14 @@ declare module 'renderer/hooks/papi-hooks/index' {
           | undefined,
       ) => [
         TDataType['getData'],
-        ((newData: TDataType['setData']) => Promise<boolean>) | undefined,
+        (
+          | ((
+              newData: TDataType['setData'],
+            ) => Promise<
+              import('shared/models/data-provider.model').DataProviderUpdateInstructions<any>
+            >)
+          | undefined
+        ),
         boolean,
       ];
     };
@@ -2427,7 +2452,14 @@ declare module 'papi' {
               | undefined,
           ) => [
             TDataType['getData'],
-            ((newData: TDataType['setData']) => Promise<boolean>) | undefined,
+            (
+              | ((
+                  newData: TDataType['setData'],
+                ) => Promise<
+                  import('shared/models/data-provider.model').DataProviderUpdateInstructions<any>
+                >)
+              | undefined
+            ),
             boolean,
           ];
         };

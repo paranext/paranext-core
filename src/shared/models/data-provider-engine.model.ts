@@ -1,9 +1,28 @@
 import {
   DataProviderDataTypes,
   DataProviderGetters,
+  DataProviderUpdateInstructions,
   DataProviderSetters,
+  DataTypeNames,
 } from '@shared/models/data-provider.model';
 import { NetworkableObject } from '@shared/models/network-object.model';
+
+export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTypes> = (
+  updateInstructions?: DataProviderUpdateInstructions<TDataTypes>,
+) => DataProviderUpdateInstructions<TDataTypes> | undefined;
+
+/**
+ * Method to run to send clients updates outside of the `set` method.
+ * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
+ *
+ * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
+ *
+ * @returns true if we should send updates, false otherwise (will not send updates). Same return as `set`
+ */
+export type DataProviderEngineNotifyUpdates<TDataTypes extends DataProviderDataTypes> = Record<
+  `notifyUpdate${DataTypeNames<TDataTypes>}`,
+  DataProviderEngineNotifyUpdate<TDataTypes>
+>;
 
 /**
  * The object to register with the DataProviderService to create a data provider.
@@ -35,16 +54,7 @@ type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProvider
      * @param selector tells the provider what subset of data to get
      * @returns the subset of data represented by the selector
      */
-    DataProviderGetters<TDataTypes> & {
-      /**
-       * Method to run to send clients updates outside of the `set` method.
-       * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
-       *
-       * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
-       *
-       * @returns true if we should send updates, false otherwise (will not send updates). Same return as `set`
-       */
-      notifyUpdate?(): boolean;
-    };
+    DataProviderGetters<TDataTypes> &
+    Partial<DataProviderEngineNotifyUpdates<TDataTypes>>;
 
 export default IDataProviderEngine;

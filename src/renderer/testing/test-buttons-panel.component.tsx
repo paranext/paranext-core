@@ -168,7 +168,7 @@ function TestButtonsPanel() {
       try {
         // Test to make sure we literally can't run updates from outside the data provider
         // @ts-ignore ts(2339)
-        const result = await greetingsDataProvider.notifyUpdate();
+        const result = await greetingsDataProvider.notifyUpdateVerse();
         logger.error(`Remote notify update succeeded! Bad ${result}`);
       } catch (e) {
         logger.info(`Remote notify update failed! Good ${e}`);
@@ -176,7 +176,7 @@ function TestButtonsPanel() {
     })();
   }
 
-  const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes['verse']>(
+  const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes['Verse']>(
     'quick-verse.quick-verse',
     verseRef,
     'Verse text goes here',

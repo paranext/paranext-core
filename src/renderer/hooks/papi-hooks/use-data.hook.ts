@@ -1,6 +1,7 @@
 import {
   DataProviderDataType,
   DataProviderSubscriberOptions,
+  DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
 import IDataProvider from '@shared/models/data-provider.interface';
 import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
@@ -36,7 +37,9 @@ type UseDataHook = {
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
     TDataType['getData'],
-    ((newData: TDataType['setData']) => Promise<boolean>) | undefined,
+    // We don't know the data types available, so we can't have TypeScript checking here
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((newData: TDataType['setData']) => Promise<DataProviderUpdateInstructions<any>>) | undefined,
     boolean,
   ];
 };
@@ -51,7 +54,9 @@ function createUseDataHook(dataType: string) {
     subscriberOptions?: DataProviderSubscriberOptions,
   ): [
     TDataType['getData'],
-    ((newData: TDataType['setData']) => Promise<boolean>) | undefined,
+    // We don't know the data types available, so we can't have TypeScript checking here
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((newData: TDataType['setData']) => Promise<DataProviderUpdateInstructions<any>>) | undefined,
     boolean,
   ] => {
     // The data from the data provider at this selector

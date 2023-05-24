@@ -29,10 +29,19 @@ export type DataProviderSubscriberOptions = {
   whichUpdates?: 'deeply-equal' | 'all';
 };
 
-export type DataProviderSetter<TDataType extends DataProviderDataType> = (
-  selector: TDataType['selector'],
-  data: TDataType['setData'],
-) => Promise<boolean>;
+export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTypes> =
+  | true
+  | false
+  | (keyof TDataTypes)[]
+  | 'all';
+
+export type DataProviderSetter<
+  TDataTypes extends DataProviderDataTypes,
+  DataType extends keyof TDataTypes,
+> = (
+  selector: TDataTypes[DataType]['selector'],
+  data: TDataTypes[DataType]['setData'],
+) => Promise<DataProviderUpdateInstructions<TDataTypes>>;
 
 export type DataProviderGetter<TDataType extends DataProviderDataType> = (
   selector: TDataType['selector'],
@@ -78,7 +87,8 @@ export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
    * @returns true if successfully set (will send updates), false otherwise (will not send updates)
    */
   [DataType in keyof TDataTypes as `set${Capitalize<DataType & string>}`]: DataProviderSetter<
-    TDataTypes[DataType]
+    TDataTypes,
+    DataType
   >;
 };
 export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {

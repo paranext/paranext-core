@@ -7,13 +7,16 @@ import IDataProvider, { IDisposableDataProvider } from '@shared/models/data-prov
 import DataProviderInternal, {
   DataProviderDataTypes,
   DataProviderGetter,
+  DataProviderUpdateInstructions,
   DataProviderSetter,
   DataProviderSubscriber,
   DataProviderSubscriberOptions,
   DataTypeNames,
   getDataProviderDataTypeFromFunctionName,
 } from '@shared/models/data-provider.model';
-import IDataProviderEngine from '@shared/models/data-provider-engine.model';
+import IDataProviderEngine, {
+  DataProviderEngineNotifyUpdate,
+} from '@shared/models/data-provider-engine.model';
 import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
@@ -78,7 +81,7 @@ async function has(providerName: string): Promise<boolean> {
  */
 function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
   dataProviderContainer: Container<IDataProvider<TDataTypes>>,
-  onDidUpdate: PapiEvent<boolean>,
+  onDidUpdate: PapiEvent<DataProviderUpdateInstructions<TDataTypes>>,
   dataType: DataTypeNames<TDataTypes>,
 ): DataProviderSubscriber<TDataTypes[typeof dataType]> {
   return async (selector, callback, options?: DataProviderSubscriberOptions) => {
@@ -102,7 +105,20 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
     // Create a layer over the provided callback that lets us know if we received an update so we don't run the callback with old data after updating
     /** Whether we have already received an update event, meaning our initial `get` will return old data */
     let receivedUpdate = false;
-    const callbackWithUpdate = async () => {
+    const callbackWithUpdate = async (
+      notifyUpdateReturn: DataProviderUpdateInstructions<TDataTypes>,
+    ) => {
+      if (
+        notifyUpdateReturn !== 'all' &&
+        (!Array.isArray(notifyUpdateReturn) || !notifyUpdateReturn.includes(dataType))
+      ) {
+        // TODO: REMOVE THIS LOG
+        console.log(`Update ${notifyUpdateReturn} does not apply to data type ${dataType}`);
+        // The update does not apply to this data type. Ignore
+        return;
+      }
+
+      // The update is relevant to this data type, so continue with this subscription
       if (!dataProviderContainer.contents)
         throw new Error("onDidUpdate: Somehow the data provider doesn't exist! Investigate");
       // Get the data at our selector when we receive notification that the data updated
@@ -158,7 +174,7 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
 function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
   dataProviderEngine: IDataProviderEngine<TDataTypes> | undefined,
   dataProviderContainer: Container<IDataProvider<TDataTypes>>,
-  onDidUpdate: PapiEvent<boolean>,
+  onDidUpdate: PapiEvent<DataProviderUpdateInstructions<TDataTypes>>,
 ): DataProviderInternal<TDataTypes> {
   // Object whose methods to run first when the data provider's method is called if they exist here
   // before falling back to the dataProviderEngine's methods. Caches subscribe functions and bound
@@ -175,8 +191,8 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
         if (prop === 'then') return obj[prop as keyof typeof obj];
 
         // Do not let anyone but the data provider engine send updates
-        if (prop === 'notifyUpdate')
-          throw new Error('Cannot run notifyUpdate outside of data provider engine');
+        if (isString(prop) && prop.startsWith('notifyUpdate'))
+          throw new Error('Cannot run notifyUpdate functions outside of data provider engine');
 
         // If the data provider already has the method, run it
         if (prop in dataProviderInternal)
@@ -226,7 +242,7 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
         // bad things will happen.
         if (
           isString(prop) &&
-          (prop === 'get' || prop.startsWith('subscribe') || prop === 'notifyUpdate')
+          (prop === 'get' || prop.startsWith('subscribe') || prop.startsWith('notifyUpdate'))
         )
           return false;
 
@@ -251,6 +267,21 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
   return dataProvider;
 }
 
+function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataTypes>(
+  updateInstructions: DataProviderUpdateInstructions<TDataTypes> | undefined,
+  dataType: keyof TDataTypes,
+) {
+  let updateEventValue = updateInstructions;
+  // If the update instructions are true, it means we should just send an update for its own data type
+  if (updateEventValue === true) updateEventValue = [dataType];
+  if (
+    updateEventValue !== 'all' &&
+    (!Array.isArray(updateEventValue) || updateEventValue.length <= 0)
+  )
+    return false;
+  return updateEventValue;
+}
+
 /**
  * Wrap a data provider engine to create a data provider that handles subscriptions for it.
  *
@@ -265,22 +296,8 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
 function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
   dataProviderEngine: IDataProviderEngine<TDataTypes>,
   dataProviderContainer: Container<IDataProvider<TDataTypes>>,
-  onDidUpdateEmitter: PapiEventEmitter<boolean>,
+  onDidUpdateEmitter: PapiEventEmitter<DataProviderUpdateInstructions<TDataTypes>>,
 ): DataProviderInternal<TDataTypes> {
-  // Layer over data provider engine methods to give it control over emitting updates
-  // Layer over the data provider engine's notifyUpdate with one that actually emits an update
-  // or if the dpe doesn't have notifyUpdate, give it one
-  const dpeNotifyUpdate = dataProviderEngine.notifyUpdate
-    ? dataProviderEngine.notifyUpdate.bind(dataProviderEngine)
-    : undefined;
-  dataProviderEngine.notifyUpdate = (...args) => {
-    // If notifyUpdate is not overridden, just return true
-    let dpeNotifyUpdateResult = true;
-    if (dpeNotifyUpdate) dpeNotifyUpdateResult = dpeNotifyUpdate(...args);
-    if (dpeNotifyUpdateResult) onDidUpdateEmitter.emit(dpeNotifyUpdateResult);
-    return dpeNotifyUpdateResult;
-  };
-
   // Figure out the available get/set methods' data types
   const dataTypes = groupBy<string, 'get' | 'set' | 'other', DataTypeNames<TDataTypes>>(
     getAllObjectFunctionNames(dataProviderEngine),
@@ -305,19 +322,46 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
   )
     throw new Error('Data provider engine does not have matching get and set functions!');
 
-  // Layer over the data provider engine's set methods with set methods that actually emit an update
-  // if they return true
+  // Layer over data provider engine methods to give it control over emitting updates
   dataTypes.get('set')?.forEach((dataType) => {
+    // Layer over the data provider engine's notifyUpdate methods with ones that actually emit
+    // updates or, if the dpe doesn't have notifyUpdate methods for each set method, give it them
+    const dpeNotifyUpdate = dataProviderEngine[`notifyUpdate${dataType}`]
+      ? (
+          dataProviderEngine[
+            `notifyUpdate${dataType}`
+          ] as DataProviderEngineNotifyUpdate<TDataTypes>
+        ).bind(dataProviderEngine)
+      : undefined;
+    (dataProviderEngine[`notifyUpdate${dataType}`] as DataProviderEngineNotifyUpdate<TDataTypes>) =
+      (...args) => {
+        // If notifyUpdate is not overridden, just return true to update subscribers for this data type
+        let dpeNotifyUpdateResult: DataProviderUpdateInstructions<TDataTypes> | undefined = true;
+        if (dpeNotifyUpdate) dpeNotifyUpdateResult = dpeNotifyUpdate(...args);
+        const updateEventResult = mapUpdateInstructionsToUpdateEvent<TDataTypes>(
+          dpeNotifyUpdateResult,
+          dataType,
+        );
+        if (updateEventResult) onDidUpdateEmitter.emit(updateEventResult);
+        return dpeNotifyUpdateResult;
+      };
+
+    // Layer over the data provider engine's set methods with set methods that actually emit an update
+    // if they return true
     if (dataProviderEngine[`set${dataType}`]) {
       /** Saved bound version of the data provider engine's set so we can call it from here */
       const dpeSet = (
-        dataProviderEngine[`set${dataType}`] as DataProviderSetter<TDataTypes[typeof dataType]>
+        dataProviderEngine[`set${dataType}`] as DataProviderSetter<TDataTypes, typeof dataType>
       ).bind(dataProviderEngine);
       /** Layered set that emits an update event after running the engine's set */
-      (dataProviderEngine[`set${dataType}`] as DataProviderSetter<TDataTypes[typeof dataType]>) =
+      (dataProviderEngine[`set${dataType}`] as DataProviderSetter<TDataTypes, typeof dataType>) =
         async (...args) => {
           const dpeSetResult = await dpeSet(...args);
-          if (dpeSetResult) onDidUpdateEmitter.emit(dpeSetResult);
+          const updateEventResult = mapUpdateInstructionsToUpdateEvent<TDataTypes>(
+            dpeSetResult,
+            dataType,
+          );
+          if (updateEventResult) onDidUpdateEmitter.emit(updateEventResult);
           return dpeSetResult;
         };
     }
@@ -369,9 +413,9 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
   };
 
   // Create a networked update event
-  const onDidUpdateEmitter = networkService.createNetworkEventEmitter<boolean>(
-    serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
-  );
+  const onDidUpdateEmitter = networkService.createNetworkEventEmitter<
+    DataProviderUpdateInstructions<TDataTypes>
+  >(serializeRequestType(dataProviderObjectId, ON_DID_UPDATE));
 
   // Build the data provider
   const dataProviderInternal = buildDataProvider(

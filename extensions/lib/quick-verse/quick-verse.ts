@@ -4,6 +4,7 @@ import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import { UnsubPromiseAsync, UnsubscriberAsync } from 'shared/utils/papi-util';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
+import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 
 const { logger } = papi;
 
@@ -33,12 +34,14 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
   }
 
   // Note: this method does not have to be provided here for it to work properly because it is layered over on the papi.
-  // But because we provide it here, we must return `true` to notify like in the set method.
+  // But because we provide it here, we must return some update instructions to notify like in the set method.
   // The contents of this method run before the update is emitted.
+  // Here, we make this update everything by default if no parameter is provided
   // TODO: What will actually happen if we run this in `get`? Stack overflow?
-  notifyUpdate() {
-    logger.info(`Quick verse notifyUpdate! latestVerseRef = ${this.latestVerseRef}`);
-    return true;
+  notifyUpdateVerse(updateInstructions?: DataProviderUpdateInstructions<QuickVerseDataTypes>) {
+    logger.info(`Quick verse notifyUpdateVerse! latestVerseRef = ${this.latestVerseRef}`);
+    // If they don't pass anything in, update everything by default
+    return updateInstructions === undefined ? 'all' : updateInstructions;
   }
 
   /**
@@ -66,7 +69,7 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
     };
     if (selector !== 'latest') this.latestVerseRef = this.#getSelector(selector);
     this.heresyCount += 1;
-    return true;
+    return 'all';
   }
 
   async setVerse(selector: string, data: QuickVerseSetData) {
@@ -104,7 +107,8 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
         this.verses[this.#getSelector(selector)] = responseVerse;
         // Cache the verse text, track the latest cached verse, and send an update
         if (selector !== 'latest') this.latestVerseRef = this.#getSelector(selector);
-        this.notifyUpdate();
+        // Inform everyone that we updated
+        this.notifyUpdateVerse('all');
       } catch (e) {
         responseVerse = {
           text: `Failed to fetch ${selector} from bible-api! Reason: ${e}`,

@@ -1,9 +1,9 @@
 import papi from 'papi';
 import type { WebViewContentType } from 'shared/data/web-view.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
+import { AllGreetingsData, GreetingsDataTypes } from '@extensions/hello-someone/hello-someone';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
-import { AllGreetingsData, GreetingsDataTypes } from '@extensions/hello-someone/hello-someone';
 
 const { logger } = papi;
 logger.info('Hello Someone is importing!');
@@ -16,17 +16,17 @@ const greetingsDataProviderEngine = {
     kathy: 'Hello. My name is Kathy.',
   } as AllGreetingsData,
 
-  setGreeting: async (selector: string, data: string) => {
+  setGreeting: async (name: string, data: string) => {
     // If there is no change in the greeting, don't update
-    if (data === greetingsDataProviderEngine.people[selector.toLowerCase()]) return false;
+    if (data === greetingsDataProviderEngine.people[name.toLowerCase()]) return false;
 
     // Update the greeting and send an update
-    greetingsDataProviderEngine.people[selector.toLowerCase()] = data;
-    return true;
+    greetingsDataProviderEngine.people[name.toLowerCase()] = data;
+    return ['Greeting', 'All'] as (keyof GreetingsDataTypes)[];
   },
 
-  async getGreeting(selector: string) {
-    return this.people[selector.toLowerCase()];
+  async getGreeting(name: string) {
+    return this.people[name.toLowerCase()];
   },
 
   async setAll() {
@@ -65,17 +65,20 @@ export async function activate() {
   );
 
   const unsubPromises = [
-    papi.commands.registerCommand('hello-someone.hello-someone', (someone) => {
+    papi.commands.registerCommand('hello-someone.hello-someone', (someone: string) => {
       return `Hello ${someone}!`;
     }),
-    papi.commands.registerCommand('hello-someone.echo-someone-renderer', async (message) => {
-      return `echo-someone-renderer: ${await papi.commands.sendCommand(
-        'addThree',
-        2,
-        4,
-        6,
-      )}! ${message}`;
-    }),
+    papi.commands.registerCommand(
+      'hello-someone.echo-someone-renderer',
+      async (message: string) => {
+        return `echo-someone-renderer: ${await papi.commands.sendCommand(
+          'addThree',
+          2,
+          4,
+          6,
+        )}! ${message}`;
+      },
+    ),
   ];
 
   // For now, let's just make things easy and await the data provider promise at the end so we don't hold everything else up

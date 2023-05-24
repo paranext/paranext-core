@@ -1,4 +1,4 @@
-import { DataProviderDataType } from 'shared/models/data-provider.model';
+import type { DataProviderDataType } from 'shared/models/data-provider.model';
 import type IDataProvider from 'shared/models/data-provider.interface';
 
 // TODO: Move these types to quick-verse.ts and generate this file from quick-verse.ts in the future?
@@ -6,8 +6,8 @@ import type IDataProvider from 'shared/models/data-provider.interface';
 export type QuickVerseSetData = string | { text: string; isHeresy: boolean };
 
 export type QuickVerseDataTypes = {
-  verse: DataProviderDataType<string, string | undefined, QuickVerseSetData>;
-  heresy: DataProviderDataType<string, string | undefined, string>;
+  Verse: DataProviderDataType<string, string | undefined, QuickVerseSetData>;
+  Heresy: DataProviderDataType<string, string | undefined, string>;
 };
 
 export type QuickVerseDataProvider = IDataProvider<QuickVerseDataTypes>;
