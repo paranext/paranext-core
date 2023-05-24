@@ -1233,7 +1233,8 @@ declare module 'shared/utils/async-variable' {
      * Creates an instance of the class
      * @param variableName name to use when logging about this variable
      * @param rejectIfNotSettledWithinMS milliseconds to wait before verifying if the promise was
-     * settled (resolved or rejected); will reject if it has not settled by that time
+     * settled (resolved or rejected); will reject if it has not settled by that time.  Use -1 if you
+     * do not want a timeout at all.
      */
     constructor(variableName: string, rejectIfNotSettledWithinMS?: number);
     /**
