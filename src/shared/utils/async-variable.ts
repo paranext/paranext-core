@@ -38,8 +38,16 @@ export default class AsyncVariable<T> {
    * value has been resolved or rejected.
    * @returns the promise for the value to be set
    */
-  public async getPromise(): Promise<T> {
+  public get promise(): Promise<T> {
     return this.promiseToValue;
+  }
+
+  /**
+   * A simple way to see if this variable's promise was resolved or rejected already
+   * @returns whether the variable was already resolved or rejected
+   */
+  public get settled(): boolean {
+    return Object.isFrozen(this);
   }
 
   /**
@@ -72,14 +80,6 @@ export default class AsyncVariable<T> {
       if (throwIfAlreadySettled) throw Error(`${this.variableName} was already settled`);
       logger.debug(`Ignoring subsequent rejection of ${this.variableName}`);
     }
-  }
-
-  /**
-   * A simple way to see if this variable's promise was resolved or rejected already
-   * @returns whether the variable was already resolved or rejected
-   */
-  public hasSettled(): boolean {
-    return Object.isFrozen(this);
   }
 
   /**

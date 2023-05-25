@@ -5,12 +5,12 @@ test('wait on other async tasks to set and notify variables', () => {
   const TEST_VALUE: string = 'A1B2C3';
   const testVariable: AsyncVariable<string> = new AsyncVariable<string>(VARIABLE_NAME);
   (async () => {
-    await expect(testVariable.getPromise()).resolves.toBe(TEST_VALUE);
+    await expect(testVariable.promise).resolves.toBe(TEST_VALUE);
   })();
   (async () => {
-    expect(testVariable.hasSettled()).toBeFalsy();
+    expect(testVariable.settled).toBeFalsy();
     testVariable.resolveToValue(TEST_VALUE);
-    expect(testVariable.hasSettled()).toBeTruthy();
+    expect(testVariable.settled).toBeTruthy();
   })();
 });
 
@@ -19,7 +19,7 @@ test('reject the promise for the value', () => {
   const TEST_REASON: string = 'This is just a test';
   const testVariable: AsyncVariable<string> = new AsyncVariable<string>(VARIABLE_NAME);
   (async () => {
-    await expect(testVariable.getPromise()).rejects.toMatch(TEST_REASON);
+    await expect(testVariable.promise).rejects.toMatch(TEST_REASON);
   })();
   (async () => {
     testVariable.rejectWithReason(TEST_REASON);

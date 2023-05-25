@@ -1242,7 +1242,12 @@ declare module 'shared/utils/async-variable' {
      * value has been resolved or rejected.
      * @returns the promise for the value to be set
      */
-    getPromise(): Promise<T>;
+    get promise(): Promise<T>;
+    /**
+     * A simple way to see if this variable's promise was resolved or rejected already
+     * @returns whether the variable was already resolved or rejected
+     */
+    get settled(): boolean;
     /**
      * Resolve this variable's promise to the given value
      * @param value this variable's promise will resolve to this value
@@ -1255,11 +1260,6 @@ declare module 'shared/utils/async-variable' {
      * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
      */
     rejectWithReason(reason: string, throwIfAlreadySettled?: boolean): void;
-    /**
-     * A simple way to see if this variable's promise was resolved or rejected already
-     * @returns whether the variable was already resolved or rejected
-     */
-    hasSettled(): boolean;
     /**
      * Prevent any further updates to this variable
      */

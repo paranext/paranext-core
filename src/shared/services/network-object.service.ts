@@ -309,7 +309,7 @@ const get = async <T extends object>(
     // If a property exists on the base object, we use it and won't look for it on the remote object.
     // If a property does not exist on the base object, it is assumed to exist on the remote object.
     const baseObject: Partial<T> = createLocalObjectToProxy
-      ? (createLocalObjectToProxy(id, networkObjectVariable.getPromise()) as Partial<T>)
+      ? (createLocalObjectToProxy(id, networkObjectVariable.promise) as Partial<T>)
       : {};
 
     // Create a proxy with functions that will send requests to the remote object

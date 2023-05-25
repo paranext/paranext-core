@@ -280,7 +280,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   // Build the data provider
   const dataProviderInternal = buildDataProvider(
     dataProviderEngine,
-    dataProviderVariable.getPromise(),
+    dataProviderVariable.promise,
     onDidUpdateEmitter,
   );
 
