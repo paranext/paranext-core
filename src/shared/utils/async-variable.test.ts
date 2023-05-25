@@ -19,7 +19,5 @@ test('reject the promise for the value', () => {
   (async () => {
     await expect(testVariable.promise).rejects.toMatch(TEST_REASON);
   })();
-  (async () => {
-    testVariable.rejectWithReason(TEST_REASON);
-  })();
+  testVariable.rejectWithReason(TEST_REASON);
 });
