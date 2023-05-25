@@ -26,7 +26,7 @@ function TestQuickVerseHeresyPanel() {
     [setVerseRefDebounced],
   );
 
-  const [heresyText, setHeresyText] = useData.Heresy<QuickVerseDataTypes['heresy']>(
+  const [heresyText, setHeresyText] = useData.Heresy<QuickVerseDataTypes['Heresy']>(
     'quick-verse.quick-verse',
     verseRef,
     'Verse text goes here',
