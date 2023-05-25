@@ -108,6 +108,38 @@ npm run package
 8. Publish the release on GitHub.
 9. Merge the release branch back into **main** with a merge commit.
 
+## Testing
+
+The following tests run automatically on each GitHub PR (see [test.yml](https://github.com/paranext/paranext-core/blob/main/.github/workflows/test.yml)).
+
+To run C# unit tests:
+
+```bash
+cd c-sharp-tests
+dotnet test
+```
+
+To run C# unit tests watching for file changes:
+
+```bash
+cd c-sharp-tests
+dotnet watch test
+```
+
+To run all TS unit tests:
+
+```bash
+npm test
+```
+
+To run an individual TS unit test watching for file changes:
+
+```bash
+npm test -- <path/to/test-file.test.ts> --watch
+```
+
+You can also use the [recommended VS Code extensions](#vs-code-extension-options) to run tests there.
+
 ## Storybook
 
 To run Storybook locally:
