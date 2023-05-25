@@ -1,4 +1,3 @@
-import { Container } from '@shared/utils/util';
 // This is used in @see comments in the JSDoc
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type networkObjectService from '@shared/services/network-object.service';
@@ -60,7 +59,7 @@ export type NetworkableObject<T = object> = T & CannotHaveOnDidDispose;
  */
 export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
   id: string,
-  networkObjectContainer: Container<NetworkObject<T>>,
+  networkObjectPromise: Promise<NetworkObject<T>>,
 ) => // TODO: This should be Partial<T> but TypeScript can't infer the type of T. Figure this out.
 // For example, in dataProviderService.get, it uses createLocalDataProviderToProxy (which does
 // return Partial<T> and matches signature with this function), but it was producing a type error

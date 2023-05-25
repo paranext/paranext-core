@@ -2,7 +2,6 @@ import { isExtensionHost } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
 import logger from '@shared/services/logger.service';
 import type GetAsset from '@extension-host/services/asset-retrieval.service';
-import { assert } from 'console';
 
 let getAsset: typeof GetAsset;
 let isInitialized: boolean = false;
@@ -17,7 +16,6 @@ const getExtensionAsset = async (
   extensionName: string,
   assetName: string,
 ): Promise<string | undefined> => {
-  assert(isInitialized, 'Cannot get an asset until the extension host has called initialize()');
   if (isExtensionHost()) {
     try {
       return (await getAsset(extensionName, assetName)).toString('base64');

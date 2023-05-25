@@ -97,7 +97,7 @@ export async function activate() {
     { type: 'panel', direction: 'top' },
   );
 
-  const unsubPromises = [
+  const unsubPromises: Promise<UnsubscriberAsync>[] = [
     papi.commands.registerCommand('hello-someone.hello-someone', (someone: string) => {
       return `Hello ${someone}!`;
     }),
@@ -117,14 +117,11 @@ export async function activate() {
   // For now, let's just make things easy and await the data provider promise at the end so we don't hold everything else up
   const greetingsDataProvider = await greetingsDataProviderPromise;
 
-  return Promise.all(unsubPromises.map((unsubPromise) => unsubPromise.promise)).then(() => {
-    logger.info('Hello Someone is finished activating!');
-    return papi.util.aggregateUnsubscriberAsyncs(
-      unsubPromises
-        .map((unsubPromise) => unsubPromise.unsubscriber)
-        .concat([greetingsDataProvider.dispose]),
-    );
-  });
+  const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
+    (await Promise.all(unsubPromises)).concat([greetingsDataProvider.dispose]),
+  );
+  logger.info('Hello Someone is finished activating!');
+  return combinedUnsubscriber;
 }
 
 export async function deactivate() {

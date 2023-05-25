@@ -8,7 +8,8 @@ import {
 } from '@shared/utils/papi-util';
 import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
-import { Container, isString } from '@shared/utils/util';
+import { isString } from '@shared/utils/util';
+import AsyncVariable from '@shared/utils/async-variable';
 import {
   NetworkObject,
   DisposableNetworkObject,
@@ -67,6 +68,7 @@ enum NetworkObjectRequestSubtype {
 /**
  * Determine if a network object with the specified id exists remotely (does not check locally)
  * @param id id of the network object - all processes must use this id to look up this network object
+ * @param retry whether or not the network service should retry failed requests several times
  * @returns empty array if there is a remote network object with this id, undefined otherwise.
  * TODO: return array of all eligible functions
  */
@@ -105,6 +107,10 @@ type NetworkObjectRegistration = {
 /** Map of id to network object */
 const networkObjectRegistrations = new Map<string, NetworkObjectRegistration>();
 
+/** Search locally known network objects for the given ID. Don't look on the network for more objects.
+ *  @returns whether we know of an existing network object with the provided id already on the network */
+const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
+
 /**
  * Emitter for when a network object is disposed. Provides the id so that the local emitter specific to that object can be run.
  *
@@ -132,26 +138,6 @@ onDidDisposeNetworkObject((id: string) => {
     networkObjectRegistration.revokeProxy();
   }
 });
-
-// #endregion
-
-// #region has
-
-/** Determine whether or not we know locally if a network object with the provided id exists anywhere on the network */
-const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
-
-/** Determine whether or not a network object with the provided id exists anywhere on the network */
-const has = async (id: string): Promise<boolean> => {
-  await initialize();
-
-  // Check if we already have this network object
-  if (hasKnown(id)) return true;
-
-  // We don't already have this network object. See if other processes have this network object
-  // If we get truthy from the request for network object functions, we do have that id
-  // TODO: Mark this network object id as available but the object not yet generated so we don't have to run get multiple times
-  return !!(await getRemoteNetworkObjectFunctions(id));
-};
 
 // #endregion
 
@@ -313,17 +299,17 @@ const get = async <T extends object>(
     // At this point, the object exists remotely but does not yet exist locally.
 
     // The base object created below might need a reference to the final network object. Since the
-    // network object doesn't exist yet, create a container now and fill it in after the network
-    // object is created.
-    const proxyContainer: Container<NetworkObject<T>> = {
-      contents: undefined,
-    };
+    // network object doesn't exist yet, create an async variable now and fill it in after the
+    // network object is created.
+    const networkObjectVariable: AsyncVariable<NetworkObject<T>> = new AsyncVariable(
+      `NetworkObject-${id}`,
+    );
 
     // Create the base object that will be proxied for remote calls.
     // If a property exists on the base object, we use it and won't look for it on the remote object.
     // If a property does not exist on the base object, it is assumed to exist on the remote object.
     const baseObject: Partial<T> = createLocalObjectToProxy
-      ? (createLocalObjectToProxy(id, proxyContainer) as Partial<T>)
+      ? (createLocalObjectToProxy(id, networkObjectVariable.promise) as Partial<T>)
       : {};
 
     // Create a proxy with functions that will send requests to the remote object
@@ -336,9 +322,6 @@ const get = async <T extends object>(
     // The network object is finished! Rename it so we know it is finished
     const networkObject = remoteProxy.proxy as NetworkObject<T>;
 
-    // Store the network object in the container so baseObject has a valid reference
-    proxyContainer.contents = networkObject;
-
     // Save the network object for future lookups
     networkObjectRegistrations.set(id, {
       registrationType: NetworkObjectRegistrationType.Remote,
@@ -346,6 +329,9 @@ const get = async <T extends object>(
       networkObject,
       revokeProxy: remoteProxy.revoke,
     });
+
+    // Resolve the promise to the network object so promise holders can complete their work
+    networkObjectVariable.resolveToValue(networkObject);
 
     return networkObject;
   });
@@ -397,27 +383,23 @@ const set = async <T extends NetworkableObject>(
     ];
 
     // Await all of the registrations finishing, successful or not
-    const registrationResponses = await Promise.allSettled(
-      unsubPromises.map((unsubPromise) => unsubPromise.promise),
-    );
-
+    const registrationResponses = await Promise.allSettled(unsubPromises);
     const didSuccessfullyRegister = registrationResponses.every(
       (response) => response.status === 'fulfilled',
     );
 
     if (!didSuccessfullyRegister) {
       // Clean up by unregistering any successful request handlers
-      const unregisterRequestHandlerPromises: Promise<boolean>[] = [];
       const rejectedRequestHandlerReasons: string[] = [];
-      registrationResponses.forEach((response, registrationIndex) => {
-        if (response.status === 'fulfilled')
-          unregisterRequestHandlerPromises.push(
+      await Promise.all(
+        registrationResponses.map(async (response, registrationIndex) => {
+          if (response.status === 'fulfilled')
             // Run the unsubscriber for this registration
-            unsubPromises[registrationIndex].unsubscriber(),
-          );
-        // Collect the reasons for failure so we can throw a useful error
-        else rejectedRequestHandlerReasons.push(response.reason);
-      });
+            (await unsubPromises[registrationIndex])();
+          // Collect the reasons for failure so we can throw a useful error
+          else rejectedRequestHandlerReasons.push(response.reason);
+        }),
+      );
 
       throw new Error(
         `Unable to register network object with id ${id}:\n\t${rejectedRequestHandlerReasons.join(
@@ -439,11 +421,8 @@ const set = async <T extends NetworkableObject>(
     // Override dispose on the object passed in to clean up the network object
     overrideDispose(objectToShare, async (): Promise<boolean> => {
       // Unsubscribe all requests for this network object
-      if (
-        !(await aggregateUnsubscriberAsyncs(
-          unsubPromises.map((unsubPromise) => unsubPromise.unsubscriber),
-        )())
-      ) {
+      const unsubscribers = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
+      if (!(await unsubscribers())) {
         logger.error(`Failed to unsubscribe all requests for ${id}`);
         return false;
       }
@@ -494,7 +473,7 @@ const set = async <T extends NetworkableObject>(
  */
 const networkObjectService = {
   initialize,
-  has,
+  hasKnown,
   get,
   set,
 };

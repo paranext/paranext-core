@@ -20,10 +20,9 @@ import {
   createSafeRegisterFn,
   RequestHandlerType,
   serializeRequestType,
-  UnsubPromiseAsync,
   UnsubscriberAsync,
 } from '@shared/utils/papi-util';
-import { getErrorMessage } from '@shared/utils/util';
+import { getErrorMessage, wait } from '@shared/utils/util';
 import * as connectionService from '@shared/services/connection.service';
 import { isClient, isRenderer, isServer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
@@ -143,7 +142,25 @@ const requestRawUnsafe = async <TParam, TReturn>(
     throw new Error(
       `Cannot perform raw request ${requestType} as the NetworkService is not initialized`,
     );
-  return connectionService.request<TParam, TReturn>(requestType, contents);
+
+  // https://github.com/paranext/paranext-core/issues/51
+  // If the request type doesn't have a registered handler yet, retry a few times to help with race conditions
+  // This approach is hacky but works well enough for now
+  const expectedErrorMsg: string = `No handler was found to process the request of type ${requestType}`;
+  const maxAttempts: number = 5;
+  for (let attemptsRemaining = maxAttempts; attemptsRemaining > 0; attemptsRemaining--) {
+    // eslint-disable-next-line no-await-in-loop
+    const response = await connectionService.request<TParam, TReturn>(requestType, contents);
+    if (response.success || attemptsRemaining === 1 || response.errorMessage !== expectedErrorMsg)
+      return response;
+
+    // eslint-disable-next-line no-await-in-loop
+    await wait(1000);
+
+    logger.debug(`Retrying network service request of type ${requestType}`);
+  }
+
+  throw new Error(`Raw request ${requestType} failed`);
 };
 
 /**
@@ -224,36 +241,26 @@ async function unregisterRequestHandlerUnsafe(
  * @param handlerType type of handler function - indicates what type of parameters and what return type the handler has
  * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
  */
-function registerRequestHandlerUnsafe(
+async function registerRequestHandlerUnsafe(
   requestType: string,
   handler: ArgsRequestHandler,
   handlerType?: RequestHandlerType,
-): UnsubPromiseAsync<void>;
-function registerRequestHandlerUnsafe(
+): Promise<UnsubscriberAsync>;
+async function registerRequestHandlerUnsafe(
   requestType: string,
   handler: ContentsRequestHandler,
   handlerType?: RequestHandlerType,
-): UnsubPromiseAsync<void>;
-function registerRequestHandlerUnsafe(
+): Promise<UnsubscriberAsync>;
+async function registerRequestHandlerUnsafe(
   requestType: string,
   handler: ComplexRequestHandler,
   handlerType?: RequestHandlerType,
-): UnsubPromiseAsync<void>;
-function registerRequestHandlerUnsafe(
+): Promise<UnsubscriberAsync>;
+async function registerRequestHandlerUnsafe(
   requestType: string,
   handler: RoutedRequestHandler,
   handlerType = RequestHandlerType.Args,
-): UnsubPromiseAsync<void> {
-  let resolveRegistration: ((value: void | PromiseLike<void>) => void) | undefined;
-  let rejectRegistration: ((reason: string) => void) | undefined;
-  /** Promise that resolves when this request successfully finishes registering */
-  const promise = new Promise<void>((resolve, reject) => {
-    resolveRegistration = resolve;
-    rejectRegistration = reject;
-  });
-  // Typescript does not understand these are definitely defined because the promise above is synchronous
-  if (!resolveRegistration || !rejectRegistration)
-    throw new Error(`Somehow the promise functions are not defined`);
+): Promise<UnsubscriberAsync> {
   // Only register the first handler provided for this request type
   // Check locally if we already have a handler for this requestType
   if (requestRegistrations.has(requestType)) {
@@ -262,43 +269,28 @@ function registerRequestHandlerUnsafe(
     // the complication of holding promise resolve and reject and all this. Consider just
     // throwing an exception. That would mean you would have to check for registerRequestHandler
     // to throw exceptions in addition to .catch-ing its promise, but maybe it's worth it. Dunno
-    rejectRegistration(`requestType ${requestType} already has a local handler registered`);
-    return { promise, unsubscriber: async () => false };
+    throw Error(`requestType ${requestType} already has a local handler registered`);
   }
 
   // Check with the server if it already has a handler for this requestType
-  const remoteRequest: Promise<void> = isClient()
-    ? // If we are the client, try to register with the server because server has all registrations
-      requestUnsafe(
-        serializeRequestType(CATEGORY_SERVER, 'registerRequest'),
-        requestType,
-        connectionService.getClientId(),
-      )
-    : // If we are the server, we just checked if there was already a registration
-      Promise.resolve();
+  if (isClient()) {
+    // If we are the client, try to register with the server because server has all registrations
+    await requestUnsafe(
+      serializeRequestType(CATEGORY_SERVER, 'registerRequest'),
+      requestType,
+      connectionService.getClientId(),
+    );
+  }
 
-  remoteRequest
-    .then(() => {
-      // We have successfully checked that this is the first registration for this requestType. Set up the handler
-      requestRegistrations.set(requestType, {
-        registrationType: 'local',
-        requestType,
-        handler,
-        handlerType,
-      });
-      if (!resolveRegistration) throw new Error(`Somehow resolveRegistration is not defined`);
-      resolveRegistration();
-      return undefined;
-    })
-    .catch((e) => {
-      if (!rejectRegistration) throw new Error(`Somehow rejectRegistration is not defined`);
-      rejectRegistration(e);
-    });
+  // We have successfully checked that this is the first registration for this requestType. Set up the handler
+  requestRegistrations.set(requestType, {
+    registrationType: 'local',
+    requestType,
+    handler,
+    handlerType,
+  });
 
-  return {
-    promise,
-    unsubscriber: () => unregisterRequestHandlerUnsafe(requestType, handler),
-  };
+  return () => unregisterRequestHandlerUnsafe(requestType, handler);
 }
 
 /**
@@ -609,14 +601,13 @@ export const initialize = () => {
     if (isServer()) {
       onDidClientDisconnect(handleClientDisconnect);
 
-      const registrationUnsubAndPromises = Object.entries(serverRequestHandlers).map(
+      const registrationUnsubscribers = Object.entries(serverRequestHandlers).map(
         ([requestType, handler]) => registerRequestHandlerUnsafe(requestType, handler),
       );
-      unsubscribeServerRequestHandlers = aggregateUnsubscriberAsyncs(
-        registrationUnsubAndPromises.map(({ unsubscriber }) => unsubscriber),
-      );
       // Wait to successfully register all requests
-      await Promise.all(registrationUnsubAndPromises.map(({ promise }) => promise));
+      unsubscribeServerRequestHandlers = aggregateUnsubscriberAsyncs(
+        await Promise.all(registrationUnsubscribers),
+      );
     }
 
     // On closing, try to close the connection
@@ -636,7 +627,7 @@ export const initialize = () => {
 // #region Public safe functions (call these, not the private unsafe functions above)
 
 /**
- * Send a request on the network and resolve the response contents
+ * Send a request on the network and resolve the response contents.
  * @param requestType the type of request
  * @param args arguments to send in the request (put in request.contents)
  * @returns promise that resolves with the response message
@@ -654,7 +645,6 @@ const registerRequestHandlerInternal = createSafeRegisterFn(
   registerRequestHandlerUnsafe,
   isInitialized,
   initialize,
-  unregisterRequestHandlerUnsafe,
 );
 /**
  * Register a local request handler to run on requests.
@@ -667,22 +657,22 @@ export function registerRequestHandler(
   requestType: string,
   handler: ArgsRequestHandler,
   handlerType?: RequestHandlerType,
-): UnsubPromiseAsync<void>;
+): Promise<UnsubscriberAsync>;
 export function registerRequestHandler(
   requestType: string,
   handler: ContentsRequestHandler,
   handlerType?: RequestHandlerType,
-): UnsubPromiseAsync<void>;
+): Promise<UnsubscriberAsync>;
 export function registerRequestHandler(
   requestType: string,
   handler: ComplexRequestHandler,
   handlerType?: RequestHandlerType,
-): UnsubPromiseAsync<void>;
+): Promise<UnsubscriberAsync>;
 export function registerRequestHandler(
   requestType: string,
   handler: RoutedRequestHandler,
   handlerType = RequestHandlerType.Args,
-): UnsubPromiseAsync<void> {
+): Promise<UnsubscriberAsync> {
   return registerRequestHandlerInternal(requestType, handler, handlerType);
 }
 

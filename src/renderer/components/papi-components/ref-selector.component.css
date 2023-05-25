@@ -1,0 +1,8 @@
+.papi-ref-selector.book {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.papi-ref-selector.chapter-verse {
+  width: 75px;
+}

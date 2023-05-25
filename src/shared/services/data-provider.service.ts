@@ -21,11 +21,12 @@ import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
 import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
-import { Container, getAllObjectFunctionNames, groupBy, isString } from '@shared/utils/util';
+import { getAllObjectFunctionNames, groupBy, isString } from '@shared/utils/util';
 import { LocalObjectToProxyCreator, NetworkObject } from '@shared/models/network-object.model';
 import networkObjectService from '@shared/services/network-object.service';
 import { CannotHaveOnDidDispose } from '@shared/models/disposal.model';
 import logger from '@shared/services/logger.service';
+import AsyncVariable from '@shared/utils/async-variable';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -65,28 +66,28 @@ const initialize = () => {
   return initializePromise;
 };
 
-/** Determine if a data provider with the given name exists anywhere on the network */
-async function has(providerName: string): Promise<boolean> {
-  await initialize();
-
-  return networkObjectService.has(getDataProviderObjectId(providerName));
+/** Indicate if we are aware of an existing data provider with the given name. If a data provider
+ *  with the given name is someone else on the network, this function won't tell you about it
+ *  unless something else in the existing process is subscribed to it.
+ */
+function hasKnown(providerName: string): boolean {
+  return networkObjectService.hasKnown(getDataProviderObjectId(providerName));
 }
 
 /**
  * Creates a subscribe function for a data provider to allow subscribing to updates on the data
- * @param dataProviderContainer container that holds a reference to the network object data provider so this subscribe function can reference the data provider
+ * @param dataProviderPromise promise to the data provider's network object
  * @param onDidUpdate the event to listen to for updates on the data
  * @param dataType the name of the functions to use (ex: `dataProvider.subscribeBook` -> `dataProvider.getBook`)
  * @returns subscribe function for a data provider
  */
 function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
-  dataProviderContainer: Container<IDataProvider<TDataTypes>>,
+  dataProviderPromise: Promise<IDataProvider<TDataTypes>>,
   onDidUpdate: PapiEvent<DataProviderUpdateInstructions<TDataTypes>>,
   dataType: DataTypeNames<TDataTypes>,
 ): DataProviderSubscriber<TDataTypes[typeof dataType]> {
   return async (selector, callback, options?: DataProviderSubscriberOptions) => {
-    if (!dataProviderContainer.contents)
-      throw new Error("subscribe: Somehow the data provider doesn't exist! Investigate");
+    const dataProvider = await dataProviderPromise;
 
     // Default options
     const subscriberOptions: DataProviderSubscriberOptions = {
@@ -116,15 +117,13 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
         return;
 
       // The update is relevant to this data type, so continue with this subscription
-      if (!dataProviderContainer.contents)
-        throw new Error("onDidUpdate: Somehow the data provider doesn't exist! Investigate");
       // Get the data at our selector when we receive notification that the data updated
       // TODO: Implement selector events so we can receive the new data with the update instead of reaching back out for it
       // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
       // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
       // to specify the specific types
       const data = await (
-        (dataProviderContainer.contents as unknown as DataProviderInternal<TDataTypes>)[
+        (dataProvider as unknown as DataProviderInternal<TDataTypes>)[
           `get${dataType}`
         ] as DataProviderGetter<TDataTypes[typeof dataType]>
       )(selector);
@@ -151,7 +150,7 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
       // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
       // to specify the specific types
       const data = await (
-        (dataProviderContainer.contents as unknown as DataProviderInternal<TDataTypes>)[
+        (dataProvider as unknown as DataProviderInternal<TDataTypes>)[
           `get${dataType}`
         ] as DataProviderGetter<TDataTypes[typeof dataType]>
       )(selector);
@@ -170,7 +169,7 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
 
 function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
   dataProviderEngine: IDataProviderEngine<TDataTypes> | undefined,
-  dataProviderContainer: Container<IDataProvider<TDataTypes>>,
+  dataProviderPromise: Promise<IDataProvider<TDataTypes>>,
   onDidUpdate: PapiEvent<DataProviderUpdateInstructions<TDataTypes>>,
 ): DataProviderInternal<TDataTypes> {
   // Object whose methods to run first when the data provider's method is called if they exist here
@@ -205,7 +204,7 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
           const dataType = getDataProviderDataTypeFromFunctionName(prop);
           // Subscribe to run the callback when data changes. Also immediately calls callback with the current value
           newDataProviderMethod = createDataProviderSubscriber<TDataTypes>(
-            dataProviderContainer,
+            dataProviderPromise,
             onDidUpdate,
             dataType,
           );
@@ -292,13 +291,13 @@ function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataT
  *
  * WARNING: this function mutates the provided object. Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
  * @param dataProviderEngine provider engine that handles setting and getting data as well as informing which listeners should get what updates
- * @param dataProviderContainer container that holds a reference to the network object data provider so the subscribe function can reference the data provider
+ * @param dataProviderPromise promise to the data provider's network object
  * @param onDidUpdateEmitter event emitter to use for informing subscribers of updates. The event just returns what set returns (should be true according to IDataProviderEngine)
  * @returns data provider layering over the provided data provider engine
  */
 function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
   dataProviderEngine: IDataProviderEngine<TDataTypes>,
-  dataProviderContainer: Container<IDataProvider<TDataTypes>>,
+  dataProviderPromise: Promise<IDataProvider<TDataTypes>>,
   onDidUpdateEmitter: PapiEventEmitter<DataProviderUpdateInstructions<TDataTypes>>,
 ): DataProviderInternal<TDataTypes> {
   // Figure out the available get/set methods' data types
@@ -372,11 +371,7 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
     }
   });
 
-  return createDataProviderProxy(
-    dataProviderEngine,
-    dataProviderContainer,
-    onDidUpdateEmitter.event,
-  );
+  return createDataProviderProxy(dataProviderEngine, dataProviderPromise, onDidUpdateEmitter.event);
 }
 
 /**
@@ -402,7 +397,7 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
   // There is a potential networking sync issue here. We check for a data provider, then we create a network event, then we create a network object.
   // If someone else registers an engine with the same data provider name at the same time, the two registrations could get intermixed and mess stuff up
   // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
-  if (await has(providerName))
+  if (hasKnown(providerName))
     throw new Error(`Data provider with type ${providerName} is already registered`);
 
   // We are good to go! Create the data provider
@@ -410,12 +405,12 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
   // Get the object id for this data provider name
   const dataProviderObjectId = getDataProviderObjectId(providerName);
 
-  /** Container to hold a reference to the final network object data provider so the local object
-   * can reference the network object in its functions
+  /** Variable to hold a promise to the final data provider's network object so the local object
+   *  can reference the network object in its functions
    */
-  const dataProviderContainer: Container<IDataProvider<TDataTypes>> = {
-    contents: undefined,
-  };
+  const dataProviderVariable = new AsyncVariable<IDataProvider<TDataTypes>>(
+    `DataProvider-${providerName}`,
+  );
 
   // Create a networked update event
   const onDidUpdateEmitter = networkService.createNetworkEventEmitter<
@@ -425,22 +420,9 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
   // Build the data provider
   const dataProviderInternal = buildDataProvider(
     dataProviderEngine,
-    dataProviderContainer,
+    dataProviderVariable.promise,
     onDidUpdateEmitter,
   );
-
-  // Temporarily fix a race condition where we register dataProviderInternal as a network object,
-  // then we get the network object in order to get the local proxy that doesn't have dispose on it,
-  // then we set the container to the local network object. If a process tries to call something on
-  // this data provider after it is set and before dataProviderContainer is properly set after the
-  // get below, an error occurred that the dataProviderContainer.contents was undefined. So we set
-  // dataProviderContainer.contents here to have a temporary fix where the container will have
-  // something in it immediately once it is set as a network object.
-  // TODO: Fix this issue - having contents set here essentially opens up data providers to be
-  // disposed by other things for a fraction of a second. Maybe we could set the container's
-  // contents in networkObjectService.set
-  // https://github.com/paranext/paranext-core/issues/185
-  dataProviderContainer.contents = dataProviderInternal as unknown as IDataProvider<TDataTypes>;
 
   // Set up the data provider to be a network object so other processes can use it
   const disposableDataProvider = (await networkObjectService.set(
@@ -448,15 +430,16 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
     dataProviderInternal,
   )) as IDisposableDataProvider<TDataTypes>;
 
-  // Get the local network object proxy for the data provider so you can't call
-  // dataProviderContainer.contents.dispose
+  // Get the local network object proxy for the data provider so the provider can't be disposed outside
+  // the service that registered the provider engine
   const dataProvider = (await networkObjectService.get<IDataProvider<TDataTypes>>(
     dataProviderObjectId,
   )) as IDataProvider<TDataTypes>;
 
-  // Update the dataProviderContainer so the internal data provider (specifically its subscribe
+  // Update the dataProviderVariable so the internal data provider (specifically its subscribe
   // function) can access the dataProvider appropriately
-  dataProviderContainer.contents = dataProvider;
+  if (dataProvider) dataProviderVariable.resolveToValue(dataProvider);
+  else throw Error(`Unable to get network object for data provider: ${dataProviderObjectId}`);
 
   return disposableDataProvider;
 }
@@ -471,13 +454,13 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
 function createLocalDataProviderToProxy<T extends DataProviderInternal>(
   dataProviderObjectId: string,
   // NetworkObject<DataProviderInternal> is our way to convert from DataProviderInternal to IDataProvider without specifying generics
-  dataProviderContainer: Container<NetworkObject<T>>,
+  dataProviderPromise: Promise<NetworkObject<T>>,
 ): Partial<T> {
   // Create a networked update event
   const onDidUpdate = networkService.getNetworkEvent<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
-  return createDataProviderProxy(undefined, dataProviderContainer, onDidUpdate) as Partial<T>;
+  return createDataProviderProxy(undefined, dataProviderPromise, onDidUpdate) as Partial<T>;
 }
 
 /**
@@ -508,7 +491,7 @@ async function get<T extends IDataProvider<any>>(providerName: string): Promise<
 }
 
 const dataProviderService = {
-  has,
+  hasKnown,
   registerEngine,
   get,
 };
