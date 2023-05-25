@@ -1442,7 +1442,7 @@ declare module 'shared/models/data-provider.model' {
   /**
    * Information that papi uses to interpret whether to send out updates on a data provider when the engine
    * runs `set<data_type>` or `notifyUpdate<data_type>`.
-   *  - `'*'` - update subscriptions for all data types on this data provider
+   *  - `'*'` update subscriptions for all data types on this data provider
    *  - `string` name of data type - update subscriptions for this data type
    *  - `string[]` names of data types - update subscriptions for the data types in the array
    *  - `true` (or other truthy values other than strings and arrays) - update subscriptions for this data type
