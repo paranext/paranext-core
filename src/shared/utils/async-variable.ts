@@ -46,7 +46,7 @@ export default class AsyncVariable<T> {
    * A simple way to see if this variable's promise was resolved or rejected already
    * @returns whether the variable was already resolved or rejected
    */
-  public get settled(): boolean {
+  public get hasSettled(): boolean {
     return Object.isFrozen(this);
   }
 

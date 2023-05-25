@@ -1247,7 +1247,7 @@ declare module 'shared/utils/async-variable' {
      * A simple way to see if this variable's promise was resolved or rejected already
      * @returns whether the variable was already resolved or rejected
      */
-    get settled(): boolean;
+    get hasSettled(): boolean;
     /**
      * Resolve this variable's promise to the given value
      * @param value this variable's promise will resolve to this value

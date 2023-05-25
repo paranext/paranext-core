@@ -7,11 +7,9 @@ test('wait on other async tasks to set and notify variables', () => {
   (async () => {
     await expect(testVariable.promise).resolves.toBe(TEST_VALUE);
   })();
-  (async () => {
-    expect(testVariable.settled).toBeFalsy();
-    testVariable.resolveToValue(TEST_VALUE);
-    expect(testVariable.settled).toBeTruthy();
-  })();
+  expect(testVariable.hasSettled).toBeFalsy();
+  testVariable.resolveToValue(TEST_VALUE);
+  expect(testVariable.hasSettled).toBeTruthy();
 });
 
 test('reject the promise for the value', () => {
