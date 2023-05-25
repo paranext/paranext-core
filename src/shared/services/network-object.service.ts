@@ -8,7 +8,8 @@ import {
 } from '@shared/utils/papi-util';
 import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
-import { Container, isString } from '@shared/utils/util';
+import { isString } from '@shared/utils/util';
+import AsyncVariable from '@shared/utils/async-variable';
 import {
   NetworkObject,
   DisposableNetworkObject,
@@ -298,17 +299,17 @@ const get = async <T extends object>(
     // At this point, the object exists remotely but does not yet exist locally.
 
     // The base object created below might need a reference to the final network object. Since the
-    // network object doesn't exist yet, create a container now and fill it in after the network
-    // object is created.
-    const proxyContainer: Container<NetworkObject<T>> = {
-      contents: undefined,
-    };
+    // network object doesn't exist yet, create an async variable now and fill it in after the
+    // network object is created.
+    const networkObjectVariable: AsyncVariable<NetworkObject<T>> = new AsyncVariable(
+      `NetworkObject-${id}`,
+    );
 
     // Create the base object that will be proxied for remote calls.
     // If a property exists on the base object, we use it and won't look for it on the remote object.
     // If a property does not exist on the base object, it is assumed to exist on the remote object.
     const baseObject: Partial<T> = createLocalObjectToProxy
-      ? (createLocalObjectToProxy(id, proxyContainer) as Partial<T>)
+      ? (createLocalObjectToProxy(id, networkObjectVariable.promise) as Partial<T>)
       : {};
 
     // Create a proxy with functions that will send requests to the remote object
@@ -321,9 +322,6 @@ const get = async <T extends object>(
     // The network object is finished! Rename it so we know it is finished
     const networkObject = remoteProxy.proxy as NetworkObject<T>;
 
-    // Store the network object in the container so baseObject has a valid reference
-    proxyContainer.contents = networkObject;
-
     // Save the network object for future lookups
     networkObjectRegistrations.set(id, {
       registrationType: NetworkObjectRegistrationType.Remote,
@@ -331,6 +329,9 @@ const get = async <T extends object>(
       networkObject,
       revokeProxy: remoteProxy.revoke,
     });
+
+    // Resolve the promise to the network object so promise holders can complete their work
+    networkObjectVariable.resolveToValue(networkObject);
 
     return networkObject;
   });
