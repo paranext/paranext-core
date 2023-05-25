@@ -48,7 +48,7 @@
           const nameInput = document.getElementById('name-input');
           const greeting = await greetingsDataProvider.getGreeting(nameInput.value.toLowerCase());
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.textContent = papi.util.htmlEncode(greeting);
+          helloSomeoneOutput.textContent = papi.util.htmlEncode(greeting || '');
           print(greeting);
         });
         greetingsButton.addEventListener('contextmenu', async (e) => {
