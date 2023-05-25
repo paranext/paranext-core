@@ -43,6 +43,12 @@ declare module 'shared/utils/util' {
    */
   export function isString(o: unknown): o is string;
   /**
+   * Evaluates if the value is truthy, false, or 0
+   * @param val value to evaluate
+   * @returns whether the value is truthy, false, or 0
+   */
+  export function isValidValue(val: unknown): val is NonNullable<unknown>;
+  /**
    * Get a function that reduces calls to the function passed in
    * @param fn The function to debounce
    * @param delay How much delay in milliseconds after the most recent call to the debounced function to call the function
@@ -1852,6 +1858,11 @@ declare module 'renderer/components/papi-components/combo-box.component' {
      */
     isDisabled?: boolean;
     /**
+     * If `true`, the component can be cleared, and will have a button to do so
+     * @default true
+     */
+    isClearable?: boolean;
+    /**
      * True when (input related to) switch is erroneous
      * @default false
      */
@@ -1861,6 +1872,10 @@ declare module 'renderer/components/papi-components/combo-box.component' {
      * @default false
      */
     isFullWidth?: boolean;
+    /**
+     * Width of the combobox in pixels. Setting this prop overrides the `isFullWidth` prop
+     */
+    width?: number;
     /**
      * List of available options for the dropdown menu
      */
@@ -1875,12 +1890,16 @@ declare module 'renderer/components/papi-components/combo-box.component' {
      */
     className?: string;
     /**
+     * The selected value that the combo box currently holds
+     */
+    value?: string;
+    /**
      * Triggers when content of textfield is changed
      */
     onChange?: (
       event: SyntheticEvent<Element, Event>,
       value: unknown,
-      reason: ComboBoxChangeReason,
+      reason?: ComboBoxChangeReason,
       details?: ComboBoxChangeDetails<unknown> | undefined,
     ) => void;
     /**
@@ -1901,10 +1920,13 @@ declare module 'renderer/components/papi-components/combo-box.component' {
   function ComboBox({
     title,
     isDisabled,
+    isClearable,
     hasError,
     isFullWidth,
+    width,
     options,
     className,
+    value,
     onChange,
     onFocus,
     onBlur,
