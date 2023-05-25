@@ -167,6 +167,13 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
   };
 }
 
+/**
+ * Creates a data provider proxy with `subscribe<data_type>` functions. Runs locally and remote
+ * @param dataProviderEngine engine to make the data provider proxy over if local. `undefined` if remote
+ * @param dataProviderPromise promise to the data provider's network object
+ * @param onDidUpdate the event to listen to for updates on the data
+ * @returns data provider proxy with `subscribe<data_type>` functions
+ */
 function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
   dataProviderEngine: IDataProviderEngine<TDataTypes> | undefined,
   dataProviderPromise: Promise<IDataProvider<TDataTypes>>,
@@ -263,6 +270,13 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
   return dataProvider;
 }
 
+/**
+ * Maps from update instructions returned from a `notifyUpdate<data_type>` or `set<data_type>` function
+ * to an update event to send over the network to inform subscribers to update their data
+ * @param updateInstructions update instructions to reformat into an update event
+ * @param dataType the data type of the update instructions (e.g. 'Verse' if update instructions came from `setVerse`)
+ * @returns update event information to send in the `onDidUpdate` event emitter to tell subscribers to update
+ */
 function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataTypes>(
   updateInstructions: DataProviderUpdateInstructions<TDataTypes> | undefined,
   dataType: DataTypeNames<TDataTypes>,
