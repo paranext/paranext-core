@@ -11,26 +11,50 @@ logger.info('Hello Someone is importing!');
 
 const unsubscribers: UnsubscriberAsync[] = [];
 
+// ensurePersonExists doesn't make TypeScript understand, so just assert where appropriate
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 const greetingsDataProviderEngine = {
   people: {
-    bill: 'Hi, my name is Bill!',
-    kathy: 'Hello. My name is Kathy.',
+    bill: { greeting: 'Hi, my name is Bill!', age: 43 },
+    kathy: { greeting: 'Hello. My name is Kathy.', age: 35 },
   } as AllGreetingsData,
 
-  setGreeting: async (
+  ensurePersonExists(name: string) {
+    if (!this.people[name.toLowerCase()]) this.people[name.toLowerCase()] = {};
+  },
+
+  async setGreeting(
     name: string,
-    data: string,
-  ): Promise<DataProviderUpdateInstructions<GreetingsDataTypes>> => {
+    greeting: string,
+  ): Promise<DataProviderUpdateInstructions<GreetingsDataTypes>> {
+    this.ensurePersonExists(name);
     // If there is no change in the greeting, don't update
-    if (data === greetingsDataProviderEngine.people[name.toLowerCase()]) return false;
+    if (greeting === this.people[name.toLowerCase()]!.greeting) return false;
 
     // Update the greeting and send an update
-    greetingsDataProviderEngine.people[name.toLowerCase()] = data;
+    this.people[name.toLowerCase()]!.greeting = greeting;
     return ['Greeting', 'All'];
   },
 
   async getGreeting(name: string) {
-    return this.people[name.toLowerCase()];
+    return this.people[name.toLowerCase()]?.greeting;
+  },
+
+  async setAge(
+    name: string,
+    age: number,
+  ): Promise<DataProviderUpdateInstructions<GreetingsDataTypes>> {
+    this.ensurePersonExists(name);
+    // If there is no change in the age, don't update
+    if (age === this.people[name.toLowerCase()]!.age) return false;
+
+    // Update the age and send an update
+    this.people[name.toLowerCase()]!.age = age;
+    return ['Age', 'All'];
+  },
+
+  async getAge(name: string) {
+    return this.people[name.toLowerCase()]?.age;
   },
 
   async setAll() {
@@ -39,6 +63,8 @@ const greetingsDataProviderEngine = {
   },
 
   async getAll() {
+    // WARNING: returning the object reference itself allows in-process consumers to edit this
+    // object directly. Please do not do this in a real extension (deep clone it or something)
     return this.people;
   },
 
@@ -49,6 +75,7 @@ const greetingsDataProviderEngine = {
     return result;
   },
 };
+/* eslint-enable */
 
 export async function activate() {
   logger.info('Hello Someone is activating!');

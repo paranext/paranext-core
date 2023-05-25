@@ -4,7 +4,7 @@
   <body>
     <div>Hello Someone!!</div>
     <div>
-      <input id="greetings-input" value="Bill" /><button id="greetings-button" type="button">
+      <input id="name-input" value="Bill" /><button id="greetings-button" type="button">
         Greet
       </button>
     </div>
@@ -15,10 +15,20 @@
         value="Hey, my name is Bill. I got set by the webview!"
       /><button id="set-greetings-button" type="button">Set Greeting</button>
     </div>
+    <div>
+      <input id="set-age-input" type="number" value="43" /><button
+        id="set-age-button"
+        type="button"
+      >
+        Set Age
+      </button>
+    </div>
     <div id="all-greetings"></div>
-    <div id="any-greetings-update-count">Any Greetings Updates: 0</div>
+    <div id="all-update-count">All Updates: 0</div>
     <div id="bill-any-greetings-update-count">Any Greetings Updates (via Bill): 0</div>
     <div id="bill-greetings-update-count">Bill Greetings Updates: 0</div>
+    <div id="bill-any-age-update-count">Any Age Updates (via Bill): 0</div>
+    <div id="bill-age-update-count">Bill Age Updates: 0</div>
     <script>
       // Enable webview debugging
       console.debug('Debug Hello Someone WebView');
@@ -35,18 +45,16 @@
         // Attach handler for greetings-button
         const greetingsButton = document.getElementById('greetings-button');
         greetingsButton.addEventListener('click', async () => {
-          const greetingsInput = document.getElementById('greetings-input');
-          const greeting = await greetingsDataProvider.getGreeting(
-            greetingsInput.value.toLowerCase(),
-          );
+          const nameInput = document.getElementById('name-input');
+          const greeting = await greetingsDataProvider.getGreeting(nameInput.value.toLowerCase());
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
           helloSomeoneOutput.textContent = papi.util.htmlEncode(greeting);
           print(greeting);
         });
         greetingsButton.addEventListener('contextmenu', async (e) => {
           e.preventDefault();
-          const greetingsInput = document.getElementById('greetings-input');
-          const name = greetingsInput.value.toLowerCase();
+          const nameInput = document.getElementById('name-input');
+          const name = nameInput.value.toLowerCase();
           const promises = new Array(10000);
           for (let i = 0; i < 10000; i += 1) promises[i] = greetingsDataProvider.getGreeting(name);
           await Promise.all(promises);
@@ -56,8 +64,8 @@
         // Attach handler for set-greetings-button
         const setGreetingsButton = document.getElementById('set-greetings-button');
         setGreetingsButton.addEventListener('click', async () => {
-          const greetingsInput = document.getElementById('greetings-input');
-          const name = greetingsInput.value;
+          const nameInput = document.getElementById('name-input');
+          const name = nameInput.value;
           const setGreetingsInput = document.getElementById('set-greetings-input');
           const success = await greetingsDataProvider.setGreeting(
             name.toLowerCase(),
@@ -72,6 +80,22 @@
           );
         });
 
+        // Attach handler for set-age-button
+        const setAgeButton = document.getElementById('set-age-button');
+        setAgeButton.addEventListener('click', async () => {
+          const nameInput = document.getElementById('name-input');
+          const name = nameInput.value;
+          const setAgeInput = document.getElementById('set-age-input');
+          const success = await greetingsDataProvider.setAge(
+            name.toLowerCase(),
+            parseInt(setAgeInput.value),
+          );
+          const helloSomeoneOutput = document.getElementById('greetings-button-output');
+          helloSomeoneOutput.textContent = papi.util.htmlEncode(
+            `${success ? 'Successfully' : 'Unsuccessfully'} set ${name}'s age!`.replace(/'/g, '`'),
+          );
+        });
+
         // Update the 'all greetings' display on load and on greetings updates
         greetingsDataProvider.subscribeAll(undefined, (greetings) => {
           const allGreetings = document.getElementById('all-greetings');
@@ -81,17 +105,13 @@
         });
 
         // Update the greetings count on any greeting update
-        let anyGreetingsUpdateCount = 0;
+        let allUpdateCount = 0;
         greetingsDataProvider.subscribeAll(
           undefined,
           () => {
-            anyGreetingsUpdateCount += 1;
-            const anyGreetingsUpdateCountDiv = document.getElementById(
-              'any-greetings-update-count',
-            );
-            anyGreetingsUpdateCountDiv.textContent = papi.util.htmlEncode(
-              `Any Greetings Updates: ${anyGreetingsUpdateCount}`,
-            );
+            allUpdateCount += 1;
+            const allUpdateCountDiv = document.getElementById('all-update-count');
+            allUpdateCountDiv.textContent = papi.util.htmlEncode(`All Updates: ${allUpdateCount}`);
           },
           { retrieveDataImmediately: false },
         );
@@ -121,6 +141,30 @@
           );
           billGreetingsUpdateCountDiv.textContent = papi.util.htmlEncode(
             `Bill Greetings Updates: ${billGreetingsUpdateCount}`,
+          );
+        });
+
+        // Update the age count on age updates
+        let billAnyAgeUpdateCount = 0;
+        greetingsDataProvider.subscribeAge(
+          'BiLl',
+          () => {
+            billAnyAgeUpdateCount += 1;
+            const billAnyAgeUpdateCountDiv = document.getElementById('bill-any-age-update-count');
+            billAnyAgeUpdateCountDiv.textContent = papi.util.htmlEncode(
+              `Any Age Updates (via Bill): ${billAnyAgeUpdateCount}`,
+            );
+          },
+          { retrieveDataImmediately: false, whichUpdates: 'all' },
+        );
+
+        // Update the age count on age updates
+        let billAgeUpdateCount = -1;
+        greetingsDataProvider.subscribeAge('bIlL', () => {
+          billAgeUpdateCount += 1;
+          const billAgeUpdateCountDiv = document.getElementById('bill-age-update-count');
+          billAgeUpdateCountDiv.textContent = papi.util.htmlEncode(
+            `Bill Age Updates: ${billAgeUpdateCount}`,
           );
         });
       }

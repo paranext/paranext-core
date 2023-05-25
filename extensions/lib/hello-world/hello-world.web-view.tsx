@@ -1,6 +1,7 @@
 import papi from 'papi';
 import { useCallback, useContext, useState } from 'react';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
+import { GreetingsDataTypes } from '@extensions/hello-someone/hello-someone';
 
 const {
   react: {
@@ -35,11 +36,21 @@ globalThis.webViewComponent = function HelloWorld() {
     'retrieving',
   );
 
-  const [latestVerseText] = useData.Verse<QuickVerseDataTypes['verse']>(
+  const [latestVerseText] = useData.Verse<QuickVerseDataTypes['Verse']>(
     'quick-verse.quick-verse',
     'latest',
     'Loading latest Scripture text...',
   );
+
+  const [name, setName] = useState('Bill');
+
+  const [personGreeting] = useData.Greeting<GreetingsDataTypes['Greeting']>(
+    'hello-someone.greetings',
+    name,
+    'Greeting loading',
+  );
+
+  const [personAge] = useData.Age<GreetingsDataTypes['Age']>('hello-someone.greetings', name, -1);
 
   return (
     <div>
@@ -73,6 +84,11 @@ globalThis.webViewComponent = function HelloWorld() {
         </Button>
       </div>
       <div>{latestVerseText}</div>
+      <div>
+        <input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div>{personGreeting}</div>
+      <div>{personAge}</div>
     </div>
   );
 };
