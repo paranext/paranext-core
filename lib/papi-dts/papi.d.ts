@@ -1418,10 +1418,10 @@ declare module 'shared/models/data-provider.model' {
     whichUpdates?: 'deeply-equal' | 'all';
   };
   export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTypes> =
-    | true
-    | false
-    | (keyof TDataTypes)[]
-    | 'all';
+    | '*'
+    | DataTypeNames<TDataTypes>
+    | DataTypeNames<TDataTypes>[]
+    | boolean;
   export type DataProviderSetter<
     TDataTypes extends DataProviderDataTypes,
     DataType extends keyof TDataTypes,
@@ -1461,22 +1461,22 @@ declare module 'shared/models/data-provider.model' {
     [dataType: string]: DataProviderDataType;
   };
   export type DataTypeNames<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-    Capitalize<keyof TDataTypes & string>;
+    keyof TDataTypes & string;
   export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
-    [DataType in keyof TDataTypes as `set${Capitalize<DataType & string>}`]: DataProviderSetter<
+    [DataType in keyof TDataTypes as `set${DataType & string}`]: DataProviderSetter<
       TDataTypes,
       DataType
     >;
   };
   export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {
-    [DataType in keyof TDataTypes as `get${Capitalize<DataType & string>}`]: DataProviderGetter<
+    [DataType in keyof TDataTypes as `get${DataType & string}`]: DataProviderGetter<
       TDataTypes[DataType]
     >;
   };
   export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = {
-    [DataType in keyof TDataTypes as `subscribe${Capitalize<
-      DataType & string
-    >}`]: DataProviderSubscriber<TDataTypes[DataType]>;
+    [DataType in keyof TDataTypes as `subscribe${DataType & string}`]: DataProviderSubscriber<
+      TDataTypes[DataType]
+    >;
   };
   /**
    * An internal object created locally when someone runs dataProviderService.registerEngine.
@@ -1499,7 +1499,7 @@ declare module 'shared/models/data-provider.model' {
     >;
   export function getDataProviderDataTypeFromFunctionName<
     TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
-  >(fnName: string): Capitalize<keyof TDataTypes & string>;
+  >(fnName: string): DataTypeNames<TDataTypes>;
   export default DataProviderInternal;
 }
 declare module 'shared/models/data-provider.interface' {
@@ -2317,7 +2317,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
    */
   type UseDataHook = {
-    [DataType: Capitalize<string>]: <TDataType extends DataProviderDataType>(
+    [DataType: string]: <TDataType extends DataProviderDataType>(
       dataProviderSource: string | IDataProvider<any> | undefined,
       selector: TDataType['selector'],
       defaultValue: TDataType['getData'],
@@ -2354,7 +2354,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
     ) => void;
     useDataProvider: typeof useDataProvider;
     useData: {
-      [DataType: Capitalize<string>]: <
+      [DataType: string]: <
         TDataType extends import('shared/models/data-provider.model').DataProviderDataType<
           unknown,
           unknown,
@@ -2434,7 +2434,7 @@ declare module 'papi' {
         ) => void;
         useDataProvider: typeof import('renderer/hooks/papi-hooks/use-data-provider.hook').default;
         useData: {
-          [DataType: Capitalize<string>]: <
+          [DataType: string]: <
             TDataType extends import('shared/models/data-provider.model').DataProviderDataType<
               unknown,
               unknown,

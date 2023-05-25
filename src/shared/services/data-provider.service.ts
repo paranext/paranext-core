@@ -106,14 +106,14 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
     /** Whether we have already received an update event, meaning our initial `get` will return old data */
     let receivedUpdate = false;
     const callbackWithUpdate = async (
-      notifyUpdateReturn: DataProviderUpdateInstructions<TDataTypes>,
+      updateEventResult: DataProviderUpdateInstructions<TDataTypes>,
     ) => {
       if (
-        notifyUpdateReturn !== 'all' &&
-        (!Array.isArray(notifyUpdateReturn) || !notifyUpdateReturn.includes(dataType))
+        updateEventResult !== '*' &&
+        (!Array.isArray(updateEventResult) || !updateEventResult.includes(dataType))
       ) {
         // TODO: REMOVE THIS LOG
-        console.log(`Update ${notifyUpdateReturn} does not apply to data type ${dataType}`);
+        console.log(`Update ${updateEventResult} does not apply to data type ${dataType}`);
         // The update does not apply to this data type. Ignore
         return;
       }
@@ -269,17 +269,23 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
 
 function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataTypes>(
   updateInstructions: DataProviderUpdateInstructions<TDataTypes> | undefined,
-  dataType: keyof TDataTypes,
-) {
-  let updateEventValue = updateInstructions;
-  // If the update instructions are true, it means we should just send an update for its own data type
-  if (updateEventValue === true) updateEventValue = [dataType];
-  if (
-    updateEventValue !== 'all' &&
-    (!Array.isArray(updateEventValue) || updateEventValue.length <= 0)
-  )
+  dataType: DataTypeNames<TDataTypes>,
+): DataProviderUpdateInstructions<TDataTypes> {
+  // If they want to update all data types, let them do it
+  if (updateInstructions === '*') return updateInstructions;
+  // If the update instructions are a string other than '*' (hopefully one of the data types), send
+  // an update specifically for that data type
+  if (isString(updateInstructions)) return [updateInstructions as DataTypeNames<TDataTypes>];
+  if (Array.isArray(updateInstructions)) {
+    // If the update instructions are a non-empty array, send it
+    if (updateInstructions.length > 0) return updateInstructions;
+    // If the update instructions are an empty array, don't update (count as falsy)
     return false;
-  return updateEventValue;
+  }
+  // If the update instructions are truthy but neither an array or a string or '*', it means we should just send an update for its own data type
+  if (updateInstructions) return [dataType];
+  // If the update instructions are falsy, do not update
+  return false;
 }
 
 /**

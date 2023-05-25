@@ -41,7 +41,7 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
   notifyUpdateVerse(updateInstructions?: DataProviderUpdateInstructions<QuickVerseDataTypes>) {
     logger.info(`Quick verse notifyUpdateVerse! latestVerseRef = ${this.latestVerseRef}`);
     // If they don't pass anything in, update everything by default
-    return updateInstructions === undefined ? 'all' : updateInstructions;
+    return updateInstructions === undefined ? '*' : updateInstructions;
   }
 
   /**
@@ -69,7 +69,7 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
     };
     if (selector !== 'latest') this.latestVerseRef = this.#getSelector(selector);
     this.heresyCount += 1;
-    return 'all';
+    return '*';
   }
 
   async setVerse(selector: string, data: QuickVerseSetData) {
@@ -108,7 +108,7 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
         // Cache the verse text, track the latest cached verse, and send an update
         if (selector !== 'latest') this.latestVerseRef = this.#getSelector(selector);
         // Inform everyone that we updated
-        this.notifyUpdateVerse('all');
+        this.notifyUpdateVerse('*');
       } catch (e) {
         responseVerse = {
           text: `Failed to fetch ${selector} from bible-api! Reason: ${e}`,

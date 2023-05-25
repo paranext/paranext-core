@@ -2,6 +2,7 @@ import papi from 'papi';
 import type { WebViewContentType } from 'shared/data/web-view.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import { AllGreetingsData, GreetingsDataTypes } from '@extensions/hello-someone/hello-someone';
+import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
 
@@ -16,13 +17,16 @@ const greetingsDataProviderEngine = {
     kathy: 'Hello. My name is Kathy.',
   } as AllGreetingsData,
 
-  setGreeting: async (name: string, data: string) => {
+  setGreeting: async (
+    name: string,
+    data: string,
+  ): Promise<DataProviderUpdateInstructions<GreetingsDataTypes>> => {
     // If there is no change in the greeting, don't update
     if (data === greetingsDataProviderEngine.people[name.toLowerCase()]) return false;
 
     // Update the greeting and send an update
     greetingsDataProviderEngine.people[name.toLowerCase()] = data;
-    return ['Greeting', 'All'] as (keyof GreetingsDataTypes)[];
+    return ['Greeting', 'All'];
   },
 
   async getGreeting(name: string) {

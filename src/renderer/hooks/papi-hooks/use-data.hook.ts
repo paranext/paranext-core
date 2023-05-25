@@ -28,7 +28,7 @@ import { isString } from '@shared/utils/util';
  *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
  */
 type UseDataHook = {
-  [DataType: Capitalize<string>]: <TDataType extends DataProviderDataType>(
+  [DataType: string]: <TDataType extends DataProviderDataType>(
     // Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     dataProviderSource: string | IDataProvider<any> | undefined,

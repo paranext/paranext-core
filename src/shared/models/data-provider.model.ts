@@ -30,10 +30,10 @@ export type DataProviderSubscriberOptions = {
 };
 
 export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTypes> =
-  | true
-  | false
-  | (keyof TDataTypes)[]
-  | 'all';
+  | '*'
+  | DataTypeNames<TDataTypes>
+  | DataTypeNames<TDataTypes>[]
+  | boolean;
 
 export type DataProviderSetter<
   TDataTypes extends DataProviderDataTypes,
@@ -75,7 +75,7 @@ export type DataProviderDataTypes = {
 };
 
 export type DataTypeNames<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-  Capitalize<keyof TDataTypes & string>;
+  keyof TDataTypes & string;
 
 export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
   /**
@@ -86,7 +86,7 @@ export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
    * @param data the data that determines what to set at the selector
    * @returns true if successfully set (will send updates), false otherwise (will not send updates)
    */
-  [DataType in keyof TDataTypes as `set${Capitalize<DataType & string>}`]: DataProviderSetter<
+  [DataType in keyof TDataTypes as `set${DataType & string}`]: DataProviderSetter<
     TDataTypes,
     DataType
   >;
@@ -100,7 +100,7 @@ export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {
    * @param selector tells the provider what subset of data to get
    * @returns the subset of data represented by the selector
    */
-  [DataType in keyof TDataTypes as `get${Capitalize<DataType & string>}`]: DataProviderGetter<
+  [DataType in keyof TDataTypes as `get${DataType & string}`]: DataProviderGetter<
     TDataTypes[DataType]
   >;
 };
@@ -116,9 +116,9 @@ export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = 
    * @param options various options to adjust how the subscriber emits updates
    * @returns unsubscriber to stop listening for updates
    */
-  [DataType in keyof TDataTypes as `subscribe${Capitalize<
-    DataType & string
-  >}`]: DataProviderSubscriber<TDataTypes[DataType]>;
+  [DataType in keyof TDataTypes as `subscribe${DataType & string}`]: DataProviderSubscriber<
+    TDataTypes[DataType]
+  >;
 };
 
 /**
