@@ -144,11 +144,3 @@ export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTime
   const timeout = wait(maxWaitTimeInMS).then(() => null);
   return Promise.any([timeout, fn()]);
 }
-
-/**
- * Generic container so we don't need to have XYZContainer types whenever we need to wrap something.
- * This type is basically a pointer to an object.
- */
-export interface Container<T> {
-  contents: T | undefined;
-}

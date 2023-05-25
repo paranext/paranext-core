@@ -87,13 +87,6 @@ declare module 'shared/utils/util' {
     fn: () => Promise<TResult>,
     maxWaitTimeInMS: number,
   ): Promise<Awaited<TResult> | null>;
-  /**
-   * Generic container so we don't need to have XYZContainer types whenever we need to wrap something.
-   * This type is basically a pointer to an object.
-   */
-  export interface Container<T> {
-    contents: T | undefined;
-  }
 }
 declare module 'shared/utils/papi-util' {
   import { ProcessType } from 'shared/global-this.model';
@@ -1227,6 +1220,52 @@ declare module 'shared/services/internet.service' {
   };
   export default internetService;
 }
+declare module 'shared/utils/async-variable' {
+  /**
+   * This class provides a convenient way for one task to wait on a variable that another task sets.
+   */
+  export default class AsyncVariable<T> {
+    private readonly variableName;
+    private readonly promiseToValue;
+    private resolver;
+    private rejecter;
+    /**
+     * Creates an instance of the class
+     * @param variableName name to use when logging about this variable
+     * @param rejectIfNotSettledWithinMS milliseconds to wait before verifying if the promise was
+     * settled (resolved or rejected); will reject if it has not settled by that time.  Use -1 if you
+     * do not want a timeout at all.
+     */
+    constructor(variableName: string, rejectIfNotSettledWithinMS?: number);
+    /**
+     * Get this variable's promise to a value. This always returns the same promise even after the
+     * value has been resolved or rejected.
+     * @returns the promise for the value to be set
+     */
+    get promise(): Promise<T>;
+    /**
+     * A simple way to see if this variable's promise was resolved or rejected already
+     * @returns whether the variable was already resolved or rejected
+     */
+    get hasSettled(): boolean;
+    /**
+     * Resolve this variable's promise to the given value
+     * @param value this variable's promise will resolve to this value
+     * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
+     */
+    resolveToValue(value: T, throwIfAlreadySettled?: boolean): void;
+    /**
+     * Reject this variable's promise for the value with the given reason
+     * @param reason this variable's promise will be rejected with this reason
+     * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
+     */
+    rejectWithReason(reason: string, throwIfAlreadySettled?: boolean): void;
+    /**
+     * Prevent any further updates to this variable
+     */
+    private complete;
+  }
+}
 declare module 'shared/models/disposal.model' {
   import { PapiEvent } from 'shared/models/papi-event.model';
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
@@ -1295,7 +1334,6 @@ declare module 'shared/services/network-object.service' {
   export default networkObjectService;
 }
 declare module 'shared/models/network-object.model' {
-  import { Container } from 'shared/utils/util';
   import {
     Dispose,
     OnDidDispose,
@@ -1350,7 +1388,7 @@ declare module 'shared/models/network-object.model' {
    */
   export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
     id: string,
-    networkObjectContainer: Container<NetworkObject<T>>,
+    networkObjectPromise: Promise<NetworkObject<T>>,
   ) => Partial<NetworkableObject>;
 }
 declare module 'shared/models/data-provider.model' {
@@ -1534,7 +1572,7 @@ declare module 'shared/services/data-provider.service' {
    *  with the given name is someone else on the network, this function won't tell you about it
    *  unless something else in the existing process is subscribed to it.
    */
-  function hasKnown(providerName: string): Promise<boolean>;
+  function hasKnown(providerName: string): boolean;
   /**
    * Creates a data provider to be shared on the network layering over the provided data provider engine.
    * @param providerName name this data provider should be called on the network
@@ -2377,7 +2415,7 @@ declare module 'papi' {
       fetch: typeof fetch;
     };
     dataProvider: {
-      hasKnown: (providerName: string) => Promise<boolean>;
+      hasKnown: (providerName: string) => boolean;
       registerEngine: <TSelector, TGetData, TSetData>(
         providerName: string,
         dataProviderEngine: import('shared/models/data-provider-engine.model').default<
