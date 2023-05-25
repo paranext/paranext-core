@@ -55,9 +55,6 @@ export async function activate() {
     const unsubGreetings = await greetingsDataProvider.subscribeGreeting('Bill', (billGreeting) =>
       logger.info(`Bill's greeting: ${billGreeting}`),
     );
-    const unsubAll = await greetingsDataProvider.subscribeAll(undefined, (billGreeting) =>
-      logger.info(`Bill's greeting: ${billGreeting}`),
-    );
 
     unsubscribers.push(unsubGreetings);
   }

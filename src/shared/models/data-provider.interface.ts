@@ -5,11 +5,8 @@ import { DisposableNetworkObject, NetworkObject } from '@shared/models/network-o
  * An object on the papi that manages data and has methods for interacting with that data.
  * Created by the papi and layers over an IDataProviderEngine provided by an extension.
  * Returned from getting a data provider with dataProviderService.get.
- * @type `TSelector` - the type of selector used to get some data from this provider.
- *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
- *  Note: A selector must be stringifiable.
- * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
- * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
+ *
+ * Note: each `set<data_type>` method has a corresponding `get<data_type>` and `subscribe<data_type>` method.
  */
 // Basically a layer over NetworkObject
 type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =

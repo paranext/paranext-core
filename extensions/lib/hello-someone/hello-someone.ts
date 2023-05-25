@@ -33,6 +33,7 @@ const greetingsDataProviderEngine = {
 
     // Update the greeting and send an update
     this.people[name.toLowerCase()]!.greeting = greeting;
+    // Update greetings and all because all needs to know about all changes to people
     return ['Greeting', 'All'];
   },
 
@@ -50,6 +51,7 @@ const greetingsDataProviderEngine = {
 
     // Update the age and send an update
     this.people[name.toLowerCase()]!.age = age;
+    // Update age and all because all needs to know about all changes to people
     return ['Age', 'All'];
   },
 

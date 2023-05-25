@@ -111,12 +111,9 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
       if (
         updateEventResult !== '*' &&
         (!Array.isArray(updateEventResult) || !updateEventResult.includes(dataType))
-      ) {
-        // TODO: REMOVE THIS LOG
-        console.log(`Update ${updateEventResult} does not apply to data type ${dataType}`);
+      )
         // The update does not apply to this data type. Ignore
         return;
-      }
 
       // The update is relevant to this data type, so continue with this subscription
       if (!dataProviderContainer.contents)
@@ -341,8 +338,10 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
       : undefined;
     (dataProviderEngine[`notifyUpdate${dataType}`] as DataProviderEngineNotifyUpdate<TDataTypes>) =
       (...args) => {
-        // If notifyUpdate is not overridden, just return true to update subscribers for this data type
-        let dpeNotifyUpdateResult: DataProviderUpdateInstructions<TDataTypes> | undefined = true;
+        // If notifyUpdate is not overridden, perform default notifyUpdate behavior:
+        // return true if the first argument is undefined. Otherwise return the first argument.
+        let dpeNotifyUpdateResult: DataProviderUpdateInstructions<TDataTypes> | undefined =
+          args[0] === undefined ? true : args[0];
         if (dpeNotifyUpdate) dpeNotifyUpdateResult = dpeNotifyUpdate(...args);
         const updateEventResult = mapUpdateInstructionsToUpdateEvent<TDataTypes>(
           dpeNotifyUpdateResult,

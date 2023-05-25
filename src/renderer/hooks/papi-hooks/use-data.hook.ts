@@ -10,24 +10,40 @@ import { PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.mode
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import { isString } from '@shared/utils/util';
 
-/**
- * Subscribes to run a callback on a data provider's data with specified selector
- * @param dataProviderSource string name of data provider to get OR dataProvider (result of useDataProvider if you
- * want to consolidate and only get the data provider once)
- * @param selector tells the provider what data this listener is listening for
- * @param defaultValue the initial value to return while first awaiting the data
- *
- *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
- * @param subscriberOptions various options to adjust how the subscriber emits updates
- *
- *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
- * @returns [data, setData, isLoading]
- *  - `data`: the current value for the data from the data provider with the specified selector, either the defaultValue or the resolved data
- *  - `setData`: asynchronous function to request that the data provider update the data at this selector. Returns true if successful.
- *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
- *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
- */
 type UseDataHook = {
+  /**
+   * Special React hook that subscribes to run a callback on a data provider's data with specified
+   * selector on any data type that data provider serves.
+   *
+   * Usage: Specify the data type on the data provider with `useData.<data_type>` and use like any other
+   * React hook. For example, `useData.Verse` lets you subscribe to verses from a data provider.
+   *
+   * @example When subscribing to John 11:35 on the `'quick-verse.quick-verse'` data provider, we need
+   * to tell the useData.Verse hook what types we are using, so we get the Verse data types from the
+   * quick verse data types as follows:
+   * ```typescript
+   * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes['Verse']>(
+   *   'quick-verse.quick-verse',
+   *   'John 11:35',
+   *   'Verse text goes here',
+   * );
+   * ```
+   *
+   * @param dataProviderSource string name of data provider to get OR dataProvider (result of useDataProvider if you
+   * want to consolidate and only get the data provider once)
+   * @param selector tells the provider what data this listener is listening for
+   * @param defaultValue the initial value to return while first awaiting the data
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+   * @param subscriberOptions various options to adjust how the subscriber emits updates
+   *
+   *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+   * @returns [data, setData, isLoading]
+   *  - `data`: the current value for the data from the data provider with the specified data type and selector, either the defaultValue or the resolved data
+   *  - `setData`: asynchronous function to request that the data provider update the data at this data type and selector. Returns true if successful.
+   *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
+   *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data provider
+   */
   [DataType: string]: <TDataType extends DataProviderDataType>(
     // Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -119,8 +135,39 @@ function createUseDataHook(dataType: string) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const useDataCachedHooks: UseDataHook = {};
 
-// People can make whatever data hook they want
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+/**
+ * Special React hook that subscribes to run a callback on a data provider's data with specified
+ * selector on any data type that data provider serves.
+ *
+ * Usage: Specify the data type on the data provider with `useData.<data_type>` and use like any other
+ * React hook. For example, `useData.Verse` lets you subscribe to verses from a data provider.
+ *
+ * @example When subscribing to John 11:35 on the `'quick-verse.quick-verse'` data provider, we need
+ * to tell the useData.Verse hook what types we are using, so we get the Verse data types from the
+ * quick verse data types as follows:
+ * ```typescript
+ * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes['Verse']>(
+ *   'quick-verse.quick-verse',
+ *   'John 11:35',
+ *   'Verse text goes here',
+ * );
+ * ```
+ *
+ * @param dataProviderSource string name of data provider to get OR dataProvider (result of useDataProvider if you
+ * want to consolidate and only get the data provider once)
+ * @param selector tells the provider what data this listener is listening for
+ * @param defaultValue the initial value to return while first awaiting the data
+ *
+ *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+ * @param subscriberOptions various options to adjust how the subscriber emits updates
+ *
+ *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+ * @returns [data, setData, isLoading]
+ *  - `data`: the current value for the data from the data provider with the specified data type and selector, either the defaultValue or the resolved data
+ *  - `setData`: asynchronous function to request that the data provider update the data at this data type and selector. Returns true if successful.
+ *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
+ *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data provider
+ */
 const useData: UseDataHook = new Proxy(useDataCachedHooks, {
   get(obj, prop) {
     // Pass promises through

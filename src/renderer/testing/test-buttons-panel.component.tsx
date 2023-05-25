@@ -176,6 +176,8 @@ function TestButtonsPanel() {
     })();
   }
 
+  // We need to tell the useData.Verse hook what types we are using, so we get the Verse data types
+  // from the quick verse data types
   const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes['Verse']>(
     'quick-verse.quick-verse',
     verseRef,
