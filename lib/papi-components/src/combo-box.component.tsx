@@ -5,7 +5,7 @@ import {
   TextField as MuiTextField,
 } from '@mui/material';
 import { FocusEventHandler, SyntheticEvent } from 'react';
-import '@renderer/components/papi-components/combo-box.component.css';
+import './combo-box.component.css';
 
 export type ComboBoxChangeDetails<T = string> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
