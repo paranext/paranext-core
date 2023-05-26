@@ -2005,14 +2005,6 @@ declare module 'papi' {
     util: typeof papiUtil;
     webViews: typeof webViewService;
     react: {
-      components: {
-        Button: typeof import('papi-components').Button;
-        Checkbox: typeof import('papi-components').Checkbox;
-        ComboBox: typeof import('papi-components').ComboBox;
-        Slider: typeof import('papi-components').Slider;
-        Switch: typeof import('papi-components').Switch;
-        TextField: typeof import('papi-components').TextField;
-      };
       context: {
         TestContext: import('react').Context<string>;
       };

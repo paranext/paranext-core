@@ -16,16 +16,12 @@ import { isExtensionHost, isRenderer } from '@shared/utils/internal-util';
 import internetService from '@shared/services/internet.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import type { ExtensionStorageService } from '@extension-host/services/extension-storage.service';
-import type { PapiComponents } from 'papi-components';
 import type { PapiContext } from '@renderer/context/papi-context';
 import type { PapiHooks } from '@renderer/hooks/papi-hooks';
 
 // TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
 const extensionStorageService: ExtensionStorageService = isExtensionHost()
   ? require('@extension-host/services/extension-storage.service').default
-  : {};
-const papiComponents: PapiComponents = isRenderer()
-  ? require('papi-components').papiComponents
   : {};
 const papiContext: PapiContext = isRenderer()
   ? require('@renderer/context/papi-context').default
@@ -44,7 +40,6 @@ const papi = {
   util: papiUtil,
   webViews: webViewService,
   react: {
-    components: papiComponents,
     context: papiContext,
     hooks: papiHooks,
   },

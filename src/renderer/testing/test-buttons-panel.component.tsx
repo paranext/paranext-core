@@ -1,4 +1,5 @@
 import './test-buttons-panel.component.css';
+import { Button, TextField } from 'papi-components';
 import { useCallback, useMemo, useState } from 'react';
 import papi from '@shared/services/papi.service';
 import * as networkService from '@shared/services/network.service';
@@ -185,7 +186,7 @@ function TestButtonsPanel() {
   return (
     <div className="buttons-panel">
       <div className="hello">
-        <papi.react.components.TextField
+        <TextField
           label="Verse Ref"
           value={verseRefIntermediate}
           onChange={(e) => {
@@ -200,7 +201,7 @@ function TestButtonsPanel() {
             if (setVerseText) setVerseText({ text: e.target.value, isHeresy: true });
           }}
         />
-        <papi.react.components.Button
+        <Button
           className="test-button"
           onClick={async () => {
             const start = performance.now();
@@ -213,8 +214,8 @@ function TestButtonsPanel() {
           }}
         >
           Echo
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={async () => {
             const start = performance.now();
@@ -227,8 +228,8 @@ function TestButtonsPanel() {
           }}
         >
           Echo Renderer
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={async () => {
             const start = performance.now();
@@ -243,8 +244,8 @@ function TestButtonsPanel() {
           }}
         >
           Echo Extension Host
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={async () => {
             const start = performance.now();
@@ -263,8 +264,8 @@ function TestButtonsPanel() {
           }}
         >
           Echo Someone Renderer
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={async () => {
             const start = performance.now();
@@ -277,8 +278,8 @@ function TestButtonsPanel() {
           }}
         >
           AddThree (Renderer)
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={async () => {
             const start = performance.now();
@@ -291,8 +292,8 @@ function TestButtonsPanel() {
           }}
         >
           AddMany (Extension Host)
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={() =>
             runPromise(async () => {
@@ -307,8 +308,8 @@ function TestButtonsPanel() {
           }}
         >
           AddOne (C#)
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={async () => {
             const start = performance.now();
@@ -323,8 +324,8 @@ function TestButtonsPanel() {
           }}
         >
           Hello World (Extension)
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={async () => {
             const start = performance.now();
@@ -339,26 +340,23 @@ function TestButtonsPanel() {
           }}
         >
           Hello Someone (Extension)
-        </papi.react.components.Button>
-        <papi.react.components.Button
-          className="test-button"
-          onClick={() => runPromise(() => throwError('Test error'))}
-        >
+        </Button>
+        <Button className="test-button" onClick={() => runPromise(() => throwError('Test error'))}>
           Test Exception
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={() => runPromise(() => throwErrorExtensionHost('Test error'))}
         >
           Test Exception (Extension Host)
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={() => runPromise(() => throwErrorHelloWorld('Test error'))}
         >
           Test Exception (Hello World)
-        </papi.react.components.Button>
-        <papi.react.components.Button
+        </Button>
+        <Button
           className="test-button"
           onClick={() => runPromise(() => test())}
           onContextMenu={() => {
@@ -366,7 +364,7 @@ function TestButtonsPanel() {
           }}
         >
           Test
-        </papi.react.components.Button>
+        </Button>
       </div>
       <div className="hello">
         <div>{promiseReturn}</div>

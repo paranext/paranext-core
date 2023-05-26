@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import LabelPosition from 'papi-components/src/label-position.model';
-import { Checkbox } from 'papi-components';
+import { Checkbox, LabelPosition } from 'papi-components';
 
 const meta: Meta<typeof Checkbox> = {
   title: 'Basics/Checkbox',
