@@ -1,7 +1,7 @@
 {
   "name": "papi-components",
   "version": "0.0.1",
-  "description": "Components available on Paranext's PAPI - package to include styles sheets.",
+  "description": "React components to use in Paranext - packaged to include styles sheets.",
   "license": "MIT",
   "homepage": "https://github.com/paranext/paranext-core/tree/main/lib/papi-components",
   "bugs": {
