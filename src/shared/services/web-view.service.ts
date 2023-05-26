@@ -7,11 +7,9 @@ import cloneDeep from 'lodash/cloneDeep';
 import { isRenderer } from '@shared/utils/internal-util';
 import {
   aggregateUnsubscriberAsyncs,
-  CommandHandler,
   getModuleSimilarApiMessage,
   serializeRequestType,
 } from '@shared/utils/papi-util';
-import * as commandService from '@shared/services/command.service';
 import { getErrorMessage, newNonce, wait } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
@@ -28,11 +26,13 @@ import {
   WebViewContentType,
   WebViewProps,
 } from '@shared/data/web-view.model';
+import * as networkService from '@shared/services/network.service';
 
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
 const DEFAULT_FLOAT_SIZE = { width: 300, height: 150 };
 const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
+const ADD_WEB_VIEW_REQUEST = 'addWebView';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -107,14 +107,14 @@ export const addWebView = async (
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
     // Try to run addWebView several times until the renderer is up
     // Once we implement a way to track dependencies across processes, this can go away
-    // Note that commands turn into requests, and requests are retried, so there is another loop
+    // Note that requests are retried, so there is another loop
     // within this loop deeper down.
     for (let attemptsRemaining = 5; attemptsRemaining > 0; attemptsRemaining--) {
       let success = true;
       try {
         // eslint-disable-next-line no-await-in-loop
-        await commandService.sendCommand<[WebViewContents, Layout], void>(
-          'addWebView',
+        await networkService.request<[WebViewContents, Layout], void>(
+          serializeRequestType(CATEGORY_WEB_VIEW, ADD_WEB_VIEW_REQUEST),
           webView,
           layout,
         );
@@ -126,8 +126,8 @@ export const addWebView = async (
           attemptsRemaining === 1 ||
           getErrorMessage(error) !==
             `No handler was found to process the request of type ${serializeRequestType(
-              'command',
-              'addWebView',
+              CATEGORY_WEB_VIEW,
+              ADD_WEB_VIEW_REQUEST,
             )}`
         )
           throw error;
@@ -279,8 +279,8 @@ export const addWebView = async (
 };
 
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
-const rendererCommandFunctions: { [commandName: string]: CommandHandler } = {
-  addWebView,
+const rendererRequestHandlers = {
+  [serializeRequestType(CATEGORY_WEB_VIEW, ADD_WEB_VIEW_REQUEST)]: addWebView,
 };
 
 /** Sets up the WebViewService. Runs only once */
@@ -292,20 +292,20 @@ export const initialize = () => {
 
     // Set up subscriptions that the service needs to work
 
-    // Register built-in commands
+    // Register built-in requests
     if (isRenderer()) {
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
-      const unsubPromises = Object.entries(rendererCommandFunctions).map(([commandName, handler]) =>
-        commandService.registerCommand(commandName, handler),
+      const unsubPromises = Object.entries(rendererRequestHandlers).map(([requestType, handler]) =>
+        networkService.registerRequestHandler(requestType, handler),
       );
 
-      // Wait to successfully register all commands
-      const unsubscribeCommands = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
+      // Wait to successfully register all requests
+      const unsubscribeRequests = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
 
-      // On closing, try to remove command listeners
+      // On closing, try to remove request listeners
       // TODO: should do this on the server when the connection closes or when the server exits as well
       window.addEventListener('beforeunload', async () => {
-        await unsubscribeCommands();
+        await unsubscribeRequests();
       });
     }
 
