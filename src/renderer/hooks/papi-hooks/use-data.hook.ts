@@ -22,10 +22,10 @@ type UseDataHook = {
    * React hook. For example, `useData.Verse` lets you subscribe to verses from a data provider.
    *
    * @example When subscribing to John 11:35 on the `'quick-verse.quick-verse'` data provider, we need
-   * to tell the useData.Verse hook what types we are using, so we get the Verse data types from the
-   * quick verse data types as follows:
+   * to tell the useData.Verse hook what types we are using, so we use the QuickVerseDataTypes and specify
+   * that we are using the 'Verse' data types as follows:
    * ```typescript
-   * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes['Verse']>(
+   * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
    *   'quick-verse.quick-verse',
    *   'John 11:35',
    *   'Verse text goes here',
@@ -157,10 +157,10 @@ const useDataCachedHooks: UseDataHook = {};
  * React hook. For example, `useData.Verse` lets you subscribe to verses from a data provider.
  *
  * @example When subscribing to John 11:35 on the `'quick-verse.quick-verse'` data provider, we need
- * to tell the useData.Verse hook what types we are using, so we get the Verse data types from the
- * quick verse data types as follows:
+ * to tell the useData.Verse hook what types we are using, so we use the QuickVerseDataTypes and specify
+ * that we are using the 'Verse' data types as follows:
  * ```typescript
- * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes['Verse']>(
+ * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
  *   'quick-verse.quick-verse',
  *   'John 11:35',
  *   'Verse text goes here',
