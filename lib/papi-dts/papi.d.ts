@@ -2418,53 +2418,25 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
 }
 declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   import {
-    DataProviderDataType,
+    DataProviderDataTypes,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import IDataProvider from 'shared/models/data-provider.interface';
   type UseDataHook = {
-    /**
-     * Special React hook that subscribes to run a callback on a data provider's data with specified
-     * selector on any data type that data provider serves.
-     *
-     * Usage: Specify the data type on the data provider with `useData.<data_type>` and use like any other
-     * React hook. For example, `useData.Verse` lets you subscribe to verses from a data provider.
-     *
-     * @example When subscribing to John 11:35 on the `'quick-verse.quick-verse'` data provider, we need
-     * to tell the useData.Verse hook what types we are using, so we get the Verse data types from the
-     * quick verse data types as follows:
-     * ```typescript
-     * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes['Verse']>(
-     *   'quick-verse.quick-verse',
-     *   'John 11:35',
-     *   'Verse text goes here',
-     * );
-     * ```
-     *
-     * @param dataProviderSource string name of data provider to get OR dataProvider (result of useDataProvider if you
-     * want to consolidate and only get the data provider once)
-     * @param selector tells the provider what data this listener is listening for
-     * @param defaultValue the initial value to return while first awaiting the data
-     *
-     *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-     * @param subscriberOptions various options to adjust how the subscriber emits updates
-     *
-     *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-     * @returns [data, setData, isLoading]
-     *  - `data`: the current value for the data from the data provider with the specified data type and selector, either the defaultValue or the resolved data
-     *  - `setData`: asynchronous function to request that the data provider update the data at this data type and selector. Returns true if successful.
-     *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
-     *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data provider
-     */
-    [DataType: string]: <TDataType extends DataProviderDataType>(
-      dataProviderSource: string | IDataProvider<any> | undefined,
-      selector: TDataType['selector'],
-      defaultValue: TDataType['getData'],
+    [DataType in string]: <TDataTypes extends DataProviderDataTypes, TDataType extends DataType>(
+      dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
+      selector: TDataTypes[TDataType]['selector'],
+      defaultValue: TDataTypes[TDataType]['getData'],
       subscriberOptions?: DataProviderSubscriberOptions,
     ) => [
-      TDataType['getData'],
-      ((newData: TDataType['setData']) => Promise<DataProviderUpdateInstructions<any>>) | undefined,
+      TDataTypes[TDataType]['getData'],
+      (
+        | ((
+            newData: TDataTypes[TDataType]['setData'],
+          ) => Promise<DataProviderUpdateInstructions<TDataTypes>>)
+        | undefined
+      ),
       boolean,
     ];
   };
@@ -2527,29 +2499,26 @@ declare module 'renderer/hooks/papi-hooks/index' {
     ) => void;
     useDataProvider: typeof useDataProvider;
     useData: {
-      [DataType: string]: <
-        TDataType extends import('shared/models/data-provider.model').DataProviderDataType<
-          unknown,
-          unknown,
-          unknown
-        >,
+      [x: string]: <
+        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+        TDataType extends string,
       >(
         dataProviderSource:
           | string
-          | import('shared/models/data-provider.interface').default<any>
+          | import('shared/models/data-provider.interface').default<TDataTypes>
           | undefined,
-        selector: TDataType['selector'],
-        defaultValue: TDataType['getData'],
+        selector: TDataTypes[TDataType]['selector'],
+        defaultValue: TDataTypes[TDataType]['getData'],
         subscriberOptions?:
           | import('shared/models/data-provider.model').DataProviderSubscriberOptions
           | undefined,
       ) => [
-        TDataType['getData'],
+        TDataTypes[TDataType]['getData'],
         (
           | ((
-              newData: TDataType['setData'],
+              newData: TDataTypes[TDataType]['setData'],
             ) => Promise<
-              import('shared/models/data-provider.model').DataProviderUpdateInstructions<any>
+              import('shared/models/data-provider.model').DataProviderUpdateInstructions<TDataTypes>
             >)
           | undefined
         ),
@@ -2607,29 +2576,26 @@ declare module 'papi' {
         ) => void;
         useDataProvider: typeof import('renderer/hooks/papi-hooks/use-data-provider.hook').default;
         useData: {
-          [DataType: string]: <
-            TDataType extends import('shared/models/data-provider.model').DataProviderDataType<
-              unknown,
-              unknown,
-              unknown
-            >,
+          [x: string]: <
+            TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+            TDataType extends string,
           >(
             dataProviderSource:
               | string
-              | import('shared/models/data-provider.interface').default<any>
+              | import('shared/models/data-provider.interface').default<TDataTypes>
               | undefined,
-            selector: TDataType['selector'],
-            defaultValue: TDataType['getData'],
+            selector: TDataTypes[TDataType]['selector'],
+            defaultValue: TDataTypes[TDataType]['getData'],
             subscriberOptions?:
               | import('shared/models/data-provider.model').DataProviderSubscriberOptions
               | undefined,
           ) => [
-            TDataType['getData'],
+            TDataTypes[TDataType]['getData'],
             (
               | ((
-                  newData: TDataType['setData'],
+                  newData: TDataTypes[TDataType]['setData'],
                 ) => Promise<
-                  import('shared/models/data-provider.model').DataProviderUpdateInstructions<any>
+                  import('shared/models/data-provider.model').DataProviderUpdateInstructions<TDataTypes>
                 >)
               | undefined
             ),
@@ -2659,12 +2625,12 @@ declare module 'papi' {
     dataProvider: {
       hasKnown: (providerName: string) => boolean;
       registerEngine: <
-        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+        TDataTypes_1 extends import('shared/models/data-provider.model').DataProviderDataTypes,
       >(
         providerName: string,
-        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes>,
+        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes_1>,
       ) => Promise<
-        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes>
+        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes_1>
       >;
       get: <T_5 extends import('shared/models/data-provider.interface').default<any>>(
         providerName: string,

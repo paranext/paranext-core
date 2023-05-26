@@ -36,7 +36,7 @@ globalThis.webViewComponent = function HelloWorld() {
     'retrieving',
   );
 
-  const [latestVerseText] = useData.Verse<QuickVerseDataTypes['Verse']>(
+  const [latestVerseText] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
     'quick-verse.quick-verse',
     'latest',
     'Loading latest Scripture text...',
@@ -44,13 +44,13 @@ globalThis.webViewComponent = function HelloWorld() {
 
   const [name, setName] = useState('Bill');
 
-  const [personGreeting] = useData.Greeting<GreetingsDataTypes['Greeting']>(
+  const [personGreeting] = useData.Greeting<GreetingsDataTypes, 'Greeting'>(
     'hello-someone.greetings',
     name,
     'Greeting loading',
   );
 
-  const [personAge] = useData.Age<GreetingsDataTypes['Age']>('hello-someone.greetings', name, -1);
+  const [personAge] = useData.Age<GreetingsDataTypes, 'Age'>('hello-someone.greetings', name, -1);
 
   return (
     <div>

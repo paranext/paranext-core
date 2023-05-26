@@ -1,7 +1,10 @@
 import {
-  DataProviderDataType,
+  DataProviderDataTypes,
+  DataProviderSetter,
+  DataProviderSubscriber,
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
+  DataTypeNames,
 } from '@shared/models/data-provider.model';
 import IDataProvider from '@shared/models/data-provider.interface';
 import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
@@ -44,74 +47,81 @@ type UseDataHook = {
    *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
    *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data provider
    */
-  [DataType: string]: <TDataType extends DataProviderDataType>(
-    // Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    dataProviderSource: string | IDataProvider<any> | undefined,
-    selector: TDataType['selector'],
-    defaultValue: TDataType['getData'],
+  [DataType in string]: <TDataTypes extends DataProviderDataTypes, TDataType extends DataType>(
+    dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
+    selector: TDataTypes[TDataType]['selector'],
+    defaultValue: TDataTypes[TDataType]['getData'],
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
-    TDataType['getData'],
-    // We don't know the data types available, so we can't have TypeScript checking here
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((newData: TDataType['setData']) => Promise<DataProviderUpdateInstructions<any>>) | undefined,
+    TDataTypes[TDataType]['getData'],
+    (
+      | ((
+          newData: TDataTypes[TDataType]['setData'],
+        ) => Promise<DataProviderUpdateInstructions<TDataTypes>>)
+      | undefined
+    ),
     boolean,
   ];
 };
 
 function createUseDataHook(dataType: string) {
-  return <TDataType extends DataProviderDataType>(
-    // Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    dataProviderSource: string | IDataProvider<any> | undefined,
-    selector: TDataType['selector'],
-    defaultValue: TDataType['getData'],
+  return <TDataTypes extends DataProviderDataTypes, TDataType extends typeof dataType>(
+    dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
+    selector: TDataTypes[TDataType]['selector'],
+    defaultValue: TDataTypes[TDataType]['getData'],
     subscriberOptions?: DataProviderSubscriberOptions,
   ): [
-    TDataType['getData'],
-    // We don't know the data types available, so we can't have TypeScript checking here
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((newData: TDataType['setData']) => Promise<DataProviderUpdateInstructions<any>>) | undefined,
+    TDataTypes[TDataType]['getData'],
+    (
+      | ((
+          newData: TDataTypes[TDataType]['setData'],
+        ) => Promise<DataProviderUpdateInstructions<TDataTypes>>)
+      | undefined
+    ),
     boolean,
   ] => {
     // The data from the data provider at this selector
-    const [data, setDataInternal] = useState<TDataType['getData']>(defaultValue);
+    const [data, setDataInternal] = useState<TDataTypes[TDataType]['getData']>(defaultValue);
 
     // Get the data provider for this data provider name
-    // Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dataProvider = useDataProvider<IDataProvider<any>>(dataProviderSource);
+    const dataProvider = useDataProvider<IDataProvider<TDataTypes>>(dataProviderSource);
 
     // Indicates if the data with the selector is awaiting retrieval from the data provider
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
     // Wrap subscribe so we can call it as a normal PapiEvent in useEvent
-    const wrappedSubscribeEvent: PapiEventAsync<TDataType['getData']> | undefined = useMemo(
-      () =>
-        dataProvider
-          ? async (eventCallback: PapiEventHandler<TDataType['getData']>) => {
-              const unsub = await dataProvider[
-                `subscribe${dataType as keyof typeof dataProviderSource}`
-              ](
-                selector,
-                (subscriptionData: TDataType['getData']) => {
-                  eventCallback(subscriptionData);
-                  // When we receive updated data, mark that we are not loading
-                  setIsLoading(false);
-                },
-                subscriberOptions,
-              );
+    const wrappedSubscribeEvent: PapiEventAsync<TDataTypes[TDataType]['getData']> | undefined =
+      useMemo(
+        () =>
+          dataProvider
+            ? async (eventCallback: PapiEventHandler<TDataTypes[TDataType]['getData']>) => {
+                const unsub =
+                  await // We need any here because for some reason IDataProvider loses its ability to index subscribe
+                  (
+                    (
+                      dataProvider as /* eslint-disable @typescript-eslint/no-explicit-any */ any
+                    ) /* eslint-enable */[
+                      `subscribe${dataType as DataTypeNames<TDataTypes>}`
+                    ] as DataProviderSubscriber<TDataTypes[TDataType]>
+                  )(
+                    selector,
+                    (subscriptionData: TDataTypes[TDataType]['getData']) => {
+                      eventCallback(subscriptionData);
+                      // When we receive updated data, mark that we are not loading
+                      setIsLoading(false);
+                    },
+                    subscriberOptions,
+                  );
 
-              return async () => {
-                // When we change data type or selector, mark that we are loading
-                setIsLoading(true);
-                return unsub();
-              };
-            }
-          : undefined,
-      [dataProvider, selector, subscriberOptions],
-    );
+                return async () => {
+                  // When we change data type or selector, mark that we are loading
+                  setIsLoading(true);
+                  return unsub();
+                };
+              }
+            : undefined,
+        [dataProvider, selector, subscriberOptions],
+      );
 
     // Subscribe to the data provider
     useEventAsync(wrappedSubscribeEvent, setDataInternal);
@@ -121,8 +131,13 @@ function createUseDataHook(dataType: string) {
     const setData = useMemo(
       () =>
         dataProvider
-          ? async (newData: TDataType['setData']) =>
-              dataProvider[`set${dataType as keyof typeof dataProviderSource}`](selector, newData)
+          ? async (newData: TDataTypes[TDataType]['setData']) =>
+              // We need any here because for some reason IDataProvider loses its ability to index subscribe
+              (
+                (dataProvider as /* eslint-disable @typescript-eslint/no-explicit-any */ any)[
+                  /* eslint-enable */ `set${dataType as DataTypeNames<TDataTypes>}`
+                ] as DataProviderSetter<TDataTypes, typeof dataType>
+              )(selector, newData)
           : undefined,
       [dataProvider, selector],
     );
@@ -132,7 +147,6 @@ function createUseDataHook(dataType: string) {
 }
 
 // People can make whatever data hook they want
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const useDataCachedHooks: UseDataHook = {};
 
 /**
