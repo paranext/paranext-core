@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 
-export type WebViewProps = Omit<WebViewContents, 'componentName'>;
+export type WebViewProps = WebViewContents;
 
 /**
  * Information used to recreate a tab

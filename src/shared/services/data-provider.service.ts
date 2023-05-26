@@ -56,9 +56,10 @@ const initialize = () => {
   return initializePromise;
 };
 
-/** Indicate if we are aware of an existing data provider with the given name. If a data provider
- *  with the given name is someone else on the network, this function won't tell you about it
- *  unless something else in the existing process is subscribed to it.
+/**
+ * Indicate if we are aware of an existing data provider with the given name. If a data provider
+ * with the given name is somewhere else on the network, this function won't tell you about it
+ * unless something else in the existing process is subscribed to it.
  */
 function hasKnown(providerName: string): boolean {
   return networkObjectService.hasKnown(getDataProviderObjectId(providerName));
