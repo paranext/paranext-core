@@ -16,7 +16,7 @@ import { isExtensionHost, isRenderer } from '@shared/utils/internal-util';
 import internetService from '@shared/services/internet.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import type { ExtensionStorageService } from '@extension-host/services/extension-storage.service';
-import type { PapiComponents } from '@renderer/components/papi-components';
+import type { PapiComponents } from '@lib/papi-components';
 import type { PapiContext } from '@renderer/context/papi-context';
 import type { PapiHooks } from '@renderer/hooks/papi-hooks';
 
@@ -25,7 +25,7 @@ const extensionStorageService: ExtensionStorageService = isExtensionHost()
   ? require('@extension-host/services/extension-storage.service').default
   : {};
 const papiComponents: PapiComponents = isRenderer()
-  ? require('@renderer/components/papi-components').default
+  ? require('@lib/papi-components').papiComponents
   : {};
 const papiContext: PapiContext = isRenderer()
   ? require('@renderer/context/papi-context').default

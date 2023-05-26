@@ -14,7 +14,7 @@ import DataGrid, {
 import { Key, ReactElement, ReactNode, UIEvent, useMemo } from 'react';
 
 import 'react-data-grid/lib/styles.css';
-import '@renderer/components/papi-components/table.component.css';
+import './table.component.css';
 
 export interface TableCalculatedColumn<T> extends TableColumn<T> {
   readonly idx: number;
