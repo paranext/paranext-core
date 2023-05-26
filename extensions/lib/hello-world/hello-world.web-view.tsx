@@ -1,5 +1,13 @@
 import papi from 'papi';
-import { Button } from 'papi-components';
+import {
+  Button,
+  Checkbox,
+  ComboBox,
+  RefSelector,
+  Slider,
+  Switch,
+  TextField,
+} from 'papi-components';
 import { useCallback, useContext, useState } from 'react';
 
 const {
@@ -72,6 +80,15 @@ globalThis.webViewComponent = function HelloWorld() {
         </Button>
       </div>
       <div>{latestVerseText}</div>
+      <br />
+      <div>
+        <TextField label="Test Me" />
+        <Checkbox labelText="Test Me" />
+        <Switch /> {/* no label available */}
+        <ComboBox title="Test Me" options={['option 1', 'option 2']} />
+        <Slider /> {/* no label available */}
+        <RefSelector scrRef={{ book: 1, chapter: 1, verse: 1 }} handleSubmit={(): void => {}} />
+      </div>
     </div>
   );
 };

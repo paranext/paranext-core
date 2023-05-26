@@ -41,7 +41,7 @@ export declare function Button({
   onClick,
   onContextMenu,
   children,
-}: ButtonProps): import('react/jsx-runtime').JSX.Element;
+}: ButtonProps): JSX.Element;
 declare enum LabelPosition {
   After = 'after',
   Before = 'before',
@@ -107,7 +107,7 @@ export declare function Checkbox({
   hasError,
   className,
   onChange,
-}: CheckboxProps): import('react/jsx-runtime').JSX.Element;
+}: CheckboxProps): JSX.Element;
 export type ComboBoxChangeDetails<T = string> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
 export type ComboBoxProps = {
@@ -193,7 +193,17 @@ export declare function ComboBox({
   onChange,
   onFocus,
   onBlur,
-}: ComboBoxProps): import('react/jsx-runtime').JSX.Element;
+}: ComboBoxProps): JSX.Element;
+export interface ScriptureReference {
+  book: number;
+  chapter: number;
+  verse: number;
+}
+export interface ScrRefSelectorProps {
+  scrRef: ScriptureReference;
+  handleSubmit: (scrRef: ScriptureReference) => void;
+}
+export declare function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps): JSX.Element;
 export type SliderProps = {
   /**
    * If `true`, the component is disabled.
@@ -283,7 +293,7 @@ export declare function Slider({
   className,
   onChange,
   onChangeCommitted,
-}: SliderProps): import('react/jsx-runtime').JSX.Element;
+}: SliderProps): JSX.Element;
 export type SwitchProps = {
   /**
    * If `true`, the component is checked.
@@ -322,7 +332,7 @@ export declare function Switch({
   hasError,
   className,
   onChange,
-}: SwitchProps): import('react/jsx-runtime').JSX.Element;
+}: SwitchProps): JSX.Element;
 export type TextFieldProps = {
   /**
    * The variant to use.
@@ -407,29 +417,6 @@ export declare function TextField({
   onChange,
   onFocus,
   onBlur,
-}: TextFieldProps): import('react/jsx-runtime').JSX.Element;
-export interface ScriptureReference {
-  book: number;
-  chapter: number;
-  verse: number;
-}
-export interface ScrRefSelectorProps {
-  scrRef: ScriptureReference;
-  handleSubmit: (scrRef: ScriptureReference) => void;
-}
-export declare function RefSelector({
-  scrRef,
-  handleSubmit,
-}: ScrRefSelectorProps): import('react/jsx-runtime').JSX.Element;
-/** All React components to be exposed on the papi */
-export declare const papiComponents: {
-  Button: typeof Button;
-  Checkbox: typeof Checkbox;
-  ComboBox: typeof ComboBox;
-  Slider: typeof Slider;
-  Switch: typeof Switch;
-  TextField: typeof TextField;
-};
-export type PapiComponents = typeof papiComponents;
+}: TextFieldProps): JSX.Element;
 
 export {};
