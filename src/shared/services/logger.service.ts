@@ -1,3 +1,4 @@
+import chalk from 'chalk';
 import log, { LogLevel } from 'electron-log';
 import { getProcessType, isClient, isRenderer } from '@shared/utils/internal-util';
 
@@ -50,6 +51,27 @@ if (isClient()) {
 } else {
   log.initialize();
   log.transports.console.level = level;
+  log.transports.console.format = '{h}:{i}:{s} {text}';
+  log.transports.console.writeFn = ({ message: msg }) => {
+    const message = `${msg.data}`;
+
+    /* eslint-disable no-console */
+    switch (msg.level) {
+      case 'info':
+        console.log(message);
+        break;
+      case 'warn':
+        console.log(chalk.yellow(message));
+        break;
+      case 'error':
+        console.log(chalk.red(message));
+        break;
+      default:
+        console.log(message);
+        break;
+    }
+    /* eslint-enable */
+  };
   log.transports.file.level = level;
 }
 
