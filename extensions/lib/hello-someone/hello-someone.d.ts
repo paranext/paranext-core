@@ -17,5 +17,6 @@ export type GreetingsDataTypes = {
 };
 
 export type GreetingsDataProvider = IDataProvider<GreetingsDataTypes> & {
+  deletePerson(name: string): Promise<boolean>;
   testRandomMethod(things: string): Promise<string>;
 };

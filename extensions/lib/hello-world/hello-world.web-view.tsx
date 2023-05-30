@@ -1,12 +1,12 @@
 import papi from 'papi';
 import { useCallback, useContext, useState } from 'react';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
-import { GreetingsDataTypes } from '@extensions/hello-someone/hello-someone';
+import { GreetingsDataProvider, GreetingsDataTypes } from '@extensions/hello-someone/hello-someone';
 
 const {
   react: {
     context: { TestContext },
-    hooks: { useData, usePromise },
+    hooks: { useData, useDataProvider, usePromise },
     components: { Button },
   },
   logger,
@@ -43,6 +43,8 @@ globalThis.webViewComponent = function HelloWorld() {
   );
 
   const [name, setName] = useState('Bill');
+
+  const greetingsDataProvider = useDataProvider<GreetingsDataProvider>('hello-someone.greetings');
 
   const [personGreeting] = useData.Greeting<GreetingsDataTypes, 'Greeting'>(
     'hello-someone.greetings',
@@ -86,6 +88,7 @@ globalThis.webViewComponent = function HelloWorld() {
       <div>{latestVerseText}</div>
       <div>
         <input value={name} onChange={(e) => setName(e.target.value)} />
+        <Button onClick={() => greetingsDataProvider?.deletePerson(name)}>Delete {name}</Button>
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>

@@ -4,9 +4,9 @@
   <body>
     <div>Hello Someone!!</div>
     <div>
-      <input id="name-input" value="Bill" /><button id="greetings-button" type="button">
-        Greet
-      </button>
+      <input id="name-input" value="Bill" />
+      <button id="greetings-button" type="button">Greet</button>
+      <button id="delete-button" type="button">Delete</button>
     </div>
     <div id="greetings-button-output"></div>
     <div>
@@ -59,6 +59,19 @@
           for (let i = 0; i < 10000; i += 1) promises[i] = greetingsDataProvider.getGreeting(name);
           await Promise.all(promises);
           print('Done');
+        });
+
+        // Attach handler for delete-button
+        const deleteButton = document.getElementById('delete-button');
+        deleteButton.addEventListener('click', async () => {
+          const nameInput = document.getElementById('name-input');
+          const success = await greetingsDataProvider.deletePerson(nameInput.value.toLowerCase());
+          const helloSomeoneOutput = document.getElementById('greetings-button-output');
+          helloSomeoneOutput.textContent = papi.util.htmlEncode(
+            `${success ? 'Successfully' : 'Unsuccessfully'} deleted ${nameInput.value}.${
+              success ? ' RIP ⚰️' : ''
+            }`.replace(/'/g, '`'),
+          );
         });
 
         // Attach handler for set-greetings-button

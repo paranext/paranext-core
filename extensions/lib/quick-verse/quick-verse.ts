@@ -14,6 +14,22 @@ const unsubscribers: UnsubscriberAsync[] = [];
 
 type QuickVerseSetData = string | { text: string; isHeresy: boolean };
 
+/**
+ * Example data provider engine (defined by a class, which is beneficial over an object because we
+ * can create extra properties/methods without having to specify them in this type and private
+ * methods. However, you lose some Intellisense features) that provides easy access to Scripture
+ * portions from an internet API.
+ * It has two data types:
+ *  - Verse: get a portion of Scripture by its reference. You can also change the Scripture at a
+ *    reference, but you have to clarify that you are heretical because you really shouldn't change
+ *    published Scriptures like this ;)
+ *  - Heresy: get or set Scripture freely. It automatically marks the verse as heretical if changed
+ * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`, and it can also
+ * specify a `notifyUpdate<data_type>` as well if desired.
+ *
+ * papi will create a data provider that internally uses this engine. The data provider layers over
+ * this engine and adds functionality like `subscribe<data_type>` functions with automatic updates.
+ */
 class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseDataTypes> {
   /**
    * Verses stored by the Data Provider.
@@ -33,10 +49,22 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
     this.heresyWarning = this.heresyWarning ?? 'heresyCount =';
   }
 
-  // Note: this method does not have to be provided here for it to work properly because it is layered over on the papi.
-  // But because we provide it here, we must return some update instructions to notify like in the set method.
-  // The contents of this method run before the update is emitted.
-  // Here, we make this update everything by default if no parameter is provided
+  /**
+   * Function used to notify subscribers that data updated.
+   * @param updateInstructions update instructions telling which data type subscribers to update.
+   * If not provided, all subscribers will update
+   * @returns either the updateInstructions passed in (so it will update however it is told) or '*'
+   * to update all subscribers. This is different than its normal functionality. Normally,
+   * `notifyUpdateVerse` would update only Verse data type subscribers if no parameters were passed in.
+   *
+   * Note: this method gets layered over so that you can run `this.notifyUpdateVerse` inside this data
+   * provider engine, and it will send updates after returning.
+   *
+   * Note: this method does not have to be provided here for it to work properly because it is layered over on the papi.
+   * But because we provide it here, we must return some update instructions to notify like in the set method.
+   *
+   * Note: The contents of this method run before the update is emitted.
+   */
   // TODO: What will actually happen if we run this in `get`? Stack overflow?
   notifyUpdateVerse(updateInstructions?: DataProviderUpdateInstructions<QuickVerseDataTypes>) {
     logger.info(`Quick verse notifyUpdateVerse! latestVerseRef = ${this.latestVerseRef}`);
@@ -45,49 +73,20 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
   }
 
   /**
-   * Internal set method that doesn't send updates so we can update how we want from setVerse and
-   * setHeresy
-   * @param selector string Scripture reference
-   * @param data Must inform us that you are a heretic
-   * Note: this method is intentionally not named `setInternal` (if it started with `set`, the papi
-   * would consider it a data type method and would fail to use this engine because it would expect
-   * a `getInternal` as well). You can name it anything that doesn't start with `set` like
-   * `_setInternal`.
-   */
-  async internalSet(selector: string, data: QuickVerseSetData) {
-    // Just get notifications of updates with the 'notify' selector. Nothing to change
-    if (selector === 'notify') return false;
-
-    // You can't change scripture from just a string. You have to tell us you're a heretic
-    if (typeof data === 'string' || data instanceof String) return false;
-
-    // Only heretics change Scripture, so you have to tell us you're a heretic
-    if (!data.isHeresy) return false;
-
-    // If there is no change in the verse text, don't update
-    if (data.text === this.verses[this.#getSelector(selector)].text) return false;
-
-    // Update the verse text, track the latest change, and send an update
-    this.verses[this.#getSelector(selector)] = {
-      text: data.text,
-      isChanged: true,
-    };
-    if (selector !== 'latest') this.latestVerseRef = this.#getSelector(selector);
-    this.heresyCount += 1;
-    // Update all data types, so Verse and Heresy in this case
-    return '*';
-  }
-
-  /**
    * Set a verse's text. You must manually specify that the verse contains heresy, or you cannot set.
-   * @param verseRef
-   * @param data
-   * @returns
-   * Note: this method gets layered over so that you can run `this.setVerse` in this data provider
-   * engine, and it will notify update afterward.
+   * @param verseRef verse reference to change
+   * @param data Verse string, and you must inform us that you are a heretic
+   * @returns '*' - update instructions for updating all data types because we want
+   * subscribers to Verse and Heresy data types to update based on this change.
+   *
+   * Note: this method gets layered over so that you can run `this.setVerse` inside this data
+   * provider engine, and it will send updates after returning.
+   *
+   * Note: this method is used when someone uses the `useData.Verse` hook on the data
+   * provider papi creates for this engine.
    */
   async setVerse(verseRef: string, data: QuickVerseSetData) {
-    return this.internalSet(verseRef, data);
+    return this.#setInternal(verseRef, data);
   }
 
   /**
@@ -95,11 +94,27 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
    * to identify as heresy in any special way
    * @param verseRef verse reference to change
    * @param verseText text to update the verse to, you heretic
+   * @returns '*' - update instructions for updating all data types because we want
+   * subscribers to Verse and Heresy data types to update based on this change.
+   *
+   * Note: this method gets layered over so that you can run `this.setHeresy` inside this data
+   * provider engine, and it will send updates after returning.
+   *
+   * Note: this method is used when someone uses the `useData.Heresy` hook on the data
+   * provider papi creates for this engine.
    */
   async setHeresy(verseRef: string, verseText: string) {
-    return this.internalSet(verseRef, { text: verseText, isHeresy: true });
+    return this.#setInternal(verseRef, { text: verseText, isHeresy: true });
   }
 
+  /**
+   * Get a verse by its reference
+   * @param verseRef verse reference to get
+   * @returns verse contents at this reference
+   *
+   * Note: this method is used when someone uses the `useData.Verse` hook or the
+   * `subscribeVerse` method on the data provider papi creates for this engine.
+   */
   getVerse = async (verseRef: string) => {
     // Just get notifications of updates with the 'notify' selector
     if (verseRef === 'notify') return undefined;
@@ -137,13 +152,56 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
   };
 
   /**
-   * Need to provide a get for every set, so we specify getHeresy here which does the same thing as
-   * getVerse
-   * @param selector
-   * @returns
+   * Get a verse by its reference. Need to provide a get for every set, so we specify getHeresy here which does the same thing as
+   * getVerse.
+   * @param verseRef verse reference to get
+   * @returns verse contents at this reference
+   *
+   * Note: this method is used when someone uses the `useData.Heresy` hook or the
+   * `subscribeHeresy` method on the data provider papi creates for this engine.
    */
-  async getHeresy(selector: string) {
-    return this.getVerse(selector);
+  async getHeresy(verseRef: string) {
+    return this.getVerse(verseRef);
+  }
+
+  /**
+   * Internal set method that doesn't send updates so we can update how we want from setVerse and
+   * setHeresy
+   * @param selector string Scripture reference
+   * @param data Verse string, and you must inform us that you are a heretic
+   * @returns '*' - update instructions for updating all data types because we want
+   * subscribers to Verse and Heresy data types to update based on this change.
+   *
+   * Note: this method is intentionally not named `setInternal` (if it started with `set`, the papi
+   * would consider it a data type method and would fail to use this engine because it would expect
+   * a `getInternal` as well). You can name it anything that doesn't start with `set` like
+   * `_setInternal` or `internalSet`.
+   */
+  async #setInternal(
+    selector: string,
+    data: QuickVerseSetData,
+  ): Promise<DataProviderUpdateInstructions<QuickVerseDataTypes>> {
+    // Just get notifications of updates with the 'notify' selector. Nothing to change
+    if (selector === 'notify') return false;
+
+    // You can't change scripture from just a string. You have to tell us you're a heretic
+    if (typeof data === 'string' || data instanceof String) return false;
+
+    // Only heretics change Scripture, so you have to tell us you're a heretic
+    if (!data.isHeresy) return false;
+
+    // If there is no change in the verse text, don't update
+    if (data.text === this.verses[this.#getSelector(selector)].text) return false;
+
+    // Update the verse text, track the latest change, and send an update
+    this.verses[this.#getSelector(selector)] = {
+      text: data.text,
+      isChanged: true,
+    };
+    if (selector !== 'latest') this.latestVerseRef = this.#getSelector(selector);
+    this.heresyCount += 1;
+    // Update all data types, so Verse and Heresy in this case
+    return '*';
   }
 
   /**

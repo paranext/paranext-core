@@ -52,8 +52,9 @@ export async function activate(): Promise<UnsubscriberAsync> {
 
   if (greetingsDataProvider) {
     // Test subscribing to a data provider
-    const unsubGreetings = await greetingsDataProvider.subscribeGreeting('Bill', (billGreeting) =>
-      logger.info(`Bill's greeting: ${billGreeting}`),
+    const unsubGreetings = await greetingsDataProvider.subscribeGreeting(
+      'Bill',
+      (billGreeting: string | undefined) => logger.info(`Bill's greeting: ${billGreeting}`),
     );
 
     unsubscribers.push(unsubGreetings);
