@@ -165,6 +165,7 @@ export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTime
  * @param obj object whose functions to get
  * @returns array of all function names on an object
  */
+// Note: lodash has something that MIGHT do the same thing as this. Investigate for https://github.com/paranext/paranext-core/issues/134
 // We want to use any so it can be an object, number, string, etc. Just can't be null or undefined
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getAllObjectFunctionNames(obj: NonNullable<any>) {

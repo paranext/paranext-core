@@ -3,10 +3,12 @@ import type { WebViewContentType } from 'shared/data/web-view.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type {
   AllGreetingsData,
+  GreetingsDataMethods,
   GreetingsDataTypes,
   Person,
 } from '@extensions/hello-someone/hello-someone';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
+import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
 
@@ -29,12 +31,20 @@ const unsubscribers: UnsubscriberAsync[] = [];
  * papi will create a data provider that internally uses this engine. The data provider layers over
  * this engine and adds functionality like `subscribe<data_type>` functions with automatic updates.
  */
-const greetingsDataProviderEngine = {
+const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
+  GreetingsDataMethods & {
+    people: AllGreetingsData;
+    internalGetPerson<T extends boolean = true>(
+      name: string,
+      createIfDoesNotExist?: T,
+    ): T extends true ? Person : Person | undefined;
+    notifyUpdateAll(): DataProviderUpdateInstructions<GreetingsDataTypes>;
+  } = {
   /** People that are the data this engine serves */
   people: {
     bill: { greeting: 'Hi, my name is Bill!', age: 43 },
     kathy: { greeting: 'Hello. My name is Kathy.', age: 35 },
-  } as AllGreetingsData,
+  },
 
   /**
    * Get a person by name. By default, creates that person if they don't exist yet

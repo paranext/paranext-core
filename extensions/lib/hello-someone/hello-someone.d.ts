@@ -16,7 +16,9 @@ export type GreetingsDataTypes = {
   All: DataProviderDataType<undefined, AllGreetingsData, never>;
 };
 
-export type GreetingsDataProvider = IDataProvider<GreetingsDataTypes> & {
+export type GreetingsDataMethods = {
   deletePerson(name: string): Promise<boolean>;
   testRandomMethod(things: string): Promise<string>;
 };
+
+export type GreetingsDataProvider = IDataProvider<GreetingsDataTypes> & GreetingsDataMethods;
