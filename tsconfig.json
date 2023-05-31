@@ -19,6 +19,7 @@
       "@shared/*": ["./shared/*"],
       "@node_modules/*": ["../node_modules/*"]
     },
+    "experimentalDecorators": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,

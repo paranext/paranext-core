@@ -1732,6 +1732,49 @@ declare module 'shared/services/data-provider.service' {
    */
   function hasKnown(providerName: string): boolean;
   /**
+   * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
+   * papi will not layer over these methods or consider them to be data type methods
+   *
+   * @param method the method to ignore
+   *
+   * @example use this as a decorator on a class's method:
+   * ```typescript
+   * class MyDataProviderEngine {
+   *   ＠papi.dataProvider.decorators.ignore
+   *   async getInternal() {}
+   * }
+   * ```
+   *
+   * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
+   * code blocks, so a different unicode character was used. Please use a normal `@` when using a decorator.
+   *
+   * OR
+   *
+   * @example call this function signature on an object's method:
+   * ```typescript
+   * const myDataProviderEngine = {
+   *   async getInternal() {}
+   * };
+   * papi.dataProvider.decorators.ignore(dataProviderEngine.getInternal);
+   * ```
+   */
+  function ignore(
+    method: Function & {
+      isIgnored?: boolean;
+    },
+  ): void;
+  /**
+   * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
+   * papi will not layer over these methods or consider them to be data type methods
+   *
+   * @param target the class that has the method to ignore
+   * @param member the name of the method to ignore
+   *
+   * Note: this is the signature that provides the actual decorator functionality. However, since
+   * users will not be using this signature, the example usage is provided in the signature above.
+   */
+  function ignore<T extends object>(target: T, member: keyof T): void;
+  /**
    * Creates a data provider to be shared on the network layering over the provided data provider engine.
    * @param providerName name this data provider should be called on the network
    * @param dataProviderEngine the object to layer over with a new data provider object
@@ -1759,6 +1802,9 @@ declare module 'shared/services/data-provider.service' {
     hasKnown: typeof hasKnown;
     registerEngine: typeof registerEngine;
     get: typeof get;
+    decorators: {
+      ignore: typeof ignore;
+    };
   };
   export default dataProviderService;
 }
@@ -2635,6 +2681,16 @@ declare module 'papi' {
       get: <T_5 extends import('shared/models/data-provider.interface').default<any>>(
         providerName: string,
       ) => Promise<T_5 | undefined>;
+      decorators: {
+        ignore: {
+          (
+            method: Function & {
+              isIgnored?: boolean | undefined;
+            },
+          ): void;
+          <T_6 extends object>(target: T_6, member: keyof T_6): void;
+        };
+      };
     };
     storage: {
       readTextFileFromInstallDirectory: (

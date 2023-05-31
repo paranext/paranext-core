@@ -34,7 +34,7 @@ const unsubscribers: UnsubscriberAsync[] = [];
 const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
   GreetingsDataMethods & {
     people: AllGreetingsData;
-    internalGetPerson<T extends boolean = true>(
+    getPerson<T extends boolean = true>(
       name: string,
       createIfDoesNotExist?: T,
     ): T extends true ? Person : Person | undefined;
@@ -59,7 +59,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * because it would also require a `setPerson` to go along with `getPerson`. You can name it
    * anything you want that doesn't start with `get`.
    */
-  internalGetPerson<T extends boolean = true>(
+  getPerson<T extends boolean = true>(
     name: string,
     createIfDoesNotExist: T = true as T,
   ): T extends true ? Person : Person | undefined {
@@ -86,7 +86,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
     name: string,
     greeting: string,
   ): Promise<DataProviderUpdateInstructions<GreetingsDataTypes>> {
-    const person = this.internalGetPerson(name);
+    const person = this.getPerson(name);
     // If there is no change in the greeting, don't update
     if (greeting === person.greeting) return false;
 
@@ -105,7 +105,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * `subscribeGreeting` method on the data provider papi creates for this engine.
    */
   async getGreeting(name: string) {
-    return this.internalGetPerson(name, false)?.greeting;
+    return this.getPerson(name, false)?.greeting;
   },
 
   /**
@@ -125,7 +125,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
     name: string,
     age: number,
   ): Promise<DataProviderUpdateInstructions<GreetingsDataTypes>> {
-    const person = this.internalGetPerson(name);
+    const person = this.getPerson(name);
     // If there is no change in the age, don't update
     if (age === person.age) return false;
 
@@ -144,7 +144,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * `subscribeAge` method on the data provider papi creates for this engine.
    */
   async getAge(name: string) {
-    return this.internalGetPerson(name, false)?.age;
+    return this.getPerson(name, false)?.age;
   },
 
   /**
@@ -187,7 +187,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * inform subscribers that the data has changed because it is not in a `set<data_type>` function.
    */
   async deletePerson(name: string) {
-    const person = this.internalGetPerson(name, false);
+    const person = this.getPerson(name, false);
     if (person) {
       logger.log(`RIP ${name}, who died tragically young at age ${person.age}. ;(`);
       delete this.people[name.toLowerCase()];
@@ -204,6 +204,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
     return result;
   },
 };
+papi.dataProvider.decorators.ignore(greetingsDataProviderEngine.getPerson);
 
 export async function activate() {
   logger.info('Hello Someone is activating!');

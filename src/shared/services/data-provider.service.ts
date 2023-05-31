@@ -299,6 +299,75 @@ function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataT
 }
 
 /**
+ * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
+ * papi will not layer over these methods or consider them to be data type methods
+ *
+ * @param method the method to ignore
+ *
+ * @example use this as a decorator on a class's method:
+ * ```typescript
+ * class MyDataProviderEngine {
+ *   ＠papi.dataProvider.decorators.ignore
+ *   async getInternal() {}
+ * }
+ * ```
+ *
+ * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
+ * code blocks, so a different unicode character was used. Please use a normal `@` when using a decorator.
+ *
+ * OR
+ *
+ * @example call this function signature on an object's method:
+ * ```typescript
+ * const myDataProviderEngine = {
+ *   async getInternal() {}
+ * };
+ * papi.dataProvider.decorators.ignore(dataProviderEngine.getInternal);
+ * ```
+ */
+function ignore(method: Function & { isIgnored?: boolean }): void;
+/**
+ * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
+ * papi will not layer over these methods or consider them to be data type methods
+ *
+ * @param target the class that has the method to ignore
+ * @param member the name of the method to ignore
+ *
+ * Note: this is the signature that provides the actual decorator functionality. However, since
+ * users will not be using this signature, the example usage is provided in the signature above.
+ */
+function ignore<T extends object>(target: T, member: keyof T): void;
+function ignore<T extends object>(
+  target: T | (Function & { isIgnored?: boolean }),
+  member?: keyof T,
+): void {
+  if (typeof target === 'function') target.isIgnored = true;
+  else {
+    // We don't care what type the decorated object is. Just want to set some function metadata
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (target[member as keyof T] as any).isIgnored = true;
+  }
+}
+
+/**
+ * A collection of decorators to be used with the data provider service
+ *
+ * @example to use the `ignore` a decorator on a class's method:
+ * ```typescript
+ * class MyDataProviderEngine {
+ *   ＠papi.dataProvider.decorators.ignore
+ *   async getInternal() {}
+ * }
+ * ```
+ *
+ * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
+ * code blocks, so a different unicode character was used. Please use a normal `@` when using a decorator.
+ */
+const decorators = {
+  ignore,
+};
+
+/**
  * Wrap a data provider engine to create a data provider that handles subscriptions for it.
  *
  * Note: This should only run locally when you have the data provider engine. The remote data provider is pretty much just a network object
@@ -318,6 +387,11 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
   const dataTypes = groupBy<string, 'get' | 'set' | 'other', DataTypeNames<TDataTypes>>(
     getAllObjectFunctionNames(dataProviderEngine),
     (fnName) => {
+      // If the function was decorated with @ignore, do not consider it a special function
+      // We don't care about types. We just want to check the decorator
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((dataProviderEngine as any)[fnName].isIgnored) return 'other';
+
       if (fnName.startsWith('get')) return 'get';
       if (fnName.startsWith('set')) return 'set';
       return 'other';
@@ -508,6 +582,7 @@ const dataProviderService = {
   hasKnown,
   registerEngine,
   get,
+  decorators,
 };
 
 export default dataProviderService;
