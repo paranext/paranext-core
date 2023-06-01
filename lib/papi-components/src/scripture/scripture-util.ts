@@ -1,5 +1,4 @@
-import { isString, isValidValue } from '@shared/utils/util';
-import { BookInfo, ScriptureReference } from './scripture-types.model';
+import { BookInfo, ScriptureReference } from './scripture.model';
 
 const scrBookData: BookInfo[] = [
   { shortName: 'ERR', fullNames: ['ERROR'], chapters: -1 },
@@ -208,3 +207,22 @@ export const areScrRefsEqual = (
     scrRef1Final.verse === scrRef2Final.verse
   );
 };
+
+// thanks to DRAX at https://stackoverflow.com/a/9436948
+/**
+ * Determine whether the object is a string
+ * @param o object to determine if it is a string
+ * @returns true if the object is a string; false otherwise
+ */
+export function isString(o: unknown): o is string {
+  return typeof o === 'string' || o instanceof String;
+}
+
+/**
+ * Evaluates if the value is truthy, false, or 0
+ * @param val value to evaluate
+ * @returns whether the value is truthy, false, or 0
+ */
+export function isValidValue(val: unknown): val is NonNullable<unknown> {
+  return !!val || val === false || val === 0;
+}

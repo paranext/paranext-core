@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import TextField from '@renderer/components/papi-components/text-field.component';
+import { TextField } from 'papi-components';
 
 const meta: Meta<typeof TextField> = {
   title: 'Basics/TextField',

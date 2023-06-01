@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import Slider from '@renderer/components/papi-components/slider.component';
+import { Slider } from 'papi-components';
 
 const meta: Meta<typeof Slider> = {
   title: 'Basics/Slider',

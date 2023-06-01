@@ -1,16 +1,18 @@
 .papi-slider {
-  color: #1ea7fd;
   background-color: transparent;
+  color: #1ea7fd;
 }
 
 .papi-slider.vertical {
   min-height: 200px;
 }
+
 .papi-slider.paratext {
-  color: greenyellow;
   background-color: darkgreen;
+  color: greenyellow;
 }
+
 .papi-slider.paratext.bright {
-  color: darkgreen;
   background-color: greenyellow;
+  color: darkgreen;
 }

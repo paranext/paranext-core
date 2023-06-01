@@ -26,7 +26,6 @@
       const {
         react: {
           hooks: { usePromise },
-          components: { Button },
         },
         logger,
       } = papi;
@@ -58,8 +57,9 @@
             'div',
             null,
             createElement(
-              Button,
+              'button',
               {
+                type: 'button',
                 onClick: () => {
                   logger.info(`${NAME} Button clicked!`);
                   setMyState((myStateCurrent) => myStateCurrent + 1);

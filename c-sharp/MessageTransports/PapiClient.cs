@@ -359,7 +359,10 @@ internal sealed class PapiClient : IDisposable
     {
         message.SenderId = _clientId;
         string jsonData = JsonSerializer.Serialize(message, s_serializationOptions);
-        Console.WriteLine("Sending message over websocket: {0}", jsonData);
+        Console.WriteLine(
+            "Sending message over websocket: {0}",
+            StringUtils.LimitLength(jsonData, 180)
+        );
         byte[] data = s_utf8WithoutBOM.GetBytes(jsonData);
         await _webSocket.SendAsync(data, WebSocketMessageType.Text, true, _cancellationToken);
     }
@@ -429,7 +432,10 @@ internal sealed class PapiClient : IDisposable
         } while (!result.EndOfMessage);
 
         string jsonData = s_utf8WithoutBOM.GetString(message.GetBuffer(), 0, (int)message.Position);
-        Console.WriteLine("Received message over websocket: {0}", jsonData);
+        Console.WriteLine(
+            "Received message over websocket: {0}",
+            StringUtils.LimitLength(jsonData, 180)
+        );
         return JsonSerializer.Deserialize<Message>(jsonData, s_serializationOptions);
     }
 

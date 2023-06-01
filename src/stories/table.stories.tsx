@@ -1,13 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useArgs } from '@storybook/client-api';
-
 import Table, {
   TableProps,
   TableTextEditor,
   TableSortColumn,
   TableCopyEvent,
   TablePasteEvent,
-} from '@renderer/components/papi-components/table.component';
+} from 'papi-components/src/table.component';
 import { Key, ReactElement, UIEvent } from 'react';
 
 type Row = {
