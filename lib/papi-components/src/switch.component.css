@@ -5,17 +5,21 @@
 .papi-switch.primary {
   background-color: #1ea7fd;
 }
+
 .papi-switch.secondary {
   background-color: #6fc8ff;
 }
+
 .papi-switch.error {
-  background-color: #ff0000;
+  background-color: #f00;
 }
+
 .papi-switch.paratext {
-  color: greenyellow;
   background-color: darkgreen;
+  color: greenyellow;
 }
+
 .papi-switch.paratext.bright {
-  color: darkgreen;
   background-color: greenyellow;
+  color: darkgreen;
 }

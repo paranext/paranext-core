@@ -7,6 +7,7 @@
     }
   ],
   "rules": {
+    "color-named": null,
     "function-parentheses-space-inside": null,
     "no-descending-specificity": null,
     "max-nesting-depth": 2,
