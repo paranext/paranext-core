@@ -168,7 +168,7 @@ function TestButtonsPanel() {
       try {
         // Test to make sure we literally can't run updates from outside the data provider
         // @ts-ignore ts(2339)
-        const result = await greetingsDataProvider.notifyUpdateVerse();
+        const result = await greetingsDataProvider.notifyUpdate();
         logger.error(`Remote notify update succeeded! Bad ${result}`);
       } catch (e) {
         logger.info(`Remote notify update failed! Good ${e}`);

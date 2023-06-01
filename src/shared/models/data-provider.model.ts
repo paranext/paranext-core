@@ -31,12 +31,14 @@ export type DataProviderSubscriberOptions = {
 
 /**
  * Information that papi uses to interpret whether to send out updates on a data provider when the engine
- * runs `set<data_type>` or `notifyUpdate<data_type>`.
+ * runs `set<data_type>` or `notifyUpdate`.
  *  - `'*'` update subscriptions for all data types on this data provider
  *  - `string` name of data type - update subscriptions for this data type
  *  - `string[]` names of data types - update subscriptions for the data types in the array
- *  - `true` (or other truthy values other than strings and arrays) - update subscriptions for this data type
- *  - `false` (or falsy) - do not update subscriptions
+ *  - `true` (or other truthy values other than strings and arrays)
+ *    - In `set<data_type>` - update subscriptions for this data type
+ *    - In `notifyUpdate` - same as '*'
+ *  - `false` (or falsy) do not update subscriptions
  */
 export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTypes> =
   | '*'
@@ -51,7 +53,10 @@ export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTy
  * this will throw an exception.
  * @param selector tells the provider what subset of data is being set
  * @param data the data that determines what to set at the selector
- * @returns true if successfully set (will send updates), false otherwise (will not send updates)
+ * @returns information that papi uses to interpret whether to send out updates. Defaults to `true`
+ * (meaning send updates only for this data type).
+ *
+ * @see DataProviderUpdateInstructions for more info on what to return
  */
 export type DataProviderSetter<
   TDataTypes extends DataProviderDataTypes,
@@ -124,13 +129,14 @@ export type DataProviderDataType<TSelector = unknown, TGetData = TSelector, TSet
  * describes a data type that the data provider handles. The data provider has a `set<data_type>`,
  * `get<data_type>`, and `subscribe<data_type>` for each property (aka data type) listed in this type.
  *
- * @example A data provider that handles greeting strings and age numbers could have a
- * DataProviderDataTypes that looks like the following:
+ * @example A data provider that handles greeting strings and age numbers (as well as an All data
+ * type that just provides all the data) could have a DataProviderDataTypes that looks like the
+ * following:
  * ```typescript
  * {
  *   Greeting: DataProviderDataType<string, string | undefined, string>;
  *   Age: DataProviderDataType<string, number | undefined, number>;
- *   All: DataProviderDataType<undefined, AllGreetingsData, never>;
+ *   All: DataProviderDataType<undefined, { greeting: string, age: number }, never>;
  * }
  * ```
  */

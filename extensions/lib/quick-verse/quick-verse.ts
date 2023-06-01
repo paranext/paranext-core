@@ -24,8 +24,7 @@ type QuickVerseSetData = string | { text: string; isHeresy: boolean };
  *    reference, but you have to clarify that you are heretical because you really shouldn't change
  *    published Scriptures like this ;)
  *  - Heresy: get or set Scripture freely. It automatically marks the verse as heretical if changed
- * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`, and it can also
- * specify a `notifyUpdate<data_type>` as well if desired.
+ * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`.
  *
  * papi will create a data provider that internally uses this engine. The data provider layers over
  * this engine and adds functionality like `subscribe<data_type>` functions with automatic updates.
@@ -91,26 +90,23 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
   }
 
   /**
-   * Function used to notify subscribers that data updated.
-   * @param updateInstructions update instructions telling which data type subscribers to update.
-   * If not provided, all subscribers will update
-   * @returns either the updateInstructions passed in (so it will update however it is told) or '*'
-   * to update all subscribers. This is different than its normal functionality. Normally,
-   * `notifyUpdateVerse` would update only Verse data type subscribers if no parameters were passed in.
+   * Function used to notify subscribers that data updated. papi layers over this method so that you
+   * can run `this.notifyUpdate` inside this data provider engine, and it will send updates after
+   * running.
    *
-   * Note: this method gets layered over so that you can run `this.notifyUpdateVerse` inside this data
-   * provider engine, and it will send updates after returning.
+   * @param updateInstructions information that papi uses to interpret whether to send out updates.
+   * papi passes the interpreted update value into this function. For example, running
+   * `this.notifyUpdate()` will call this `notifyUpdate` with `updateInstructions` of `'*'`.
    *
-   * Note: this method does not have to be provided here for it to work properly because it is layered over on the papi.
-   * But because we provide it here, we must return some update instructions to notify like in the set method.
-   *
-   * Note: The contents of this method run before the update is emitted.
+   * Note: this method does not have to be provided here for it to work properly because it is
+   * layered over on the papi. The only thing you can do here that will affect the update is to
+   * throw an error.
    */
   // TODO: What will actually happen if we run this in `get`? Stack overflow?
-  notifyUpdateVerse(updateInstructions?: DataProviderUpdateInstructions<QuickVerseDataTypes>) {
-    logger.info(`Quick verse notifyUpdateVerse! latestVerseRef = ${this.latestVerseRef}`);
-    // If they don't pass anything in, update everything by default
-    return updateInstructions === undefined ? '*' : updateInstructions;
+  notifyUpdate(updateInstructions?: DataProviderUpdateInstructions<QuickVerseDataTypes>) {
+    logger.info(
+      `Quick verse notifyUpdate(${updateInstructions})! latestVerseRef = ${this.latestVerseRef}`,
+    );
   }
 
   /**
@@ -176,7 +172,7 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
         // Cache the verse text, track the latest cached verse, and send an update
         if (verseRef !== 'latest') this.latestVerseRef = this.#getSelector(verseRef);
         // Inform everyone that we updated
-        this.notifyUpdateVerse('*');
+        this.notifyUpdate();
       } catch (e) {
         responseVerse = {
           text: `Failed to fetch ${verseRef} from bible-api! Reason: ${e}`,

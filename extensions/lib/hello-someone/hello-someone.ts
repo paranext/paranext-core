@@ -9,6 +9,7 @@ import type {
 } from '@extensions/hello-someone/hello-someone';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
+import type { HasNotifyUpdate } from 'shared/models/data-provider-engine.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
 
@@ -25,20 +26,19 @@ const unsubscribers: UnsubscriberAsync[] = [];
  *  - Greeting: a person's greeting
  *  - Age: a person's age
  *  - All: information about all the people associated with this engine
- * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`, and it can also
- * specify a `notifyUpdate<data_type>` as well if desired.
+ * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`.
  *
  * papi will create a data provider that internally uses this engine. The data provider layers over
  * this engine and adds functionality like `subscribe<data_type>` functions with automatic updates.
  */
 const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
+  HasNotifyUpdate<GreetingsDataTypes> &
   GreetingsDataMethods & {
     people: AllGreetingsData;
     getPerson<T extends boolean = true>(
       name: string,
       createIfDoesNotExist?: T,
     ): T extends true ? Person : Person | undefined;
-    notifyUpdateAll(): DataProviderUpdateInstructions<GreetingsDataTypes>;
   } = {
   /** People that are the data this engine serves */
   people: {
@@ -148,14 +148,20 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
   },
 
   /**
-   * Function used to notify all subscribers that data updated.
-   * @returns '*' - update instructions telling all subscribers to update
+   * Function used to notify subscribers that data updated. papi layers over this method so that you
+   * can run `this.notifyUpdate` inside this data provider engine, and it will send updates after
+   * running.
    *
-   * Note: this method gets layered over so that you can run `this.notifyUpdateAll` inside this data
-   * provider engine, and it will send updates after returning.
+   * @param updateInstructions information that papi uses to interpret whether to send out updates.
+   * papi passes the interpreted update value into this function. For example, running
+   * `this.notifyUpdate()` will call this `notifyUpdate` with `updateInstructions` of `'*'`.
+   *
+   * Note: this method does not have to be provided here for it to work properly because it is
+   * layered over on the papi. The only thing you can do here that will affect the update is to
+   * throw an error.
    */
-  notifyUpdateAll(): DataProviderUpdateInstructions<GreetingsDataTypes> {
-    return '*';
+  notifyUpdate(updateInstructions) {
+    logger.info(`greetings data provider engine ran notifyUpdate! ${updateInstructions}`);
   },
 
   /**
@@ -191,7 +197,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
     if (person) {
       logger.log(`RIP ${name}, who died tragically young at age ${person.age}. ;(`);
       delete this.people[name.toLowerCase()];
-      this.notifyUpdateAll();
+      this.notifyUpdate();
       return true;
     }
     return false;
