@@ -14,7 +14,9 @@ import DataProviderInternal, {
   DataTypeNames,
   getDataProviderDataTypeFromFunctionName,
 } from '@shared/models/data-provider.model';
-import IDataProviderEngine from '@shared/models/data-provider-engine.model';
+import IDataProviderEngine, {
+  DataProviderEngineNotifyUpdate,
+} from '@shared/models/data-provider-engine.model';
 import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
@@ -47,6 +49,16 @@ let isInitialized = false;
 
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
+
+/**
+ * Abstract class that provides a placeholder `notifyUpdate` so data provider engine classes don't
+ * have to write their own if they want to use `notifyUpdate` if they don't want to.
+ */
+abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
+  // This is just a placeholder. We don't need it to do anything
+  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes> = (_updateInstructions) => {};
+}
 
 /** Sets up the service. Only runs once and always returns the same promise after that */
 const initialize = () => {
@@ -575,6 +587,7 @@ const dataProviderService = {
   registerEngine,
   get,
   decorators,
+  DataProviderEngine,
 };
 
 export default dataProviderService;

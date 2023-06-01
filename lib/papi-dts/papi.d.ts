@@ -1708,7 +1708,7 @@ declare module 'shared/models/data-provider-engine.model' {
    * not understand that papi will create one as you are writing your data provider engine, so you can
    * avoid type errors with one of the following options:
    *
-   * If you are using an object or class to create a data provider engine, you can add a
+   * 1. If you are using an object or class to create a data provider engine, you can add a
    * `notifyUpdate` function (and, with an object, add the HasNotifyUpdate type) to
    * your data provider engine like so:
    * ```typescript
@@ -1720,7 +1720,15 @@ declare module 'shared/models/data-provider-engine.model' {
    * OR
    * ```typescript
    * class MyDPE implements IDataProviderEngine<MyDataTypes> {
-   *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {},
+   *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
+   *   ...
+   * }
+   * ```
+   *
+   * 2. If you are using a class to create a data provider engine, you can extend the `DataProviderEngine`
+   * class, and it will provide `notifyUpdate` for you:
+   * ```typescript
+   * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
    *   ...
    * }
    * ```
@@ -1759,7 +1767,16 @@ declare module 'shared/services/data-provider.service' {
    */
   import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
   import { DataProviderDataTypes } from 'shared/models/data-provider.model';
-  import IDataProviderEngine from 'shared/models/data-provider-engine.model';
+  import IDataProviderEngine, {
+    DataProviderEngineNotifyUpdate,
+  } from 'shared/models/data-provider-engine.model';
+  /**
+   * Abstract class that provides a placeholder `notifyUpdate` so data provider engine classes don't
+   * have to write their own if they want to use `notifyUpdate` if they don't want to.
+   */
+  abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
+    notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
+  }
   /** Indicate if we are aware of an existing data provider with the given name. If a data provider
    *  with the given name is someone else on the network, this function won't tell you about it
    *  unless something else in the existing process is subscribed to it.
@@ -1839,6 +1856,7 @@ declare module 'shared/services/data-provider.service' {
     decorators: {
       ignore: typeof ignore;
     };
+    DataProviderEngine: typeof DataProviderEngine;
   };
   export default dataProviderService;
 }
@@ -2724,6 +2742,11 @@ declare module 'papi' {
           ): void;
           <T_6 extends object>(target: T_6, member: keyof T_6): void;
         };
+      };
+      DataProviderEngine: abstract new <
+        TDataTypes_2 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >() => {
+        notifyUpdate: import('shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_2>;
       };
     };
     storage: {

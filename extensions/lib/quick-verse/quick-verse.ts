@@ -6,7 +6,10 @@ import type { ExecutionActivationContext } from 'extension-host/extension-types/
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 
-const { logger } = papi;
+const {
+  logger,
+  dataProvider: { DataProviderEngine },
+} = papi;
 
 logger.info('Quick Verse is importing!');
 
@@ -29,7 +32,10 @@ type QuickVerseSetData = string | { text: string; isHeresy: boolean };
  * papi will create a data provider that internally uses this engine. The data provider layers over
  * this engine and adds functionality like `subscribe<data_type>` functions with automatic updates.
  */
-class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseDataTypes> {
+class QuickVerseDataProviderEngine
+  extends DataProviderEngine<QuickVerseDataTypes>
+  implements IDataProviderEngine<QuickVerseDataTypes>
+{
   /**
    * Verses stored by the Data Provider.
    * Keys are Scripture References.
@@ -45,6 +51,10 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
 
   /** @param heresyWarning string to prefix heretical data */
   constructor(public heresyWarning: string) {
+    // `DataProviderEngine`'s constructor currently does nothing, but TypeScript requires that we
+    // call it.
+    super();
+
     this.heresyWarning = this.heresyWarning ?? 'heresyCount =';
   }
 
@@ -87,26 +97,6 @@ class QuickVerseDataProviderEngine implements IDataProviderEngine<QuickVerseData
     this.heresyCount += 1;
     // Update all data types, so Verse and Heresy in this case
     return '*';
-  }
-
-  /**
-   * Function used to notify subscribers that data updated. papi layers over this method so that you
-   * can run `this.notifyUpdate` inside this data provider engine, and it will send updates after
-   * running.
-   *
-   * @param updateInstructions information that papi uses to interpret whether to send out updates.
-   * papi passes the interpreted update value into this function. For example, running
-   * `this.notifyUpdate()` will call this `notifyUpdate` with `updateInstructions` of `'*'`.
-   *
-   * Note: this method does not have to be provided here for it to work properly because it is
-   * layered over on the papi. The only thing you can do here that will affect the update is to
-   * throw an error.
-   */
-  // TODO: What will actually happen if we run this in `get`? Stack overflow?
-  notifyUpdate(updateInstructions?: DataProviderUpdateInstructions<QuickVerseDataTypes>) {
-    logger.info(
-      `Quick verse notifyUpdate(${updateInstructions})! latestVerseRef = ${this.latestVerseRef}`,
-    );
   }
 
   /**

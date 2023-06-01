@@ -70,7 +70,7 @@ export type HasNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
  * not understand that papi will create one as you are writing your data provider engine, so you can
  * avoid type errors with one of the following options:
  *
- * If you are using an object or class to create a data provider engine, you can add a
+ * 1. If you are using an object or class to create a data provider engine, you can add a
  * `notifyUpdate` function (and, with an object, add the HasNotifyUpdate type) to
  * your data provider engine like so:
  * ```typescript
@@ -82,7 +82,15 @@ export type HasNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
  * OR
  * ```typescript
  * class MyDPE implements IDataProviderEngine<MyDataTypes> {
- *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {},
+ *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
+ *   ...
+ * }
+ * ```
+ *
+ * 2. If you are using a class to create a data provider engine, you can extend the `DataProviderEngine`
+ * class, and it will provide `notifyUpdate` for you:
+ * ```typescript
+ * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
  *   ...
  * }
  * ```

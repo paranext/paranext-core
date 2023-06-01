@@ -160,6 +160,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * layered over on the papi. The only thing you can do here that will affect the update is to
    * throw an error.
    */
+  // TODO: What will actually happen if we run this in `get`? Stack overflow?
   notifyUpdate(updateInstructions) {
     logger.info(`greetings data provider engine ran notifyUpdate! ${updateInstructions}`);
   },
