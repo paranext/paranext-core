@@ -7,43 +7,80 @@ const papi = require('papi');
 
 const { logger } = papi;
 
-logger.info('Evil is importing! Mwahahaha');
+async function tryImports() {
+  logger.info('Evil is importing! Mwahahaha');
 
-try {
-  // This will be blocked
-  const fs = require('fs');
-  logger.info(`Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`);
-} catch (e) {
-  logger.info(e.message);
+  try {
+    // This will be blocked and will suggest the papi.storage api.
+    const fs = require('fs');
+    logger.error(`Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`);
+  } catch (e) {
+    logger.info(e.message);
+  }
+
+  try {
+    // This will be blocked and will suggest the papi.fetch api.
+    const https = require('https');
+    logger.error(`Successfully imported https! ${https}`);
+  } catch (e) {
+    logger.info(e.message);
+  }
+
+  try {
+    // This should always work because `fetch` is replaced with `papi.fetch`.
+    fetch('https://bible-api.com/1%20thessalonians+5:16');
+    logger.info('Evil: fetch is working.');
+  } catch (e) {
+    logger.error(`Evil: Error on fetch! ${e}`);
+  }
+
+  try {
+    // This is just for testing and will throw an exception.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const xhr = new XMLHttpRequest();
+  } catch (e) {
+    logger.info(`Evil: Error on XMLHttpRequest! ${e}`);
+  }
+
+  try {
+    // This is just for testing and will throw an exception.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const webSocket = new WebSocket();
+  } catch (e) {
+    logger.info(`Evil: Error on WebSocket! ${e}`);
+  }
+
+  try {
+    // This will be blocked and will suggest the papi.storage api.
+    const fs = await import('fs');
+    logger.error(`Successfully dynamically imported fs! fs.readFileSync = ${fs.readFileSync}`);
+  } catch (e) {
+    logger.info(`Evil: Error on dynamic import! ${e.message}`);
+  }
+
+  try {
+    // This should always work.
+    const verse = await papi.fetch('https://bible-api.com/1%20thessalonians+5:16');
+    const verseJson = await verse.json();
+    logger.info(`Evil: could papi.fetch verse 1TH 5:16 "${verseJson.text.replace(/\n/g, '')}"`);
+  } catch (e) {
+    logger.error(`Evil: Error on papi.fetch! ${e}`);
+  }
 }
 
-try {
-  // This will be blocked and will suggest the papi.fetch api
-  const https = require('https');
-  logger.info(`Successfully imported https! ${https}`);
-} catch (e) {
-  logger.info(e.message);
+tryImports();
+
+function activate() {
+  logger.info('Evil is activating...');
+  tryImports();
+  // 3 secs is timed to be after the extension service has finished initializing.
+  setTimeout(tryImports, 3000);
+  logger.info('Evil is finished activating!');
 }
 
-try {
-  // This is just for testing and will throw an exception
-  fetch('test');
-} catch (e) {
-  logger.info(`Evil: Error on fetch! ${e}`);
+function deactivate() {
+  logger.info('Evil is deactivated.');
 }
 
-try {
-  // This is just for testing and will throw an exception
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const xhr = new XMLHttpRequest();
-} catch (e) {
-  logger.info(`Evil: Error on XMLHttpRequest! ${e}`);
-}
-
-try {
-  // This is just for testing and will throw an exception
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const webSocket = new WebSocket();
-} catch (e) {
-  logger.info(`Evil: Error on WebSocket! ${e}`);
-}
+exports.activate = activate;
+exports.deactivate = deactivate;

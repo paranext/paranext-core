@@ -41,7 +41,7 @@ const initialize = async () => {
       async (extensionName: string, assetName: string) => {
         return getExtensionAsset(extensionName, assetName);
       },
-    ).promise;
+    );
 
     isInitialized = true;
   })();
