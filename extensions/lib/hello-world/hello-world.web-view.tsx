@@ -1,4 +1,13 @@
 import papi from 'papi';
+import {
+  Button,
+  Checkbox,
+  ComboBox,
+  RefSelector,
+  Slider,
+  Switch,
+  TextField,
+} from 'papi-components';
 import { useCallback, useContext, useState } from 'react';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
@@ -7,7 +16,6 @@ const {
   react: {
     context: { TestContext },
     hooks: { useData, useDataProvider, usePromise },
-    components: { Button },
   },
   logger,
 } = papi;
@@ -100,6 +108,15 @@ globalThis.webViewComponent = function HelloWorld() {
       <div>{personAge}</div>
       <h3>Psalm 1</h3>
       <div>{psalm1}</div>
+      <br />
+      <div>
+        <TextField label="Test Me" />
+        <Checkbox labelText="Test Me" />
+        <Switch /> {/* no label available */}
+        <ComboBox title="Test Me" options={['option 1', 'option 2']} />
+        <Slider /> {/* no label available */}
+        <RefSelector scrRef={{ book: 1, chapter: 1, verse: 1 }} handleSubmit={(): void => {}} />
+      </div>
     </div>
   );
 };

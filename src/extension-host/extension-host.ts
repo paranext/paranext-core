@@ -13,7 +13,6 @@ import extensionAssetService from '@shared/services/extension-asset.service';
 
 logger.info('Starting extension-host');
 logger.info(`Extension host is${isClient() ? '' : ' not'} client`);
-logger.info(`Extension host process.type = ${process.type}`);
 logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
 logger.warn('Extension host example warning');
 
@@ -22,6 +21,7 @@ logger.warn('Extension host example warning');
 // #region Services setup
 
 const commandHandlers: { [commandName: string]: CommandHandler } = {
+  // Set up test handlers
   addMany: async (...nums: number[]) => {
     /* const start = performance.now(); */
     /* const result = await papi.commands.sendCommand('addThree', 1, 4, 9); */
@@ -41,7 +41,7 @@ networkService
     // Set up network commands
     await Promise.all(
       Object.entries(commandHandlers).map(async ([commandName, handler]) => {
-        await papi.commands.registerCommand(commandName, handler).promise;
+        await papi.commands.registerCommand(commandName, handler);
       }),
     );
 

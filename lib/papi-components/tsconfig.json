@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig",
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "rootDir": "./src",
+    "target": "ESNext",
+    "module": "ESNext",
+    "types": ["vite/client", "node", "react"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "forceConsistentCasingInFileNames": true,
+    "incremental": false,
+    "isolatedModules": true,
+    "noEmit": true,
+    "noImplicitReturns": false,
+    "skipLibCheck": false,
+    "useDefineForClassFields": true,
+    "outDir": "",
+    "paths": {},
+    "typeRoots": []
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

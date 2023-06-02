@@ -1,9 +1,9 @@
 import { isExtensionHost } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
 import logger from '@shared/services/logger.service';
-import type GetAsset from '@extension-host/services/asset-retrieval.service';
+import type { GetAsset } from '@extension-host/services/asset-retrieval.service';
 
-let getAsset: typeof GetAsset;
+let getAsset: GetAsset;
 let isInitialized: boolean = false;
 let initializePromise: Promise<void>;
 
@@ -41,7 +41,7 @@ const initialize = async () => {
       async (extensionName: string, assetName: string) => {
         return getExtensionAsset(extensionName, assetName);
       },
-    ).promise;
+    );
 
     isInitialized = true;
   })();

@@ -4,7 +4,7 @@ import { TabInfo } from '@shared/data/web-view.model';
 import { debounce } from '@shared/utils/util';
 import { useState, useMemo, useCallback } from 'react';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
-import TextField from '@renderer/components/papi-components/text-field.component';
+import { TextField } from 'papi-components';
 
 function TestQuickVerseHeresyPanel() {
   const [verseRef, setVerseRef] = useState<string>('John 11:35');

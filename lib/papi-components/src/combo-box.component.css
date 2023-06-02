@@ -5,14 +5,17 @@
 .papi-combo-box.fullwidth {
   width: 100%;
 }
+
 .papi-combo-box.error {
-  background-color: #ff0000;
+  background-color: #f00;
 }
+
 .papi-combo-box.paratext {
-  color: greenyellow;
   background-color: darkgreen;
+  color: greenyellow;
 }
+
 .papi-combo-box.paratext.bright {
-  color: darkgreen;
   background-color: greenyellow;
+  color: darkgreen;
 }

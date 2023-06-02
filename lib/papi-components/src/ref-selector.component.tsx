@@ -10,19 +10,19 @@ import {
   FIRST_SCR_VERSE_NUM,
   getBookLongNameFromNum,
   getChaptersForBook,
-} from '@shared/scripture/scripture.util';
-import { ScriptureReference } from '@shared/scripture/scripture-types.model';
-import '@renderer/components/papi-components/ref-selector.component.css';
-import ComboBox from '@renderer/components/papi-components/combo-box.component';
-import Button from '@renderer/components/papi-components/button.component';
-import TextField from '@renderer/components/papi-components/text-field.component';
+} from './scripture/scripture-util';
+import { ScriptureReference } from './scripture/scripture.model';
+import './ref-selector.component.css';
+import ComboBox from './combo-box.component';
+import Button from './button.component';
+import TextField from './text-field.component';
 
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
 }
 
-function TJRefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
+function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
   const [currentBookName, setCurrentBookName] = useState<string>(
     getBookLongNameFromNum(scrRef.book),
   );
@@ -105,4 +105,4 @@ function TJRefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
   );
 }
 
-export default TJRefSelector;
+export default RefSelector;

@@ -1,40 +1,46 @@
 .papi-button {
-  font-family: 'Nunito Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-weight: 700;
   border: 0;
   border-radius: 3em;
   cursor: pointer;
   display: inline-block;
+  font-family: 'Nunito Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 700;
   line-height: 1;
 }
 
 .papi-button.primary {
-  color: white;
   background-color: #1ea7fd;
+  color: white;
 }
+
 .papi-button.secondary {
-  color: #333;
   background-color: transparent;
-  box-shadow: rgba(0, 0, 0, 0.15) 0px 0px 0px 1px inset;
+  box-shadow: rgba(0, 0, 0, 0.15) 0 0 0 1px inset;
+  color: #333;
 }
+
 .papi-button.paratext {
   background-color: darkgreen;
   color: greenyellow;
 }
+
 .papi-button.paratext.bright {
   background-color: greenyellow;
   color: darkgreen;
 }
+
 .papi-button.video {
   background-color: red;
   color: white;
 }
+
 .papi-button.video a,
 .papi-button.video a:visited {
+  color: white;
   text-decoration: none;
-  color: white;
 }
+
 .papi-button.video a:hover {
-  text-decoration: underline;
   color: white;
+  text-decoration: underline;
 }
