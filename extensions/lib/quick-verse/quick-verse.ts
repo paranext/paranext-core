@@ -25,6 +25,10 @@ type QuickVerseSetData = string | { text: string; isHeresy: boolean };
  *    reference, but you have to clarify that you are heretical because you really shouldn't change
  *    published Scriptures like this ;)
  *  - Heresy: get or set Scripture freely. It automatically marks the verse as heretical if changed
+ *  - Chapter: get a whole chapter of Scripture by book name and chapter number. Read-only
+ *    - This data type is provided to demonstrate a more complex selector - an array of typed
+ *      values. This is one way to make a `get<data_type>` function that feels more like a normal
+ *      function that has "multiple" parameters in its selector.
  *
  * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`.
  *
@@ -174,7 +178,7 @@ class QuickVerseDataProviderEngine
           `https://bible-api.com/${encodeURIComponent(this.#getSelector(verseRef))}`,
         );
         const verseData = await verseResponse.json();
-        const text = verseData.text.replaceAll('\n', '');
+        const text = verseData.text.trim().replaceAll('\n', ' ');
         responseVerse = { text };
         this.verses[this.#getSelector(verseRef)] = responseVerse;
         // Cache the verse text, track the latest cached verse, and send an update
@@ -207,6 +211,41 @@ class QuickVerseDataProviderEngine
    */
   async getHeresy(verseRef: string) {
     return this.getVerse(verseRef);
+  }
+
+  /**
+   * Does nothing (meaning the Chapter data type is read-only). This method is provided to match
+   * with `getChapter`.
+   * @returns false meaning do not update anything
+   */
+  // Does nothing, so we don't need to use `this`
+  // eslint-disable-next-line class-methods-use-this
+  async setChapter() {
+    // We are not supporting setting chapters now, so don't update anything
+    return false;
+  }
+
+  /**
+   * Get a chapter by its book name and chapter number.
+   *
+   * @param chapterInfo parameters for getting the chapter
+   *   - `book` - the name of the book like 'John'
+   *   - `chapter` - the chapter number
+   *
+   * @returns full contents of the chapter
+   *
+   * This function demonstrates one way to make a `get<data_type>` function that feels more like a
+   * normal function in that it has "multiple" parameters in its selector, which is an array of
+   * parameters. To use it, you have to wrap the parameters in an array.
+   *
+   * @example To get the contents of John 3, you can use `getChapter(['John', 3])`.
+   *
+   * Note: this method is used when someone uses the `useData.Chapter` hook or the
+   * `subscribeChapter` method on the data provider papi creates for this engine.
+   */
+  async getChapter(chapterInfo: [book: string, chapter: number]) {
+    const [book, chapter] = chapterInfo;
+    return this.getVerse(`${book} ${chapter}`);
   }
 
   /**
