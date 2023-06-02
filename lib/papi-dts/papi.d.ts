@@ -1429,7 +1429,7 @@ declare module 'shared/models/data-provider.model' {
      *
      *    For example, suppose your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3. Your data
      *    at John 3:5 does not change, and your callback will not run.
-     *  - `'all'` - run the update callback every time the data has been updated whether or not the data
+     *  - `'*'` - run the update callback every time the data has been updated whether or not the data
      *    at this selector has changed.
      *
      *    For example, suppose your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3. Your data
@@ -1437,7 +1437,7 @@ declare module 'shared/models/data-provider.model' {
      *
      * @default 'deeply-equal'
      */
-    whichUpdates?: 'deeply-equal' | 'all';
+    whichUpdates?: 'deeply-equal' | '*';
   };
   /**
    * Information that papi uses to interpret whether to send out updates on a data provider when the engine

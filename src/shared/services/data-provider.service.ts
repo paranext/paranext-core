@@ -142,7 +142,7 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
 
       // Only update if we should listen to all updates, if the old data is the default placeholder data, or the data is not deeply equal
       if (
-        whichUpdates === 'all' ||
+        whichUpdates === '*' ||
         dataPrevious === SUBSCRIBE_PLACEHOLDER ||
         !deepEqual(dataPrevious, data)
       ) {
