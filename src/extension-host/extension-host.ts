@@ -13,7 +13,6 @@ import extensionAssetService from '@shared/services/extension-asset.service';
 
 logger.info('Starting extension-host');
 logger.info(`Extension host is${isClient() ? '' : ' not'} client`);
-logger.info(`Extension host process.type = ${process.type}`);
 logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
 logger.warn('Extension host example warning');
 
