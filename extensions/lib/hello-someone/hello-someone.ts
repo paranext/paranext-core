@@ -9,7 +9,7 @@ import type {
 } from '@extensions/hello-someone/hello-someone';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
-import type { HasNotifyUpdate } from 'shared/models/data-provider-engine.model';
+import type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
 
@@ -39,14 +39,14 @@ const unsubscribers: UnsubscriberAsync[] = [];
  *  - Cons
  *    - Must specify all properties and methods in the object type
  *    - papi.dataProvider.decorators.ignore is difficult to apply to tell papi to ignore methods
- *    - When using `this.notifyUpdate`, you must include the `HasNotifyUpdate` type and provide a
+ *    - When using `this.notifyUpdate`, you must include the `WithNotifyUpdate` type and provide a
  *      placeholder `notifyUpdate` method
  *
  * If you would like more advanced functionality, you can alternatively define a data provider
  * engine with a class. An example of this is found in `quick-verse.ts`.
  */
 const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
-  HasNotifyUpdate<GreetingsDataTypes> &
+  WithNotifyUpdate<GreetingsDataTypes> &
   GreetingsDataMethods & {
     people: AllGreetingsData;
     getPerson<T extends boolean = true>(
@@ -63,7 +63,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
   /**
    * Get a person by name. By default, creates that person if they don't exist yet
    * @param name name of person
-   * @param createIfDoesNotExist whether to create the person if they doesn't exist. Defaults to true
+   * @param createIfDoesNotExist whether to create the person if they don't exist. Defaults to true
    * @returns person according to the provided name or undefined if they don't exist and
    * were not set to be created in this method.
    *
@@ -209,7 +209,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
   async deletePerson(name: string) {
     const person = this.getPerson(name, false);
     if (person) {
-      logger.log(`RIP ${name}, who died tragically young at age ${person.age}. ;(`);
+      logger.info(`RIP ${name}, who died tragically young at age ${person.age}. ;(`);
       delete this.people[name.toLowerCase()];
       this.notifyUpdate();
       return true;

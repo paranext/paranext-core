@@ -47,8 +47,8 @@ type QuickVerseSetData = string | { text: string; isHeresy: boolean };
  *      an error unless you have the right methods.
  *    - You must specify parameter and return types. They are not inferred
  *
- * can create extra properties/methods without having to specify them in this type and private
- * methods. However, you lose some Intellisense features)
+ * If you would like better Intellisense support to get familiar with the api, you can alternatively
+ * define a data provider engine with an object. An example of this is found in `hello-someone.ts`.
  */
 class QuickVerseDataProviderEngine
   extends DataProviderEngine<QuickVerseDataTypes>

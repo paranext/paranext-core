@@ -48,9 +48,9 @@ export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTy
  * to be registered as a data provider engine and you need to use `notifyUpdate`.
  *
  * @see DataProviderEngineNotifyUpdate for more information on `notifyUpdate`.
- * @see HasNotifyUpdate for more information on using this type.
+ * @see IDataProviderEngine for more information on using this type.
  */
-export type HasNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
+export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
   notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
 };
 
@@ -71,10 +71,10 @@ export type HasNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
  * avoid type errors with one of the following options:
  *
  * 1. If you are using an object or class to create a data provider engine, you can add a
- * `notifyUpdate` function (and, with an object, add the HasNotifyUpdate type) to
+ * `notifyUpdate` function (and, with an object, add the WithNotifyUpdate type) to
  * your data provider engine like so:
  * ```typescript
- * const myDPE: IDataProviderEngine<MyDataTypes> & HasNotifyUpdate<MyDataTypes> = {
+ * const myDPE: IDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
  *   notifyUpdate(updateInstructions) {},
  *   ...
  * }
@@ -119,6 +119,6 @@ type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProvider
      * @see DataProviderGetter for more information
      */
     DataProviderGetters<TDataTypes> &
-    Partial<HasNotifyUpdate<TDataTypes>>;
+    Partial<WithNotifyUpdate<TDataTypes>>;
 
 export default IDataProviderEngine;

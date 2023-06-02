@@ -51,11 +51,14 @@ let isInitialized = false;
 let initializePromise: Promise<void> | undefined;
 
 /**
- * Abstract class that provides a placeholder `notifyUpdate` so data provider engine classes don't
- * have to write their own if they want to use `notifyUpdate` if they don't want to.
+ * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes.
+ * If a data provider engine class extends this class, it doesn't have to specify its own
+ * `notifyUpdate` function in order to use `notifyUpdate`.
+ *
+ * @see IDataProviderEngine for more information on extending this class.
  */
 abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
-  // This is just a placeholder. We don't need it to do anything
+  // This is just a placeholder and will be layered over by papi. We don't need it to do anything
   // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
   notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes> = (_updateInstructions) => {};
 }
@@ -285,12 +288,12 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
  * to an update event to send over the network to inform subscribers to update their data
  * @param updateInstructions update instructions to reformat into an update event
  * @param dataType the data type of the update instructions (e.g. 'Verse' if update instructions came from `setVerse`)
- * or `null` if being mapped for `notifyUpdate`, which doesn't have a data type
+ * or `undefined` if being mapped for `notifyUpdate`, which doesn't have a data type
  * @returns update event information to send in the `onDidUpdate` event emitter to tell subscribers to update
  */
 function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataTypes>(
   updateInstructions: DataProviderUpdateInstructions<TDataTypes> | undefined,
-  dataType: DataTypeNames<TDataTypes> | null,
+  dataType: DataTypeNames<TDataTypes> | undefined,
 ): DataProviderUpdateInstructions<TDataTypes> {
   // If they want to update all data types, let them do it
   if (updateInstructions === '*') return updateInstructions;
@@ -305,7 +308,7 @@ function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataT
   }
   // If the update instructions are truthy but neither an array or a string or '*', it means we should just send an update for its own data type
   // However, we don't have a data type if we're mapping for `notifyUpdate`, so just return '*' to update everything.
-  if (updateInstructions) return dataType !== null ? [dataType] : '*';
+  if (updateInstructions) return dataType !== undefined ? [dataType] : '*';
   // If the update instructions are falsy, do not update
   return false;
 }
@@ -434,7 +437,7 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
     // emit an update if updateInstructions indicate to do so
     const updateEventResult = mapUpdateInstructionsToUpdateEvent<TDataTypes>(
       updateInstructions,
-      null,
+      undefined,
     );
     // Run the data provider engine's original `notifyUpdate` with the update result before we send the update
     if (dpeNotifyUpdate) dpeNotifyUpdate(updateEventResult, ...args);
