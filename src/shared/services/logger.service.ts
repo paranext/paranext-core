@@ -1,6 +1,8 @@
 import chalk from 'chalk';
 import log, { LogLevel } from 'electron-log';
-import { getProcessType, isClient, isRenderer } from '@shared/utils/internal-util';
+import { getProcessType, isClient, isExtensionHost, isRenderer } from '@shared/utils/internal-util';
+
+export const WARN_TAG = '<WARN>';
 
 /**
  * Format a string of a service message
@@ -37,14 +39,22 @@ if (isClient()) {
       return {
         ...message,
         data: message.data.map((logLine) =>
-          // We just checked above if message.variables is null
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           formatLog(
             logLine,
             getProcessType(),
             // Renderer sends back with log level of log. Not sure why it's not in the type
             (message.level as LogLevel | 'log') === 'log' ? undefined : message.level,
           ),
+        ),
+      };
+    });
+  if (isExtensionHost())
+    // Add a tag for warnings so we can recognize them outside the process.
+    log.hooks.push((message) => {
+      return {
+        ...message,
+        data: message.data.map((logLine) =>
+          message.level === 'warn' ? `${WARN_TAG}${logLine}` : logLine,
         ),
       };
     });

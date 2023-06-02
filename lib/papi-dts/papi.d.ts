@@ -479,6 +479,7 @@ declare module 'shared/data/network-connector.model' {
 }
 declare module 'shared/services/logger.service' {
   import log from 'electron-log';
+  export const WARN_TAG = '<WARN>';
   /**
    * Format a string of a service message
    * @param message message from the service
