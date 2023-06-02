@@ -1771,8 +1771,11 @@ declare module 'shared/services/data-provider.service' {
     DataProviderEngineNotifyUpdate,
   } from 'shared/models/data-provider-engine.model';
   /**
-   * Abstract class that provides a placeholder `notifyUpdate` so data provider engine classes don't
-   * have to write their own if they want to use `notifyUpdate` if they don't want to.
+   * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes.
+   * If a data provider engine class extends this class, it doesn't have to specify its own
+   * `notifyUpdate` function in order to use `notifyUpdate`.
+   *
+   * @see IDataProviderEngine for more information on extending this class.
    */
   abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
     notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
