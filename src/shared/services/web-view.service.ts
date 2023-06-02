@@ -149,10 +149,10 @@ export const addWebView = async (
   var React = window.parent.React;
   var createRoot = window.parent.createRoot;
   var require = window.parent.webViewRequire;
+  window.fetch = papi.fetch;
   delete window.parent;
   delete window.top;
   delete window.frameElement;
-  delete window.fetch;
   delete window.XMLHttpRequest;
   delete window.WebSocket;
   `;

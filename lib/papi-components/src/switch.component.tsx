@@ -1,6 +1,6 @@
 ﻿import { Switch as MuiSwitch } from '@mui/material';
 import { ChangeEvent } from 'react';
-import '@renderer/components/papi-components/switch.component.css';
+import './switch.component.css';
 
 export type SwitchProps = {
   /**

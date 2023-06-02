@@ -1,8 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useArgs } from '@storybook/client-api';
-import RefSelector, {
-  ScrRefSelectorProps,
-} from '@renderer/components/papi-components/ref-selector.component';
+import { RefSelector, ScrRefSelectorProps } from 'papi-components';
 import { ReactElement } from 'react';
 
 type Ref = { book: number; chapter: number; verse: number };

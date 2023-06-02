@@ -1,0 +1,163 @@
+.papi-button {
+  border: 0;
+  border-radius: 3em;
+  cursor: pointer;
+  display: inline-block;
+  font-family: Nunito Sans, Helvetica Neue, Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.papi-button.primary {
+  background-color: #1ea7fd;
+  color: #fff;
+}
+
+.papi-button.secondary {
+  background-color: transparent;
+  box-shadow: #00000026 0 0 0 1px inset;
+  color: #333;
+}
+
+.papi-button.paratext {
+  background-color: #006400;
+  color: #adff2f;
+}
+
+.papi-button.paratext.bright {
+  background-color: #adff2f;
+  color: #006400;
+}
+
+.papi-button.video {
+  background-color: red;
+  color: #fff;
+}
+
+.papi-button.video a,
+.papi-button.video a:visited {
+  color: #fff;
+  text-decoration: none;
+}
+
+.papi-button.video a:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.papi-checkbox {
+  background-color: transparent;
+}
+
+.papi-checkbox.error {
+  color: red;
+}
+
+.papi-checkbox.error:hover {
+  background-color: #f003;
+}
+
+.papi-checkbox.paratext {
+  color: #adff2f;
+}
+
+.papi-checkbox-label.paratext {
+  color: #006400;
+}
+
+.papi-checkbox.paratext:hover {
+  background-color: #0064004d;
+}
+
+.papi-checkbox.paratext.bright {
+  color: #006400;
+}
+
+.papi-checkbox-label.paratext.bright {
+  background-color: #adff2f;
+}
+
+.papi-checkbox.paratext.bright:hover {
+  background-color: #adff2f4d;
+}
+
+.papi-checkbox.below,
+.papi-checkbox.above {
+  text-align: center;
+}
+
+.papi-combo-box {
+  background-color: transparent;
+}
+
+.papi-combo-box.fullwidth {
+  width: 100%;
+}
+
+.papi-combo-box.error {
+  background-color: red;
+}
+
+.papi-combo-box.paratext {
+  background-color: #006400;
+  color: #adff2f;
+}
+
+.papi-combo-box.paratext.bright {
+  background-color: #adff2f;
+  color: #006400;
+}
+
+.papi-ref-selector.book {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.papi-ref-selector.chapter-verse {
+  width: 75px;
+}
+
+.papi-slider {
+  background-color: transparent;
+  color: #1ea7fd;
+}
+
+.papi-slider.vertical {
+  min-height: 200px;
+}
+
+.papi-slider.paratext {
+  background-color: #006400;
+  color: #adff2f;
+}
+
+.papi-slider.paratext.bright {
+  background-color: #adff2f;
+  color: #006400;
+}
+
+.papi-switch {
+  background-color: transparent;
+}
+
+.papi-switch.primary {
+  background-color: #1ea7fd;
+}
+
+.papi-switch.secondary {
+  background-color: #6fc8ff;
+}
+
+.papi-switch.error {
+  background-color: red;
+}
+
+.papi-switch.paratext {
+  background-color: #006400;
+  color: #adff2f;
+}
+
+.papi-switch.paratext.bright {
+  background-color: #adff2f;
+  color: #006400;
+}

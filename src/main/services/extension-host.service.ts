@@ -7,7 +7,7 @@ import {
   ARG_EXTENSIONS,
   getCommandLineArgumentsGroup,
 } from '@node/utils/command-line.util';
-import logger, { formatLog } from '@shared/services/logger.service';
+import logger, { formatLog, WARN_TAG } from '@shared/services/logger.service';
 import { waitForDuration } from '@shared/utils/util';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
@@ -26,7 +26,11 @@ const closePromise: Promise<void> = new Promise<void>((resolve) => {
 
 // log functions for inside the extension host process
 function logProcessError(message: unknown) {
-  logger.error(formatLog(message?.toString() || '', EXTENSION_HOST_NAME, 'error'));
+  let msg = message?.toString() || '';
+  if (msg.includes(WARN_TAG)) {
+    msg = msg.split(WARN_TAG).join('');
+    logger.warn(formatLog(msg, EXTENSION_HOST_NAME, 'warning'));
+  } else logger.error(formatLog(msg, EXTENSION_HOST_NAME, 'error'));
 }
 function logProcessInfo(message: unknown) {
   logger.info(formatLog(message?.toString() || '', EXTENSION_HOST_NAME));

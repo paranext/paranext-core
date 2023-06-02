@@ -129,7 +129,8 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
 /**
  * Loads an extension and runs its activate function.
  *
- * WARNING: This does not shim functionality out of extensions! Do not run this alone. Only run wrapped in activateExtensions()
+ * WARNING: This does not shim functionality out of extensions! Do not run this alone. Only run
+ *   wrapped in activateExtensions().
  * @param extension extension info for the extension to activate
  * @param extensionFilePath path to extension main file to import
  * @returns unsubscriber that deactivates the extension
@@ -138,7 +139,8 @@ const activateExtension = async (
   extension: ExtensionInfo,
   extensionFilePath: string,
 ): Promise<ActiveExtension> => {
-  // Import the extension file. Tell webpack to ignore it because extension files are not in the bundle and should not be looked up in the bundle
+  // Import the extension file. Tell webpack to ignore it because extension files are not in the
+  // bundle and should not be looked up in the bundle
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
   const extensionModule = (await import(/* webpackIgnore: true */ extensionFilePath)) as IExtension;
 
@@ -190,47 +192,43 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
 
   // Shim out require so extensions can't use it
   const requireOriginal = Module.prototype.require;
-  Module.prototype.require = ((fileName: string) => {
+  Module.prototype.require = ((moduleName: string) => {
     // Allow the extension to import papi
-    if (fileName === 'papi') return papi;
+    if (moduleName === 'papi') return papi;
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithFiles.find(
       (extensionFileToCheck) =>
-        !extensionFileToCheck.hasBeenImported && extensionFileToCheck.filePath === fileName,
+        !extensionFileToCheck.hasBeenImported && extensionFileToCheck.filePath === moduleName,
     );
 
     if (extensionFile) {
-      // The file that is being imported is the extension file, so this hopefully means
-      // we are importing the extension file in activateExtension. Allow this and mark the extension as imported.
+      // The file that is being imported is the extension file, so this hopefully means we are
+      // importing the extension file in activateExtension. Allow this and mark the extension as
+      // imported.
       // TODO: an extension can probably import another extension's file and mess this up. Maybe try to find a better way
       extensionFile.hasBeenImported = true;
-      return requireOriginal(fileName);
+      return requireOriginal(moduleName);
     }
 
     // Disallow any imports within the extension
     // Tell the extension dev if there is an api similar to what they want to import
     const message = `Requiring other than papi is not allowed in extensions! ${getModuleSimilarApiMessage(
-      fileName,
+      moduleName,
     )}`;
     throw new Error(message);
   }) as typeof Module.prototype.require;
 
-  // Shim out internet access options in environments where they are defined so extensions can't use them
-  const fetchOriginal: typeof fetch | undefined = globalThis.fetch;
+  // Replace fetch with papi.fetch.
   // eslint-disable-next-line no-global-assign
-  globalThis.fetch = function fetchForbidden() {
-    throw new Error('Cannot use fetch! Try using papi.fetch');
-  };
+  globalThis.fetch = papi.fetch;
 
-  const xmlHttpRequestOriginal: typeof XMLHttpRequest | undefined = globalThis.XMLHttpRequest;
   // @ts-expect-error we want to remove XMLHttpRequest
   // eslint-disable-next-line no-global-assign
   globalThis.XMLHttpRequest = function XMLHttpRequestForbidden() {
     throw new Error('Cannot use XMLHttpRequest! Try using papi.fetch');
   };
 
-  const webSocketOriginal: typeof WebSocket | undefined = globalThis.WebSocket;
   // @ts-expect-error we want to remove WebSocket
   // eslint-disable-next-line no-global-assign
   globalThis.WebSocket = function WebSocketForbidden() {
@@ -243,7 +241,7 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
       extensionsWithFiles.map((extensionWithFile) =>
         activateExtension(extensionWithFile.extension, extensionWithFile.filePath).catch((e) => {
           logger.error(
-            `Extension ${extensionWithFile.extension.name} threw while activating! ${e}`,
+            `Extension '${extensionWithFile.extension.name}' threw while activating! ${e}`,
           );
           return null;
         }),
@@ -251,20 +249,14 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
     )
   ).filter((activeExtension) => activeExtension !== null) as ActiveExtension[];
 
-  // Put shimmed out modules and globals back so we can use them again
-  // TODO: replacing the original modules and globals almost confidently lets extensions wait and use them later. Serious security concern. Pls fix
-  Module.prototype.require = requireOriginal;
-  // eslint-disable-next-line no-global-assign
-  globalThis.fetch = fetchOriginal;
-  // eslint-disable-next-line no-global-assign
-  globalThis.XMLHttpRequest = xmlHttpRequestOriginal;
-  // eslint-disable-next-line no-global-assign
-  globalThis.WebSocket = webSocketOriginal;
-
   return extensionsActive;
 };
 
-/** Sets up the ExtensionService. Runs only once */
+/**
+ * Sets up the ExtensionService. Runs only once
+ *
+ * WARNING: import everything needed before this initialize as `require` becomes limited after.
+ */
 export const initialize = () => {
   if (initializePromise) return initializePromise;
 
