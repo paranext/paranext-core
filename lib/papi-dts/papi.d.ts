@@ -1100,7 +1100,7 @@ declare module 'shared/services/command.service' {
 }
 declare module 'shared/data/web-view.model' {
   import { ReactNode } from 'react';
-  export type WebViewProps = Omit<WebViewContents, 'componentName'>;
+  export type WebViewProps = WebViewContents;
   /**
    * Information used to recreate a tab
    */
@@ -1160,6 +1160,8 @@ declare module 'shared/data/web-view.model' {
   };
   /** WebView definition created by extensions to show web content */
   export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
+  /** Serialized WebView information that does not contain the content of the WebView */
+  export type WebViewContentsSerialized = Omit<WebViewContents, 'content'>;
   export const TYPE_WEBVIEW = 'webView';
   interface TabLayout {
     type: 'tab';
@@ -1568,9 +1570,10 @@ declare module 'shared/services/data-provider.service' {
    */
   import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
   import IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  /** Indicate if we are aware of an existing data provider with the given name. If a data provider
-   *  with the given name is someone else on the network, this function won't tell you about it
-   *  unless something else in the existing process is subscribed to it.
+  /**
+   * Indicate if we are aware of an existing data provider with the given name. If a data provider
+   * with the given name is somewhere else on the network, this function won't tell you about it
+   * unless something else in the existing process is subscribed to it.
    */
   function hasKnown(providerName: string): boolean;
   /**

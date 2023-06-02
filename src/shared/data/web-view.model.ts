@@ -65,6 +65,9 @@ export type WebViewContentsHtml = WebViewContentsBase & {
 /** WebView definition created by extensions to show web content */
 export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
 
+/** Serialized WebView information that does not contain the content of the WebView */
+export type WebViewContentsSerialized = Omit<WebViewContents, 'content'>;
+
 export const TYPE_WEBVIEW = 'webView';
 
 interface TabLayout {

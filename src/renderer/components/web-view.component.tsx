@@ -39,9 +39,9 @@ export function WebView({ id, content, title, contentType }: WebViewProps) {
       // allow-scripts so the iframe can actually do things
       // allow-pointer-lock so the iframe can lock the pointer as desired
       // Note: Mozilla's iframe page 'allow-same-origin' and 'allow-scripts' warns that listing both of these
-      // allows the child scripts to remove this sandbox attribute from the iframe. However, it seems that this
-      // is done by accessing window.parent or window.top, which is removed from the iframe with the injected
-      // scripts in WebViewService. We will probably want to stay vigilant on security in this area.
+      // allows the child scripts to remove this sandbox attribute from the iframe. This means the
+      // sandboxing will do nothing for a determined hacker. We must distrust the whole renderer due
+      // to this issue. We will probably want to stay vigilant on security in this area.
       sandbox="allow-same-origin allow-scripts allow-pointer-lock"
       srcDoc={content}
     />

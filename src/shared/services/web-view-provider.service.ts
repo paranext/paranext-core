@@ -3,16 +3,21 @@
  * Exposed on the papi.
  */
 
-import { WebViewContents } from '@shared/data/web-view.model';
+import {
+  DisposableWebViewProvider,
+  IWebViewProvider,
+  WebViewProvider,
+} from '@shared/models/web-view-provider.model';
 import networkObjectService from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
+import logger from '@shared/services/logger.service';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const WEB_VIEW_PROVIDER_LABEL = 'webView';
 
 /** Gets the id for the web view network object with the given name */
-const getWebViewProviderObjectId = (providerName: string) =>
-  `${providerName}-${WEB_VIEW_PROVIDER_LABEL}`;
+const getWebViewProviderObjectId = (webViewType: string) =>
+  `${webViewType}-${WEB_VIEW_PROVIDER_LABEL}`;
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -41,21 +46,58 @@ const initialize = () => {
  * provider with the given name is somewhere else on the network, this function won't tell you about
  * it unless something else in the existing process is subscribed to it.
  */
-function hasKnown(providerName: string): boolean {
-  return networkObjectService.hasKnown(getWebViewProviderObjectId(providerName));
+function hasKnown(webViewType: string): boolean {
+  return networkObjectService.hasKnown(getWebViewProviderObjectId(webViewType));
 }
 
-export type WebViewProvider = {
-  deserialize(serializedWebView: Omit<WebViewContents, 'content'>): Promise<WebViewContents>;
-};
-
-async function register(providerName: string, webViewProvider: WebViewProvider) {
+async function register(
+  webViewType: string,
+  webViewProvider: IWebViewProvider,
+): Promise<DisposableWebViewProvider> {
   await initialize();
+
+  if (hasKnown(webViewType))
+    throw new Error(`WebView provider for WebView type ${webViewType} is already registered`);
+
+  // Validate that the WebView provider has what it needs
+  if (!webViewProvider.deserialize || typeof webViewProvider.deserialize !== 'function')
+    throw new Error(`WebView provider does not have a deserialize function`);
+
+  // We are good to go! Create the WebView provider
+
+  // Get the object id for this web view provider name
+  const webViewProviderObjectId = getWebViewProviderObjectId(webViewType);
+
+  // Set up the WebView provider to be a network object so other processes can use it
+  const disposableWebViewProvider = (await networkObjectService.set(
+    webViewProviderObjectId,
+    webViewProvider,
+  )) as DisposableWebViewProvider;
+
+  return disposableWebViewProvider;
+}
+
+async function get(webViewType: string): Promise<WebViewProvider | undefined> {
+  await initialize();
+
+  // Get the object id for this web view provider name
+  const webViewProviderObjectId = getWebViewProviderObjectId(webViewType);
+
+  const webViewProvider = await networkObjectService.get<WebViewProvider>(webViewProviderObjectId);
+
+  if (!webViewProvider) {
+    logger.info(`No WebView provider found for WebView type ${webViewType}`);
+    return undefined;
+  }
+
+  return webViewProvider;
 }
 
 const webViewProviderService = {
   initialize,
   hasKnown,
+  register,
+  get,
 };
 
 export default webViewProviderService;

@@ -16,7 +16,7 @@ import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
 import AsyncVariable from '@shared/utils/async-variable';
 import { NetworkObject } from '@shared/models/network-object.model';
 import networkObjectService from '@shared/services/network-object.service';
-import logger from './logger.service';
+import logger from '@shared/services/logger.service';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -251,11 +251,8 @@ async function registerEngine<TSelector, TGetData, TSetData>(
 ): Promise<IDisposableDataProvider<TSelector, TGetData, TSetData>> {
   await initialize();
 
-  // There is a potential networking sync issue here. We check for a data provider, then we create a network event, then we create a network object.
-  // If someone else registers an engine with the same data provider name at the same time, the two registrations could get intermixed and mess stuff up
-  // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
   if (hasKnown(providerName))
-    throw new Error(`Data provider with type ${providerName} is already registered`);
+    throw new Error(`Data provider with name ${providerName} is already registered`);
 
   // Validate that the data provider engine has what it needs
   if (!dataProviderEngine.get || typeof dataProviderEngine.get !== 'function')

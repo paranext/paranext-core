@@ -30,8 +30,8 @@ import {
   TabInfo,
 } from '@shared/data/web-view.model';
 import LogError from '@shared/log-error.model';
-import papi from '@shared/services/papi.service';
 import { serializeTabId, deserializeTabId } from '@shared/utils/papi-util';
+import { onDidAddWebView } from '@shared/services/web-view.service';
 
 type TabType = string;
 
@@ -52,7 +52,6 @@ const groups: { [key: string]: TabGroup } = {
 };
 const savedLayout: LayoutData = getStorageValue(DOCK_LAYOUT_KEY, testLayout as LayoutData);
 
-// TODO: Build this mapping from extensions so extensions can create their own panels
 const tabTypeCreationMap = new Map<TabType, TabCreator>([
   ['about', createAboutPanel],
   ['buttons', createButtonsPanel],
@@ -221,7 +220,7 @@ export default function ParanextDockLayout() {
   const dockLayoutRef = useRef<DockLayout>(null!);
 
   useEvent(
-    papi.webViews.onDidAddWebView,
+    onDidAddWebView,
     useCallback((event: AddWebViewEvent) => {
       const dockLayout = dockLayoutRef.current;
       addWebViewToDock(event, dockLayout);
