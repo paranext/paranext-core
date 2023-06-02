@@ -3,7 +3,7 @@ import type { ExecutionToken } from 'node/models/execution-token.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
-import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
+import { QuickVerseDataTypes, QuickVerseSetData } from '@extensions/quick-verse/quick-verse';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 
 const {
@@ -14,8 +14,6 @@ const {
 logger.info('Quick Verse is importing!');
 
 const unsubscribers: UnsubscriberAsync[] = [];
-
-type QuickVerseSetData = string | { text: string; isHeresy: boolean };
 
 /**
  * Example data provider engine that provides easy access to Scripture from an internet API.
