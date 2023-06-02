@@ -1,11 +1,13 @@
 import './test-buttons-panel.component.css';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
-import { TabInfo } from '@shared/data/web-view.model';
+import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { debounce } from '@shared/utils/util';
 import { useState, useMemo, useCallback } from 'react';
 import { QuickVerseDataProvider } from '@extensions/quick-verse/quick-verse';
 import { TextField } from 'papi-components';
+
+export const TAB_TYPE_QUICK_VERSE_HERESY = 'quick-verse-heresy';
 
 function TestQuickVerseHeresyPanel() {
   const [verseRef, setVerseRef] = useState<string>('John 11:35');
@@ -63,8 +65,9 @@ function TestQuickVerseHeresyPanel() {
   );
 }
 
-export default function createQuickVerseHeresyPanel(): TabInfo {
+export default function loadQuickVerseHeresyPanel(savedTabInfo: SavedTabInfo): TabInfo {
   return {
+    ...savedTabInfo,
     title: 'Quick Verse Heresy',
     content: <TestQuickVerseHeresyPanel />,
   };

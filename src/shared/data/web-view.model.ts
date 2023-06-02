@@ -1,31 +1,40 @@
 import { ReactNode } from 'react';
 
-export type WebViewProps = WebViewContents;
+/** Props that are passed to the web view component */
+export type WebViewProps = WebViewContents & Pick<SavedTabInfo, 'id'>;
 
 /**
- * Information used to recreate a tab
+ * Serialized information used to recreate a tab.
+ *
+ * {@link TabLoader} deserializes this into {@link TabInfo}
  */
 export type SavedTabInfo = {
   /**
-   * Tab ID - must be unique
+   * Tab ID - a unique identifier that identifies this tab
    */
-  id?: string;
+  id: string;
   /**
-   * Data needed to recreate the tab during load
+   * Type of tab - indicates what kind of built-in tab this info represents
+   */
+  tabType: string;
+  /**
+   * Data needed to deserialize the tab during load
    */
   data?: unknown;
 };
 
 /**
- * Information needed to create a tab inside of Paranext
+ * Information that Paranext uses to create a tab in the dock layout.
+ *
+ * {@link TabLoader} deserialize {@link SavedTabInfo} into this
  */
-export type TabInfo = {
+export type TabInfo = SavedTabInfo & {
   /**
    * Text to show on the title bar of the tab
    */
   title: string;
   /**
-   * Content to show inside the tab
+   * Content to show inside the tab.
    */
   content: ReactNode;
   /**
@@ -39,9 +48,19 @@ export type TabInfo = {
 };
 
 /**
+ * Function that takes a serialized tab and creates a Paranext tab out of it. Each type of tab must
+ * provide a TabLoader.
+ *
  * For now all tab creators must do their own data type verification
  */
-export type TabCreator = (tabData: SavedTabInfo) => TabInfo;
+export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
+
+/**
+ * Function that takes a Paranext tab and creates a serialized tab out of it. Each type of tab can
+ * provide a TabSaver. If they do not provide one, the `SavedTabInfo` properties are stripped from
+ * TabInfo before saving.
+ */
+export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
 
 export enum WebViewContentType {
   React = 'react',
@@ -49,7 +68,7 @@ export enum WebViewContentType {
 }
 
 /** Base WebView properties that all WebViews share */
-type WebViewContentsBase = { id: string; content: string; title?: string };
+type WebViewContentsBase = { webViewType: string; content: string; title?: string };
 
 /** WebView representation using React */
 export type WebViewContentsReact = WebViewContentsBase & {
@@ -66,9 +85,9 @@ export type WebViewContentsHtml = WebViewContentsBase & {
 export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
 
 /** Serialized WebView information that does not contain the content of the WebView */
-export type WebViewContentsSerialized = Omit<WebViewContents, 'content'>;
-
-export const TYPE_WEBVIEW = 'webView';
+export type WebViewContentsSerialized =
+  | Omit<WebViewContentsReact, 'content'>
+  | Omit<WebViewContentsHtml, 'content'>;
 
 interface TabLayout {
   type: 'tab';

@@ -3,16 +3,19 @@ import {
   SavedTabInfo,
   TabInfo,
   WebViewContentType,
+  WebViewContents,
+  WebViewContentsSerialized,
   WebViewProps,
 } from '@shared/data/web-view.model';
-import { deserializeTabId } from '@shared/utils/papi-util';
+import { saveTabInfoBase } from '@shared/services/web-view.service';
 
-export function getTitle({ id, title, contentType }: WebViewProps): string {
-  const defaultTitle = id ? `${id} ${contentType}` : `${contentType} Web View`;
-  return title || defaultTitle;
+export const TAB_TYPE_WEBVIEW = 'webView';
+
+export function getTitle({ webViewType, title, contentType }: Partial<WebViewProps>): string {
+  return title || `${webViewType || contentType} Web View`;
 }
 
-export function WebView({ id, content, title, contentType }: WebViewProps) {
+export function WebView({ webViewType, content, title, contentType }: WebViewProps) {
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const iframeRef = useRef<HTMLIFrameElement>(null!);
@@ -26,7 +29,7 @@ export function WebView({ id, content, title, contentType }: WebViewProps) {
   return (
     <iframe
       ref={iframeRef}
-      title={getTitle({ id, content, title, contentType })}
+      title={getTitle({ webViewType, title, contentType })}
       // TODO: csp?
       // TODO: credentialless?
       // TODO: referrerpolicy?
@@ -48,22 +51,35 @@ export function WebView({ id, content, title, contentType }: WebViewProps) {
   );
 }
 
-export default function createWebViewPanel(tabInfo: SavedTabInfo): TabInfo {
-  if (!tabInfo.id) throw new Error('"id" is missing.');
+export default function loadWebViewPanel(savedTabInfo: SavedTabInfo): TabInfo {
+  if (!savedTabInfo.id) throw new Error('"id" is missing.');
 
   let data: WebViewProps;
-  if (tabInfo.data) {
+  if (savedTabInfo.data) {
     // We need to make sure that the data is of the correct type
-    data = tabInfo.data as WebViewProps;
+    data = savedTabInfo.data as WebViewProps;
   } else {
     // placeholder data
-    const { typeId } = deserializeTabId(tabInfo.id);
-    data = { id: typeId, title: typeId, content: '', contentType: WebViewContentType.HTML };
+    data = {
+      id: savedTabInfo.id,
+      webViewType: 'Unknown',
+      title: 'Unknown',
+      content: '',
+      contentType: WebViewContentType.HTML,
+    };
   }
 
-  const title = data.title ?? 'Unknown';
   return {
-    title: `${title}`,
+    ...savedTabInfo,
+    title: data.title ?? 'Unknown',
     content: <WebView {...data} />,
   };
+}
+
+export function saveWebViewPanel(tabInfo: TabInfo): SavedTabInfo {
+  const data = { ...(tabInfo.data as WebViewContentsSerialized) };
+  // We don't want to keep the webView content so the extension can provide it
+  delete (data as Omit<WebViewContents, 'content'> & Partial<Pick<WebViewContents, 'content'>>)
+    .content;
+  return { ...saveTabInfoBase(tabInfo), data };
 }

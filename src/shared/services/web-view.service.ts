@@ -10,7 +10,7 @@ import {
   getModuleSimilarApiMessage,
   serializeRequestType,
 } from '@shared/utils/papi-util';
-import { getErrorMessage, newNonce, wait } from '@shared/utils/util';
+import { getErrorMessage, newGuid, newNonce, wait } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi.service';
@@ -21,6 +21,8 @@ import {
   AddWebViewEvent,
   Layout,
   PanelDirection,
+  SavedTabInfo,
+  TabInfo,
   WebViewContents,
   WebViewContentsReact,
   WebViewContentType,
@@ -78,6 +80,8 @@ const webViewRequire = (module: string) => {
 
 // #endregion
 
+// #region functions related to the dock layout
+
 function layoutDefaults(layout: Layout): Layout {
   const layoutDefaulted = cloneDeep(layout);
   switch (layoutDefaulted.type) {
@@ -93,6 +97,15 @@ function layoutDefaults(layout: Layout): Layout {
   }
   return layoutDefaulted;
 }
+
+export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
+  // We don't need to use the other properties, but we need to remove them
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { title, content, minWidth, minHeight, ...savedTabInfo } = tabInfo;
+  return savedTabInfo;
+}
+
+// #endregion
 
 /**
  * Adds a WebView and runs all event handlers who are listening to this event
@@ -270,6 +283,7 @@ export const addWebView = async (
 
   const updatedWebView: WebViewProps = {
     ...webView,
+    id: newGuid(),
     contentType,
     content: webViewContent,
   };

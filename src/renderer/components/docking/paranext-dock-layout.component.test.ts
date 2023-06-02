@@ -68,10 +68,14 @@ describe('Dock Layout Component', () => {
   });
 
   describe('loadTab()', () => {
-    it('should throw when no id', () => {
-      const savedTabInfo: SavedTabInfo = {};
+    it('should throw when no id or tabType', () => {
+      const savedTabInfoNone = {} as SavedTabInfo;
+      const savedTabInfoNoId = {} as SavedTabInfo;
+      const savedTabInfoNoTabType = {} as SavedTabInfo;
 
-      expect(() => loadTab(savedTabInfo)).toThrow();
+      expect(() => loadTab(savedTabInfoNone)).toThrow();
+      expect(() => loadTab(savedTabInfoNoId)).toThrow();
+      expect(() => loadTab(savedTabInfoNoTabType)).toThrow();
     });
   });
 
@@ -88,7 +92,7 @@ describe('Dock Layout Component', () => {
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
       const event: AddWebViewEvent = {
-        webView: { id: 'myId', content: '' },
+        webView: { id: 'myId', webViewType: 'test', content: '' },
         layout: { type: 'wacked' } as unknown as FloatLayout,
       };
 
@@ -104,7 +108,7 @@ describe('Dock Layout Component', () => {
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
       const event: AddWebViewEvent = {
-        webView: { id: 'myId', content: '' },
+        webView: { id: 'myId', webViewType: 'test', content: '' },
         layout: { type: 'panel', direction: 'top', targetTabId: 'unknownTabId' },
       };
 

@@ -14,24 +14,29 @@ import DockLayout, {
 import createErrorTab from '@renderer/components/docking/error-tab.component';
 import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
-import createWebViewPanel from '@renderer/components/web-view.component';
+import loadWebViewPanel, {
+  TAB_TYPE_WEBVIEW,
+  saveWebViewPanel,
+} from '@renderer/components/web-view.component';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
-import createAboutPanel from '@renderer/testing/about-panel.component';
-import createButtonsPanel from '@renderer/testing/test-buttons-panel.component';
+import loadAboutPanel, { TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
+import loadButtonsPanel, { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
 import testLayout, { FIRST_TAB_ID } from '@renderer/testing/test-layout.data';
-import createTabPanel from '@renderer/testing/test-panel.component';
-import createQuickVerseHeresyPanel from '@renderer/testing/test-quick-verse-heresy-panel.component';
+import loadTestPanel, { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
+import loadQuickVerseHeresyPanel, {
+  TAB_TYPE_QUICK_VERSE_HERESY,
+} from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import {
   AddWebViewEvent,
   FloatLayout,
   SavedTabInfo,
-  TYPE_WEBVIEW,
-  TabCreator,
+  TabLoader,
   TabInfo,
+  TabSaver,
 } from '@shared/data/web-view.model';
 import LogError from '@shared/log-error.model';
-import { serializeTabId, deserializeTabId } from '@shared/utils/papi-util';
-import { onDidAddWebView } from '@shared/services/web-view.service';
+import { onDidAddWebView, saveTabInfoBase } from '@shared/services/web-view.service';
+import { getErrorMessage } from '@shared/utils/util';
 
 type TabType = string;
 
@@ -52,57 +57,67 @@ const groups: { [key: string]: TabGroup } = {
 };
 const savedLayout: LayoutData = getStorageValue(DOCK_LAYOUT_KEY, testLayout as LayoutData);
 
-const tabTypeCreationMap = new Map<TabType, TabCreator>([
-  ['about', createAboutPanel],
-  ['buttons', createButtonsPanel],
-  ['quick-verse-heresy', createQuickVerseHeresyPanel],
-  ['tab', createTabPanel],
-  [TYPE_WEBVIEW, createWebViewPanel],
+const tabLoaderMap = new Map<TabType, TabLoader>([
+  [TAB_TYPE_ABOUT, loadAboutPanel],
+  [TAB_TYPE_BUTTONS, loadButtonsPanel],
+  [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyPanel],
+  [TAB_TYPE_TEST, loadTestPanel],
+  [TAB_TYPE_WEBVIEW, loadWebViewPanel],
 ]);
+
+const tabSaverMap = new Map<TabType, TabSaver>([[TAB_TYPE_WEBVIEW, saveWebViewPanel]]);
 
 let previousTabId: string = FIRST_TAB_ID;
 let floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
 
-function getTabDataFromSavedInfo(tabInfo: SavedTabInfo): TabInfo {
-  let tabCreator: TabCreator | undefined;
-  if (tabInfo.id) {
-    const { type } = deserializeTabId(tabInfo.id);
-    tabCreator = tabTypeCreationMap.get(type);
-  }
-  if (!tabCreator) return createErrorTab(`No handler for the tab type '${tabInfo.id}'`);
+function loadSavedTabInfo(tabInfo: SavedTabInfo): TabInfo {
+  const tabLoader = tabLoaderMap.get(tabInfo.tabType);
+  if (!tabLoader) return createErrorTab(`No tab loader for tabType '${tabInfo.tabType}'`);
 
   // Call the creation method to let the extension method create the tab
   try {
-    return tabCreator(tabInfo);
+    return tabLoader(tabInfo);
   } catch (e) {
     // If the tab couldn't be created, replace it with an error tab
-    if (e instanceof Error) return createErrorTab(e.message);
-    return createErrorTab(String(e));
+    return createErrorTab(getErrorMessage(e));
   }
 }
+
+type RCDockTabInfo = TabData & Omit<TabInfo, 'title'> & { tabInfoTitle: string };
 
 /**
  * Creates tab data from the specified saved tab information by calling back to the
  * extension that registered the creation of the tab type
  * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
  */
-export function loadTab(savedTabInfo: SavedTabInfo): TabData & SavedTabInfo {
+export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
   if (!savedTabInfo.id) throw new LogError('loadTab: "id" is missing.');
 
-  const { id } = savedTabInfo;
-  const newTabData = getTabDataFromSavedInfo(savedTabInfo);
+  // Load the tab from the saved tab info
+  const tabInfo = loadSavedTabInfo(savedTabInfo);
 
-  // Translate the data from the extension to be in the form needed by rc-dock
+  // Translate the data from the loaded tab to be in the form needed by rc-dock
   return {
-    id,
-    data: savedTabInfo.data,
-    title: <ParanextTabTitle text={newTabData.title} />,
-    content: <ParanextPanel>{newTabData.content}</ParanextPanel>,
-    minWidth: newTabData.minWidth,
-    minHeight: newTabData.minHeight,
+    ...tabInfo,
+    tabInfoTitle: tabInfo.title,
+    title: <ParanextTabTitle text={tabInfo.title} />,
+    content: <ParanextPanel>{tabInfo.content}</ParanextPanel>,
     group: TAB_GROUP,
     closable: true,
   };
+}
+
+function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo {
+  // Remove the rc-dock properties that are not also in SavedTabInfo
+  // We don't need to use the other properties, but we need to remove them
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { parent, group, closable, title, tabInfoTitle, ...strippedTabInfo } = dockTabInfo;
+  // Put back the tabInfoTitle we saved off in `loadTab`
+  const tabInfo: TabInfo = { ...strippedTabInfo, title: tabInfoTitle };
+
+  const tabSaver = tabSaverMap.get(tabInfo.tabType);
+
+  return tabSaver ? tabSaver(tabInfo) : saveTabInfoBase(tabInfo);
 }
 
 /**
@@ -170,8 +185,8 @@ export function getFloatPosition(
 }
 
 export function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayout: DockLayout) {
-  const tabId = serializeTabId(TYPE_WEBVIEW, webView.id);
-  const tab = loadTab({ id: tabId, data: webView });
+  const tabId = webView.id;
+  const tab = loadTab({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView });
   let targetTab = dockLayout.find(tabId);
 
   // Update existing WebView
@@ -234,6 +249,7 @@ export default function ParanextDockLayout() {
       defaultLayout={savedLayout}
       dropMode="edge"
       loadTab={loadTab}
+      saveTab={saveTab}
       onLayoutChange={onLayoutChange}
     />
   );

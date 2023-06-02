@@ -5,11 +5,13 @@ import papi from '@shared/services/papi.service';
 import * as networkService from '@shared/services/network.service';
 import { debounce, getErrorMessage, isString } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
-import { TabInfo } from '@shared/data/web-view.model';
+import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import IDataProvider from '@shared/models/data-provider.interface';
+
+export const TAB_TYPE_BUTTONS = 'buttons';
 
 const testBase: (message: string) => Promise<string> =
   networkService.createRequestFunction('electronAPI.env.test');
@@ -373,8 +375,9 @@ function TestButtonsPanel() {
   );
 }
 
-export default function createButtonsPanel(): TabInfo {
+export default function loadButtonsPanel(savedTabInfo: SavedTabInfo): TabInfo {
   return {
+    ...savedTabInfo,
     title: 'Test Buttons',
     content: <TestButtonsPanel />,
   };

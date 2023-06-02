@@ -1,13 +1,11 @@
+import { SavedTabInfo } from '@shared/data/web-view.model';
 import { LayoutBase } from 'rc-dock';
-import { serializeTabId } from '@shared/utils/papi-util';
+import { TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
+import { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
+import { TAB_TYPE_QUICK_VERSE_HERESY } from '@renderer/testing/test-quick-verse-heresy-panel.component';
+import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 
-const ABOUT_TAB_ID = serializeTabId('about', 'About');
-const TEST_TAB_TWO_ID = serializeTabId('tab', 'Test Tab Two');
-const TEST_TAB_ONE_ID = serializeTabId('tab', 'Test Tab One');
-const TEST_BUTTONS_TAB_ID = serializeTabId('buttons', 'Test Buttons');
-const TEST_QUICK_VERSE_TAB_ID = serializeTabId('quick-verse-heresy', 'Test Quick Verse Heresy');
-
-export const FIRST_TAB_ID = ABOUT_TAB_ID;
+export const FIRST_TAB_ID = 'About';
 
 const testLayout: LayoutBase = {
   dockbox: {
@@ -18,12 +16,16 @@ const testLayout: LayoutBase = {
         size: 250,
         children: [
           {
-            tabs: [{ id: ABOUT_TAB_ID }, { id: TEST_TAB_TWO_ID }, { id: TEST_TAB_ONE_ID }],
+            tabs: [
+              { id: 'About', tabType: TAB_TYPE_ABOUT },
+              { id: 'Test Tab Two', tabType: TAB_TYPE_TEST },
+              { id: 'Test Tab One', tabType: TAB_TYPE_TEST },
+            ] as SavedTabInfo[],
           },
         ],
       },
       {
-        tabs: [{ id: TEST_BUTTONS_TAB_ID }],
+        tabs: [{ id: 'Test Buttons', tabType: TAB_TYPE_BUTTONS }] as SavedTabInfo[],
       },
     ],
   },
@@ -31,7 +33,9 @@ const testLayout: LayoutBase = {
     mode: 'float',
     children: [
       {
-        tabs: [{ id: TEST_QUICK_VERSE_TAB_ID }],
+        tabs: [
+          { id: 'Test Quick Verse Heresy', tabType: TAB_TYPE_QUICK_VERSE_HERESY },
+        ] as SavedTabInfo[],
         x: 300,
         y: 170,
         w: 320,
