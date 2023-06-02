@@ -18,19 +18,37 @@ const unsubscribers: UnsubscriberAsync[] = [];
 type QuickVerseSetData = string | { text: string; isHeresy: boolean };
 
 /**
- * Example data provider engine (defined by a class, which is beneficial over an object because we
- * can create extra properties/methods without having to specify them in this type and private
- * methods. However, you lose some Intellisense features) that provides easy access to Scripture
- * portions from an internet API.
+ * Example data provider engine that provides easy access to Scripture from an internet API.
+ *
  * It has two data types:
  *  - Verse: get a portion of Scripture by its reference. You can also change the Scripture at a
  *    reference, but you have to clarify that you are heretical because you really shouldn't change
  *    published Scriptures like this ;)
  *  - Heresy: get or set Scripture freely. It automatically marks the verse as heretical if changed
+ *
  * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`.
  *
  * papi will create a data provider that internally uses this engine. The data provider layers over
  * this engine and adds functionality like `subscribe<data_type>` functions with automatic updates.
+ *
+ * This data provider engine is defined by a class, which we recommend trying once you get
+ * comfortable with the data provider api because of the following pros and cons:
+ *  - Pros
+ *    - Can freely add properties and methods without specifying them in an extra type
+ *    - Can use private methods (prefix with `#`) that are automatically ignored by papi
+ *    - Can use @papi.dataProvider.decorators.ignore to tell papi to ignore methods
+ *    - Can extend `DataProviderEngine` so TypeScript will understand you can call
+ * `this.notifyUpdate` without specifying a `notifyUpdate` function
+ *    - Can easily create multiple data providers from the same engine if you have two independent
+ *      sets of data or something
+ *  - Cons
+ *    - Intellisense does not tell you all the `set<data_type>` and `get<data_type>` methods you
+ *      need to provide, so it is slightly more challenging to use. However, TypeScript still shows
+ *      an error unless you have the right methods.
+ *    - You must specify parameter and return types. They are not inferred
+ *
+ * can create extra properties/methods without having to specify them in this type and private
+ * methods. However, you lose some Intellisense features)
  */
 class QuickVerseDataProviderEngine
   extends DataProviderEngine<QuickVerseDataTypes>
@@ -66,10 +84,10 @@ class QuickVerseDataProviderEngine
    * @returns '*' - update instructions for updating all data types because we want
    * subscribers to Verse and Heresy data types to update based on this change.
    *
-   * Note: this method is intentionally not named `setInternal` (if it started with `set`, the papi
-   * would consider it a data type method and would fail to use this engine because it would expect
-   * a `getInternal` as well). You can name it anything that doesn't start with `set` like
-   * `_setInternal` or `internalSet`.
+   * Note: this method is named `setInternal`, which would normally mean papi would consider it to
+   * be a data type method and would fail to use this engine because it would expect a `getInternal`
+   * as well. However, we added the `ignore` decorator, so papi will not pick it up. Alternatively,
+   * you can name it anything that doesn't start with `set` like `_setInternal` or `internalSet`.
    */
   @papi.dataProvider.decorators.ignore
   async setInternal(

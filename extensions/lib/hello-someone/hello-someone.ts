@@ -19,17 +19,31 @@ logger.info('Hello Someone is importing!');
 const unsubscribers: UnsubscriberAsync[] = [];
 
 /**
- * Example data provider engine (defined by an object instead of a class to test the limits of registerEngine)
- * that provides information about people. `quick-verse.ts`'s data provider is defined by a class,
- * which is a better example to look at. But it is possible to use an object directly as well.
+ * Example data provider engine that provides information about people.
+ *
  * It has three data types:
  *  - Greeting: a person's greeting
  *  - Age: a person's age
  *  - All: information about all the people associated with this engine
+ *
  * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`.
  *
  * papi will create a data provider that internally uses this engine. The data provider layers over
  * this engine and adds functionality like `subscribe<data_type>` functions with automatic updates.
+ *
+ * This data provider engine is defined by an object, which we recommend starting with to get
+ * comfortable with the data provider api because of the following pros and cons:
+ *  - Pros
+ *    - Intellisense works better (Ctrl+Space lists methods you need to implement)
+ *    - Function parameter and return types are inferred - no need to specify types
+ *  - Cons
+ *    - Must specify all properties and methods in the object type
+ *    - papi.dataProvider.decorators.ignore is difficult to apply to tell papi to ignore methods
+ *    - When using `this.notifyUpdate`, you must include the `HasNotifyUpdate` type and provide a
+ *      placeholder `notifyUpdate` method
+ *
+ * If you would like more advanced functionality, you can alternatively define a data provider
+ * engine with a class. An example of this is found in `quick-verse.ts`.
  */
 const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
   HasNotifyUpdate<GreetingsDataTypes> &
@@ -53,11 +67,11 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * @returns person according to the provided name or undefined if they don't exist and
    * were not set to be created in this method.
    *
-   * Note: this method is intentionally not named something that starts with `get` so it does not
-   * get picked up by papi and considered to be a new data type. If this method were named
-   * `getPerson`, papi would consider this a data type method and would fail to register this engine
-   * because it would also require a `setPerson` to go along with `getPerson`. You can name it
-   * anything you want that doesn't start with `get`.
+   * Note: this method is named `getPerson`, which would normally mean papi would consider it to be
+   * a data type method and would fail to use this engine because it would expect a `setPerson` as
+   * well. However, we added the `ignore` decorator (the line immediately after defining this
+   * greetingsDataProviderEngine object), so papi will not pick it up. Alternatively, you can name
+   * it anything that doesn't start with `get` like `_getPerson` or `internalGetPerson`.
    */
   getPerson<T extends boolean = true>(
     name: string,
@@ -160,7 +174,6 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * layered over on the papi. The only thing you can do here that will affect the update is to
    * throw an error.
    */
-  // TODO: What will actually happen if we run this in `get`? Stack overflow?
   notifyUpdate(updateInstructions) {
     logger.info(`greetings data provider engine ran notifyUpdate! ${updateInstructions}`);
   },
