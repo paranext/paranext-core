@@ -2,9 +2,9 @@ import papi from 'papi';
 import type { WebViewContentType } from 'shared/data/web-view.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type {
-  AllGreetingsData,
-  GreetingsDataMethods,
-  GreetingsDataTypes,
+  PeopleData,
+  PeopleDataMethods,
+  PeopleDataTypes,
   Person,
 } from '@extensions/hello-someone/hello-someone';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
@@ -24,7 +24,7 @@ const unsubscribers: UnsubscriberAsync[] = [];
  * It has three data types:
  *  - Greeting: a person's greeting
  *  - Age: a person's age
- *  - All: information about all the people associated with this engine
+ *  - People: information about all the people associated with this engine
  *
  * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`.
  *
@@ -45,10 +45,10 @@ const unsubscribers: UnsubscriberAsync[] = [];
  * If you would like more advanced functionality, you can alternatively define a data provider
  * engine with a class. An example of this is found in `quick-verse.ts`.
  */
-const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
-  WithNotifyUpdate<GreetingsDataTypes> &
-  GreetingsDataMethods & {
-    people: AllGreetingsData;
+const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
+  WithNotifyUpdate<PeopleDataTypes> &
+  PeopleDataMethods & {
+    people: PeopleData;
     getPerson<T extends boolean = true>(
       name: string,
       createIfDoesNotExist?: T,
@@ -70,7 +70,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * Note: this method is named `getPerson`, which would normally mean papi would consider it to be
    * a data type method and would fail to use this engine because it would expect a `setPerson` as
    * well. However, we added the `ignore` decorator (the line immediately after defining this
-   * greetingsDataProviderEngine object), so papi will not pick it up. Alternatively, you can name
+   * peopleDataProviderEngine object), so papi will not pick it up. Alternatively, you can name
    * it anything that doesn't start with `get` like `_getPerson` or `internalGetPerson`.
    */
   getPerson<T extends boolean = true>(
@@ -87,7 +87,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * Sets a person's greeting, creating the person if they do not exist.
    * @param name name of person
    * @param greeting person's new greeting
-   * @returns update instructions for updating the Greeting and All data types because we want
+   * @returns update instructions for updating the Greeting and People data types because we want
    * subscribers to either of these data types to update based on this change.
    *
    * Note: this method gets layered over so that you can run `this.setGreeting` inside this data
@@ -99,15 +99,15 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
   async setGreeting(
     name: string,
     greeting: string,
-  ): Promise<DataProviderUpdateInstructions<GreetingsDataTypes>> {
+  ): Promise<DataProviderUpdateInstructions<PeopleDataTypes>> {
     const person = this.getPerson(name);
     // If there is no change in the greeting, don't update
     if (greeting === person.greeting) return false;
 
     // Update the greeting and send an update
     person.greeting = greeting;
-    // Update greetings and all because all needs to know about all changes to people
-    return ['Greeting', 'All'];
+    // Update greetings and People because People needs to know about all changes to people
+    return ['Greeting', 'People'];
   },
 
   /**
@@ -126,7 +126,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * Set's a person's age, creating the person if they do not exist.
    * @param name name of person
    * @param age person's new age
-   * @returns update instructions for updating the Age and All data types because we want
+   * @returns update instructions for updating the Age and People data types because we want
    * subscribers to either of these data types to update based on this change.
    *
    * Note: this method gets layered over so that you can run `this.setAge` inside this data
@@ -138,15 +138,15 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
   async setAge(
     name: string,
     age: number,
-  ): Promise<DataProviderUpdateInstructions<GreetingsDataTypes>> {
+  ): Promise<DataProviderUpdateInstructions<PeopleDataTypes>> {
     const person = this.getPerson(name);
     // If there is no change in the age, don't update
     if (age === person.age) return false;
 
     // Update the age and send an update
     person.age = age;
-    // Update age and all because all needs to know about all changes to people
-    return ['Age', 'All'];
+    // Update age and People because People needs to know about all changes to people
+    return ['Age', 'People'];
   },
 
   /**
@@ -175,15 +175,15 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * throw an error.
    */
   notifyUpdate(updateInstructions) {
-    logger.info(`greetings data provider engine ran notifyUpdate! ${updateInstructions}`);
+    logger.info(`people data provider engine ran notifyUpdate! ${updateInstructions}`);
   },
 
   /**
-   * Does nothing (meaning the All data type is read-only). This method is provided to match with
-   * `getAll`.
+   * Does nothing (meaning the People data type is read-only). This method is provided to match with
+   * `getPeople`.
    * @returns false meaning do not update anything
    */
-  async setAll() {
+  async setPeople() {
     // Don't change everyone's greeting, you heathen!
     return false;
   },
@@ -192,7 +192,7 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
    * Gets information about all people in this data provider.
    * @returns information about all people in this data provider
    */
-  async getAll() {
+  async getPeople() {
     // WARNING: returning the object reference itself allows in-process consumers to edit this
     // object directly. Please do not do this in a real extension (deep clone it or something)
     return this.people;
@@ -219,19 +219,19 @@ const greetingsDataProviderEngine: IDataProviderEngine<GreetingsDataTypes> &
 
   /** Test method to make sure people can use data provider engines' custom methods */
   testRandomMethod: async (things: string) => {
-    const result = `Greetings data provider got testRandomMethod! ${things}`;
+    const result = `People data provider got testRandomMethod! ${things}`;
     logger.info(result);
     return result;
   },
 };
-papi.dataProvider.decorators.ignore(greetingsDataProviderEngine.getPerson);
+papi.dataProvider.decorators.ignore(peopleDataProviderEngine.getPerson);
 
 export async function activate() {
   logger.info('Hello Someone is activating!');
 
-  const greetingsDataProviderPromise = papi.dataProvider.registerEngine<GreetingsDataTypes>(
-    'hello-someone.greetings',
-    greetingsDataProviderEngine,
+  const peopleDataProviderPromise = papi.dataProvider.registerEngine<PeopleDataTypes>(
+    'hello-someone.people',
+    peopleDataProviderEngine,
   );
 
   await papi.webViews.addWebView(
@@ -262,10 +262,10 @@ export async function activate() {
   ];
 
   // For now, let's just make things easy and await the data provider promise at the end so we don't hold everything else up
-  const greetingsDataProvider = await greetingsDataProviderPromise;
+  const peopleDataProvider = await peopleDataProviderPromise;
 
   const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
-    (await Promise.all(unsubPromises)).concat([greetingsDataProvider.dispose]),
+    (await Promise.all(unsubPromises)).concat([peopleDataProvider.dispose]),
   );
   logger.info('Hello Someone is finished activating!');
   return combinedUnsubscriber;

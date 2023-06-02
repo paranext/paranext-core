@@ -23,8 +23,8 @@
         Set Age
       </button>
     </div>
-    <div id="all-greetings"></div>
-    <div id="all-update-count">All Updates: 0</div>
+    <div id="people-data"></div>
+    <div id="people-update-count">People Updates: 0</div>
     <div id="bill-any-greetings-update-count">Any Greetings Updates (via Bill): 0</div>
     <div id="bill-greetings-update-count">Bill Greetings Updates: 0</div>
     <div id="bill-any-age-update-count">Any Age Updates (via Bill): 0</div>
@@ -37,16 +37,16 @@
         papi.logger.info(input);
       }
 
-      const dataProviderPromise = papi.dataProvider.get('hello-someone.greetings');
+      const dataProviderPromise = papi.dataProvider.get('hello-someone\.people');
 
       async function setupWebView() {
-        const greetingsDataProvider = await dataProviderPromise;
+        const peopleDataProvider = await dataProviderPromise;
 
         // Attach handler for greetings-button
         const greetingsButton = document.getElementById('greetings-button');
         greetingsButton.addEventListener('click', async () => {
           const nameInput = document.getElementById('name-input');
-          const greeting = await greetingsDataProvider.getGreeting(nameInput.value.toLowerCase());
+          const greeting = await peopleDataProvider.getGreeting(nameInput.value.toLowerCase());
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
           helloSomeoneOutput.textContent = papi.util.htmlEncode(greeting || '');
           print(greeting);
@@ -56,7 +56,7 @@
           const nameInput = document.getElementById('name-input');
           const name = nameInput.value.toLowerCase();
           const promises = new Array(10000);
-          for (let i = 0; i < 10000; i += 1) promises[i] = greetingsDataProvider.getGreeting(name);
+          for (let i = 0; i < 10000; i += 1) promises[i] = peopleDataProvider.getGreeting(name);
           await Promise.all(promises);
           print('Done');
         });
@@ -65,7 +65,7 @@
         const deleteButton = document.getElementById('delete-button');
         deleteButton.addEventListener('click', async () => {
           const nameInput = document.getElementById('name-input');
-          const success = await greetingsDataProvider.deletePerson(nameInput.value.toLowerCase());
+          const success = await peopleDataProvider.deletePerson(nameInput.value.toLowerCase());
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
           helloSomeoneOutput.textContent = papi.util.htmlEncode(
             `${success ? 'Successfully' : 'Unsuccessfully'} deleted ${nameInput.value}.${
@@ -80,7 +80,7 @@
           const nameInput = document.getElementById('name-input');
           const name = nameInput.value;
           const setGreetingsInput = document.getElementById('set-greetings-input');
-          const success = await greetingsDataProvider.setGreeting(
+          const success = await peopleDataProvider.setGreeting(
             name.toLowerCase(),
             setGreetingsInput.value,
           );
@@ -99,7 +99,7 @@
           const nameInput = document.getElementById('name-input');
           const name = nameInput.value;
           const setAgeInput = document.getElementById('set-age-input');
-          const success = await greetingsDataProvider.setAge(
+          const success = await peopleDataProvider.setAge(
             name.toLowerCase(),
             parseInt(setAgeInput.value),
           );
@@ -109,29 +109,31 @@
           );
         });
 
-        // Update the 'all greetings' display on load and on greetings updates
-        greetingsDataProvider.subscribeAll(undefined, (greetings) => {
-          const allGreetings = document.getElementById('all-greetings');
-          const greetingsString = JSON.stringify(greetings, null, 2);
-          allGreetings.textContent = papi.util.htmlEncode(greetingsString.replace(/"/g, '`'));
-          print(greetingsString);
+        // Update the 'people' display on load and on updates
+        peopleDataProvider.subscribePeople(undefined, (people) => {
+          const peopleData = document.getElementById('people-data');
+          const peopleString = JSON.stringify(people, null, 2);
+          peopleData.textContent = papi.util.htmlEncode(peopleString.replace(/"/g, '`'));
+          print(peopleString);
         });
 
-        // Update the greetings count on any greeting update
-        let allUpdateCount = 0;
-        greetingsDataProvider.subscribeAll(
+        // Update the people update count on any people update
+        let peopleUpdateCount = 0;
+        peopleDataProvider.subscribePeople(
           undefined,
           () => {
-            allUpdateCount += 1;
-            const allUpdateCountDiv = document.getElementById('all-update-count');
-            allUpdateCountDiv.textContent = papi.util.htmlEncode(`All Updates: ${allUpdateCount}`);
+            peopleUpdateCount += 1;
+            const peopleUpdateCountDiv = document.getElementById('people-update-count');
+            peopleUpdateCountDiv.textContent = papi.util.htmlEncode(
+              `People Updates: ${peopleUpdateCount}`,
+            );
           },
           { retrieveDataImmediately: false },
         );
 
         // Update the greetings count on greetings updates
         let billAnyGreetingsUpdateCount = 0;
-        greetingsDataProvider.subscribeGreeting(
+        peopleDataProvider.subscribeGreeting(
           'BiLl',
           () => {
             billAnyGreetingsUpdateCount += 1;
@@ -147,7 +149,7 @@
 
         // Update the greetings count on greetings updates
         let billGreetingsUpdateCount = -1;
-        greetingsDataProvider.subscribeGreeting('bIlL', () => {
+        peopleDataProvider.subscribeGreeting('bIlL', () => {
           billGreetingsUpdateCount += 1;
           const billGreetingsUpdateCountDiv = document.getElementById(
             'bill-greetings-update-count',
@@ -159,7 +161,7 @@
 
         // Update the age count on age updates
         let billAnyAgeUpdateCount = 0;
-        greetingsDataProvider.subscribeAge(
+        peopleDataProvider.subscribeAge(
           'BiLl',
           () => {
             billAnyAgeUpdateCount += 1;
@@ -173,7 +175,7 @@
 
         // Update the age count on age updates
         let billAgeUpdateCount = -1;
-        greetingsDataProvider.subscribeAge('bIlL', () => {
+        peopleDataProvider.subscribeAge('bIlL', () => {
           billAgeUpdateCount += 1;
           const billAgeUpdateCountDiv = document.getElementById('bill-age-update-count');
           billAgeUpdateCountDiv.textContent = papi.util.htmlEncode(

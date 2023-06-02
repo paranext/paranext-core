@@ -1,7 +1,7 @@
 import papi from 'papi';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type { WebViewContentType } from 'shared/data/web-view.model';
-import { GreetingsDataProvider } from '@extensions/hello-someone/hello-someone';
+import { PeopleDataProvider } from '@extensions/hello-someone/hello-someone';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloWorldReactWebView from './hello-world.web-view';
 import helloWorldReactWebViewStyles from './hello-world.web-view.scss?inline';
@@ -46,13 +46,13 @@ export async function activate(): Promise<UnsubscriberAsync> {
     styles: helloWorldReactWebViewStyles,
   });
 
-  const greetingsDataProvider = await papi.dataProvider.get<GreetingsDataProvider>(
-    'hello-someone.greetings',
+  const peopleDataProvider = await papi.dataProvider.get<PeopleDataProvider>(
+    'hello-someone.people',
   );
 
-  if (greetingsDataProvider) {
+  if (peopleDataProvider) {
     // Test subscribing to a data provider
-    const unsubGreetings = await greetingsDataProvider.subscribeGreeting(
+    const unsubGreetings = await peopleDataProvider.subscribeGreeting(
       'Bill',
       (billGreeting: string | undefined) => logger.info(`Bill's greeting: ${billGreeting}`),
     );

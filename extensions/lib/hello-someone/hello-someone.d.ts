@@ -6,19 +6,19 @@ export type Person = {
   age?: number;
 };
 
-export type AllGreetingsData = {
+export type PeopleData = {
   [name: string]: Person | undefined;
 };
 
-export type GreetingsDataTypes = {
+export type PeopleDataTypes = {
   Greeting: DataProviderDataType<string, string | undefined, string>;
   Age: DataProviderDataType<string, number | undefined, number>;
-  All: DataProviderDataType<undefined, AllGreetingsData, never>;
+  People: DataProviderDataType<undefined, PeopleData, never>;
 };
 
-export type GreetingsDataMethods = {
+export type PeopleDataMethods = {
   deletePerson(name: string): Promise<boolean>;
   testRandomMethod(things: string): Promise<string>;
 };
 
-export type GreetingsDataProvider = IDataProvider<GreetingsDataTypes> & GreetingsDataMethods;
+export type PeopleDataProvider = IDataProvider<PeopleDataTypes> & PeopleDataMethods;

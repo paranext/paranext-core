@@ -1,7 +1,7 @@
 import papi from 'papi';
 import { useCallback, useContext, useState } from 'react';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
-import { GreetingsDataProvider, GreetingsDataTypes } from '@extensions/hello-someone/hello-someone';
+import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
 
 const {
   react: {
@@ -44,15 +44,15 @@ globalThis.webViewComponent = function HelloWorld() {
 
   const [name, setName] = useState('Bill');
 
-  const greetingsDataProvider = useDataProvider<GreetingsDataProvider>('hello-someone.greetings');
+  const peopleDataProvider = useDataProvider<PeopleDataProvider>('hello-someone.people');
 
-  const [personGreeting] = useData.Greeting<GreetingsDataTypes, 'Greeting'>(
-    'hello-someone.greetings',
+  const [personGreeting] = useData.Greeting<PeopleDataTypes, 'Greeting'>(
+    'hello-someone.people',
     name,
     'Greeting loading',
   );
 
-  const [personAge] = useData.Age<GreetingsDataTypes, 'Age'>('hello-someone.greetings', name, -1);
+  const [personAge] = useData.Age<PeopleDataTypes, 'Age'>('hello-someone.people', name, -1);
 
   return (
     <div>
@@ -88,7 +88,7 @@ globalThis.webViewComponent = function HelloWorld() {
       <div>{latestVerseText}</div>
       <div>
         <input value={name} onChange={(e) => setName(e.target.value)} />
-        <Button onClick={() => greetingsDataProvider?.deletePerson(name)}>Delete {name}</Button>
+        <Button onClick={() => peopleDataProvider?.deletePerson(name)}>Delete {name}</Button>
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>
