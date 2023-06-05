@@ -1,4 +1,5 @@
 using System.Text.Json;
+using NetLoc;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
@@ -14,8 +15,7 @@ public static class Program
     {
         Console.WriteLine("Paranext data provider starting up");
 
-        ParatextData.Initialize("assets");
-        ScrText scrText = ScrTextCollection.Get("WEB");
+        InitializeParatextData("assets");
 
         using PapiClient papi = new();
         try
@@ -46,6 +46,13 @@ public static class Program
         Console.WriteLine("Paranext data provider shutting down");
     }
 
+    internal static void InitializeParatextData(string paratextDataFolder)
+    {
+        RegistryU.Implementation = new DummyRegistry();
+        ICUDllLocator.Initialize(false, false);
+        ParatextData.Initialize(paratextDataFolder, false);
+    }
+
     #region Request handlers
 
     private static ResponseToRequest RequestAddOne(dynamic val)
@@ -61,5 +68,69 @@ public static class Program
         return ResponseToRequest.Succeeded(intVal + 1);
     }
 
+    #endregion
+
+    #region DummyRegistry class
+    private sealed class DummyRegistry : RegistryU
+    {
+        protected override string? GetStringInternal(string registryPath)
+        {
+            return null;
+        }
+
+        protected override string? GetStringInternal(string basekey, string path, string key)
+        {
+            return null;
+        }
+
+        protected override object? GetValInternal(string registryPath)
+        {
+            return null;
+        }
+
+        protected override object? GetValInternal(string baseKey, string subKey, string key)
+        {
+            return null;
+        }
+
+        protected override object? GetValIfExistsInternal(string registryPath)
+        {
+            return null;
+        }
+
+        protected override bool HasWritePermissionInternal(string registryPath)
+        {
+            return false;
+        }
+
+        protected override bool KeyExistsInternal(string registryPath)
+        {
+            return false;
+        }
+
+        // TODO: If this is needed, it might cause problems since it references RegistryKey. >.<
+        //protected override bool KeyExistsInternal(RegistryKey key, string subKey)
+        //{
+        //    return false;
+        //}
+
+        protected override bool ValueExistsInternal(string registryPath)
+        {
+            return false;
+        }
+
+        protected override void SetValInternal(string registryPath, object theValue) { }
+
+        protected override void SetValInternal(
+            string baseKey,
+            string subKey,
+            string key,
+            object theValue
+        ) { }
+
+        protected override void DelKeyInternal(string registryPath) { }
+
+        protected override void DelKeyInternal(string baseKey, string subKey) { }
+    }
     #endregion
 }
