@@ -108,7 +108,7 @@ export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
  */
 export type WebViewDefinitionSerialized =
   | (
-      | Partial<Omit<WebViewDefinitionReact, 'content'>>
+      | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
       | Partial<Omit<WebViewDefinitionHtml, 'content'>>
     ) &
       Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
@@ -149,7 +149,7 @@ export type Layout = TabLayout | FloatLayout | PanelLayout;
 
 /** Event emitted when webViews are added */
 export type AddWebViewEvent = {
-  webView: WebViewProps;
+  webView: WebViewDefinitionSerialized;
   layout: Layout;
 };
 

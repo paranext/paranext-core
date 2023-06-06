@@ -118,13 +118,13 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
 export function serializeWebViewDefinition(
   webViewDefinition: WebViewDefinition,
 ): WebViewDefinitionSerialized {
-  const webViewDefinitionCloned = { ...webViewDefinition };
+  const webViewDefinitionCloned: Omit<WebViewDefinition, 'content'> &
+    Partial<Pick<WebViewDefinition, 'content'>> &
+    Partial<Pick<WebViewDefinitionReact, 'styles'>> = { ...webViewDefinition };
   // We don't want to keep the webView content so the web view provider can provide it again when
   // deserializing
-  delete (
-    webViewDefinitionCloned as Omit<WebViewDefinition, 'content'> &
-      Partial<Pick<WebViewDefinition, 'content'>>
-  ).content;
+  delete webViewDefinitionCloned.content;
+  delete webViewDefinitionCloned.styles;
   return webViewDefinitionCloned;
 }
 
@@ -152,7 +152,7 @@ export type OnLayoutChangeEventInternal = {
 export type PapiDockLayout = {
   dockLayout: DockLayout;
   onLayoutChange: PapiEvent<OnLayoutChangeEventInternal>;
-  addWebViewToDock: (event: AddWebViewEvent) => void;
+  addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
   testLayout: LayoutBase;
 };
 
@@ -441,12 +441,13 @@ export const addWebView = async (
   };
   const updatedLayout = layoutDefaults(layout);
 
-  const addWebViewEvent = { webView: updatedWebView, layout: updatedLayout };
-
-  (await papiDockLayoutVar.promise).addWebViewToDock(addWebViewEvent);
+  (await papiDockLayoutVar.promise).addWebViewToDock(updatedWebView, updatedLayout);
 
   // Inform web view consumers we added a web view
-  onDidAddWebViewEmitter.emit(addWebViewEvent);
+  onDidAddWebViewEmitter.emit({
+    webView: serializeWebViewDefinition(updatedWebView),
+    layout: updatedLayout,
+  });
 
   return webViewId;
 };

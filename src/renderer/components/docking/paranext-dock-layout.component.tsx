@@ -24,12 +24,13 @@ import loadQuickVerseHeresyPanel, {
   TAB_TYPE_QUICK_VERSE_HERESY,
 } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import {
-  AddWebViewEvent,
   FloatLayout,
   SavedTabInfo,
   TabLoader,
   TabInfo,
   TabSaver,
+  Layout,
+  WebViewProps,
 } from '@shared/data/web-view.model';
 import LogError from '@shared/log-error.model';
 import {
@@ -162,7 +163,7 @@ export function getFloatPosition(
   return { left, top, width, height };
 }
 
-export function addWebViewToDock({ webView, layout }: AddWebViewEvent, dockLayout: DockLayout) {
+export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayout: DockLayout) {
   const tabId = webView.id;
   const tab = loadTab({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView });
   let targetTab = dockLayout.find(tabId);
@@ -218,7 +219,8 @@ export default function ParanextDockLayout() {
     const unsub = registerDockLayout({
       dockLayout: dockLayoutRef.current,
       onLayoutChange: onLayoutChangeEmitterRef.current.event,
-      addWebViewToDock: (event: AddWebViewEvent) => addWebViewToDock(event, dockLayoutRef.current),
+      addWebViewToDock: (webView: WebViewProps, layout: Layout) =>
+        addWebViewToDock(webView, layout, dockLayoutRef.current),
       testLayout,
     });
     return () => {
