@@ -28,7 +28,7 @@ export default class PapiNetworkEventEmitter<T> extends PapiEventEmitter<T> {
     super();
   }
 
-  public override emit = (event: T) => {
+  override emit = (event: T) => {
     this.assertNotDisposed();
 
     if (this.networkSubscriber) this.networkSubscriber(event);
@@ -39,13 +39,13 @@ export default class PapiNetworkEventEmitter<T> extends PapiEventEmitter<T> {
    * Runs only the subscriptions for the event that are on this process. Does not send over network
    * @param event event data to provide to subscribed callbacks
    */
-  public emitLocal(event: T) {
+  emitLocal(event: T) {
     this.assertNotDisposed();
 
     super.emitFn(event);
   }
 
-  public override dispose = () => {
+  override dispose = () => {
     super.disposeFn();
     // TODO: Do we need to set networkSubscriber to undefined? Had to remove readonly from it to do this
     this.networkSubscriber = undefined as unknown as PapiEventHandler<T>;

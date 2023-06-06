@@ -29,6 +29,7 @@ module.exports = {
     // `@typescript-eslint` rules require disabling the equivalent ESLint rule. So in these cases
     // each ESLint rule is turned off immediately above the corresponding `@typescript-eslint` rule.
     'import/no-anonymous-default-export': ['error', { allowCallExpression: false }],
+    '@typescript-eslint/explicit-member-accessibility': ['error', { accessibility: 'no-public' }],
     'lines-between-class-members': 'off',
     '@typescript-eslint/lines-between-class-members': [
       'error',
