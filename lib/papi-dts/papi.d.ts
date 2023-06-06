@@ -1463,6 +1463,7 @@ declare module 'shared/services/web-view-provider.service' {
   export default webViewProviderService;
 }
 declare module 'shared/services/web-view.service' {
+  import { Unsubscriber } from 'shared/utils/papi-util';
   import {
     AddWebViewEvent,
     Layout,
@@ -1471,10 +1472,29 @@ declare module 'shared/services/web-view.service' {
     WebViewType,
     WebViewId,
     AddWebViewOptions,
+    WebViewDefinition,
+    WebViewDefinitionSerialized,
   } from 'shared/data/web-view.model';
+  import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
+  import { PapiEvent } from 'shared/models/papi-event.model';
   /** Event that emits with webView info when a webView is added */
-  export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+  export const onDidAddWebView: PapiEvent<AddWebViewEvent>;
   export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
+  export function serializeWebViewDefinition(
+    webViewDefinition: WebViewDefinition,
+  ): WebViewDefinitionSerialized;
+  export type OnLayoutChangeEventInternal = {
+    newLayout: LayoutBase;
+    currentTabId?: string;
+    direction?: DropDirection;
+  };
+  export type PapiDockLayout = {
+    dockLayout: DockLayout;
+    onLayoutChange: PapiEvent<OnLayoutChangeEventInternal>;
+    addWebViewToDock: (event: AddWebViewEvent) => void;
+    testLayout: LayoutBase;
+  };
+  export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber;
   /**
    * Adds a WebView and runs all event handlers who are listening to this event
    * @param webViewType type of WebView to create
@@ -1493,7 +1513,7 @@ declare module 'shared/services/web-view.service' {
   ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
   /** All the exports in this service that are to be exposed on the PAPI */
   export const papiWebViewService: {
-    onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+    onDidAddWebView: PapiEvent<AddWebViewEvent>;
     addWebView: (
       webViewType: WebViewType,
       layout?: Layout,
@@ -1505,6 +1525,7 @@ declare module 'shared/services/web-view.service' {
       webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
     ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
   };
+  export type PapiWebViewService = typeof papiWebViewService;
 }
 declare module 'shared/services/internet.service' {
   const internetService: {
@@ -2119,14 +2140,27 @@ declare module 'papi' {
    */
   import * as commandService from 'shared/services/command.service';
   import * as papiUtil from 'shared/utils/papi-util';
-  import * as webViewService from 'shared/services/web-view.service';
   import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
   const papi: {
     EventEmitter: typeof PapiEventEmitter;
     fetch: typeof fetch;
     commands: typeof commandService;
     util: typeof papiUtil;
-    webViews: typeof webViewService;
+    webViews: {
+      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/web-view.model').AddWebViewEvent
+      >;
+      addWebView: (
+        webViewType: string,
+        layout?: import('shared/data/web-view.model').Layout,
+        options?: import('shared/data/web-view.model').AddWebViewOptions,
+      ) => Promise<string | undefined>;
+      initialize: () => Promise<void>;
+      registerWebViewProvider: (
+        webViewType: string,
+        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+    };
     react: {
       context: {
         TestContext: import('react').Context<string>;

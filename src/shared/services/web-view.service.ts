@@ -6,7 +6,9 @@
 import cloneDeep from 'lodash/cloneDeep';
 import { isRenderer } from '@shared/utils/internal-util';
 import {
+  Unsubscriber,
   aggregateUnsubscriberAsyncs,
+  aggregateUnsubscribers,
   getModuleSimilarApiMessage,
   serializeRequestType,
 } from '@shared/utils/papi-util';
@@ -29,9 +31,14 @@ import {
   WebViewType,
   WebViewId,
   AddWebViewOptions,
+  WebViewDefinition,
+  WebViewDefinitionSerialized,
 } from '@shared/data/web-view.model';
 import * as networkService from '@shared/services/network.service';
-import webViewProviderService from './web-view-provider.service';
+import webViewProviderService from '@shared/services/web-view-provider.service';
+import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
+import AsyncVariable from '@shared/utils/async-variable';
+import { PapiEvent } from '@shared/models/papi-event.model';
 
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
@@ -108,6 +115,111 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
   return savedTabInfo;
 }
 
+export function serializeWebViewDefinition(
+  webViewDefinition: WebViewDefinition,
+): WebViewDefinitionSerialized {
+  const webViewDefinitionCloned = { ...webViewDefinition };
+  // We don't want to keep the webView content so the web view provider can provide it again when
+  // deserializing
+  delete (
+    webViewDefinitionCloned as Omit<WebViewDefinition, 'content'> &
+      Partial<Pick<WebViewDefinition, 'content'>>
+  ).content;
+  return webViewDefinitionCloned;
+}
+
+function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
+  return new AsyncVariable<PapiDockLayout>(
+    'web-view.service.paranextDockLayout',
+    // Use default timeout on renderer, but never timeout anywhere else because we will not be
+    // resolving this. One of the serious pains of not having #203
+    isRenderer() ? undefined : -1,
+  );
+}
+
+/**
+ *
+ * WARNING: YOU CANNOT USE THIS VARIABLE IN ANYTHING BUT THE RENDERER
+ */
+let papiDockLayoutVar = createDockLayoutAsyncVar();
+
+export type OnLayoutChangeEventInternal = {
+  newLayout: LayoutBase;
+  currentTabId?: string;
+  direction?: DropDirection;
+};
+
+export type PapiDockLayout = {
+  dockLayout: DockLayout;
+  onLayoutChange: PapiEvent<OnLayoutChangeEventInternal>;
+  addWebViewToDock: (event: AddWebViewEvent) => void;
+  testLayout: LayoutBase;
+};
+
+const DOCK_LAYOUT_KEY = 'dock-saved-layout';
+
+/**
+ * Safely load a value from local storage.
+ * @param key of the value.
+ * @param defaultValue to return if the key is not found.
+ * @returns the value of the key fetched from local storage, or the default value if not found.
+ */
+function getStorageValue<T>(key: string, defaultValue: T): T {
+  const saved = localStorage.getItem(key);
+  const initial = saved ? JSON.parse(saved) : undefined;
+  return initial || defaultValue;
+}
+
+async function saveLayout(layout?: LayoutBase): Promise<void> {
+  const currentLayout = layout || (await papiDockLayoutVar.promise).dockLayout.saveLayout();
+  localStorage.setItem(DOCK_LAYOUT_KEY, JSON.stringify(currentLayout));
+}
+
+async function loadLayout(layout?: LayoutBase): Promise<void> {
+  const dockLayoutVar = await papiDockLayoutVar.promise;
+  const layoutToLoad = layout || getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
+
+  dockLayoutVar.dockLayout.loadLayout(layoutToLoad);
+  if (layout) {
+    // A layout was provided, meaning this is a layout change. Since `dockLayout.loadLayout` doesn't
+    // run `onLayoutChange`, we run it manually
+    await onLayoutChange({ newLayout: layoutToLoad });
+  }
+}
+
+/**
+ * When rc-dock detects a changed layout, save it.
+ *
+ * TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
+ * @param newLayout the changed layout to save.
+ */
+async function onLayoutChange({ newLayout }: OnLayoutChangeEventInternal): Promise<void> {
+  return saveLayout(newLayout);
+}
+
+export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
+  // Save the current async var so we know if it changed before we unsubscribed
+  const currentPapiDockLayoutVar = papiDockLayoutVar;
+
+  papiDockLayoutVar.resolveToValue(dockLayout, true);
+
+  const unsubOnLayoutChange = dockLayout.onLayoutChange(onLayoutChange);
+
+  return aggregateUnsubscribers([
+    unsubOnLayoutChange,
+    () => {
+      // Somehow this is not the registered dock layout anymore
+      if (papiDockLayoutVar !== currentPapiDockLayoutVar) return false;
+
+      // Create a new async var to empty out the dock layout
+      // TODO: Would this create any problems...? I guess only if we save dockLayoutVar somewhere else
+      papiDockLayoutVar = createDockLayoutAsyncVar();
+
+      return true;
+    },
+  ]);
+}
+
 // #endregion
 
 /**
@@ -169,11 +281,27 @@ export const addWebView = async (
     throw new Error(`Cannot find Web View Provider for webview type ${webViewType}`);
 
   // Find existing webView if one exists
-  const webViewId = options.existingId || newGuid();
-  // TODO: FIND EXISTING WEBVIEW
+  /** Either the existing webview with the specified id or a placeholder webview if one was not found */
+  let existingWebViewSerialized: WebViewDefinitionSerialized | undefined;
+  // Look for existing webview
+  if (options.existingId) {
+    const existingWebView = (await papiDockLayoutVar.promise).dockLayout.find(
+      options.existingId,
+    ) as TabInfo;
+    if (existingWebView)
+      // We found the webview! Serialize it to send to the web view provider
+      existingWebViewSerialized = serializeWebViewDefinition(
+        existingWebView.data as WebViewDefinition,
+      );
+  }
+
+  // We didn't find an existing web view with the id. Set a placeholder
+  if (!existingWebViewSerialized) existingWebViewSerialized = { webViewType, id: newGuid() };
+
+  const webViewId = existingWebViewSerialized.id;
 
   // Create the new webview or deserialize if it already existed
-  const webView = await webViewProvider.getWebView({ webViewType, id: webViewId }, options);
+  const webView = await webViewProvider.getWebView(existingWebViewSerialized, options);
 
   // The web view provider didn't want to create this web view
   if (!webView) return undefined;
@@ -312,8 +440,13 @@ export const addWebView = async (
     content: webViewContent,
   };
   const updatedLayout = layoutDefaults(layout);
+
+  const addWebViewEvent = { webView: updatedWebView, layout: updatedLayout };
+
+  (await papiDockLayoutVar.promise).addWebViewToDock(addWebViewEvent);
+
   // Inform web view consumers we added a web view
-  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layout: updatedLayout });
+  onDidAddWebViewEmitter.emit(addWebViewEvent);
 
   return webViewId;
 };
@@ -339,8 +472,13 @@ export const initialize = () => {
         networkService.registerRequestHandler(requestType, handler),
       );
 
+      const [, ...unsubscribers] = await Promise.all([
+        isRenderer() ? loadLayout() : Promise.resolve(),
+        ...unsubPromises,
+      ]);
+
       // Wait to successfully register all requests
-      const unsubscribeRequests = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
+      const unsubscribeRequests = aggregateUnsubscriberAsyncs(unsubscribers);
 
       // On closing, try to remove request listeners
       // TODO: should do this on the server when the connection closes or when the server exits as well
@@ -370,3 +508,5 @@ export const papiWebViewService = {
   initialize,
   registerWebViewProvider,
 };
+
+export type PapiWebViewService = typeof papiWebViewService;

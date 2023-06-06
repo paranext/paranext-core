@@ -10,6 +10,7 @@ import * as papiUtil from '@shared/utils/papi-util';
 // We need the WebViewService here to include on the papi, but WebViewService passes papi into WebViews
 // eslint-disable-next-line import/no-cycle
 import * as webViewService from '@shared/services/web-view.service';
+import type { PapiWebViewService } from '@shared/services/web-view.service';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import logger from '@shared/services/logger.service';
 import { isExtensionHost, isRenderer } from '@shared/utils/internal-util';
@@ -38,7 +39,10 @@ const papi = {
   // Services/modules
   commands: commandService,
   util: papiUtil,
-  webViews: webViewService,
+  // TODO: This is force-hiding the functions we don't want papi users to see, but it does not
+  // prevent them from using them. Fix this maybe with #172.
+  // See `papiWebViewService` in `web-view.service.ts` for more info
+  webViews: webViewService as PapiWebViewService,
   react: {
     context: papiContext,
     hooks: papiHooks,

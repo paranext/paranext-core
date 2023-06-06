@@ -1,8 +1,8 @@
 import './test-buttons-panel.component.css';
 import { Button, TextField } from 'papi-components';
 import { useCallback, useMemo, useState } from 'react';
-import papi from '@shared/services/papi.service';
 import * as networkService from '@shared/services/network.service';
+import * as commandService from '@shared/services/command.service';
 import { debounce, getErrorMessage, isString } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
@@ -23,42 +23,42 @@ const test = async () => {
   return result;
 };
 
-const addOne = async (num: number) => papi.commands.sendCommand<[number], number>('addOne', num);
+const addOne = async (num: number) => commandService.sendCommand<[number], number>('addOne', num);
 
-const echo: (message: string) => Promise<string> = papi.commands.createSendCommandFunction<
+const echo: (message: string) => Promise<string> = commandService.createSendCommandFunction<
   [string],
   string
 >('echo');
 
-const echoRenderer = papi.commands.createSendCommandFunction<[string], string>('echoRenderer');
+const echoRenderer = commandService.createSendCommandFunction<[string], string>('echoRenderer');
 
-const echoExtensionHost = papi.commands.createSendCommandFunction<[string], string>(
+const echoExtensionHost = commandService.createSendCommandFunction<[string], string>(
   'echoExtensionHost',
 );
 
-const echoSomeoneRenderer = papi.commands.createSendCommandFunction<[string], string>(
+const echoSomeoneRenderer = commandService.createSendCommandFunction<[string], string>(
   'hello-someone.echo-someone-renderer',
 );
 
-const addThree = papi.commands.createSendCommandFunction<[number, number, number], number>(
+const addThree = commandService.createSendCommandFunction<[number, number, number], number>(
   'addThree',
 );
 
-const addMany = papi.commands.createSendCommandFunction<number[], number>('addMany');
+const addMany = commandService.createSendCommandFunction<number[], number>('addMany');
 
-const helloWorld = papi.commands.createSendCommandFunction<[], string>('hello-world.hello-world');
+const helloWorld = commandService.createSendCommandFunction<[], string>('hello-world.hello-world');
 
-const throwErrorHelloWorld = papi.commands.createSendCommandFunction<[string], string>(
+const throwErrorHelloWorld = commandService.createSendCommandFunction<[string], string>(
   'hello-world.hello-exception',
 );
 
-const helloSomeone = papi.commands.createSendCommandFunction<[string], string>(
+const helloSomeone = commandService.createSendCommandFunction<[string], string>(
   'hello-someone.hello-someone',
 );
 
-const throwError = papi.commands.createSendCommandFunction<[string], string>('throwError');
+const throwError = commandService.createSendCommandFunction<[string], string>('throwError');
 
-const throwErrorExtensionHost = papi.commands.createSendCommandFunction<[string], string>(
+const throwErrorExtensionHost = commandService.createSendCommandFunction<[string], string>(
   'throwErrorExtensionHost',
 );
 
@@ -121,7 +121,7 @@ function TestButtonsPanel() {
   );
 
   useEvent(
-    papi.network.onDidClientConnect,
+    networkService.onDidClientConnect,
     useCallback(
       ({ clientId, didReconnect }) => {
         const result = `Client with id ${clientId} ${didReconnect ? 're' : ''}connected!`;

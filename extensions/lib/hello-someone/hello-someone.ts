@@ -7,6 +7,7 @@ import type {
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type IDataProvider from 'shared/models/data-provider.interface';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
 
@@ -51,6 +52,7 @@ const greetingsDataProviderEngine = {
 };
 
 const peopleWebViewType = 'hello-someone.people-viewer';
+const peopleWebViewIdKey = 'people-web-view-id';
 
 const peopleWebViewProvider: IWebViewProvider = {
   async getWebView(
@@ -69,7 +71,7 @@ const peopleWebViewProvider: IWebViewProvider = {
   },
 };
 
-export async function activate() {
+export async function activate(context: ExecutionActivationContext) {
   logger.info('Hello Someone is activating!');
 
   const greetingsDataProviderPromise = papi.dataProvider.registerEngine(
@@ -81,8 +83,6 @@ export async function activate() {
     peopleWebViewType,
     peopleWebViewProvider,
   );
-
-  await papi.webViews.addWebView(peopleWebViewType, { type: 'panel', direction: 'top' });
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
     papi.commands.registerCommand('hello-someone.hello-someone', (someone: string) => {
@@ -100,6 +100,30 @@ export async function activate() {
       },
     ),
   ];
+
+  // Get existing webview id if we previously created a webview for this type
+  let existingPeopleWebViewId: string | undefined;
+  try {
+    existingPeopleWebViewId = await papi.storage.readUserData(
+      context.executionToken,
+      peopleWebViewIdKey,
+    );
+  } catch (e) {
+    existingPeopleWebViewId = undefined;
+  }
+
+  const peopleWebViewId = await papi.webViews.addWebView(
+    peopleWebViewType,
+    { type: 'panel', direction: 'top' },
+    { existingId: existingPeopleWebViewId },
+  );
+
+  // Save newly acquired webview id
+  await papi.storage.writeUserData(
+    context.executionToken,
+    peopleWebViewIdKey,
+    peopleWebViewId || '',
+  );
 
   // For now, let's just make things easy and await the registration promises at the end so we don't hold everything else up
   const greetingsDataProvider = await greetingsDataProviderPromise;

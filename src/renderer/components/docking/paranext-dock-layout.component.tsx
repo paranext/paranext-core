@@ -1,11 +1,9 @@
 import 'rc-dock/dist/rc-dock.css';
 import './paranext-dock-layout.component.css';
-import { useRef, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 import DockLayout, {
   BoxData,
   FloatPosition,
-  LayoutBase,
-  LayoutData,
   LayoutSize,
   PanelData,
   TabData,
@@ -18,7 +16,6 @@ import loadWebViewPanel, {
   TAB_TYPE_WEBVIEW,
   saveWebViewPanel,
 } from '@renderer/components/web-view.component';
-import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import loadAboutPanel, { TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
 import loadButtonsPanel, { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
 import testLayout, { FIRST_TAB_ID } from '@renderer/testing/test-layout.data';
@@ -35,13 +32,17 @@ import {
   TabSaver,
 } from '@shared/data/web-view.model';
 import LogError from '@shared/log-error.model';
-import { onDidAddWebView, saveTabInfoBase } from '@shared/services/web-view.service';
+import {
+  OnLayoutChangeEventInternal,
+  registerDockLayout,
+  saveTabInfoBase,
+} from '@shared/services/web-view.service';
 import { getErrorMessage } from '@shared/utils/util';
+import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 
 type TabType = string;
 
 const DOCK_FLOAT_OFFSET = 28;
-const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
 // Paranext.
 const TAB_GROUP = 'card paranext';
@@ -55,7 +56,6 @@ const groups: { [key: string]: TabGroup } = {
     // newWindow: true, // Allow floating windows to show in a native window
   },
 };
-const savedLayout: LayoutData = getStorageValue(DOCK_LAYOUT_KEY, testLayout as LayoutData);
 
 const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_ABOUT, loadAboutPanel],
@@ -118,28 +118,6 @@ function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo {
   const tabSaver = tabSaverMap.get(tabInfo.tabType);
 
   return tabSaver ? tabSaver(tabInfo) : saveTabInfoBase(tabInfo);
-}
-
-/**
- * When rc-dock detects a changed layout, save it.
- *
- * TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
- * @param newLayout the changed layout to save.
- */
-function onLayoutChange(newLayout: LayoutBase): void {
-  localStorage.setItem(DOCK_LAYOUT_KEY, JSON.stringify(newLayout));
-}
-
-/**
- * Safely load a value from local storage.
- * @param key of the value.
- * @param defaultValue to return if the key is not found.
- * @returns the value of the key fetched from local storage, or the default value if not found.
- */
-function getStorageValue<T>(key: string, defaultValue: T): T {
-  const saved = localStorage.getItem(key);
-  const initial = saved ? JSON.parse(saved) : undefined;
-  return initial || defaultValue;
 }
 
 /**
@@ -234,23 +212,32 @@ export default function ParanextDockLayout() {
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const dockLayoutRef = useRef<DockLayout>(null!);
 
-  useEvent(
-    onDidAddWebView,
-    useCallback((event: AddWebViewEvent) => {
-      const dockLayout = dockLayoutRef.current;
-      addWebViewToDock(event, dockLayout);
-    }, []),
-  );
+  const onLayoutChangeEmitterRef = useRef(new PapiEventEmitter<OnLayoutChangeEventInternal>());
+
+  useEffect(() => {
+    const unsub = registerDockLayout({
+      dockLayout: dockLayoutRef.current,
+      onLayoutChange: onLayoutChangeEmitterRef.current.event,
+      addWebViewToDock: (event: AddWebViewEvent) => addWebViewToDock(event, dockLayoutRef.current),
+      testLayout,
+    });
+    return () => {
+      unsub();
+    };
+    // Is there any situation where dockLayoutRef will change? We need to add to dependencies if so
+  }, []);
 
   return (
     <DockLayout
       ref={dockLayoutRef}
       groups={groups}
-      defaultLayout={savedLayout}
+      defaultLayout={{ dockbox: { mode: 'horizontal', children: [] } }}
       dropMode="edge"
       loadTab={loadTab}
       saveTab={saveTab}
-      onLayoutChange={onLayoutChange}
+      onLayoutChange={(newLayout, currentTabId, direction) =>
+        onLayoutChangeEmitterRef.current.emit({ newLayout, currentTabId, direction })
+      }
     />
   );
 }
