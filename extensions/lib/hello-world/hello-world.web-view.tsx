@@ -7,6 +7,7 @@ import {
   Slider,
   Switch,
   TextField,
+  Table,
 } from 'papi-components';
 import { useCallback, useContext, useState } from 'react';
 
@@ -48,6 +49,11 @@ globalThis.webViewComponent = function HelloWorld() {
     'Loading latest Scripture text...',
   );
 
+  type Row = {
+    id: string;
+    title: string;
+  };
+
   return (
     <div>
       <div className="title">
@@ -88,6 +94,27 @@ globalThis.webViewComponent = function HelloWorld() {
         <ComboBox title="Test Me" options={['option 1', 'option 2']} />
         <Slider /> {/* no label available */}
         <RefSelector scrRef={{ book: 1, chapter: 1, verse: 1 }} handleSubmit={(): void => {}} />
+        <Table<Row>
+          columns={[
+            {
+              key: 'id',
+              name: 'ID',
+            },
+            {
+              key: 'title',
+              name: 'Title',
+            },
+          ]}
+          rows={[
+            { id: '0', title: 'Lorem ipsum dolor sit amet' },
+            { id: '1', title: 'Consectetur adipiscing elit' },
+            { id: '2', title: 'Pellentesque suscipit tortor est' },
+            { id: '3', title: 'Ut egestas massa aliquam a' },
+            { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+            { id: '5', title: 'Sed aliquet pulvinar neque' },
+          ]}
+          enableSelectColumn
+        />
       </div>
     </div>
   );
