@@ -1,8 +1,5 @@
 import { ReactNode } from 'react';
 
-/** Props that are passed to the web view component */
-export type WebViewProps = WebViewContents & Pick<SavedTabInfo, 'id'>;
-
 /**
  * Serialized information used to recreate a tab.
  *
@@ -10,7 +7,8 @@ export type WebViewProps = WebViewContents & Pick<SavedTabInfo, 'id'>;
  */
 export type SavedTabInfo = {
   /**
-   * Tab ID - a unique identifier that identifies this tab
+   * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this id will
+   * match the WebViewDefinition.id
    */
   id: string;
   /**
@@ -62,32 +60,61 @@ export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
  */
 export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
 
+/** Type of code for a WebView */
 export enum WebViewContentType {
   React = 'react',
   HTML = 'html',
 }
 
+/** What type a WebView is. Each WebView definition must have a unique type. */
+export type WebViewType = string;
+
+/** Id for a specific WebView. Each WebView has a unique id */
+export type WebViewId = string;
+
 /** Base WebView properties that all WebViews share */
-type WebViewContentsBase = { webViewType: string; content: string; title?: string };
+type WebViewDefinitionBase = {
+  /** What type of WebView this is. Unique to all other WebView definitions */
+  webViewType: WebViewType;
+  /** Unique id among webviews specific to this webview instance. */
+  id: WebViewId;
+  /** The code for the WebView that papi puts into an iframe */
+  content: string;
+  /** Name of the tab for the WebView */
+  title?: string;
+};
 
 /** WebView representation using React */
-export type WebViewContentsReact = WebViewContentsBase & {
+export type WebViewDefinitionReact = WebViewDefinitionBase & {
+  /** Indicates this WebView uses React */
   contentType?: WebViewContentType.React;
+  /** String of styles to be loaded into the iframe for this WebView */
   styles?: string;
 };
 
 /** WebView representation using HTML */
-export type WebViewContentsHtml = WebViewContentsBase & {
+export type WebViewDefinitionHtml = WebViewDefinitionBase & {
+  /** Indicates this WebView uses HTML */
   contentType: WebViewContentType.HTML;
 };
 
-/** WebView definition created by extensions to show web content */
-export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
+/** Properties defining a type of WebView created by extensions to show web content */
+export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
 
-/** Serialized WebView information that does not contain the content of the WebView */
-export type WebViewContentsSerialized =
-  | Omit<WebViewContentsReact, 'content'>
-  | Omit<WebViewContentsHtml, 'content'>;
+/**
+ * Serialized WebView information that does not contain the actual content of the WebView. Saved into
+ * layouts. Could have as little as the type and id. WebView providers deserialize these into actual
+ * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
+ */
+export type WebViewDefinitionSerialized =
+  | (
+      | Partial<Omit<WebViewDefinitionReact, 'content'>>
+      | Partial<Omit<WebViewDefinitionHtml, 'content'>>
+    ) &
+      Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+
+/** Props that are passed to the web view component */
+export type WebViewProps = WebViewDefinition;
 
 interface TabLayout {
   type: 'tab';
@@ -124,4 +151,12 @@ export type Layout = TabLayout | FloatLayout | PanelLayout;
 export type AddWebViewEvent = {
   webView: WebViewProps;
   layout: Layout;
+};
+
+export type AddWebViewOptions = {
+  /**
+   * If provided, requests from the web view provider an existing existing WebView with this id
+   * if one exists. The web view provider can deny the request if it chooses to do so.
+   */
+  existingId?: string;
 };

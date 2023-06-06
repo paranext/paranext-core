@@ -7,6 +7,7 @@ describe('WebView Component', () => {
       const title = 'MyTitle';
       const props: WebViewProps = {
         id: '',
+        webViewType: '',
         content: '',
         contentType: WebViewContentType.HTML,
         title,
@@ -14,23 +15,26 @@ describe('WebView Component', () => {
       expect(getTitle(props)).toEqual(title);
     });
 
-    it('can get title when title is undefined', () => {
-      const id = 'my-webview';
-      const title = `${id} ${WebViewContentType.HTML}`;
+    it('can get title when title is undefined but webViewType exists', () => {
+      const webViewType = 'my-webview';
+      const title = `${webViewType} Web View`;
       const props: WebViewProps = {
-        id,
+        id: '',
+        webViewType,
         content: '',
         contentType: WebViewContentType.HTML,
       };
       expect(getTitle(props)).toEqual(title);
     });
 
-    it('can get title when title is undefined and ID is empty', () => {
-      const title = `${WebViewContentType.HTML} Web View`;
+    it('can get title when title is undefined and webViewType is empty but contentType exists', () => {
+      const contentType = WebViewContentType.HTML;
+      const title = `${contentType} Web View`;
       const props: WebViewProps = {
         id: '',
+        webViewType: '',
         content: '',
-        contentType: WebViewContentType.HTML,
+        contentType,
       };
       expect(getTitle(props)).toEqual(title);
     });

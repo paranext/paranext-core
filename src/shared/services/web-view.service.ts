@@ -23,12 +23,15 @@ import {
   PanelDirection,
   SavedTabInfo,
   TabInfo,
-  WebViewContents,
-  WebViewContentsReact,
+  WebViewDefinitionReact,
   WebViewContentType,
   WebViewProps,
+  WebViewType,
+  WebViewId,
+  AddWebViewOptions,
 } from '@shared/data/web-view.model';
 import * as networkService from '@shared/services/network.service';
+import webViewProviderService from './web-view-provider.service';
 
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
@@ -109,13 +112,19 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
 
 /**
  * Adds a WebView and runs all event handlers who are listening to this event
- * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
+ * @param webViewType type of WebView to create
  * @returns promise that resolves nothing if we successfully handled the webView
  */
 export const addWebView = async (
-  webView: WebViewContents,
+  webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
-): Promise<void> => {
+  options: AddWebViewOptions = {},
+): Promise<WebViewId | undefined> => {
+  // ENHANCEMENT: If they aren't looking for an existingId, we could get the webview without
+  // searching for an existing webview and send it to the renderer, skipping the part where we send
+  // to the renderer, then search for an existing webview, then get the webview
+
+  // Create the webview
   if (!isRenderer()) {
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
     // Try to run addWebView several times until the renderer is up
@@ -123,16 +132,18 @@ export const addWebView = async (
     // Note that requests are retried, so there is another loop
     // within this loop deeper down.
     for (let attemptsRemaining = 5; attemptsRemaining > 0; attemptsRemaining--) {
-      let success = true;
       try {
         // eslint-disable-next-line no-await-in-loop
-        await networkService.request<[WebViewContents, Layout], void>(
+        return await networkService.request<
+          [WebViewType, Layout, AddWebViewOptions],
+          WebViewId | undefined
+        >(
           serializeRequestType(CATEGORY_WEB_VIEW, ADD_WEB_VIEW_REQUEST),
-          webView,
+          webViewType,
           layout,
+          options,
         );
       } catch (error) {
-        success = false;
         // If we are out of tries or the error returned is not that the renderer is down, stop
         // trying to resend and just throw
         if (
@@ -147,11 +158,25 @@ export const addWebView = async (
         // eslint-disable-next-line no-await-in-loop
         await wait(1000);
       }
-
-      if (success) return;
     }
     throw new Error(`addWebView failed, but you should have seen a different error than this!`);
   }
+
+  // Get the webview definition from the webview provider
+  const webViewProvider = await webViewProviderService.get(webViewType);
+
+  if (!webViewProvider)
+    throw new Error(`Cannot find Web View Provider for webview type ${webViewType}`);
+
+  // Find existing webView if one exists
+  const webViewId = options.existingId || newGuid();
+  // TODO: FIND EXISTING WEBVIEW
+
+  // Create the new webview or deserialize if it already existed
+  const webView = await webViewProvider.getWebView({ webViewType, id: webViewId }, options);
+
+  // The web view provider didn't want to create this web view
+  if (!webView) return undefined;
 
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
   const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
@@ -187,7 +212,7 @@ export const addWebView = async (
       specificSrcPolicy = "'unsafe-inline'";
       break;
     default: {
-      const reactWebView = webView as WebViewContentsReact;
+      const reactWebView = webView as WebViewDefinitionReact;
 
       // Add the component as a script
       // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
@@ -283,13 +308,14 @@ export const addWebView = async (
 
   const updatedWebView: WebViewProps = {
     ...webView,
-    id: newGuid(),
     contentType,
     content: webViewContent,
   };
   const updatedLayout = layoutDefaults(layout);
   // Inform web view consumers we added a web view
   onDidAddWebViewEmitter.emit({ webView: updatedWebView, layout: updatedLayout });
+
+  return webViewId;
 };
 
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */

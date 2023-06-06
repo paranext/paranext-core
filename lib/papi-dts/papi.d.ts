@@ -1080,8 +1080,6 @@ declare module 'shared/services/command.service' {
 }
 declare module 'shared/data/web-view.model' {
   import { ReactNode } from 'react';
-  /** Props that are passed to the web view component */
-  export type WebViewProps = WebViewContents & Pick<SavedTabInfo, 'id'>;
   /**
    * Serialized information used to recreate a tab.
    *
@@ -1089,7 +1087,8 @@ declare module 'shared/data/web-view.model' {
    */
   export type SavedTabInfo = {
     /**
-     * Tab ID - a unique identifier that identifies this tab
+     * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this id will
+     * match the WebViewDefinition.id
      */
     id: string;
     /**
@@ -1137,31 +1136,52 @@ declare module 'shared/data/web-view.model' {
    * TabInfo before saving.
    */
   export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
+  /** Type of code for a WebView */
   export enum WebViewContentType {
     React = 'react',
     HTML = 'html',
   }
+  /** What type a WebView is. Each WebView definition must have a unique type. */
+  export type WebViewType = string;
+  /** Id for a specific WebView. Each WebView has a unique id */
+  export type WebViewId = string;
   /** Base WebView properties that all WebViews share */
-  type WebViewContentsBase = {
-    webViewType: string;
+  type WebViewDefinitionBase = {
+    /** What type of WebView this is. Unique to all other WebView definitions */
+    webViewType: WebViewType;
+    /** Unique id among webviews specific to this webview instance. */
+    id: WebViewId;
+    /** The code for the WebView that papi puts into an iframe */
     content: string;
+    /** Name of the tab for the WebView */
     title?: string;
   };
   /** WebView representation using React */
-  export type WebViewContentsReact = WebViewContentsBase & {
+  export type WebViewDefinitionReact = WebViewDefinitionBase & {
+    /** Indicates this WebView uses React */
     contentType?: WebViewContentType.React;
+    /** String of styles to be loaded into the iframe for this WebView */
     styles?: string;
   };
   /** WebView representation using HTML */
-  export type WebViewContentsHtml = WebViewContentsBase & {
+  export type WebViewDefinitionHtml = WebViewDefinitionBase & {
+    /** Indicates this WebView uses HTML */
     contentType: WebViewContentType.HTML;
   };
-  /** WebView definition created by extensions to show web content */
-  export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
-  /** Serialized WebView information that does not contain the content of the WebView */
-  export type WebViewContentsSerialized =
-    | Omit<WebViewContentsReact, 'content'>
-    | Omit<WebViewContentsHtml, 'content'>;
+  /** Properties defining a type of WebView created by extensions to show web content */
+  export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
+  /**
+   * Serialized WebView information that does not contain the actual content of the WebView. Saved into
+   * layouts. Could have as little as the type and id. WebView providers deserialize these into actual
+   * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
+   */
+  export type WebViewDefinitionSerialized = (
+    | Partial<Omit<WebViewDefinitionReact, 'content'>>
+    | Partial<Omit<WebViewDefinitionHtml, 'content'>>
+  ) &
+    Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+  /** Props that are passed to the web view component */
+  export type WebViewProps = WebViewDefinition;
   interface TabLayout {
     type: 'tab';
   }
@@ -1195,38 +1215,13 @@ declare module 'shared/data/web-view.model' {
     webView: WebViewProps;
     layout: Layout;
   };
-}
-declare module 'shared/services/web-view.service' {
-  import {
-    AddWebViewEvent,
-    Layout,
-    SavedTabInfo,
-    TabInfo,
-    WebViewContents,
-  } from 'shared/data/web-view.model';
-  /** Event that emits with webView info when a webView is added */
-  export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
-  export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
-  /**
-   * Adds a WebView and runs all event handlers who are listening to this event
-   * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
-   * @returns promise that resolves nothing if we successfully handled the webView
-   */
-  export const addWebView: (webView: WebViewContents, layout?: Layout) => Promise<void>;
-  /** Sets up the WebViewService. Runs only once */
-  export const initialize: () => Promise<void>;
-  /** All the exports in this service that are to be exposed on the PAPI */
-  export const papiWebViewService: {
-    onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
-    addWebView: (webView: WebViewContents, layout?: Layout) => Promise<void>;
-    initialize: () => Promise<void>;
+  export type AddWebViewOptions = {
+    /**
+     * If provided, requests from the web view provider an existing existing WebView with this id
+     * if one exists. The web view provider can deny the request if it chooses to do so.
+     */
+    existingId?: string;
   };
-}
-declare module 'shared/services/internet.service' {
-  const internetService: {
-    fetch: typeof fetch;
-  };
-  export default internetService;
 }
 declare module 'shared/utils/async-variable' {
   /**
@@ -1398,6 +1393,110 @@ declare module 'shared/models/network-object.model' {
     id: string,
     networkObjectPromise: Promise<NetworkObject<T>>,
   ) => Partial<NetworkableObject>;
+}
+declare module 'shared/models/web-view-provider.model' {
+  import {
+    AddWebViewOptions,
+    WebViewDefinition,
+    WebViewDefinitionSerialized,
+  } from 'shared/data/web-view.model';
+  import {
+    DisposableNetworkObject,
+    NetworkObject,
+    NetworkableObject,
+  } from 'shared/models/network-object.model';
+  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
+  export interface IWebViewProvider extends NetworkableObject {
+    /**
+     * @param serializedWebView filled out if an existing webview is being called for (matched by id).
+     * Just id if this is a new request or if the web view with the existing id was not found
+     * @param addWebViewOptions
+     */
+    getWebView(
+      serializedWebView: WebViewDefinitionSerialized,
+      addWebViewOptions: AddWebViewOptions,
+    ): Promise<WebViewDefinition | undefined>;
+  }
+  export interface WebViewProvider
+    extends NetworkObject<NetworkableObject>,
+      CanHaveOnDidDispose<IWebViewProvider> {}
+  export interface DisposableWebViewProvider
+    extends DisposableNetworkObject<NetworkableObject>,
+      Omit<WebViewProvider, 'dispose'> {}
+}
+declare module 'shared/services/web-view-provider.service' {
+  /**
+   * Handles registering web view providers and serving web views around the papi.
+   * Exposed on the papi.
+   */
+  import {
+    DisposableWebViewProvider,
+    IWebViewProvider,
+    WebViewProvider,
+  } from 'shared/models/web-view-provider.model';
+  /**
+   * Indicate if we are aware of an existing web view provider with the given name. If a web view
+   * provider with the given name is somewhere else on the network, this function won't tell you about
+   * it unless something else in the existing process is subscribed to it.
+   */
+  function hasKnown(webViewType: string): boolean;
+  function register(
+    webViewType: string,
+    webViewProvider: IWebViewProvider,
+  ): Promise<DisposableWebViewProvider>;
+  function get(webViewType: string): Promise<WebViewProvider | undefined>;
+  const webViewProviderService: {
+    initialize: () => Promise<void>;
+    hasKnown: typeof hasKnown;
+    register: typeof register;
+    get: typeof get;
+  };
+  export const papiWebViewProviderService: {
+    register: typeof register;
+  };
+  export default webViewProviderService;
+}
+declare module 'shared/services/web-view.service' {
+  import {
+    AddWebViewEvent,
+    Layout,
+    SavedTabInfo,
+    TabInfo,
+    WebViewType,
+    WebViewId,
+    AddWebViewOptions,
+  } from 'shared/data/web-view.model';
+  /** Event that emits with webView info when a webView is added */
+  export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+  export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
+  /**
+   * Adds a WebView and runs all event handlers who are listening to this event
+   * @param webViewType type of WebView to create
+   * @returns promise that resolves nothing if we successfully handled the webView
+   */
+  export const addWebView: (
+    webViewType: WebViewType,
+    layout?: Layout,
+    options?: AddWebViewOptions,
+  ) => Promise<WebViewId | undefined>;
+  /** Sets up the WebViewService. Runs only once */
+  export const initialize: () => Promise<void>;
+  /** All the exports in this service that are to be exposed on the PAPI */
+  export const papiWebViewService: {
+    onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+    addWebView: (
+      webViewType: WebViewType,
+      layout?: Layout,
+      options?: AddWebViewOptions,
+    ) => Promise<WebViewId | undefined>;
+    initialize: () => Promise<void>;
+  };
+}
+declare module 'shared/services/internet.service' {
+  const internetService: {
+    fetch: typeof fetch;
+  };
+  export default internetService;
 }
 declare module 'shared/models/data-provider.model' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
@@ -2014,6 +2113,12 @@ declare module 'papi' {
     commands: typeof commandService;
     util: typeof papiUtil;
     webViews: typeof webViewService;
+    webViewProviders: {
+      register: (
+        webViewType: string,
+        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+    };
     react: {
       context: {
         TestContext: import('react').Context<string>;

@@ -3,8 +3,8 @@ import {
   SavedTabInfo,
   TabInfo,
   WebViewContentType,
-  WebViewContents,
-  WebViewContentsSerialized,
+  WebViewDefinition,
+  WebViewDefinitionSerialized,
   WebViewProps,
 } from '@shared/data/web-view.model';
 import { saveTabInfoBase } from '@shared/services/web-view.service';
@@ -58,6 +58,9 @@ export default function loadWebViewPanel(savedTabInfo: SavedTabInfo): TabInfo {
   if (savedTabInfo.data) {
     // We need to make sure that the data is of the correct type
     data = savedTabInfo.data as WebViewProps;
+
+    if (savedTabInfo.id !== data.id) throw new Error('"id" does not match webView id.');
+    if (!data.webViewType) throw new Error('WebView does not have a webViewType. Cannot restore');
   } else {
     // placeholder data
     data = {
@@ -77,9 +80,9 @@ export default function loadWebViewPanel(savedTabInfo: SavedTabInfo): TabInfo {
 }
 
 export function saveWebViewPanel(tabInfo: TabInfo): SavedTabInfo {
-  const data = { ...(tabInfo.data as WebViewContentsSerialized) };
+  const data = { ...(tabInfo.data as WebViewDefinitionSerialized) };
   // We don't want to keep the webView content so the extension can provide it
-  delete (data as Omit<WebViewContents, 'content'> & Partial<Pick<WebViewContents, 'content'>>)
+  delete (data as Omit<WebViewDefinition, 'content'> & Partial<Pick<WebViewDefinition, 'content'>>)
     .content;
   return { ...saveTabInfoBase(tabInfo), data };
 }

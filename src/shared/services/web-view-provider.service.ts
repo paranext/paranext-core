@@ -13,7 +13,7 @@ import * as networkService from '@shared/services/network.service';
 import logger from '@shared/services/logger.service';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
-const WEB_VIEW_PROVIDER_LABEL = 'webView';
+const WEB_VIEW_PROVIDER_LABEL = 'webViewProvider';
 
 /** Gets the id for the web view network object with the given name */
 const getWebViewProviderObjectId = (webViewType: string) =>
@@ -60,8 +60,8 @@ async function register(
     throw new Error(`WebView provider for WebView type ${webViewType} is already registered`);
 
   // Validate that the WebView provider has what it needs
-  if (!webViewProvider.deserialize || typeof webViewProvider.deserialize !== 'function')
-    throw new Error(`WebView provider does not have a deserialize function`);
+  if (!webViewProvider.getWebView || typeof webViewProvider.getWebView !== 'function')
+    throw new Error(`WebView provider does not have a getWebView function`);
 
   // We are good to go! Create the WebView provider
 
@@ -98,6 +98,11 @@ const webViewProviderService = {
   hasKnown,
   register,
   get,
+};
+
+// TODO: refactor? Put all provider service stuff in webview service?
+export const papiWebViewProviderService = {
+  register,
 };
 
 export default webViewProviderService;

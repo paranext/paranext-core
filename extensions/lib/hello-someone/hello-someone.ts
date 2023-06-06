@@ -1,7 +1,12 @@
 import papi from 'papi';
-import type { WebViewContentType } from 'shared/data/web-view.model';
+import type {
+  WebViewContentType,
+  WebViewDefinition,
+  WebViewDefinitionSerialized,
+} from 'shared/data/web-view.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type IDataProvider from 'shared/models/data-provider.interface';
+import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
 
@@ -45,6 +50,25 @@ const greetingsDataProviderEngine = {
   },
 };
 
+const peopleWebViewType = 'hello-someone.people-viewer';
+
+const peopleWebViewProvider: IWebViewProvider = {
+  async getWebView(
+    serializedWebView: WebViewDefinitionSerialized,
+  ): Promise<WebViewDefinition | undefined> {
+    if (serializedWebView.webViewType !== peopleWebViewType)
+      throw new Error(
+        `${peopleWebViewType} provider received request to provide a ${serializedWebView.webViewType} web view`,
+      );
+    return {
+      ...serializedWebView,
+      title: 'Hello Someone HTML',
+      contentType: 'html' as WebViewContentType.HTML,
+      content: helloSomeoneHtmlWebView,
+    };
+  },
+};
+
 export async function activate() {
   logger.info('Hello Someone is activating!');
 
@@ -53,15 +77,12 @@ export async function activate() {
     greetingsDataProviderEngine,
   );
 
-  await papi.webViews.addWebView(
-    {
-      id: 'Hello Someone',
-      title: 'Hello Someone HTML',
-      contentType: 'html' as WebViewContentType.HTML,
-      content: helloSomeoneHtmlWebView,
-    },
-    { type: 'panel', direction: 'top' },
+  const peopleWebViewProviderPromise = papi.webViewProviders.register(
+    peopleWebViewType,
+    peopleWebViewProvider,
   );
+
+  await papi.webViews.addWebView(peopleWebViewType, { type: 'panel', direction: 'top' });
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
     papi.commands.registerCommand('hello-someone.hello-someone', (someone: string) => {
@@ -80,11 +101,15 @@ export async function activate() {
     ),
   ];
 
-  // For now, let's just make things easy and await the data provider promise at the end so we don't hold everything else up
+  // For now, let's just make things easy and await the registration promises at the end so we don't hold everything else up
   const greetingsDataProvider = await greetingsDataProviderPromise;
+  const peopleWebViewProviderResolved = await peopleWebViewProviderPromise;
 
   const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
-    (await Promise.all(unsubPromises)).concat([greetingsDataProvider.dispose]),
+    (await Promise.all(unsubPromises)).concat([
+      greetingsDataProvider.dispose,
+      peopleWebViewProviderResolved.dispose,
+    ]),
   );
   logger.info('Hello Someone is finished activating!');
   return combinedUnsubscriber;
