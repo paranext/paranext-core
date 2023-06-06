@@ -1176,7 +1176,7 @@ declare module 'shared/data/web-view.model' {
    * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
    */
   export type WebViewDefinitionSerialized = (
-    | Partial<Omit<WebViewDefinitionReact, 'content'>>
+    | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
     | Partial<Omit<WebViewDefinitionHtml, 'content'>>
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
@@ -1212,7 +1212,7 @@ declare module 'shared/data/web-view.model' {
   export type Layout = TabLayout | FloatLayout | PanelLayout;
   /** Event emitted when webViews are added */
   export type AddWebViewEvent = {
-    webView: WebViewProps;
+    webView: WebViewDefinitionSerialized;
     layout: Layout;
   };
   export type AddWebViewOptions = {
@@ -1469,6 +1469,7 @@ declare module 'shared/services/web-view.service' {
     Layout,
     SavedTabInfo,
     TabInfo,
+    WebViewProps,
     WebViewType,
     WebViewId,
     AddWebViewOptions,
@@ -1491,7 +1492,7 @@ declare module 'shared/services/web-view.service' {
   export type PapiDockLayout = {
     dockLayout: DockLayout;
     onLayoutChange: PapiEvent<OnLayoutChangeEventInternal>;
-    addWebViewToDock: (event: AddWebViewEvent) => void;
+    addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
     testLayout: LayoutBase;
   };
   export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber;
