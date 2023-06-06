@@ -60,12 +60,12 @@ const reactWebViewProvider: IWebViewProvider = {
 export async function activate(): Promise<UnsubscriberAsync> {
   logger.info('Hello world is activating!');
 
-  const htmlWebViewProviderPromise = papi.webViewProviders.register(
+  const htmlWebViewProviderPromise = papi.webViews.registerWebViewProvider(
     htmlWebViewType,
     htmlWebViewProvider,
   );
 
-  const reactWebViewProviderPromise = papi.webViewProviders.register(
+  const reactWebViewProviderPromise = papi.webViews.registerWebViewProvider(
     reactWebViewType,
     reactWebViewProvider,
   );

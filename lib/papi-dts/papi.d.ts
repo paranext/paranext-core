@@ -1440,6 +1440,12 @@ declare module 'shared/services/web-view-provider.service' {
    * it unless something else in the existing process is subscribed to it.
    */
   function hasKnown(webViewType: string): boolean;
+  /**
+   * Things n stuff
+   * @param webViewType
+   * @param webViewProvider
+   * @returns
+   */
   function register(
     webViewType: string,
     webViewProvider: IWebViewProvider,
@@ -1481,6 +1487,10 @@ declare module 'shared/services/web-view.service' {
   ) => Promise<WebViewId | undefined>;
   /** Sets up the WebViewService. Runs only once */
   export const initialize: () => Promise<void>;
+  export const registerWebViewProvider: (
+    webViewType: string,
+    webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+  ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
   /** All the exports in this service that are to be exposed on the PAPI */
   export const papiWebViewService: {
     onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
@@ -1490,6 +1500,10 @@ declare module 'shared/services/web-view.service' {
       options?: AddWebViewOptions,
     ) => Promise<WebViewId | undefined>;
     initialize: () => Promise<void>;
+    registerWebViewProvider: (
+      webViewType: string,
+      webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+    ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
   };
 }
 declare module 'shared/services/internet.service' {
@@ -2113,12 +2127,6 @@ declare module 'papi' {
     commands: typeof commandService;
     util: typeof papiUtil;
     webViews: typeof webViewService;
-    webViewProviders: {
-      register: (
-        webViewType: string,
-        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
-      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
-    };
     react: {
       context: {
         TestContext: import('react').Context<string>;

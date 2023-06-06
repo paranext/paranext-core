@@ -355,9 +355,18 @@ export const initialize = () => {
   return initializePromise;
 };
 
+// Pulled out registering web view providers because it feels better to have these services split
+// up internally but combined externally.
+// TODO: once we fix the dependency loop mentioned below on `papiWebViewService`, we can remove this
+// line since we don't need to export the registration twice.
+export const registerWebViewProvider = webViewProviderService.register;
+
 /** All the exports in this service that are to be exposed on the PAPI */
+// TODO: This doesn't actually work - causes a dependency loop if used in papi.service.ts. We may
+// fix this when we split papi into frontend and backend in #172
 export const papiWebViewService = {
   onDidAddWebView,
   addWebView,
   initialize,
+  registerWebViewProvider,
 };

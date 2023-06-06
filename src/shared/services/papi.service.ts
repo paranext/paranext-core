@@ -18,7 +18,6 @@ import dataProviderService from '@shared/services/data-provider.service';
 import type { ExtensionStorageService } from '@extension-host/services/extension-storage.service';
 import type { PapiContext } from '@renderer/context/papi-context';
 import type { PapiHooks } from '@renderer/hooks/papi-hooks';
-import { papiWebViewProviderService } from '@shared/services/web-view-provider.service';
 
 // TODO: Fix these to use NormalModuleReplacementPlugin or something https://webpack.js.org/plugins/normal-module-replacement-plugin/
 const extensionStorageService: ExtensionStorageService = isExtensionHost()
@@ -40,7 +39,6 @@ const papi = {
   commands: commandService,
   util: papiUtil,
   webViews: webViewService,
-  webViewProviders: papiWebViewProviderService,
   react: {
     context: papiContext,
     hooks: papiHooks,

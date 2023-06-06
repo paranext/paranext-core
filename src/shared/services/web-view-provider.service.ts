@@ -50,6 +50,12 @@ function hasKnown(webViewType: string): boolean {
   return networkObjectService.hasKnown(getWebViewProviderObjectId(webViewType));
 }
 
+/**
+ * Things n stuff
+ * @param webViewType
+ * @param webViewProvider
+ * @returns
+ */
 async function register(
   webViewType: string,
   webViewProvider: IWebViewProvider,

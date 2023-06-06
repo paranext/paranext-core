@@ -77,7 +77,7 @@ export async function activate() {
     greetingsDataProviderEngine,
   );
 
-  const peopleWebViewProviderPromise = papi.webViewProviders.register(
+  const peopleWebViewProviderPromise = papi.webViews.registerWebViewProvider(
     peopleWebViewType,
     peopleWebViewProvider,
   );
