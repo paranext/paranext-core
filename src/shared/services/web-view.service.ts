@@ -139,7 +139,8 @@ function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
 
 /**
  *
- * WARNING: YOU CANNOT USE THIS VARIABLE IN ANYTHING BUT THE RENDERER
+ * WARNING: YOU CANNOT USE THIS VARIABLE IN ANYTHING BUT THE RENDERER. Also please do not save this
+ * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
  */
 let papiDockLayoutVar = createDockLayoutAsyncVar();
 
@@ -205,6 +206,12 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 
   const unsubOnLayoutChange = dockLayout.onLayoutChange(onLayoutChange);
 
+  // Will we ever need to await this? For now, seems like it unnecessarily complicates registering
+  // because making this function async would probably be annoying in React
+  loadLayout();
+
+  // Return an unsubscriber ot unregister this dock layout. The primary situation in which I see
+  // this happening is when you change something on the renderer that causes a live hot reload
   return aggregateUnsubscribers([
     unsubOnLayoutChange,
     () => {
@@ -222,6 +229,14 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 
 // #endregion
 
+function addWebViewOptionsDefaults(options: AddWebViewOptions): AddWebViewOptions {
+  const optionsDefaulted = cloneDeep(options);
+  if ('existingId' in optionsDefaulted && !('createNewIfNotFound' in optionsDefaulted))
+    optionsDefaulted.createNewIfNotFound = true;
+
+  return optionsDefaulted;
+}
+
 /**
  * Adds a WebView and runs all event handlers who are listening to this event
  * @param webViewType type of WebView to create
@@ -232,6 +247,7 @@ export const addWebView = async (
   layout: Layout = { type: 'tab' },
   options: AddWebViewOptions = {},
 ): Promise<WebViewId | undefined> => {
+  const optionsDef = addWebViewOptionsDefaults(options);
   // ENHANCEMENT: If they aren't looking for an existingId, we could get the webview without
   // searching for an existing webview and send it to the renderer, skipping the part where we send
   // to the renderer, then search for an existing webview, then get the webview
@@ -253,7 +269,7 @@ export const addWebView = async (
           serializeRequestType(CATEGORY_WEB_VIEW, ADD_WEB_VIEW_REQUEST),
           webViewType,
           layout,
-          options,
+          optionsDef,
         );
       } catch (error) {
         // If we are out of tries or the error returned is not that the renderer is down, stop
@@ -284,9 +300,9 @@ export const addWebView = async (
   /** Either the existing webview with the specified id or a placeholder webview if one was not found */
   let existingWebViewSerialized: WebViewDefinitionSerialized | undefined;
   // Look for existing webview
-  if (options.existingId) {
+  if (optionsDef.existingId) {
     const existingWebView = (await papiDockLayoutVar.promise).dockLayout.find(
-      options.existingId,
+      optionsDef.existingId,
     ) as TabInfo;
     if (existingWebView)
       // We found the webview! Serialize it to send to the web view provider
@@ -295,13 +311,18 @@ export const addWebView = async (
       );
   }
 
-  // We didn't find an existing web view with the id. Set a placeholder
-  if (!existingWebViewSerialized) existingWebViewSerialized = { webViewType, id: newGuid() };
+  // We didn't find an existing web view with the id
+  if (!existingWebViewSerialized) {
+    // If we are not looking to create a new webview, then don't.
+    if ('existingId' in optionsDef && !optionsDef.createNewIfNotFound) return undefined;
+    // If we want to create a new webview, set a placeholder with a new id
+    existingWebViewSerialized = { webViewType, id: newGuid() };
+  }
 
   const webViewId = existingWebViewSerialized.id;
 
   // Create the new webview or deserialize if it already existed
-  const webView = await webViewProvider.getWebView(existingWebViewSerialized, options);
+  const webView = await webViewProvider.getWebView(existingWebViewSerialized, optionsDef);
 
   // The web view provider didn't want to create this web view
   if (!webView) return undefined;
@@ -473,13 +494,8 @@ export const initialize = () => {
         networkService.registerRequestHandler(requestType, handler),
       );
 
-      const [, ...unsubscribers] = await Promise.all([
-        isRenderer() ? loadLayout() : Promise.resolve(),
-        ...unsubPromises,
-      ]);
-
       // Wait to successfully register all requests
-      const unsubscribeRequests = aggregateUnsubscriberAsyncs(unsubscribers);
+      const unsubscribeRequests = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
 
       // On closing, try to remove request listeners
       // TODO: should do this on the server when the connection closes or when the server exits as well

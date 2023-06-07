@@ -6,7 +6,11 @@ import {
   WebViewDefinition,
   WebViewProps,
 } from '@shared/data/web-view.model';
-import { saveTabInfoBase, serializeWebViewDefinition } from '@shared/services/web-view.service';
+import {
+  addWebView,
+  saveTabInfoBase,
+  serializeWebViewDefinition,
+} from '@shared/services/web-view.service';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -60,6 +64,20 @@ export default function loadWebViewPanel(savedTabInfo: SavedTabInfo): TabInfo {
 
     if (savedTabInfo.id !== data.id) throw new Error('"id" does not match webView id.');
     if (!data.webViewType) throw new Error('WebView does not have a webViewType. Cannot restore');
+
+    // If the webview is serialized aka doesn't have content, tell the web view service to
+    // deserialize the web view. It will asynchronously go get the content and re-run this function
+    if (!data.content && data.content !== '')
+      (async () => {
+        const deserializedId = await addWebView(data.webViewType, undefined, {
+          existingId: data.id,
+          createNewIfNotFound: false,
+        });
+        if (deserializedId !== data.id)
+          throw new Error(
+            `WebView with type ${data.webViewType} and id ${data.id} deserialized into id ${deserializedId}!`,
+          );
+      })();
   } else {
     // placeholder data
     data = {
