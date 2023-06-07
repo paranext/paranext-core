@@ -1,5 +1,4 @@
 import { BoxData, DropDirection, PanelData, TabData } from 'rc-dock';
-import * as Algorithm from 'rc-dock/lib/Algorithm';
 
 declare module 'rc-dock' {
   export interface FloatSize {
@@ -21,7 +20,6 @@ declare module 'rc-dock' {
       direction: DropDirection,
       floatPosition?: FloatPosition,
     ): void;
-    find(id: string, filter?: Algorithm.Filter): PanelData | TabData | BoxData | undefined;
     getLayoutSize(): LayoutSize;
   }
 }

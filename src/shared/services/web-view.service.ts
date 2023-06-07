@@ -302,8 +302,18 @@ export const addWebView = async (
   // Look for existing webview
   if (optionsDef.existingId) {
     const existingWebView = (await papiDockLayoutVar.promise).dockLayout.find(
-      optionsDef.existingId,
-    ) as TabInfo;
+      optionsDef.existingId === '*'
+        ? // If they provided '*', that means look for any webview with a matching webViewType
+          (item) => {
+            // This is not a webview
+            if (!('data' in item)) return false;
+
+            // Find any webview with the specified webViewType
+            return (item.data as WebViewDefinition).webViewType === webViewType;
+          }
+        : // If they provided any other string, look for a webview with that id
+          optionsDef.existingId,
+    ) as TabInfo | undefined;
     if (existingWebView)
       // We found the webview! Serialize it to send to the web view provider
       existingWebViewSerialized = serializeWebViewDefinition(

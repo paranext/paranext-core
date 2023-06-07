@@ -7,7 +7,6 @@ import type {
 } from 'shared/data/web-view.model';
 import { GreetingsDataProvider } from '@extensions/hello-someone/hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
-import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloWorldReactWebView from './hello-world.web-view';
 import helloWorldReactWebViewStyles from './hello-world.web-view.scss?inline';
@@ -21,7 +20,6 @@ logger.info('Hello world is importing!');
 const unsubscribers: UnsubscriberAsync[] = [];
 
 const htmlWebViewType = 'hello-world.html';
-const htmlWebViewIdKey = 'html-web-view-id';
 
 const htmlWebViewProvider: IWebViewProvider = {
   async getWebView(
@@ -41,7 +39,6 @@ const htmlWebViewProvider: IWebViewProvider = {
 };
 
 const reactWebViewType = 'hello-world.react';
-const reactWebViewIdKey = 'react-web-view-id';
 
 const reactWebViewProvider: IWebViewProvider = {
   async getWebView(
@@ -60,7 +57,7 @@ const reactWebViewProvider: IWebViewProvider = {
   },
 };
 
-export async function activate(context: ExecutionActivationContext): Promise<UnsubscriberAsync> {
+export async function activate(): Promise<UnsubscriberAsync> {
   logger.info('Hello world is activating!');
 
   const htmlWebViewProviderPromise = papi.webViews.registerWebViewProvider(
@@ -88,35 +85,13 @@ export async function activate(context: ExecutionActivationContext): Promise<Uns
     .then((scr) => logger.info(scr.text.replace(/\n/g, '')))
     .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
 
-  // Make sure the providers are set up before we start messing with them
-  // const htmlWebViewProviderResolved = await htmlWebViewProviderPromise;
-  // const reactWebViewProviderResolved = await reactWebViewProviderPromise;
-
-  // Get existing webview ids if we previously created webviews for this type
-  const [existingHtmlWebViewId, existingReactWebViewId] = (
-    await Promise.allSettled([
-      papi.storage.readUserData(context.executionToken, htmlWebViewIdKey),
-      papi.storage.readUserData(context.executionToken, reactWebViewIdKey),
-    ])
-  ).map((userDataResult) =>
-    userDataResult.status === 'fulfilled' ? userDataResult.value : undefined,
-  );
-
-  // Create webviews. Keep the existing webview if one already exists for this type
-  const [htmlWebViewId, reactWebViewId] = await Promise.all([
-    papi.webViews.addWebView(htmlWebViewType, undefined, {
-      existingId: existingHtmlWebViewId,
-    }),
-    papi.webViews.addWebView(reactWebViewType, undefined, {
-      existingId: existingReactWebViewId,
-    }),
-  ]);
-
-  // Save newly acquired webview ids
-  await Promise.all([
-    papi.storage.writeUserData(context.executionToken, htmlWebViewIdKey, htmlWebViewId || ''),
-    papi.storage.writeUserData(context.executionToken, reactWebViewIdKey, reactWebViewId || ''),
-  ]);
+  // Create webviews or get an existing webview if one already exists for this type
+  // Note: here, we are using `existingId: '*'` to indicate we do not want to create a new webview
+  // if one already exists. The webview that already exists could have been created by anyone
+  // anywhere; it just has to match `webViewType`. See `hello-someone.ts` for an example of keeping
+  // an existing webview that was specifically created by `hello-someone`.
+  papi.webViews.addWebView(htmlWebViewType, undefined, { existingId: '*' });
+  papi.webViews.addWebView(reactWebViewType, undefined, { existingId: '*' });
 
   const greetingsDataProvider = await papi.dataProvider.get<GreetingsDataProvider>(
     'hello-someone.greetings',

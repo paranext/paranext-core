@@ -158,6 +158,9 @@ export type AddWebViewOptions = {
    * If provided, requests from the web view provider an existing existing WebView with this id
    * if one exists. The web view provider can deny the request if it chooses to do so.
    *
+   * Alternatively, set this to '*' to attempt to find any existing web view with the specified
+   * webViewType.
+   *
    * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
    * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
    * `existingId` at all is the only way to specify we are not looking for an existing webView
