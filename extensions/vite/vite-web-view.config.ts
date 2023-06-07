@@ -29,7 +29,12 @@ const webViewConfig = defineConfig(async ({ mode }) => {
     ],
     // Since Vite is in library mode `process` is not replaced by default and that won't work in the
     // renderer.
-    define: { 'process.env.NODE_ENV': JSON.stringify(mode) },
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(mode),
+      // For @eten-lab/ui-kit
+      'process.env.STORYBOOK_LOGLEVEL': JSON.stringify(process.env.STORYBOOK_LOGLEVEL),
+      'process.env.STORYBOOK_LOGTRACEALL': JSON.stringify(process.env.STORYBOOK_LOGTRACEALL),
+    },
     build: {
       // This project is a library as it is being used in Paranext
       lib: {

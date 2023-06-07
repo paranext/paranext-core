@@ -1,13 +1,7 @@
 import papi from 'papi';
-import {
-  Button,
-  Checkbox,
-  ComboBox,
-  RefSelector,
-  Slider,
-  Switch,
-  TextField,
-} from 'papi-components';
+import { RefSelector, Slider, Switch } from 'papi-components';
+import { Autocomplete, Button, Checkbox, Input, Radio, ThemeProvider } from '@eten-lab/ui-kit';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import { useCallback, useContext, useState } from 'react';
 
 const {
@@ -49,7 +43,7 @@ globalThis.webViewComponent = function HelloWorld() {
   );
 
   return (
-    <div>
+    <ThemeProvider>
       <div className="title">
         Hello World <span className="framework">React</span>
       </div>
@@ -82,13 +76,16 @@ globalThis.webViewComponent = function HelloWorld() {
       <div>{latestVerseText}</div>
       <br />
       <div>
-        <TextField label="Test Me" />
-        <Checkbox labelText="Test Me" />
-        <Switch /> {/* no label available */}
-        <ComboBox title="Test Me" options={['option 1', 'option 2']} />
+        <Input label="Test Me" />
+        <FormControlLabel label="Test Me" control={<Checkbox />} />
+        <FormControlLabel label="Test Me" control={<Radio />} />
+        <Autocomplete label="Test Me" options={['option 1', 'option 2']} />
+      </div>
+      <div>
+        <FormControlLabel label="Test Me" control={<Switch />} />
         <Slider /> {/* no label available */}
         <RefSelector scrRef={{ book: 1, chapter: 1, verse: 1 }} handleSubmit={(): void => {}} />
       </div>
-    </div>
+    </ThemeProvider>
   );
 };
