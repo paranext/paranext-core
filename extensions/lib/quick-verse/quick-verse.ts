@@ -18,7 +18,7 @@ const unsubscribers: UnsubscriberAsync[] = [];
 /**
  * Example data provider engine that provides easy access to Scripture from an internet API.
  *
- * It has two data types:
+ * It has three data types:
  *  - Verse: get a portion of Scripture by its reference. You can also change the Scripture at a
  *    reference, but you have to clarify that you are heretical because you really shouldn't change
  *    published Scriptures like this ;)
