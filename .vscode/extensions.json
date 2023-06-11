@@ -6,6 +6,7 @@
     "esbenp.prettier-vscode",
     "formulahendry.dotnet-test-explorer",
     "mrmlnc.vscode-json5",
+    "ms-dotnettools.csdevkit",
     "streetsidesoftware.code-spell-checker"
   ]
 }
