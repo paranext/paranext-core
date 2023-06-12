@@ -19,7 +19,7 @@ export const createErrorTab = (errorMessage: string): TabInfo => {
   return {
     id: newGuid(),
     tabType: 'error',
-    title: 'Error',
+    tabTitle: 'Error',
     content: <ErrorTab errorMessage={errorMessage} />,
     minWidth: 150,
     minHeight: 150,

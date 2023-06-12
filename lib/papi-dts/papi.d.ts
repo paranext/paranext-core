@@ -1109,7 +1109,7 @@ declare module 'shared/data/web-view.model' {
     /**
      * Text to show on the title bar of the tab
      */
-    title: string;
+    tabTitle: string;
     /**
      * Content to show inside the tab.
      */
@@ -1171,11 +1171,11 @@ declare module 'shared/data/web-view.model' {
   /** Properties defining a type of WebView created by extensions to show web content */
   export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
   /**
-   * Serialized WebView information that does not contain the actual content of the WebView. Saved into
-   * layouts. Could have as little as the type and id. WebView providers deserialize these into actual
+   * Saved WebView information that does not contain the actual content of the WebView. Saved into
+   * layouts. Could have as little as the type and id. WebView providers load these into actual
    * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
    */
-  export type WebViewDefinitionSerialized = (
+  export type SavedWebViewDefinition = (
     | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
     | Partial<Omit<WebViewDefinitionHtml, 'content'>>
   ) &
@@ -1212,22 +1212,22 @@ declare module 'shared/data/web-view.model' {
   export type Layout = TabLayout | FloatLayout | PanelLayout;
   /** Event emitted when webViews are added */
   export type AddWebViewEvent = {
-    webView: WebViewDefinitionSerialized;
+    webView: SavedWebViewDefinition;
     layout: Layout;
   };
-  export type AddWebViewOptions = {
+  export type GetWebViewOptions = {
     /**
-     * If provided, requests from the web view provider an existing existing WebView with this id
+     * If provided and if a web view with this id exists, requests from the web view provider an existing existing WebView with this id
      * if one exists. The web view provider can deny the request if it chooses to do so.
      *
-     * Alternatively, set this to '*' to attempt to find any existing web view with the specified
+     * Alternatively, set this to '?' to attempt to find any existing web view with the specified
      * webViewType.
      *
      * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
      * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
      * `existingId` at all is the only way to specify we are not looking for an existing webView
      */
-    existingId?: string | undefined;
+    existingId?: string | '?' | undefined;
     /**
      * Whether to create a webview with a new id and a webview with id `existingId` was not found.
      * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
@@ -1411,9 +1411,9 @@ declare module 'shared/models/network-object.model' {
 }
 declare module 'shared/models/web-view-provider.model' {
   import {
-    AddWebViewOptions,
+    GetWebViewOptions,
     WebViewDefinition,
-    WebViewDefinitionSerialized,
+    SavedWebViewDefinition,
   } from 'shared/data/web-view.model';
   import {
     DisposableNetworkObject,
@@ -1423,13 +1423,13 @@ declare module 'shared/models/web-view-provider.model' {
   import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
   export interface IWebViewProvider extends NetworkableObject {
     /**
-     * @param serializedWebView filled out if an existing webview is being called for (matched by id).
+     * @param savedWebView filled out if an existing webview is being called for (matched by id).
      * Just id if this is a new request or if the web view with the existing id was not found
-     * @param addWebViewOptions
+     * @param getWebViewOptions
      */
     getWebView(
-      serializedWebView: WebViewDefinitionSerialized,
-      addWebViewOptions: AddWebViewOptions,
+      savedWebView: SavedWebViewDefinition,
+      getWebViewOptions: GetWebViewOptions,
     ): Promise<WebViewDefinition | undefined>;
   }
   export interface WebViewProvider
@@ -1479,6 +1479,7 @@ declare module 'shared/services/web-view-provider.service' {
 }
 declare module 'shared/services/web-view.service' {
   import { Unsubscriber } from 'shared/utils/papi-util';
+  import { MutableRefObject } from 'react';
   import {
     AddWebViewEvent,
     Layout,
@@ -1487,39 +1488,53 @@ declare module 'shared/services/web-view.service' {
     WebViewProps,
     WebViewType,
     WebViewId,
-    AddWebViewOptions,
+    GetWebViewOptions,
     WebViewDefinition,
-    WebViewDefinitionSerialized,
+    SavedWebViewDefinition,
   } from 'shared/data/web-view.model';
   import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  /** Event that emits with webView info when a webView is added */
-  export const onDidAddWebView: PapiEvent<AddWebViewEvent>;
-  export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
-  export function serializeWebViewDefinition(
-    webViewDefinition: WebViewDefinition,
-  ): WebViewDefinitionSerialized;
-  export type OnLayoutChangeEventInternal = {
-    newLayout: LayoutBase;
-    currentTabId?: string;
-    direction?: DropDirection;
-  };
+  /** rc-dock's onLayoutChange prop made asynchronous - resolves */
+  export type OnLayoutChangeRCDock = (
+    newLayout: LayoutBase,
+    currentTabId?: string,
+    direction?: DropDirection,
+  ) => Promise<void>;
   export type PapiDockLayout = {
     dockLayout: DockLayout;
-    onLayoutChange: PapiEvent<OnLayoutChangeEventInternal>;
+    onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
     addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
+    /**
+     * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
+     *
+     * TODO: This should be removed and the `testLayout` imported directly in this file once this
+     * service is refactored to split the code between processes. The only reason this is passed from
+     * `paranext-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
+     * service is currently all shared code. Refactor should happen in #203
+     */
     testLayout: LayoutBase;
   };
+  /** Event that emits with webView info when a webView is added */
+  export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+  export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
+  export function convertWebViewDefinitionToSaved(
+    webViewDefinition: WebViewDefinition,
+  ): SavedWebViewDefinition;
   export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber;
   /**
-   * Adds a WebView and runs all event handlers who are listening to this event
+   * Creates a new web view or gets an existing one depending on if you request an existing one and
+   * if the web view provider decides to give that existing one to you (it is up to the provider).
+   *
    * @param webViewType type of WebView to create
-   * @returns promise that resolves nothing if we successfully handled the webView
+   * @param layout information about where you want the web view to go. Defaults to adding as a tab
+   * @param options options that affect what this function does. For example, you can provide an
+   * existing web view id to request an existing web view with that id.
+   *
+   * @returns promise that resolves to the id of the webview we got.
    */
-  export const addWebView: (
+  export const getWebView: (
     webViewType: WebViewType,
     layout?: Layout,
-    options?: AddWebViewOptions,
+    options?: GetWebViewOptions,
   ) => Promise<WebViewId | undefined>;
   /** Sets up the WebViewService. Runs only once */
   export const initialize: () => Promise<void>;
@@ -1529,11 +1544,11 @@ declare module 'shared/services/web-view.service' {
   ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
   /** All the exports in this service that are to be exposed on the PAPI */
   export const papiWebViewService: {
-    onDidAddWebView: PapiEvent<AddWebViewEvent>;
-    addWebView: (
+    onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+    getWebView: (
       webViewType: WebViewType,
       layout?: Layout,
-      options?: AddWebViewOptions,
+      options?: GetWebViewOptions,
     ) => Promise<WebViewId | undefined>;
     initialize: () => Promise<void>;
     registerWebViewProvider: (
@@ -2166,10 +2181,10 @@ declare module 'papi' {
       onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
         import('shared/data/web-view.model').AddWebViewEvent
       >;
-      addWebView: (
+      getWebView: (
         webViewType: string,
         layout?: import('shared/data/web-view.model').Layout,
-        options?: import('shared/data/web-view.model').AddWebViewOptions,
+        options?: import('shared/data/web-view.model').GetWebViewOptions,
       ) => Promise<string | undefined>;
       initialize: () => Promise<void>;
       registerWebViewProvider: (

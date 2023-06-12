@@ -36,14 +36,15 @@ import {
 } from '@shared/data/web-view.model';
 import LogError from '@shared/log-error.model';
 import {
-  OnLayoutChangeEventInternal,
+  OnLayoutChangeRCDock,
   registerDockLayout,
   saveTabInfoBase,
 } from '@shared/services/web-view.service';
 import { getErrorMessage } from '@shared/utils/util';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 
 type TabType = string;
+
+type RCDockTabInfo = TabData & TabInfo;
 
 const DOCK_FLOAT_OFFSET = 28;
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
@@ -59,6 +60,11 @@ const groups: { [key: string]: TabGroup } = {
     // newWindow: true, // Allow floating windows to show in a native window
   },
 };
+
+// #region utility functions that deal with loading, saving, and adding webviews. This code should
+// really be in `web-view.service.ts`, but that file cannot currently import renderer code as it is
+// a shared file.
+// TODO: please move these utility functions with #203
 
 const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_ABOUT, loadAboutTab],
@@ -86,8 +92,6 @@ function loadSavedTabInfo(tabInfo: SavedTabInfo): TabInfo {
   }
 }
 
-type RCDockTabInfo = TabData & Omit<TabInfo, 'title'> & { tabInfoTitle: string };
-
 /**
  * Creates tab data from the specified saved tab information by calling back to the
  * extension that registered the creation of the tab type
@@ -102,8 +106,7 @@ export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
   // Translate the data from the loaded tab to be in the form needed by rc-dock
   return {
     ...tabInfo,
-    tabInfoTitle: tabInfo.title,
-    title: <ParanextTabTitle text={tabInfo.title} />,
+    title: <ParanextTabTitle text={tabInfo.tabTitle} />,
     content: <ParanextPanel>{tabInfo.content}</ParanextPanel>,
     group: TAB_GROUP,
     closable: true,
@@ -114,9 +117,8 @@ function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo {
   // Remove the rc-dock properties that are not also in SavedTabInfo
   // We don't need to use the other properties, but we need to remove them
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { parent, group, closable, title, tabInfoTitle, ...strippedTabInfo } = dockTabInfo;
-  // Put back the tabInfoTitle we saved off in `loadTab`
-  const tabInfo: TabInfo = { ...strippedTabInfo, title: tabInfoTitle };
+  const { parent, group, closable, title, ...strippedTabInfo } = dockTabInfo;
+  const tabInfo: TabInfo = strippedTabInfo;
 
   const tabSaver = tabSaverMap.get(tabInfo.tabType);
 
@@ -210,17 +212,25 @@ export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayo
   }
 }
 
+// #endregion
+
 export default function ParanextDockLayout() {
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const dockLayoutRef = useRef<DockLayout>(null!);
 
-  const onLayoutChangeEmitterRef = useRef(new PapiEventEmitter<OnLayoutChangeEventInternal>());
+  /**
+   * onLayoutChange function from `web-view.service.ts` once this docklayout is registered.
+   *
+   * TODO: Strange pattern that we are setting a ref to a service function. Investigate changing
+   * this pattern in some way. Maybe just export `onLayoutChange`?
+   */
+  const onLayoutChangeRef = useRef<OnLayoutChangeRCDock | undefined>();
 
   useEffect(() => {
     const unsub = registerDockLayout({
       dockLayout: dockLayoutRef.current,
-      onLayoutChange: onLayoutChangeEmitterRef.current.event,
+      onLayoutChangeRef,
       addWebViewToDock: (webView: WebViewProps, layout: Layout) =>
         addWebViewToDock(webView, layout, dockLayoutRef.current),
       testLayout,
@@ -239,9 +249,9 @@ export default function ParanextDockLayout() {
       dropMode="edge"
       loadTab={loadTab}
       saveTab={saveTab}
-      onLayoutChange={(newLayout, currentTabId, direction) =>
-        onLayoutChangeEmitterRef.current.emit({ newLayout, currentTabId, direction })
-      }
+      onLayoutChange={(...args) => {
+        if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);
+      }}
     />
   );
 }

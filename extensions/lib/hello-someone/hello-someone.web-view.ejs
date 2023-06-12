@@ -127,7 +127,7 @@
         // Attach handler for new-web-view-button
         const newWebViewButton = document.getElementById('new-web-view-button');
         newWebViewButton.addEventListener('click', async () => {
-          const webViewId = await papi.webViews.addWebView('hello-someone.people-viewer', {
+          const webViewId = await papi.webViews.getWebView('hello-someone.people-viewer', {
             type: 'float',
           });
           print(`New People webview id: ${webViewId}`);

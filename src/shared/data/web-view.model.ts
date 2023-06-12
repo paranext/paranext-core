@@ -30,7 +30,7 @@ export type TabInfo = SavedTabInfo & {
   /**
    * Text to show on the title bar of the tab
    */
-  title: string;
+  tabTitle: string;
   /**
    * Content to show inside the tab.
    */
@@ -102,11 +102,11 @@ export type WebViewDefinitionHtml = WebViewDefinitionBase & {
 export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
 
 /**
- * Serialized WebView information that does not contain the actual content of the WebView. Saved into
- * layouts. Could have as little as the type and id. WebView providers deserialize these into actual
+ * Saved WebView information that does not contain the actual content of the WebView. Saved into
+ * layouts. Could have as little as the type and id. WebView providers load these into actual
  * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
  */
-export type WebViewDefinitionSerialized =
+export type SavedWebViewDefinition =
   | (
       | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
       | Partial<Omit<WebViewDefinitionHtml, 'content'>>
@@ -149,23 +149,23 @@ export type Layout = TabLayout | FloatLayout | PanelLayout;
 
 /** Event emitted when webViews are added */
 export type AddWebViewEvent = {
-  webView: WebViewDefinitionSerialized;
+  webView: SavedWebViewDefinition;
   layout: Layout;
 };
 
-export type AddWebViewOptions = {
+export type GetWebViewOptions = {
   /**
-   * If provided, requests from the web view provider an existing existing WebView with this id
+   * If provided and if a web view with this id exists, requests from the web view provider an existing existing WebView with this id
    * if one exists. The web view provider can deny the request if it chooses to do so.
    *
-   * Alternatively, set this to '*' to attempt to find any existing web view with the specified
+   * Alternatively, set this to '?' to attempt to find any existing web view with the specified
    * webViewType.
    *
    * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
    * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
    * `existingId` at all is the only way to specify we are not looking for an existing webView
    */
-  existingId?: string | undefined;
+  existingId?: string | '?' | undefined;
   /**
    * Whether to create a webview with a new id and a webview with id `existingId` was not found.
    * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is

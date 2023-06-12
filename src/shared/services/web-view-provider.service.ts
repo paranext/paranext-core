@@ -75,10 +75,10 @@ async function register(
   const webViewProviderObjectId = getWebViewProviderObjectId(webViewType);
 
   // Set up the WebView provider to be a network object so other processes can use it
-  const disposableWebViewProvider = (await networkObjectService.set(
+  const disposableWebViewProvider: DisposableWebViewProvider = await networkObjectService.set(
     webViewProviderObjectId,
     webViewProvider,
-  )) as DisposableWebViewProvider;
+  );
 
   return disposableWebViewProvider;
 }

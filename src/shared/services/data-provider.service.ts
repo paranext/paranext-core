@@ -283,10 +283,8 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   );
 
   // Set up the data provider to be a network object so other processes can use it
-  const disposableDataProvider = (await networkObjectService.set(
-    dataProviderObjectId,
-    dataProviderInternal,
-  )) as IDisposableDataProvider<TSelector, TGetData, TSetData>;
+  const disposableDataProvider: IDisposableDataProvider<TSelector, TGetData, TSetData> =
+    await networkObjectService.set(dataProviderObjectId, dataProviderInternal);
 
   // Get the local network object proxy for the data provider so the provider can't be disposed by extensions
   const dataProvider = await networkObjectService.get<IDataProvider<TSelector, TGetData, TSetData>>(

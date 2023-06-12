@@ -1,7 +1,7 @@
 import {
-  AddWebViewOptions,
+  GetWebViewOptions,
   WebViewDefinition,
-  WebViewDefinitionSerialized,
+  SavedWebViewDefinition,
 } from '@shared/data/web-view.model';
 import {
   DisposableNetworkObject,
@@ -13,13 +13,13 @@ import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
 // What the developer registers
 export interface IWebViewProvider extends NetworkableObject {
   /**
-   * @param serializedWebView filled out if an existing webview is being called for (matched by id).
+   * @param savedWebView filled out if an existing webview is being called for (matched by id).
    * Just id if this is a new request or if the web view with the existing id was not found
-   * @param addWebViewOptions
+   * @param getWebViewOptions
    */
   getWebView(
-    serializedWebView: WebViewDefinitionSerialized,
-    addWebViewOptions: AddWebViewOptions,
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: GetWebViewOptions,
   ): Promise<WebViewDefinition | undefined>;
 }
 

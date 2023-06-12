@@ -68,7 +68,7 @@ export function TestQuickVerseHeresyPanel() {
 export function loadQuickVerseHeresyTab(savedTabInfo: SavedTabInfo): TabInfo {
   return {
     ...savedTabInfo,
-    title: 'Quick Verse Heresy',
+    tabTitle: 'Quick Verse Heresy',
     content: <TestQuickVerseHeresyPanel />,
   };
 }

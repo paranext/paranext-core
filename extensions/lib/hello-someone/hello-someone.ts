@@ -2,7 +2,7 @@ import papi from 'papi';
 import type {
   WebViewContentType,
   WebViewDefinition,
-  WebViewDefinitionSerialized,
+  SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type IDataProvider from 'shared/models/data-provider.interface';
@@ -55,15 +55,13 @@ const peopleWebViewType = 'hello-someone.people-viewer';
 const peopleWebViewIdKey = 'people-web-view-id';
 
 const peopleWebViewProvider: IWebViewProvider = {
-  async getWebView(
-    serializedWebView: WebViewDefinitionSerialized,
-  ): Promise<WebViewDefinition | undefined> {
-    if (serializedWebView.webViewType !== peopleWebViewType)
+  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== peopleWebViewType)
       throw new Error(
-        `${peopleWebViewType} provider received request to provide a ${serializedWebView.webViewType} web view`,
+        `${peopleWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     return {
-      ...serializedWebView,
+      ...savedWebView,
       title: 'People',
       contentType: 'html' as WebViewContentType.HTML,
       content: helloSomeoneHtmlWebView,
@@ -119,7 +117,7 @@ export async function activate(context: ExecutionActivationContext) {
     existingPeopleWebViewId = undefined;
   }
 
-  const peopleWebViewId = await papi.webViews.addWebView(
+  const peopleWebViewId = await papi.webViews.getWebView(
     peopleWebViewType,
     { type: 'panel', direction: 'top' },
     { existingId: existingPeopleWebViewId },

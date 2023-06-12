@@ -9,11 +9,11 @@ export default function TestPanel({ content }: { content: string }) {
 export function loadTestTab(savedTabInfo: SavedTabInfo): TabInfo {
   if (!savedTabInfo.id) throw new Error('Tab creation "id" is missing');
 
-  const title = savedTabInfo.id || 'Unknown';
-  const content = savedTabInfo.id ? `Content for ${title}` : 'Unknown';
+  const tabTitle = savedTabInfo.id || 'Unknown';
+  const content = savedTabInfo.id ? `Content for ${tabTitle}` : 'Unknown';
   return {
     ...savedTabInfo,
-    title,
+    tabTitle,
     content: <TestPanel content={content} />,
   };
 }

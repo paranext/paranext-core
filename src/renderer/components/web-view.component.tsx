@@ -4,12 +4,13 @@ import {
   TabInfo,
   WebViewContentType,
   WebViewDefinition,
+  SavedWebViewDefinition,
   WebViewProps,
 } from '@shared/data/web-view.model';
 import {
-  addWebView,
+  getWebView,
   saveTabInfoBase,
-  serializeWebViewDefinition,
+  convertWebViewDefinitionToSaved,
 } from '@shared/services/web-view.service';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
@@ -54,6 +55,21 @@ export default function WebView({ webViewType, content, title, contentType }: We
   );
 }
 
+/**
+ * Tell the web view service to deserialize the web view with the provided serialized definition
+ * @param data web view definition to deserialize
+ */
+async function retrieveWebViewContent(data: SavedWebViewDefinition): Promise<void> {
+  const loadedId = await getWebView(data.webViewType, undefined, {
+    existingId: data.id,
+    createNewIfNotFound: false,
+  });
+  if (loadedId !== data.id)
+    throw new Error(
+      `WebView with type ${data.webViewType} and id ${data.id} loaded into id ${loadedId}!`,
+    );
+}
+
 export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
   if (!savedTabInfo.id) throw new Error('"id" is missing.');
 
@@ -65,19 +81,9 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
     if (savedTabInfo.id !== data.id) throw new Error('"id" does not match webView id.');
     if (!data.webViewType) throw new Error('WebView does not have a webViewType. Cannot restore');
 
-    // If the webview is serialized aka doesn't have content, tell the web view service to
-    // deserialize the web view. It will asynchronously go get the content and re-run this function
-    if (!data.content && data.content !== '')
-      (async () => {
-        const deserializedId = await addWebView(data.webViewType, undefined, {
-          existingId: data.id,
-          createNewIfNotFound: false,
-        });
-        if (deserializedId !== data.id)
-          throw new Error(
-            `WebView with type ${data.webViewType} and id ${data.id} deserialized into id ${deserializedId}!`,
-          );
-      })();
+    // If the webview is saved aka doesn't have content, tell the web view service to load the web
+    // view. It will asynchronously go get the content and re-run this function
+    if (!data.content && data.content !== '') retrieveWebViewContent(data);
   } else {
     // placeholder data
     data = {
@@ -91,7 +97,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
 
   return {
     ...savedTabInfo,
-    title: data.title ?? 'Unknown',
+    tabTitle: data.title ?? 'Unknown',
     content: <WebView {...data} />,
   };
 }
@@ -99,6 +105,6 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
 export function saveWebViewTab(tabInfo: TabInfo): SavedTabInfo {
   return {
     ...saveTabInfoBase(tabInfo),
-    data: serializeWebViewDefinition(tabInfo.data as WebViewDefinition),
+    data: convertWebViewDefinitionToSaved(tabInfo.data as WebViewDefinition),
   };
 }

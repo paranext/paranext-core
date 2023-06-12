@@ -3,7 +3,7 @@ import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type {
   WebViewContentType,
   WebViewDefinition,
-  WebViewDefinitionSerialized,
+  SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
 import { GreetingsDataProvider } from '@extensions/hello-someone/hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
@@ -22,15 +22,13 @@ const unsubscribers: UnsubscriberAsync[] = [];
 const htmlWebViewType = 'hello-world.html';
 
 const htmlWebViewProvider: IWebViewProvider = {
-  async getWebView(
-    serializedWebView: WebViewDefinitionSerialized,
-  ): Promise<WebViewDefinition | undefined> {
-    if (serializedWebView.webViewType !== htmlWebViewType)
+  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== htmlWebViewType)
       throw new Error(
-        `${htmlWebViewType} provider received request to provide a ${serializedWebView.webViewType} web view`,
+        `${htmlWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     return {
-      ...serializedWebView,
+      ...savedWebView,
       title: 'Hello World HTML',
       contentType: 'html' as WebViewContentType.HTML,
       content: helloWorldHtmlWebView,
@@ -41,15 +39,13 @@ const htmlWebViewProvider: IWebViewProvider = {
 const reactWebViewType = 'hello-world.react';
 
 const reactWebViewProvider: IWebViewProvider = {
-  async getWebView(
-    serializedWebView: WebViewDefinitionSerialized,
-  ): Promise<WebViewDefinition | undefined> {
-    if (serializedWebView.webViewType !== reactWebViewType)
+  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== reactWebViewType)
       throw new Error(
-        `${reactWebViewType} provider received request to provide a ${serializedWebView.webViewType} web view`,
+        `${reactWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     return {
-      ...serializedWebView,
+      ...savedWebView,
       title: 'Hello World React',
       content: helloWorldReactWebView,
       styles: helloWorldReactWebViewStyles,
@@ -90,8 +86,8 @@ export async function activate(): Promise<UnsubscriberAsync> {
   // if one already exists. The webview that already exists could have been created by anyone
   // anywhere; it just has to match `webViewType`. See `hello-someone.ts` for an example of keeping
   // an existing webview that was specifically created by `hello-someone`.
-  papi.webViews.addWebView(htmlWebViewType, undefined, { existingId: '*' });
-  papi.webViews.addWebView(reactWebViewType, undefined, { existingId: '*' });
+  papi.webViews.getWebView(htmlWebViewType, undefined, { existingId: '*' });
+  papi.webViews.getWebView(reactWebViewType, undefined, { existingId: '*' });
 
   const greetingsDataProvider = await papi.dataProvider.get<GreetingsDataProvider>(
     'hello-someone.greetings',

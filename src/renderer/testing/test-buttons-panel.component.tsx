@@ -378,7 +378,7 @@ export default function TestButtonsPanel() {
 export function loadButtonsTab(savedTabInfo: SavedTabInfo): TabInfo {
   return {
     ...savedTabInfo,
-    title: 'Test Buttons',
+    tabTitle: 'Test Buttons',
     content: <TestButtonsPanel />,
   };
 }

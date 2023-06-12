@@ -19,7 +19,7 @@ export default function AboutPanel() {
 export function loadAboutTab(savedTabInfo: SavedTabInfo): TabInfo {
   return {
     ...savedTabInfo,
-    title: 'About',
+    tabTitle: 'About',
     content: <AboutPanel />,
     minWidth: 230,
     minHeight: 230,
