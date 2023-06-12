@@ -3,7 +3,7 @@ import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 
 export const TAB_TYPE_ABOUT = 'about';
 
-function AboutPanel() {
+export default function AboutPanel() {
   return (
     <div className="about-panel">
       <div className="hello">
@@ -16,7 +16,7 @@ function AboutPanel() {
   );
 }
 
-export default function loadAboutPanel(savedTabInfo: SavedTabInfo): TabInfo {
+export function loadAboutTab(savedTabInfo: SavedTabInfo): TabInfo {
   return {
     ...savedTabInfo,
     title: 'About',

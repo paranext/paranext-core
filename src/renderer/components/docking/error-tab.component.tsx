@@ -1,6 +1,7 @@
 import { TabInfo } from '@shared/data/web-view.model';
+import { newGuid } from '@shared/utils/util';
 
-function ErrorTab({ errorMessage }: { errorMessage: string }) {
+export default function ErrorTab({ errorMessage }: { errorMessage: string }) {
   return (
     <>
       <div>
@@ -14,13 +15,13 @@ function ErrorTab({ errorMessage }: { errorMessage: string }) {
 /**
  * Creates a new error message tab with the specified error message
  */
-const createErrorTab = (errorMessage: string): TabInfo => {
+export const createErrorTab = (errorMessage: string): TabInfo => {
   return {
+    id: newGuid(),
+    tabType: 'error',
     title: 'Error',
     content: <ErrorTab errorMessage={errorMessage} />,
     minWidth: 150,
     minHeight: 150,
   };
 };
-
-export default createErrorTab;

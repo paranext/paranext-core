@@ -9,18 +9,20 @@ import DockLayout, {
   TabData,
   TabGroup,
 } from 'rc-dock';
-import createErrorTab from '@renderer/components/docking/error-tab.component';
+import { createErrorTab } from '@renderer/components/docking/error-tab.component';
 import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
-import loadWebViewPanel, {
+import {
+  loadWebViewTab,
   TAB_TYPE_WEBVIEW,
-  saveWebViewPanel,
+  saveWebViewTab,
 } from '@renderer/components/web-view.component';
-import loadAboutPanel, { TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
-import loadButtonsPanel, { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
+import { loadAboutTab, TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
+import { loadButtonsTab, TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
 import testLayout, { FIRST_TAB_ID } from '@renderer/testing/test-layout.data';
-import loadTestPanel, { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
-import loadQuickVerseHeresyPanel, {
+import { loadTestTab, TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
+import {
+  loadQuickVerseHeresyTab,
   TAB_TYPE_QUICK_VERSE_HERESY,
 } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import {
@@ -59,14 +61,14 @@ const groups: { [key: string]: TabGroup } = {
 };
 
 const tabLoaderMap = new Map<TabType, TabLoader>([
-  [TAB_TYPE_ABOUT, loadAboutPanel],
-  [TAB_TYPE_BUTTONS, loadButtonsPanel],
-  [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyPanel],
-  [TAB_TYPE_TEST, loadTestPanel],
-  [TAB_TYPE_WEBVIEW, loadWebViewPanel],
+  [TAB_TYPE_ABOUT, loadAboutTab],
+  [TAB_TYPE_BUTTONS, loadButtonsTab],
+  [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
+  [TAB_TYPE_TEST, loadTestTab],
+  [TAB_TYPE_WEBVIEW, loadWebViewTab],
 ]);
 
-const tabSaverMap = new Map<TabType, TabSaver>([[TAB_TYPE_WEBVIEW, saveWebViewPanel]]);
+const tabSaverMap = new Map<TabType, TabSaver>([[TAB_TYPE_WEBVIEW, saveWebViewTab]]);
 
 let previousTabId: string = FIRST_TAB_ID;
 let floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };

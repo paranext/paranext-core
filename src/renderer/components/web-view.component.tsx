@@ -18,7 +18,7 @@ export function getTitle({ webViewType, title, contentType }: Partial<WebViewPro
   return title || `${webViewType || contentType} Web View`;
 }
 
-export function WebView({ webViewType, content, title, contentType }: WebViewProps) {
+export default function WebView({ webViewType, content, title, contentType }: WebViewProps) {
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const iframeRef = useRef<HTMLIFrameElement>(null!);
@@ -54,7 +54,7 @@ export function WebView({ webViewType, content, title, contentType }: WebViewPro
   );
 }
 
-export default function loadWebViewPanel(savedTabInfo: SavedTabInfo): TabInfo {
+export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
   if (!savedTabInfo.id) throw new Error('"id" is missing.');
 
   let data: WebViewProps;
@@ -96,7 +96,7 @@ export default function loadWebViewPanel(savedTabInfo: SavedTabInfo): TabInfo {
   };
 }
 
-export function saveWebViewPanel(tabInfo: TabInfo): SavedTabInfo {
+export function saveWebViewTab(tabInfo: TabInfo): SavedTabInfo {
   return {
     ...saveTabInfoBase(tabInfo),
     data: serializeWebViewDefinition(tabInfo.data as WebViewDefinition),

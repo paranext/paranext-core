@@ -95,7 +95,7 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
   }
 };
 
-function TestButtonsPanel() {
+export default function TestButtonsPanel() {
   const [promiseReturn, setPromiseReturn] = useState('Click a button.');
   const updatePromiseReturn = useCallback(
     (state: unknown) => setPromiseReturn(isString(state) ? state : JSON.stringify(state)),
@@ -375,7 +375,7 @@ function TestButtonsPanel() {
   );
 }
 
-export default function loadButtonsPanel(savedTabInfo: SavedTabInfo): TabInfo {
+export function loadButtonsTab(savedTabInfo: SavedTabInfo): TabInfo {
   return {
     ...savedTabInfo,
     title: 'Test Buttons',
