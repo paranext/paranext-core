@@ -1,4 +1,5 @@
 {
+  "dotnet.defaultSolution": "c-sharp/ParanextDataProvider.sln",
   "dotnet-test-explorer.testProjectPath": "c-sharp-tests/c-sharp-tests.csproj",
 
   "editor.defaultFormatter": "esbenp.prettier-vscode",
