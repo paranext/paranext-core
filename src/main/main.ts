@@ -18,7 +18,6 @@ import * as networkService from '@shared/services/network.service';
 import papi from '@shared/services/papi.service';
 import { CommandHandler } from '@shared/utils/papi-util';
 import { resolveHtmlPath } from '@node/utils/util';
-import MenuBuilder from '@main/menu.model';
 import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
@@ -145,8 +144,7 @@ async function main() {
       mainWindow = null;
     });
 
-    const menuBuilder = new MenuBuilder(mainWindow);
-    menuBuilder.buildMenu();
+    mainWindow.setMenu(null);
 
     // Open urls in the user's browser
     mainWindow.webContents.setWindowOpenHandler((edata) => {
@@ -253,6 +251,10 @@ async function main() {
     },
     throwError: async (message: string) => {
       throw new Error(`Test Error thrown in throwError command: ${message}`);
+    },
+    // This is a temporary hack (per TJ) to allow the Exit menu to have a way to exit the app.
+    quit: async () => {
+      app.exit();
     },
   };
 

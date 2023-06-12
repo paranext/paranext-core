@@ -32,6 +32,7 @@ import {
 import LogError from '@shared/log-error.model';
 import papi from '@shared/services/papi.service';
 import { serializeTabId, deserializeTabId } from '@shared/utils/papi-util';
+import PlatformBibleToolbar from '../platform-bible-toolbar';
 
 type TabType = string;
 
@@ -229,13 +230,16 @@ export default function ParanextDockLayout() {
   );
 
   return (
-    <DockLayout
-      ref={dockLayoutRef}
-      groups={groups}
-      defaultLayout={savedLayout}
-      dropMode="edge"
-      loadTab={loadTab}
-      onLayoutChange={onLayoutChange}
-    />
+    <>
+      <PlatformBibleToolbar/>
+      <DockLayout
+        ref={dockLayoutRef}
+        groups={groups}
+        defaultLayout={savedLayout}
+        dropMode="edge"
+        loadTab={loadTab}
+        onLayoutChange={onLayoutChange}
+      />
+    </>
   );
 }
