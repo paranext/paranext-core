@@ -68,6 +68,12 @@ globalThis.webViewComponent = function HelloWorld() {
     'Loading Psalm 1...',
   );
 
+  const [currentTime] = useData(
+    'current-time',
+    '*',
+    'Loading current time',
+  );
+
   return (
     <div>
       <div className="title">
@@ -100,6 +106,7 @@ globalThis.webViewComponent = function HelloWorld() {
         </Button>
       </div>
       <div>{latestVerseText}</div>
+      <div>{currentTime}</div>
       <div>
         <input value={name} onChange={(e) => setName(e.target.value)} />
         <Button onClick={() => peopleDataProvider?.deletePerson(name)}>Delete {name}</Button>
