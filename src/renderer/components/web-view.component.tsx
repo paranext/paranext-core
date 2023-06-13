@@ -56,8 +56,8 @@ export default function WebView({ webViewType, content, title, contentType }: We
 }
 
 /**
- * Tell the web view service to deserialize the web view with the provided serialized definition
- * @param data web view definition to deserialize
+ * Tell the web view service to load the web view with the provided saved definition
+ * @param data web view definition to load
  */
 async function retrieveWebViewContent(data: SavedWebViewDefinition): Promise<void> {
   const loadedId = await getWebView(data.webViewType, undefined, {

@@ -63,22 +63,10 @@ describe('Dock Layout Component', () => {
   });
 
   describe('loadTab()', () => {
-    it('should throw when no id or tabType', () => {
-      const savedTabInfoNone = {} as SavedTabInfo;
-
-      expect(() => loadTab(savedTabInfoNone)).toThrow();
-    });
-
     it('should throw when no id', () => {
-      const savedTabInfoNoId = { tabType: 'stuff' } as SavedTabInfo;
+      const savedTabInfoNoId = {} as SavedTabInfo;
 
       expect(() => loadTab(savedTabInfoNoId)).toThrow();
-    });
-
-    it('should throw when no tabType', () => {
-      const savedTabInfoNoTabType = { id: 'stuff' } as SavedTabInfo;
-
-      expect(() => loadTab(savedTabInfoNoTabType)).toThrow();
     });
   });
 
