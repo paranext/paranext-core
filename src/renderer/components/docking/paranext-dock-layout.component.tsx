@@ -19,7 +19,7 @@ import {
 } from '@renderer/components/web-view.component';
 import { loadAboutTab, TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
 import { loadButtonsTab, TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
-import testLayout, { FIRST_TAB_ID } from '@renderer/testing/test-layout.data';
+import testLayout from '@renderer/testing/test-layout.data';
 import { loadTestTab, TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 import {
   loadQuickVerseHeresyTab,
@@ -78,7 +78,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
 /** tab saver functions for each Paranext tab type that wants to override the default */
 const tabSaverMap = new Map<TabType, TabSaver>([[TAB_TYPE_WEBVIEW, saveWebViewTab]]);
 
-let previousTabId: string = FIRST_TAB_ID;
+let previousTabId: string | undefined;
 let floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
 
 /**
@@ -181,6 +181,19 @@ export function getFloatPosition(
   return { left, top, width, height };
 }
 
+/** Find the previous tab if one was previously added or find the first tab otherwise */
+function findPreviousTab(dockLayout: DockLayout) {
+  // If we have a previous tab, try to find it
+  if (previousTabId !== undefined) {
+    const previousTab = dockLayout.find(previousTabId);
+    // If we found the previous tab, go with that
+    if (previousTab) return previousTab;
+  }
+  // We don't have a previous tab or we didn't find the one we thought we had. Just find the first
+  // available tab
+  return dockLayout.find((tabData) => isTab(tabData)) as TabData;
+}
+
 /**
  * Function to call to add or update a webview in the layout
  * @param webView web view to add or update
@@ -202,13 +215,24 @@ export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayo
 
   // Add new WebView
   const unknownLayoutType = layout.type;
-  let targetTabId = previousTabId;
   switch (layout.type) {
     case 'tab':
-      targetTab = dockLayout.find(previousTabId) as TabData;
-      if (previousTabId === FIRST_TAB_ID)
-        dockLayout.dockMove(tab, targetTab.parent as PanelData, 'top');
-      else dockLayout.dockMove(tab, targetTab, 'after-tab');
+      targetTab = findPreviousTab(dockLayout);
+      if (targetTab) {
+        if (previousTabId === undefined)
+          // The target tab is the first found tab, so just add this as a new panel on top
+          dockLayout.dockMove(tab, targetTab.parent as PanelData, 'top');
+        // The target tab is a previously added tab, so add this as a tab next to it
+        else dockLayout.dockMove(tab, targetTab, 'after-tab');
+      }
+      // Didn't find any tabs. Add as a new tab
+      else
+        dockLayout.dockMove(
+          tab,
+          // Find the first thing (the dock box) and add the tab to it
+          dockLayout.find(() => true) ?? null,
+          'middle',
+        );
       previousTabId = tabId;
       break;
 
@@ -218,14 +242,26 @@ export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayo
       break;
 
     case 'panel':
-      if (layout.targetTabId) targetTabId = layout.targetTabId;
-      targetTab = dockLayout.find(targetTabId);
-      if (!isTab(targetTab))
-        throw new LogError(`When adding a panel, unknown target tab: '${targetTabId}'`);
+      if (layout.targetTabId !== undefined) {
+        // Look for a specific tab
+        targetTab = dockLayout.find(layout.targetTabId);
+        if (!isTab(targetTab))
+          throw new LogError(`When adding a panel, unknown target tab: '${layout.targetTabId}'`);
+      }
+      // Didn't ask for a specific tab, so just get the previous tab and go from there
+      else targetTab = findPreviousTab(dockLayout);
 
-      // Defaults are added in `web-view.service.ts`.
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      dockLayout.dockMove(tab, targetTab?.parent as PanelData, layout.direction!);
+      dockLayout.dockMove(
+        tab,
+        // Add to the parent of the found tab if we found a tab
+        (targetTab?.parent as PanelData) ??
+          // Otherwise find the first thing (the dock box) and add the tab to it
+          dockLayout.find(() => true) ??
+          null,
+        // Defaults are added in `web-view.service.ts`.
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        layout.direction!,
+      );
       break;
 
     default:
