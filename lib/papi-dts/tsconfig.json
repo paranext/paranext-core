@@ -8,7 +8,8 @@
     "typeRoots": ["../node_modules/@types", "../extensions/dist", "../src/@types"]
   },
   "files": [
-    "../../src/shared/services/papi.service.ts",
+    "../../src/renderer/services/papi-renderer.service.ts",
+    "../../src/extension-host/services/papi-extension-host.service.ts",
     "../../src/extension-host/extension-types/extension.interface.ts"
   ]
 }

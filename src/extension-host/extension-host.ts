@@ -1,9 +1,9 @@
 import '@extension-host/global-this.model';
 import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
-import papi from '@shared/services/papi.service';
 import { CommandHandler } from '@shared/utils/papi-util';
 import * as ExtensionService from '@extension-host/services/extension.service';
+import papi from '@extension-host/services/papi-extension-host.service';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
