@@ -568,13 +568,9 @@ export const initialize = () => {
 export const registerWebViewProvider = webViewProviderService.register;
 
 /** All the exports in this service that are to be exposed on the PAPI */
-// TODO: This doesn't actually work - causes a dependency loop if used in papi.service.ts. We may
-// fix this when we split papi into frontend and backend in #172
 export const papiWebViewService = {
   onDidAddWebView,
   getWebView,
   initialize,
   registerWebViewProvider,
 };
-
-export type PapiWebViewService = typeof papiWebViewService;
