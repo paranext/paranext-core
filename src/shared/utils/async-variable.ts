@@ -38,7 +38,7 @@ export default class AsyncVariable<T> {
    * value has been resolved or rejected.
    * @returns the promise for the value to be set
    */
-  public get promise(): Promise<T> {
+  get promise(): Promise<T> {
     return this.promiseToValue;
   }
 
@@ -46,7 +46,7 @@ export default class AsyncVariable<T> {
    * A simple way to see if this variable's promise was resolved or rejected already
    * @returns whether the variable was already resolved or rejected
    */
-  public get hasSettled(): boolean {
+  get hasSettled(): boolean {
     return Object.isFrozen(this);
   }
 
@@ -55,7 +55,7 @@ export default class AsyncVariable<T> {
    * @param value this variable's promise will resolve to this value
    * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
    */
-  public resolveToValue(value: T, throwIfAlreadySettled: boolean = false): void {
+  resolveToValue(value: T, throwIfAlreadySettled: boolean = false): void {
     if (this.resolver) {
       logger.debug(`${this.variableName} is being resolved now`);
       this.resolver(value);
@@ -71,7 +71,7 @@ export default class AsyncVariable<T> {
    * @param reason this variable's promise will be rejected with this reason
    * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
    */
-  public rejectWithReason(reason: string, throwIfAlreadySettled: boolean = false): void {
+  rejectWithReason(reason: string, throwIfAlreadySettled: boolean = false): void {
     if (this.rejecter) {
       logger.debug(`${this.variableName} is being rejected now`);
       this.rejecter(reason);

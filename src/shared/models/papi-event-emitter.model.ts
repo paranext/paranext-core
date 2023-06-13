@@ -18,7 +18,7 @@ export default class PapiEventEmitter<T> {
    * @param callback function to run with the event when it is emitted
    * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
    */
-  public subscribe = this.event;
+  subscribe = this.event;
 
   /** All callback functions that will run when this event is emitted. Lazy loaded */
   private subscriptions?: PapiEventHandler<T>[];
@@ -33,7 +33,7 @@ export default class PapiEventEmitter<T> {
    * @param callback function to run with the event when it is emitted
    * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
    */
-  public get event(): PapiEvent<T> {
+  get event(): PapiEvent<T> {
     this.assertNotDisposed();
 
     if (!this.lazyEvent) {
@@ -64,7 +64,7 @@ export default class PapiEventEmitter<T> {
   }
 
   /** Disposes of this event, preparing it to release from memory */
-  public dispose = () => {
+  dispose = () => {
     this.disposeFn();
   };
 
@@ -72,7 +72,7 @@ export default class PapiEventEmitter<T> {
    * Runs the subscriptions for the event
    * @param event event data to provide to subscribed callbacks
    */
-  public emit = (event: T) => {
+  emit = (event: T) => {
     // Do not do anything other than emitFn here. This emit is just binding `this` to emitFn
     this.emitFn(event);
   };

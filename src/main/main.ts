@@ -35,12 +35,12 @@ async function main() {
 
   // The extension host service relies on the network service.
   // Extensions inside the extension host might rely on the .NET data provider and each other
-  // Some extensions inside the extension host rely on the renderer to accept 'addWebView' commands.
+  // Some extensions inside the extension host rely on the renderer to accept 'getWebView' commands.
   // The renderer relies on the extension host, so something has to break the dependency loop.
-  // For now, the dependency loop is broken by retrying 'addWebView' in a loop for a while.
+  // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
   extensionHostService.start();
 
-  // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'addWebView')
+  // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
   // Extension host test

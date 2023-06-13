@@ -155,34 +155,6 @@ export function deserializeRequestType(requestType: string): RequestType {
   return { category, directive };
 }
 
-/** Parts of a Dock Tab ID */
-export interface TabIdParts {
-  /** Type of the tab */
-  type: string;
-  /** ID of the particular tab type */
-  typeId: string;
-}
-
-/**
- * Create a tab ID.
- * @param type Type of the tab.
- * @param typeId ID of the particular tab type.
- * @returns a tab ID
- */
-export function serializeTabId(type: string, typeId: string): string {
-  return serializeRequestType(type, typeId);
-}
-
-/**
- * Split the tab ID into its parts.
- * @param id Tab ID.
- * @returns The two parts of the tab ID
- */
-export function deserializeTabId(id: string): TabIdParts {
-  const { category: type, directive: typeId } = deserializeRequestType(id);
-  return { type, typeId };
-}
-
 /**
  * HTML Encodes the provided string.
  * Thanks to ChatGPT

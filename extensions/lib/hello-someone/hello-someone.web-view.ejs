@@ -29,6 +29,8 @@
     <div id="bill-greetings-update-count">Bill Greetings Updates: 0</div>
     <div id="bill-any-age-update-count">Any Age Updates (via Bill): 0</div>
     <div id="bill-age-update-count">Bill Age Updates: 0</div>
+    <br />
+    <div><button id="new-web-view-button" type="button">Create a new People WebView!</button></div>
     <script>
       function print(input) {
         papi.logger.info(input);
@@ -178,6 +180,15 @@
           billAgeUpdateCountDiv.textContent = papi.util.htmlEncode(
             `Bill Age Updates: ${billAgeUpdateCount}`,
           );
+        });
+
+        // Attach handler for new-web-view-button
+        const newWebViewButton = document.getElementById('new-web-view-button');
+        newWebViewButton.addEventListener('click', async () => {
+          const webViewId = await papi.webViews.getWebView('hello-someone.people-viewer', {
+            type: 'float',
+          });
+          print(`New People webview id: ${webViewId}`);
         });
       }
 

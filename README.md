@@ -38,6 +38,8 @@ Add the system libraries needed for Electron, [Build Instructions (Linux)](https
 
 ### All Platforms Development Pre-requisites
 
+Install [`Node.js` version >=18.0.0](https://nodejs.org/) (18.0.0 or greater is required for using `fetch`).
+
 Install `dotnet` [.NET 7 SDK from here](https://learn.microsoft.com/en-us/dotnet/core/install/).
 
 To check if `dotnet` is installed run (ensure you have a v7 SDK):
