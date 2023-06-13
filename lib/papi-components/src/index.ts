@@ -8,4 +8,18 @@ export { default as Slider } from './slider.component';
 export { default as Switch } from './switch.component';
 export { default as TextField } from './text-field.component';
 export { default as Table } from './table.component';
-export type { TableProps } from './table.component';
+export type {
+  TableCalculatedColumn,
+  TableCellClickArgs,
+  TableCellKeyboardEvent,
+  TableCellKeyDownArgs,
+  TableCellMouseEvent,
+  TableColumn,
+  TableCopyEvent,
+  TableEditorProps,
+  TablePasteEvent,
+  TableRowsChangeData,
+  TableSortColumn,
+  TableProps,
+  TableTextEditor,
+} from './table.component';

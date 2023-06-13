@@ -23,6 +23,7 @@ import {
   PasteEvent,
   RowsChangeData,
   SortColumn,
+  textEditor,
 } from 'react-data-grid';
 
 export type ButtonProps = PropsWithChildren<{
@@ -513,6 +514,7 @@ export type TableFormatterProps<T> = FormatterProps<T>;
 export type TablePasteEvent<T> = PasteEvent<T>;
 export type TableRowsChangeData<T> = RowsChangeData<T>;
 export type TableSortColumn = SortColumn;
+export declare const TableTextEditor: typeof textEditor;
 export type TableProps<T> = {
   /**
    * An array of objects representing each column on the grid

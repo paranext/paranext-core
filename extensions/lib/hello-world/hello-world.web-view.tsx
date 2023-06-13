@@ -8,8 +8,9 @@ import {
   Switch,
   TextField,
   Table,
+  TableEditorProps,
 } from 'papi-components';
-import { useCallback, useContext, useState } from 'react';
+import { ChangeEvent, ReactElement, Key, useCallback, useContext, useState } from 'react';
 
 const {
   react: {
@@ -31,7 +32,20 @@ papi
 globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
+  const initializeRows = () => {
+    return [
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
+    ];
+  };
+
   const [myState, setMyState] = useState(0);
+  const [rows, setRows] = useState(initializeRows());
+  const [selRows, setSelRows] = useState(new Set<Key>());
 
   const [echoResult] = usePromise(
     useCallback(async () => {
@@ -52,6 +66,24 @@ globalThis.webViewComponent = function HelloWorld() {
   type Row = {
     id: string;
     title: string;
+  };
+
+  const textEditor = ({ onRowChange, row }: TableEditorProps<Row>): ReactElement => {
+    const changeHandler = (e: ChangeEvent<HTMLInputElement>) => {
+      const newRow = { ...rows[+row.id], title: e.target.value };
+      onRowChange(newRow);
+    };
+
+    return <TextField defaultValue={rows[+row.id].title} onChange={changeHandler} />;
+  };
+
+  const rowsChangeHandler = (changedRows: Row[]): void => {
+    console.log('Changed rows');
+    setRows(changedRows);
+  };
+
+  const selRowsChangeHandler = (selectedRows: Set<Key>): void => {
+    setSelRows(selectedRows);
   };
 
   return (
@@ -103,16 +135,16 @@ globalThis.webViewComponent = function HelloWorld() {
             {
               key: 'title',
               name: 'Title',
+              editor: textEditor,
             },
           ]}
-          rows={[
-            { id: '0', title: 'Lorem ipsum dolor sit amet' },
-            { id: '1', title: 'Consectetur adipiscing elit' },
-            { id: '2', title: 'Pellentesque suscipit tortor est' },
-            { id: '3', title: 'Ut egestas massa aliquam a' },
-            { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
-            { id: '5', title: 'Sed aliquet pulvinar neque' },
-          ]}
+          rows={rows}
+          rowKeyGetter={(row: Row) => {
+            return row.id;
+          }}
+          selectedRows={selRows}
+          onSelectedRowsChange={selRowsChangeHandler}
+          onRowsChange={rowsChangeHandler}
           enableSelectColumn
         />
       </div>
