@@ -6,33 +6,77 @@
 import cloneDeep from 'lodash/cloneDeep';
 import { isRenderer } from '@shared/utils/internal-util';
 import {
+  Unsubscriber,
   aggregateUnsubscriberAsyncs,
-  CommandHandler,
   getModuleSimilarApiMessage,
   serializeRequestType,
 } from '@shared/utils/papi-util';
-import * as commandService from '@shared/services/command.service';
-import { getErrorMessage, newNonce, wait } from '@shared/utils/util';
+import { getErrorMessage, newGuid, newNonce, wait } from '@shared/utils/util';
 // We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
 // eslint-disable-next-line import/no-cycle
 import papi from '@shared/services/papi.service';
-import React from 'react';
+import React, { MutableRefObject } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   AddWebViewEvent,
   Layout,
   PanelDirection,
-  WebViewContents,
-  WebViewContentsReact,
+  SavedTabInfo,
+  TabInfo,
+  WebViewDefinitionReact,
   WebViewContentType,
   WebViewProps,
+  WebViewType,
+  WebViewId,
+  GetWebViewOptions,
+  WebViewDefinition,
+  SavedWebViewDefinition,
 } from '@shared/data/web-view.model';
+import * as networkService from '@shared/services/network.service';
+import webViewProviderService from '@shared/services/web-view-provider.service';
+import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
+import AsyncVariable from '@shared/utils/async-variable';
+
+/** rc-dock's onLayoutChange prop made asynchronous - resolves */
+export type OnLayoutChangeRCDock = (
+  newLayout: LayoutBase,
+  currentTabId?: string,
+  direction?: DropDirection,
+) => Promise<void>;
+
+/** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
+export type PapiDockLayout = {
+  /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
+  dockLayout: DockLayout;
+  /**
+   * A ref to a function that runs when the layout changes. We set this ref to our
+   * {@link onLayoutChange} function
+   */
+  onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
+  /** Function to call to add or update a webview in the layout */
+  addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
+  /**
+   * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
+   *
+   * TODO: This should be removed and the `testLayout` imported directly in this file once this
+   * service is refactored to split the code between processes. The only reason this is passed from
+   * `paranext-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
+   * service is currently all shared code. Refactor should happen in #203
+   */
+  testLayout: LayoutBase;
+};
 
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
 const DEFAULT_FLOAT_SIZE = { width: 300, height: 150 };
 const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
+
+/** Name for request to get a web view */
+const GET_WEB_VIEW_REQUEST = 'getWebView';
+
+/** localstorage key for saving and loading the dock layout */
+const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -46,6 +90,16 @@ const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
 );
 /** Event that emits with webView info when a webView is added */
 export const onDidAddWebView = onDidAddWebViewEmitter.event;
+
+/**
+ * Variable that will hold the rc-dock dock layout along with a couple other props. This is
+ * populated by `paranext-dock-layout.component.tsx` registering its dock layout with this service,
+ * allowing this service to manage layouts and such.
+ *
+ * WARNING: YOU CANNOT USE THIS VARIABLE IN ANYTHING BUT THE RENDERER. Also please do not save this
+ * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
+ */
+let papiDockLayoutVar = createDockLayoutAsyncVar();
 
 // #region Renderer-only stuff
 
@@ -78,6 +132,9 @@ const webViewRequire = (module: string) => {
 
 // #endregion
 
+// #region functions related to the dock layout
+
+/** Set up defaults for webview layout instructions */
 function layoutDefaults(layout: Layout): Layout {
   const layoutDefaulted = cloneDeep(layout);
   switch (layoutDefaulted.type) {
@@ -95,50 +152,262 @@ function layoutDefaults(layout: Layout): Layout {
 }
 
 /**
- * Adds a WebView and runs all event handlers who are listening to this event
- * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
- * @returns promise that resolves nothing if we successfully handled the webView
+ * Basic `saveTabInfo` that simply strips the properties added by {@link TabInfo} off of the object
+ * and returns it as a {@link SavedTabInfo}. Runs as the {@link TabSaver} by default if the tab type
+ * does not have a specific `TabSaver`
  */
-export const addWebView = async (
-  webView: WebViewContents,
+export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
+  // We don't need to use the other properties, but we need to remove them
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { tabTitle, content, minWidth, minHeight, ...savedTabInfo } = tabInfo;
+  return savedTabInfo;
+}
+
+/**
+ * Converts web view definition used in an actual docking tab into saveable web view information by
+ * stripping out the members we don't want to save
+ * @param webViewDefinition web view to save
+ * @returns saveable web view information based on `webViewDefinition`
+ */
+export function convertWebViewDefinitionToSaved(
+  webViewDefinition: WebViewDefinition,
+): SavedWebViewDefinition {
+  const webViewDefinitionCloned: Omit<WebViewDefinition, 'content'> &
+    Partial<Pick<WebViewDefinition, 'content'>> &
+    Partial<Pick<WebViewDefinitionReact, 'styles'>> = { ...webViewDefinition };
+  // We don't want to keep the webView content so the web view provider can provide it again when
+  // deserializing
+  delete webViewDefinitionCloned.content;
+  delete webViewDefinitionCloned.styles;
+  return webViewDefinitionCloned;
+}
+
+/** Create a new dock layout promise variable */
+function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
+  return new AsyncVariable<PapiDockLayout>(
+    'web-view.service.paranextDockLayout',
+    // Use default timeout on renderer, but never timeout anywhere else because we will not be
+    // resolving this. One of the serious pains of not having #203
+    isRenderer() ? undefined : -1,
+  );
+}
+
+/**
+ * When rc-dock detects a changed layout, save it. This function is given to the registered
+ * papiDockLayout to run when the dock layout changes.
+ *
+ * TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
+ * @param newLayout the changed layout to save.
+ */
+const onLayoutChange: OnLayoutChangeRCDock = async (newLayout) => {
+  return saveLayout(newLayout);
+};
+
+/**
+ * Safely load a value from local storage.
+ * @param key of the value.
+ * @param defaultValue to return if the key is not found.
+ * @returns the value of the key fetched from local storage, or the default value if not found.
+ */
+function getStorageValue<T>(key: string, defaultValue: T): T {
+  const saved = localStorage.getItem(key);
+  const initial = saved ? JSON.parse(saved) : undefined;
+  return initial || defaultValue;
+}
+
+/**
+ * Persists the current dock layout information.
+ * @param layout layout to persist
+ */
+async function saveLayout(layout: LayoutBase): Promise<void> {
+  const currentLayout = layout;
+  localStorage.setItem(DOCK_LAYOUT_KEY, JSON.stringify(currentLayout));
+}
+
+/**
+ * Loads layout information into the dock layout.
+ * @param layout If this parameter is provided, loads that layout information. If not provided, gets
+ * the persisted layout information and loads it into the dock layout.
+ */
+async function loadLayout(layout?: LayoutBase): Promise<void> {
+  const dockLayoutVar = await papiDockLayoutVar.promise;
+  const layoutToLoad = layout || getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
+
+  dockLayoutVar.dockLayout.loadLayout(layoutToLoad);
+  if (layout) {
+    // A layout was provided, meaning this is a layout change. Since `dockLayout.loadLayout` doesn't
+    // run `onLayoutChange`, we run it manually
+    await onLayoutChange(layoutToLoad);
+  }
+}
+
+/**
+ * Register a dock layout React element to be used by this service to perform layout-related
+ * operations
+ * @param dockLayout dock layout element to register along with other important properties
+ * @returns function used to unregister this dock layout
+ */
+export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
+  // Save the current async var so we know if it changed before we unsubscribed
+  const currentPapiDockLayoutVar = papiDockLayoutVar;
+
+  // Set the dock layout as the promise var. Throws if already resolved
+  papiDockLayoutVar.resolveToValue(dockLayout, true);
+
+  // TODO: Strange pattern that we are setting a ref to a service function. Investigate changing
+  // this pattern in some way. Maybe just export `onLayoutChange`?
+  dockLayout.onLayoutChangeRef.current = onLayoutChange;
+
+  // Will we ever need to await this? For now, seems like it unnecessarily complicates registering
+  // because making this function async would probably be annoying in React
+  loadLayout();
+
+  // Return an unsubscriber to unregister this dock layout. The primary situation in which I see
+  // this happening is when you change something on the renderer that causes a live hot reload
+  return () => {
+    // Somehow this is not the registered dock layout anymore
+    if (papiDockLayoutVar !== currentPapiDockLayoutVar)
+      throw new Error('Tried to unregister an old dock layout');
+
+    // Create a new async var to empty out the dock layout
+    // TODO: Would this create any problems...? I guess only if we save dockLayoutVar somewhere else
+    papiDockLayoutVar = createDockLayoutAsyncVar();
+
+    return true;
+  };
+}
+
+// #endregion
+
+/** Set up defaults for options for getting a web view */
+function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOptions {
+  const optionsDefaulted = cloneDeep(options);
+  if ('existingId' in optionsDefaulted && !('createNewIfNotFound' in optionsDefaulted))
+    optionsDefaulted.createNewIfNotFound = true;
+
+  return optionsDefaulted;
+}
+
+/**
+ * Creates a new web view or gets an existing one depending on if you request an existing one and
+ * if the web view provider decides to give that existing one to you (it is up to the provider).
+ *
+ * @param webViewType type of WebView to create
+ * @param layout information about where you want the web view to go. Defaults to adding as a tab
+ * @param options options that affect what this function does. For example, you can provide an
+ * existing web view id to request an existing web view with that id.
+ *
+ * @returns promise that resolves to the id of the webview we got.
+ */
+export const getWebView = async (
+  webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
-): Promise<void> => {
+  options: GetWebViewOptions = {},
+): Promise<WebViewId | undefined> => {
+  const optionsDefaulted = getWebViewOptionsDefaults(options);
+  // ENHANCEMENT: If they aren't looking for an existingId, we could get the webview without
+  // searching for an existing webview and send it to the renderer, skipping the part where we send
+  // to the renderer, then search for an existing webview, then get the webview
+
+  // Create the webview
   if (!isRenderer()) {
     // HACK: Quick fix for https://github.com/paranext/paranext-core/issues/52
-    // Try to run addWebView several times until the renderer is up
+    // Try to run getWebView several times until the renderer is up
     // Once we implement a way to track dependencies across processes, this can go away
-    // Note that commands turn into requests, and requests are retried, so there is another loop
+    // Note that requests are retried, so there is another loop
     // within this loop deeper down.
     for (let attemptsRemaining = 5; attemptsRemaining > 0; attemptsRemaining--) {
-      let success = true;
       try {
         // eslint-disable-next-line no-await-in-loop
-        await commandService.sendCommand<[WebViewContents, Layout], void>(
-          'addWebView',
-          webView,
+        return await networkService.request<
+          [WebViewType, Layout, GetWebViewOptions],
+          WebViewId | undefined
+        >(
+          serializeRequestType(CATEGORY_WEB_VIEW, GET_WEB_VIEW_REQUEST),
+          webViewType,
           layout,
+          optionsDefaulted,
         );
       } catch (error) {
-        success = false;
         // If we are out of tries or the error returned is not that the renderer is down, stop
         // trying to resend and just throw
         if (
           attemptsRemaining === 1 ||
           getErrorMessage(error) !==
             `No handler was found to process the request of type ${serializeRequestType(
-              'command',
-              'addWebView',
+              CATEGORY_WEB_VIEW,
+              GET_WEB_VIEW_REQUEST,
             )}`
         )
           throw error;
         // eslint-disable-next-line no-await-in-loop
         await wait(1000);
       }
-
-      if (success) return;
     }
-    throw new Error(`addWebView failed, but you should have seen a different error than this!`);
+    throw new Error(`getWebView failed, but you should have seen a different error than this!`);
   }
+
+  // Get the webview definition from the webview provider
+  const webViewProvider = await webViewProviderService.get(webViewType);
+
+  if (!webViewProvider)
+    throw new Error(`Cannot find Web View Provider for webview type ${webViewType}`);
+
+  // Find existing webView if one exists
+  /** Either the existing webview with the specified id or a placeholder webview if one was not found */
+  let existingSavedWebView: SavedWebViewDefinition | undefined;
+  /** Whether we found an existing web view to ask the provider for */
+  let didFindExistingWebView = false;
+  // Look for existing webview
+  if (optionsDefaulted.existingId) {
+    const existingWebView = (await papiDockLayoutVar.promise).dockLayout.find(
+      optionsDefaulted.existingId === '?'
+        ? // If they provided '?', that means look for any webview with a matching webViewType
+          (item) => {
+            // This is not a webview
+            if (!('data' in item)) return false;
+
+            // Find any webview with the specified webViewType
+            return (item.data as WebViewDefinition).webViewType === webViewType;
+          }
+        : // If they provided any other string, look for a webview with that id
+          optionsDefaulted.existingId,
+    ) as TabInfo | undefined;
+    if (existingWebView) {
+      // We found the webview! Save it to send to the web view provider
+      existingSavedWebView = convertWebViewDefinitionToSaved(
+        existingWebView.data as WebViewDefinition,
+      );
+      didFindExistingWebView = true;
+    }
+  }
+
+  // We didn't find an existing web view with the id
+  if (!existingSavedWebView) {
+    // If we are not looking to create a new webview, then don't.
+    if ('existingId' in optionsDefaulted && !optionsDefaulted.createNewIfNotFound) return undefined;
+    // If we want to create a new webview, set a placeholder with a new id
+    existingSavedWebView = { webViewType, id: newGuid() };
+  }
+
+  // Create the new webview or load if it already existed
+  const webView = await webViewProvider.getWebView(existingSavedWebView, optionsDefaulted);
+
+  // The web view provider didn't want to create this web view
+  if (!webView) return undefined;
+
+  /**
+   * The web view we are getting is new. Either the webview provider gave us a new webview instead
+   * of the existing one or there wasn't an existing one in the first place
+   */
+  // See if the provider gave us a new web view
+  // Meaning we got a web view from the provider (which is already the case since we are here)
+  // And we didn't find an existing one so the one we got must be new
+  // or the web view id we asked the provider for is not the one it gave us and it already exists
+  const webViewIsNew =
+    !didFindExistingWebView ||
+    (existingSavedWebView.id !== webView.id &&
+      (await papiDockLayoutVar.promise).dockLayout.find(webView.id));
 
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
   const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
@@ -174,7 +443,7 @@ export const addWebView = async (
       specificSrcPolicy = "'unsafe-inline'";
       break;
     default: {
-      const reactWebView = webView as WebViewContentsReact;
+      const reactWebView = webView as WebViewDefinitionReact;
 
       // Add the component as a script
       // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
@@ -274,13 +543,22 @@ export const addWebView = async (
     content: webViewContent,
   };
   const updatedLayout = layoutDefaults(layout);
-  // Inform web view consumers we added a web view
-  onDidAddWebViewEmitter.emit({ webView: updatedWebView, layout: updatedLayout });
+
+  (await papiDockLayoutVar.promise).addWebViewToDock(updatedWebView, updatedLayout);
+
+  // Inform web view consumers we added a new web view
+  if (webViewIsNew)
+    onDidAddWebViewEmitter.emit({
+      webView: convertWebViewDefinitionToSaved(updatedWebView),
+      layout: updatedLayout,
+    });
+
+  return webView.id;
 };
 
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
-const rendererCommandFunctions: { [commandName: string]: CommandHandler } = {
-  addWebView,
+const rendererRequestHandlers = {
+  [serializeRequestType(CATEGORY_WEB_VIEW, GET_WEB_VIEW_REQUEST)]: getWebView,
 };
 
 /** Sets up the WebViewService. Runs only once */
@@ -292,20 +570,20 @@ export const initialize = () => {
 
     // Set up subscriptions that the service needs to work
 
-    // Register built-in commands
+    // Register built-in requests
     if (isRenderer()) {
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
-      const unsubPromises = Object.entries(rendererCommandFunctions).map(([commandName, handler]) =>
-        commandService.registerCommand(commandName, handler),
+      const unsubPromises = Object.entries(rendererRequestHandlers).map(([requestType, handler]) =>
+        networkService.registerRequestHandler(requestType, handler),
       );
 
-      // Wait to successfully register all commands
-      const unsubscribeCommands = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
+      // Wait to successfully register all requests
+      const unsubscribeRequests = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
 
-      // On closing, try to remove command listeners
+      // On closing, try to remove request listeners
       // TODO: should do this on the server when the connection closes or when the server exits as well
       window.addEventListener('beforeunload', async () => {
-        await unsubscribeCommands();
+        await unsubscribeRequests();
       });
     }
 
@@ -315,9 +593,20 @@ export const initialize = () => {
   return initializePromise;
 };
 
+// Pulled out registering web view providers because it feels better to have these services split
+// up internally but combined externally.
+// TODO: once we fix the dependency loop mentioned below on `papiWebViewService`, we can remove this
+// line since we don't need to export the registration twice.
+export const registerWebViewProvider = webViewProviderService.register;
+
 /** All the exports in this service that are to be exposed on the PAPI */
+// TODO: This doesn't actually work - causes a dependency loop if used in papi.service.ts. We may
+// fix this when we split papi into frontend and backend in #172
 export const papiWebViewService = {
   onDidAddWebView,
-  addWebView,
+  getWebView,
   initialize,
+  registerWebViewProvider,
 };
+
+export type PapiWebViewService = typeof papiWebViewService;
