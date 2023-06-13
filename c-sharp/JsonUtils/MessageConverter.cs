@@ -44,7 +44,8 @@ internal sealed class MessageConverter : JsonConverter<Message>
 
         foreach (var evt in GetObjectsOfClosestSubtypes<MessageEvent>())
         {
-            s_eventTypeMap.Add(evt.EventType, evt.GetType());
+            if (evt.EventType != Enum<EventType>.Null)
+                s_eventTypeMap.Add(evt.EventType, evt.GetType());
         }
     }
 

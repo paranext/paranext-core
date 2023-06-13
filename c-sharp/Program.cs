@@ -2,6 +2,7 @@ using System.Text.Json;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
+using Paranext.DataProvider.NetworkObjects;
 using PtxUtils;
 
 namespace Paranext.DataProvider;
@@ -27,6 +28,9 @@ public static class Program
                 return;
             }
 
+            var tdp = new TimeDataProvider(papi);
+            tdp.RegisterDataProvider();
+
             Console.WriteLine("Paranext data provider ready!");
             papi.BlockUntilMessageHandlingComplete();
         }
@@ -43,16 +47,14 @@ public static class Program
     private static ResponseToRequest RequestAddOne(dynamic val)
     {
         if (val is not JsonElement element || element.GetArrayLength() != 1)
-            return new ResponseToRequest("Unexpected data in request: " + val);
+            return ResponseToRequest.Failed("Unexpected data in request: " + val);
 
-        int? intVal = ErrorUtils.IgnoreErrors(
+        int intVal = ErrorUtils.IgnoreErrors(
             "Trying to parse data from server",
             () => element[0].GetInt32()
         );
-        if (intVal == null)
-            return new ResponseToRequest("Unexpected data in request: " + val);
 
-        return new ResponseToRequest(intVal + 1);
+        return ResponseToRequest.Succeeded(intVal + 1);
     }
 
     #endregion
