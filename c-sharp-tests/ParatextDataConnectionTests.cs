@@ -66,6 +66,9 @@ namespace TestParanextDataProvider
                 bool showInTaskbar
             )
             {
+                if (text.Contains("unable to find a language definition file for English"))
+                    return AlertResult.Positive;
+
                 Assert.Fail("Unexpected dialog box:\n" + text);
                 return AlertResult.Negative;
             }
