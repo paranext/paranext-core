@@ -5,7 +5,7 @@ import type {
   WebViewDefinition,
   SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
-import type { GreetingsDataProvider } from '@extensions/hello-someone/hello-someone';
+import { PeopleDataProvider } from '@extensions/hello-someone/hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloWorldReactWebView from './hello-world.web-view';
@@ -95,14 +95,15 @@ export async function activate(): Promise<UnsubscriberAsync> {
   papi.webViews.getWebView(htmlWebViewType, undefined, { existingId: '?' });
   papi.webViews.getWebView(reactWebViewType, undefined, { existingId: '?' });
 
-  const greetingsDataProvider = await papi.dataProvider.get<GreetingsDataProvider>(
-    'hello-someone.greetings',
+  const peopleDataProvider = await papi.dataProvider.get<PeopleDataProvider>(
+    'hello-someone.people',
   );
 
-  if (greetingsDataProvider) {
+  if (peopleDataProvider) {
     // Test subscribing to a data provider
-    const unsubGreetings = await greetingsDataProvider.subscribe('Bill', (billGreeting: string) =>
-      logger.info(`Bill's greeting: ${billGreeting}`),
+    const unsubGreetings = await peopleDataProvider.subscribeGreeting(
+      'Bill',
+      (billGreeting: string | undefined) => logger.info(`Bill's greeting: ${billGreeting}`),
     );
 
     unsubscribers.push(unsubGreetings);

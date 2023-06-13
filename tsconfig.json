@@ -19,6 +19,7 @@
       "@shared/*": ["./shared/*"],
       "@node_modules/*": ["../node_modules/*"]
     },
+    "experimentalDecorators": true,
     "typeRoots": ["./node_modules/@types", "./extensions/dist", "src/@types"],
     "allowJs": true,
     "allowSyntheticDefaultImports": true,

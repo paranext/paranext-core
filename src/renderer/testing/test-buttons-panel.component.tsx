@@ -9,7 +9,8 @@ import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
-import IDataProvider from '@shared/models/data-provider.interface';
+import { PeopleDataProvider } from '@extensions/hello-someone/hello-someone';
+import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 
 export const TAB_TYPE_BUTTONS = 'buttons';
 
@@ -153,16 +154,12 @@ export default function TestButtonsPanel() {
 
   // Test a method on a data provider engine that isn't on the interface to see if you can actually do this
   const [hasTestedRandomMethod, setHasTestedRandomMethod] = useState(false);
-  const greetingsDataProvider =
-    useDataProvider<IDataProvider<string, string, string>>('hello-someone.greetings');
-  if (!hasTestedRandomMethod && greetingsDataProvider) {
+  const peopleDataProvider = useDataProvider<PeopleDataProvider>('hello-someone.people');
+  if (!hasTestedRandomMethod && peopleDataProvider) {
     setHasTestedRandomMethod(true);
     (async () => {
       try {
-        // Could make this a GreetingsDataProvider type and have this method available,
-        // but this is the only opportunity so far to demonstrate how to type `useDataProvider`
-        // @ts-ignore ts(2339)
-        const result = await greetingsDataProvider.testRandomMethod('from test buttons panel');
+        const result = await peopleDataProvider.testRandomMethod('from test buttons panel');
         logger.info(result);
       } catch (e) {
         logger.error(e);
@@ -171,7 +168,7 @@ export default function TestButtonsPanel() {
       try {
         // Test to make sure we literally can't run updates from outside the data provider
         // @ts-ignore ts(2339)
-        const result = await greetingsDataProvider.notifyUpdate();
+        const result = await peopleDataProvider.notifyUpdate();
         logger.error(`Remote notify update succeeded! Bad ${result}`);
       } catch (e) {
         logger.info(`Remote notify update failed! Good ${e}`);
@@ -179,11 +176,13 @@ export default function TestButtonsPanel() {
     })();
   }
 
-  const [verseText, setVerseText, verseTextIsLoading] = useData<
-    string,
-    string,
-    string | { text: string; isHeresy: boolean }
-  >('quick-verse.quick-verse', verseRef, 'Verse text goes here');
+  // We need to tell the useData.Verse hook what types we are using, so we get the Verse data types
+  // from the quick verse data types
+  const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
+    'quick-verse.quick-verse',
+    verseRef,
+    'Verse text goes here',
+  );
 
   return (
     <div className="buttons-panel">
