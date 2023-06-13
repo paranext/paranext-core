@@ -16,7 +16,7 @@ import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
 import AsyncVariable from '@shared/utils/async-variable';
 import { NetworkObject } from '@shared/models/network-object.model';
 import networkObjectService from '@shared/services/network-object.service';
-import logger from './logger.service';
+import logger from '@shared/services/logger.service';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -56,9 +56,10 @@ const initialize = () => {
   return initializePromise;
 };
 
-/** Indicate if we are aware of an existing data provider with the given name. If a data provider
- *  with the given name is someone else on the network, this function won't tell you about it
- *  unless something else in the existing process is subscribed to it.
+/**
+ * Indicate if we are aware of an existing data provider with the given name. If a data provider
+ * with the given name is somewhere else on the network, this function won't tell you about it
+ * unless something else in the existing process is subscribed to it.
  */
 function hasKnown(providerName: string): boolean {
   return networkObjectService.hasKnown(getDataProviderObjectId(providerName));
@@ -237,7 +238,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
  *
  * WARNING: registering a dataProviderEngine mutates the provided object.
  * Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
- * @returns information about the data provider including control over disposing of it.
+ * @returns the data provider including control over disposing of it.
  *  Note that this data provider is a new object distinct from the data provider engine passed in.
  * @type `TSelector` - the type of selector used to get some data from this provider.
  *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
@@ -250,11 +251,8 @@ async function registerEngine<TSelector, TGetData, TSetData>(
 ): Promise<IDisposableDataProvider<TSelector, TGetData, TSetData>> {
   await initialize();
 
-  // There is a potential networking sync issue here. We check for a data provider, then we create a network event, then we create a network object.
-  // If someone else registers an engine with the same data provider name at the same time, the two registrations could get intermixed and mess stuff up
-  // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
   if (hasKnown(providerName))
-    throw new Error(`Data provider with type ${providerName} is already registered`);
+    throw new Error(`Data provider with name ${providerName} is already registered`);
 
   // Validate that the data provider engine has what it needs
   if (!dataProviderEngine.get || typeof dataProviderEngine.get !== 'function')
@@ -285,10 +283,8 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   );
 
   // Set up the data provider to be a network object so other processes can use it
-  const disposableDataProvider = (await networkObjectService.set(
-    dataProviderObjectId,
-    dataProviderInternal,
-  )) as IDisposableDataProvider<TSelector, TGetData, TSetData>;
+  const disposableDataProvider: IDisposableDataProvider<TSelector, TGetData, TSetData> =
+    await networkObjectService.set(dataProviderObjectId, dataProviderInternal);
 
   // Get the local network object proxy for the data provider so the provider can't be disposed by extensions
   const dataProvider = await networkObjectService.get<IDataProvider<TSelector, TGetData, TSetData>>(

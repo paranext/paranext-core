@@ -1,18 +1,19 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
-import { deserializeTabId } from '@shared/utils/papi-util';
 
-function TestPanel({ content }: { content: string }) {
+export const TAB_TYPE_TEST = 'tab';
+
+export default function TestPanel({ content }: { content: string }) {
   return <div className="test-panel">{content}</div>;
 }
 
-export default function createTabPanel(tabInfo: SavedTabInfo): TabInfo {
-  if (!tabInfo.id) throw new Error('Tab creation "id" is missing');
+export function loadTestTab(savedTabInfo: SavedTabInfo): TabInfo {
+  if (!savedTabInfo.id) throw new Error('Tab creation "id" is missing');
 
-  const { typeId } = deserializeTabId(tabInfo.id);
-  const title = typeId || 'Unknown';
-  const content = typeId ? `Content for ${title}` : 'Unknown';
+  const tabTitle = savedTabInfo.id || 'Unknown';
+  const content = savedTabInfo.id ? `Content for ${tabTitle}` : 'Unknown';
   return {
-    title,
+    ...savedTabInfo,
+    tabTitle,
     content: <TestPanel content={content} />,
   };
 }
