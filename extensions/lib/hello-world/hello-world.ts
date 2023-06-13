@@ -5,7 +5,7 @@ import type {
   WebViewDefinition,
   SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
-import { GreetingsDataProvider } from '@extensions/hello-someone/hello-someone';
+import type { GreetingsDataProvider } from '@extensions/hello-someone/hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloWorldReactWebView from './hello-world.web-view';
@@ -21,6 +21,9 @@ const unsubscribers: UnsubscriberAsync[] = [];
 
 const htmlWebViewType = 'hello-world.html';
 
+/**
+ * Simple web view provider that provides sample html web views when papi requests them
+ */
 const htmlWebViewProvider: IWebViewProvider = {
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== htmlWebViewType)
@@ -38,6 +41,9 @@ const htmlWebViewProvider: IWebViewProvider = {
 
 const reactWebViewType = 'hello-world.react';
 
+/**
+ * Simple web view provider that provides React web views when papi requests them
+ */
 const reactWebViewProvider: IWebViewProvider = {
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== reactWebViewType)
@@ -82,12 +88,12 @@ export async function activate(): Promise<UnsubscriberAsync> {
     .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
 
   // Create webviews or get an existing webview if one already exists for this type
-  // Note: here, we are using `existingId: '*'` to indicate we do not want to create a new webview
+  // Note: here, we are using `existingId: '?'` to indicate we do not want to create a new webview
   // if one already exists. The webview that already exists could have been created by anyone
   // anywhere; it just has to match `webViewType`. See `hello-someone.ts` for an example of keeping
   // an existing webview that was specifically created by `hello-someone`.
-  papi.webViews.getWebView(htmlWebViewType, undefined, { existingId: '*' });
-  papi.webViews.getWebView(reactWebViewType, undefined, { existingId: '*' });
+  papi.webViews.getWebView(htmlWebViewType, undefined, { existingId: '?' });
+  papi.webViews.getWebView(reactWebViewType, undefined, { existingId: '?' });
 
   const greetingsDataProvider = await papi.dataProvider.get<GreetingsDataProvider>(
     'hello-someone.greetings',

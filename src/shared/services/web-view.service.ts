@@ -45,9 +45,16 @@ export type OnLayoutChangeRCDock = (
   direction?: DropDirection,
 ) => Promise<void>;
 
+/** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
 export type PapiDockLayout = {
+  /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
   dockLayout: DockLayout;
+  /**
+   * A ref to a function that runs when the layout changes. We set this ref to our
+   * {@link onLayoutChange} function
+   */
   onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
+  /** Function to call to add or update a webview in the layout */
   addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
   /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
@@ -64,6 +71,8 @@ export type PapiDockLayout = {
 const CATEGORY_WEB_VIEW = 'webView';
 const DEFAULT_FLOAT_SIZE = { width: 300, height: 150 };
 const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
+
+/** Name for request to get a web view */
 const GET_WEB_VIEW_REQUEST = 'getWebView';
 
 /** localstorage key for saving and loading the dock layout */
@@ -125,6 +134,7 @@ const webViewRequire = (module: string) => {
 
 // #region functions related to the dock layout
 
+/** Set up defaults for webview layout instructions */
 function layoutDefaults(layout: Layout): Layout {
   const layoutDefaulted = cloneDeep(layout);
   switch (layoutDefaulted.type) {
@@ -141,13 +151,24 @@ function layoutDefaults(layout: Layout): Layout {
   return layoutDefaulted;
 }
 
+/**
+ * Basic `saveTabInfo` that simply strips the properties added by {@link TabInfo} off of the object
+ * and returns it as a {@link SavedTabInfo}. Runs as the {@link TabSaver} by default if the tab type
+ * does not have a specific `TabSaver`
+ */
 export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
   // We don't need to use the other properties, but we need to remove them
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { tabTitle: title, content, minWidth, minHeight, ...savedTabInfo } = tabInfo;
+  const { tabTitle, content, minWidth, minHeight, ...savedTabInfo } = tabInfo;
   return savedTabInfo;
 }
 
+/**
+ * Converts web view definition used in an actual docking tab into saveable web view information by
+ * stripping out the members we don't want to save
+ * @param webViewDefinition web view to save
+ * @returns saveable web view information based on `webViewDefinition`
+ */
 export function convertWebViewDefinitionToSaved(
   webViewDefinition: WebViewDefinition,
 ): SavedWebViewDefinition {
@@ -161,6 +182,7 @@ export function convertWebViewDefinitionToSaved(
   return webViewDefinitionCloned;
 }
 
+/** Create a new dock layout promise variable */
 function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
   return new AsyncVariable<PapiDockLayout>(
     'web-view.service.paranextDockLayout',
@@ -171,7 +193,8 @@ function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
 }
 
 /**
- * When rc-dock detects a changed layout, save it.
+ * When rc-dock detects a changed layout, save it. This function is given to the registered
+ * papiDockLayout to run when the dock layout changes.
  *
  * TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
  * @param newLayout the changed layout to save.
@@ -218,10 +241,17 @@ async function loadLayout(layout?: LayoutBase): Promise<void> {
   }
 }
 
+/**
+ * Register a dock layout React element to be used by this service to perform layout-related
+ * operations
+ * @param dockLayout dock layout element to register along with other important properties
+ * @returns function used to unregister this dock layout
+ */
 export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // Save the current async var so we know if it changed before we unsubscribed
   const currentPapiDockLayoutVar = papiDockLayoutVar;
 
+  // Set the dock layout as the promise var. Throws if already resolved
   papiDockLayoutVar.resolveToValue(dockLayout, true);
 
   // TODO: Strange pattern that we are setting a ref to a service function. Investigate changing
@@ -236,7 +266,8 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // this happening is when you change something on the renderer that causes a live hot reload
   return () => {
     // Somehow this is not the registered dock layout anymore
-    if (papiDockLayoutVar !== currentPapiDockLayoutVar) return false;
+    if (papiDockLayoutVar !== currentPapiDockLayoutVar)
+      throw new Error('Tried to unregister an old dock layout');
 
     // Create a new async var to empty out the dock layout
     // TODO: Would this create any problems...? I guess only if we save dockLayoutVar somewhere else
@@ -248,6 +279,7 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 
 // #endregion
 
+/** Set up defaults for options for getting a web view */
 function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOptions {
   const optionsDefaulted = cloneDeep(options);
   if ('existingId' in optionsDefaulted && !('createNewIfNotFound' in optionsDefaulted))

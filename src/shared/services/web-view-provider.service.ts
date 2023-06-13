@@ -42,19 +42,24 @@ const initialize = () => {
 };
 
 /**
- * Indicate if we are aware of an existing web view provider with the given name. If a web view
- * provider with the given name is somewhere else on the network, this function won't tell you about
+ * Indicate if we are aware of an existing web view provider with the given type. If a web view
+ * provider with the given type is somewhere else on the network, this function won't tell you about
  * it unless something else in the existing process is subscribed to it.
+ * @param webViewType type of webView to check for
  */
 function hasKnown(webViewType: string): boolean {
   return networkObjectService.hasKnown(getWebViewProviderObjectId(webViewType));
 }
 
 /**
- * Things n stuff
- * @param webViewType
- * @param webViewProvider
- * @returns
+ * Register a web view provider to serve webViews for a specified type of webViews
+ *
+ * @param webViewType type of web view to provide
+ * @param webViewProvider object to register as a webView provider including control over disposing
+ * of it.
+ *
+ * WARNING: setting a webView provider mutates the provided object.
+ * @returns `webViewProvider` modified to be a network object
  */
 async function register(
   webViewType: string,
@@ -83,6 +88,11 @@ async function register(
   return disposableWebViewProvider;
 }
 
+/**
+ * Get a web view provider that has previously been set up
+ * @param webViewType type of webview provider to get
+ * @returns web view provider with the given name if one exists, undefined otherwise
+ */
 async function get(webViewType: string): Promise<WebViewProvider | undefined> {
   await initialize();
 

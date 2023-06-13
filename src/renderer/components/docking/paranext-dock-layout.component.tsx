@@ -66,6 +66,7 @@ const groups: { [key: string]: TabGroup } = {
 // a shared file.
 // TODO: please move these utility functions with #203
 
+/** tab loader functions for each Paranext tab type */
 const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_ABOUT, loadAboutTab],
   [TAB_TYPE_BUTTONS, loadButtonsTab],
@@ -74,18 +75,25 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_WEBVIEW, loadWebViewTab],
 ]);
 
+/** tab saver functions for each Paranext tab type that wants to override the default */
 const tabSaverMap = new Map<TabType, TabSaver>([[TAB_TYPE_WEBVIEW, saveWebViewTab]]);
 
 let previousTabId: string = FIRST_TAB_ID;
 let floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
 
-function loadSavedTabInfo(tabInfo: SavedTabInfo): TabInfo {
-  const tabLoader = tabLoaderMap.get(tabInfo.tabType);
-  if (!tabLoader) return createErrorTab(`No tab loader for tabType '${tabInfo.tabType}'`);
+/**
+ * Loads tab data from the specified saved tab information by running the tab loader provided by the
+ * component file that registered this tab type
+ * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
+ * @returns tab that holds all info needed to make an actual tab in the dock layout
+ */
+function loadSavedTabInfo(savedTabInfo: SavedTabInfo): TabInfo {
+  const tabLoader = tabLoaderMap.get(savedTabInfo.tabType);
+  if (!tabLoader) return createErrorTab(`No tab loader for tabType '${savedTabInfo.tabType}'`);
 
   // Call the creation method to let the extension method create the tab
   try {
-    return tabLoader(tabInfo);
+    return tabLoader(savedTabInfo);
   } catch (e) {
     // If the tab couldn't be created, replace it with an error tab
     return createErrorTab(getErrorMessage(e));
@@ -93,9 +101,9 @@ function loadSavedTabInfo(tabInfo: SavedTabInfo): TabInfo {
 }
 
 /**
- * Creates tab data from the specified saved tab information by calling back to the
- * extension that registered the creation of the tab type
+ * Loads tab data from the specified saved tab information into an actual dock layout tab
  * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
+ * @returns live dock layout tab ready to used
  */
 export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
   if (!savedTabInfo.id) throw new LogError('loadTab: "id" is missing.');
@@ -113,6 +121,12 @@ export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
   };
 }
 
+/**
+ * Converts the tab data into saved tab information by running the tab saver provided by the
+ * component file that registered this tab type
+ * @param dockTabInfo the tab data to save
+ * @returns saved tab info ready to be saved into the layout
+ */
 function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo {
   // Remove the rc-dock properties that are not also in SavedTabInfo
   // We don't need to use the other properties, but we need to remove them
@@ -167,6 +181,13 @@ export function getFloatPosition(
   return { left, top, width, height };
 }
 
+/**
+ * Function to call to add or update a webview in the layout
+ * @param webView web view to add or update
+ * @param layout information about where to put a new webview
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ * layout
+ */
 export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayout: DockLayout) {
   const tabId = webView.id;
   const tab = loadTab({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView });
@@ -228,6 +249,7 @@ export default function ParanextDockLayout() {
   const onLayoutChangeRef = useRef<OnLayoutChangeRCDock | undefined>();
 
   useEffect(() => {
+    // Register with `web-view.service.ts` so it can perform operations on us
     const unsub = registerDockLayout({
       dockLayout: dockLayoutRef.current,
       onLayoutChangeRef,

@@ -238,7 +238,7 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
  *
  * WARNING: registering a dataProviderEngine mutates the provided object.
  * Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
- * @returns information about the data provider including control over disposing of it.
+ * @returns the data provider including control over disposing of it.
  *  Note that this data provider is a new object distinct from the data provider engine passed in.
  * @type `TSelector` - the type of selector used to get some data from this provider.
  *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.

@@ -54,6 +54,9 @@ const greetingsDataProviderEngine = {
 const peopleWebViewType = 'hello-someone.people-viewer';
 const peopleWebViewIdKey = 'people-web-view-id';
 
+/**
+ * Simple web view provider that provides People web views when papi requests them
+ */
 const peopleWebViewProvider: IWebViewProvider = {
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== peopleWebViewType)
@@ -117,6 +120,7 @@ export async function activate(context: ExecutionActivationContext) {
     existingPeopleWebViewId = undefined;
   }
 
+  // Get the existing web view if one exists or create a new one
   const peopleWebViewId = await papi.webViews.getWebView(
     peopleWebViewType,
     { type: 'panel', direction: 'top' },

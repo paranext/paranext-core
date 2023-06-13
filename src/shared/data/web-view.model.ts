@@ -1,9 +1,10 @@
 import { ReactNode } from 'react';
 
 /**
- * Serialized information used to recreate a tab.
+ * Saved information used to recreate a tab.
  *
- * {@link TabLoader} deserializes this into {@link TabInfo}
+ * {@link TabLoader} loads this into {@link TabInfo}
+ * {@link TabSaver} saves {@link TabInfo} into this
  */
 export type SavedTabInfo = {
   /**
@@ -16,7 +17,7 @@ export type SavedTabInfo = {
    */
   tabType: string;
   /**
-   * Data needed to deserialize the tab during load
+   * Data needed to load the tab
    */
   data?: unknown;
 };
@@ -24,7 +25,8 @@ export type SavedTabInfo = {
 /**
  * Information that Paranext uses to create a tab in the dock layout.
  *
- * {@link TabLoader} deserialize {@link SavedTabInfo} into this
+ * {@link TabLoader} loads {@link SavedTabInfo} into this
+ * {@link TabSaver} saves this into {@link SavedTabInfo}
  */
 export type TabInfo = SavedTabInfo & {
   /**
@@ -46,23 +48,28 @@ export type TabInfo = SavedTabInfo & {
 };
 
 /**
- * Function that takes a serialized tab and creates a Paranext tab out of it. Each type of tab must
- * provide a TabLoader.
+ * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
+ * must provide a {@link TabLoader}.
  *
  * For now all tab creators must do their own data type verification
  */
 export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
 
 /**
- * Function that takes a Paranext tab and creates a serialized tab out of it. Each type of tab can
- * provide a TabSaver. If they do not provide one, the `SavedTabInfo` properties are stripped from
- * TabInfo before saving.
+ * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+ * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
+ * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
  */
 export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
 
-/** Type of code for a WebView */
+/** The type of code that defines a webview's content */
 export enum WebViewContentType {
+  /**
+   * This webview is a React webview. It must specify its component by setting it to
+   * `globalThis.webViewComponent`
+   */
   React = 'react',
+  /** This webview is a raw HTML/JS/CSS webview. */
   HTML = 'html',
 }
 
@@ -116,10 +123,12 @@ export type SavedWebViewDefinition =
 /** Props that are passed to the web view component */
 export type WebViewProps = WebViewDefinition;
 
+/** Information about a tab in a panel */
 interface TabLayout {
   type: 'tab';
 }
 
+/** Information about a floating window */
 export interface FloatLayout {
   type: 'float';
   floatSize?: { width: number; height: number };
@@ -138,6 +147,7 @@ export type PanelDirection =
   | 'active'
   | 'update';
 
+/** Information about a panel */
 interface PanelLayout {
   type: 'panel';
   direction?: PanelDirection;
@@ -145,18 +155,21 @@ interface PanelLayout {
   targetTabId?: string;
 }
 
+/** Information about how a Paranext tab fits into the dock layout */
 export type Layout = TabLayout | FloatLayout | PanelLayout;
 
-/** Event emitted when webViews are added */
+/** Event emitted when webViews are created */
 export type AddWebViewEvent = {
   webView: SavedWebViewDefinition;
   layout: Layout;
 };
 
+/** Options that affect what `webViews.getWebView` does */
 export type GetWebViewOptions = {
   /**
-   * If provided and if a web view with this id exists, requests from the web view provider an existing existing WebView with this id
-   * if one exists. The web view provider can deny the request if it chooses to do so.
+   * If provided and if a web view with this id exists, requests from the web view provider an
+   * existing WebView with this id if one exists. The web view provider can deny the request if it
+   * chooses to do so.
    *
    * Alternatively, set this to '?' to attempt to find any existing web view with the specified
    * webViewType.

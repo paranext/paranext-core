@@ -1081,9 +1081,10 @@ declare module 'shared/services/command.service' {
 declare module 'shared/data/web-view.model' {
   import { ReactNode } from 'react';
   /**
-   * Serialized information used to recreate a tab.
+   * Saved information used to recreate a tab.
    *
-   * {@link TabLoader} deserializes this into {@link TabInfo}
+   * {@link TabLoader} loads this into {@link TabInfo}
+   * {@link TabSaver} saves {@link TabInfo} into this
    */
   export type SavedTabInfo = {
     /**
@@ -1096,14 +1097,15 @@ declare module 'shared/data/web-view.model' {
      */
     tabType: string;
     /**
-     * Data needed to deserialize the tab during load
+     * Data needed to load the tab
      */
     data?: unknown;
   };
   /**
    * Information that Paranext uses to create a tab in the dock layout.
    *
-   * {@link TabLoader} deserialize {@link SavedTabInfo} into this
+   * {@link TabLoader} loads {@link SavedTabInfo} into this
+   * {@link TabSaver} saves this into {@link SavedTabInfo}
    */
   export type TabInfo = SavedTabInfo & {
     /**
@@ -1124,21 +1126,26 @@ declare module 'shared/data/web-view.model' {
     minHeight?: number;
   };
   /**
-   * Function that takes a serialized tab and creates a Paranext tab out of it. Each type of tab must
-   * provide a TabLoader.
+   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
+   * must provide a {@link TabLoader}.
    *
    * For now all tab creators must do their own data type verification
    */
   export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
   /**
-   * Function that takes a Paranext tab and creates a serialized tab out of it. Each type of tab can
-   * provide a TabSaver. If they do not provide one, the `SavedTabInfo` properties are stripped from
-   * TabInfo before saving.
+   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+   * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
+   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
    */
   export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
-  /** Type of code for a WebView */
+  /** The type of code that defines a webview's content */
   export enum WebViewContentType {
+    /**
+     * This webview is a React webview. It must specify its component by setting it to
+     * `globalThis.webViewComponent`
+     */
     React = 'react',
+    /** This webview is a raw HTML/JS/CSS webview. */
     HTML = 'html',
   }
   /** What type a WebView is. Each WebView definition must have a unique type. */
@@ -1182,9 +1189,11 @@ declare module 'shared/data/web-view.model' {
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
   /** Props that are passed to the web view component */
   export type WebViewProps = WebViewDefinition;
+  /** Information about a tab in a panel */
   interface TabLayout {
     type: 'tab';
   }
+  /** Information about a floating window */
   export interface FloatLayout {
     type: 'float';
     floatSize?: {
@@ -1203,22 +1212,26 @@ declare module 'shared/data/web-view.model' {
     | 'move'
     | 'active'
     | 'update';
+  /** Information about a panel */
   interface PanelLayout {
     type: 'panel';
     direction?: PanelDirection;
     /** If undefined, it will add in the `direction` relative to the previously added tab. */
     targetTabId?: string;
   }
+  /** Information about how a Paranext tab fits into the dock layout */
   export type Layout = TabLayout | FloatLayout | PanelLayout;
-  /** Event emitted when webViews are added */
+  /** Event emitted when webViews are created */
   export type AddWebViewEvent = {
     webView: SavedWebViewDefinition;
     layout: Layout;
   };
+  /** Options that affect what `webViews.getWebView` does */
   export type GetWebViewOptions = {
     /**
-     * If provided and if a web view with this id exists, requests from the web view provider an existing existing WebView with this id
-     * if one exists. The web view provider can deny the request if it chooses to do so.
+     * If provided and if a web view with this id exists, requests from the web view provider an
+     * existing WebView with this id if one exists. The web view provider can deny the request if it
+     * chooses to do so.
      *
      * Alternatively, set this to '?' to attempt to find any existing web view with the specified
      * webViewType.
@@ -1450,21 +1463,31 @@ declare module 'shared/services/web-view-provider.service' {
     WebViewProvider,
   } from 'shared/models/web-view-provider.model';
   /**
-   * Indicate if we are aware of an existing web view provider with the given name. If a web view
-   * provider with the given name is somewhere else on the network, this function won't tell you about
+   * Indicate if we are aware of an existing web view provider with the given type. If a web view
+   * provider with the given type is somewhere else on the network, this function won't tell you about
    * it unless something else in the existing process is subscribed to it.
+   * @param webViewType type of webView to check for
    */
   function hasKnown(webViewType: string): boolean;
   /**
-   * Things n stuff
-   * @param webViewType
-   * @param webViewProvider
-   * @returns
+   * Register a web view provider to serve webViews for a specified type of webViews
+   *
+   * @param webViewType type of web view to provide
+   * @param webViewProvider object to register as a webView provider including control over disposing
+   * of it.
+   *
+   * WARNING: setting a webView provider mutates the provided object.
+   * @returns `webViewProvider` modified to be a network object
    */
   function register(
     webViewType: string,
     webViewProvider: IWebViewProvider,
   ): Promise<DisposableWebViewProvider>;
+  /**
+   * Get a web view provider that has previously been set up
+   * @param webViewType type of webview provider to get
+   * @returns web view provider with the given name if one exists, undefined otherwise
+   */
   function get(webViewType: string): Promise<WebViewProvider | undefined>;
   const webViewProviderService: {
     initialize: () => Promise<void>;
@@ -1499,9 +1522,16 @@ declare module 'shared/services/web-view.service' {
     currentTabId?: string,
     direction?: DropDirection,
   ) => Promise<void>;
+  /** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
   export type PapiDockLayout = {
+    /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
     dockLayout: DockLayout;
+    /**
+     * A ref to a function that runs when the layout changes. We set this ref to our
+     * {@link onLayoutChange} function
+     */
     onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
+    /** Function to call to add or update a webview in the layout */
     addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
@@ -1515,10 +1545,27 @@ declare module 'shared/services/web-view.service' {
   };
   /** Event that emits with webView info when a webView is added */
   export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+  /**
+   * Basic `saveTabInfo` that simply strips the properties added by {@link TabInfo} off of the object
+   * and returns it as a {@link SavedTabInfo}. Runs as the {@link TabSaver} by default if the tab type
+   * does not have a specific `TabSaver`
+   */
   export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
+  /**
+   * Converts web view definition used in an actual docking tab into saveable web view information by
+   * stripping out the members we don't want to save
+   * @param webViewDefinition web view to save
+   * @returns saveable web view information based on `webViewDefinition`
+   */
   export function convertWebViewDefinitionToSaved(
     webViewDefinition: WebViewDefinition,
   ): SavedWebViewDefinition;
+  /**
+   * Register a dock layout React element to be used by this service to perform layout-related
+   * operations
+   * @param dockLayout dock layout element to register along with other important properties
+   * @returns function used to unregister this dock layout
+   */
   export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber;
   /**
    * Creates a new web view or gets an existing one depending on if you request an existing one and
@@ -1754,7 +1801,7 @@ declare module 'shared/services/data-provider.service' {
    *
    * WARNING: registering a dataProviderEngine mutates the provided object.
    * Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
-   * @returns information about the data provider including control over disposing of it.
+   * @returns the data provider including control over disposing of it.
    *  Note that this data provider is a new object distinct from the data provider engine passed in.
    * @type `TSelector` - the type of selector used to get some data from this provider.
    *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
