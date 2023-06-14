@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
@@ -9,18 +10,22 @@ namespace Paranext.DataProvider.NetworkObjects
     internal abstract class DataProvider : NetworkObject
     {
         // This is an internal class because nothing else should be instantiating it directly
-        private class MessageEventDataUpdated : MessageEventGeneric<bool>
+        private class MessageEventDataUpdated : MessageEventGeneric<string>
         {
             // A parameterless constructor is required for serialization to work
             // ReSharper disable once UnusedMember.Local
             public MessageEventDataUpdated()
                 : base(Enum<EventType>.Null) { }
 
-            public MessageEventDataUpdated(Enum<EventType> eventType)
-                : base(eventType, true) { }
+            public MessageEventDataUpdated(Enum<EventType> eventType, string dataScope)
+                : base(eventType, dataScope) { }
         }
 
-        private readonly MessageEventDataUpdated _dataUpdatedEvent;
+        private readonly Enum<EventType> _eventType;
+        private readonly ConcurrentDictionary<
+            string,
+            MessageEventDataUpdated
+        > _updateEventsByScope = new();
 
         protected DataProvider(string name, PapiClient papiClient)
             : base(papiClient)
@@ -29,9 +34,7 @@ namespace Paranext.DataProvider.NetworkObjects
             DataProviderName = name + "-data";
 
             // "onDidUpdate" is the event name used by PAPI for data providers to notify consumers of updates
-            var eventType = new Enum<EventType>($"{DataProviderName}:onDidUpdate");
-
-            _dataUpdatedEvent = new MessageEventDataUpdated(eventType);
+            _eventType = new Enum<EventType>($"{DataProviderName}:onDidUpdate");
         }
 
         protected string DataProviderName { get; }
@@ -57,22 +60,22 @@ namespace Paranext.DataProvider.NetworkObjects
                     $"No function name provided when calling data provider {DataProviderName}"
                 );
 
-            string functionName = arguments[0].ToUpperInvariant();
+            string functionName = arguments[0];
             string[] parameters = arguments.Skip(1).ToArray();
-            return functionName switch
-            {
-                "GET" => HandleGetRequest(parameters),
-                "SET" => HandleSetRequest(parameters),
-                _ => ResponseToRequest.Failed($"Unexpected function call: {functionName}"),
-            };
+            return HandleRequest(functionName, parameters);
         }
 
         /// <summary>
         /// Notify all processes on the network that this data provider has new data
         /// </summary>
-        protected void SendDataUpdateEvent()
+        /// <param name="dataScope">Indicator of what data changed in the provider</param>
+        protected void SendDataUpdateEvent(string dataScope)
         {
-            PapiClient.SendEvent(_dataUpdatedEvent);
+            var dataUpdateEventMessage = _updateEventsByScope.GetOrAdd(
+                dataScope,
+                (scope) => new MessageEventDataUpdated(_eventType, scope)
+            );
+            PapiClient.SendEvent(dataUpdateEventMessage);
         }
 
         /// <summary>
@@ -81,17 +84,11 @@ namespace Paranext.DataProvider.NetworkObjects
         protected abstract void StartDataProvider();
 
         /// <summary>
-        /// Read a copy of the requested data
+        /// Handle a request from a service using this data provider
         /// </summary>
-        /// <param name="arguments">The first value in the array is meant to scope what kind of data was requested</param>
-        /// <returns>ResponseToRequest value that either contains the requested data or an error message</returns>
-        protected abstract ResponseToRequest HandleGetRequest(string[] arguments);
-
-        /// <summary>
-        /// Write data to the provided scope
-        /// </summary>
-        /// <param name="arguments">The first value in the array is meant to scope what kind of data was provided</param>
-        /// <returns>ResponseToRequest value that either notes success or an error message describing the failure</returns>
-        protected abstract ResponseToRequest HandleSetRequest(string[] arguments);
+        /// <param name="functionName">This would typically be "getXYZ" or "setXYZ", where "XYZ" is a type of data handled by this provider</param>
+        /// <param name="arguments">Optional arguments provided by the requester for the function indicated</param>
+        /// <returns>ResponseToRequest value that either contains a response for the function or an error message</returns>
+        protected abstract ResponseToRequest HandleRequest(string functionName, string[] arguments);
     }
 }

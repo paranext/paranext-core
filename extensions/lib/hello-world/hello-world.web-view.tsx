@@ -11,6 +11,7 @@ import {
 import { useCallback, useContext, useState } from 'react';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
+import type { DataProviderDataType } from 'shared/models/data-provider.model';
 
 const {
   react: {
@@ -50,6 +51,16 @@ globalThis.webViewComponent = function HelloWorld() {
     'Loading latest Scripture text...',
   );
 
+  type TimeDataType = {
+    TimeData: DataProviderDataType<string, string | undefined, string>;
+  };
+
+  const [currentTime] = useData.Time<TimeDataType, 'TimeData'>(
+    'current-time',
+    '*',
+    'Loading current time',
+  );
+
   const [name, setName] = useState('Bill');
 
   const peopleDataProvider = useDataProvider<PeopleDataProvider>('hello-someone.people');
@@ -66,12 +77,6 @@ globalThis.webViewComponent = function HelloWorld() {
     'quick-verse.quick-verse',
     ['Psalm', 1],
     'Loading Psalm 1...',
-  );
-
-  const [currentTime] = useData(
-    'current-time',
-    '*',
-    'Loading current time',
   );
 
   return (
