@@ -39,7 +39,7 @@
   },
   "peerDependencies": {
     "react": ">=18.2.0",
-    "react-data-grid": ">=7.0.0-beta.30",
+    "react-data-grid": ">=7.0.0-beta.33",
     "react-dom": ">=18.2.0"
   },
   "devDependencies": {

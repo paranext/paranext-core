@@ -2,11 +2,15 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { useArgs } from '@storybook/client-api';
 import {
   Table,
-  TableProps,
-  TableTextEditor,
-  TableSortColumn,
+  TableCellClickArgs,
+  TableCellMouseEvent,
   TableCopyEvent,
+  TableCellKeyboardEvent,
+  TableCellKeyDownArgs,
   TablePasteEvent,
+  TableProps,
+  TableSortColumn,
+  TableTextEditor,
 } from 'papi-components';
 import { Key, ReactElement, UIEvent } from 'react';
 
@@ -160,7 +164,7 @@ export const CustomizedColumns: Story = {
         frozen: false,
         resizable: true,
         sortable: true,
-        editor: TableTextEditor,
+        renderEditCell: TableTextEditor,
       },
       {
         key: 'title',
@@ -333,7 +337,7 @@ export const CellCallbackFunctions: Story = {
       { id: '5', title: 'Sed aliquet pulvinar neque' },
     ],
 
-    onCellClick: (args, event) => {
+    onCellClick: (args: TableCellClickArgs<Row>, event: TableCellMouseEvent) => {
       // eslint-disable-next-line no-console
       console.log(args);
 
@@ -341,7 +345,7 @@ export const CellCallbackFunctions: Story = {
       console.log(event);
     },
 
-    onCellDoubleClick: (args, event) => {
+    onCellDoubleClick: (args: TableCellClickArgs<Row>, event: TableCellMouseEvent) => {
       // eslint-disable-next-line no-console
       console.log(args);
 
@@ -349,7 +353,7 @@ export const CellCallbackFunctions: Story = {
       console.log(event);
     },
 
-    onCellContextMenu: (args, event) => {
+    onCellContextMenu: (args: TableCellClickArgs<Row>, event: TableCellMouseEvent) => {
       // eslint-disable-next-line no-console
       console.log(args);
 
@@ -357,7 +361,7 @@ export const CellCallbackFunctions: Story = {
       console.log(event);
     },
 
-    onCellKeyDown: (args, event) => {
+    onCellKeyDown: (args: TableCellKeyDownArgs<Row>, event: TableCellKeyboardEvent) => {
       // eslint-disable-next-line no-console
       console.log(args);
 
@@ -458,7 +462,7 @@ export const MiscellaneousFunctions: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
-        editor: TableTextEditor,
+        renderEditCell: TableTextEditor,
       },
     ],
 

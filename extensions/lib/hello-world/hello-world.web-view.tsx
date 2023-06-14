@@ -163,7 +163,7 @@ globalThis.webViewComponent = function HelloWorld() {
             {
               key: 'title',
               name: 'Title',
-              editor: textEditor,
+              renderEditCell: textEditor,
             },
           ]}
           rows={rows}

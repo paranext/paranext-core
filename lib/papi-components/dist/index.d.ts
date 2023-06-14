@@ -19,8 +19,8 @@ import {
   CellKeyboardEvent,
   CellMouseEvent,
   CopyEvent,
-  FormatterProps,
   PasteEvent,
+  RenderCellProps,
   RowsChangeData,
   SortColumn,
   textEditor,
@@ -57,7 +57,7 @@ export declare function Button({
   onClick,
   onContextMenu,
   children,
-}: ButtonProps): JSX.Element;
+}: ButtonProps): import('react/jsx-runtime').JSX.Element;
 export declare enum LabelPosition {
   After = 'after',
   Before = 'before',
@@ -123,7 +123,7 @@ export declare function Checkbox({
   hasError,
   className,
   onChange,
-}: CheckboxProps): JSX.Element;
+}: CheckboxProps): import('react/jsx-runtime').JSX.Element;
 export type ComboBoxChangeDetails<T = string> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
 export type ComboBoxProps = {
@@ -209,7 +209,7 @@ export declare function ComboBox({
   onChange,
   onFocus,
   onBlur,
-}: ComboBoxProps): JSX.Element;
+}: ComboBoxProps): import('react/jsx-runtime').JSX.Element;
 export interface ScriptureReference {
   book: number;
   chapter: number;
@@ -219,7 +219,10 @@ export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
 }
-export declare function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps): JSX.Element;
+export declare function RefSelector({
+  scrRef,
+  handleSubmit,
+}: ScrRefSelectorProps): import('react/jsx-runtime').JSX.Element;
 export type SliderProps = {
   /**
    * If `true`, the component is disabled.
@@ -309,7 +312,7 @@ export declare function Slider({
   className,
   onChange,
   onChangeCommitted,
-}: SliderProps): JSX.Element;
+}: SliderProps): import('react/jsx-runtime').JSX.Element;
 export type SwitchProps = {
   /**
    * If `true`, the component is checked.
@@ -348,7 +351,7 @@ export declare function Switch({
   hasError,
   className,
   onChange,
-}: SwitchProps): JSX.Element;
+}: SwitchProps): import('react/jsx-runtime').JSX.Element;
 export type TextFieldProps = {
   /**
    * The variant to use.
@@ -433,7 +436,7 @@ export declare function TextField({
   onChange,
   onFocus,
   onBlur,
-}: TextFieldProps): JSX.Element;
+}: TextFieldProps): import('react/jsx-runtime').JSX.Element;
 export interface TableCalculatedColumn<T> extends TableColumn<T> {
   readonly idx: number;
   readonly width: number | string;
@@ -444,7 +447,7 @@ export interface TableCalculatedColumn<T> extends TableColumn<T> {
   readonly frozen: boolean;
   readonly isLastFrozenColumn: boolean;
   readonly rowGroup: boolean;
-  readonly formatter: (props: TableFormatterProps<T>) => ReactNode;
+  readonly renderCell: (props: RenderCellProps<T>) => ReactNode;
 }
 export type TableCellClickArgs<T> = CellClickArgs<T>;
 export type TableCellKeyboardEvent = CellKeyboardEvent;
@@ -477,10 +480,6 @@ export type TableColumn<T> = {
    */
   readonly editable?: boolean | ((row: T) => boolean) | null;
   /**
-   * Formatter to be used to render the cell content
-   */
-  readonly formatter?: ((props: TableFormatterProps<T>) => ReactNode) | null;
-  /**
    * Determines whether column is frozen or not
    */
   readonly frozen?: boolean | null;
@@ -501,7 +500,7 @@ export type TableColumn<T> = {
    * Editor to be rendered when cell of column is being edited.
    * If set, then the column is automatically set to be editable
    */
-  readonly editor?: ((props: TableEditorProps<T>) => ReactNode) | null;
+  readonly renderEditCell?: ((props: TableEditorProps<T>) => ReactNode) | null;
 };
 export type TableCopyEvent<T> = CopyEvent<T>;
 export type TableEditorProps<T> = {
@@ -510,7 +509,6 @@ export type TableEditorProps<T> = {
   onRowChange: (row: T, commitChanges?: boolean) => void;
   onClose: (commitChanges?: boolean) => void;
 };
-export type TableFormatterProps<T> = FormatterProps<T>;
 export type TablePasteEvent<T> = PasteEvent<T>;
 export type TableRowsChangeData<T> = RowsChangeData<T>;
 export type TableSortColumn = SortColumn;
@@ -676,6 +674,6 @@ export declare function Table<T>({
   onPaste,
   onScroll,
   className,
-}: TableProps<T>): JSX.Element;
+}: TableProps<T>): import('react/jsx-runtime').JSX.Element;
 
 export {};

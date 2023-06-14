@@ -4,14 +4,16 @@ import DataGrid, {
   CellKeyDownArgs,
   CellMouseEvent,
   CopyEvent,
-  FormatterProps,
   PasteEvent,
   RowsChangeData,
+  RenderCellProps,
+  RenderCheckboxProps,
   SelectColumn,
   SortColumn,
   textEditor,
 } from 'react-data-grid';
 import { Key, ReactElement, ReactNode, UIEvent, useMemo } from 'react';
+import Checkbox from './checkbox.component';
 
 import 'react-data-grid/lib/styles.css';
 import './table.component.css';
@@ -26,7 +28,7 @@ export interface TableCalculatedColumn<T> extends TableColumn<T> {
   readonly frozen: boolean;
   readonly isLastFrozenColumn: boolean;
   readonly rowGroup: boolean;
-  readonly formatter: (props: TableFormatterProps<T>) => ReactNode;
+  readonly renderCell: (props: RenderCellProps<T>) => ReactNode;
 }
 export type TableCellClickArgs<T> = CellClickArgs<T>;
 export type TableCellKeyboardEvent = CellKeyboardEvent;
@@ -59,10 +61,6 @@ export type TableColumn<T> = {
    */
   readonly editable?: boolean | ((row: T) => boolean) | null;
   /**
-   * Formatter to be used to render the cell content
-   */
-  readonly formatter?: ((props: TableFormatterProps<T>) => ReactNode) | null;
-  /**
    * Determines whether column is frozen or not
    */
   readonly frozen?: boolean | null;
@@ -83,7 +81,7 @@ export type TableColumn<T> = {
    * Editor to be rendered when cell of column is being edited.
    * If set, then the column is automatically set to be editable
    */
-  readonly editor?: ((props: TableEditorProps<T>) => ReactNode) | null;
+  readonly renderEditCell?: ((props: TableEditorProps<T>) => ReactNode) | null;
 };
 export type TableCopyEvent<T> = CopyEvent<T>;
 export type TableEditorProps<T> = {
@@ -92,7 +90,6 @@ export type TableEditorProps<T> = {
   onRowChange: (row: T, commitChanges?: boolean) => void;
   onClose: (commitChanges?: boolean) => void;
 };
-export type TableFormatterProps<T> = FormatterProps<T>;
 export type TablePasteEvent<T> = PasteEvent<T>;
 export type TableRowsChangeData<T> = RowsChangeData<T>;
 export type TableSortColumn = SortColumn;
@@ -265,6 +262,15 @@ function Table<T>({
   const cachedColumns = useMemo(() => {
     return enableSelectColumn ? [SelectColumn, ...columns] : columns;
   }, [enableSelectColumn, columns]);
+
+  function renderCheckbox({ onChange, ...props }: RenderCheckboxProps) {
+    function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+      onChange(e.target.checked, (e.nativeEvent as MouseEvent).shiftKey);
+    }
+
+    return <Checkbox {...props} onChange={handleChange} />;
+  }
+
   return (
     <DataGrid<T>
       columns={cachedColumns}
@@ -294,6 +300,7 @@ function Table<T>({
       onCopy={onCopy}
       onPaste={onPaste}
       onScroll={onScroll}
+      renderers={{ renderCheckbox }}
       className={`${className ?? ''}`}
     />
   );
