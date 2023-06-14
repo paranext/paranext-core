@@ -1535,7 +1535,7 @@ declare module 'shared/services/web-view.service' {
     direction?: DropDirection,
   ) => Promise<void>;
   /** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
-  export type PapiDockLayout = {
+  type PapiDockLayout = {
     /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
     dockLayout: DockLayout;
     /**
