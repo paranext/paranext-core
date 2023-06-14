@@ -8,15 +8,10 @@ import { isRenderer } from '@shared/utils/internal-util';
 import {
   Unsubscriber,
   aggregateUnsubscriberAsyncs,
-  getModuleSimilarApiMessage,
   serializeRequestType,
 } from '@shared/utils/papi-util';
 import { getErrorMessage, newGuid, newNonce, wait } from '@shared/utils/util';
-// We need the papi here to pass it into WebViews. Don't use it anywhere else in this file
-// eslint-disable-next-line import/no-cycle
-import papi from '@shared/services/papi.service';
-import React, { MutableRefObject } from 'react';
-import { createRoot } from 'react-dom/client';
+import { MutableRefObject } from 'react';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   AddWebViewEvent,
@@ -47,7 +42,7 @@ export type OnLayoutChangeRCDock = (
 ) => Promise<void>;
 
 /** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
-export type PapiDockLayout = {
+type PapiDockLayout = {
   /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
   dockLayout: DockLayout;
   /**
@@ -101,37 +96,6 @@ export const onDidAddWebView = onDidAddWebViewEmitter.event;
  * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
  */
 let papiDockLayoutVar = createDockLayoutAsyncVar();
-
-// #region Renderer-only stuff
-
-/**
- * Provide a require implementation so we can provide some needed packages for extensions or
- * for packages that extensions import
- */
-const webViewRequire = (module: string) => {
-  if (module === 'papi') return papi;
-  if (module === 'react') return React;
-  if (module === 'react-dom/client') return { createRoot };
-  // Tell the extension dev if there is an api similar to what they want to import
-  const message = `Requiring other than papi, react, and react-dom/client > createRoot is not allowed in WebViews! ${getModuleSimilarApiMessage(
-    module,
-  )}`;
-  throw new Error(message);
-};
-
-// TODO: Hacking in React, createRoot, and papi onto window for now so webViews can access it. Make this TypeScript-y
-// getPapi must be a function because this service cannot immediately access papi since it is a
-// circular dependency
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).getPapi = () => papi;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).React = React;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).createRoot = createRoot;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).webViewRequire = webViewRequire;
-
-// #endregion
 
 // #region functions related to the dock layout
 
@@ -415,9 +379,10 @@ export const getWebView = async (
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
   const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
 
+  // Note: `webViewRequire` below is defined in `src\renderer\global-this.model.ts`.
   /** String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such */
   const imports = `
-  var papi = window.parent.getPapi();
+  var papi = window.parent.papi;
   var React = window.parent.React;
   var createRoot = window.parent.createRoot;
   var require = window.parent.webViewRequire;

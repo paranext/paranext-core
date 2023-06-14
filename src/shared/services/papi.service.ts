@@ -7,8 +7,6 @@
 import * as commandService from '@shared/services/command.service';
 import { papiNetworkService } from '@shared/services/network.service';
 import * as papiUtil from '@shared/utils/papi-util';
-// We need the WebViewService here to include on the papi, but WebViewService passes papi into WebViews
-// eslint-disable-next-line import/no-cycle
 import * as webViewService from '@shared/services/web-view.service';
 import type { PapiWebViewService } from '@shared/services/web-view.service';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
