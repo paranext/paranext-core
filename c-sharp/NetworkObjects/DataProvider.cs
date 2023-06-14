@@ -8,14 +8,37 @@ namespace Paranext.DataProvider.NetworkObjects
 {
     internal abstract class DataProvider : NetworkObject
     {
+        // This is an internal class because nothing else should be instantiating it directly
+        private class MessageEventDataUpdated : MessageEventGeneric<bool>
+        {
+            // A parameterless constructor is required for serialization to work
+            // ReSharper disable once UnusedMember.Local
+            public MessageEventDataUpdated()
+                : base(Enum<EventType>.Null) { }
+
+            public MessageEventDataUpdated(Enum<EventType> eventType)
+                : base(eventType, true) { }
+        }
+
+        private readonly MessageEventDataUpdated _dataUpdatedEvent;
+
         protected DataProvider(string name, PapiClient papiClient)
             : base(papiClient)
         {
+            // "-data" is the prefix used by PAPI for data provider names
             DataProviderName = name + "-data";
+
+            // "onDidUpdate" is the event name used by PAPI for data providers to notify consumers of updates
+            var eventType = new Enum<EventType>($"{DataProviderName}:onDidUpdate");
+
+            _dataUpdatedEvent = new MessageEventDataUpdated(eventType);
         }
 
         protected string DataProviderName { get; }
 
+        /// <summary>
+        /// Register this data provider on the network so that other services can use it
+        /// </summary>
         public void RegisterDataProvider()
         {
             RegisterNetworkObject(DataProviderName, FunctionHandler);
@@ -47,10 +70,9 @@ namespace Paranext.DataProvider.NetworkObjects
         /// <summary>
         /// Notify all processes on the network that this data provider has new data
         /// </summary>
-        protected void ReportDataUpdate()
+        protected void SendDataUpdateEvent()
         {
-            var dataUpdateEventType = new Enum<EventType>($"{DataProviderName}:onDidUpdate");
-            PapiClient.SendEvent(new DataUpdateEvent(dataUpdateEventType, true));
+            PapiClient.SendEvent(_dataUpdatedEvent);
         }
 
         /// <summary>
