@@ -1,44 +1,124 @@
-import { NetworkableObject } from './network-object.model';
+import {
+  DataProviderDataTypes,
+  DataProviderGetters,
+  DataProviderUpdateInstructions,
+  DataProviderSetters,
+} from '@shared/models/data-provider.model';
+import { NetworkableObject } from '@shared/models/network-object.model';
+
+/**
+ * Method to run to send clients updates for a specific data type outside of the `set<data_type>` method.
+ * papi overwrites this function on the DataProviderEngine itself to emit an update after running
+ * the `notifyUpdate` method in the DataProviderEngine.
+ *
+ * @param updateInstructions information that papi uses to interpret whether to send out updates.
+ * Defaults to `'*'` (meaning send updates for all data types) if parameter `updateInstructions` is
+ * not provided or is undefined. Otherwise returns `updateInstructions`. papi passes the interpreted
+ * update value into this `notifyUpdate` function. For example, running `this.notifyUpdate()` will
+ * call the data provider engine's `notifyUpdate` with `updateInstructions` of `'*'`.
+ *
+ * @see DataProviderUpdateInstructions for more info on the `updateInstructions` parameter
+ *
+ * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
+ * It will create a destructive infinite loop.
+ *
+ * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types
+ * (in a data provider engine):
+ * ```typescript
+ * this.notifyUpdate(['Verse', 'Heresy']);
+ * ```
+ *
+ * @example You can log the manual updates in your data provider engine by specifying the following
+ * `notifyUpdate` function in the data provider engine:
+ * ```typescript
+ * notifyUpdate(updateInstructions) {
+ *   papi.logger.info(updateInstructions);
+ * }
+ * ```
+ *
+ * Note: This function's return is treated the same as the return from `set<data_type>`
+ */
+export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTypes> = (
+  updateInstructions?: DataProviderUpdateInstructions<TDataTypes>,
+) => void;
+
+/**
+ * Addon type for IDataProviderEngine to specify that there is a `notifyUpdate` method on the data
+ * provider engine. You do not need to specify this type unless you are creating an object that is
+ * to be registered as a data provider engine and you need to use `notifyUpdate`.
+ *
+ * @see DataProviderEngineNotifyUpdate for more information on `notifyUpdate`.
+ * @see IDataProviderEngine for more information on using this type.
+ */
+export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
+  notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
+};
 
 /**
  * The object to register with the DataProviderService to create a data provider.
- * The DataProviderService creates an IDataProvider on the papi that layers over this engine, providing special functionality
+ * The DataProviderService creates an IDataProvider on the papi that layers over this engine,
+ * providing special functionality.
  *
- * Note: methods on objects that implement this interface must be unbound functions, not arrow functions.
- * @type `TSelector` - the type of selector used to get some data from this provider.
- *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
- * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
- * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
+ * @type TDataTypes - the data types that this data provider engine serves. For each data type defined,
+ * the engine must have corresponding `get<data_type>` and `set<data_type> function` functions.
+ *
+ * @see DataProviderDataTypes for information on how to make powerful types that work well with
+ * Intellisense.
+ *
+ * Note: papi creates a `notifyUpdate` function on the data provider engine if one is not provided, so it
+ * is not necessary to provide one in order to call `this.notifyUpdate`. However, TypeScript does
+ * not understand that papi will create one as you are writing your data provider engine, so you can
+ * avoid type errors with one of the following options:
+ *
+ * 1. If you are using an object or class to create a data provider engine, you can add a
+ * `notifyUpdate` function (and, with an object, add the WithNotifyUpdate type) to
+ * your data provider engine like so:
+ * ```typescript
+ * const myDPE: IDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
+ *   notifyUpdate(updateInstructions) {},
+ *   ...
+ * }
+ * ```
+ * OR
+ * ```typescript
+ * class MyDPE implements IDataProviderEngine<MyDataTypes> {
+ *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
+ *   ...
+ * }
+ * ```
+ *
+ * 2. If you are using a class to create a data provider engine, you can extend the `DataProviderEngine`
+ * class, and it will provide `notifyUpdate` for you:
+ * ```typescript
+ * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
+ *   ...
+ * }
+ * ```
  */
-interface IDataProviderEngine<TSelector, TGetData, TSetData> extends NetworkableObject {
-  /**
-   * Method to run to send clients updates outside of the `set` method.
-   * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
-   *
-   * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
-   *
-   * @returns true if we should send updates, false otherwise (will not send updates). Same return as `set`
-   */
-  notifyUpdate?(): boolean;
-  /**
-   * Set a subset of data according to the selector.
-   * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `set` method in the DataProviderEngine.
-   *
-   * Note: you could consider this data provider to be read-only if this method is not provided.
-   *
-   * WARNING: Do not run this recursively in its own `set` method! It will create as many updates as you run `set` methods.
-   * @param selector tells the provider what subset of data is being set
-   * @param data the data that determines what to set at the selector
-   * @returns true if successfully set (will send updates), false otherwise (will not send updates)
-   */
-  set?(selector: TSelector, data: TSetData): Promise<boolean>;
-  /**
-   * Get a subset of data from the provider according to the selector.
-   * Run by the data provider on get
-   * @param selector tells the provider what subset of data to get
-   * @returns the subset of data represented by the selector
-   */
-  get(selector: TSelector): Promise<TGetData>;
-}
+type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+  NetworkableObject &
+    /**
+     * Set of all `set<data_type>` methods that a data provider engine must provide according to its data types.
+     * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `set<data_type>` method in the DataProviderEngine.
+     *
+     * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>` method.
+     *
+     * Note: to make a data type read-only, you can always return false or throw from `set<data_type>`.
+     *
+     * WARNING: Do not run this recursively in its own `set<data_type>` method! It will create as many updates as you run `set<data_type>` methods.
+     *
+     * @see DataProviderSetter for more information
+     */
+    DataProviderSetters<TDataTypes> &
+    /**
+     * Set of all `get<data_type>` methods that a data provider engine must provide according to its data types.
+     * Run by the data provider on `get<data_type>`
+     *
+     * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>` method.
+     *
+     * @see DataProviderGetter for more information
+     */
+    DataProviderGetters<TDataTypes> &
+    Partial<WithNotifyUpdate<TDataTypes>>;
 
 export default IDataProviderEngine;

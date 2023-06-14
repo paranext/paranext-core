@@ -37,6 +37,7 @@ import * as networkService from '@shared/services/network.service';
 import webViewProviderService from '@shared/services/web-view-provider.service';
 import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
 import AsyncVariable from '@shared/utils/async-variable';
+import logger from '@shared/services/logger.service';
 
 /** rc-dock's onLayoutChange prop made asynchronous - resolves */
 export type OnLayoutChangeRCDock = (
@@ -350,8 +351,10 @@ export const getWebView = async (
   // Get the webview definition from the webview provider
   const webViewProvider = await webViewProviderService.get(webViewType);
 
-  if (!webViewProvider)
-    throw new Error(`Cannot find Web View Provider for webview type ${webViewType}`);
+  if (!webViewProvider) {
+    logger.error(`Cannot find Web View Provider for webview type ${webViewType}`);
+    return undefined;
+  }
 
   // Find existing webView if one exists
   /** Either the existing webview with the specified id or a placeholder webview if one was not found */

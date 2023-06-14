@@ -12,6 +12,7 @@ import {
   saveTabInfoBase,
   convertWebViewDefinitionToSaved,
 } from '@shared/services/web-view.service';
+import logger from '@shared/services/logger.service';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -65,7 +66,7 @@ async function retrieveWebViewContent(data: SavedWebViewDefinition): Promise<voi
     createNewIfNotFound: false,
   });
   if (loadedId !== data.id)
-    throw new Error(
+    logger.error(
       `WebView with type ${data.webViewType} and id ${data.id} loaded into id ${loadedId}!`,
     );
 }
