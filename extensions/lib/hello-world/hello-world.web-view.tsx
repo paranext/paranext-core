@@ -8,11 +8,11 @@ import {
   Switch,
   TextField,
   Table,
-  TableEditorProps,
+  TableTextEditor,
 } from 'papi-components';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
-import { ChangeEvent, ReactElement, Key, useCallback, useContext, useState } from 'react';
+import { Key, useCallback, useContext, useState } from 'react';
 
 const {
   react: {
@@ -36,12 +36,12 @@ globalThis.webViewComponent = function HelloWorld() {
 
   const initializeRows = () => {
     return [
-      { id: '0', title: 'Lorem ipsum dolor sit amet' },
-      { id: '1', title: 'Consectetur adipiscing elit' },
-      { id: '2', title: 'Pellentesque suscipit tortor est' },
-      { id: '3', title: 'Ut egestas massa aliquam a' },
-      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
-      { id: '5', title: 'Sed aliquet pulvinar neque' },
+      { id: '0', title: 'Norem ipsum dolor sit amet', subtitle: 'Subtitle1' },
+      { id: '1', title: 'Consectetur adipiscing elit', subtitle: 'Subtitle2' },
+      { id: '2', title: 'Pellentesque suscipit tortor est', subtitle: 'Subtitle3' },
+      { id: '3', title: 'Ut egestas massa aliquam a', subtitle: 'Subtitle4' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis', subtitle: 'Subtitle5' },
+      { id: '5', title: 'Sed aliquet pulvinar neque', subtitle: 'Subtitle6' },
     ];
   };
 
@@ -86,19 +86,10 @@ globalThis.webViewComponent = function HelloWorld() {
   type Row = {
     id: string;
     title: string;
-  };
-
-  const textEditor = ({ onRowChange, row }: TableEditorProps<Row>): ReactElement => {
-    const changeHandler = (e: ChangeEvent<HTMLInputElement>) => {
-      const newRow = { ...rows[+row.id], title: e.target.value };
-      onRowChange(newRow);
-    };
-
-    return <TextField defaultValue={rows[+row.id].title} onChange={changeHandler} />;
+    subtitle: string;
   };
 
   const rowsChangeHandler = (changedRows: Row[]): void => {
-    console.log('Changed rows');
     setRows(changedRows);
   };
 
@@ -163,7 +154,12 @@ globalThis.webViewComponent = function HelloWorld() {
             {
               key: 'title',
               name: 'Title',
-              renderEditCell: textEditor,
+              renderEditCell: TableTextEditor<Row>,
+            },
+            {
+              key: 'subtitle',
+              name: 'Subtitle',
+              renderEditCell: TableTextEditor<Row>,
             },
           ]}
           rows={rows}

@@ -129,7 +129,7 @@ export const Default: Story = {
       },
     ],
     rows: [
-      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '0', title: 'Loremm ipsum dolor sit amet' },
       { id: '1', title: 'Consectetur adipiscing elit' },
       { id: '2', title: 'Pellentesque suscipit tortor est' },
       { id: '3', title: 'Ut egestas massa aliquam a' },
@@ -164,7 +164,7 @@ export const CustomizedColumns: Story = {
         frozen: false,
         resizable: true,
         sortable: true,
-        renderEditCell: TableTextEditor,
+        renderEditCell: TableTextEditor<Row>,
       },
       {
         key: 'title',
@@ -290,6 +290,7 @@ export const CustomizedRows: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 
@@ -325,6 +326,7 @@ export const CellCallbackFunctions: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 
@@ -392,6 +394,7 @@ export const Direction: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 
@@ -436,6 +439,7 @@ export const Virtualization: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 
@@ -462,7 +466,7 @@ export const MiscellaneousFunctions: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
-        renderEditCell: TableTextEditor,
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 
@@ -536,6 +540,7 @@ export const CustomClassNames: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 

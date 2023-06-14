@@ -23,7 +23,6 @@ import {
   RenderCellProps,
   RowsChangeData,
   SortColumn,
-  textEditor,
 } from 'react-data-grid';
 
 export type ButtonProps = PropsWithChildren<{
@@ -437,7 +436,7 @@ export declare function TextField({
   onFocus,
   onBlur,
 }: TextFieldProps): import('react/jsx-runtime').JSX.Element;
-export interface TableCalculatedColumn<T> extends TableColumn<T> {
+export interface TableCalculatedColumn<R> extends TableColumn<R> {
   readonly idx: number;
   readonly width: number | string;
   readonly minWidth: number;
@@ -447,13 +446,13 @@ export interface TableCalculatedColumn<T> extends TableColumn<T> {
   readonly frozen: boolean;
   readonly isLastFrozenColumn: boolean;
   readonly rowGroup: boolean;
-  readonly renderCell: (props: RenderCellProps<T>) => ReactNode;
+  readonly renderCell: (props: RenderCellProps<R>) => ReactNode;
 }
-export type TableCellClickArgs<T> = CellClickArgs<T>;
+export type TableCellClickArgs<R> = CellClickArgs<R>;
 export type TableCellKeyboardEvent = CellKeyboardEvent;
-export type TableCellKeyDownArgs<T> = CellKeyDownArgs<T>;
+export type TableCellKeyDownArgs<R> = CellKeyDownArgs<R>;
 export type TableCellMouseEvent = CellMouseEvent;
-export type TableColumn<T> = {
+export type TableColumn<R> = {
   /**
    * The name of the column. By default it will be displayed in the header cell
    */
@@ -478,7 +477,7 @@ export type TableColumn<T> = {
   /**
    * Enables cell editing
    */
-  readonly editable?: boolean | ((row: T) => boolean) | null;
+  readonly editable?: boolean | ((row: R) => boolean) | null;
   /**
    * Determines whether column is frozen or not
    */
@@ -500,24 +499,28 @@ export type TableColumn<T> = {
    * Editor to be rendered when cell of column is being edited.
    * If set, then the column is automatically set to be editable
    */
-  readonly renderEditCell?: ((props: TableEditorProps<T>) => ReactNode) | null;
+  readonly renderEditCell?: ((props: TableEditorProps<R>) => ReactNode) | null;
 };
-export type TableCopyEvent<T> = CopyEvent<T>;
-export type TableEditorProps<T> = {
-  column: TableCalculatedColumn<T>;
-  row: T;
-  onRowChange: (row: T, commitChanges?: boolean) => void;
+export type TableCopyEvent<R> = CopyEvent<R>;
+export type TableEditorProps<R> = {
+  column: TableCalculatedColumn<R>;
+  row: R;
+  onRowChange: (row: R, commitChanges?: boolean) => void;
   onClose: (commitChanges?: boolean) => void;
 };
-export type TablePasteEvent<T> = PasteEvent<T>;
-export type TableRowsChangeData<T> = RowsChangeData<T>;
+export type TablePasteEvent<R> = PasteEvent<R>;
+export type TableRowsChangeData<R> = RowsChangeData<R>;
 export type TableSortColumn = SortColumn;
-export declare const TableTextEditor: typeof textEditor;
-export type TableProps<T> = {
+export declare function TableTextEditor<R>({
+  onRowChange,
+  row,
+  column,
+}: TableEditorProps<R>): ReactElement;
+export type TableProps<R> = {
   /**
    * An array of objects representing each column on the grid
    */
-  columns: readonly TableColumn<T>[];
+  columns: readonly TableColumn<R>[];
   /**
    * Whether or not a column with checkboxes is inserted that allows you to select rows
    */
@@ -563,11 +566,11 @@ export type TableProps<T> = {
   /**
    * An array of objects representing the rows in the grid
    */
-  rows: readonly T[];
+  rows: readonly R[];
   /**
    * A function that returns the key for a given row
    */
-  rowKeyGetter?: (row: T) => Key;
+  rowKeyGetter?: (row: R) => Key;
   /**
    * The height of each row in pixels
    * @default 35
@@ -589,27 +592,27 @@ export type TableProps<T> = {
   /**
    * A callback function that is called when the rows in the grid change
    */
-  onRowsChange?: (rows: T[], data: TableRowsChangeData<T>) => void;
+  onRowsChange?: (rows: R[], data: TableRowsChangeData<R>) => void;
   /**
    * A callback function that is called when a cell is clicked
    * @param event The event source of the callback
    */
-  onCellClick?: (args: TableCellClickArgs<T>, event: TableCellMouseEvent) => void;
+  onCellClick?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
   /**
    * A callback function that is called when a cell is double-clicked
    * @param event The event source of the callback
    */
-  onCellDoubleClick?: (args: TableCellClickArgs<T>, event: TableCellMouseEvent) => void;
+  onCellDoubleClick?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
   /**
    * A callback function that is called when a cell is right-clicked
    * @param event The event source of the callback
    */
-  onCellContextMenu?: (args: TableCellClickArgs<T>, event: TableCellMouseEvent) => void;
+  onCellContextMenu?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
   /**
    * A callback function that is called when a key is pressed while a cell is focused
    * @param event The event source of the callback
    */
-  onCellKeyDown?: (args: TableCellKeyDownArgs<T>, event: TableCellKeyboardEvent) => void;
+  onCellKeyDown?: (args: TableCellKeyDownArgs<R>, event: TableCellKeyboardEvent) => void;
   /**
    * The text direction of the table
    * @default "ltr"
@@ -629,12 +632,12 @@ export type TableProps<T> = {
    * A callback function that is called when the user copies data from the table.
    * @param event The event source of the callback
    */
-  onCopy?: (event: TableCopyEvent<T>) => void;
+  onCopy?: (event: TableCopyEvent<R>) => void;
   /**
    * A callback function that is called when the user pastes data into the table.
    * @param event The event source of the callback
    */
-  onPaste?: (event: TablePasteEvent<T>) => T;
+  onPaste?: (event: TablePasteEvent<R>) => R;
   /**
    * Additional css classes to help with unique styling of the table
    */
@@ -646,7 +649,7 @@ export type TableProps<T> = {
  * Thanks to Adazzle for heavy inspiration and documentation
  * https://adazzle.github.io/react-data-grid/
  */
-export declare function Table<T>({
+export declare function Table<R>({
   columns,
   sortColumns,
   onSortColumnsChange,
@@ -674,6 +677,6 @@ export declare function Table<T>({
   onPaste,
   onScroll,
   className,
-}: TableProps<T>): import('react/jsx-runtime').JSX.Element;
+}: TableProps<R>): import('react/jsx-runtime').JSX.Element;
 
 export {};
