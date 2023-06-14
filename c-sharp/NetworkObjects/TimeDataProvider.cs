@@ -19,20 +19,21 @@ namespace Paranext.DataProvider.NetworkObjects
         {
             _timer.Elapsed += (_, _) =>
             {
-                SendDataUpdateEvent();
+                SendDataUpdateEvent("*");
             };
             _timer.AutoReset = true;
             _timer.Enabled = true;
         }
 
-        protected override ResponseToRequest HandleGetRequest(string[] arguments)
+        protected override ResponseToRequest HandleRequest(string functionName, string[] arguments)
         {
-            return ResponseToRequest.Succeeded(DateTime.Now.ToISO8601TimeFormatWithUTCString());
-        }
-
-        protected override ResponseToRequest HandleSetRequest(string[] arguments)
-        {
-            return ResponseToRequest.Failed("Setting the time is not allowed");
+            return functionName switch
+            {
+                "getTime"
+                    => ResponseToRequest.Succeeded(DateTime.Now.ToISO8601TimeFormatWithUTCString()),
+                "setTime" => ResponseToRequest.Failed("Cannot set the time"),
+                _ => ResponseToRequest.Failed($"Unexpected function: {functionName}")
+            };
         }
     }
 }
