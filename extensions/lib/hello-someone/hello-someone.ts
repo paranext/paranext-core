@@ -10,7 +10,7 @@ import type {
   PeopleDataMethods,
   PeopleDataTypes,
   Person,
-} from '@extensions/hello-someone/hello-someone';
+} from 'papi-extensions/hello-someone/hello-someone';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';

@@ -10,9 +10,9 @@ import {
   Table,
   TableTextEditor,
 } from 'papi-components';
-import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
-import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
-import type { UsfmProviderDataTypes } from '@extensions/external-usfm-data-provider';
+import { QuickVerseDataTypes } from 'papi-extensions/quick-verse/quick-verse';
+import { PeopleDataProvider, PeopleDataTypes } from 'papi-extensions/hello-someone/hello-someone';
+import type { UsfmProviderDataTypes } from 'papi-extensions/external-usfm-data-provider';
 import type { DataProviderDataType } from 'shared/models/data-provider.model';
 import { Key, useCallback, useContext, useMemo, useState } from 'react';
 

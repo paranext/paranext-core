@@ -9,8 +9,8 @@ import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
-import { PeopleDataProvider } from '@extensions/hello-someone/hello-someone';
-import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
+import { PeopleDataProvider } from 'papi-extensions/hello-someone/hello-someone';
+import { QuickVerseDataTypes } from 'papi-extensions/quick-verse/quick-verse';
 
 export const TAB_TYPE_BUTTONS = 'buttons';
 

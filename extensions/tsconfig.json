@@ -17,7 +17,7 @@
     "jsx": "react-jsx",
     "typeRoots": ["./node_modules/@types", "./dist", "node_modules/papi-dts"],
     "paths": {
-      "@extensions/*": ["./dist/*"]
+      "papi-extensions/*": ["./dist/*"]
     },
     "experimentalDecorators": true,
     "noUnusedLocals": true,

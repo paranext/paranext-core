@@ -12,12 +12,12 @@
       "@assets/*": ["../assets/*"],
       "@client/*": ["./client/*"],
       "@extension-host/*": ["./extension-host/*"],
-      "@extensions/*": ["../extensions/dist/*"],
       "@main/*": ["./main/*"],
       "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
-      "@node_modules/*": ["../node_modules/*"]
+      "@node_modules/*": ["../node_modules/*"],
+      "papi-extensions/*": ["../extensions/dist/*"]
     },
     "experimentalDecorators": true,
     "typeRoots": ["./node_modules/@types", "./extensions/dist", "src/@types"],

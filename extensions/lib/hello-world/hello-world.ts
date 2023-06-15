@@ -5,7 +5,7 @@ import type {
   WebViewDefinition,
   SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
-import { PeopleDataProvider } from '@extensions/hello-someone/hello-someone';
+import { PeopleDataProvider } from 'papi-extensions/hello-someone/hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloWorldReactWebView from './hello-world.web-view';
