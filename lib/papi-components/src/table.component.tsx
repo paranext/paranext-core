@@ -106,6 +106,14 @@ export function TableTextEditor<R>({
   return <TextField defaultValue={row[column.key as keyof R]} onChange={changeHandler} />;
 }
 
+const renderCheckbox = ({ onChange, ...props }: RenderCheckboxProps) => {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    onChange(e.target.checked, (e.nativeEvent as MouseEvent).shiftKey);
+  }
+
+  return <Checkbox {...props} onChange={handleChange} />;
+};
+
 // Subset of https://github.com/adazzle/react-data-grid#api
 export type TableProps<R> = {
   /**
@@ -273,14 +281,6 @@ function Table<R>({
   const cachedColumns = useMemo(() => {
     return enableSelectColumn ? [SelectColumn, ...columns] : columns;
   }, [enableSelectColumn, columns]);
-
-  function renderCheckbox({ onChange, ...props }: RenderCheckboxProps) {
-    function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-      onChange(e.target.checked, (e.nativeEvent as MouseEvent).shiftKey);
-    }
-
-    return <Checkbox {...props} onChange={handleChange} />;
-  }
 
   return (
     <DataGrid<R>

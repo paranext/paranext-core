@@ -14,6 +14,12 @@ import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
 import { Key, useCallback, useContext, useState } from 'react';
 
+type Row = {
+  id: string;
+  title: string;
+  subtitle: string;
+};
+
 const {
   react: {
     context: { TestContext },
@@ -34,20 +40,18 @@ papi
 globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
-  const initializeRows = () => {
-    return [
-      { id: '0', title: 'Norem ipsum dolor sit amet', subtitle: 'Subtitle1' },
-      { id: '1', title: 'Consectetur adipiscing elit', subtitle: 'Subtitle2' },
-      { id: '2', title: 'Pellentesque suscipit tortor est', subtitle: 'Subtitle3' },
-      { id: '3', title: 'Ut egestas massa aliquam a', subtitle: 'Subtitle4' },
-      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis', subtitle: 'Subtitle5' },
-      { id: '5', title: 'Sed aliquet pulvinar neque', subtitle: 'Subtitle6' },
-    ];
-  };
+  const initialRows: Row[] = [
+    { id: '0', title: 'Norem ipsum dolor sit amet', subtitle: 'Subtitle1' },
+    { id: '1', title: 'Consectetur adipiscing elit', subtitle: 'Subtitle2' },
+    { id: '2', title: 'Pellentesque suscipit tortor est', subtitle: 'Subtitle3' },
+    { id: '3', title: 'Ut egestas massa aliquam a', subtitle: 'Subtitle4' },
+    { id: '4', title: 'Nulla egestas vestibulum felis a venenatis', subtitle: 'Subtitle5' },
+    { id: '5', title: 'Sed aliquet pulvinar neque', subtitle: 'Subtitle6' },
+  ];
 
   const [myState, setMyState] = useState(0);
-  const [rows, setRows] = useState(initializeRows());
-  const [selRows, setSelRows] = useState(new Set<Key>());
+  const [rows, setRows] = useState(initialRows);
+  const [selectRows, setSelectRows] = useState(new Set<Key>());
 
   const [echoResult] = usePromise(
     useCallback(async () => {
@@ -82,20 +86,6 @@ globalThis.webViewComponent = function HelloWorld() {
     ['Psalm', 1],
     'Loading Psalm 1...',
   );
-
-  type Row = {
-    id: string;
-    title: string;
-    subtitle: string;
-  };
-
-  const rowsChangeHandler = (changedRows: Row[]): void => {
-    setRows(changedRows);
-  };
-
-  const selRowsChangeHandler = (selectedRows: Set<Key>): void => {
-    setSelRows(selectedRows);
-  };
 
   return (
     <div>
@@ -166,9 +156,9 @@ globalThis.webViewComponent = function HelloWorld() {
           rowKeyGetter={(row: Row) => {
             return row.id;
           }}
-          selectedRows={selRows}
-          onSelectedRowsChange={selRowsChangeHandler}
-          onRowsChange={rowsChangeHandler}
+          selectedRows={selectRows}
+          onSelectedRowsChange={(selectedRows: Set<Key>) => setSelectRows(selectedRows)}
+          onRowsChange={(changedRows: Row[]) => setRows(changedRows)}
           enableSelectColumn
         />
       </div>
