@@ -183,45 +183,54 @@ const configuration: webpack.Configuration = {
       verbose: true,
     },
     setupMiddlewares(middlewares) {
-      let extensionsProcess: ChildProcess | undefined;
+      const childProcesses: ChildProcess[] = [];
 
       console.log('Starting preload.js builder...');
-      const preloadProcess = spawn('npm', ['run', 'start:preload'], {
-        shell: true,
-        stdio: 'inherit',
-      })
-        .on('close', (code: number) => {
-          extensionsProcess?.kill();
-          process.exit(code);
-        })
-        .on('error', (spawnError) => console.error(spawnError));
+      childProcesses.push(
+        spawn('npm', ['run', 'start:preload'], {
+          shell: true,
+          stdio: 'inherit',
+        }),
+      );
 
       console.log('Starting extensions builder...');
-      extensionsProcess = spawn('npm', ['run', 'start:extensions'], {
-        shell: true,
-        stdio: 'inherit',
-      })
-        .on('close', (code: number) => {
-          preloadProcess.kill();
-          process.exit(code);
-        })
-        .on('error', (spawnError) => console.error(spawnError));
+      childProcesses.push(
+        spawn('npm', ['run', 'start:extensions'], {
+          shell: true,
+          stdio: 'inherit',
+        }),
+      );
 
       console.log('Starting Main Process...');
       let args = ['run', 'start:main'];
       if (process.env.MAIN_ARGS) {
         args = args.concat(['--', ...process.env.MAIN_ARGS.matchAll(/"[^"]+"|[^\s"]+/g)].flat());
       }
-      spawn('npm', args, {
-        shell: true,
-        stdio: 'inherit',
-      })
-        .on('close', (code: number) => {
-          preloadProcess.kill();
-          extensionsProcess?.kill();
-          process.exit(code);
-        })
-        .on('error', (spawnError) => console.error(spawnError));
+      childProcesses.push(
+        spawn('npm', args, {
+          shell: true,
+          stdio: 'inherit',
+        }),
+      );
+
+      // Link processes to each others' lifecycles
+      childProcesses.forEach((childProcess, i) => {
+        childProcess
+          .on('close', (code: number) => {
+            // Close all other child processes and exit the main process
+            childProcesses.forEach((otherProcess, j) => {
+              // Kill all processes but the one that is closing
+              if (i !== j) otherProcess.kill();
+            });
+            process.exit(code);
+          })
+          .on('error', (spawnError) => console.error(spawnError));
+      });
+
+      // When this process closes, make sure all other processes shut down
+      process.on('close', () => {
+        childProcesses.forEach((childProcess) => childProcess.kill());
+      });
       return middlewares;
     },
   },

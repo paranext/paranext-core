@@ -8,6 +8,7 @@ import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
+import { getErrorMessage } from '@shared/utils/util';
 
 // #region Test logs
 
@@ -63,11 +64,15 @@ networkService
 (async () => {
   const testEH = await networkObjectService.set('test-extension-host', {
     getVerse: async () => {
-      const verse = await papi.fetch('https://bible-api.com/matthew+24:14');
-      const verseJson = await verse.json();
-      const results = `test-extension-host got verse: ${verseJson.text.replace(/\\n/g, '')}`;
-      logger.info(results);
-      return results;
+      try {
+        const verse = await papi.fetch('https://bible-api.com/matthew+24:14');
+        const verseJson = await verse.json();
+        const results = `test-extension-host got verse: ${verseJson.text.replace(/\\n/g, '')}`;
+        logger.info(results);
+        return results;
+      } catch (e) {
+        return getErrorMessage(e);
+      }
     },
   });
 
