@@ -1,0 +1,27 @@
+.papi-snackbar {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.papi-snackbar.primary {
+  background: #1ea7fd;
+  color: white;
+}
+
+.papi-snackbar.secondary {
+  background: transparent;
+  color: #333;
+}
+
+.papi-snackbar.alert {
+  background: lightcoral;
+}
+
+.papi-snackbar.paratext {
+  background: darkgreen;
+  color: greenyellow;
+}
+
+.papi-snackbar.bright {
+  background: greenyellow;
+  color: darkgreen;
+}

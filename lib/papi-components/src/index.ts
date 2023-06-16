@@ -7,3 +7,4 @@ export type { ScrRefSelectorProps } from './ref-selector.component';
 export { default as Slider } from './slider.component';
 export { default as Switch } from './switch.component';
 export { default as TextField } from './text-field.component';
+export { default as Snackbar } from './snackbar.component';
