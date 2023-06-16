@@ -1,4 +1,4 @@
-import papi from 'papi';
+import papi from 'papi-backend';
 import type {
   WebViewContentType,
   WebViewDefinition,

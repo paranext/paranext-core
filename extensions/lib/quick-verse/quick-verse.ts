@@ -1,4 +1,4 @@
-import papi from 'papi';
+import papi from 'papi-backend';
 import type { ExecutionToken } from 'node/models/execution-token.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
