@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Snackbar, Button } from 'papi-components';
 
-//
 const defaultSnackbarAction = <Button>Close</Button>;
 
 const meta: Meta<typeof Snackbar> = {
@@ -9,7 +8,7 @@ const meta: Meta<typeof Snackbar> = {
   component: Snackbar,
   tags: ['autodocs'],
   argTypes: {
-    open: { control: 'boolean' },
+    isOpen: { control: 'boolean' },
     message: { control: 'text' },
     autoHideDuration: { control: 'number' },
     className: { control: 'text' },
@@ -30,11 +29,11 @@ export const Primary: Story = {
     ContentProps: {
       message: 'The default snackbar',
       action: defaultSnackbarAction,
-      classes: { root: 'papi-snackbar primary' }, // styles the root element
+      className: 'papi-snackbar primary', // or classes: {root} styles the root element
     },
-    // className: 'primary', // styles the div surrounding snackbar
-    open: true,
+    // className: 'papi-snackbar primary', // styles the div surrounding snackbar
     autoHideDuration: 6000,
+    isOpen: true,
   },
   parameters: {
     docs: {
@@ -57,7 +56,7 @@ export const Alert: Story = {
     ContentProps: {
       message: 'WARNING',
       action: defaultSnackbarAction,
-      classes: { root: 'papi-snackbar alert' },
+      className: 'papi-snackbar alert',
     },
   },
   parameters: {
@@ -77,7 +76,7 @@ export const Paratext: Story = {
     ContentProps: {
       message: 'The Paratext snackbar',
       action: defaultSnackbarAction,
-      classes: { root: 'papi-snackbar paratext' },
+      className: 'papi-snackbar paratext',
     },
   },
   parameters: {
@@ -95,7 +94,7 @@ export const ParatextBright: Story = {
     ContentProps: {
       message: 'The bright Paratext snackbar',
       action: defaultSnackbarAction,
-      classes: { root: 'papi-snackbar bright' },
+      className: 'papi-snackbar bright',
     },
   },
   parameters: {

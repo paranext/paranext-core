@@ -1,14 +1,9 @@
-import { Snackbar as MuiSnackbar, SnackbarContentClasses } from '@mui/material';
+import { Snackbar as MuiSnackbar, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import { SyntheticEvent, ReactElement, ReactNode } from 'react';
-import { SxProps, Theme } from '@mui/system';
 import './snackbar.component.css';
 
-export type CloseReason = 'timeout' | 'clickaway' | 'escapeKeyDown';
-
-export interface AnchorOrigin {
-  vertical: 'top' | 'bottom';
-  horizontal: 'left' | 'center' | 'right';
-}
+export type CloseReason = SnackbarCloseReason;
+export type AnchorOrigin = SnackbarOrigin;
 
 export type SnackbarContentProps = {
   /**
@@ -22,17 +17,7 @@ export type SnackbarContentProps = {
   message?: ReactNode;
 
   /**
-   * Override or extend the styles applied to the component.
-   */
-  classes?: Partial<SnackbarContentClasses>;
-
-  /**
-   * The system prop that allows defining system overrides as well as additional CSS styles.
-   */
-  sx?: SxProps<Theme>;
-
-  /**
-   * Additional css classes to help with unique styling of the snackbar
+   * Additional css classes to help with unique styling of the snackbar, internal
    */
   className?: string;
 };
@@ -40,8 +25,9 @@ export type SnackbarContentProps = {
 export type SnackbarProps = {
   /**
    * If true, the component is shown
+   * @default false
    */
-  open?: boolean;
+  isOpen?: boolean;
 
   /**
    * The number of milliseconds to wait before automatically calling onClose()
@@ -50,7 +36,7 @@ export type SnackbarProps = {
   autoHideDuration?: number | null;
 
   /**
-   * Additional css classes to help with unique styling of the snackbar
+   * Additional css classes to help with unique styling of the snackbar, external
    */
   className?: string;
 
@@ -83,17 +69,14 @@ export type SnackbarProps = {
  */
 function Snackbar({
   autoHideDuration = 6000,
-  open = false,
+  isOpen = false,
   className,
   onClose,
   anchorOrigin = { vertical: 'bottom', horizontal: 'left' },
   ContentProps = {
     action: '',
     message: '',
-    classes: {
-      root: 'papi-snackbar',
-    },
-    sx: {},
+    className: `papi-snackbar ${className ?? ''}`,
   },
   children,
 }: SnackbarProps) {
@@ -101,7 +84,7 @@ function Snackbar({
     <MuiSnackbar
       autoHideDuration={autoHideDuration}
       className={`papi-snackbar ${className ?? ''}`}
-      open={open}
+      open={isOpen}
       onClose={onClose}
       anchorOrigin={anchorOrigin}
       ContentProps={ContentProps}
