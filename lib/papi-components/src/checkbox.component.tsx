@@ -25,7 +25,6 @@ export type CheckboxProps = {
   isIndeterminate?: boolean;
   /**
    * If `true`, the component is checked by default.
-   * @default false
    */
   isDefaultChecked?: boolean;
   /**
@@ -67,7 +66,7 @@ function Checkbox({
   labelText = '',
   labelPosition = LabelPosition.After,
   isIndeterminate = false,
-  isDefaultChecked = false,
+  isDefaultChecked,
   isDisabled = false,
   hasError = false,
   className,

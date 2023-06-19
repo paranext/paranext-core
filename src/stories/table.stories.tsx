@@ -12,6 +12,7 @@ import {
   TableSortColumn,
   TableTextEditor,
 } from 'papi-components';
+import 'papi-components/dist/style.css';
 import { Key, ReactElement, UIEvent } from 'react';
 
 type Row = {
@@ -44,16 +45,16 @@ function TableDecorator(Story: (update?: { args: Partial<TableProps<Row>> }) => 
     updateArgs({ rows });
   };
 
-  const setSortColumns = (cols: TableSortColumn[]) => {
-    updateArgs({ sortColumns: cols });
+  const setSortColumns = (sortColumns: TableSortColumn[]) => {
+    updateArgs({ sortColumns });
 
-    if (cols.length === 0) {
+    if (sortColumns.length === 0) {
       setRows(args.rows);
     } else {
       setRows(
         args.rows.sort((a: Row, b: Row) => {
           // eslint-disable-next-line no-restricted-syntax
-          for (const sort of cols) {
+          for (const sort of sortColumns) {
             const comparator = getComparator(sort.columnKey);
             const compResult = comparator(a, b);
             if (compResult !== 0) {

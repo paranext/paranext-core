@@ -85,7 +85,6 @@ export type CheckboxProps = {
   isIndeterminate?: boolean;
   /**
    * If `true`, the component is checked by default.
-   * @default false
    */
   isDefaultChecked?: boolean;
   /**
@@ -526,6 +525,11 @@ export type TableProps<R> = {
    */
   enableSelectColumn?: boolean;
   /**
+   * Specifies the width of the select column. Only relevant when enableSelectColumn is true
+   * @default 50
+   */
+  selectColumnWidth?: number;
+  /**
    * An array of objects representing the currently sorted columns
    */
   sortColumns?: readonly TableSortColumn[];
@@ -661,6 +665,7 @@ export declare function Table<R>({
   defaultColumnResizable,
   rows,
   enableSelectColumn,
+  selectColumnWidth,
   rowKeyGetter,
   rowHeight,
   headerRowHeight,

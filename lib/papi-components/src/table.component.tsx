@@ -106,12 +106,20 @@ export function TableTextEditor<R>({
   return <TextField defaultValue={row[column.key as keyof R]} onChange={changeHandler} />;
 }
 
-const renderCheckbox = ({ onChange, ...props }: RenderCheckboxProps) => {
+const renderCheckbox = ({ onChange, disabled, checked, ...props }: RenderCheckboxProps) => {
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     onChange(e.target.checked, (e.nativeEvent as MouseEvent).shiftKey);
   }
 
-  return <Checkbox {...props} onChange={handleChange} />;
+  return (
+    <Checkbox
+      {...props}
+      // key={} Any idea how we can get a unique ID for each checkbox?
+      isChecked={checked}
+      isDisabled={disabled}
+      onChange={handleChange}
+    />
+  );
 };
 
 // Subset of https://github.com/adazzle/react-data-grid#api
@@ -124,6 +132,11 @@ export type TableProps<R> = {
    * Whether or not a column with checkboxes is inserted that allows you to select rows
    */
   enableSelectColumn?: boolean;
+  /**
+   * Specifies the width of the select column. Only relevant when enableSelectColumn is true
+   * @default 50
+   */
+  selectColumnWidth?: number;
   /**
    * An array of objects representing the currently sorted columns
    */
@@ -261,6 +274,7 @@ function Table<R>({
   defaultColumnResizable = true,
   rows,
   enableSelectColumn,
+  selectColumnWidth = 50,
   rowKeyGetter,
   rowHeight = 35,
   headerRowHeight = 35,
@@ -279,7 +293,9 @@ function Table<R>({
   className,
 }: TableProps<R>) {
   const cachedColumns = useMemo(() => {
-    return enableSelectColumn ? [SelectColumn, ...columns] : columns;
+    return enableSelectColumn
+      ? [{ ...SelectColumn, minWidth: selectColumnWidth }, ...columns]
+      : columns;
   }, [enableSelectColumn, columns]);
 
   return (
@@ -312,7 +328,7 @@ function Table<R>({
       onPaste={onPaste}
       onScroll={onScroll}
       renderers={{ renderCheckbox }}
-      className={`${className ?? ''}`}
+      className={`${className ?? 'rdg-light'}`}
     />
   );
 }

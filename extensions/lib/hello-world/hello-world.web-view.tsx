@@ -160,6 +160,9 @@ globalThis.webViewComponent = function HelloWorld() {
           onSelectedRowsChange={(selectedRows: Set<Key>) => setSelectRows(selectedRows)}
           onRowsChange={(changedRows: Row[]) => setRows(changedRows)}
           enableSelectColumn
+          selectColumnWidth={60}
+          rowHeight={60}
+          headerRowHeight={50}
         />
       </div>
     </div>
