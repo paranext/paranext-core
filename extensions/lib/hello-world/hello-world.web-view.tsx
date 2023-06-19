@@ -12,6 +12,7 @@ import {
 } from 'papi-components';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
+import type { DataProviderDataType } from 'shared/models/data-provider.model';
 import { Key, useCallback, useContext, useState } from 'react';
 
 type Row = {
@@ -69,6 +70,16 @@ globalThis.webViewComponent = function HelloWorld() {
     'Loading latest Scripture text...',
   );
 
+  type TimeDataType = {
+    TimeData: DataProviderDataType<string, string | undefined, string>;
+  };
+
+  const [currentTime] = useData.Time<TimeDataType, 'TimeData'>(
+    'current-time',
+    '*',
+    'Loading current time',
+  );
+
   const [name, setName] = useState('Bill');
 
   const peopleDataProvider = useDataProvider<PeopleDataProvider>('hello-someone.people');
@@ -119,6 +130,7 @@ globalThis.webViewComponent = function HelloWorld() {
         </Button>
       </div>
       <div>{latestVerseText}</div>
+      <div>{currentTime}</div>
       <div>
         <input value={name} onChange={(e) => setName(e.target.value)} />
         <Button onClick={() => peopleDataProvider?.deletePerson(name)}>Delete {name}</Button>

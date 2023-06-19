@@ -39,7 +39,7 @@ internal class MessageHandlerRequestByRequestType : IMessageHandler
         var response = handler(request.Contents);
         if (response.Success)
         {
-            yield return new MessageResponse(
+            yield return MessageResponse.Succeeded(
                 request.RequestType,
                 request.RequestId,
                 request.SenderId,
@@ -48,7 +48,7 @@ internal class MessageHandlerRequestByRequestType : IMessageHandler
         }
         else
         {
-            yield return new MessageResponse(
+            yield return MessageResponse.Failed(
                 request.RequestType,
                 request.RequestId,
                 request.SenderId,

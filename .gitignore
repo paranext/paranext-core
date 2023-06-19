@@ -35,5 +35,8 @@ npm-debug.log.*
 # Extra VS Code workspaces
 *.code-workspace
 
+# Extra Visual Studio files
+launchSettings.json
+
 # Test development user appdata files
 dev-appdata/

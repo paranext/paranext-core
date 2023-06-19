@@ -20,7 +20,7 @@ internal sealed class PapiClient : IDisposable
     private const int DISCONNECT_TIMEOUT = 2000;
     private const int RECEIVE_BUFFER_LENGTH = 2048;
     private const int MAX_OUTGOING_MESSAGES = 10;
-    private static readonly Encoding s_utf8WithoutBOM = new UTF8Encoding();
+    private static readonly Encoding s_utf8WithoutBom = new UTF8Encoding();
     private static readonly Uri s_connectionUri = new("ws://localhost:8876");
     private static readonly JsonSerializerOptions s_serializationOptions;
 
@@ -79,6 +79,7 @@ internal sealed class PapiClient : IDisposable
     {
         // Do not change this code. Put cleanup code in 'Dispose(bool isDisposing)' method
         Dispose(isDisposing: true);
+        // ReSharper disable once GCSuppressFinalizeForTypeWithoutDestructor
         GC.SuppressFinalize(this);
     }
 
@@ -140,7 +141,7 @@ internal sealed class PapiClient : IDisposable
 
         if (!_clientInitializationComplete.Wait(CONNECT_TIMEOUT))
         {
-            Console.Error.WriteLine("PapiClient did not connect");
+            await Console.Error.WriteLineAsync("PapiClient did not connect");
             await DisconnectAsync();
             return false;
         }
@@ -162,9 +163,13 @@ internal sealed class PapiClient : IDisposable
         SignalToBeginGracefulDisconnect();
 
         if (_incomingMessageThread.IsAlive && !_incomingMessageThread.Join(DISCONNECT_TIMEOUT))
-            Console.Error.WriteLine("Incoming message thread did not shut down properly");
+            await Console.Error.WriteLineAsync(
+                "Incoming message thread did not shut down properly"
+            );
         if (_outgoingMessageThread.IsAlive && !_outgoingMessageThread.Join(DISCONNECT_TIMEOUT))
-            Console.Error.WriteLine("Outgoing message thread did not shut down properly");
+            await Console.Error.WriteLineAsync(
+                "Outgoing message thread did not shut down properly"
+            );
 
         if (Connected)
         {
@@ -194,12 +199,12 @@ internal sealed class PapiClient : IDisposable
     /// </summary>
     /// <param name="requestType">The request type to register</param>
     /// <param name="requestHandler">Method that is called when a request of the specified type is received from the server</param>
-    /// <param name="responseTimeoutInMS">Number of milliseconds to wait for the registration response to be received</param>
+    /// <param name="responseTimeoutInMs">Number of milliseconds to wait for the registration response to be received</param>
     /// <returns>True if the registration was successful</returns>
     public bool RegisterRequestHandler(
         Enum<RequestType> requestType,
         Func<dynamic, ResponseToRequest> requestHandler,
-        int responseTimeoutInMS = 1000
+        int responseTimeoutInMs = 1000
     )
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
@@ -216,7 +221,7 @@ internal sealed class PapiClient : IDisposable
 
         _messageHandlersForMyRequests[requestMessage.RequestId] = new MessageHandlerResponse(
             requestMessage,
-            (bool success, dynamic? data) =>
+            (bool success, dynamic? _) =>
             {
                 if (!success)
                 {
@@ -235,12 +240,13 @@ internal sealed class PapiClient : IDisposable
                     registrationSucceeded = true;
                 }
 
+                // ReSharper disable once AccessToDisposedClosure
                 registrationComplete.Set();
             }
         );
 
         QueueOutgoingMessage(requestMessage);
-        if (!registrationComplete.Wait(responseTimeoutInMS))
+        if (!registrationComplete.Wait(responseTimeoutInMs))
         {
             Console.Error.WriteLine(
                 $"No response came back when registering request type \"{requestType}\""
@@ -284,7 +290,7 @@ internal sealed class PapiClient : IDisposable
     }
 
     /// <summary>
-    /// Send an event message to the server/>.
+    /// Send an event message to the server.
     /// </summary>
     /// <param name="message">Event message to send</param>
     public void SendEvent(MessageEvent message)
@@ -346,7 +352,9 @@ internal sealed class PapiClient : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"Exception while sending outgoing messages: {ex}");
+                    await Console.Error.WriteLineAsync(
+                        $"Exception while sending outgoing messages: {ex}"
+                    );
                 }
             } while (!_cancellationToken.IsCancellationRequested && Connected);
 
@@ -359,11 +367,13 @@ internal sealed class PapiClient : IDisposable
     {
         message.SenderId = _clientId;
         string jsonData = JsonSerializer.Serialize(message, s_serializationOptions);
+        /* Helpful for debugging
         Console.WriteLine(
             "Sending message over websocket: {0}",
             StringUtils.LimitLength(jsonData, 180)
         );
-        byte[] data = s_utf8WithoutBOM.GetBytes(jsonData);
+        */
+        byte[] data = s_utf8WithoutBom.GetBytes(jsonData);
         await _webSocket.SendAsync(data, WebSocketMessageType.Text, true, _cancellationToken);
     }
 
@@ -387,10 +397,13 @@ internal sealed class PapiClient : IDisposable
                 {
                     Message? message = await ReceiveIncomingMessageAsync();
                     // Handle each message asynchronously so we can keep receiving more messages
-                    _ = Task.Run(() =>
-                    {
-                        HandleIncomingMessage(message);
-                    });
+                    _ = Task.Run(
+                        () =>
+                        {
+                            HandleIncomingMessage(message);
+                        },
+                        _cancellationToken
+                    );
                 }
                 catch (OperationCanceledException)
                 {
@@ -398,7 +411,7 @@ internal sealed class PapiClient : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"Exception while handling messages: {ex}");
+                    await Console.Error.WriteLineAsync($"Exception while handling messages: {ex}");
                 }
             } while (!_cancellationToken.IsCancellationRequested && Connected);
 
@@ -431,11 +444,13 @@ internal sealed class PapiClient : IDisposable
             }
         } while (!result.EndOfMessage);
 
-        string jsonData = s_utf8WithoutBOM.GetString(message.GetBuffer(), 0, (int)message.Position);
+        string jsonData = s_utf8WithoutBom.GetString(message.GetBuffer(), 0, (int)message.Position);
+        /* Helpful for debugging
         Console.WriteLine(
             "Received message over websocket: {0}",
             StringUtils.LimitLength(jsonData, 180)
         );
+        */
         return JsonSerializer.Deserialize<Message>(jsonData, s_serializationOptions);
     }
 

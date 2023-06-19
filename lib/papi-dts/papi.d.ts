@@ -219,6 +219,78 @@ declare module 'shared/utils/papi-util' {
    */
   export function getModuleSimilarApiMessage(moduleName: string): string;
 }
+declare module 'shared/models/papi-event.model' {
+  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
+  /** Callback function that accepts an event and should run when an event is emitted */
+  export type PapiEventHandler<T> = (event: T) => void;
+  /**
+   * Function that subscribes the provided callback to run when this event is emitted.
+   * @param callback function to run with the event when it is emitted
+   * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+   */
+  export type PapiEvent<T> = (callback: PapiEventHandler<T>) => Unsubscriber;
+  /**
+   * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
+   *
+   * Note: The callback itself is not asynchronous.
+   */
+  export type PapiEventAsync<T> = (callback: PapiEventHandler<T>) => Promise<UnsubscriberAsync>;
+}
+declare module 'shared/models/papi-event-emitter.model' {
+  /**
+   * Interfaces, classes, and functions related to events and event emitters
+   */
+  import { PapiEvent } from 'shared/models/papi-event.model';
+  /**
+   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
+   * Use eventEmitter.event(callback) to subscribe to the event.
+   * Use eventEmitter.emit(event) to run the subscriptions.
+   * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
+   * but anyone can subscribe to the event.
+   */
+  export default class PapiEventEmitter<T> {
+    /**
+     * Subscribes a function to run when this event is emitted.
+     * @alias event
+     * @param callback function to run with the event when it is emitted
+     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+     */
+    subscribe: PapiEvent<T>;
+    /** All callback functions that will run when this event is emitted. Lazy loaded */
+    private subscriptions?;
+    /** Event for listeners to subscribe to. Lazy loaded */
+    private lazyEvent?;
+    /** Whether this emitter has been disposed */
+    private isDisposed;
+    /**
+     * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
+     * Use like `const unsubscriber = event(callback)`
+     * @param callback function to run with the event when it is emitted
+     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+     */
+    get event(): PapiEvent<T>;
+    /** Disposes of this event, preparing it to release from memory */
+    dispose: () => void;
+    /**
+     * Runs the subscriptions for the event
+     * @param event event data to provide to subscribed callbacks
+     */
+    emit: (event: T) => void;
+    /**
+     * Function that runs the subscriptions for the event.
+     * Added here so children can override emit and still call the base functionality.
+     * See NetworkEventEmitter.emit for example
+     */
+    protected emitFn(event: T): void;
+    /** Check to make sure this emitter is not disposed. Throw if it is */
+    protected assertNotDisposed(): void;
+    /**
+     * Disposes of this event, preparing it to release from memory.
+     * Added here so children can override emit and still call the base functionality.
+     */
+    protected disposeFn(): void;
+  }
+}
 declare module 'shared/data/internal-connection.model' {
   /**
    * Types that are internal to the communication we do through WebSocket.
@@ -484,78 +556,6 @@ declare module 'shared/services/logger.service' {
     default: log.Logger;
   };
   export default logger;
-}
-declare module 'shared/models/papi-event.model' {
-  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Callback function that accepts an event and should run when an event is emitted */
-  export type PapiEventHandler<T> = (event: T) => void;
-  /**
-   * Function that subscribes the provided callback to run when this event is emitted.
-   * @param callback function to run with the event when it is emitted
-   * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-   */
-  export type PapiEvent<T> = (callback: PapiEventHandler<T>) => Unsubscriber;
-  /**
-   * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
-   *
-   * Note: The callback itself is not asynchronous.
-   */
-  export type PapiEventAsync<T> = (callback: PapiEventHandler<T>) => Promise<UnsubscriberAsync>;
-}
-declare module 'shared/models/papi-event-emitter.model' {
-  /**
-   * Interfaces, classes, and functions related to events and event emitters
-   */
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  /**
-   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
-   * Use eventEmitter.event(callback) to subscribe to the event.
-   * Use eventEmitter.emit(event) to run the subscriptions.
-   * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
-   * but anyone can subscribe to the event.
-   */
-  export default class PapiEventEmitter<T> {
-    /**
-     * Subscribes a function to run when this event is emitted.
-     * @alias event
-     * @param callback function to run with the event when it is emitted
-     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-     */
-    subscribe: PapiEvent<T>;
-    /** All callback functions that will run when this event is emitted. Lazy loaded */
-    private subscriptions?;
-    /** Event for listeners to subscribe to. Lazy loaded */
-    private lazyEvent?;
-    /** Whether this emitter has been disposed */
-    private isDisposed;
-    /**
-     * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
-     * Use like `const unsubscriber = event(callback)`
-     * @param callback function to run with the event when it is emitted
-     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-     */
-    get event(): PapiEvent<T>;
-    /** Disposes of this event, preparing it to release from memory */
-    dispose: () => void;
-    /**
-     * Runs the subscriptions for the event
-     * @param event event data to provide to subscribed callbacks
-     */
-    emit: (event: T) => void;
-    /**
-     * Function that runs the subscriptions for the event.
-     * Added here so children can override emit and still call the base functionality.
-     * See NetworkEventEmitter.emit for example
-     */
-    protected emitFn(event: T): void;
-    /** Check to make sure this emitter is not disposed. Throw if it is */
-    protected assertNotDisposed(): void;
-    /**
-     * Disposes of this event, preparing it to release from memory.
-     * Added here so children can override emit and still call the base functionality.
-     */
-    protected disposeFn(): void;
-  }
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -1535,7 +1535,7 @@ declare module 'shared/services/web-view.service' {
     direction?: DropDirection,
   ) => Promise<void>;
   /** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
-  export type PapiDockLayout = {
+  type PapiDockLayout = {
     /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
     dockLayout: DockLayout;
     /**
@@ -1615,7 +1615,6 @@ declare module 'shared/services/web-view.service' {
       webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
     ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
   };
-  export type PapiWebViewService = typeof papiWebViewService;
 }
 declare module 'shared/services/internet.service' {
   const internetService: {
@@ -2078,197 +2077,84 @@ declare module 'shared/services/data-provider.service' {
   };
   export default dataProviderService;
 }
-declare module 'shared/data/file-system.model' {
+declare module 'shared/services/papi.service' {
   /**
-   * Types to use with file system operations
-   */
-  /**
-   * Represents a path in file system or other.
-   * Has a scheme followed by :// followed by a relative path.
-   * If no scheme is provided, the app scheme is used.
-   * Available schemes are as follows:
-   *  - app:// - goes to the app's data directory (platform-dependent)
-   *  - resources:// - goes to the resources directory installed in the app
-   */
-  export type Uri = string;
-}
-declare module 'node/utils/util' {
-  import { Uri } from 'shared/data/file-system.model';
-  export function resolveHtmlPath(htmlFileName: string): string;
-  /**
-   * Gets the platform-specific user appdata folder for this application
-   * Thanks to Luke at https://stackoverflow.com/a/26227660
-   */
-  export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
-  /**
-   * Resolves the uri to a path
-   * @param uri the uri to resolve
-   * @returns real path to the uri supplied
-   */
-  export function getPathFromUri(uri: Uri): string;
-  /**
-   * Combines the uri passed in with the paths passed in to make one uri
-   * @param uri uri to start from
-   * @param paths paths to combine into the uri
-   * @returns one uri that combines the uri and the paths in left-to-right order
-   */
-  export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
-}
-declare module 'node/services/node-file-system.service' {
-  import { Uri } from 'shared/data/file-system.model';
-  /**
-   * Reads a text file asynchronously
-   * @param uri Uri of file
-   * @returns promise that resolves to the contents of the file
-   */
-  export function readFileText(uri: Uri): Promise<string>;
-  /**
-   * Reads a binary file asynchronously
-   * @param uri Uri of file
-   * @returns promise that resolves to the contents of the file
-   */
-  export function readFileBinary(uri: Uri): Promise<Buffer>;
-  /**
-   * Writes the string to a file asynchronously
-   * @param uri Uri of file
-   * @param fileContents string to write into the file
-   * @returns promise that resolves after writing the file
-   */
-  export function writeFileText(uri: Uri, fileContents: string): Promise<void>;
-  export function deleteFile(uri: Uri): Promise<void>;
-  /** Type of file system item in a directory */
-  export enum EntryType {
-    File = 'file',
-    Directory = 'directory',
-    Unknown = 'unknown',
-  }
-  /** All entries in a directory, mapped from entry type to array of uris for the entries */
-  export type DirectoryEntries = Readonly<{
-    [entryType in EntryType]: Uri[];
-  }>;
-  /**
-   * Reads a directory and returns lists of entries in the directory by entry type
-   * @param uri uri of directory
-   * @returns map of entry type to list of uris for each entry in the directory with that type
-   */
-  export function readDir(uri: Uri): Promise<DirectoryEntries>;
-}
-declare module 'node/utils/crypto-util' {
-  export function createUuid(): string;
-  /**
-   * Create a cryptographically secure nonce that is at least 128 bits long
-   * See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
+   * Unified module for accessing API features in extensions.
    *
-   * @param encoding: "base64url" (HTML safe, shorter string) or "hex" (longer string)
-   * From https://base64.guru/standards/base64url, the purpose of this encoding is
-   * "the ability to use the encoding result as filename or URL address"
-   * @param numberOfBytes: number of bytes the resulting nonce should contain
-   * @returns cryptographically secure, pseudo-randomly generated value encoded as a string
+   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
    */
-  export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
-}
-declare module 'node/models/execution-token.model' {
-  /** For now this is just for extensions, but maybe we will want to expand this in the future */
-  export type ExecutionTokenType = 'extension';
-  /** Execution tokens can be passed into API calls to provide context about their identity */
-  export class ExecutionToken {
-    readonly type: ExecutionTokenType;
-    readonly name: string;
-    readonly nonce: string;
-    constructor(tokenType: ExecutionTokenType, name: string);
-    getHash(): string;
-  }
-}
-declare module 'node/services/execution-token.service' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
-  /** This should be called when extensions are being loaded
-   *  @param extensionName Name of the extension to register
-   *  @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers.
-   *  It is important that the token is not shared to avoid impersonation of API callers.
-   */
-  function registerExtension(extensionName: string): ExecutionToken;
-  /** Remove a registered token.  Note that a hash of a token is what is needed to unregister, not
-   *  the full token itself (notably not the nonce), so something can be delegated the ability to
-   *  unregister a token without having been given the full token itself.
-   *  @param extensionName Name of the extension that was originally registered
-   *  @param tokenHash Value of `getHash()` of the token that was originally registered.
-   *  @returns `true` if the token was successfully unregistered, `false` otherwise
-   */
-  function unregisterExtension(extensionName: string, tokenHash: string): boolean;
-  /** This should only be needed by services that need to contextualize the response for the caller
-   *  @param executionToken Token that was previously registered.
-   *  @returns `true` if the token matches a token that was previous registered, `false` otherwise.
-   */
-  function tokenIsValid(executionToken: ExecutionToken): boolean;
-  const executionTokenService: {
-    registerExtension: typeof registerExtension;
-    unregisterExtension: typeof unregisterExtension;
-    tokenIsValid: typeof tokenIsValid;
+  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+  import * as commandService from 'shared/services/command.service';
+  import * as papiUtil from 'shared/utils/papi-util';
+  const papi: {
+    EventEmitter: typeof PapiEventEmitter;
+    fetch: typeof fetch;
+    commands: typeof commandService;
+    util: typeof papiUtil;
+    webViews: {
+      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/web-view.model').AddWebViewEvent
+      >;
+      getWebView: (
+        webViewType: string,
+        layout?: import('shared/data/web-view.model').Layout,
+        options?: import('shared/data/web-view.model').GetWebViewOptions,
+      ) => Promise<string | undefined>;
+      initialize: () => Promise<void>;
+      registerWebViewProvider: (
+        webViewType: string,
+        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+    };
+    network: {
+      onDidClientConnect: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/internal-connection.model').ClientConnectEvent
+      >;
+      onDidClientDisconnect: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/internal-connection.model').ClientDisconnectEvent
+      >;
+      createNetworkEventEmitter: <T>(eventType: string) => PapiEventEmitter<T>;
+      getNetworkEvent: <T_1>(
+        eventType: string,
+      ) => import('shared/models/papi-event.model').PapiEvent<T_1>;
+    };
+    logger: import('electron-log').Logger & {
+      default: import('electron-log').Logger;
+    };
+    internet: {
+      fetch: typeof fetch;
+    };
+    dataProvider: {
+      hasKnown: (providerName: string) => boolean;
+      registerEngine: <
+        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >(
+        providerName: string,
+        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes>,
+      ) => Promise<
+        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes>
+      >;
+      get: <T_2 extends import('shared/models/data-provider.interface').default<any>>(
+        providerName: string,
+      ) => Promise<T_2 | undefined>;
+      decorators: {
+        ignore: {
+          (
+            method: Function & {
+              isIgnored?: boolean | undefined;
+            },
+          ): void;
+          <T_3 extends object>(target: T_3, member: keyof T_3): void;
+        };
+      };
+      DataProviderEngine: abstract new <
+        TDataTypes_1 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >() => {
+        notifyUpdate: import('shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_1>;
+      };
+    };
   };
-  export default executionTokenService;
-}
-declare module 'extension-host/services/extension-storage.service' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
-  import { Buffer } from 'buffer';
-  /** This is only intended to be called by the extension service.
-   *  This service cannot call into the extension service or it causes a circular dependency.
-   */
-  export function setExtensionUris(urisPerExtension: Map<string, string>): void;
-  /** Return a path to the specified file within the extension's installation directory */
-  export function buildExtensionPathFromName(extensionName: string, fileName: string): string;
-  /** Read a text file from the the extension's installation directory
-   *  @param token ExecutionToken provided to the extension when `activate()` was called
-   *  @param fileName Name of the file to be read
-   *  @returns Promise for a string with the contents of the file
-   */
-  function readTextFileFromInstallDirectory(
-    token: ExecutionToken,
-    fileName: string,
-  ): Promise<string>;
-  /** Read a binary file from the the extension's installation directory
-   *  @param token ExecutionToken provided to the extension when `activate()` was called
-   *  @param fileName Name of the file to be read
-   *  @returns Promise for a Buffer with the contents of the file
-   */
-  function readBinaryFileFromInstallDirectory(
-    token: ExecutionToken,
-    fileName: string,
-  ): Promise<Buffer>;
-  /** Read data specific to the user (as identified by the OS) and extension (as identified by
-   *  the ExecutionToken)
-   *  @param token ExecutionToken provided to the extension when `activate()` was called
-   *  @param key Unique identifier of the data
-   *  @returns Promise for a string containing the data
-   */
-  function readUserData(token: ExecutionToken, key: string): Promise<string>;
-  /** Write data specific to the user (as identified by the OS) and extension (as identified by
-   *  the ExecutionToken)
-   *  @param token ExecutionToken provided to the extension when `activate()` was called
-   *  @param key Unique identifier of the data
-   *  @param data Data to be written
-   *  @returns Promise that will resolve if the data is written successfully
-   */
-  function writeUserData(token: ExecutionToken, key: string, data: string): Promise<void>;
-  /** Delete data previously written that is specific to the user (as identified by the OS)
-   *  and extension (as identified by the ExecutionToken)
-   *  @param token ExecutionToken provided to the extension when `activate()` was called
-   *  @param key Unique identifier of the data
-   *  @returns Promise that will resolve if the data is deleted successfully
-   */
-  function deleteUserData(token: ExecutionToken, key: string): Promise<void>;
-  /** This service provides extensions in the extension host the ability to read/write data
-   *  based on the extension identity and current user (as identified by the OS). This service will
-   *  not work within the renderer.
-   */
-  const extensionStorageService: {
-    readTextFileFromInstallDirectory: typeof readTextFileFromInstallDirectory;
-    readBinaryFileFromInstallDirectory: typeof readBinaryFileFromInstallDirectory;
-    readUserData: typeof readUserData;
-    writeUserData: typeof writeUserData;
-    deleteUserData: typeof deleteUserData;
-  };
-  export default extensionStorageService;
-  export type ExtensionStorageService = typeof extensionStorageService;
+  export default papi;
 }
 declare module 'renderer/context/papi-context/test.context' {
   const TestContext: import('react').Context<string>;
@@ -2472,34 +2358,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export type PapiHooks = typeof papiHooks;
 }
 declare module 'papi' {
-  /**
-   * Unified module for accessing API features in extensions.
-   *
-   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
-   */
-  import * as commandService from 'shared/services/command.service';
-  import * as papiUtil from 'shared/utils/papi-util';
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
   const papi: {
-    EventEmitter: typeof PapiEventEmitter;
-    fetch: typeof fetch;
-    commands: typeof commandService;
-    util: typeof papiUtil;
-    webViews: {
-      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/web-view.model').AddWebViewEvent
-      >;
-      getWebView: (
-        webViewType: string,
-        layout?: import('shared/data/web-view.model').Layout,
-        options?: import('shared/data/web-view.model').GetWebViewOptions,
-      ) => Promise<string | undefined>;
-      initialize: () => Promise<void>;
-      registerWebViewProvider: (
-        webViewType: string,
-        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
-      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
-    };
     react: {
       context: {
         TestContext: import('react').Context<string>;
@@ -2552,6 +2411,25 @@ declare module 'papi' {
         };
       };
     };
+    EventEmitter: typeof import('shared/models/papi-event-emitter.model').default;
+    fetch: typeof fetch;
+    commands: typeof import('shared/services/command.service');
+    util: typeof import('shared/utils/papi-util');
+    webViews: {
+      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/web-view.model').AddWebViewEvent
+      >;
+      getWebView: (
+        webViewType: string,
+        layout?: import('shared/data/web-view.model').Layout,
+        options?: import('shared/data/web-view.model').GetWebViewOptions,
+      ) => Promise<string | undefined>;
+      initialize: () => Promise<void>;
+      registerWebViewProvider: (
+        webViewType: string,
+        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+    };
     network: {
       onDidClientConnect: import('shared/models/papi-event.model').PapiEvent<
         import('shared/data/internal-connection.model').ClientConnectEvent
@@ -2559,7 +2437,9 @@ declare module 'papi' {
       onDidClientDisconnect: import('shared/models/papi-event.model').PapiEvent<
         import('shared/data/internal-connection.model').ClientDisconnectEvent
       >;
-      createNetworkEventEmitter: <T_3>(eventType: string) => PapiEventEmitter<T_3>;
+      createNetworkEventEmitter: <T_3>(
+        eventType: string,
+      ) => import('shared/models/papi-event-emitter.model').default<T_3>;
       getNetworkEvent: <T_4>(
         eventType: string,
       ) => import('shared/models/papi-event.model').PapiEvent<T_4>;
@@ -2599,6 +2479,204 @@ declare module 'papi' {
         notifyUpdate: import('shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_2>;
       };
     };
+  };
+  export default papi;
+  export type Papi = typeof papi;
+}
+declare module 'shared/data/file-system.model' {
+  /**
+   * Types to use with file system operations
+   */
+  /**
+   * Represents a path in file system or other.
+   * Has a scheme followed by :// followed by a relative path.
+   * If no scheme is provided, the app scheme is used.
+   * Available schemes are as follows:
+   *  - app:// - goes to the app's data directory (platform-dependent)
+   *  - resources:// - goes to the resources directory installed in the app
+   */
+  export type Uri = string;
+}
+declare module 'node/utils/util' {
+  import { Uri } from 'shared/data/file-system.model';
+  export function resolveHtmlPath(htmlFileName: string): string;
+  /**
+   * Gets the platform-specific user appdata folder for this application
+   * Thanks to Luke at https://stackoverflow.com/a/26227660
+   */
+  export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
+  /**
+   * Resolves the uri to a path
+   * @param uri the uri to resolve
+   * @returns real path to the uri supplied
+   */
+  export function getPathFromUri(uri: Uri): string;
+  /**
+   * Combines the uri passed in with the paths passed in to make one uri
+   * @param uri uri to start from
+   * @param paths paths to combine into the uri
+   * @returns one uri that combines the uri and the paths in left-to-right order
+   */
+  export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
+}
+declare module 'node/services/node-file-system.service' {
+  import { Uri } from 'shared/data/file-system.model';
+  /**
+   * Reads a text file asynchronously
+   * @param uri Uri of file
+   * @returns promise that resolves to the contents of the file
+   */
+  export function readFileText(uri: Uri): Promise<string>;
+  /**
+   * Reads a binary file asynchronously
+   * @param uri Uri of file
+   * @returns promise that resolves to the contents of the file
+   */
+  export function readFileBinary(uri: Uri): Promise<Buffer>;
+  /**
+   * Writes the string to a file asynchronously
+   * @param uri Uri of file
+   * @param fileContents string to write into the file
+   * @returns promise that resolves after writing the file
+   */
+  export function writeFileText(uri: Uri, fileContents: string): Promise<void>;
+  export function deleteFile(uri: Uri): Promise<void>;
+  /** Type of file system item in a directory */
+  export enum EntryType {
+    File = 'file',
+    Directory = 'directory',
+    Unknown = 'unknown',
+  }
+  /** All entries in a directory, mapped from entry type to array of uris for the entries */
+  export type DirectoryEntries = Readonly<{
+    [entryType in EntryType]: Uri[];
+  }>;
+  /**
+   * Reads a directory and returns lists of entries in the directory by entry type
+   * @param uri uri of directory
+   * @returns map of entry type to list of uris for each entry in the directory with that type
+   */
+  export function readDir(uri: Uri): Promise<DirectoryEntries>;
+}
+declare module 'node/utils/crypto-util' {
+  export function createUuid(): string;
+  /**
+   * Create a cryptographically secure nonce that is at least 128 bits long
+   * See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
+   *
+   * @param encoding: "base64url" (HTML safe, shorter string) or "hex" (longer string)
+   * From https://base64.guru/standards/base64url, the purpose of this encoding is
+   * "the ability to use the encoding result as filename or URL address"
+   * @param numberOfBytes: number of bytes the resulting nonce should contain
+   * @returns cryptographically secure, pseudo-randomly generated value encoded as a string
+   */
+  export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
+}
+declare module 'node/models/execution-token.model' {
+  /** For now this is just for extensions, but maybe we will want to expand this in the future */
+  export type ExecutionTokenType = 'extension';
+  /** Execution tokens can be passed into API calls to provide context about their identity */
+  export class ExecutionToken {
+    readonly type: ExecutionTokenType;
+    readonly name: string;
+    readonly nonce: string;
+    constructor(tokenType: ExecutionTokenType, name: string);
+    getHash(): string;
+  }
+}
+declare module 'node/services/execution-token.service' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  /** This should be called when extensions are being loaded
+   *  @param extensionName Name of the extension to register
+   *  @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers.
+   *  It is important that the token is not shared to avoid impersonation of API callers.
+   */
+  function registerExtension(extensionName: string): ExecutionToken;
+  /** Remove a registered token.  Note that a hash of a token is what is needed to unregister, not
+   *  the full token itself (notably not the nonce), so something can be delegated the ability to
+   *  unregister a token without having been given the full token itself.
+   *  @param extensionName Name of the extension that was originally registered
+   *  @param tokenHash Value of `getHash()` of the token that was originally registered.
+   *  @returns `true` if the token was successfully unregistered, `false` otherwise
+   */
+  function unregisterExtension(extensionName: string, tokenHash: string): boolean;
+  /** This should only be needed by services that need to contextualize the response for the caller
+   *  @param executionToken Token that was previously registered.
+   *  @returns `true` if the token matches a token that was previous registered, `false` otherwise.
+   */
+  function tokenIsValid(executionToken: ExecutionToken): boolean;
+  const executionTokenService: {
+    registerExtension: typeof registerExtension;
+    unregisterExtension: typeof unregisterExtension;
+    tokenIsValid: typeof tokenIsValid;
+  };
+  export default executionTokenService;
+}
+declare module 'extension-host/services/extension-storage.service' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  import { Buffer } from 'buffer';
+  /** This is only intended to be called by the extension service.
+   *  This service cannot call into the extension service or it causes a circular dependency.
+   */
+  export function setExtensionUris(urisPerExtension: Map<string, string>): void;
+  /** Return a path to the specified file within the extension's installation directory */
+  export function buildExtensionPathFromName(extensionName: string, fileName: string): string;
+  /** Read a text file from the the extension's installation directory
+   *  @param token ExecutionToken provided to the extension when `activate()` was called
+   *  @param fileName Name of the file to be read
+   *  @returns Promise for a string with the contents of the file
+   */
+  function readTextFileFromInstallDirectory(
+    token: ExecutionToken,
+    fileName: string,
+  ): Promise<string>;
+  /** Read a binary file from the the extension's installation directory
+   *  @param token ExecutionToken provided to the extension when `activate()` was called
+   *  @param fileName Name of the file to be read
+   *  @returns Promise for a Buffer with the contents of the file
+   */
+  function readBinaryFileFromInstallDirectory(
+    token: ExecutionToken,
+    fileName: string,
+  ): Promise<Buffer>;
+  /** Read data specific to the user (as identified by the OS) and extension (as identified by
+   *  the ExecutionToken)
+   *  @param token ExecutionToken provided to the extension when `activate()` was called
+   *  @param key Unique identifier of the data
+   *  @returns Promise for a string containing the data
+   */
+  function readUserData(token: ExecutionToken, key: string): Promise<string>;
+  /** Write data specific to the user (as identified by the OS) and extension (as identified by
+   *  the ExecutionToken)
+   *  @param token ExecutionToken provided to the extension when `activate()` was called
+   *  @param key Unique identifier of the data
+   *  @param data Data to be written
+   *  @returns Promise that will resolve if the data is written successfully
+   */
+  function writeUserData(token: ExecutionToken, key: string, data: string): Promise<void>;
+  /** Delete data previously written that is specific to the user (as identified by the OS)
+   *  and extension (as identified by the ExecutionToken)
+   *  @param token ExecutionToken provided to the extension when `activate()` was called
+   *  @param key Unique identifier of the data
+   *  @returns Promise that will resolve if the data is deleted successfully
+   */
+  function deleteUserData(token: ExecutionToken, key: string): Promise<void>;
+  /** This service provides extensions in the extension host the ability to read/write data
+   *  based on the extension identity and current user (as identified by the OS). This service will
+   *  not work within the renderer.
+   */
+  const extensionStorageService: {
+    readTextFileFromInstallDirectory: typeof readTextFileFromInstallDirectory;
+    readBinaryFileFromInstallDirectory: typeof readBinaryFileFromInstallDirectory;
+    readUserData: typeof readUserData;
+    writeUserData: typeof writeUserData;
+    deleteUserData: typeof deleteUserData;
+  };
+  export default extensionStorageService;
+  export type ExtensionStorageService = typeof extensionStorageService;
+}
+declare module 'papi' {
+  const papi: {
     storage: {
       readTextFileFromInstallDirectory: (
         token: import('node/models/execution-token.model').ExecutionToken,
@@ -2621,6 +2699,74 @@ declare module 'papi' {
         token: import('node/models/execution-token.model').ExecutionToken,
         key: string,
       ) => Promise<void>;
+    };
+    EventEmitter: typeof import('shared/models/papi-event-emitter.model').default;
+    fetch: typeof fetch;
+    commands: typeof import('shared/services/command.service');
+    util: typeof import('shared/utils/papi-util');
+    webViews: {
+      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/web-view.model').AddWebViewEvent
+      >;
+      getWebView: (
+        webViewType: string,
+        layout?: import('shared/data/web-view.model').Layout,
+        options?: import('shared/data/web-view.model').GetWebViewOptions,
+      ) => Promise<string | undefined>;
+      initialize: () => Promise<void>;
+      registerWebViewProvider: (
+        webViewType: string,
+        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+    };
+    network: {
+      onDidClientConnect: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/internal-connection.model').ClientConnectEvent
+      >;
+      onDidClientDisconnect: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/internal-connection.model').ClientDisconnectEvent
+      >;
+      createNetworkEventEmitter: <T>(
+        eventType: string,
+      ) => import('shared/models/papi-event-emitter.model').default<T>;
+      getNetworkEvent: <T_1>(
+        eventType: string,
+      ) => import('shared/models/papi-event.model').PapiEvent<T_1>;
+    };
+    logger: import('electron-log').Logger & {
+      default: import('electron-log').Logger;
+    };
+    internet: {
+      fetch: typeof fetch;
+    };
+    dataProvider: {
+      hasKnown: (providerName: string) => boolean;
+      registerEngine: <
+        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >(
+        providerName: string,
+        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes>,
+      ) => Promise<
+        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes>
+      >;
+      get: <T_2 extends import('shared/models/data-provider.interface').default<any>>(
+        providerName: string,
+      ) => Promise<T_2 | undefined>;
+      decorators: {
+        ignore: {
+          (
+            method: Function & {
+              isIgnored?: boolean | undefined;
+            },
+          ): void;
+          <T_3 extends object>(target: T_3, member: keyof T_3): void;
+        };
+      };
+      DataProviderEngine: abstract new <
+        TDataTypes_1 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >() => {
+        notifyUpdate: import('shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_1>;
+      };
     };
   };
   export default papi;
