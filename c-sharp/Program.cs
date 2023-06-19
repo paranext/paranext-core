@@ -48,6 +48,10 @@ public static class Program
 
     internal static void InitializeParatextData(string paratextDataFolder)
     {
+        // ParatextData doesn't support macOS at the moment
+        if (OperatingSystem.IsMacOS())
+            return;
+
         RegistryU.Implementation = new DummyRegistry();
         ICUDllLocator.Initialize(false, false);
         ParatextData.Initialize(paratextDataFolder, false);
