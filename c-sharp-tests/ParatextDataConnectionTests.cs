@@ -49,7 +49,7 @@ namespace TestParanextDataProvider
             EnsureIcuConfigFileIsInPlace();
 
             Console.WriteLine(Assembly.GetExecutingAssembly().Location);
-            Program.InitializeParatextData("../../../../assets");
+            Program.InitializeParatextData("assets");
 
             ScrText scrText = ScrTextCollection.Find("WEB");
             Assert.That(scrText, Is.Not.Null);
