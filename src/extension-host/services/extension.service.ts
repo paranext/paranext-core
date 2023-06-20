@@ -8,7 +8,6 @@ import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
 import { UnsubscriberAsync, getModuleSimilarApiMessage } from '@shared/utils/papi-util';
 import Module from 'module';
-import papi from '@shared/services/papi.service';
 import logger from '@shared/services/logger.service';
 import {
   ARG_EXTENSION_DIRS,
@@ -16,6 +15,7 @@ import {
   getCommandLineArgumentsGroup,
 } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
+import papi from '@extension-host/services/papi-extension-host.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 

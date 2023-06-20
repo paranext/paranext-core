@@ -62,18 +62,18 @@ export function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, A
 export function groupBy<T, K, V>(
   items: T[],
   keySelector: (item: T) => K,
-  valueSelector: (item: T) => V,
+  valueSelector: (item: T, key: K) => V,
 ): Map<K, Array<V>>;
 export function groupBy<T, K, V = T>(
   items: T[],
   keySelector: (item: T) => K,
-  valueSelector?: (item: T) => V,
+  valueSelector?: (item: T, key: K) => V,
 ): Map<K, Array<V | T>> {
   const map = new Map<K, Array<V | T>>();
   items.forEach((item) => {
     const key = keySelector(item);
     const group = map.get(key);
-    const value = valueSelector ? valueSelector(item) : item;
+    const value = valueSelector ? valueSelector(item, key) : item;
     if (group) group.push(value);
     else map.set(key, [value]);
   });
@@ -143,4 +143,24 @@ export function wait(ms: number) {
 export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTimeInMS: number) {
   const timeout = wait(maxWaitTimeInMS).then(() => null);
   return Promise.any([timeout, fn()]);
+}
+
+/**
+ * Get all functions on an object and its prototype (so we don't miss any class methods or any
+ * object methods).
+ *
+ * Note: this does return some potentially unexpected function names. For example:
+ * `getAllObjectFunctionNames({})` returns `[constructor,__defineGetter__,__defineSetter__,
+ * hasOwnProperty,__lookupGetter__,__lookupSetter__,isPrototypeOf,propertyIsEnumerable,toString,
+ * valueOf,toLocaleString]`
+ * @param obj object whose functions to get
+ * @returns array of all function names on an object
+ */
+// Note: lodash has something that MIGHT do the same thing as this. Investigate for https://github.com/paranext/paranext-core/issues/134
+// We want to use any so it can be an object, number, string, etc. Just can't be null or undefined
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getAllObjectFunctionNames(obj: NonNullable<any>) {
+  return Object.getOwnPropertyNames(obj)
+    .concat(Object.getOwnPropertyNames(Object.getPrototypeOf(obj)))
+    .filter((fn) => typeof obj[fn] === 'function');
 }

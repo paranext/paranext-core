@@ -9,11 +9,14 @@ import {
   TextField,
 } from 'papi-components';
 import { useCallback, useContext, useState } from 'react';
+import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
+import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
+import type { DataProviderDataType } from 'shared/models/data-provider.model';
 
 const {
   react: {
     context: { TestContext },
-    hooks: { useData, usePromise },
+    hooks: { useData, useDataProvider, usePromise },
   },
   logger,
 } = papi;
@@ -42,10 +45,38 @@ globalThis.webViewComponent = function HelloWorld() {
     'retrieving',
   );
 
-  const [latestVerseText] = useData(
+  const [latestVerseText] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
     'quick-verse.quick-verse',
     'latest',
     'Loading latest Scripture text...',
+  );
+
+  type TimeDataType = {
+    TimeData: DataProviderDataType<string, string | undefined, string>;
+  };
+
+  const [currentTime] = useData.Time<TimeDataType, 'TimeData'>(
+    'current-time',
+    '*',
+    'Loading current time',
+  );
+
+  const [name, setName] = useState('Bill');
+
+  const peopleDataProvider = useDataProvider<PeopleDataProvider>('hello-someone.people');
+
+  const [personGreeting] = useData.Greeting<PeopleDataTypes, 'Greeting'>(
+    'hello-someone.people',
+    name,
+    'Greeting loading',
+  );
+
+  const [personAge] = useData.Age<PeopleDataTypes, 'Age'>('hello-someone.people', name, -1);
+
+  const [psalm1] = useData.Chapter<QuickVerseDataTypes, 'Chapter'>(
+    'quick-verse.quick-verse',
+    ['Psalm', 1],
+    'Loading Psalm 1...',
   );
 
   return (
@@ -80,6 +111,15 @@ globalThis.webViewComponent = function HelloWorld() {
         </Button>
       </div>
       <div>{latestVerseText}</div>
+      <div>{currentTime}</div>
+      <div>
+        <input value={name} onChange={(e) => setName(e.target.value)} />
+        <Button onClick={() => peopleDataProvider?.deletePerson(name)}>Delete {name}</Button>
+      </div>
+      <div>{personGreeting}</div>
+      <div>{personAge}</div>
+      <h3>Psalm 1</h3>
+      <div>{psalm1}</div>
       <br />
       <div>
         <TextField label="Test Me" />

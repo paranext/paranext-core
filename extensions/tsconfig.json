@@ -15,11 +15,12 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "typeRoots": ["./node_modules/@types", "./dist"],
+    "typeRoots": ["./node_modules/@types", "./dist", "../lib"],
     "types": ["papi-dts"],
     "paths": {
       "@extensions/*": ["./dist/*"]
     },
+    "experimentalDecorators": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,

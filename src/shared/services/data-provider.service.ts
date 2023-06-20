@@ -5,18 +5,28 @@
 
 import IDataProvider, { IDisposableDataProvider } from '@shared/models/data-provider.interface';
 import DataProviderInternal, {
+  DataProviderDataTypes,
+  DataProviderGetter,
+  DataProviderUpdateInstructions,
+  DataProviderSetter,
   DataProviderSubscriber,
   DataProviderSubscriberOptions,
+  DataTypeNames,
+  getDataProviderDataTypeFromFunctionName,
 } from '@shared/models/data-provider.model';
-import IDataProviderEngine from '@shared/models/data-provider-engine.model';
+import IDataProviderEngine, {
+  DataProviderEngineNotifyUpdate,
+} from '@shared/models/data-provider-engine.model';
 import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as networkService from '@shared/services/network.service';
 import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
-import AsyncVariable from '@shared/utils/async-variable';
-import { NetworkObject } from '@shared/models/network-object.model';
+import { getAllObjectFunctionNames, groupBy, isString } from '@shared/utils/util';
+import { LocalObjectToProxyCreator, NetworkObject } from '@shared/models/network-object.model';
 import networkObjectService from '@shared/services/network-object.service';
-import logger from './logger.service';
+import { CannotHaveOnDidDispose } from '@shared/models/disposal.model';
+import logger from '@shared/services/logger.service';
+import AsyncVariable from '@shared/utils/async-variable';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -40,6 +50,19 @@ let isInitialized = false;
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
 
+/**
+ * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes.
+ * If a data provider engine class extends this class, it doesn't have to specify its own
+ * `notifyUpdate` function in order to use `notifyUpdate`.
+ *
+ * @see IDataProviderEngine for more information on extending this class.
+ */
+abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
+  // This is just a placeholder and will be layered over by papi. We don't need it to do anything
+  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes> = (_updateInstructions) => {};
+}
+
 /** Sets up the service. Only runs once and always returns the same promise after that */
 const initialize = () => {
   if (initializePromise) return initializePromise;
@@ -56,9 +79,10 @@ const initialize = () => {
   return initializePromise;
 };
 
-/** Indicate if we are aware of an existing data provider with the given name. If a data provider
- *  with the given name is someone else on the network, this function won't tell you about it
- *  unless something else in the existing process is subscribed to it.
+/**
+ * Indicate if we are aware of an existing data provider with the given name. If a data provider
+ * with the given name is somewhere else on the network, this function won't tell you about it
+ * unless something else in the existing process is subscribed to it.
  */
 function hasKnown(providerName: string): boolean {
   return networkObjectService.hasKnown(getDataProviderObjectId(providerName));
@@ -68,14 +92,16 @@ function hasKnown(providerName: string): boolean {
  * Creates a subscribe function for a data provider to allow subscribing to updates on the data
  * @param dataProviderPromise promise to the data provider's network object
  * @param onDidUpdate the event to listen to for updates on the data
+ * @param dataType the name of the functions to use (ex: `dataProvider.subscribeBook` -> `dataProvider.getBook`)
  * @returns subscribe function for a data provider
  */
-function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
-  dataProviderPromise: Promise<IDataProvider<TSelector, TGetData, TSetData>>,
-  onDidUpdate: PapiEvent<boolean>,
-): DataProviderSubscriber<TSelector, TGetData> {
+function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
+  dataProviderPromise: Promise<IDataProvider<TDataTypes>>,
+  onDidUpdate: PapiEvent<DataProviderUpdateInstructions<TDataTypes>>,
+  dataType: DataTypeNames<TDataTypes>,
+): DataProviderSubscriber<TDataTypes[typeof dataType]> {
   return async (selector, callback, options?: DataProviderSubscriberOptions) => {
-    const dataProvider: IDataProvider<TSelector, TGetData, TSetData> = await dataProviderPromise;
+    const dataProvider = await dataProviderPromise;
 
     // Default options
     const subscriberOptions: DataProviderSubscriberOptions = {
@@ -89,21 +115,38 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
     /** The most recent data before the newest update. Used for deep comparison checks to prevent useless updates */
     // Start this out as a placeholder so updates definitely run the callback (including if the data is undefined or an empty object)
     // TODO: create a cache for the data provider that holds data returned per selector and shares that cache here
-    let dataPrevious: TGetData = SUBSCRIBE_PLACEHOLDER as TGetData;
+    let dataPrevious: unknown = SUBSCRIBE_PLACEHOLDER;
 
     // Create a layer over the provided callback that lets us know if we received an update so we don't run the callback with old data after updating
     /** Whether we have already received an update event, meaning our initial `get` will return old data */
     let receivedUpdate = false;
-    const callbackWithUpdate = async () => {
+    const callbackWithUpdate = async (
+      updateEventResult: DataProviderUpdateInstructions<TDataTypes>,
+    ) => {
+      if (
+        updateEventResult !== '*' &&
+        (!Array.isArray(updateEventResult) || !updateEventResult.includes(dataType))
+      )
+        // The update does not apply to this data type. Ignore
+        return;
+
+      // The update is relevant to this data type, so continue with this subscription
       // Get the data at our selector when we receive notification that the data updated
       // TODO: Implement selector events so we can receive the new data with the update instead of reaching back out for it
-      const data = await dataProvider.get(selector);
+      // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
+      // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
+      // to specify the specific types
+      const data = await (
+        (dataProvider as unknown as DataProviderInternal<TDataTypes>)[
+          `get${dataType}`
+        ] as DataProviderGetter<TDataTypes[typeof dataType]>
+      )(selector);
       // Take note that we have received an update so we don't run the callback with the old data below in the `retrieveDataImmediately` code
       receivedUpdate = true;
 
       // Only update if we should listen to all updates, if the old data is the default placeholder data, or the data is not deeply equal
       if (
-        whichUpdates === 'all' ||
+        whichUpdates === '*' ||
         dataPrevious === SUBSCRIBE_PLACEHOLDER ||
         !deepEqual(dataPrevious, data)
       ) {
@@ -117,7 +160,14 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
     // If the subscriber wants to get the data as soon as possible in addition to running the callback on updates, get the data
     if (retrieveDataImmediately) {
       // Get the data to run the callback immediately so it has the data
-      const data = await dataProvider.get(selector);
+      // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
+      // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
+      // to specify the specific types
+      const data = await (
+        (dataProvider as unknown as DataProviderInternal<TDataTypes>)[
+          `get${dataType}`
+        ] as DataProviderGetter<TDataTypes[typeof dataType]>
+      )(selector);
       // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
       if (!receivedUpdate) {
         receivedUpdate = true;
@@ -132,102 +182,292 @@ function createDataProviderSubscriber<TSelector, TGetData, TSetData>(
 }
 
 /**
+ * Creates a data provider proxy with `subscribe<data_type>` functions. Runs locally and remote
+ * @param dataProviderEngine engine to make the data provider proxy over if local. `undefined` if remote
+ * @param dataProviderPromise promise to the data provider's network object
+ * @param onDidUpdate the event to listen to for updates on the data
+ * @returns data provider proxy with `subscribe<data_type>` functions
+ */
+function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
+  dataProviderEngine: IDataProviderEngine<TDataTypes> | undefined,
+  dataProviderPromise: Promise<IDataProvider<TDataTypes>>,
+  onDidUpdate: PapiEvent<DataProviderUpdateInstructions<TDataTypes>>,
+): DataProviderInternal<TDataTypes> {
+  // Object whose methods to run first when the data provider's method is called if they exist here
+  // before falling back to the dataProviderEngine's methods. Caches subscribe functions and bound
+  // data provider engine methods.
+  // TODO: update network objects so remote objects know when methods do not exist, then make IDataProvider.set optional
+  const dataProviderInternal: Partial<DataProviderInternal<TDataTypes>> = {};
+
+  // Create a proxy that runs the data provider method if it exists or runs the engine method otherwise
+  const dataProvider = new Proxy(
+    dataProviderEngine ?? (dataProviderInternal as IDataProviderEngine<TDataTypes>),
+    {
+      get(obj, prop) {
+        // Pass promises through
+        if (prop === 'then') return obj[prop as keyof typeof obj];
+
+        // Do not let anyone but the data provider engine send updates
+        if (isString(prop) && prop === 'notifyUpdate')
+          throw new Error('Cannot run notifyUpdate outside of data provider engine');
+
+        // If the data provider already has the method, run it
+        if (prop in dataProviderInternal)
+          return dataProviderInternal[prop as keyof typeof dataProviderInternal];
+
+        /** Figure out the method that will go on the data provider to run */
+        // Any because we want this method to be any method on the data provider type
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let newDataProviderMethod: DataProviderInternal<TDataTypes>[any] | undefined;
+
+        // If they want a subscriber, build a subscribe function specific to the data type used
+        if (isString(prop) && prop.startsWith('subscribe')) {
+          const dataType = getDataProviderDataTypeFromFunctionName(prop);
+          // Subscribe to run the callback when data changes. Also immediately calls callback with the current value
+          newDataProviderMethod = createDataProviderSubscriber<TDataTypes>(
+            dataProviderPromise,
+            onDidUpdate,
+            dataType,
+          );
+        }
+        // If it's not a subscribe and the data provider engine is provided (meaning this proxy is
+        // being created for a local data provider), try to get the engine method
+        else if (dataProviderEngine) {
+          // Otherwise, get the engine method and bind it
+          // There isn't indexing on IDataProviderEngine so normal objects could be used,
+          // but now members can't be accessed by indexing in DataProviderService
+          // TODO: fix it so it is indexable but can have specific members
+          newDataProviderMethod = // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (obj[prop as keyof typeof obj] as IDataProviderEngine<TDataTypes>[any])?.bind(
+              dataProviderEngine,
+            );
+        }
+
+        // Save the bound engine method on the data provider to be run later
+        if (newDataProviderMethod) {
+          // There isn't indexing on IDataProviderEngine so normal objects could be used,
+          // but now members can't be accessed by indexing in DataProviderService
+          // TODO: fix it so it is indexable but can have specific members
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (dataProviderInternal as any)[prop] = newDataProviderMethod;
+        }
+        return newDataProviderMethod;
+      },
+      set(obj, prop, value) {
+        // We create `subscribe<data_type>` and `notifyUpdate` for extensions, and
+        // `subscribe<data_type>` uses `get<data_type>` internally, so those 3 properties can't
+        // change after the data provider has been created or bad things will happen.
+        if (
+          isString(prop) &&
+          (prop === 'get' || prop.startsWith('subscribe') || prop === 'notifyUpdate')
+        )
+          return false;
+
+        // If we cached a property previously, purge the cache for that property since it is changing.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((dataProviderInternal as any)[prop]) delete (dataProviderInternal as any)[prop];
+
+        // Actually set the provided property
+        Reflect.set(obj, prop, value);
+        return true;
+      },
+      has(obj, prop) {
+        if (prop in dataProviderInternal) return true;
+        // This proxy provides subscribe methods, so make sure they seem to exist
+        if (isString(prop) && prop.startsWith('subscribe')) return true;
+        return prop in obj;
+      },
+    },
+    // Type assert the data provider engine proxy because it is a DataProviderInternal
+  ) as DataProviderInternal<TDataTypes>;
+
+  return dataProvider;
+}
+
+/**
+ * Maps from update instructions returned from `notifyUpdate` or a `set<data_type>` function
+ * to an update event to send over the network to inform subscribers to update their data
+ * @param updateInstructions update instructions to reformat into an update event
+ * @param dataType the data type of the update instructions (e.g. 'Verse' if update instructions came from `setVerse`)
+ * or `undefined` if being mapped for `notifyUpdate`, which doesn't have a data type
+ * @returns update event information to send in the `onDidUpdate` event emitter to tell subscribers to update
+ */
+function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataTypes>(
+  updateInstructions: DataProviderUpdateInstructions<TDataTypes> | undefined,
+  dataType: DataTypeNames<TDataTypes> | undefined,
+): DataProviderUpdateInstructions<TDataTypes> {
+  // If they want to update all data types, let them do it
+  if (updateInstructions === '*') return updateInstructions;
+  // If the update instructions are a string other than '*' (hopefully one of the data types), send
+  // an update specifically for that data type
+  if (isString(updateInstructions)) return [updateInstructions as DataTypeNames<TDataTypes>];
+  if (Array.isArray(updateInstructions)) {
+    // If the update instructions are a non-empty array, send it
+    if (updateInstructions.length > 0) return updateInstructions;
+    // If the update instructions are an empty array, don't update (count as falsy)
+    return false;
+  }
+  // If the update instructions are truthy but neither an array or a string or '*', it means we should just send an update for its own data type
+  // However, we don't have a data type if we're mapping for `notifyUpdate`, so just return '*' to update everything.
+  if (updateInstructions) return dataType !== undefined ? [dataType] : '*';
+  // If the update instructions are falsy, do not update
+  return false;
+}
+
+/**
+ * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
+ * papi will not layer over these methods or consider them to be data type methods
+ *
+ * @param method the method to ignore
+ *
+ * @example use this as a decorator on a class's method:
+ * ```typescript
+ * class MyDataProviderEngine {
+ *   ＠papi.dataProvider.decorators.ignore
+ *   async getInternal() {}
+ * }
+ * ```
+ *
+ * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
+ * code blocks, so a different unicode character was used. Please use a normal `@` when using a decorator.
+ *
+ * OR
+ *
+ * @example call this function signature on an object's method:
+ * ```typescript
+ * const myDataProviderEngine = {
+ *   async getInternal() {}
+ * };
+ * papi.dataProvider.decorators.ignore(dataProviderEngine.getInternal);
+ * ```
+ */
+function ignore(method: Function & { isIgnored?: boolean }): void;
+/**
+ * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
+ * papi will not layer over these methods or consider them to be data type methods
+ *
+ * @param target the class that has the method to ignore
+ * @param member the name of the method to ignore
+ *
+ * Note: this is the signature that provides the actual decorator functionality. However, since
+ * users will not be using this signature, the example usage is provided in the signature above.
+ */
+function ignore<T extends object>(target: T, member: keyof T): void;
+function ignore<T extends object>(
+  target: T | (Function & { isIgnored?: boolean }),
+  member?: keyof T,
+): void {
+  if (typeof target === 'function') target.isIgnored = true;
+  else {
+    // We don't care what type the decorated object is. Just want to set some function metadata
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (target[member as keyof T] as any).isIgnored = true;
+  }
+}
+
+/**
+ * A collection of decorators to be used with the data provider service
+ *
+ * @example to use the `ignore` a decorator on a class's method:
+ * ```typescript
+ * class MyDataProviderEngine {
+ *   ＠papi.dataProvider.decorators.ignore
+ *   async getInternal() {}
+ * }
+ * ```
+ *
+ * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
+ * code blocks, so a different unicode character was used. Please use a normal `@` when using a decorator.
+ */
+const decorators = {
+  ignore,
+};
+
+/**
  * Wrap a data provider engine to create a data provider that handles subscriptions for it.
  *
  * Note: This should only run locally when you have the data provider engine. The remote data provider is pretty much just a network object
  *
- * WARNING: this function mutates the provided object. Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
+ * WARNING: this function mutates the provided object. Its `notifyUpdate` and `set<data_type>` methods are layered over to facilitate data provider subscriptions.
  * @param dataProviderEngine provider engine that handles setting and getting data as well as informing which listeners should get what updates
  * @param dataProviderPromise promise to the data provider's network object
  * @param onDidUpdateEmitter event emitter to use for informing subscribers of updates. The event just returns what set returns (should be true according to IDataProviderEngine)
  * @returns data provider layering over the provided data provider engine
  */
-function buildDataProvider<TSelector, TGetData, TSetData>(
-  dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
-  dataProviderPromise: Promise<IDataProvider<TSelector, TGetData, TSetData>>,
-  onDidUpdateEmitter: PapiEventEmitter<boolean>,
-): DataProviderInternal<TSelector, TGetData, TSetData> {
+function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
+  dataProviderEngine: IDataProviderEngine<TDataTypes>,
+  dataProviderPromise: Promise<IDataProvider<TDataTypes>>,
+  onDidUpdateEmitter: PapiEventEmitter<DataProviderUpdateInstructions<TDataTypes>>,
+): DataProviderInternal<TDataTypes> {
+  // Figure out the available get/set methods' data types
+  const dataTypes = groupBy<string, 'get' | 'set' | 'other', DataTypeNames<TDataTypes>>(
+    getAllObjectFunctionNames(dataProviderEngine),
+    (fnName) => {
+      // If the function was decorated with @ignore, do not consider it a special function
+      // We don't care about types. We just want to check the decorator
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((dataProviderEngine as any)[fnName].isIgnored) return 'other';
+
+      if (fnName.startsWith('get')) return 'get';
+      if (fnName.startsWith('set')) return 'set';
+      return 'other';
+    },
+    (fnName, fnType) => {
+      // If it's not a get or a set, just return an empty string. We aren't planning to use this
+      if (fnType === 'other') return '' as DataTypeNames<TDataTypes>;
+
+      // Grab the data type out of the function names
+      return getDataProviderDataTypeFromFunctionName<TDataTypes>(fnName);
+    },
+  );
+
+  // Validate that the data provider engine has matching get and set functions
+  if (
+    dataTypes.get('get')?.length !== dataTypes.get('set')?.length ||
+    dataTypes.get('get')?.some((getDataType) => !dataTypes.get('set')?.includes(getDataType))
+  )
+    throw new Error('Data provider engine does not have matching get and set functions!');
+
   // Layer over data provider engine methods to give it control over emitting updates
   // Layer over the data provider engine's notifyUpdate with one that actually emits an update
   // or if the dpe doesn't have notifyUpdate, give it one
   const dpeNotifyUpdate = dataProviderEngine.notifyUpdate
     ? dataProviderEngine.notifyUpdate.bind(dataProviderEngine)
     : undefined;
-  dataProviderEngine.notifyUpdate = (...args) => {
-    // If notifyUpdate is not overridden, just return true
-    let dpeNotifyUpdateResult = true;
-    if (dpeNotifyUpdate) dpeNotifyUpdateResult = dpeNotifyUpdate(...args);
-    if (dpeNotifyUpdateResult) onDidUpdateEmitter.emit(dpeNotifyUpdateResult);
-    return dpeNotifyUpdateResult;
+  dataProviderEngine.notifyUpdate = (updateInstructions = true, ...args) => {
+    // emit an update if updateInstructions indicate to do so
+    const updateEventResult = mapUpdateInstructionsToUpdateEvent<TDataTypes>(
+      updateInstructions,
+      undefined,
+    );
+    // Run the data provider engine's original `notifyUpdate` with the update result before we send the update
+    if (dpeNotifyUpdate) dpeNotifyUpdate(updateEventResult, ...args);
+    if (updateEventResult) onDidUpdateEmitter.emit(updateEventResult);
   };
 
-  // Layer over the data provider engine's set with one that actually emits an update if set returns true
-  if (dataProviderEngine.set) {
-    /** Saved bound version of the data provider engine's set so we can call it from here */
-    const dpeSet = dataProviderEngine.set.bind(dataProviderEngine);
-    /** Layered set that emits an update event after running the engine's set */
-    dataProviderEngine.set = async (...args) => {
-      const dpeSetResult = await dpeSet(...args);
-      if (dpeSetResult) onDidUpdateEmitter.emit(dpeSetResult);
-      return dpeSetResult;
-    };
-  }
+  // Layer over the data provider engine's set methods with set methods that actually emit an update
+  // if they return true
+  dataTypes.get('set')?.forEach((dataType) => {
+    if (dataProviderEngine[`set${dataType}`]) {
+      /** Saved bound version of the data provider engine's set so we can call it from here */
+      const dpeSet = (
+        dataProviderEngine[`set${dataType}`] as DataProviderSetter<TDataTypes, typeof dataType>
+      ).bind(dataProviderEngine);
+      /** Layered set that emits an update event after running the engine's set */
+      (dataProviderEngine[`set${dataType}`] as DataProviderSetter<TDataTypes, typeof dataType>) =
+        async (...args) => {
+          const dpeSetResult = await dpeSet(...args);
+          const updateEventResult = mapUpdateInstructionsToUpdateEvent<TDataTypes>(
+            dpeSetResult,
+            dataType,
+          );
+          if (updateEventResult) onDidUpdateEmitter.emit(updateEventResult);
+          return dpeSetResult;
+        };
+    }
+  });
 
-  // Object whose methods to run first when the data provider's method is called if they exist here
-  // before falling back to the dataProviderEngine's methods. Also stores bound versions of the dpe methods
-  // Currently, set is omitted because it may or may not be provided on the data provider engine, and we want to
-  // throw an exception if someone uses it without it being provided.
-  // TODO: update network objects so remote objects know when methods do not exist, then make IDataProvider.set optional
-  const dataProviderInternal: Omit<DataProviderInternal<TSelector, TGetData, TSetData>, 'set'> = {
-    /** Layered get that runs the engine's get */
-    get: dataProviderEngine.get.bind(dataProviderEngine),
-    /** Subscribe to run the callback when data changes. Also immediately calls callback with the current value */
-    subscribe: createDataProviderSubscriber(dataProviderPromise, onDidUpdateEmitter.event),
-  };
-
-  // Create a proxy that runs the data provider method if it exists or runs the engine method otherwise
-  const dataProvider = new Proxy(dataProviderEngine, {
-    get(obj: IDataProviderEngine<TSelector, TGetData, TSetData>, prop) {
-      // Pass promises through
-      if (prop === 'then') return obj[prop as keyof typeof obj];
-
-      // Do not let anyone but the data provider engine send updates
-      if (prop === 'notifyUpdate')
-        throw new Error('Cannot run notifyUpdate outside of data provider engine');
-
-      // If the data provider already has the method, run it
-      if (prop in dataProviderInternal)
-        return dataProviderInternal[prop as keyof typeof dataProviderInternal];
-
-      // Get the engine method and bind it
-      const engineMethod = obj[prop as keyof typeof obj]?.bind(dataProviderEngine);
-
-      // Save the bound engine method on the data provider to be run later
-      // There isn't indexing on IDataProviderEngine so normal objects could be used,
-      // but now members can't be accessed by indexing in DataProviderService
-      // TODO: fix it so it is indexable but can have specific members
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (engineMethod) (dataProviderInternal as any)[prop] = engineMethod;
-      return engineMethod;
-    },
-    set(obj: IDataProviderEngine<TSelector, TGetData, TSetData>, prop, value) {
-      // We create `subscribe` for extensions, and `subscribe` uses `get` internally, so those 2
-      // properties can't change after the data provider has been created or bad things will happen.
-      if (prop === 'get' || prop === 'subscribe') return false;
-
-      // If we cached a property previously, purge the cache for that property since it is changing.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((dataProviderInternal as any)[prop]) delete (dataProviderInternal as any)[prop];
-
-      // Actually set the provided property
-      Reflect.set(obj, prop, value);
-      return true;
-    },
-    // Type assert the data provider engine proxy because it is a DataProviderInternal although
-    // Typescript can't figure it out
-  }) as unknown as DataProviderInternal<TSelector, TGetData, TSetData>;
-
-  return dataProvider;
+  return createDataProviderProxy(dataProviderEngine, dataProviderPromise, onDidUpdateEmitter.event);
 }
 
 /**
@@ -237,28 +477,21 @@ function buildDataProvider<TSelector, TGetData, TSetData>(
  *
  * WARNING: registering a dataProviderEngine mutates the provided object.
  * Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
- * @returns information about the data provider including control over disposing of it.
+ * @returns the data provider including control over disposing of it.
  *  Note that this data provider is a new object distinct from the data provider engine passed in.
  * @type `TSelector` - the type of selector used to get some data from this provider.
  *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
  *  Note: A selector must be stringifiable.
  * @type `TData` - the type of data provided by this data provider based on a provided selector
  */
-async function registerEngine<TSelector, TGetData, TSetData>(
+async function registerEngine<TDataTypes extends DataProviderDataTypes>(
   providerName: string,
-  dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
-): Promise<IDisposableDataProvider<TSelector, TGetData, TSetData>> {
+  dataProviderEngine: IDataProviderEngine<TDataTypes>,
+): Promise<IDisposableDataProvider<TDataTypes>> {
   await initialize();
 
-  // There is a potential networking sync issue here. We check for a data provider, then we create a network event, then we create a network object.
-  // If someone else registers an engine with the same data provider name at the same time, the two registrations could get intermixed and mess stuff up
-  // TODO: fix this split network request issue. Just try to register the network object. If it succeeds, continue. If it fails, give up.
   if (hasKnown(providerName))
-    throw new Error(`Data provider with type ${providerName} is already registered`);
-
-  // Validate that the data provider engine has what it needs
-  if (!dataProviderEngine.get || typeof dataProviderEngine.get !== 'function')
-    throw new Error('Data provider engine does not have a get function');
+    throw new Error(`Data provider with name ${providerName} is already registered`);
 
   // We are good to go! Create the data provider
 
@@ -268,14 +501,14 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   /** Variable to hold a promise to the final data provider's network object so the local object
    *  can reference the network object in its functions
    */
-  const dataProviderVariable = new AsyncVariable<IDataProvider<TSelector, TGetData, TSetData>>(
+  const dataProviderVariable = new AsyncVariable<IDataProvider<TDataTypes>>(
     `DataProvider-${providerName}`,
   );
 
   // Create a networked update event
-  const onDidUpdateEmitter = networkService.createNetworkEventEmitter<boolean>(
-    serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
-  );
+  const onDidUpdateEmitter = networkService.createNetworkEventEmitter<
+    DataProviderUpdateInstructions<TDataTypes>
+  >(serializeRequestType(dataProviderObjectId, ON_DID_UPDATE));
 
   // Build the data provider
   const dataProviderInternal = buildDataProvider(
@@ -285,15 +518,14 @@ async function registerEngine<TSelector, TGetData, TSetData>(
   );
 
   // Set up the data provider to be a network object so other processes can use it
-  const disposableDataProvider = (await networkObjectService.set(
-    dataProviderObjectId,
-    dataProviderInternal,
-  )) as IDisposableDataProvider<TSelector, TGetData, TSetData>;
+  const disposableDataProvider: IDisposableDataProvider<TDataTypes> =
+    await networkObjectService.set(dataProviderObjectId, dataProviderInternal);
 
-  // Get the local network object proxy for the data provider so the provider can't be disposed by extensions
-  const dataProvider = await networkObjectService.get<IDataProvider<TSelector, TGetData, TSetData>>(
+  // Get the local network object proxy for the data provider so the provider can't be disposed outside
+  // the service that registered the provider engine
+  const dataProvider = (await networkObjectService.get<IDataProvider<TDataTypes>>(
     dataProviderObjectId,
-  );
+  )) as IDataProvider<TDataTypes>;
 
   // Update the dataProviderVariable so the internal data provider (specifically its subscribe
   // function) can access the dataProvider appropriately
@@ -310,8 +542,7 @@ async function registerEngine<TSelector, TGetData, TSetData>(
  * @returns local data provider object that represents a remote data provider
  */
 // This generic type should be DataProviderInternal because we are making part of a local/internal data provider
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createLocalDataProviderToProxy<T extends DataProviderInternal<any, any, any>>(
+function createLocalDataProviderToProxy<T extends DataProviderInternal>(
   dataProviderObjectId: string,
   // NetworkObject<DataProviderInternal> is our way to convert from DataProviderInternal to IDataProvider without specifying generics
   dataProviderPromise: Promise<NetworkObject<T>>,
@@ -320,9 +551,7 @@ function createLocalDataProviderToProxy<T extends DataProviderInternal<any, any,
   const onDidUpdate = networkService.getNetworkEvent<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
-  return {
-    subscribe: createDataProviderSubscriber(dataProviderPromise, onDidUpdate),
-  } as Partial<T>;
+  return createDataProviderProxy(undefined, dataProviderPromise, onDidUpdate) as Partial<T>;
 }
 
 /**
@@ -330,20 +559,19 @@ function createLocalDataProviderToProxy<T extends DataProviderInternal<any, any,
  * @param providerName Name of the desired data provider
  * @returns The data provider with the given name if one exists, undefined otherwise
  */
+// Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function get<T extends IDataProvider<any, any, any>>(
-  providerName: string,
-): Promise<T | undefined> {
+async function get<T extends IDataProvider<any>>(providerName: string): Promise<T | undefined> {
   await initialize();
 
   // Get the object id for this data provider name
   const dataProviderObjectId = getDataProviderObjectId(providerName);
 
   // Get the network object for this data provider
-  const dataProvider = (await networkObjectService.get<T>(
+  const dataProvider = (await networkObjectService.get<CannotHaveOnDidDispose & T>(
     dataProviderObjectId,
-    createLocalDataProviderToProxy,
-  )) as T;
+    createLocalDataProviderToProxy as LocalObjectToProxyCreator<CannotHaveOnDidDispose & T>,
+  )) as T | undefined;
 
   if (!dataProvider) {
     logger.info(`No data provider found with name = ${providerName}`);
@@ -357,6 +585,8 @@ const dataProviderService = {
   hasKnown,
   registerEngine,
   get,
+  decorators,
+  DataProviderEngine,
 };
 
 export default dataProviderService;
