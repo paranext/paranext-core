@@ -18,4 +18,10 @@
     <PackageReference Include="icu.net" Version="2.9.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="assets\**\*.*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
