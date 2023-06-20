@@ -11,16 +11,6 @@ import './platform-bible-toolbar.css';
 export default function PlatformBibleToolbar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  function toggleDrawer(): undefined {
-    setMenuOpen((prev) => !prev);
-    return undefined;
-  }
-
-  function closeDrawer(): undefined {
-    if (menuOpen !== false) setMenuOpen(false);
-    return undefined;
-  }
-
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -33,7 +23,9 @@ export default function PlatformBibleToolbar() {
           className="menuButton"
           color="inherit"
           aria-label="open drawer"
-          onClick={() => toggleDrawer()}
+          onClick={() => {
+            setMenuOpen((prev) => !prev);
+          }}
         >
           <MenuIcon />
         </IconButton>
@@ -46,7 +38,9 @@ export default function PlatformBibleToolbar() {
           anchor="left"
           variant="temporary"
           open={menuOpen}
-          onClose={() => closeDrawer()}
+          onClose={() => {
+            if (menuOpen) setMenuOpen(false);
+          }}
           PaperProps={{ style: { top: '40px', width: '95%', height: '170px'} }}
         >
           <PlatformBibleMenu />
