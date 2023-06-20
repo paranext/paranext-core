@@ -14,8 +14,8 @@ let papiDTS = fs.readFileSync(PAPI_DTS_PATH, 'utf8');
 
 // Rename module 'shared/services/papi.service' to 'papi' so extensions can import just 'papi'
 papiDTS = papiDTS
-  .replaceAll("'renderer/services/papi-renderer.service'", "'papi'")
-  .replaceAll("'extension-host/services/papi-extension-host.service'", "'papi'");
+  .replaceAll("'renderer/services/papi-frontend.service'", "'papi-frontend'")
+  .replaceAll("'extension-host/services/papi-backend.service'", "'papi-backend'");
 
 // Remove all the @ from the @imports except @mui/material  - not sure why these show up
 // as they are all defined other than the css files and external modules

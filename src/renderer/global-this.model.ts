@@ -5,7 +5,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { ProcessType } from '@shared/global-this.model';
-import papi, { Papi } from '@renderer/services/papi-renderer.service';
+import papi, { Papi } from '@renderer/services/papi-frontend.service';
 import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
 
 // #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
@@ -23,7 +23,7 @@ declare const webpackRenderer: {
  * for packages that extensions import
  */
 function webViewRequire(module: string) {
-  if (module === 'papi') return papi;
+  if (module === 'papi-frontend') return papi;
   if (module === 'react') return React;
   if (module === 'react-dom/client') return { createRoot };
   // Tell the extension dev if there is an api similar to what they want to import

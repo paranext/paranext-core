@@ -15,7 +15,7 @@ import {
   getCommandLineArgumentsGroup,
 } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
-import papi from '@extension-host/services/papi-extension-host.service';
+import papi from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 
@@ -194,7 +194,7 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
   const requireOriginal = Module.prototype.require;
   Module.prototype.require = ((moduleName: string) => {
     // Allow the extension to import papi
-    if (moduleName === 'papi') return papi;
+    if (moduleName === 'papi-backend') return papi;
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithFiles.find(
