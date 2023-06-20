@@ -57,7 +57,9 @@ export type TableColumn<R> = {
    */
   readonly maxWidth?: number | null;
   /**
-   * Enables cell editing
+   * Used to disable editing for a cell if `renderEditCell` is provided (meaning the column will
+   * be editable). Set this explicitly to `false` to turn off editing for this column, or provide
+   * a function that explicitly returns `false` for the rows you want not to be editable.
    */
   readonly editable?: boolean | ((row: R) => boolean) | null;
   /**
@@ -79,7 +81,9 @@ export type TableColumn<R> = {
   readonly sortDescendingFirst?: boolean | null;
   /**
    * Editor to be rendered when cell of column is being edited.
-   * If set, then the column is automatically set to be editable
+   * If set, the column is automatically set to be editable unless the `editable` prop is
+   * explicitly set to `false`. If `editable` is a function, each row will be set to be editable
+   * unless the `editable` function explicitly returns `false` for that row.
    */
   readonly renderEditCell?: ((props: TableEditorProps<R>) => ReactNode) | null;
 };

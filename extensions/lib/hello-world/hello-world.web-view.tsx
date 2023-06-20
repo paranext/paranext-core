@@ -31,6 +31,17 @@ const {
 
 const NAME = 'Hello World React WebView';
 
+const initializeRows = (): Row[] => {
+  return [
+    { id: '0', title: 'Norem ipsum dolor sit amet', subtitle: 'Subtitle1' },
+    { id: '1', title: 'Consectetur adipiscing elit', subtitle: 'Subtitle2' },
+    { id: '2', title: 'Pellentesque suscipit tortor est', subtitle: 'Subtitle3' },
+    { id: '3', title: 'Ut egestas massa aliquam a', subtitle: 'Subtitle4' },
+    { id: '4', title: 'Nulla egestas vestibulum felis a venenatis', subtitle: 'Subtitle5' },
+    { id: '5', title: 'Sed aliquet pulvinar neque', subtitle: 'Subtitle6' },
+  ];
+};
+
 // Test fetching
 papi
   .fetch('https://bible-api.com/matthew+24:14')
@@ -41,18 +52,9 @@ papi
 globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
-  const initialRows: Row[] = [
-    { id: '0', title: 'Norem ipsum dolor sit amet', subtitle: 'Subtitle1' },
-    { id: '1', title: 'Consectetur adipiscing elit', subtitle: 'Subtitle2' },
-    { id: '2', title: 'Pellentesque suscipit tortor est', subtitle: 'Subtitle3' },
-    { id: '3', title: 'Ut egestas massa aliquam a', subtitle: 'Subtitle4' },
-    { id: '4', title: 'Nulla egestas vestibulum felis a venenatis', subtitle: 'Subtitle5' },
-    { id: '5', title: 'Sed aliquet pulvinar neque', subtitle: 'Subtitle6' },
-  ];
-
   const [myState, setMyState] = useState(0);
-  const [rows, setRows] = useState(initialRows);
-  const [selectRows, setSelectRows] = useState(new Set<Key>());
+  const [rows, setRows] = useState(initializeRows());
+  const [selectedRows, setSelectedRows] = useState(new Set<Key>());
 
   const [echoResult] = usePromise(
     useCallback(async () => {
@@ -168,8 +170,10 @@ globalThis.webViewComponent = function HelloWorld() {
           rowKeyGetter={(row: Row) => {
             return row.id;
           }}
-          selectedRows={selectRows}
-          onSelectedRowsChange={(selectedRows: Set<Key>) => setSelectRows(selectedRows)}
+          selectedRows={selectedRows}
+          onSelectedRowsChange={(currentlySelectedRows: Set<Key>) =>
+            setSelectedRows(currentlySelectedRows)
+          }
           onRowsChange={(changedRows: Row[]) => setRows(changedRows)}
           enableSelectColumn
           selectColumnWidth={60}
