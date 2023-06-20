@@ -28,11 +28,8 @@ export const Primary: Story = {
   args: {
     ContentProps: {
       message: 'The default snackbar',
-      action: defaultSnackbarAction,
-      className: 'papi-snackbar primary', // or classes: {root} styles the root element
+      className: 'papi-snackbar primary',
     },
-    // className: 'papi-snackbar primary', // styles the div surrounding snackbar
-    autoHideDuration: 6000,
     isOpen: true,
   },
   parameters: {
@@ -40,11 +37,69 @@ export const Primary: Story = {
       description: {
         story:
           'This is the primary snackbar story. ' +
-          'You can see the snackbar appear with a basic message and color scheme. ' +
-          'If you open the actions console, you will see the snackbar calls onClose ' +
-          'for three reasons: clickaway, timeout, and escapekeydown. If you perform ' +
-          'any of these actions, the action will appear in the list, but the snackbar ' +
-          'itself will not close.',
+          'You can see the snackbar appear with a basic message and color scheme.',
+      },
+    },
+  },
+};
+
+export const Timeout: Story = {
+  args: {
+    ...Primary.args,
+    ContentProps: {
+      message: 'This snackbar will timeout',
+      action: '',
+      className: 'papi-snackbar primary',
+    },
+    autoHideDuration: 6000,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This snackbar inherits the attributes from the primary, but highlights if ' +
+          'the snackbar has autoHideDuration enabled.',
+      },
+    },
+  },
+};
+
+export const SnackbarWithButton: Story = {
+  args: {
+    ...Primary.args,
+    ContentProps: {
+      message: 'This snackbar has a button',
+      action: defaultSnackbarAction,
+      className: 'papi-snackbar primary',
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This snackbar inherits the attributes from the primary, but contains a button ' +
+          'to show the snackbar can have a button as the action.',
+      },
+    },
+  },
+};
+
+export const DivAndSnackbarStyling: Story = {
+  args: {
+    ...Primary.args,
+    ContentProps: {
+      message: 'This snackbar has the div and snackbar styled',
+      className: 'papi-snackbar primary', // styles the root element
+    },
+    className: 'papi-snackbar external', // styles the div surrounding snackbar
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This snackbar inherits the attributes from the primary, but the div ' +
+          'is also styled. This is to demonstrate the difference between the two ' +
+          'className attributes.',
       },
     },
   },
@@ -55,7 +110,6 @@ export const Alert: Story = {
     ...Primary.args,
     ContentProps: {
       message: 'WARNING',
-      action: defaultSnackbarAction,
       className: 'papi-snackbar alert',
     },
   },
@@ -75,7 +129,6 @@ export const Paratext: Story = {
     ...Primary.args,
     ContentProps: {
       message: 'The Paratext snackbar',
-      action: defaultSnackbarAction,
       className: 'papi-snackbar paratext',
     },
   },
@@ -93,7 +146,6 @@ export const ParatextBright: Story = {
     ...Primary.args,
     ContentProps: {
       message: 'The bright Paratext snackbar',
-      action: defaultSnackbarAction,
       className: 'papi-snackbar bright',
     },
   },

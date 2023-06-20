@@ -5,6 +5,16 @@
 .papi-snackbar.primary {
   background: #1ea7fd;
   color: white;
+  line-height: auto;
+  height: auto;
+}
+
+.papi-snackbar.external {
+  background-color: lightsteelblue;
+  width: 30%;
+  padding: 2%;
+  border-style: dotted;
+  border-color: white;
 }
 
 .papi-snackbar.secondary {

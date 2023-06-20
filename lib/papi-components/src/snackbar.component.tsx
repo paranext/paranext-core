@@ -68,7 +68,7 @@ export type SnackbarProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 function Snackbar({
-  autoHideDuration = 6000,
+  autoHideDuration = null,
   isOpen = false,
   className,
   onClose,
