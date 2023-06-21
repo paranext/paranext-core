@@ -1,0 +1,9 @@
+{
+  "name": "external-data-provider-types",
+  "version": "0.0.1",
+  "description": "Typescript model files for data providers written in other languages",
+  "author": "Matt Lyons",
+  "license": "MIT",
+  "main": "does-not-exist",
+  "activationEvents": []
+}

@@ -134,6 +134,7 @@ export async function getExtensions(): Promise<ExtensionInfo[]> {
     })
   )
     .filter((dirEntry) => dirEntry.isDirectory())
+    .filter((dirEntry) => dirEntry.name !== 'external-data-provider-types')
     .map((dirEntry) => dirEntry.name);
 
   // Return extension info for each extension folder
