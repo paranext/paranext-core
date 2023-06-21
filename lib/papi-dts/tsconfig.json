@@ -5,7 +5,7 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "outFile": "papi.d.ts",
-    "typeRoots": ["../node_modules/@types", "../extensions/dist", "../src/@types"]
+    "typeRoots": ["../../node_modules/@types", "../../extensions/dist", "../../src/@types"]
   },
   "files": [
     "../../src/renderer/services/papi-frontend.service.ts",
