@@ -47,15 +47,15 @@ export type TableColumn<R> = {
    * Column width. If not specified, it will be determined automatically
    * based on grid width and specified widths of other columns
    */
-  readonly width?: number | string | null;
+  readonly width?: number | string;
   /**
    * Minimum column width in px.
    */
-  readonly minWidth?: number | null;
+  readonly minWidth?: number;
   /**
    * Maximum column width in px.
    */
-  readonly maxWidth?: number | null;
+  readonly maxWidth?: number;
   /**
    * Used to disable editing for a cell if `renderEditCell` is provided (meaning the column will
    * be editable). Set this explicitly to `false` to turn off editing for this column, or provide
@@ -65,15 +65,15 @@ export type TableColumn<R> = {
   /**
    * Determines whether column is frozen or not
    */
-  readonly frozen?: boolean | null;
+  readonly frozen?: boolean;
   /**
    * Enable resizing of a column
    */
-  readonly resizable?: boolean | null;
+  readonly resizable?: boolean;
   /**
    * Enable sorting of a column
    */
-  readonly sortable?: boolean | null;
+  readonly sortable?: boolean;
   /**
    * Sets the column sort order to be descending instead of ascending the first time
    * the column is sorted
