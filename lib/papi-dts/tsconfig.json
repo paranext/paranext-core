@@ -5,10 +5,11 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "outFile": "papi.d.ts",
-    "typeRoots": ["../node_modules/@types", "../extensions/dist", "../src/@types"]
+    "typeRoots": ["../../node_modules/@types", "../../extensions/dist", "../../src/@types"]
   },
   "files": [
-    "../../src/shared/services/papi.service.ts",
+    "../../src/renderer/services/papi-frontend.service.ts",
+    "../../src/extension-host/services/papi-backend.service.ts",
     "../../src/extension-host/extension-types/extension.interface.ts"
   ]
 }

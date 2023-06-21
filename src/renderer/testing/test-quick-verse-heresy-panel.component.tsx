@@ -1,13 +1,14 @@
 import './test-buttons-panel.component.css';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
-import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
-import { TabInfo } from '@shared/data/web-view.model';
+import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { debounce } from '@shared/utils/util';
 import { useState, useMemo, useCallback } from 'react';
-import { QuickVerseDataProvider } from '@extensions/quick-verse/quick-verse';
+import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { TextField } from 'papi-components';
 
-function TestQuickVerseHeresyPanel() {
+export const TAB_TYPE_QUICK_VERSE_HERESY = 'quick-verse-heresy';
+
+export function TestQuickVerseHeresyPanel() {
   const [verseRef, setVerseRef] = useState<string>('John 11:35');
   // Displayed verse ref while debouncing the actual verse ref
   const [verseRefIntermediate, setVerseRefIntermediate] = useState<string>(verseRef);
@@ -27,10 +28,11 @@ function TestQuickVerseHeresyPanel() {
     [setVerseRefDebounced],
   );
 
-  // Test a custom setter method on a data provider engine that isn't on the interface to see if you can actually do this
-  const quickVerseDataProvider = useDataProvider<QuickVerseDataProvider>('quick-verse.quick-verse');
-
-  const [verseText] = useData(quickVerseDataProvider, verseRef, 'Verse text goes here');
+  const [heresyText, setHeresyText] = useData.Heresy<QuickVerseDataTypes, 'Heresy'>(
+    'quick-verse.quick-verse',
+    verseRef,
+    'Verse text goes here',
+  );
 
   return (
     <div className="buttons-panel">
@@ -53,9 +55,9 @@ function TestQuickVerseHeresyPanel() {
         />
         <textarea
           className="scr-verse-text-area"
-          value={verseText}
+          value={heresyText}
           onChange={(e) => {
-            if (quickVerseDataProvider) quickVerseDataProvider.setHeresy(verseRef, e.target.value);
+            if (setHeresyText) setHeresyText(e.target.value);
           }}
         />
       </div>
@@ -63,9 +65,10 @@ function TestQuickVerseHeresyPanel() {
   );
 }
 
-export default function createQuickVerseHeresyPanel(): TabInfo {
+export function loadQuickVerseHeresyTab(savedTabInfo: SavedTabInfo): TabInfo {
   return {
-    title: 'Quick Verse Heresy',
+    ...savedTabInfo,
+    tabTitle: 'Quick Verse Heresy',
     content: <TestQuickVerseHeresyPanel />,
   };
 }

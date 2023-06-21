@@ -6,36 +6,6 @@ import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 import { isString } from '@shared/utils/util';
 
 /**
- * Gets a data provider with specified name
- * @param providerName name of the data provider to get
- * @returns undefined if the data provider has not been retrieved,
- *  data provider if it has been retrieved and is not disposed,
- *  and undefined again if the data provider is disposed
- *
- * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
- *  specifying your own types, or provide a custom data provider type
- */
-// User of this hook must provide types. Cannot use `unknown` here unfortunately because
-// TypeScript would think we want the implementing IDataProvider types to be unknown as well
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends IDataProvider<any, any, any>>(
-  providerName: string | undefined,
-): T | undefined;
-/**
- * Passes the provided data provider through. Used to support hooks that already have a dataProvider
- * @param dataProvider result of useDataProvider if you want this hook to just return the data provider again
- * @returns undefined if the data provider has not been retrieved,
- *  data provider if it has been retrieved and is not disposed,
- *  and undefined again if the data provider is disposed
- *
- * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
- *  specifying your own types, or provide a custom data provider type
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends IDataProvider<any, any, any>>(
-  dataProvider: T | undefined,
-): T | undefined;
-/**
  * Gets a data provider with specified provider name
  * @param dataProviderSource string name of the data provider to get OR dataProvider (result of useDataProvider if you
  * want this hook to just return the data provider again)
@@ -43,15 +13,11 @@ function useDataProvider<T extends IDataProvider<any, any, any>>(
  *  data provider if it has been retrieved and is not disposed,
  *  and undefined again if the data provider is disposed
  *
- * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
+ * @type `T` - the type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
  *  specifying your own types, or provide a custom data provider type
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends IDataProvider<any, any, any>>(
-  dataProviderSource: string | T | undefined,
-): T | undefined;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends IDataProvider<any, any, any>>(
+function useDataProvider<T extends IDataProvider<any>>(
   dataProviderSource: string | T | undefined,
 ): T | undefined {
   // Check to see if they passed in the results of a useDataProvider hook or undefined

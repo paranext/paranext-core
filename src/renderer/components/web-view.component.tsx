@@ -3,16 +3,24 @@ import {
   SavedTabInfo,
   TabInfo,
   WebViewContentType,
+  WebViewDefinition,
+  SavedWebViewDefinition,
   WebViewProps,
 } from '@shared/data/web-view.model';
-import { deserializeTabId } from '@shared/utils/papi-util';
+import {
+  getWebView,
+  saveTabInfoBase,
+  convertWebViewDefinitionToSaved,
+} from '@shared/services/web-view.service';
+import logger from '@shared/services/logger.service';
 
-export function getTitle({ id, title, contentType }: WebViewProps): string {
-  const defaultTitle = id ? `${id} ${contentType}` : `${contentType} Web View`;
-  return title || defaultTitle;
+export const TAB_TYPE_WEBVIEW = 'webView';
+
+export function getTitle({ webViewType, title, contentType }: Partial<WebViewProps>): string {
+  return title || `${webViewType || contentType} Web View`;
 }
 
-export function WebView({ id, content, title, contentType }: WebViewProps) {
+export default function WebView({ webViewType, content, title, contentType }: WebViewProps) {
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const iframeRef = useRef<HTMLIFrameElement>(null!);
@@ -26,7 +34,7 @@ export function WebView({ id, content, title, contentType }: WebViewProps) {
   return (
     <iframe
       ref={iframeRef}
-      title={getTitle({ id, content, title, contentType })}
+      title={getTitle({ webViewType, title, contentType })}
       // TODO: csp?
       // TODO: credentialless?
       // TODO: referrerpolicy?
@@ -39,31 +47,65 @@ export function WebView({ id, content, title, contentType }: WebViewProps) {
       // allow-scripts so the iframe can actually do things
       // allow-pointer-lock so the iframe can lock the pointer as desired
       // Note: Mozilla's iframe page 'allow-same-origin' and 'allow-scripts' warns that listing both of these
-      // allows the child scripts to remove this sandbox attribute from the iframe. However, it seems that this
-      // is done by accessing window.parent or window.top, which is removed from the iframe with the injected
-      // scripts in WebViewService. We will probably want to stay vigilant on security in this area.
+      // allows the child scripts to remove this sandbox attribute from the iframe. This means the
+      // sandboxing will do nothing for a determined hacker. We must distrust the whole renderer due
+      // to this issue. We will probably want to stay vigilant on security in this area.
       sandbox="allow-same-origin allow-scripts allow-pointer-lock"
       srcDoc={content}
     />
   );
 }
 
-export default function createWebViewPanel(tabInfo: SavedTabInfo): TabInfo {
-  if (!tabInfo.id) throw new Error('"id" is missing.');
+/**
+ * Tell the web view service to load the web view with the provided saved definition
+ * @param data web view definition to load
+ */
+async function retrieveWebViewContent(data: SavedWebViewDefinition): Promise<void> {
+  const loadedId = await getWebView(data.webViewType, undefined, {
+    existingId: data.id,
+    createNewIfNotFound: false,
+  });
+  if (loadedId !== data.id)
+    logger.error(
+      `WebView with type ${data.webViewType} and id ${data.id} loaded into id ${loadedId}!`,
+    );
+}
+
+export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
+  if (!savedTabInfo.id) throw new Error('"id" is missing.');
 
   let data: WebViewProps;
-  if (tabInfo.data) {
+  if (savedTabInfo.data) {
     // We need to make sure that the data is of the correct type
-    data = tabInfo.data as WebViewProps;
+    data = savedTabInfo.data as WebViewProps;
+
+    if (savedTabInfo.id !== data.id) throw new Error('"id" does not match webView id.');
+    if (!data.webViewType) throw new Error('WebView does not have a webViewType. Cannot restore');
+
+    // If the webview is saved aka doesn't have content, tell the web view service to load the web
+    // view. It will asynchronously go get the content and re-run this function
+    if (!data.content && data.content !== '') retrieveWebViewContent(data);
   } else {
     // placeholder data
-    const { typeId } = deserializeTabId(tabInfo.id);
-    data = { id: typeId, title: typeId, content: '', contentType: WebViewContentType.HTML };
+    data = {
+      id: savedTabInfo.id,
+      webViewType: 'Unknown',
+      title: 'Unknown',
+      content: '',
+      contentType: WebViewContentType.HTML,
+    };
   }
 
-  const title = data.title ?? 'Unknown';
   return {
-    title: `${title}`,
+    ...savedTabInfo,
+    tabTitle: data.title ?? 'Unknown',
     content: <WebView {...data} />,
+  };
+}
+
+export function saveWebViewTab(tabInfo: TabInfo): SavedTabInfo {
+  return {
+    ...saveTabInfoBase(tabInfo),
+    data: convertWebViewDefinitionToSaved(tabInfo.data as WebViewDefinition),
   };
 }

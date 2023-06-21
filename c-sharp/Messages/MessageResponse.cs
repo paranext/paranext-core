@@ -15,35 +15,41 @@ public sealed class MessageResponse : Message
     /// <summary>
     /// Response when there was an error - no contents
     /// </summary>
-    public MessageResponse(
+    public static MessageResponse Failed(
         Enum<RequestType> requestType,
         int requestId,
         int requesterId,
         string errorMessage
     )
     {
-        RequestType = requestType;
-        RequestId = requestId;
-        RequesterId = requesterId;
-        Success = false;
-        ErrorMessage = errorMessage;
+        return new MessageResponse
+        {
+            RequestType = requestType,
+            RequestId = requestId,
+            RequesterId = requesterId,
+            Success = false,
+            ErrorMessage = errorMessage
+        };
     }
 
     /// <summary>
     /// Response when successful
     /// </summary>
-    public MessageResponse(
+    public static MessageResponse Succeeded(
         Enum<RequestType> requestType,
         int requestId,
         int requesterId,
         dynamic? contents
     )
     {
-        RequestType = requestType;
-        RequestId = requestId;
-        RequesterId = requesterId;
-        Success = true;
-        Contents = contents;
+        return new MessageResponse
+        {
+            RequestType = requestType,
+            RequestId = requestId,
+            RequesterId = requesterId,
+            Success = true,
+            Contents = contents
+        };
     }
 
     public sealed override Enum<MessageType> Type => MessageType.Response;

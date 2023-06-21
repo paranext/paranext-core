@@ -18,7 +18,6 @@ import * as networkService from '@shared/services/network.service';
 import papi from '@shared/services/papi.service';
 import { CommandHandler } from '@shared/utils/papi-util';
 import { resolveHtmlPath } from '@node/utils/util';
-import MenuBuilder from '@main/menu.model';
 import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
@@ -35,12 +34,12 @@ async function main() {
 
   // The extension host service relies on the network service.
   // Extensions inside the extension host might rely on the .NET data provider and each other
-  // Some extensions inside the extension host rely on the renderer to accept 'addWebView' commands.
+  // Some extensions inside the extension host rely on the renderer to accept 'getWebView' commands.
   // The renderer relies on the extension host, so something has to break the dependency loop.
-  // For now, the dependency loop is broken by retrying 'addWebView' in a loop for a while.
+  // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
   extensionHostService.start();
 
-  // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'addWebView')
+  // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
   // Extension host test
@@ -145,8 +144,7 @@ async function main() {
       mainWindow = null;
     });
 
-    const menuBuilder = new MenuBuilder(mainWindow);
-    menuBuilder.buildMenu();
+    mainWindow.setMenu(null);
 
     // Open urls in the user's browser
     mainWindow.webContents.setWindowOpenHandler((edata) => {
@@ -253,6 +251,10 @@ async function main() {
     },
     throwError: async (message: string) => {
       throw new Error(`Test Error thrown in throwError command: ${message}`);
+    },
+    // This is a temporary hack (per TJ) to allow the Exit menu to have a way to exit the app.
+    quit: async () => {
+      app.exit();
     },
   };
 

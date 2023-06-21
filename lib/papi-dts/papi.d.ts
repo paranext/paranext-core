@@ -1,3 +1,4 @@
+/// <reference types="react" />
 /// <reference types="node" />
 declare module 'shared/global-this.model' {
   import { FunctionComponent } from 'react';
@@ -59,7 +60,7 @@ declare module 'shared/utils/util' {
   export function groupBy<T, K, V>(
     items: T[],
     keySelector: (item: T) => K,
-    valueSelector: (item: T) => V,
+    valueSelector: (item: T, key: K) => V,
   ): Map<K, Array<V>>;
   /**
    * Function to get an error message from the object (useful for getting error message in a catch block)
@@ -86,6 +87,18 @@ declare module 'shared/utils/util' {
     fn: () => Promise<TResult>,
     maxWaitTimeInMS: number,
   ): Promise<Awaited<TResult> | null>;
+  /**
+   * Get all functions on an object and its prototype (so we don't miss any class methods or any
+   * object methods).
+   *
+   * Note: this does return some potentially unexpected function names. For example:
+   * `getAllObjectFunctionNames({})` returns `[constructor,__defineGetter__,__defineSetter__,
+   * hasOwnProperty,__lookupGetter__,__lookupSetter__,isPrototypeOf,propertyIsEnumerable,toString,
+   * valueOf,toLocaleString]`
+   * @param obj object whose functions to get
+   * @returns array of all function names on an object
+   */
+  export function getAllObjectFunctionNames(obj: NonNullable<any>): string[];
 }
 declare module 'shared/utils/papi-util' {
   import { ProcessType } from 'shared/global-this.model';
@@ -181,26 +194,6 @@ declare module 'shared/utils/papi-util' {
   export function serializeRequestType(category: string, directive: string): string;
   /** Split a request message requestType string into its parts */
   export function deserializeRequestType(requestType: string): RequestType;
-  /** Parts of a Dock Tab ID */
-  export interface TabIdParts {
-    /** Type of the tab */
-    type: string;
-    /** ID of the particular tab type */
-    typeId: string;
-  }
-  /**
-   * Create a tab ID.
-   * @param type Type of the tab.
-   * @param typeId ID of the particular tab type.
-   * @returns a tab ID
-   */
-  export function serializeTabId(type: string, typeId: string): string;
-  /**
-   * Split the tab ID into its parts.
-   * @param id Tab ID.
-   * @returns The two parts of the tab ID
-   */
-  export function deserializeTabId(id: string): TabIdParts;
   /**
    * HTML Encodes the provided string.
    * Thanks to ChatGPT
@@ -226,6 +219,78 @@ declare module 'shared/utils/papi-util' {
    * @returns string that says the import was rejected and a similar api to try
    */
   export function getModuleSimilarApiMessage(moduleName: string): string;
+}
+declare module 'shared/models/papi-event.model' {
+  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
+  /** Callback function that accepts an event and should run when an event is emitted */
+  export type PapiEventHandler<T> = (event: T) => void;
+  /**
+   * Function that subscribes the provided callback to run when this event is emitted.
+   * @param callback function to run with the event when it is emitted
+   * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+   */
+  export type PapiEvent<T> = (callback: PapiEventHandler<T>) => Unsubscriber;
+  /**
+   * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
+   *
+   * Note: The callback itself is not asynchronous.
+   */
+  export type PapiEventAsync<T> = (callback: PapiEventHandler<T>) => Promise<UnsubscriberAsync>;
+}
+declare module 'shared/models/papi-event-emitter.model' {
+  /**
+   * Interfaces, classes, and functions related to events and event emitters
+   */
+  import { PapiEvent } from 'shared/models/papi-event.model';
+  /**
+   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
+   * Use eventEmitter.event(callback) to subscribe to the event.
+   * Use eventEmitter.emit(event) to run the subscriptions.
+   * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
+   * but anyone can subscribe to the event.
+   */
+  export default class PapiEventEmitter<T> {
+    /**
+     * Subscribes a function to run when this event is emitted.
+     * @alias event
+     * @param callback function to run with the event when it is emitted
+     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+     */
+    subscribe: PapiEvent<T>;
+    /** All callback functions that will run when this event is emitted. Lazy loaded */
+    private subscriptions?;
+    /** Event for listeners to subscribe to. Lazy loaded */
+    private lazyEvent?;
+    /** Whether this emitter has been disposed */
+    private isDisposed;
+    /**
+     * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
+     * Use like `const unsubscriber = event(callback)`
+     * @param callback function to run with the event when it is emitted
+     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+     */
+    get event(): PapiEvent<T>;
+    /** Disposes of this event, preparing it to release from memory */
+    dispose: () => void;
+    /**
+     * Runs the subscriptions for the event
+     * @param event event data to provide to subscribed callbacks
+     */
+    emit: (event: T) => void;
+    /**
+     * Function that runs the subscriptions for the event.
+     * Added here so children can override emit and still call the base functionality.
+     * See NetworkEventEmitter.emit for example
+     */
+    protected emitFn(event: T): void;
+    /** Check to make sure this emitter is not disposed. Throw if it is */
+    protected assertNotDisposed(): void;
+    /**
+     * Disposes of this event, preparing it to release from memory.
+     * Added here so children can override emit and still call the base functionality.
+     */
+    protected disposeFn(): void;
+  }
 }
 declare module 'shared/data/internal-connection.model' {
   /**
@@ -492,78 +557,6 @@ declare module 'shared/services/logger.service' {
     default: log.Logger;
   };
   export default logger;
-}
-declare module 'shared/models/papi-event.model' {
-  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Callback function that accepts an event and should run when an event is emitted */
-  export type PapiEventHandler<T> = (event: T) => void;
-  /**
-   * Function that subscribes the provided callback to run when this event is emitted.
-   * @param callback function to run with the event when it is emitted
-   * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-   */
-  export type PapiEvent<T> = (callback: PapiEventHandler<T>) => Unsubscriber;
-  /**
-   * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
-   *
-   * Note: The callback itself is not asynchronous.
-   */
-  export type PapiEventAsync<T> = (callback: PapiEventHandler<T>) => Promise<UnsubscriberAsync>;
-}
-declare module 'shared/models/papi-event-emitter.model' {
-  /**
-   * Interfaces, classes, and functions related to events and event emitters
-   */
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  /**
-   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
-   * Use eventEmitter.event(callback) to subscribe to the event.
-   * Use eventEmitter.emit(event) to run the subscriptions.
-   * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
-   * but anyone can subscribe to the event.
-   */
-  export default class PapiEventEmitter<T> {
-    /**
-     * Subscribes a function to run when this event is emitted.
-     * @alias event
-     * @param callback function to run with the event when it is emitted
-     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-     */
-    subscribe: PapiEvent<T>;
-    /** All callback functions that will run when this event is emitted. Lazy loaded */
-    private subscriptions?;
-    /** Event for listeners to subscribe to. Lazy loaded */
-    private lazyEvent?;
-    /** Whether this emitter has been disposed */
-    private isDisposed;
-    /**
-     * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
-     * Use like `const unsubscriber = event(callback)`
-     * @param callback function to run with the event when it is emitted
-     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-     */
-    get event(): PapiEvent<T>;
-    /** Disposes of this event, preparing it to release from memory */
-    dispose: () => void;
-    /**
-     * Runs the subscriptions for the event
-     * @param event event data to provide to subscribed callbacks
-     */
-    emit: (event: T) => void;
-    /**
-     * Function that runs the subscriptions for the event.
-     * Added here so children can override emit and still call the base functionality.
-     * See NetworkEventEmitter.emit for example
-     */
-    protected emitFn(event: T): void;
-    /** Check to make sure this emitter is not disposed. Throw if it is */
-    protected assertNotDisposed(): void;
-    /**
-     * Disposes of this event, preparing it to release from memory.
-     * Added here so children can override emit and still call the base functionality.
-     */
-    protected disposeFn(): void;
-  }
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -1100,30 +1093,40 @@ declare module 'shared/services/command.service' {
 }
 declare module 'shared/data/web-view.model' {
   import { ReactNode } from 'react';
-  export type WebViewProps = Omit<WebViewContents, 'componentName'>;
   /**
-   * Information used to recreate a tab
+   * Saved information used to recreate a tab.
+   *
+   * {@link TabLoader} loads this into {@link TabInfo}
+   * {@link TabSaver} saves {@link TabInfo} into this
    */
   export type SavedTabInfo = {
     /**
-     * Tab ID - must be unique
+     * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this id will
+     * match the WebViewDefinition.id
      */
-    id?: string;
+    id: string;
     /**
-     * Data needed to recreate the tab during load
+     * Type of tab - indicates what kind of built-in tab this info represents
+     */
+    tabType: string;
+    /**
+     * Data needed to load the tab
      */
     data?: unknown;
   };
   /**
-   * Information needed to create a tab inside of Paranext
+   * Information that Paranext uses to create a tab in the dock layout.
+   *
+   * {@link TabLoader} loads {@link SavedTabInfo} into this
+   * {@link TabSaver} saves this into {@link SavedTabInfo}
    */
-  export type TabInfo = {
+  export type TabInfo = SavedTabInfo & {
     /**
      * Text to show on the title bar of the tab
      */
-    title: string;
+    tabTitle: string;
     /**
-     * Content to show inside the tab
+     * Content to show inside the tab.
      */
     content: ReactNode;
     /**
@@ -1136,34 +1139,74 @@ declare module 'shared/data/web-view.model' {
     minHeight?: number;
   };
   /**
+   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
+   * must provide a {@link TabLoader}.
+   *
    * For now all tab creators must do their own data type verification
    */
-  export type TabCreator = (tabData: SavedTabInfo) => TabInfo;
+  export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
+  /**
+   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+   * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
+   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
+   */
+  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
+  /** The type of code that defines a webview's content */
   export enum WebViewContentType {
+    /**
+     * This webview is a React webview. It must specify its component by setting it to
+     * `globalThis.webViewComponent`
+     */
     React = 'react',
+    /** This webview is a raw HTML/JS/CSS webview. */
     HTML = 'html',
   }
+  /** What type a WebView is. Each WebView definition must have a unique type. */
+  export type WebViewType = string;
+  /** Id for a specific WebView. Each WebView has a unique id */
+  export type WebViewId = string;
   /** Base WebView properties that all WebViews share */
-  type WebViewContentsBase = {
-    id: string;
+  type WebViewDefinitionBase = {
+    /** What type of WebView this is. Unique to all other WebView definitions */
+    webViewType: WebViewType;
+    /** Unique id among webviews specific to this webview instance. */
+    id: WebViewId;
+    /** The code for the WebView that papi puts into an iframe */
     content: string;
+    /** Name of the tab for the WebView */
     title?: string;
   };
   /** WebView representation using React */
-  export type WebViewContentsReact = WebViewContentsBase & {
+  export type WebViewDefinitionReact = WebViewDefinitionBase & {
+    /** Indicates this WebView uses React */
     contentType?: WebViewContentType.React;
+    /** String of styles to be loaded into the iframe for this WebView */
     styles?: string;
   };
   /** WebView representation using HTML */
-  export type WebViewContentsHtml = WebViewContentsBase & {
+  export type WebViewDefinitionHtml = WebViewDefinitionBase & {
+    /** Indicates this WebView uses HTML */
     contentType: WebViewContentType.HTML;
   };
-  /** WebView definition created by extensions to show web content */
-  export type WebViewContents = WebViewContentsReact | WebViewContentsHtml;
-  export const TYPE_WEBVIEW = 'webView';
+  /** Properties defining a type of WebView created by extensions to show web content */
+  export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
+  /**
+   * Saved WebView information that does not contain the actual content of the WebView. Saved into
+   * layouts. Could have as little as the type and id. WebView providers load these into actual
+   * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
+   */
+  export type SavedWebViewDefinition = (
+    | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
+    | Partial<Omit<WebViewDefinitionHtml, 'content'>>
+  ) &
+    Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+  /** Props that are passed to the web view component */
+  export type WebViewProps = WebViewDefinition;
+  /** Information about a tab in a panel */
   interface TabLayout {
     type: 'tab';
   }
+  /** Information about a floating window */
   export interface FloatLayout {
     type: 'float';
     floatSize?: {
@@ -1182,43 +1225,44 @@ declare module 'shared/data/web-view.model' {
     | 'move'
     | 'active'
     | 'update';
+  /** Information about a panel */
   interface PanelLayout {
     type: 'panel';
     direction?: PanelDirection;
     /** If undefined, it will add in the `direction` relative to the previously added tab. */
     targetTabId?: string;
   }
+  /** Information about how a Paranext tab fits into the dock layout */
   export type Layout = TabLayout | FloatLayout | PanelLayout;
-  /** Event emitted when webViews are added */
+  /** Event emitted when webViews are created */
   export type AddWebViewEvent = {
-    webView: WebViewProps;
+    webView: SavedWebViewDefinition;
     layout: Layout;
   };
-}
-declare module 'shared/services/web-view.service' {
-  import { AddWebViewEvent, Layout, WebViewContents } from 'shared/data/web-view.model';
-  /** Event that emits with webView info when a webView is added */
-  export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
-  /**
-   * Adds a WebView and runs all event handlers who are listening to this event
-   * @param webView full html document to set as the webview iframe contents. Can be shortened to just a string
-   * @returns promise that resolves nothing if we successfully handled the webView
-   */
-  export const addWebView: (webView: WebViewContents, layout?: Layout) => Promise<void>;
-  /** Sets up the WebViewService. Runs only once */
-  export const initialize: () => Promise<void>;
-  /** All the exports in this service that are to be exposed on the PAPI */
-  export const papiWebViewService: {
-    onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
-    addWebView: (webView: WebViewContents, layout?: Layout) => Promise<void>;
-    initialize: () => Promise<void>;
+  /** Options that affect what `webViews.getWebView` does */
+  export type GetWebViewOptions = {
+    /**
+     * If provided and if a web view with this id exists, requests from the web view provider an
+     * existing WebView with this id if one exists. The web view provider can deny the request if it
+     * chooses to do so.
+     *
+     * Alternatively, set this to '?' to attempt to find any existing web view with the specified
+     * webViewType.
+     *
+     * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
+     * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
+     * `existingId` at all is the only way to specify we are not looking for an existing webView
+     */
+    existingId?: string | '?' | undefined;
+    /**
+     * Whether to create a webview with a new id and a webview with id `existingId` was not found.
+     * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
+     * ignored.
+     *
+     * Defaults to true
+     */
+    createNewIfNotFound?: boolean;
   };
-}
-declare module 'shared/services/internet.service' {
-  const internetService: {
-    fetch: typeof fetch;
-  };
-  export default internetService;
 }
 declare module 'shared/utils/async-variable' {
   /**
@@ -1326,7 +1370,7 @@ declare module 'shared/services/network-object.service' {
       id: string,
       createLocalObjectToProxy?: LocalObjectToProxyCreator<T> | undefined,
     ) => Promise<NetworkObject<T> | undefined>;
-    set: <T_1 extends NetworkableObject<object>>(
+    set: <T_1 extends NetworkableObject>(
       id: string,
       objectToShare: T_1,
     ) => Promise<DisposableNetworkObject<T_1>>;
@@ -1391,6 +1435,194 @@ declare module 'shared/models/network-object.model' {
     networkObjectPromise: Promise<NetworkObject<T>>,
   ) => Partial<NetworkableObject>;
 }
+declare module 'shared/models/web-view-provider.model' {
+  import {
+    GetWebViewOptions,
+    WebViewDefinition,
+    SavedWebViewDefinition,
+  } from 'shared/data/web-view.model';
+  import {
+    DisposableNetworkObject,
+    NetworkObject,
+    NetworkableObject,
+  } from 'shared/models/network-object.model';
+  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
+  export interface IWebViewProvider extends NetworkableObject {
+    /**
+     * @param savedWebView filled out if an existing webview is being called for (matched by id).
+     * Just id if this is a new request or if the web view with the existing id was not found
+     * @param getWebViewOptions
+     */
+    getWebView(
+      savedWebView: SavedWebViewDefinition,
+      getWebViewOptions: GetWebViewOptions,
+    ): Promise<WebViewDefinition | undefined>;
+  }
+  export interface WebViewProvider
+    extends NetworkObject<NetworkableObject>,
+      CanHaveOnDidDispose<IWebViewProvider> {}
+  export interface DisposableWebViewProvider
+    extends DisposableNetworkObject<NetworkableObject>,
+      Omit<WebViewProvider, 'dispose'> {}
+}
+declare module 'shared/services/web-view-provider.service' {
+  /**
+   * Handles registering web view providers and serving web views around the papi.
+   * Exposed on the papi.
+   */
+  import {
+    DisposableWebViewProvider,
+    IWebViewProvider,
+    WebViewProvider,
+  } from 'shared/models/web-view-provider.model';
+  /**
+   * Indicate if we are aware of an existing web view provider with the given type. If a web view
+   * provider with the given type is somewhere else on the network, this function won't tell you about
+   * it unless something else in the existing process is subscribed to it.
+   * @param webViewType type of webView to check for
+   */
+  function hasKnown(webViewType: string): boolean;
+  /**
+   * Register a web view provider to serve webViews for a specified type of webViews
+   *
+   * @param webViewType type of web view to provide
+   * @param webViewProvider object to register as a webView provider including control over disposing
+   * of it.
+   *
+   * WARNING: setting a webView provider mutates the provided object.
+   * @returns `webViewProvider` modified to be a network object
+   */
+  function register(
+    webViewType: string,
+    webViewProvider: IWebViewProvider,
+  ): Promise<DisposableWebViewProvider>;
+  /**
+   * Get a web view provider that has previously been set up
+   * @param webViewType type of webview provider to get
+   * @returns web view provider with the given name if one exists, undefined otherwise
+   */
+  function get(webViewType: string): Promise<WebViewProvider | undefined>;
+  const webViewProviderService: {
+    initialize: () => Promise<void>;
+    hasKnown: typeof hasKnown;
+    register: typeof register;
+    get: typeof get;
+  };
+  export const papiWebViewProviderService: {
+    register: typeof register;
+  };
+  export default webViewProviderService;
+}
+declare module 'shared/services/web-view.service' {
+  import { Unsubscriber } from 'shared/utils/papi-util';
+  import { MutableRefObject } from 'react';
+  import {
+    AddWebViewEvent,
+    Layout,
+    SavedTabInfo,
+    TabInfo,
+    WebViewProps,
+    WebViewType,
+    WebViewId,
+    GetWebViewOptions,
+    WebViewDefinition,
+    SavedWebViewDefinition,
+  } from 'shared/data/web-view.model';
+  import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
+  /** rc-dock's onLayoutChange prop made asynchronous - resolves */
+  export type OnLayoutChangeRCDock = (
+    newLayout: LayoutBase,
+    currentTabId?: string,
+    direction?: DropDirection,
+  ) => Promise<void>;
+  /** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
+  type PapiDockLayout = {
+    /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
+    dockLayout: DockLayout;
+    /**
+     * A ref to a function that runs when the layout changes. We set this ref to our
+     * {@link onLayoutChange} function
+     */
+    onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
+    /** Function to call to add or update a webview in the layout */
+    addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
+    /**
+     * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
+     *
+     * TODO: This should be removed and the `testLayout` imported directly in this file once this
+     * service is refactored to split the code between processes. The only reason this is passed from
+     * `paranext-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
+     * service is currently all shared code. Refactor should happen in #203
+     */
+    testLayout: LayoutBase;
+  };
+  /** Event that emits with webView info when a webView is added */
+  export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+  /**
+   * Basic `saveTabInfo` that simply strips the properties added by {@link TabInfo} off of the object
+   * and returns it as a {@link SavedTabInfo}. Runs as the {@link TabSaver} by default if the tab type
+   * does not have a specific `TabSaver`
+   */
+  export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
+  /**
+   * Converts web view definition used in an actual docking tab into saveable web view information by
+   * stripping out the members we don't want to save
+   * @param webViewDefinition web view to save
+   * @returns saveable web view information based on `webViewDefinition`
+   */
+  export function convertWebViewDefinitionToSaved(
+    webViewDefinition: WebViewDefinition,
+  ): SavedWebViewDefinition;
+  /**
+   * Register a dock layout React element to be used by this service to perform layout-related
+   * operations
+   * @param dockLayout dock layout element to register along with other important properties
+   * @returns function used to unregister this dock layout
+   */
+  export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber;
+  /**
+   * Creates a new web view or gets an existing one depending on if you request an existing one and
+   * if the web view provider decides to give that existing one to you (it is up to the provider).
+   *
+   * @param webViewType type of WebView to create
+   * @param layout information about where you want the web view to go. Defaults to adding as a tab
+   * @param options options that affect what this function does. For example, you can provide an
+   * existing web view id to request an existing web view with that id.
+   *
+   * @returns promise that resolves to the id of the webview we got.
+   */
+  export const getWebView: (
+    webViewType: WebViewType,
+    layout?: Layout,
+    options?: GetWebViewOptions,
+  ) => Promise<WebViewId | undefined>;
+  /** Sets up the WebViewService. Runs only once */
+  export const initialize: () => Promise<void>;
+  export const registerWebViewProvider: (
+    webViewType: string,
+    webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+  ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+  /** All the exports in this service that are to be exposed on the PAPI */
+  export const papiWebViewService: {
+    onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+    getWebView: (
+      webViewType: WebViewType,
+      layout?: Layout,
+      options?: GetWebViewOptions,
+    ) => Promise<WebViewId | undefined>;
+    initialize: () => Promise<void>;
+    registerWebViewProvider: (
+      webViewType: string,
+      webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+    ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+  };
+}
+declare module 'shared/services/internet.service' {
+  const internetService: {
+    fetch: typeof fetch;
+  };
+  export default internetService;
+}
 declare module 'shared/models/data-provider.model' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
   import { PapiEventHandler } from 'shared/models/papi-event.model';
@@ -1411,7 +1643,7 @@ declare module 'shared/models/data-provider.model' {
      *
      *    For example, suppose your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3. Your data
      *    at John 3:5 does not change, and your callback will not run.
-     *  - `'all'` - run the update callback every time the data has been updated whether or not the data
+     *  - `'*'` - run the update callback every time the data has been updated whether or not the data
      *    at this selector has changed.
      *
      *    For example, suppose your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3. Your data
@@ -1419,92 +1651,195 @@ declare module 'shared/models/data-provider.model' {
      *
      * @default 'deeply-equal'
      */
-    whichUpdates?: 'deeply-equal' | 'all';
+    whichUpdates?: 'deeply-equal' | '*';
   };
   /**
-   * Subscribe to receive updates from this data provider that are relevant to the provided selector.
-   *
-   * Note: By default, this `subscribe` function automatically retrieves the current state of the data
-   * and runs the provided callback as soon as possible. That way, if you want to keep your data up-to-date,
-   * you do not also have to run `get`. You can turn this functionality off in the `options` parameter.
-   * @param selector tells the provider what data this listener is listening for
-   * @param callback function to run with the updated data for this selector
-   * @param options various options to adjust how the subscriber emits updates
-   * @returns unsubscriber to stop listening for updates
+   * Information that papi uses to interpret whether to send out updates on a data provider when the engine
+   * runs `set<data_type>` or `notifyUpdate`.
+   *  - `'*'` update subscriptions for all data types on this data provider
+   *  - `string` name of data type - update subscriptions for this data type
+   *  - `string[]` names of data types - update subscriptions for the data types in the array
+   *  - `true` (or other truthy values other than strings and arrays)
+   *    - In `set<data_type>` - update subscriptions for this data type
+   *    - In `notifyUpdate` - same as '*'
+   *  - `false` (or falsy) do not update subscriptions
    */
-  export type DataProviderSubscriber<TSelector, TGetData> = (
-    selector: TSelector,
-    callback: PapiEventHandler<TGetData>,
-    options?: DataProviderSubscriberOptions,
-  ) => Promise<UnsubscriberAsync>;
+  export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTypes> =
+    | '*'
+    | DataTypeNames<TDataTypes>
+    | DataTypeNames<TDataTypes>[]
+    | boolean;
   /**
-   * An internal object created locally when someone runs dataProviderService.registerEngine.
-   * This object layers over the data provider engine and runs its methods along with other methods.
-   * This object is transformed into an IDataProvider by networkObjectService.set.
+   * Set a subset of data according to the selector.
    *
-   * @type `TSelector` - the type of selector used to get some data from this provider.
-   *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
-   *  Note: A selector must be stringifiable.
-   * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
-   * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
+   * Note: if a data provider engine does not provide `set` (possibly indicating it is read-only),
+   * this will throw an exception.
+   * @param selector tells the provider what subset of data is being set
+   * @param data the data that determines what to set at the selector
+   * @returns information that papi uses to interpret whether to send out updates. Defaults to `true`
+   * (meaning send updates only for this data type).
    *
-   * @see IDataProvider
+   * @see DataProviderUpdateInstructions for more info on what to return
    */
-  interface DataProviderInternal<TSelector, TGetData, TSetData> extends NetworkableObject {
-    /**
-     * Set a subset of data according to the selector.
+  export type DataProviderSetter<
+    TDataTypes extends DataProviderDataTypes,
+    DataType extends keyof TDataTypes,
+  > = (
+    selector: TDataTypes[DataType]['selector'],
+    data: TDataTypes[DataType]['setData'],
+  ) => Promise<DataProviderUpdateInstructions<TDataTypes>>;
+  /**
+   * Get a subset of data from the provider according to the selector.
+   *
+   * Note: This is good for retrieving data from a provider once. If you want to keep the data up-to-date,
+   * use `subscribe` instead, which can immediately give you the data and keep it up-to-date.
+   * @param selector tells the provider what subset of data to get
+   * @returns the subset of data represented by the selector
+   */
+  export type DataProviderGetter<TDataType extends DataProviderDataType> = (
+    selector: TDataType['selector'],
+  ) => Promise<TDataType['getData']>;
+  /**
+     * Subscribe to receive updates relevant to the provided selector from this data provider for a specific data type.
      *
-     * Note: if a data provider engine does not provide `set` (possibly indicating it is read-only), this will throw an exception.
-     * @param selector tells the provider what subset of data is being set
-     * @param data the data that determines what to set at the selector
-     * @returns true if successfully set (will send updates), false otherwise (will not send updates)
-     */
-    set: (selector: TSelector, data: TSetData) => Promise<boolean>;
-    /**
-     * Get a subset of data from the provider according to the selector.
-     *
-     * Note: This is good for retrieving data from a provider once. If you want to keep the data up-to-date,
-     * use `subscribe` instead, which can immediately give you the data and keep it up-to-date.
-     * @param selector tells the provider what subset of data to get
-     * @returns the subset of data represented by the selector
-     */
-    get: (selector: TSelector) => Promise<TGetData>;
-    /**
-     * Subscribe to receive updates from this data provider that are relevant to the provided selector.
-     *
-     * Note: By default, this `subscribe` function automatically retrieves the current state of the data
+     * Note: By default, this `subscribe<data_type>` function automatically retrieves the current state of the data
      * and runs the provided callback as soon as possible. That way, if you want to keep your data up-to-date,
-     * you do not also have to run `get`. You can turn this functionality off in the `options` parameter.
+     * you do not also have to run `get<data_type>`. You can turn this functionality off in the `options` parameter.
+    
      * @param selector tells the provider what data this listener is listening for
      * @param callback function to run with the updated data for this selector
      * @param options various options to adjust how the subscriber emits updates
      * @returns unsubscriber to stop listening for updates
      */
-    subscribe: DataProviderSubscriber<TSelector, TGetData>;
-  }
+  export type DataProviderSubscriber<TDataType extends DataProviderDataType> = (
+    selector: TDataType['selector'],
+    callback: PapiEventHandler<TDataType['getData']>,
+    options?: DataProviderSubscriberOptions,
+  ) => Promise<UnsubscriberAsync>;
+  /**
+   * A helper type describing the types associated with a data provider's methods for a specific data
+   * type it handles.
+   *
+   * @type `TSelector` - the type of selector used to get some data from this provider at this data type.
+   *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants at this data type.
+   * @type `TGetData` - the type of data provided by this data provider when you run `get<data_type>` based on a provided selector
+   * @type `TSetData` - the type of data ingested by this data provider when you run `set<data_type>` based on a provided selector
+   */
+  export type DataProviderDataType<
+    TSelector = unknown,
+    TGetData = TSelector,
+    TSetData = TGetData,
+  > = {
+    /**
+     * The type of selector used to get some data from this provider at this data type.
+     * A selector is an object a caller provides to the data provider to tell the provider what subset
+     * of data it wants at this data type.
+     */
+    selector: TSelector;
+    /**
+     * The type of data provided by this data provider when you run `get<data_type>` based on a
+     * provided selector
+     */
+    getData: TGetData;
+    /**
+     * The type of data ingested by this data provider when you run `set<data_type>` based on a provided selector
+     */
+    setData: TSetData;
+  };
+  /**
+   * A helper type describing all the data types a data provider handles. Each property on this type
+   * (consisting of a DataProviderDataType, which describes the types that correspond to that data type)
+   * describes a data type that the data provider handles. The data provider has a `set<data_type>`,
+   * `get<data_type>`, and `subscribe<data_type>` for each property (aka data type) listed in this type.
+   *
+   * @example A data provider that handles greeting strings and age numbers (as well as an All data
+   * type that just provides all the data) could have a DataProviderDataTypes that looks like the
+   * following:
+   * ```typescript
+   * {
+   *   Greeting: DataProviderDataType<string, string | undefined, string>;
+   *   Age: DataProviderDataType<string, number | undefined, number>;
+   *   All: DataProviderDataType<undefined, { greeting: string, age: number }, never>;
+   * }
+   * ```
+   */
+  export type DataProviderDataTypes = {
+    [dataType: string]: DataProviderDataType;
+  };
+  /**
+   * Names of data types in a DataProviderDataTypes type. Indicates the data types that a data provider
+   * can handle (so it will have methods with these names like `set<data_type>`)
+   *
+   * @see DataProviderDataTypes for more information
+   */
+  export type DataTypeNames<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    keyof TDataTypes & string;
+  /**
+   * Set of all `set<data_type>` methods that a data provider provides according to its data types.
+   *
+   * @see DataProviderSetter for more information
+   */
+  export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
+    [DataType in keyof TDataTypes as `set${DataType & string}`]: DataProviderSetter<
+      TDataTypes,
+      DataType
+    >;
+  };
+  /**
+   * Set of all `get<data_type>` methods that a data provider provides according to its data types.
+   *
+   * @see DataProviderGetter for more information
+   */
+  export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {
+    [DataType in keyof TDataTypes as `get${DataType & string}`]: DataProviderGetter<
+      TDataTypes[DataType]
+    >;
+  };
+  /**
+   * Set of all `subscribe<data_type>` methods that a data provider provides according to its data types.
+   *
+   * @see DataProviderSubscriber for more information
+   */
+  export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = {
+    [DataType in keyof TDataTypes as `subscribe${DataType & string}`]: DataProviderSubscriber<
+      TDataTypes[DataType]
+    >;
+  };
+  /**
+   * An internal object created locally when someone runs dataProviderService.registerEngine.
+   * This object layers over the data provider engine and runs its methods along with other methods.
+   * This object is transformed into an IDataProvider by networkObjectService.set.
+   *
+   * @see IDataProvider
+   */
+  type DataProviderInternal<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    NetworkableObject<
+      DataProviderSetters<TDataTypes> &
+        DataProviderGetters<TDataTypes> &
+        DataProviderSubscribers<TDataTypes>
+    >;
+  /**
+   * Get the data type for a data provider function based on its name
+   * @param fnName name of data provider function e.g. `getVerse`
+   * @returns data type for that data provider function e.g. `Verse`
+   */
+  export function getDataProviderDataTypeFromFunctionName<
+    TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
+  >(fnName: string): DataTypeNames<TDataTypes>;
   export default DataProviderInternal;
 }
 declare module 'shared/models/data-provider.interface' {
-  import DataProviderInternal from 'shared/models/data-provider.model';
-  import {
-    DisposableNetworkObject,
-    NetworkObject,
-    NetworkableObject,
-  } from 'shared/models/network-object.model';
-  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
+  import DataProviderInternal, { DataProviderDataTypes } from 'shared/models/data-provider.model';
+  import { DisposableNetworkObject, NetworkObject } from 'shared/models/network-object.model';
   /**
    * An object on the papi that manages data and has methods for interacting with that data.
    * Created by the papi and layers over an IDataProviderEngine provided by an extension.
    * Returned from getting a data provider with dataProviderService.get.
-   * @type `TSelector` - the type of selector used to get some data from this provider.
-   *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
-   *  Note: A selector must be stringifiable.
-   * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
-   * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
+   *
+   * Note: each `set<data_type>` method has a corresponding `get<data_type>` and `subscribe<data_type>` method.
    */
-  interface IDataProvider<TSelector, TGetData, TSetData>
-    extends NetworkObject<NetworkableObject>,
-      CanHaveOnDidDispose<DataProviderInternal<TSelector, TGetData, TSetData>> {}
+  type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    NetworkObject<DataProviderInternal<TDataTypes>>;
   export default IDataProvider;
   /**
    * A data provider that has control over disposing of it with dispose.
@@ -1513,52 +1848,130 @@ declare module 'shared/models/data-provider.interface' {
    *
    * @see IDataProvider
    */
-  export interface IDisposableDataProvider<TSelector, TGetData, TSetData>
-    extends DisposableNetworkObject<NetworkableObject>,
-      Omit<IDataProvider<TSelector, TGetData, TSetData>, 'dispose'> {}
+  export type IDisposableDataProvider<
+    TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
+  > = DisposableNetworkObject<Omit<IDataProvider<TDataTypes>, 'dispose'>>;
 }
 declare module 'shared/models/data-provider-engine.model' {
+  import {
+    DataProviderDataTypes,
+    DataProviderGetters,
+    DataProviderUpdateInstructions,
+    DataProviderSetters,
+  } from 'shared/models/data-provider.model';
   import { NetworkableObject } from 'shared/models/network-object.model';
   /**
-   * The object to register with the DataProviderService to create a data provider.
-   * The DataProviderService creates an IDataProvider on the papi that layers over this engine, providing special functionality
+   * Method to run to send clients updates for a specific data type outside of the `set<data_type>` method.
+   * papi overwrites this function on the DataProviderEngine itself to emit an update after running
+   * the `notifyUpdate` method in the DataProviderEngine.
    *
-   * Note: methods on objects that implement this interface must be unbound functions, not arrow functions.
-   * @type `TSelector` - the type of selector used to get some data from this provider.
-   *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
-   * @type `TGetData` - the type of data provided by this data provider when you run `get` based on a provided selector
-   * @type `TSetData` - the type of data ingested by this data provider when you run `set` based on a provided selector
+   * @param updateInstructions information that papi uses to interpret whether to send out updates.
+   * Defaults to `'*'` (meaning send updates for all data types) if parameter `updateInstructions` is
+   * not provided or is undefined. Otherwise returns `updateInstructions`. papi passes the interpreted
+   * update value into this `notifyUpdate` function. For example, running `this.notifyUpdate()` will
+   * call the data provider engine's `notifyUpdate` with `updateInstructions` of `'*'`.
+   *
+   * @see DataProviderUpdateInstructions for more info on the `updateInstructions` parameter
+   *
+   * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
+   * It will create a destructive infinite loop.
+   *
+   * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types
+   * (in a data provider engine):
+   * ```typescript
+   * this.notifyUpdate(['Verse', 'Heresy']);
+   * ```
+   *
+   * @example You can log the manual updates in your data provider engine by specifying the following
+   * `notifyUpdate` function in the data provider engine:
+   * ```typescript
+   * notifyUpdate(updateInstructions) {
+   *   papi.logger.info(updateInstructions);
+   * }
+   * ```
+   *
+   * Note: This function's return is treated the same as the return from `set<data_type>`
    */
-  interface IDataProviderEngine<TSelector, TGetData, TSetData> extends NetworkableObject {
-    /**
-     * Method to run to send clients updates outside of the `set` method.
-     * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `notifyUpdate` method in the DataProviderEngine.
-     *
-     * WARNING: Never run this in the `get` method! It will create a destructive infinite loop.
-     *
-     * @returns true if we should send updates, false otherwise (will not send updates). Same return as `set`
-     */
-    notifyUpdate?(): boolean;
-    /**
-     * Set a subset of data according to the selector.
-     * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `set` method in the DataProviderEngine.
-     *
-     * Note: you could consider this data provider to be read-only if this method is not provided.
-     *
-     * WARNING: Do not run this recursively in its own `set` method! It will create as many updates as you run `set` methods.
-     * @param selector tells the provider what subset of data is being set
-     * @param data the data that determines what to set at the selector
-     * @returns true if successfully set (will send updates), false otherwise (will not send updates)
-     */
-    set?(selector: TSelector, data: TSetData): Promise<boolean>;
-    /**
-     * Get a subset of data from the provider according to the selector.
-     * Run by the data provider on get
-     * @param selector tells the provider what subset of data to get
-     * @returns the subset of data represented by the selector
-     */
-    get(selector: TSelector): Promise<TGetData>;
-  }
+  export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTypes> = (
+    updateInstructions?: DataProviderUpdateInstructions<TDataTypes>,
+  ) => void;
+  /**
+   * Addon type for IDataProviderEngine to specify that there is a `notifyUpdate` method on the data
+   * provider engine. You do not need to specify this type unless you are creating an object that is
+   * to be registered as a data provider engine and you need to use `notifyUpdate`.
+   *
+   * @see DataProviderEngineNotifyUpdate for more information on `notifyUpdate`.
+   * @see IDataProviderEngine for more information on using this type.
+   */
+  export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
+    notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
+  };
+  /**
+   * The object to register with the DataProviderService to create a data provider.
+   * The DataProviderService creates an IDataProvider on the papi that layers over this engine,
+   * providing special functionality.
+   *
+   * @type TDataTypes - the data types that this data provider engine serves. For each data type defined,
+   * the engine must have corresponding `get<data_type>` and `set<data_type> function` functions.
+   *
+   * @see DataProviderDataTypes for information on how to make powerful types that work well with
+   * Intellisense.
+   *
+   * Note: papi creates a `notifyUpdate` function on the data provider engine if one is not provided, so it
+   * is not necessary to provide one in order to call `this.notifyUpdate`. However, TypeScript does
+   * not understand that papi will create one as you are writing your data provider engine, so you can
+   * avoid type errors with one of the following options:
+   *
+   * 1. If you are using an object or class to create a data provider engine, you can add a
+   * `notifyUpdate` function (and, with an object, add the WithNotifyUpdate type) to
+   * your data provider engine like so:
+   * ```typescript
+   * const myDPE: IDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
+   *   notifyUpdate(updateInstructions) {},
+   *   ...
+   * }
+   * ```
+   * OR
+   * ```typescript
+   * class MyDPE implements IDataProviderEngine<MyDataTypes> {
+   *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
+   *   ...
+   * }
+   * ```
+   *
+   * 2. If you are using a class to create a data provider engine, you can extend the `DataProviderEngine`
+   * class, and it will provide `notifyUpdate` for you:
+   * ```typescript
+   * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
+   *   ...
+   * }
+   * ```
+   */
+  type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    NetworkableObject &
+      /**
+       * Set of all `set<data_type>` methods that a data provider engine must provide according to its data types.
+       * papi overwrites this function on the DataProviderEngine itself to emit an update after running the defined `set<data_type>` method in the DataProviderEngine.
+       *
+       * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>` method.
+       *
+       * Note: to make a data type read-only, you can always return false or throw from `set<data_type>`.
+       *
+       * WARNING: Do not run this recursively in its own `set<data_type>` method! It will create as many updates as you run `set<data_type>` methods.
+       *
+       * @see DataProviderSetter for more information
+       */
+      DataProviderSetters<TDataTypes> &
+      /**
+       * Set of all `get<data_type>` methods that a data provider engine must provide according to its data types.
+       * Run by the data provider on `get<data_type>`
+       *
+       * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>` method.
+       *
+       * @see DataProviderGetter for more information
+       */
+      DataProviderGetters<TDataTypes> &
+      Partial<WithNotifyUpdate<TDataTypes>>;
   export default IDataProviderEngine;
 }
 declare module 'shared/services/data-provider.service' {
@@ -1567,12 +1980,69 @@ declare module 'shared/services/data-provider.service' {
    * Exposed on the papi.
    */
   import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
-  import IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  /** Indicate if we are aware of an existing data provider with the given name. If a data provider
-   *  with the given name is someone else on the network, this function won't tell you about it
-   *  unless something else in the existing process is subscribed to it.
+  import { DataProviderDataTypes } from 'shared/models/data-provider.model';
+  import IDataProviderEngine, {
+    DataProviderEngineNotifyUpdate,
+  } from 'shared/models/data-provider-engine.model';
+  /**
+   * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes.
+   * If a data provider engine class extends this class, it doesn't have to specify its own
+   * `notifyUpdate` function in order to use `notifyUpdate`.
+   *
+   * @see IDataProviderEngine for more information on extending this class.
+   */
+  abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
+    notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
+  }
+  /**
+   * Indicate if we are aware of an existing data provider with the given name. If a data provider
+   * with the given name is somewhere else on the network, this function won't tell you about it
+   * unless something else in the existing process is subscribed to it.
    */
   function hasKnown(providerName: string): boolean;
+  /**
+   * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
+   * papi will not layer over these methods or consider them to be data type methods
+   *
+   * @param method the method to ignore
+   *
+   * @example use this as a decorator on a class's method:
+   * ```typescript
+   * class MyDataProviderEngine {
+   *   ＠papi.dataProvider.decorators.ignore
+   *   async getInternal() {}
+   * }
+   * ```
+   *
+   * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
+   * code blocks, so a different unicode character was used. Please use a normal `@` when using a decorator.
+   *
+   * OR
+   *
+   * @example call this function signature on an object's method:
+   * ```typescript
+   * const myDataProviderEngine = {
+   *   async getInternal() {}
+   * };
+   * papi.dataProvider.decorators.ignore(dataProviderEngine.getInternal);
+   * ```
+   */
+  function ignore(
+    method: Function & {
+      isIgnored?: boolean;
+    },
+  ): void;
+  /**
+   * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
+   * papi will not layer over these methods or consider them to be data type methods
+   *
+   * @param target the class that has the method to ignore
+   * @param member the name of the method to ignore
+   *
+   * Note: this is the signature that provides the actual decorator functionality. However, since
+   * users will not be using this signature, the example usage is provided in the signature above.
+   */
+  function ignore<T extends object>(target: T, member: keyof T): void;
   /**
    * Creates a data provider to be shared on the network layering over the provided data provider engine.
    * @param providerName name this data provider should be called on the network
@@ -1580,31 +2050,439 @@ declare module 'shared/services/data-provider.service' {
    *
    * WARNING: registering a dataProviderEngine mutates the provided object.
    * Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
-   * @returns information about the data provider including control over disposing of it.
+   * @returns the data provider including control over disposing of it.
    *  Note that this data provider is a new object distinct from the data provider engine passed in.
    * @type `TSelector` - the type of selector used to get some data from this provider.
    *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
    *  Note: A selector must be stringifiable.
    * @type `TData` - the type of data provided by this data provider based on a provided selector
    */
-  function registerEngine<TSelector, TGetData, TSetData>(
+  function registerEngine<TDataTypes extends DataProviderDataTypes>(
     providerName: string,
-    dataProviderEngine: IDataProviderEngine<TSelector, TGetData, TSetData>,
-  ): Promise<IDisposableDataProvider<TSelector, TGetData, TSetData>>;
+    dataProviderEngine: IDataProviderEngine<TDataTypes>,
+  ): Promise<IDisposableDataProvider<TDataTypes>>;
   /**
    * Get a data provider that has previously been set up
    * @param providerName Name of the desired data provider
    * @returns The data provider with the given name if one exists, undefined otherwise
    */
-  function get<T extends IDataProvider<any, any, any>>(
-    providerName: string,
-  ): Promise<T | undefined>;
+  function get<T extends IDataProvider<any>>(providerName: string): Promise<T | undefined>;
   const dataProviderService: {
     hasKnown: typeof hasKnown;
     registerEngine: typeof registerEngine;
     get: typeof get;
+    decorators: {
+      ignore: typeof ignore;
+    };
+    DataProviderEngine: typeof DataProviderEngine;
   };
   export default dataProviderService;
+}
+declare module 'shared/services/papi.service' {
+  /**
+   * Unified module for accessing API features in extensions.
+   *
+   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
+   */
+  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+  import * as commandService from 'shared/services/command.service';
+  import * as papiUtil from 'shared/utils/papi-util';
+  const papi: {
+    EventEmitter: typeof PapiEventEmitter;
+    fetch: typeof fetch;
+    commands: typeof commandService;
+    util: typeof papiUtil;
+    webViews: {
+      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/web-view.model').AddWebViewEvent
+      >;
+      getWebView: (
+        webViewType: string,
+        layout?: import('shared/data/web-view.model').Layout,
+        options?: import('shared/data/web-view.model').GetWebViewOptions,
+      ) => Promise<string | undefined>;
+      initialize: () => Promise<void>;
+      registerWebViewProvider: (
+        webViewType: string,
+        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+    };
+    network: {
+      onDidClientConnect: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/internal-connection.model').ClientConnectEvent
+      >;
+      onDidClientDisconnect: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/internal-connection.model').ClientDisconnectEvent
+      >;
+      createNetworkEventEmitter: <T>(eventType: string) => PapiEventEmitter<T>;
+      getNetworkEvent: <T_1>(
+        eventType: string,
+      ) => import('shared/models/papi-event.model').PapiEvent<T_1>;
+    };
+    logger: import('electron-log').Logger & {
+      default: import('electron-log').Logger;
+    };
+    internet: {
+      fetch: typeof fetch;
+    };
+    dataProvider: {
+      hasKnown: (providerName: string) => boolean;
+      registerEngine: <
+        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >(
+        providerName: string,
+        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes>,
+      ) => Promise<
+        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes>
+      >;
+      get: <T_2 extends import('shared/models/data-provider.interface').default<any>>(
+        providerName: string,
+      ) => Promise<T_2 | undefined>;
+      decorators: {
+        ignore: {
+          (
+            method: Function & {
+              isIgnored?: boolean | undefined;
+            },
+          ): void;
+          <T_3 extends object>(target: T_3, member: keyof T_3): void;
+        };
+      };
+      DataProviderEngine: abstract new <
+        TDataTypes_1 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >() => {
+        notifyUpdate: import('shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_1>;
+      };
+    };
+  };
+  export default papi;
+}
+declare module 'renderer/context/papi-context/test.context' {
+  const TestContext: import('react').Context<string>;
+  export default TestContext;
+}
+declare module 'renderer/context/papi-context/index' {
+  /** All React contexts to be exposed on the papi */
+  const papiContext: {
+    TestContext: import('react').Context<string>;
+  };
+  export default papiContext;
+  export type PapiContext = typeof papiContext;
+}
+declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
+  /**
+   * Awaits a promise and returns a loading value while the promise is unresolved
+   * @param promiseFactoryCallback a function that returns the promise to await. If the promise resolves to null, the value will not change.
+   * If this callback is undefined, the current value will be returned (defaultValue unless it was previously changed and preserveValue is true), and there will be no loading.
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated every render
+   * @param defaultValue the initial value to return while first awaiting the promise. If preserveValue is false, this value is also shown while awaiting the promise on subsequent calls.
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+   * @param preserveValue whether to leave the value as the most recent resolved promise value or set it back to defaultValue while running the promise again. Default to true
+   * @returns [value, isLoading]
+   *  - `value`: the current value for the promise, either the defaultValue or the resolved promise value
+   *  - `isLoading`: whether the promise is waiting to be resolved
+   */
+  const usePromise: <T>(
+    promiseFactoryCallback: (() => Promise<T | null>) | undefined,
+    defaultValue: T,
+    preserveValue?: boolean,
+  ) => [value: T, isLoading: boolean];
+  export default usePromise;
+}
+declare module 'renderer/hooks/papi-hooks/use-event.hook' {
+  import { PapiEvent, PapiEventHandler } from 'shared/models/papi-event.model';
+  /**
+   * Adds an event handler to an event so the event handler runs when the event is emitted
+   * @param event the event to subscribe to. Can be either a string or an Event
+   *  - If event is a `string`, the network event associated with this type will automatically be used
+   *  - If event is a `PapiEvent`, that event will be used
+   *  - If event is undefined, the callback will not be subscribed. Useful if the event is not yet available for example
+   * @param eventHandler the callback to run when the event is emitted
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated every render
+   */
+  const useEvent: <T>(
+    event: string | PapiEvent<T> | undefined,
+    eventHandler: PapiEventHandler<T>,
+  ) => void;
+  export default useEvent;
+}
+declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
+  import { PapiEvent, PapiEventAsync, PapiEventHandler } from 'shared/models/papi-event.model';
+  /**
+   * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler runs when the event is emitted
+   * @param event the asynchronously (un)subscribing event to subscribe to. Can be either a string or an Event
+   *  - If event is a `string`, the network event associated with this type will automatically be used
+   *  - If event is a `PapiEvent` or `PapiEventAsync`, that event will be used
+   *  - If event is undefined, the callback will not be subscribed. Useful if the event is not yet available for example
+   * @param eventHandler the callback to run when the event is emitted
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated every render
+   */
+  const useEventAsync: <T>(
+    event: string | PapiEvent<T> | PapiEventAsync<T> | undefined,
+    eventHandler: PapiEventHandler<T>,
+  ) => void;
+  export default useEventAsync;
+}
+declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
+  import IDataProvider from 'shared/models/data-provider.interface';
+  /**
+   * Gets a data provider with specified provider name
+   * @param dataProviderSource string name of the data provider to get OR dataProvider (result of useDataProvider if you
+   * want this hook to just return the data provider again)
+   * @returns undefined if the data provider has not been retrieved,
+   *  data provider if it has been retrieved and is not disposed,
+   *  and undefined again if the data provider is disposed
+   *
+   * @type `T` - the type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
+   *  specifying your own types, or provide a custom data provider type
+   */
+  function useDataProvider<T extends IDataProvider<any>>(
+    dataProviderSource: string | T | undefined,
+  ): T | undefined;
+  export default useDataProvider;
+}
+declare module 'renderer/hooks/papi-hooks/use-data.hook' {
+  import {
+    DataProviderDataTypes,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import IDataProvider from 'shared/models/data-provider.interface';
+  type UseDataHook = {
+    [DataType in string]: <TDataTypes extends DataProviderDataTypes, TDataType extends DataType>(
+      dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
+      selector: TDataTypes[TDataType]['selector'],
+      defaultValue: TDataTypes[TDataType]['getData'],
+      subscriberOptions?: DataProviderSubscriberOptions,
+    ) => [
+      TDataTypes[TDataType]['getData'],
+      (
+        | ((
+            newData: TDataTypes[TDataType]['setData'],
+          ) => Promise<DataProviderUpdateInstructions<TDataTypes>>)
+        | undefined
+      ),
+      boolean,
+    ];
+  };
+  /**
+   * Special React hook that subscribes to run a callback on a data provider's data with specified
+   * selector on any data type that data provider serves.
+   *
+   * Usage: Specify the data type on the data provider with `useData.<data_type>` and use like any other
+   * React hook. For example, `useData.Verse` lets you subscribe to verses from a data provider.
+   *
+   * @example When subscribing to John 11:35 on the `'quick-verse.quick-verse'` data provider, we need
+   * to tell the useData.Verse hook what types we are using, so we use the QuickVerseDataTypes and specify
+   * that we are using the 'Verse' data types as follows:
+   * ```typescript
+   * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
+   *   'quick-verse.quick-verse',
+   *   'John 11:35',
+   *   'Verse text goes here',
+   * );
+   * ```
+   *
+   * @param dataProviderSource string name of data provider to get OR dataProvider (result of useDataProvider if you
+   * want to consolidate and only get the data provider once)
+   * @param selector tells the provider what data this listener is listening for
+   * @param defaultValue the initial value to return while first awaiting the data
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+   * @param subscriberOptions various options to adjust how the subscriber emits updates
+   *
+   *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+   * @returns [data, setData, isLoading]
+   *  - `data`: the current value for the data from the data provider with the specified data type and selector, either the defaultValue or the resolved data
+   *  - `setData`: asynchronous function to request that the data provider update the data at this data type and selector. Returns true if successful.
+   *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
+   *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data provider
+   */
+  const useData: UseDataHook;
+  export default useData;
+}
+declare module 'renderer/hooks/papi-hooks/index' {
+  import useDataProvider from 'renderer/hooks/papi-hooks/use-data-provider.hook';
+  /** All React hooks to be exposed on the papi */
+  const papiHooks: {
+    usePromise: <T>(
+      promiseFactoryCallback: (() => Promise<T | null>) | undefined,
+      defaultValue: T,
+      preserveValue?: boolean,
+    ) => [value: T, isLoading: boolean];
+    useEvent: <T_1>(
+      event: string | import('shared/models/papi-event.model').PapiEvent<T_1> | undefined,
+      eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_1>,
+    ) => void;
+    useEventAsync: <T_2>(
+      event:
+        | string
+        | import('shared/models/papi-event.model').PapiEvent<T_2>
+        | import('shared/models/papi-event.model').PapiEventAsync<T_2>
+        | undefined,
+      eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_2>,
+    ) => void;
+    useDataProvider: typeof useDataProvider;
+    useData: {
+      [x: string]: <
+        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+        TDataType extends string,
+      >(
+        dataProviderSource:
+          | string
+          | import('shared/models/data-provider.interface').default<TDataTypes>
+          | undefined,
+        selector: TDataTypes[TDataType]['selector'],
+        defaultValue: TDataTypes[TDataType]['getData'],
+        subscriberOptions?:
+          | import('shared/models/data-provider.model').DataProviderSubscriberOptions
+          | undefined,
+      ) => [
+        TDataTypes[TDataType]['getData'],
+        (
+          | ((
+              newData: TDataTypes[TDataType]['setData'],
+            ) => Promise<
+              import('shared/models/data-provider.model').DataProviderUpdateInstructions<TDataTypes>
+            >)
+          | undefined
+        ),
+        boolean,
+      ];
+    };
+  };
+  export default papiHooks;
+  export type PapiHooks = typeof papiHooks;
+}
+declare module 'papi-frontend' {
+  const papi: {
+    react: {
+      context: {
+        TestContext: import('react').Context<string>;
+      };
+      hooks: {
+        usePromise: <T>(
+          promiseFactoryCallback: (() => Promise<T | null>) | undefined,
+          defaultValue: T,
+          preserveValue?: boolean,
+        ) => [value: T, isLoading: boolean];
+        useEvent: <T_1>(
+          event: string | import('shared/models/papi-event.model').PapiEvent<T_1> | undefined,
+          eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_1>,
+        ) => void;
+        useEventAsync: <T_2>(
+          event:
+            | string
+            | import('shared/models/papi-event.model').PapiEvent<T_2>
+            | import('shared/models/papi-event.model').PapiEventAsync<T_2>
+            | undefined,
+          eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_2>,
+        ) => void;
+        useDataProvider: typeof import('renderer/hooks/papi-hooks/use-data-provider.hook').default;
+        useData: {
+          [x: string]: <
+            TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+            TDataType extends string,
+          >(
+            dataProviderSource:
+              | string
+              | import('shared/models/data-provider.interface').default<TDataTypes>
+              | undefined,
+            selector: TDataTypes[TDataType]['selector'],
+            defaultValue: TDataTypes[TDataType]['getData'],
+            subscriberOptions?:
+              | import('shared/models/data-provider.model').DataProviderSubscriberOptions
+              | undefined,
+          ) => [
+            TDataTypes[TDataType]['getData'],
+            (
+              | ((
+                  newData: TDataTypes[TDataType]['setData'],
+                ) => Promise<
+                  import('shared/models/data-provider.model').DataProviderUpdateInstructions<TDataTypes>
+                >)
+              | undefined
+            ),
+            boolean,
+          ];
+        };
+      };
+    };
+    EventEmitter: typeof import('shared/models/papi-event-emitter.model').default;
+    fetch: typeof fetch;
+    commands: typeof import('shared/services/command.service');
+    util: typeof import('shared/utils/papi-util');
+    webViews: {
+      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/web-view.model').AddWebViewEvent
+      >;
+      getWebView: (
+        webViewType: string,
+        layout?: import('shared/data/web-view.model').Layout,
+        options?: import('shared/data/web-view.model').GetWebViewOptions,
+      ) => Promise<string | undefined>;
+      initialize: () => Promise<void>;
+      registerWebViewProvider: (
+        webViewType: string,
+        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+    };
+    network: {
+      onDidClientConnect: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/internal-connection.model').ClientConnectEvent
+      >;
+      onDidClientDisconnect: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/internal-connection.model').ClientDisconnectEvent
+      >;
+      createNetworkEventEmitter: <T_3>(
+        eventType: string,
+      ) => import('shared/models/papi-event-emitter.model').default<T_3>;
+      getNetworkEvent: <T_4>(
+        eventType: string,
+      ) => import('shared/models/papi-event.model').PapiEvent<T_4>;
+    };
+    logger: import('electron-log').Logger & {
+      default: import('electron-log').Logger;
+    };
+    internet: {
+      fetch: typeof fetch;
+    };
+    dataProvider: {
+      hasKnown: (providerName: string) => boolean;
+      registerEngine: <
+        TDataTypes_1 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >(
+        providerName: string,
+        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes_1>,
+      ) => Promise<
+        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes_1>
+      >;
+      get: <T_5 extends import('shared/models/data-provider.interface').default<any>>(
+        providerName: string,
+      ) => Promise<T_5 | undefined>;
+      decorators: {
+        ignore: {
+          (
+            method: Function & {
+              isIgnored?: boolean | undefined;
+            },
+          ): void;
+          <T_6 extends object>(target: T_6, member: keyof T_6): void;
+        };
+      };
+      DataProviderEngine: abstract new <
+        TDataTypes_2 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >() => {
+        notifyUpdate: import('shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_2>;
+      };
+    };
+  };
+  export default papi;
+  export type Papi = typeof papi;
 }
 declare module 'shared/data/file-system.model' {
   /**
@@ -1798,277 +2676,8 @@ declare module 'extension-host/services/extension-storage.service' {
   export default extensionStorageService;
   export type ExtensionStorageService = typeof extensionStorageService;
 }
-declare module 'renderer/context/papi-context/test.context' {
-  const TestContext: import('react').Context<string>;
-  export default TestContext;
-}
-declare module 'renderer/context/papi-context/index' {
-  /** All React contexts to be exposed on the papi */
-  const papiContext: {
-    TestContext: import('react').Context<string>;
-  };
-  export default papiContext;
-  export type PapiContext = typeof papiContext;
-}
-declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
-  /**
-   * Awaits a promise and returns a loading value while the promise is unresolved
-   * @param promiseFactoryCallback a function that returns the promise to await. If the promise resolves to null, the value will not change.
-   * If this callback is undefined, the current value will be returned (defaultValue unless it was previously changed and preserveValue is true), and there will be no loading.
-   *
-   *    WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated every render
-   * @param defaultValue the initial value to return while first awaiting the promise. If preserveValue is false, this value is also shown while awaiting the promise on subsequent calls.
-   *
-   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-   * @param preserveValue whether to leave the value as the most recent resolved promise value or set it back to defaultValue while running the promise again. Default to true
-   * @returns [value, isLoading]
-   *  - `value`: the current value for the promise, either the defaultValue or the resolved promise value
-   *  - `isLoading`: whether the promise is waiting to be resolved
-   */
-  const usePromise: <T>(
-    promiseFactoryCallback: (() => Promise<T | null>) | undefined,
-    defaultValue: T,
-    preserveValue?: boolean,
-  ) => [value: T, isLoading: boolean];
-  export default usePromise;
-}
-declare module 'renderer/hooks/papi-hooks/use-event.hook' {
-  import { PapiEvent, PapiEventHandler } from 'shared/models/papi-event.model';
-  /**
-   * Adds an event handler to an event so the event handler runs when the event is emitted
-   * @param event the event to subscribe to. Can be either a string or an Event
-   *  - If event is a `string`, the network event associated with this type will automatically be used
-   *  - If event is a `PapiEvent`, that event will be used
-   *  - If event is undefined, the callback will not be subscribed. Useful if the event is not yet available for example
-   * @param eventHandler the callback to run when the event is emitted
-   *
-   *    WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated every render
-   */
-  const useEvent: <T>(
-    event: string | PapiEvent<T> | undefined,
-    eventHandler: PapiEventHandler<T>,
-  ) => void;
-  export default useEvent;
-}
-declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
-  import { PapiEvent, PapiEventAsync, PapiEventHandler } from 'shared/models/papi-event.model';
-  /**
-   * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler runs when the event is emitted
-   * @param event the asynchronously (un)subscribing event to subscribe to. Can be either a string or an Event
-   *  - If event is a `string`, the network event associated with this type will automatically be used
-   *  - If event is a `PapiEvent` or `PapiEventAsync`, that event will be used
-   *  - If event is undefined, the callback will not be subscribed. Useful if the event is not yet available for example
-   * @param eventHandler the callback to run when the event is emitted
-   *
-   *    WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated every render
-   */
-  const useEventAsync: <T>(
-    event: string | PapiEvent<T> | PapiEventAsync<T> | undefined,
-    eventHandler: PapiEventHandler<T>,
-  ) => void;
-  export default useEventAsync;
-}
-declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
-  import IDataProvider from 'shared/models/data-provider.interface';
-  /**
-   * Gets a data provider with specified name
-   * @param providerName name of the data provider to get
-   * @returns undefined if the data provider has not been retrieved,
-   *  data provider if it has been retrieved and is not disposed,
-   *  and undefined again if the data provider is disposed
-   *
-   * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
-   *  specifying your own types, or provide a custom data provider type
-   */
-  function useDataProvider<T extends IDataProvider<any, any, any>>(
-    providerName: string | undefined,
-  ): T | undefined;
-  /**
-   * Passes the provided data provider through. Used to support hooks that already have a dataProvider
-   * @param dataProvider result of useDataProvider if you want this hook to just return the data provider again
-   * @returns undefined if the data provider has not been retrieved,
-   *  data provider if it has been retrieved and is not disposed,
-   *  and undefined again if the data provider is disposed
-   *
-   * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
-   *  specifying your own types, or provide a custom data provider type
-   */
-  function useDataProvider<T extends IDataProvider<any, any, any>>(
-    dataProvider: T | undefined,
-  ): T | undefined;
-  /**
-   * Gets a data provider with specified provider name
-   * @param dataProviderSource string name of the data provider to get OR dataProvider (result of useDataProvider if you
-   * want this hook to just return the data provider again)
-   * @returns undefined if the data provider has not been retrieved,
-   *  data provider if it has been retrieved and is not disposed,
-   *  and undefined again if the data provider is disposed
-   *
-   * @type `T` - the type of data provider to return. Use `IDataProvider<TSelector, TGetData, TSetData>`,
-   *  specifying your own types, or provide a custom data provider type
-   */
-  function useDataProvider<T extends IDataProvider<any, any, any>>(
-    dataProviderSource: string | T | undefined,
-  ): T | undefined;
-  export default useDataProvider;
-}
-declare module 'renderer/hooks/papi-hooks/use-data.hook' {
-  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
-  import IDataProvider from 'shared/models/data-provider.interface';
-  /**
-   * Subscribes to run a callback on a data provider's data with specified selector
-   * @param providerName name of the data provider to subscribe to
-   * @param selector tells the provider what data this listener is listening for
-   * @param defaultValue the initial value to return while first awaiting the data
-   *
-   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-   * @param subscriberOptions various options to adjust how the subscriber emits updates
-   *
-   *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-   * @returns [data, setData, isLoading]
-   *  - `data`: the current value for the data from the data provider with the specified selector, either the defaultValue or the resolved data
-   *  - `setData`: asynchronous function to request that the data provider update the data at this selector. Returns true if successful.
-   *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
-   *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
-   */
-  function useData<TSelector, TGetData, TSetData>(
-    providerName: string | undefined,
-    selector: TSelector,
-    defaultValue: TGetData,
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
-  /**
-   * Subscribes to run a callback on a data provider's data with specified selector
-   * @param dataProvider result of useDataProvider if you want to consolidate and only get the data provider once
-   * @param selector tells the provider what data this listener is listening for
-   * @param defaultValue the initial value to return while first awaiting the data
-   *
-   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-   * @param subscriberOptions various options to adjust how the subscriber emits updates
-   *
-   *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-   * @returns [data, setData, isLoading]
-   *  - `data`: the current value for the data from the data provider with the specified selector, either the defaultValue or the resolved data
-   *  - `setData`: asynchronous function to request that the data provider update the data at this selector. Returns true if successful.
-   *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
-   *  - `isLoading`: whether the data with the selector is awaiting retrieval from the data provider
-   */
-  function useData<TSelector, TGetData, TSetData>(
-    dataProvider: IDataProvider<TSelector, TGetData, TSetData> | undefined,
-    selector: TSelector,
-    defaultValue: TGetData,
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ): [TGetData, ((newData: TSetData) => Promise<boolean>) | undefined, boolean];
-  export default useData;
-}
-declare module 'renderer/hooks/papi-hooks/index' {
-  import useDataProvider from 'renderer/hooks/papi-hooks/use-data-provider.hook';
-  import useData from 'renderer/hooks/papi-hooks/use-data.hook';
-  /** All React hooks to be exposed on the papi */
-  const papiHooks: {
-    usePromise: <T>(
-      promiseFactoryCallback: (() => Promise<T | null>) | undefined,
-      defaultValue: T,
-      preserveValue?: boolean,
-    ) => [value: T, isLoading: boolean];
-    useEvent: <T_1>(
-      event: string | import('shared/models/papi-event.model').PapiEvent<T_1> | undefined,
-      eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_1>,
-    ) => void;
-    useEventAsync: <T_2>(
-      event:
-        | string
-        | import('shared/models/papi-event.model').PapiEvent<T_2>
-        | import('shared/models/papi-event.model').PapiEventAsync<T_2>
-        | undefined,
-      eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_2>,
-    ) => void;
-    useDataProvider: typeof useDataProvider;
-    useData: typeof useData;
-  };
-  export default papiHooks;
-  export type PapiHooks = typeof papiHooks;
-}
-declare module 'papi' {
-  /**
-   * Unified module for accessing API features in extensions.
-   *
-   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
-   */
-  import * as commandService from 'shared/services/command.service';
-  import * as papiUtil from 'shared/utils/papi-util';
-  import * as webViewService from 'shared/services/web-view.service';
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+declare module 'papi-backend' {
   const papi: {
-    EventEmitter: typeof PapiEventEmitter;
-    fetch: typeof fetch;
-    commands: typeof commandService;
-    util: typeof papiUtil;
-    webViews: typeof webViewService;
-    react: {
-      context: {
-        TestContext: import('react').Context<string>;
-      };
-      hooks: {
-        usePromise: <T>(
-          promiseFactoryCallback: (() => Promise<T | null>) | undefined,
-          defaultValue: T,
-          preserveValue?: boolean,
-        ) => [value: T, isLoading: boolean];
-        useEvent: <T_1>(
-          event: string | import('shared/models/papi-event.model').PapiEvent<T_1> | undefined,
-          eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_1>,
-        ) => void;
-        useEventAsync: <T_2>(
-          event:
-            | string
-            | import('shared/models/papi-event.model').PapiEvent<T_2>
-            | import('shared/models/papi-event.model').PapiEventAsync<T_2>
-            | undefined,
-          eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_2>,
-        ) => void;
-        useDataProvider: typeof import('renderer/hooks/papi-hooks/use-data-provider.hook').default;
-        useData: typeof import('renderer/hooks/papi-hooks/use-data.hook').default;
-      };
-    };
-    network: {
-      onDidClientConnect: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/internal-connection.model').ClientConnectEvent
-      >;
-      onDidClientDisconnect: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/internal-connection.model').ClientDisconnectEvent
-      >;
-      createNetworkEventEmitter: <T_3>(eventType: string) => PapiEventEmitter<T_3>;
-      getNetworkEvent: <T_4>(
-        eventType: string,
-      ) => import('shared/models/papi-event.model').PapiEvent<T_4>;
-    };
-    logger: import('electron-log').Logger & {
-      default: import('electron-log').Logger;
-    };
-    internet: {
-      fetch: typeof fetch;
-    };
-    dataProvider: {
-      hasKnown: (providerName: string) => boolean;
-      registerEngine: <TSelector, TGetData, TSetData>(
-        providerName: string,
-        dataProviderEngine: import('shared/models/data-provider-engine.model').default<
-          TSelector,
-          TGetData,
-          TSetData
-        >,
-      ) => Promise<
-        import('shared/models/data-provider.interface').IDisposableDataProvider<
-          TSelector,
-          TGetData,
-          TSetData
-        >
-      >;
-      get: <T_5 extends import('shared/models/data-provider.interface').default<any, any, any>>(
-        providerName: string,
-      ) => Promise<T_5 | undefined>;
-    };
     storage: {
       readTextFileFromInstallDirectory: (
         token: import('node/models/execution-token.model').ExecutionToken,
@@ -2091,6 +2700,74 @@ declare module 'papi' {
         token: import('node/models/execution-token.model').ExecutionToken,
         key: string,
       ) => Promise<void>;
+    };
+    EventEmitter: typeof import('shared/models/papi-event-emitter.model').default;
+    fetch: typeof fetch;
+    commands: typeof import('shared/services/command.service');
+    util: typeof import('shared/utils/papi-util');
+    webViews: {
+      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/web-view.model').AddWebViewEvent
+      >;
+      getWebView: (
+        webViewType: string,
+        layout?: import('shared/data/web-view.model').Layout,
+        options?: import('shared/data/web-view.model').GetWebViewOptions,
+      ) => Promise<string | undefined>;
+      initialize: () => Promise<void>;
+      registerWebViewProvider: (
+        webViewType: string,
+        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+    };
+    network: {
+      onDidClientConnect: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/internal-connection.model').ClientConnectEvent
+      >;
+      onDidClientDisconnect: import('shared/models/papi-event.model').PapiEvent<
+        import('shared/data/internal-connection.model').ClientDisconnectEvent
+      >;
+      createNetworkEventEmitter: <T>(
+        eventType: string,
+      ) => import('shared/models/papi-event-emitter.model').default<T>;
+      getNetworkEvent: <T_1>(
+        eventType: string,
+      ) => import('shared/models/papi-event.model').PapiEvent<T_1>;
+    };
+    logger: import('electron-log').Logger & {
+      default: import('electron-log').Logger;
+    };
+    internet: {
+      fetch: typeof fetch;
+    };
+    dataProvider: {
+      hasKnown: (providerName: string) => boolean;
+      registerEngine: <
+        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >(
+        providerName: string,
+        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes>,
+      ) => Promise<
+        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes>
+      >;
+      get: <T_2 extends import('shared/models/data-provider.interface').default<any>>(
+        providerName: string,
+      ) => Promise<T_2 | undefined>;
+      decorators: {
+        ignore: {
+          (
+            method: Function & {
+              isIgnored?: boolean | undefined;
+            },
+          ): void;
+          <T_3 extends object>(target: T_3, member: keyof T_3): void;
+        };
+      };
+      DataProviderEngine: abstract new <
+        TDataTypes_1 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+      >() => {
+        notifyUpdate: import('shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_1>;
+      };
     };
   };
   export default papi;

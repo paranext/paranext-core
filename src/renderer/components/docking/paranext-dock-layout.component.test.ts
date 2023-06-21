@@ -3,12 +3,7 @@ jest.mock('../../../shared/services/logger.service');
 
 import DockLayout, { FloatPosition } from 'rc-dock';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
-import {
-  AddWebViewEvent,
-  FloatLayout,
-  SavedTabInfo,
-  WebViewProps,
-} from '@shared/data/web-view.model';
+import { FloatLayout, Layout, SavedTabInfo, WebViewProps } from '@shared/data/web-view.model';
 import { addWebViewToDock, getFloatPosition, loadTab } from './paranext-dock-layout.component';
 
 describe('Dock Layout Component', () => {
@@ -69,30 +64,29 @@ describe('Dock Layout Component', () => {
 
   describe('loadTab()', () => {
     it('should throw when no id', () => {
-      const savedTabInfo: SavedTabInfo = {};
+      const savedTabInfoNoId = {} as SavedTabInfo;
 
-      expect(() => loadTab(savedTabInfo)).toThrow();
+      expect(() => loadTab(savedTabInfoNoId)).toThrow();
     });
   });
 
   describe('addWebViewToDock()', () => {
     it('should throw when no id', () => {
       const dockLayout = instance(mockDockLayout);
-      const event: AddWebViewEvent = { webView: {} as WebViewProps, layout: { type: 'tab' } };
+      const webView = {} as WebViewProps;
+      const layout: Layout = { type: 'tab' };
 
-      expect(() => addWebViewToDock(event, dockLayout)).toThrow();
+      expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();
     });
 
     it('should throw on unknown layout type', () => {
       // Ensure this is an add (rather than an update).
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
-      const event: AddWebViewEvent = {
-        webView: { id: 'myId', content: '' },
-        layout: { type: 'wacked' } as unknown as FloatLayout,
-      };
+      const webView: WebViewProps = { id: 'myId', webViewType: 'test', content: '' };
+      const layout = { type: 'wacked' } as unknown as FloatLayout;
 
-      expect(() => addWebViewToDock(event, dockLayout)).toThrow();
+      expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();
 
       verify(mockDockLayout.find(anything())).once();
       verify(mockDockLayout.updateTab(anything(), anything())).never();
@@ -103,12 +97,10 @@ describe('Dock Layout Component', () => {
       // Ensure this is an add (rather than an update).
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
-      const event: AddWebViewEvent = {
-        webView: { id: 'myId', content: '' },
-        layout: { type: 'panel', direction: 'top', targetTabId: 'unknownTabId' },
-      };
+      const webView: WebViewProps = { id: 'myId', webViewType: 'test', content: '' };
+      const layout: Layout = { type: 'panel', direction: 'top', targetTabId: 'unknownTabId' };
 
-      expect(() => addWebViewToDock(event, dockLayout)).toThrow();
+      expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();
 
       verify(mockDockLayout.find(anything())).called();
       verify(mockDockLayout.updateTab(anything(), anything())).never();

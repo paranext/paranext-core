@@ -45,7 +45,12 @@ export const webViewTempDir = 'temp-vite';
 export const webViewTempGlob = `**/${webViewTempDir}/*.web-view.js`;
 
 /** Modules that Paranext supplies so extensions can use them easily */
-export const paranextProvidedModules = ['react', 'react-dom/client', 'papi'];
+export const paranextProvidedModules = [
+  'react',
+  'react-dom/client',
+  'papi-frontend',
+  'papi-backend',
+];
 
 /**
  * Gets a file extension based on the moduleFormat input.

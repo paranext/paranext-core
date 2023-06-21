@@ -1,7 +1,9 @@
 import icon from '@assets/icon.png';
-import { TabInfo } from '@shared/data/web-view.model';
+import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 
-function AboutPanel() {
+export const TAB_TYPE_ABOUT = 'about';
+
+export default function AboutPanel() {
   return (
     <div className="about-panel">
       <div className="hello">
@@ -14,9 +16,10 @@ function AboutPanel() {
   );
 }
 
-export default function createAboutPanel(): TabInfo {
+export function loadAboutTab(savedTabInfo: SavedTabInfo): TabInfo {
   return {
-    title: 'About',
+    ...savedTabInfo,
+    tabTitle: 'About',
     content: <AboutPanel />,
     minWidth: 230,
     minHeight: 230,

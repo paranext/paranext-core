@@ -349,7 +349,9 @@ const get = async <T extends object>(
  * `onDidDispose` property on it. If the object already contained a `dispose` function, a new
  * `dispose` function will be set that calls the existing function (amongst other things). If the
  * object did not already define a `dispose` function, one will be added.
- * @returns INetworkObjectDisposer wrapping the object to share
+ *
+ * WARNING: setting a network object mutates the provided object.
+ * @returns `objectToShare` modified to be a network object
  */
 
 const set = async <T extends NetworkableObject>(

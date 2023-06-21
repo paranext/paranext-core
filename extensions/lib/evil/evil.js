@@ -3,7 +3,7 @@
 'use strict';
 
 // eslint-disable-next-line import/no-unresolved
-const papi = require('papi');
+const papi = require('papi-backend');
 
 const { logger } = papi;
 
@@ -28,7 +28,7 @@ async function tryImports() {
 
   try {
     // This should always work because `fetch` is replaced with `papi.fetch`.
-    fetch('https://bible-api.com/1%20thessalonians+5:16');
+    await fetch('https://bible-api.com/1%20thessalonians+5:16');
     logger.info('Evil: fetch is working.');
   } catch (e) {
     logger.error(`Evil: Error on fetch! ${e}`);

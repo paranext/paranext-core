@@ -1,13 +1,14 @@
 import '@extension-host/global-this.model';
 import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
-import papi from '@shared/services/papi.service';
 import { CommandHandler } from '@shared/utils/papi-util';
 import * as ExtensionService from '@extension-host/services/extension.service';
+import papi from '@extension-host/services/papi-backend.service';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
+import { getErrorMessage } from '@shared/utils/util';
 
 // #region Test logs
 
@@ -63,11 +64,15 @@ networkService
 (async () => {
   const testEH = await networkObjectService.set('test-extension-host', {
     getVerse: async () => {
-      const verse = await papi.fetch('https://bible-api.com/matthew+24:14');
-      const verseJson = await verse.json();
-      const results = `test-extension-host got verse: ${verseJson.text.replace(/\\n/g, '')}`;
-      logger.info(results);
-      return results;
+      try {
+        const verse = await papi.fetch('https://bible-api.com/matthew+24:14');
+        const verseJson = await verse.json();
+        const results = `test-extension-host got verse: ${verseJson.text.replace(/\\n/g, '')}`;
+        logger.info(results);
+        return results;
+      } catch (e) {
+        return getErrorMessage(e);
+      }
     },
   });
 

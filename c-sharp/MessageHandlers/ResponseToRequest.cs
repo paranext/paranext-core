@@ -3,24 +3,34 @@ namespace Paranext.DataProvider.MessageHandlers;
 /// <summary>
 /// Internally represents a response we generated to an incoming request
 /// </summary>
-public sealed record class ResponseToRequest
+public sealed record ResponseToRequest
 {
-    /// <summary>
-    /// Response when there was an error - no contents
-    /// </summary>
-    public ResponseToRequest(string errorMessage)
+    private ResponseToRequest(bool success, dynamic? details)
     {
-        Success = false;
-        ErrorMessage = errorMessage;
+        Success = success;
+        if (success)
+            Contents = details;
+        else
+            ErrorMessage = details;
     }
 
     /// <summary>
     /// Response when successful
     /// </summary>
-    public ResponseToRequest(dynamic? contents)
+    public static ResponseToRequest Succeeded(dynamic? contents = null)
     {
-        Success = true;
-        Contents = contents;
+        // If the contents are sent as null it is assumed to be a failed response regardless of the value of "Success".
+        // Replace null with an empty list to avoid this confusing behavior.
+        contents ??= new List<object>();
+        return new ResponseToRequest(true, contents);
+    }
+
+    /// <summary>
+    /// Response when there was an error
+    /// </summary>
+    public static ResponseToRequest Failed(string errorMessage)
+    {
+        return new ResponseToRequest(false, errorMessage);
     }
 
     public bool Success { get; }
