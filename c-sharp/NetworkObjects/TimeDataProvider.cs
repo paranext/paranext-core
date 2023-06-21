@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using SIL.Extensions;
@@ -25,7 +26,7 @@ namespace Paranext.DataProvider.NetworkObjects
             _timer.Enabled = true;
         }
 
-        protected override ResponseToRequest HandleRequest(string functionName, string[] arguments)
+        protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
         {
             return functionName switch
             {

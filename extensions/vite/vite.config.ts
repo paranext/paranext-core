@@ -65,6 +65,15 @@ const extensionConfig = defineConfig(async () => {
           ),
         ),
       }),
+      // Copy the external data provider types separately since they aren't in a library
+      viteStaticCopy({
+        targets: [
+          {
+            src: `${sourceFolder}/external-data-provider-types/*.*`,
+            dest: 'external-data-provider-types',
+          },
+        ],
+      }),
       // Shared with https://github.com/paranext/paranext-extension-template/blob/main/vite/vite.config.ts
       // Import web view files as strings to pass on the papi
       {
