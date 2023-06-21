@@ -13,8 +13,8 @@ const meta: Meta<typeof Snackbar> = {
     autoHideDuration: { control: 'number' },
     className: { control: 'text' },
     /*
-     * adding actions to onClose: timeout, clickaway, or escapekeydown
-     * they show up in actions console when they are called
+     * Adding actions to onClose: timeout, clickaway, or escapekeydown
+     * They show up in actions console when they are called
      */
     onClose: { action: 'onClose' },
   },
@@ -48,7 +48,6 @@ export const Timeout: Story = {
     ...Primary.args,
     ContentProps: {
       message: 'This snackbar will timeout',
-      action: '',
       className: 'papi-snackbar primary',
     },
     autoHideDuration: 6000,
