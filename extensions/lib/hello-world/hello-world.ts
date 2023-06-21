@@ -1,4 +1,4 @@
-import papi from 'papi';
+import papi from 'papi-backend';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type {
   WebViewContentType,

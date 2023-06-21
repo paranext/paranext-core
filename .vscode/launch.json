@@ -10,6 +10,7 @@
       "args": [],
       "cwd": "${workspaceFolder}",
       "stopAtEntry": false,
+      "justMyCode": false,
       "windows": {
         "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/win-x64/ParanextDataProvider.exe"
       },
