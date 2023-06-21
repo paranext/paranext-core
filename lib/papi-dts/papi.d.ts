@@ -1,3 +1,4 @@
+/// <reference types="react" />
 /// <reference types="node" />
 declare module 'shared/global-this.model' {
   import { FunctionComponent } from 'react';
@@ -1369,7 +1370,7 @@ declare module 'shared/services/network-object.service' {
       id: string,
       createLocalObjectToProxy?: LocalObjectToProxyCreator<T> | undefined,
     ) => Promise<NetworkObject<T> | undefined>;
-    set: <T_1 extends NetworkableObject<object>>(
+    set: <T_1 extends NetworkableObject>(
       id: string,
       objectToShare: T_1,
     ) => Promise<DisposableNetworkObject<T_1>>;
@@ -2357,7 +2358,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export default papiHooks;
   export type PapiHooks = typeof papiHooks;
 }
-declare module 'papi' {
+declare module 'papi-frontend' {
   const papi: {
     react: {
       context: {
@@ -2675,7 +2676,7 @@ declare module 'extension-host/services/extension-storage.service' {
   export default extensionStorageService;
   export type ExtensionStorageService = typeof extensionStorageService;
 }
-declare module 'papi' {
+declare module 'papi-backend' {
   const papi: {
     storage: {
       readTextFileFromInstallDirectory: (

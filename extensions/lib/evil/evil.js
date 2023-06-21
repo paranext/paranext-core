@@ -3,7 +3,7 @@
 'use strict';
 
 // eslint-disable-next-line import/no-unresolved
-const papi = require('papi');
+const papi = require('papi-backend');
 
 const { logger } = papi;
 
