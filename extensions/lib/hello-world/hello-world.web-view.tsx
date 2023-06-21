@@ -8,7 +8,6 @@ import {
   Switch,
   TextField,
   Table,
-  TableTextEditor,
 } from 'papi-components';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
@@ -158,12 +157,12 @@ globalThis.webViewComponent = function HelloWorld() {
             {
               key: 'title',
               name: 'Title',
-              renderEditCell: TableTextEditor<Row>,
+              editable: true,
             },
             {
               key: 'subtitle',
               name: 'Subtitle',
-              renderEditCell: TableTextEditor<Row>,
+              editable: true,
             },
           ]}
           rows={rows}

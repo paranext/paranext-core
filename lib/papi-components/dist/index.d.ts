@@ -474,9 +474,8 @@ export type TableColumn<R> = {
    */
   readonly maxWidth?: number;
   /**
-   * Used to disable editing for a cell if `renderEditCell` is provided (meaning the column will
-   * be editable). Set this explicitly to `false` to turn off editing for this column, or provide
-   * a function that explicitly returns `false` for the rows you want not to be editable.
+   * If `true`, editing is enabled. If no custom cell editor is provided through `renderEditCell`
+   * the default text editor will be used for editing.
    */
   readonly editable?: boolean | ((row: R) => boolean) | null;
   /**
@@ -498,9 +497,7 @@ export type TableColumn<R> = {
   readonly sortDescendingFirst?: boolean | null;
   /**
    * Editor to be rendered when cell of column is being edited.
-   * If set, the column is automatically set to be editable unless the `editable` prop is
-   * explicitly set to `false`. If `editable` is a function, each row will be set to be editable
-   * unless the `editable` function explicitly returns `false` for that row.
+   * Don't forget to also set the `editable` prop to true in order to enable editing.
    */
   readonly renderEditCell?: ((props: TableEditorProps<R>) => ReactNode) | null;
 };
@@ -514,11 +511,6 @@ export type TableEditorProps<R> = {
 export type TablePasteEvent<R> = PasteEvent<R>;
 export type TableRowsChangeData<R> = RowsChangeData<R>;
 export type TableSortColumn = SortColumn;
-export declare function TableTextEditor<R>({
-  onRowChange,
-  row,
-  column,
-}: TableEditorProps<R>): ReactElement;
 export type TableProps<R> = {
   /**
    * An array of objects representing each column on the grid
