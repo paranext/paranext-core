@@ -41,7 +41,7 @@ export default function PlatformBibleToolbar() {
           onClose={() => {
             if (menuOpen) setMenuOpen(false);
           }}
-          PaperProps={{ style: { top: '40px', width: '95%', height: '170px'} }}
+          PaperProps={{ style: { top: '40px', width: '95%', height: '170px' } }}
         >
           <PlatformBibleMenu />
         </Drawer>

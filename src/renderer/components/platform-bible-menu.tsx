@@ -53,7 +53,9 @@ export default function PlatformBibleMenu() {
         >
           Settings...
         </MenuItem>
-        <MenuItem className="menu-item" dense onClick={onExit}>Exit</MenuItem>
+        <MenuItem className="menu-item" dense onClick={onExit}>
+          Exit
+        </MenuItem>
       </Grid>
       <Grid item xs={1}>
         <h3 className="menu">Window</h3>
@@ -66,7 +68,9 @@ export default function PlatformBibleMenu() {
         <MenuItem className="menu-item" dense onClick={visitSupportPage}>
           Visit Support.Bible
         </MenuItem>
-        <MenuItem className="menu-item" dense>About Platform.Bible...</MenuItem>
+        <MenuItem className="menu-item" dense>
+          About Platform.Bible...
+        </MenuItem>
       </Grid>
     </Grid>
   );
