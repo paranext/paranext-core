@@ -6,6 +6,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "types": ["vite/client", "node", "react"],
+    "typeRoots": ["node_modules/@types", "node_modules"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "forceConsistentCasingInFileNames": true,
     "incremental": false,
@@ -15,8 +16,7 @@
     "skipLibCheck": false,
     "useDefineForClassFields": true,
     "outDir": "",
-    "paths": {},
-    "typeRoots": []
+    "paths": {}
   },
   "include": ["src"],
   "exclude": ["node_modules"],

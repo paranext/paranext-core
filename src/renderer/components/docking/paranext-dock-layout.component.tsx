@@ -302,7 +302,7 @@ export default function ParanextDockLayout() {
 
   return (
     <>
-      <PlatformBibleToolbar/>
+      <PlatformBibleToolbar />
       <DockLayout
         ref={dockLayoutRef}
         groups={groups}
@@ -312,7 +312,7 @@ export default function ParanextDockLayout() {
         saveTab={saveTab}
         onLayoutChange={(...args) => {
           if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);
-      }}
+        }}
       />
     </>
   );
