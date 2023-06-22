@@ -183,7 +183,7 @@ const configuration: webpack.Configuration = {
       verbose: true,
     },
     setupMiddlewares(middlewares) {
-      const childProcesses: ChildProcess[] = [];
+      const childProcesses: (ChildProcess | null)[] = [];
 
       console.log('Starting preload.js builder...');
       childProcesses.push(
@@ -215,21 +215,23 @@ const configuration: webpack.Configuration = {
 
       // Link processes to each others' lifecycles
       childProcesses.forEach((childProcess, i) => {
-        childProcess
-          .on('close', (code: number) => {
-            // Close all other child processes and exit the main process
-            childProcesses.forEach((otherProcess, j) => {
-              // Kill all processes but the one that is closing
-              if (i !== j) otherProcess.kill();
-            });
-            process.exit(code);
-          })
-          .on('error', (spawnError) => console.error(spawnError));
+        if (childProcess)
+          childProcess
+            .on('exit', (code: number) => {
+              childProcesses[i] = null;
+              // Close all other child processes and exit the main process
+              childProcesses.forEach((otherProcess, j) => {
+                // Kill all processes but the one that is closing
+                if (otherProcess && i !== j) otherProcess.kill(code);
+              });
+              process.exit(code);
+            })
+            .on('error', (spawnError) => console.error(spawnError));
       });
 
       // When this process closes, make sure all other processes shut down
-      process.on('close', () => {
-        childProcesses.forEach((childProcess) => childProcess.kill());
+      process.on('exit', (code: number) => {
+        childProcesses.forEach((childProcess) => childProcess && childProcess.kill(code));
       });
       return middlewares;
     },
