@@ -59,6 +59,8 @@ export type TableColumn<R> = {
   /**
    * If `true`, editing is enabled. If no custom cell editor is provided through `renderEditCell`
    * the default text editor will be used for editing.
+   * Note: If `editable` is set to 'true' and no custom `renderEditCell` is provided,
+   * the internal logic that sets the `renderEditCell` will shallow clone the column.
    */
   readonly editable?: boolean | ((row: R) => boolean) | null;
   /**
@@ -295,7 +297,7 @@ function Table<R>({
         return { ...column, renderEditCell: TableTextEditor };
       }
       if (column.renderEditCell && !column.editable) {
-        return { ...column, renderEditCell: null };
+        return { ...column, editable: false };
       }
       return column;
     });

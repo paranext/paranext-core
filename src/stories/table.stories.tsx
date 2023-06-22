@@ -581,9 +581,11 @@ export const CustomRenderEditCell: Story = {
       },
       {
         key: 'title',
-        name: 'Title (editable)',
+        name: 'Title (The title for id == 0 is editable)',
         renderEditCell: CustomTextEditor<Row>,
-        editable: true,
+        editable: (row: Row) => {
+          return +row.id === 0;
+        },
       },
     ],
 
