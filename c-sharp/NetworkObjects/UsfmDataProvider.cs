@@ -14,11 +14,11 @@ namespace Paranext.DataProvider.NetworkObjects
         private readonly string _collectionName;
         private ScrText? _scrText;
 
-        public UsfmDataProvider(PapiClient papiClient, string dataFolder, string collectionName)
+        public UsfmDataProvider(PapiClient papiClient, string dataFolderPath, string collectionName)
             : base("usfm", papiClient)
         {
             _collectionName = collectionName;
-            ParatextGlobals.Initialize(dataFolder);
+            ParatextGlobals.Initialize(dataFolderPath);
         }
 
         protected override void StartDataProvider()

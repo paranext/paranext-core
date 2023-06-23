@@ -9,10 +9,13 @@ namespace Paranext.DataProvider.ParatextUtils
         private static readonly object s_locker = new();
         private static bool s_initialized = false;
 
-        public static void Initialize(string dataFolder)
+        public static void Initialize(string dataFolderPath)
         {
             // Paratext not supported on MacOS for now
             if (OperatingSystem.IsMacOS())
+                return;
+
+            if (s_initialized)
                 return;
 
             lock (s_locker)
@@ -31,7 +34,7 @@ namespace Paranext.DataProvider.ParatextUtils
                 ICUDllLocator.Initialize(false, false);
 
                 // Now tell Paratext.Data to use the specified folder
-                ParatextData.Initialize(dataFolder, false);
+                ParatextData.Initialize(dataFolderPath, false);
                 s_initialized = true;
             }
         }
