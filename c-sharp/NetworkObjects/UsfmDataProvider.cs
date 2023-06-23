@@ -1,4 +1,6 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.ParatextUtils;
@@ -7,7 +9,6 @@ using SIL.Scripture;
 
 namespace Paranext.DataProvider.NetworkObjects
 {
-    // TODO: Add versificaiton support
     internal class UsfmDataProvider : DataProvider
     {
         private readonly string _collectionName;
@@ -37,8 +38,9 @@ namespace Paranext.DataProvider.NetworkObjects
             {
                 return functionName switch
                 {
-                    "getChapter" => GetChapter(args),
-                    "getVerse" => GetVerse(args),
+                    "getBookNames" => GetBookNames(),
+                    "getChapter" => GetChapter(args[0]!.ToJsonString()),
+                    "getVerse" => GetVerse(args[0]!.ToJsonString()),
                     _ => ResponseToRequest.Failed($"Unexpected function: {functionName}")
                 };
             }
@@ -49,59 +51,23 @@ namespace Paranext.DataProvider.NetworkObjects
             }
         }
 
-        private ResponseToRequest GetChapter(JsonArray args)
+        private static ResponseToRequest GetBookNames()
         {
-            return TryCreateVerseRef(args, 2, "chapter", out VerseRef verseRef, out string errorMsg)
+            return ResponseToRequest.Succeeded(JsonSerializer.Serialize(Canon.AllBookIds));
+        }
+
+        private ResponseToRequest GetChapter(string args)
+        {
+            return VerseRefConverter.TryCreateVerseRef(args, out var verseRef, out string errorMsg)
                 ? ResponseToRequest.Succeeded(_scrText!.GetText(verseRef, true, true))
                 : ResponseToRequest.Failed(errorMsg);
         }
 
-        private ResponseToRequest GetVerse(JsonArray args)
+        private ResponseToRequest GetVerse(string args)
         {
-            return TryCreateVerseRef(args, 3, "verse", out VerseRef verseRef, out string errorMsg)
+            return VerseRefConverter.TryCreateVerseRef(args, out var verseRef, out string errorMsg)
                 ? ResponseToRequest.Succeeded(_scrText!.GetVerseText(verseRef))
                 : ResponseToRequest.Failed(errorMsg);
-        }
-
-        private static bool TryCreateVerseRef(
-            JsonArray args,
-            int expectedArgCount,
-            string name,
-            out VerseRef verseRef,
-            out string errorMessage
-        )
-        {
-            // Default values for out parameters
-            verseRef = new VerseRef();
-            errorMessage = string.Empty;
-
-            if (args.Count == 0)
-            {
-                errorMessage = $"Invalid {name} reference: no args";
-                return false;
-            }
-
-            args = args[0]!.AsArray();
-            if (args.Count != expectedArgCount)
-            {
-                errorMessage = $"Invalid {name} reference: {args}";
-                return false;
-            }
-
-            try
-            {
-                string book = (string)args[0]!;
-                string chapter = ((int)args[1]!).ToString();
-                string verse = (args.Count < 3) ? "1" : ((int)args[2]!).ToString();
-                verseRef = new VerseRef(book, chapter, verse, ScrVers.English);
-                return true;
-            }
-            catch (Exception e)
-            {
-                Console.Error.Write(e.ToString());
-                errorMessage = $"Invalid {name} reference ({args}): {e.Message}";
-                return false;
-            }
         }
     }
 }

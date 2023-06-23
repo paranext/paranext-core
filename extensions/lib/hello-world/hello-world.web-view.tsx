@@ -11,7 +11,7 @@ import {
 import { useCallback, useContext, useState } from 'react';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
-import { UsfmProviderDataTypes } from '@extensions/external-data-provider-types/usfm-data-provider';
+import { type UsfmProviderDataTypes } from '@extensions/external-usfm-data-provider/usfm-data-provider';
 import type { DataProviderDataType } from 'shared/models/data-provider.model';
 
 const {
@@ -76,13 +76,13 @@ globalThis.webViewComponent = function HelloWorld() {
 
   const [psalm1] = useData.Chapter<UsfmProviderDataTypes, 'Chapter'>(
     'usfm',
-    ['PSA', 1],
+    { book: 'PSA', chapter: '1', verse: '1', versification: 'English' },
     'Loading Psalm 1...',
   );
 
   const [john11] = useData.Verse<UsfmProviderDataTypes, 'Verse'>(
     'usfm',
-    ['JHN', 1, 1],
+    { verseString: 'JHN 1:1' },
     'Loading John 1:1...',
   );
 
