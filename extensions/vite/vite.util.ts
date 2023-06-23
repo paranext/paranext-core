@@ -126,7 +126,7 @@ export type ExtensionInfo = {
  * TODO: figure out if we can share this code with extension.service.ts.
  *   Note that this does not transform the main file .ts into .js unlike extension.service
  */
-export async function getExtensions(): Promise<ExtensionInfo[]> {
+export async function getInternalExtensions(): Promise<ExtensionInfo[]> {
   // Get names of each folder in the source folder
   const extensionFolderNames = (
     await fs.promises.readdir(sourceFolder, {
@@ -134,7 +134,7 @@ export async function getExtensions(): Promise<ExtensionInfo[]> {
     })
   )
     .filter((dirEntry) => dirEntry.isDirectory())
-    .filter((dirEntry) => dirEntry.name !== 'external-data-provider-types')
+    .filter((dirEntry) => !dirEntry.name.startsWith('external-'))
     .map((dirEntry) => dirEntry.name);
 
   // Return extension info for each extension folder
@@ -157,4 +157,18 @@ export async function getExtensions(): Promise<ExtensionInfo[]> {
       };
     }),
   );
+}
+
+/**
+ * Gets a list of the external extension folders
+ */
+export async function getExternalExtensions(): Promise<string[]> {
+  // Get names of each folder in the source folder
+  return (
+    await fs.promises.readdir(sourceFolder, {
+      withFileTypes: true,
+    })
+  )
+    .filter((dirEntry) => dirEntry.name.startsWith('external-'))
+    .map((dirEntry) => dirEntry.name);
 }

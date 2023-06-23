@@ -9,7 +9,8 @@ import escapeStringRegexp from 'escape-string-regexp';
 import { Target, viteStaticCopy } from 'vite-plugin-static-copy';
 import { string as importString } from 'rollup-plugin-string';
 import {
-  getExtensions,
+  getInternalExtensions,
+  getExternalExtensions,
   getFileExtensionByModuleFormat,
   getStaticFileName,
   getWebViewTsxPaths,
@@ -24,8 +25,13 @@ import {
 // https://vitejs.dev/config/
 const extensionConfig = defineConfig(async () => {
   /** tsxWebViews - List of TypeScript WebView files transpiled in the first build step */
-  /** extensions - List of all the extensions to build */
-  const [tsxWebViews, extensions] = await Promise.all([getWebViewTsxPaths(), getExtensions()]);
+  /** internalExtensions - List of all the internal extensions to build */
+  /** externalExtensions - List of all the external extensions to build */
+  const [tsxWebViews, internalExtensions, externalExtensions] = await Promise.all([
+    getWebViewTsxPaths(),
+    getInternalExtensions(),
+    getExternalExtensions(),
+  ]);
 
   return {
     plugins: [
@@ -50,9 +56,9 @@ const extensionConfig = defineConfig(async () => {
           };
         }),
       }),
-      // Copy the static files from each extension folder like manifest.json
+      // Copy the internal extension static files from each extension folder like manifest.json
       viteStaticCopy({
-        targets: extensions.flatMap((extension) =>
+        targets: internalExtensions.flatMap((extension) =>
           staticFiles.map(
             (staticFile): Target => ({
               // vite-static-copy-plugin does not accept path.join here as it does not work with backslashes
@@ -65,14 +71,14 @@ const extensionConfig = defineConfig(async () => {
           ),
         ),
       }),
-      // Copy the external data provider types separately since they aren't in a library
+      // Copy all external data provider files since they aren't part of normal extensions
       viteStaticCopy({
-        targets: [
-          {
-            src: `${sourceFolder}/external-data-provider-types/*.*`,
-            dest: 'external-data-provider-types',
-          },
-        ],
+        targets: externalExtensions.flatMap<Target>((extension): Target => {
+          return {
+            src: `${sourceFolder}/${extension}/*.*`,
+            dest: `${extension}`,
+          };
+        }),
       }),
       // Shared with https://github.com/paranext/paranext-extension-template/blob/main/vite/vite.config.ts
       // Import web view files as strings to pass on the papi
@@ -88,7 +94,7 @@ const extensionConfig = defineConfig(async () => {
       // This project is a library as it is being used in Paranext
       lib: {
         // The main entry file of each extension to build
-        entry: extensions.map((extension) =>
+        entry: internalExtensions.map((extension) =>
           path.resolve(__dirname, '..', extension.entryFilePath),
         ),
         // The output file name for the extension (file extension is appended)
