@@ -1,0 +1,37 @@
+.papi-snackbar {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.papi-snackbar.primary {
+  background: #1ea7fd;
+  color: white;
+  height: auto;
+  line-height: auto;
+}
+
+.papi-snackbar.external {
+  background-color: lightsteelblue;
+  border-color: white;
+  border-style: dotted;
+  padding: 2%;
+  width: 30%;
+}
+
+.papi-snackbar.secondary {
+  background: transparent;
+  color: #333;
+}
+
+.papi-snackbar.alert {
+  background: lightcoral;
+}
+
+.papi-snackbar.paratext {
+  background: darkgreen;
+  color: greenyellow;
+}
+
+.papi-snackbar.bright {
+  background: greenyellow;
+  color: darkgreen;
+}

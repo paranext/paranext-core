@@ -1,3 +1,4 @@
+/// <reference types="react" />
 /// <reference types="node" />
 declare module 'shared/global-this.model' {
   import { FunctionComponent } from 'react';
