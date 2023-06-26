@@ -1,5 +1,5 @@
 import Grid from '@mui/material/Grid';
-import MenuItem from '@mui/material/MenuItem';
+import { MenuItem } from 'papi-components';
 import * as commandService from '@shared/services/command.service';
 import logger from 'electron-log';
 import './platform-bible-menu.css';
@@ -26,9 +26,6 @@ export default function PlatformBibleMenu() {
           dense
           onClick={() => {
             sendCommand('Download/Install Resources');
-          }}
-          sx={{
-            lineHeight: 0.8,
           }}
         >
           Download/Install Resources...
