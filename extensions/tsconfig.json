@@ -15,7 +15,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "typeRoots": ["./node_modules/@types", "./dist", "node_modules/papi-dts"],
+    "typeRoots": ["./node_modules/@types", "./dist", "../lib"],
     "paths": {
       "papi-extensions/*": ["./dist/*"]
     },
