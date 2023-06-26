@@ -5,11 +5,17 @@ import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import Drawer from '@mui/material/Drawer';
 import MenuIcon from '@mui/icons-material/Menu';
+import { RefSelector, ScriptureReference } from 'papi-components';
 import PlatformBibleMenu from './platform-bible-menu';
 import './platform-bible-toolbar.css';
 
-export default function PlatformBibleToolbar() {
+export default function PlatformBibleToolbar(props: {
+  scrRef: ScriptureReference;
+  referenceChanged: (scrRef: ScriptureReference) => void;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { referenceChanged } = props;
+  const { scrRef } = props;
 
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -30,7 +36,7 @@ export default function PlatformBibleToolbar() {
           <MenuIcon />
         </IconButton>
         <Typography className="title" variant="h6" noWrap>
-          Scripture Reference Control goes here.
+          <RefSelector handleSubmit={referenceChanged} scrRef={scrRef} />
         </Typography>
 
         <Drawer
