@@ -7,11 +7,19 @@ import {
   Slider,
   Switch,
   TextField,
+  Table,
+  TableTextEditor,
 } from 'papi-components';
-import { useCallback, useContext, useState } from 'react';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
 import type { DataProviderDataType } from 'shared/models/data-provider.model';
+import { Key, useCallback, useContext, useState } from 'react';
+
+type Row = {
+  id: string;
+  title: string;
+  subtitle: string;
+};
 
 const {
   react: {
@@ -22,6 +30,17 @@ const {
 } = papi;
 
 const NAME = 'Hello World React WebView';
+
+const initializeRows = (): Row[] => {
+  return [
+    { id: '0', title: 'Norem ipsum dolor sit amet', subtitle: 'Subtitle1' },
+    { id: '1', title: 'Consectetur adipiscing elit', subtitle: 'Subtitle2' },
+    { id: '2', title: 'Pellentesque suscipit tortor est', subtitle: 'Subtitle3' },
+    { id: '3', title: 'Ut egestas massa aliquam a', subtitle: 'Subtitle4' },
+    { id: '4', title: 'Nulla egestas vestibulum felis a venenatis', subtitle: 'Subtitle5' },
+    { id: '5', title: 'Sed aliquet pulvinar neque', subtitle: 'Subtitle6' },
+  ];
+};
 
 // Test fetching
 papi
@@ -34,6 +53,8 @@ globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
   const [myState, setMyState] = useState(0);
+  const [rows, setRows] = useState(initializeRows());
+  const [selectedRows, setSelectedRows] = useState(new Set<Key>());
 
   const [echoResult] = usePromise(
     useCallback(async () => {
@@ -128,6 +149,37 @@ globalThis.webViewComponent = function HelloWorld() {
         <ComboBox title="Test Me" options={['option 1', 'option 2']} />
         <Slider /> {/* no label available */}
         <RefSelector scrRef={{ book: 1, chapter: 1, verse: 1 }} handleSubmit={(): void => {}} />
+        <Table<Row>
+          columns={[
+            {
+              key: 'id',
+              name: 'ID',
+            },
+            {
+              key: 'title',
+              name: 'Title',
+              renderEditCell: TableTextEditor<Row>,
+            },
+            {
+              key: 'subtitle',
+              name: 'Subtitle',
+              renderEditCell: TableTextEditor<Row>,
+            },
+          ]}
+          rows={rows}
+          rowKeyGetter={(row: Row) => {
+            return row.id;
+          }}
+          selectedRows={selectedRows}
+          onSelectedRowsChange={(currentlySelectedRows: Set<Key>) =>
+            setSelectedRows(currentlySelectedRows)
+          }
+          onRowsChange={(changedRows: Row[]) => setRows(changedRows)}
+          enableSelectColumn
+          selectColumnWidth={60}
+          rowHeight={60}
+          headerRowHeight={50}
+        />
       </div>
     </div>
   );
