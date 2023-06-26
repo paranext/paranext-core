@@ -7,7 +7,7 @@ export type MenuItemProps = PropsWithChildren<{
    * If true, list item is focused during the first mount
    * @default false
    */
-  autoFocus?: boolean;
+  hasAutoFocus?: boolean;
 
   /**
    * Additional css classes to help with unique styling of the button
@@ -19,19 +19,19 @@ export type MenuItemProps = PropsWithChildren<{
    * input is used.
    * @default false
    */
-  dense?: boolean;
+  isDense?: boolean;
 
   /**
    * If true, the left and right padding is removed
    * @default false
    */
-  disableGutters?: boolean;
+  hasDisabledGutters?: boolean;
 
   /**
    * If true, a 1px light border is added to bottom of menu item
    * @default false
    */
-  divider?: boolean;
+  hasDivider?: boolean;
 
   /**
    * Help identify which element has keyboard focus
@@ -45,23 +45,23 @@ export type MenuItemProps = PropsWithChildren<{
 }>;
 
 function MenuItem({
-  autoFocus = false,
-  dense = false,
-  disableGutters = false,
-  divider = false,
-  focusVisibleClassName,
+  hasAutoFocus = false,
   className,
+  isDense = false,
+  hasDisabledGutters = false,
+  hasDivider = false,
+  focusVisibleClassName,
   onClick,
   children,
 }: MenuItemProps) {
   return (
     <MuiMenuItem
-      autoFocus={autoFocus}
-      dense={dense}
-      disableGutters={disableGutters}
-      divider={divider}
-      focusVisibleClassName={focusVisibleClassName}
+      autoFocus={hasAutoFocus}
       className={className}
+      dense={isDense}
+      disableGutters={hasDisabledGutters}
+      divider={hasDivider}
+      focusVisibleClassName={focusVisibleClassName}
       onClick={onClick}
     >
       {children}
