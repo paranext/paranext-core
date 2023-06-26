@@ -73,12 +73,12 @@ const extensionConfig = defineConfig(async () => {
       }),
       // Copy all external data provider files since they aren't part of normal extensions
       viteStaticCopy({
-        targets: externalExtensions.flatMap<Target>((extension): Target => {
-          return {
+        targets: externalExtensions.flatMap<Target>(
+          (extension): Target => ({
             src: `${sourceFolder}/${extension}/*.*`,
             dest: `${extension}`,
-          };
-        }),
+          }),
+        ),
       }),
       // Shared with https://github.com/paranext/paranext-extension-template/blob/main/vite/vite.config.ts
       // Import web view files as strings to pass on the papi
