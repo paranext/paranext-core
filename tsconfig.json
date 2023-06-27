@@ -16,8 +16,7 @@
       "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
-      "@node_modules/*": ["../node_modules/*"],
-      "papi-extensions/*": ["../extensions/dist/*"]
+      "@node_modules/*": ["../node_modules/*"]
     },
     "experimentalDecorators": true,
     "typeRoots": ["./node_modules/@types", "./extensions/dist", "src/@types"],

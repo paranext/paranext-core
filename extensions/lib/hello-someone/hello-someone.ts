@@ -5,12 +5,7 @@ import type {
   SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
-import type {
-  PeopleData,
-  PeopleDataMethods,
-  PeopleDataTypes,
-  Person,
-} from 'papi-extensions/hello-someone/hello-someone';
+import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
