@@ -503,6 +503,51 @@ export declare function Snackbar({
   ContentProps,
   children,
 }: SnackbarProps): import('react/jsx-runtime').JSX.Element;
+export type MenuItemProps = PropsWithChildren<{
+  /**
+   * If true, list item is focused during the first mount
+   * @default false
+   */
+  hasAutoFocus?: boolean;
+  /**
+   * Additional css classes to help with unique styling of the button
+   */
+  className?: string;
+  /**
+   * If true, compact vertical padding designed for keyboard and mouse
+   * input is used.
+   * @default false
+   */
+  isDense?: boolean;
+  /**
+   * If true, the left and right padding is removed
+   * @default false
+   */
+  hasDisabledGutters?: boolean;
+  /**
+   * If true, a 1px light border is added to bottom of menu item
+   * @default false
+   */
+  hasDivider?: boolean;
+  /**
+   * Help identify which element has keyboard focus
+   */
+  focusVisibleClassName?: string;
+  /**
+   * Optional click handler
+   */
+  onClick?: MouseEventHandler<HTMLLIElement> | undefined;
+}>;
+export declare function MenuItem({
+  hasAutoFocus,
+  className,
+  isDense,
+  hasDisabledGutters,
+  hasDivider,
+  focusVisibleClassName,
+  onClick,
+  children,
+}: MenuItemProps): import('react/jsx-runtime').JSX.Element;
 export interface TableCalculatedColumn<R> extends TableColumn<R> {
   readonly idx: number;
   readonly width: number | string;

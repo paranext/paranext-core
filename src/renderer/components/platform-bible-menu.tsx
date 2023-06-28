@@ -1,5 +1,5 @@
 import Grid from '@mui/material/Grid';
-import MenuItem from '@mui/material/MenuItem';
+import { MenuItem } from 'papi-components';
 import * as commandService from '@shared/services/command.service';
 import logger from 'electron-log';
 import './platform-bible-menu.css';
@@ -23,20 +23,17 @@ export default function PlatformBibleMenu() {
         <h3 className="menu">Project</h3>
         <MenuItem
           className="menu-item"
-          dense
+          isDense
           onClick={() => {
             sendCommand('Download/Install Resources');
-          }}
-          sx={{
-            lineHeight: 0.8,
           }}
         >
           Download/Install Resources...
         </MenuItem>
         <MenuItem
           className="menu-item"
-          dense
-          divider
+          isDense
+          hasDivider
           onClick={() => {
             sendCommand('Open Text Collection');
           }}
@@ -45,15 +42,15 @@ export default function PlatformBibleMenu() {
         </MenuItem>
         <MenuItem
           className="menu-item"
-          dense
-          divider
+          isDense
+          hasDivider
           onClick={() => {
             sendCommand('Settings');
           }}
         >
           Settings...
         </MenuItem>
-        <MenuItem className="menu-item" dense onClick={onExit}>
+        <MenuItem className="menu-item" isDense onClick={onExit}>
           Exit
         </MenuItem>
       </Grid>
@@ -65,10 +62,10 @@ export default function PlatformBibleMenu() {
       </Grid>
       <Grid item xs={1}>
         <h3 className="menu">Help</h3>
-        <MenuItem className="menu-item" dense onClick={visitSupportPage}>
+        <MenuItem className="menu-item" isDense onClick={visitSupportPage}>
           Visit Support.Bible
         </MenuItem>
-        <MenuItem className="menu-item" dense>
+        <MenuItem className="menu-item" isDense>
           About Platform.Bible...
         </MenuItem>
       </Grid>
