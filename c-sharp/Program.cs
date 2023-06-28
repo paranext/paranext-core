@@ -12,6 +12,7 @@ public static class Program
     public static async Task Main()
     {
         Console.WriteLine("Paranext data provider starting up");
+        Thread.CurrentThread.Name = "Main";
 
         using PapiClient papi = new();
         try
@@ -36,6 +37,7 @@ public static class Program
 
             Console.WriteLine("Paranext data provider ready!");
             papi.BlockUntilMessageHandlingComplete();
+            Console.WriteLine("Paranext data provider message handling complete");
         }
         finally
         {
