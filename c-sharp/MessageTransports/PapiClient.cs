@@ -32,6 +32,7 @@ internal sealed class PapiClient : IDisposable
     private readonly Thread _incomingMessageThread;
     private readonly Thread _outgoingMessageThread;
     private readonly ManualResetEventSlim _clientInitializationComplete = new(false);
+    private readonly ManualResetEventSlim _messagingComplete = new(false);
     private readonly BlockingCollection<Message> _outgoingMessages = new(MAX_OUTGOING_MESSAGES);
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly CancellationToken _cancellationToken;
@@ -51,10 +52,14 @@ internal sealed class PapiClient : IDisposable
 
     public PapiClient()
     {
-        _incomingMessageThread = new(HandleIncomingMessages);
-        _outgoingMessageThread = new(HandleOutgoingMessages);
+        _incomingMessageThread = new(HandleIncomingMessages) { Name = "Incoming" };
+        _outgoingMessageThread = new(HandleOutgoingMessages) { Name = "Outgoing" };
 
         _cancellationToken = _cancellationTokenSource.Token;
+        _cancellationToken.Register(() =>
+        {
+            Console.WriteLine("Cancellation requested on " + Thread.CurrentThread.Name);
+        });
 
         _messageHandlersByMessageType[MessageType.Event] = new MessageHandlerEvent();
         _messageHandlersByMessageType[MessageType.InitClient] = new MessageHandlerInitClient(
@@ -100,6 +105,7 @@ internal sealed class PapiClient : IDisposable
         {
             _webSocket.Dispose();
             _clientInitializationComplete.Dispose();
+            _messagingComplete.Dispose();
             _cancellationTokenSource.Dispose();
             _outgoingMessages.Dispose();
         }
@@ -141,7 +147,7 @@ internal sealed class PapiClient : IDisposable
 
         if (!_clientInitializationComplete.Wait(CONNECT_TIMEOUT))
         {
-            await Console.Error.WriteLineAsync("PapiClient did not connect");
+            Console.WriteLine("PapiClient did not connect");
             await DisconnectAsync();
             return false;
         }
@@ -163,13 +169,9 @@ internal sealed class PapiClient : IDisposable
         SignalToBeginGracefulDisconnect();
 
         if (_incomingMessageThread.IsAlive && !_incomingMessageThread.Join(DISCONNECT_TIMEOUT))
-            await Console.Error.WriteLineAsync(
-                "Incoming message thread did not shut down properly"
-            );
+            Console.WriteLine("Incoming message thread did not shut down properly");
         if (_outgoingMessageThread.IsAlive && !_outgoingMessageThread.Join(DISCONNECT_TIMEOUT))
-            await Console.Error.WriteLineAsync(
-                "Outgoing message thread did not shut down properly"
-            );
+            Console.WriteLine("Outgoing message thread did not shut down properly");
 
         if (Connected)
         {
@@ -188,10 +190,29 @@ internal sealed class PapiClient : IDisposable
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        if (_incomingMessageThread.IsAlive)
-            _incomingMessageThread.Join();
-        if (_outgoingMessageThread.IsAlive)
-            _outgoingMessageThread.Join();
+        bool done = false;
+
+        while (!done)
+        {
+            Console.WriteLine("BlockUntilMessageHandlingComplete: checking thread state");
+
+            if (_incomingMessageThread.IsAlive)
+                _incomingMessageThread.Join();
+            Console.WriteLine($"Incoming thread state={_incomingMessageThread.ThreadState}");
+
+            if (_outgoingMessageThread.IsAlive)
+                _outgoingMessageThread.Join();
+            Console.WriteLine($"Outgoing thread state={_outgoingMessageThread.ThreadState}");
+
+            _messagingComplete.Wait(_cancellationToken);
+            Console.WriteLine($"Web socket state={_webSocket.State}");
+
+            done =
+                !_incomingMessageThread.IsAlive
+                && !_outgoingMessageThread.IsAlive
+                && _webSocket.State != WebSocketState.Open
+                && _webSocket.State != WebSocketState.Connecting;
+        }
     }
 
     /// <summary>
@@ -225,7 +246,7 @@ internal sealed class PapiClient : IDisposable
             {
                 if (!success)
                 {
-                    Console.Error.WriteLine(
+                    Console.WriteLine(
                         $"Failed to register request type \"{requestType}\" with the server"
                     );
                 }
@@ -248,7 +269,7 @@ internal sealed class PapiClient : IDisposable
         QueueOutgoingMessage(requestMessage);
         if (!registrationComplete.Wait(responseTimeoutInMs))
         {
-            Console.Error.WriteLine(
+            Console.WriteLine(
                 $"No response came back when registering request type \"{requestType}\""
             );
         }
@@ -318,6 +339,10 @@ internal sealed class PapiClient : IDisposable
     /// </summary>
     private void SignalToBeginGracefulDisconnect()
     {
+        Console.WriteLine(
+            $"SignalToBeginGracefulDisconnect: webSocketState={_webSocket.State}, closeStatus={_webSocket.CloseStatus}, closeStatusDescription=\"{_webSocket.CloseStatusDescription}\", currentThreadName={Thread.CurrentThread.Name}"
+        );
+
         // This should shut down the socket and messaging threads
         _cancellationTokenSource.Cancel();
 
@@ -352,15 +377,18 @@ internal sealed class PapiClient : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    await Console.Error.WriteLineAsync(
-                        $"Exception while sending outgoing messages: {ex}"
-                    );
+                    Console.WriteLine($"Exception while sending outgoing messages: {ex}");
                 }
             } while (!_cancellationToken.IsCancellationRequested && Connected);
-
-            Console.WriteLine("PapiClient HandleOutgoingMessages finishing");
         }
         catch (ObjectDisposedException) { }
+        finally
+        {
+            _messagingComplete.Set();
+            Console.WriteLine(
+                $"PapiClient HandleOutgoingMessages finishing: cancel={_cancellationToken.IsCancellationRequested}, connected={Connected}"
+            );
+        }
     }
 
     private async Task SendOutgoingMessageAsync(Message message)
@@ -411,13 +439,18 @@ internal sealed class PapiClient : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    await Console.Error.WriteLineAsync($"Exception while handling messages: {ex}");
+                    Console.WriteLine($"Exception while handling messages: {ex}");
                 }
             } while (!_cancellationToken.IsCancellationRequested && Connected);
-
-            Console.WriteLine("PapiClient HandleIncomingMessages finishing");
         }
         catch (ObjectDisposedException) { }
+        finally
+        {
+            _messagingComplete.Set();
+            Console.WriteLine(
+                $"PapiClient HandleIncomingMessages finishing: cancel={_cancellationToken.IsCancellationRequested}, connected={Connected}"
+            );
+        }
     }
 
     private async Task<Message?> ReceiveIncomingMessageAsync()
@@ -469,7 +502,7 @@ internal sealed class PapiClient : IDisposable
             if (message is null)
             {
                 if (!_cancellationToken.IsCancellationRequested)
-                    Console.Error.WriteLine("Received null message!");
+                    Console.WriteLine("Received null message!");
                 return;
             }
 
@@ -488,12 +521,12 @@ internal sealed class PapiClient : IDisposable
             }
             else
             {
-                Console.Error.WriteLine($"No handler registered for message type: {message.Type}");
+                Console.WriteLine($"No handler registered for message type: {message.Type}");
             }
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Exception while handling message: {ex}");
+            Console.WriteLine($"Exception while handling message: {ex}");
         }
     }
 
@@ -512,7 +545,7 @@ internal sealed class PapiClient : IDisposable
         }
         else
         {
-            Console.Error.WriteLine(
+            Console.WriteLine(
                 $"No handler registered for response from request ID: {response.RequestId}"
             );
         }
