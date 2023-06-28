@@ -183,46 +183,65 @@ const configuration: webpack.Configuration = {
       verbose: true,
     },
     setupMiddlewares(middlewares) {
-      const childProcesses: (ChildProcess | null)[] = [];
+      type ChildProcessInfo = { process: ChildProcess | null; name: string };
+      const childProcesses: ChildProcessInfo[] = [];
 
       console.log('Starting preload.js builder...');
-      childProcesses.push(
-        spawn('npm', ['run', 'start:preload'], {
+      childProcesses.push({
+        process: spawn('npm', ['run', 'start:preload'], {
           shell: true,
           stdio: 'inherit',
         }),
-      );
+        name: 'Preload Builder',
+      });
 
       console.log('Starting extensions builder...');
-      childProcesses.push(
-        spawn('npm', ['run', 'start:extensions'], {
+      childProcesses.push({
+        process: spawn('npm', ['run', 'start:extensions'], {
           shell: true,
           stdio: 'inherit',
         }),
-      );
+        name: 'Extension Builder',
+      });
 
       console.log('Starting Main Process...');
       let args = ['run', 'start:main'];
       if (process.env.MAIN_ARGS) {
         args = args.concat(['--', ...process.env.MAIN_ARGS.matchAll(/"[^"]+"|[^\s"]+/g)].flat());
       }
-      childProcesses.push(
-        spawn('npm', args, {
+      childProcesses.push({
+        process: spawn('npm', args, {
           shell: true,
           stdio: 'inherit',
         }),
-      );
+        name: 'Main',
+      });
+
+      function tryKillChildProcess(
+        childProcessInfo: ChildProcessInfo,
+        code: number,
+        closingProcessName: string,
+      ) {
+        try {
+          if (childProcessInfo.process) childProcessInfo.process.kill(code);
+        } catch (e) {
+          console.error(
+            `${childProcessInfo.name} threw an error during closing of ${closingProcessName}! ${e}`,
+          );
+        }
+      }
 
       // Link processes to each others' lifecycles
       childProcesses.forEach((childProcess, i) => {
-        if (childProcess)
-          childProcess
-            .on('exit', (code: number) => {
-              childProcesses[i] = null;
+        if (childProcess.process)
+          childProcess.process
+            .on('close', (code: number) => {
+              console.log(`${childProcess.name} is closing!`);
+              childProcess.process = null;
               // Close all other child processes and exit the main process
               childProcesses.forEach((otherProcess, j) => {
                 // Kill all processes but the one that is closing
-                if (otherProcess && i !== j) otherProcess.kill(code);
+                if (i !== j) tryKillChildProcess(otherProcess, code, childProcess.name);
               });
               process.exit(code);
             })
@@ -230,8 +249,11 @@ const configuration: webpack.Configuration = {
       });
 
       // When this process closes, make sure all other processes shut down
-      process.on('exit', (code: number) => {
-        childProcesses.forEach((childProcess) => childProcess && childProcess.kill(code));
+      process.on('close', (code: number) => {
+        console.log('Renderer (parent process) is closing!');
+        childProcesses.forEach((childProcess) =>
+          tryKillChildProcess(childProcess, code, 'Renderer (parent process)'),
+        );
       });
       return middlewares;
     },
