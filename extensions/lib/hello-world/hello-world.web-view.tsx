@@ -12,9 +12,9 @@ import {
 } from 'papi-components';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
-import { type UsfmProviderDataTypes } from '@extensions/external-usfm-data-provider';
+import type { UsfmProviderDataTypes } from '@extensions/external-usfm-data-provider';
 import type { DataProviderDataType } from 'shared/models/data-provider.model';
-import { Key, useCallback, useContext, useState } from 'react';
+import { Key, useCallback, useContext, useMemo, useState } from 'react';
 
 type Row = {
   id: string;
@@ -97,13 +97,13 @@ globalThis.webViewComponent = function HelloWorld() {
 
   const [psalm1] = useData.Chapter<UsfmProviderDataTypes, 'Chapter'>(
     'usfm',
-    { book: 'PSA', chapter: '1', verse: '1', versification: 'English' },
+    useMemo(() => ({ book: 'PSA', chapter: '1', verse: '1', versification: 'English' }), []),
     'Loading Psalm 1...',
   );
 
   const [john11] = useData.Verse<UsfmProviderDataTypes, 'Verse'>(
     'usfm',
-    { verseString: 'JHN 1:1' },
+    useMemo(() => ({ verseString: 'JHN 1:1' }), []),
     'Loading John 1:1...',
   );
 
