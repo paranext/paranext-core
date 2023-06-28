@@ -1,8 +1,7 @@
 using System.ComponentModel;
 using System.Configuration;
-using System.IO;
 using System.Reflection;
-using Paranext.DataProvider;
+using Paranext.DataProvider.ParatextUtils;
 using Paratext.Data;
 using PtxUtils;
 
@@ -12,7 +11,7 @@ namespace TestParanextDataProvider
     {
         // Work around a known issue where NUnit doesn't pick up config files
         // https://github.com/nunit/nunit3-vs-adapter/issues/356
-        private void EnsureIcuConfigFileIsInPlace()
+        private static void EnsureIcuConfigFileIsInPlace()
         {
             string appConfigFile = ConfigurationManager
                 .OpenExeConfiguration(ConfigurationUserLevel.None)
@@ -49,12 +48,15 @@ namespace TestParanextDataProvider
             EnsureIcuConfigFileIsInPlace();
 
             Console.WriteLine(Assembly.GetExecutingAssembly().Location);
-            Program.InitializeParatextData("assets");
+            ParatextGlobals.Initialize("assets");
 
             ScrText scrText = ScrTextCollection.Find("WEB");
-            Assert.That(scrText, Is.Not.Null);
-            Assert.That(scrText.Name, Is.EqualTo("WEB"));
-            Assert.That(scrText.Settings.BooksPresentSet.Count, Is.EqualTo(83));
+            Assert.Multiple(() =>
+            {
+                Assert.That(scrText, Is.Not.Null);
+                Assert.That(scrText.Name, Is.EqualTo("WEB"));
+                Assert.That(scrText.Settings.BooksPresentSet.Count, Is.EqualTo(83));
+            });
         }
 
         #region DummyAlert class

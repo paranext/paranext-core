@@ -1,12 +1,18 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useArgs } from '@storybook/client-api';
-import Table, {
-  TableProps,
-  TableTextEditor,
-  TableSortColumn,
+import {
+  Table,
+  TableCellClickArgs,
+  TableCellMouseEvent,
   TableCopyEvent,
+  TableCellKeyboardEvent,
+  TableCellKeyDownArgs,
   TablePasteEvent,
-} from 'papi-components/src/table.component';
+  TableProps,
+  TableSortColumn,
+  TableTextEditor,
+} from 'papi-components';
+import 'papi-components/dist/style.css';
 import { Key, ReactElement, UIEvent } from 'react';
 
 type Row = {
@@ -39,16 +45,16 @@ function TableDecorator(Story: (update?: { args: Partial<TableProps<Row>> }) => 
     updateArgs({ rows });
   };
 
-  const setSortColumns = (cols: TableSortColumn[]) => {
-    updateArgs({ sortColumns: cols });
+  const setSortColumns = (sortColumns: TableSortColumn[]) => {
+    updateArgs({ sortColumns });
 
-    if (cols.length === 0) {
+    if (sortColumns.length === 0) {
       setRows(args.rows);
     } else {
       setRows(
         args.rows.sort((a: Row, b: Row) => {
           // eslint-disable-next-line no-restricted-syntax
-          for (const sort of cols) {
+          for (const sort of sortColumns) {
             const comparator = getComparator(sort.columnKey);
             const compResult = comparator(a, b);
             if (compResult !== 0) {
@@ -124,7 +130,7 @@ export const Default: Story = {
       },
     ],
     rows: [
-      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '0', title: 'Loremm ipsum dolor sit amet' },
       { id: '1', title: 'Consectetur adipiscing elit' },
       { id: '2', title: 'Pellentesque suscipit tortor est' },
       { id: '3', title: 'Ut egestas massa aliquam a' },
@@ -159,7 +165,7 @@ export const CustomizedColumns: Story = {
         frozen: false,
         resizable: true,
         sortable: true,
-        editor: TableTextEditor,
+        renderEditCell: TableTextEditor<Row>,
       },
       {
         key: 'title',
@@ -285,6 +291,7 @@ export const CustomizedRows: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 
@@ -320,6 +327,7 @@ export const CellCallbackFunctions: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 
@@ -332,7 +340,7 @@ export const CellCallbackFunctions: Story = {
       { id: '5', title: 'Sed aliquet pulvinar neque' },
     ],
 
-    onCellClick: (args, event) => {
+    onCellClick: (args: TableCellClickArgs<Row>, event: TableCellMouseEvent) => {
       // eslint-disable-next-line no-console
       console.log(args);
 
@@ -340,7 +348,7 @@ export const CellCallbackFunctions: Story = {
       console.log(event);
     },
 
-    onCellDoubleClick: (args, event) => {
+    onCellDoubleClick: (args: TableCellClickArgs<Row>, event: TableCellMouseEvent) => {
       // eslint-disable-next-line no-console
       console.log(args);
 
@@ -348,7 +356,7 @@ export const CellCallbackFunctions: Story = {
       console.log(event);
     },
 
-    onCellContextMenu: (args, event) => {
+    onCellContextMenu: (args: TableCellClickArgs<Row>, event: TableCellMouseEvent) => {
       // eslint-disable-next-line no-console
       console.log(args);
 
@@ -356,7 +364,7 @@ export const CellCallbackFunctions: Story = {
       console.log(event);
     },
 
-    onCellKeyDown: (args, event) => {
+    onCellKeyDown: (args: TableCellKeyDownArgs<Row>, event: TableCellKeyboardEvent) => {
       // eslint-disable-next-line no-console
       console.log(args);
 
@@ -387,6 +395,7 @@ export const Direction: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 
@@ -431,6 +440,7 @@ export const Virtualization: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 
@@ -457,7 +467,7 @@ export const MiscellaneousFunctions: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
-        editor: TableTextEditor,
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 
@@ -531,6 +541,7 @@ export const CustomClassNames: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
+        renderEditCell: TableTextEditor<Row>,
       },
     ],
 

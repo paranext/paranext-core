@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Switch } from 'papi-components';
+import 'papi-components/dist/style.css';
 
 const meta: Meta<typeof Switch> = {
   title: 'Basics/Switch',

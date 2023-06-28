@@ -1,9 +1,10 @@
-using System.Collections.Concurrent;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
 using PtxUtils;
+using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Paranext.DataProvider.NetworkObjects
 {
@@ -54,15 +55,25 @@ namespace Paranext.DataProvider.NetworkObjects
         // Data providers must provide "get" and "set" functions.
         private ResponseToRequest FunctionHandler(dynamic? request)
         {
-            string[] arguments = JsonSerializer.Deserialize<string[]>(request);
-            if (arguments.Length == 0)
-                return ResponseToRequest.Failed(
-                    $"No function name provided when calling data provider {DataProviderName}"
-                );
+            string functionName;
+            JsonArray jsonArray;
+            try
+            {
+                jsonArray = ((JsonElement)request!).Deserialize<JsonNode>()!.AsArray();
+                if (jsonArray.Count == 0)
+                    return ResponseToRequest.Failed(
+                        $"No function name provided when calling data provider {DataProviderName}"
+                    );
+                functionName = (string)jsonArray[0]!;
+                jsonArray.RemoveAt(0);
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine(e.ToString());
+                return ResponseToRequest.Failed("Invalid function call data");
+            }
 
-            string functionName = arguments[0];
-            string[] parameters = arguments.Skip(1).ToArray();
-            return HandleRequest(functionName, parameters);
+            return HandleRequest(functionName, jsonArray);
         }
 
         /// <summary>
@@ -87,8 +98,8 @@ namespace Paranext.DataProvider.NetworkObjects
         /// Handle a request from a service using this data provider
         /// </summary>
         /// <param name="functionName">This would typically be "getXYZ" or "setXYZ", where "XYZ" is a type of data handled by this provider</param>
-        /// <param name="arguments">Optional arguments provided by the requester for the function indicated</param>
+        /// <param name="args">Optional arguments provided by the requester for the function indicated</param>
         /// <returns>ResponseToRequest value that either contains a response for the function or an error message</returns>
-        protected abstract ResponseToRequest HandleRequest(string functionName, string[] arguments);
+        protected abstract ResponseToRequest HandleRequest(string functionName, JsonArray args);
     }
 }

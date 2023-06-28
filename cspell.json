@@ -41,7 +41,10 @@
     "unsub",
     "unsubs",
     "unsubscriber",
-    "unsubscribers"
+    "unsubscribers",
+    "usfm",
+    "verseref",
+    "versification"
   ],
   "ignoreWords": [],
   "import": []
