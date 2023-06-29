@@ -2555,9 +2555,10 @@ declare module 'node/services/node-file-system.service' {
   /**
    * Reads a directory and returns lists of entries in the directory by entry type
    * @param uri uri of directory
+   * @param filter function to filter out directories based on their names
    * @returns map of entry type to list of uris for each entry in the directory with that type
    */
-  export function readDir(uri: Uri): Promise<DirectoryEntries>;
+  export function readDir(uri: Uri, filter: (x: string) => boolean): Promise<DirectoryEntries>;
 }
 declare module 'node/utils/crypto-util' {
   export function createUuid(): string;

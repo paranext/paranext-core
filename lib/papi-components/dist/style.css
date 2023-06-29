@@ -199,6 +199,10 @@
   background: greenyellow;
   color: #006400;
 }
+
+.papi-menu-item {
+  line-height: 0.8;
+}
 @layer rdg.MeasuringCell {
   .m1l09lto7-0-0-beta-33 {
     contain: strict;

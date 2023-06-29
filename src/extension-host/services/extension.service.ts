@@ -85,7 +85,9 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
         ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
           (extensionDirPath) => `file://${extensionDirPath}`,
         ),
-      ].map((extensionDirUri) => readDir(extensionDirUri)),
+      ].map((extensionDirUri) =>
+        readDir(extensionDirUri, (dirName) => !dirName.startsWith('external-')),
+      ),
     )
   )
     .flatMap((dirEntries) => dirEntries[EntryType.Directory])
