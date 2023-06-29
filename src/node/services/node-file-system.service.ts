@@ -58,12 +58,14 @@ export type DirectoryEntries = Readonly<{
 /**
  * Reads a directory and returns lists of entries in the directory by entry type
  * @param uri uri of directory
+ * @param filter function to filter out directories based on their names
  * @returns map of entry type to list of uris for each entry in the directory with that type
  */
-export async function readDir(uri: Uri): Promise<DirectoryEntries> {
-  const dirEntries = await fs.promises.readdir(getPathFromUri(uri), {
+export async function readDir(uri: Uri, filter: (x: string) => boolean): Promise<DirectoryEntries> {
+  const unfilteredDirEntries = await fs.promises.readdir(getPathFromUri(uri), {
     withFileTypes: true,
   });
+  const dirEntries = unfilteredDirEntries.filter((directory) => filter(directory.name));
   return Object.fromEntries(
     groupBy(
       dirEntries,

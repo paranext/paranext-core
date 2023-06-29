@@ -7,11 +7,19 @@ import {
   Slider,
   Switch,
   TextField,
+  Table,
 } from 'papi-components';
-import { useCallback, useContext, useState } from 'react';
 import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
 import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
+import type { UsfmProviderDataTypes } from '@extensions/external-usfm-data-provider';
 import type { DataProviderDataType } from 'shared/models/data-provider.model';
+import { Key, useCallback, useContext, useMemo, useState } from 'react';
+
+type Row = {
+  id: string;
+  title: string;
+  subtitle: string;
+};
 
 const {
   react: {
@@ -22,6 +30,17 @@ const {
 } = papi;
 
 const NAME = 'Hello World React WebView';
+
+const initializeRows = (): Row[] => {
+  return [
+    { id: '0', title: 'Norem ipsum dolor sit amet', subtitle: 'Subtitle1' },
+    { id: '1', title: 'Consectetur adipiscing elit', subtitle: 'Subtitle2' },
+    { id: '2', title: 'Pellentesque suscipit tortor est', subtitle: 'Subtitle3' },
+    { id: '3', title: 'Ut egestas massa aliquam a', subtitle: 'Subtitle4' },
+    { id: '4', title: 'Nulla egestas vestibulum felis a venenatis', subtitle: 'Subtitle5' },
+    { id: '5', title: 'Sed aliquet pulvinar neque', subtitle: 'Subtitle6' },
+  ];
+};
 
 // Test fetching
 papi
@@ -34,6 +53,8 @@ globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
   const [myState, setMyState] = useState(0);
+  const [rows, setRows] = useState(initializeRows());
+  const [selectedRows, setSelectedRows] = useState(new Set<Key>());
 
   const [echoResult] = usePromise(
     useCallback(async () => {
@@ -73,10 +94,16 @@ globalThis.webViewComponent = function HelloWorld() {
 
   const [personAge] = useData.Age<PeopleDataTypes, 'Age'>('hello-someone.people', name, -1);
 
-  const [psalm1] = useData.Chapter<QuickVerseDataTypes, 'Chapter'>(
-    'quick-verse.quick-verse',
-    ['Psalm', 1],
+  const [psalm1] = useData.Chapter<UsfmProviderDataTypes, 'Chapter'>(
+    'usfm',
+    useMemo(() => ({ book: 'PSA', chapter: '1', verse: '1', versification: 'English' }), []),
     'Loading Psalm 1...',
+  );
+
+  const [john11] = useData.Verse<UsfmProviderDataTypes, 'Verse'>(
+    'usfm',
+    useMemo(() => ({ verseString: 'JHN 1:1' }), []),
+    'Loading John 1:1...',
   );
 
   return (
@@ -118,6 +145,8 @@ globalThis.webViewComponent = function HelloWorld() {
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>
+      <h3>John 1:1</h3>
+      <div>{john11}</div>
       <h3>Psalm 1</h3>
       <div>{psalm1}</div>
       <br />
@@ -128,6 +157,37 @@ globalThis.webViewComponent = function HelloWorld() {
         <ComboBox title="Test Me" options={['option 1', 'option 2']} />
         <Slider /> {/* no label available */}
         <RefSelector scrRef={{ book: 1, chapter: 1, verse: 1 }} handleSubmit={(): void => {}} />
+        <Table<Row>
+          columns={[
+            {
+              key: 'id',
+              name: 'ID',
+            },
+            {
+              key: 'title',
+              name: 'Title',
+              editable: true,
+            },
+            {
+              key: 'subtitle',
+              name: 'Subtitle',
+              editable: true,
+            },
+          ]}
+          rows={rows}
+          rowKeyGetter={(row: Row) => {
+            return row.id;
+          }}
+          selectedRows={selectedRows}
+          onSelectedRowsChange={(currentlySelectedRows: Set<Key>) =>
+            setSelectedRows(currentlySelectedRows)
+          }
+          onRowsChange={(changedRows: Row[]) => setRows(changedRows)}
+          enableSelectColumn
+          selectColumnWidth={60}
+          rowHeight={60}
+          headerRowHeight={50}
+        />
       </div>
     </div>
   );
