@@ -293,6 +293,17 @@ function Table<R>({
 }: TableProps<R>) {
   const cachedColumns = useMemo(() => {
     const editableColumns = columns.map((column) => {
+      if (typeof column.editable === 'function') {
+        const editableFalsy = (row: R) => {
+          // We've already confirmed that editable is a function
+          return !!(column.editable as (row: R) => boolean)(row);
+        };
+        return {
+          ...column,
+          editable: editableFalsy,
+          renderEditCell: column.renderEditCell || TableTextEditor,
+        };
+      }
       if (column.editable && !column.renderEditCell) {
         return { ...column, renderEditCell: TableTextEditor };
       }
