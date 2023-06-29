@@ -1,7 +1,6 @@
 import '@extension-host/global-this.model';
 import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
-import { CommandHandler } from '@shared/utils/papi-util';
 import * as ExtensionService from '@extension-host/services/extension.service';
 import papi from '@extension-host/services/papi-backend.service';
 import logger from '@shared/services/logger.service';
@@ -9,6 +8,19 @@ import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
 import { getErrorMessage } from '@shared/utils/util';
+import type {
+  CommandHandlerTypes,
+  CommandNames,
+  CommandHandler,
+  CommandTypes,
+} from 'papi-commands';
+
+declare module 'papi-commands' {
+  export interface CommandHandlers {
+    addMany: CommandHandlerTypes<typeof commandHandlers.addMany>;
+    throwErrorExtensionHost: CommandHandlerTypes<typeof commandHandlers.throwErrorExtensionHost>;
+  }
+}
 
 // #region Test logs
 
@@ -21,7 +33,7 @@ logger.warn('Extension host example warning');
 
 // #region Services setup
 
-const commandHandlers: { [commandName: string]: CommandHandler } = {
+const commandHandlers: { [commandName: string]: CommandHandler<CommandTypes> } = {
   // Set up test handlers
   addMany: async (...nums: number[]) => {
     /* const start = performance.now(); */
@@ -42,7 +54,7 @@ networkService
     // Set up network commands
     await Promise.all(
       Object.entries(commandHandlers).map(async ([commandName, handler]) => {
-        await papi.commands.registerCommand(commandName, handler);
+        await papi.commands.registerCommand(commandName as CommandNames, handler);
       }),
     );
 

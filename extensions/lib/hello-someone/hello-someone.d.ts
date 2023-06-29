@@ -1,5 +1,6 @@
 import type IDataProvider from 'shared/models/data-provider.interface';
 import type { DataProviderDataType } from 'shared/models/data-provider.model';
+import { CommandHandlerTypes } from 'papi-commands';
 
 declare module 'hello-someone' {
   export type Person = {
@@ -23,4 +24,13 @@ declare module 'hello-someone' {
   };
 
   export type PeopleDataProvider = IDataProvider<PeopleDataTypes> & PeopleDataMethods;
+}
+
+declare module 'papi-commands' {
+  export interface CommandHandlers {
+    'hello-someone.hello-someone': CommandHandlerTypes<(someone: string) => string>;
+    'hello-someone.echo-someone-renderer': CommandHandlerTypes<
+      (message: string) => Promise<string>
+    >;
+  }
 }

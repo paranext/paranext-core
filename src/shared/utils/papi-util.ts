@@ -107,19 +107,6 @@ export enum RequestHandlerType {
   Complex = 'complex',
 }
 
-/**
- * Handler function for a command. Called when a command is executed.
- * The function should accept the command's parameters as its parameters.
- * The function should return a promise that resolves with the "return" value of the command.
- */
-// Any is probably fine because we likely never know or care about the args or return
-export type CommandHandler<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  TParam extends Array<unknown> = any[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  TReturn = any,
-> = (...args: TParam) => Promise<TReturn> | TReturn;
-
 /** Check that two objects are deeply equal, comparing members of each object and such */
 export function deepEqual(a: unknown, b: unknown) {
   return equal(a, b);

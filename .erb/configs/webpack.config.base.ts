@@ -54,8 +54,7 @@ const configuration: webpack.Configuration = {
    */
   resolve: {
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
-    // Must add extensions dist path here so eslint knows about the types provided by extensions
-    modules: [webpackPaths.srcPath, 'node_modules', webpackPaths.extensionsDistPath],
+    modules: [webpackPaths.srcPath, 'node_modules'],
     // There is no need to add aliases here, the paths in tsconfig get mirrored
     plugins: [new TsconfigPathsPlugins()],
     fallback: {

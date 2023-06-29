@@ -4,8 +4,7 @@
     "baseUrl": "../../src",
     "declaration": true,
     "emitDeclarationOnly": true,
-    "outFile": "papi.d.ts",
-    "typeRoots": ["../../node_modules/@types", "../../src/@types"]
+    "outFile": "papi.d.ts"
   },
   "files": [
     "../../src/renderer/services/papi-frontend.service.ts",

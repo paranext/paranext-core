@@ -59,6 +59,16 @@ const reactWebViewProvider: IWebViewProvider = {
   },
 };
 
+/** Simple function to return hello world. Registered as a command handler */
+function helloWorld() {
+  return 'Hello world!';
+}
+
+/** Simple function to throw a customized exception. Registered as a command handler */
+function helloException(message: string) {
+  throw new Error(`Hello World Exception! ${message}`);
+}
+
 export async function activate(): Promise<UnsubscriberAsync> {
   logger.info('Hello world is activating!');
 
@@ -73,12 +83,8 @@ export async function activate(): Promise<UnsubscriberAsync> {
   );
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
-    papi.commands.registerCommand('hello-world.hello-world', () => {
-      return 'Hello world!';
-    }),
-    papi.commands.registerCommand('hello-world.hello-exception', (message: string) => {
-      throw new Error(`Hello World Exception! ${message}`);
-    }),
+    papi.commands.registerCommand('hello-world.hello-world', helloWorld),
+    papi.commands.registerCommand('hello-world.hello-exception', helloException),
   ];
 
   papi

@@ -14,7 +14,6 @@ import {
 } from '@shared/data/internal-connection.model';
 import {
   aggregateUnsubscriberAsyncs,
-  CommandHandler,
   ComplexRequest,
   ComplexResponse,
   createSafeRegisterFn,
@@ -91,7 +90,7 @@ type ArgsRequestHandler<
   // Any is probably fine because we likely never know or care about the args or return
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   TReturn = any,
-> = CommandHandler<TParam, TReturn>;
+> = (...args: TParam) => Promise<TReturn> | TReturn;
 
 /**
  * Contents handler function for a request. Called when a request is handled.

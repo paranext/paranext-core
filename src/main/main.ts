@@ -16,12 +16,37 @@ import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import logger from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import papi from '@shared/services/papi.service';
-import { CommandHandler } from '@shared/utils/papi-util';
 import { resolveHtmlPath } from '@node/utils/util';
 import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
 import { wait } from '@shared/utils/util';
+import type { CommandNames, CommandHandler, CommandTypes } from 'papi-commands';
+
+const commandHandlers: { [commandName: string]: CommandHandler<CommandTypes> } = {
+  echo: async (message: string) => {
+    return message;
+  },
+  echoRenderer: async (message: string) => {
+    /* const start = performance.now(); */
+    /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
+    /* logger.info(
+      `addThree(...) = ${result} took ${performance.now() - start} ms`,
+    ); */
+    return message;
+  },
+  echoExtensionHost: async (message: string) => {
+    await papi.commands.sendCommand('addMany', 3, 5, 7, 1, 4);
+    return message;
+  },
+  throwError: async (message: string) => {
+    throw new Error(`Test Error thrown in throwError command: ${message}`);
+  },
+  // This is a temporary hack (per TJ) to allow the Exit menu to have a way to exit the app.
+  quit: async () => {
+    app.exit();
+  },
+};
 
 async function main() {
   // The network service relies on nothing else, and other things rely on it, so start it first
@@ -233,33 +258,8 @@ async function main() {
 
   // #region Register test command handlers
 
-  const commandHandlers: { [commandName: string]: CommandHandler } = {
-    echo: async (message: string) => {
-      return message;
-    },
-    echoRenderer: async (message: string) => {
-      /* const start = performance.now(); */
-      /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
-      /* logger.info(
-      `addThree(...) = ${result} took ${performance.now() - start} ms`,
-    ); */
-      return message;
-    },
-    echoExtensionHost: async (message: string) => {
-      await papi.commands.sendCommand('addMany', 3, 5, 7, 1, 4);
-      return message;
-    },
-    throwError: async (message: string) => {
-      throw new Error(`Test Error thrown in throwError command: ${message}`);
-    },
-    // This is a temporary hack (per TJ) to allow the Exit menu to have a way to exit the app.
-    quit: async () => {
-      app.exit();
-    },
-  };
-
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-    papi.commands.registerCommand(commandName, handler);
+    papi.commands.registerCommand(commandName as CommandNames, handler);
   });
 
   // #endregion

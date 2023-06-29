@@ -11,6 +11,7 @@ import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import type { PeopleDataProvider } from 'hello-someone';
 import type { QuickVerseDataTypes } from 'quick-verse';
+import { CommandNames } from 'papi-commands';
 
 export const TAB_TYPE_BUTTONS = 'buttons';
 
@@ -24,44 +25,35 @@ const test = async () => {
   return result;
 };
 
-const addOne = async (num: number) => commandService.sendCommand<[number], number>('addOne', num);
+// WARNING: THIS TYPE ASSERTION IS WRONG! DO NOT LET ME FORGETFULLY MERGE THIS CODE IN THIS STATE
+// TODO: Provide C# command types and remove this assertion
+const addOne = async (num: number) => commandService.sendCommand('addOne' as CommandNames, num);
 
-const echo: (message: string) => Promise<string> = commandService.createSendCommandFunction<
-  [string],
-  string
->('echo');
+const echo = commandService.createSendCommandFunction('echo');
 
-const echoRenderer = commandService.createSendCommandFunction<[string], string>('echoRenderer');
+const echoRenderer = commandService.createSendCommandFunction('echoRenderer');
 
-const echoExtensionHost = commandService.createSendCommandFunction<[string], string>(
-  'echoExtensionHost',
-);
+const echoExtensionHost = commandService.createSendCommandFunction('echoExtensionHost');
 
-const echoSomeoneRenderer = commandService.createSendCommandFunction<[string], string>(
+const echoSomeoneRenderer = commandService.createSendCommandFunction(
   'hello-someone.echo-someone-renderer',
 );
 
-const addThree = commandService.createSendCommandFunction<[number, number, number], number>(
-  'addThree',
-);
+const addThree = commandService.createSendCommandFunction('addThree');
 
-const addMany = commandService.createSendCommandFunction<number[], number>('addMany');
+const addMany = commandService.createSendCommandFunction('addMany');
 
-const helloWorld = commandService.createSendCommandFunction<[], string>('hello-world.hello-world');
+const helloWorld = commandService.createSendCommandFunction('hello-world.hello-world');
 
-const throwErrorHelloWorld = commandService.createSendCommandFunction<[string], string>(
+const throwErrorHelloWorld = commandService.createSendCommandFunction(
   'hello-world.hello-exception',
 );
 
-const helloSomeone = commandService.createSendCommandFunction<[string], string>(
-  'hello-someone.hello-someone',
-);
+const helloSomeone = commandService.createSendCommandFunction('hello-someone.hello-someone');
 
-const throwError = commandService.createSendCommandFunction<[string], string>('throwError');
+const throwError = commandService.createSendCommandFunction('throwError');
 
-const throwErrorExtensionHost = commandService.createSendCommandFunction<[string], string>(
-  'throwErrorExtensionHost',
-);
+const throwErrorExtensionHost = commandService.createSendCommandFunction('throwErrorExtensionHost');
 
 const executeMany = async <T,>(fn: () => Promise<T>) => {
   const numRequests = 10000;
