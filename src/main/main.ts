@@ -21,8 +21,10 @@ import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
 import { wait } from '@shared/utils/util';
-import type { CommandNames, CommandHandler, CommandTypes } from 'papi-commands';
+import { CommandHandler, CommandNames, CommandTypes } from '@shared/services/command.service';
 
+// `main.ts`'s command handler declarations are in `command.service.ts` so they can be picked up
+// by papi-dts
 const commandHandlers: { [commandName: string]: CommandHandler<CommandTypes> } = {
   echo: async (message: string) => {
     return message;

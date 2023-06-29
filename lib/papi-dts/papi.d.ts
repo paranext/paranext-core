@@ -1,44 +1,4 @@
-/// <reference types="react" />
 /// <reference types="node" />
-
-declare module 'papi-commands' {
-  // We want to be able to use `CommandTypes` as a catch-all for creating command handler maps, so we
-  // need `any`, not just `unknown`, because `unknown` does not match to actual functions
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  export type CommandTypes<TParams extends Array<any> = Array<any>, TReturn = any> = {
-    params: TParams;
-    returnType: TReturn;
-  };
-
-  // Can't use Function type because it is not compatible with Parameters or ReturnType, so we spell
-  // out any function type here
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  export type CommandHandlerTypes<TCommandHandler extends (...args: any) => any> = CommandTypes<
-    Parameters<TCommandHandler>,
-    ReturnType<TCommandHandler>
-  >;
-
-  /**
-   * Handler function for a command. Called when a command is executed.
-   */
-  export type CommandHandler<TCommandTypes extends CommandTypes> = (
-    ...args: TCommandTypes['params']
-  ) => Promise<TCommandTypes['returnType']> | TCommandTypes['returnType'];
-
-  // TODO: Adding an index type removes type checking on the key :( How do we make sure extensions provide only CommandTypes?
-  export interface CommandHandlers {
-    // These commands are provided in `main.ts`. They are only here because I needed them to use in
-    // other places, but building `papi-dts` wasn't working because it didn't see `main.ts`
-    echo: CommandTypes<[message: string], string>;
-    echoRenderer: CommandHandlerTypes<(message: string) => Promise<string>>;
-    echoExtensionHost: CommandHandlerTypes<(message: string) => Promise<string>>;
-    throwError: CommandHandlerTypes<(message: string) => void>;
-    quit: CommandHandlerTypes<() => Promise<void>>;
-  }
-
-  export type CommandNames = keyof CommandHandlers;
-}
-
 declare module 'shared/global-this.model' {
   import { FunctionComponent } from 'react';
   /**
@@ -207,14 +167,6 @@ declare module 'shared/utils/papi-util' {
     Contents = 'contents',
     Complex = 'complex',
   }
-  /**
-   * Handler function for a command. Called when a command is executed.
-   * The function should accept the command's parameters as its parameters.
-   * The function should return a promise that resolves with the "return" value of the command.
-   */
-  export type CommandHandler<TParam extends Array<unknown> = any[], TReturn = any> = (
-    ...args: TParam
-  ) => Promise<TReturn> | TReturn;
   /** Check that two objects are deeply equal, comparing members of each object and such */
   export function deepEqual(a: unknown, b: unknown): boolean;
   /** Information about a request that tells us what to do with it */
@@ -980,7 +932,6 @@ declare module 'shared/services/network.service' {
    */
   import { ClientConnectEvent, ClientDisconnectEvent } from 'shared/data/internal-connection.model';
   import {
-    CommandHandler,
     ComplexRequest,
     ComplexResponse,
     RequestHandlerType,
@@ -994,10 +945,9 @@ declare module 'shared/services/network.service' {
    * The function should return an object that becomes the contents object of the response.
    * This type of handler is a normal function.
    */
-  type ArgsRequestHandler<TParam extends Array<unknown> = any[], TReturn = any> = CommandHandler<
-    TParam,
-    TReturn
-  >;
+  type ArgsRequestHandler<TParam extends Array<unknown> = any[], TReturn = any> = (
+    ...args: TParam
+  ) => Promise<TReturn> | TReturn;
   /**
    * Contents handler function for a request. Called when a request is handled.
    * The function should accept the contents object of the request as its single parameter.
@@ -1089,13 +1039,32 @@ declare module 'shared/services/network.service' {
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import type { CommandHandler, CommandHandlers, CommandNames } from 'papi-commands';
-  module 'papi-commands' {
-    interface CommandHandlers {
-      addThree: CommandHandlerTypes<typeof addThree>;
-      squareAndConcat: CommandHandlerTypes<typeof squareAndConcat>;
-    }
+  export type CommandTypes<TParams extends Array<any> = Array<any>, TReturn = any> = {
+    params: TParams;
+    returnType: TReturn;
+  };
+  export type CommandHandlerTypes<TCommandHandler extends (...args: any) => any> = CommandTypes<
+    Parameters<TCommandHandler>,
+    ReturnType<TCommandHandler>
+  >;
+  /**
+   * Handler function for a command. Called when a command is executed.
+   */
+  export type CommandHandler<TCommandTypes extends CommandTypes> = (
+    ...args: TCommandTypes['params']
+  ) => Promise<TCommandTypes['returnType']> | TCommandTypes['returnType'];
+  export interface CommandHandlers {
+    addThree: CommandHandlerTypes<typeof addThree>;
+    squareAndConcat: CommandHandlerTypes<typeof squareAndConcat>;
+    echo: CommandTypes<[message: string], string>;
+    echoRenderer: CommandHandlerTypes<(message: string) => Promise<string>>;
+    echoExtensionHost: CommandHandlerTypes<(message: string) => Promise<string>>;
+    throwError: CommandHandlerTypes<(message: string) => void>;
+    quit: CommandHandlerTypes<() => Promise<void>>;
+    addMany: CommandHandlerTypes<(...nums: number[]) => number>;
+    throwErrorExtensionHost: CommandHandlerTypes<(message: string) => void>;
   }
+  export type CommandNames = keyof CommandHandlers;
   function addThree(a: number, b: number, c: number): Promise<number>;
   function squareAndConcat(a: number, b: string): Promise<string>;
   /**
@@ -1755,7 +1724,7 @@ declare module 'shared/models/data-provider.model' {
      * Note: By default, this `subscribe<data_type>` function automatically retrieves the current state of the data
      * and runs the provided callback as soon as possible. That way, if you want to keep your data up-to-date,
      * you do not also have to run `get<data_type>`. You can turn this functionality off in the `options` parameter.
-
+    
      * @param selector tells the provider what data this listener is listening for
      * @param callback function to run with the updated data for this selector
      * @param options various options to adjust how the subscriber emits updates

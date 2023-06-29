@@ -11,7 +11,7 @@ import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import type { PeopleDataProvider } from 'hello-someone';
 import type { QuickVerseDataTypes } from 'quick-verse';
-import { CommandNames } from 'papi-commands';
+import { CommandNames } from '@shared/services/command.service';
 
 export const TAB_TYPE_BUTTONS = 'buttons';
 
@@ -25,9 +25,10 @@ const test = async () => {
   return result;
 };
 
-// WARNING: THIS TYPE ASSERTION IS WRONG! DO NOT LET ME FORGETFULLY MERGE THIS CODE IN THIS STATE
-// TODO: Provide C# command types and remove this assertion
-const addOne = async (num: number) => commandService.sendCommand('addOne' as CommandNames, num);
+const addOne = async (num: number) =>
+  // WARNING: THIS TYPE ASSERTION IS WRONG! DO NOT LET ME FORGETFULLY MERGE THIS CODE IN THIS STATE
+  // TODO: Provide C# command types and remove this assertion
+  commandService.sendCommand('addOne' as CommandNames, num) as Promise<number>;
 
 const echo = commandService.createSendCommandFunction('echo');
 

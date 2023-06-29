@@ -8,19 +8,7 @@ import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
 import { getErrorMessage } from '@shared/utils/util';
-import type {
-  CommandHandlerTypes,
-  CommandNames,
-  CommandHandler,
-  CommandTypes,
-} from 'papi-commands';
-
-declare module 'papi-commands' {
-  export interface CommandHandlers {
-    addMany: CommandHandlerTypes<typeof commandHandlers.addMany>;
-    throwErrorExtensionHost: CommandHandlerTypes<typeof commandHandlers.throwErrorExtensionHost>;
-  }
-}
+import { CommandHandler, CommandNames, CommandTypes } from '@shared/services/command.service';
 
 // #region Test logs
 
@@ -33,6 +21,8 @@ logger.warn('Extension host example warning');
 
 // #region Services setup
 
+// `extension-host.ts`'s command handler declarations are in `command.service.ts` so they can be
+// picked up by papi-dts
 const commandHandlers: { [commandName: string]: CommandHandler<CommandTypes> } = {
   // Set up test handlers
   addMany: async (...nums: number[]) => {

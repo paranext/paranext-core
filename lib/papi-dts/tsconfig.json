@@ -4,7 +4,9 @@
     "baseUrl": "../../src",
     "declaration": true,
     "emitDeclarationOnly": true,
-    "outFile": "papi.d.ts"
+    "outFile": "papi.d.ts",
+    // typeRoots should be all of root tsconfig.json's typeRoots but without extensions
+    "typeRoots": ["./node_modules/@types", "src/@types"]
   },
   "files": [
     "../../src/renderer/services/papi-frontend.service.ts",
