@@ -10,10 +10,10 @@ import {
   TablePasteEvent,
   TableProps,
   TableSortColumn,
-  TableTextEditor,
+  TableEditorProps,
 } from 'papi-components';
 import 'papi-components/dist/style.css';
-import { Key, ReactElement, UIEvent } from 'react';
+import { ChangeEvent, Key, ReactElement, UIEvent } from 'react';
 
 type Row = {
   id: string;
@@ -165,7 +165,6 @@ export const CustomizedColumns: Story = {
         frozen: false,
         resizable: true,
         sortable: true,
-        renderEditCell: TableTextEditor<Row>,
       },
       {
         key: 'title',
@@ -291,7 +290,7 @@ export const CustomizedRows: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
-        renderEditCell: TableTextEditor<Row>,
+        editable: true,
       },
     ],
 
@@ -327,7 +326,7 @@ export const CellCallbackFunctions: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
-        renderEditCell: TableTextEditor<Row>,
+        editable: true,
       },
     ],
 
@@ -395,7 +394,7 @@ export const Direction: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
-        renderEditCell: TableTextEditor<Row>,
+        editable: true,
       },
     ],
 
@@ -440,7 +439,7 @@ export const Virtualization: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
-        renderEditCell: TableTextEditor<Row>,
+        editable: true,
       },
     ],
 
@@ -467,7 +466,7 @@ export const MiscellaneousFunctions: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
-        renderEditCell: TableTextEditor<Row>,
+        editable: true,
       },
     ],
 
@@ -541,7 +540,7 @@ export const CustomClassNames: Story = {
       {
         key: 'title',
         name: 'Title (editable)',
-        renderEditCell: TableTextEditor<Row>,
+        editable: true,
       },
     ],
 
@@ -560,6 +559,49 @@ export const CustomClassNames: Story = {
     docs: {
       description: {
         story: 'This story showcases how custom CSS classes can be used',
+      },
+    },
+  },
+};
+
+function CustomTextEditor<R>({ onRowChange, row, column }: TableEditorProps<R>): ReactElement {
+  const changeHandler = (e: ChangeEvent<HTMLInputElement>) => {
+    onRowChange({ ...row, [column.key]: e.target.value });
+  };
+
+  return <input onChange={changeHandler} />;
+}
+
+export const CustomRenderEditCell: Story = {
+  args: {
+    columns: [
+      {
+        key: 'id',
+        name: 'ID',
+      },
+      {
+        key: 'title',
+        name: 'Title (The title for id == 0 is editable)',
+        renderEditCell: CustomTextEditor<Row>,
+        editable: (row: Row) => {
+          return +row.id === 0;
+        },
+      },
+    ],
+
+    rows: [
+      { id: '0', title: 'Lorem ipsum dolor sit amet' },
+      { id: '1', title: 'Consectetur adipiscing elit' },
+      { id: '2', title: 'Pellentesque suscipit tortor est' },
+      { id: '3', title: 'Ut egestas massa aliquam a' },
+      { id: '4', title: 'Nulla egestas vestibulum felis a venenatis' },
+      { id: '5', title: 'Sed aliquet pulvinar neque' },
+    ],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'This story showcases how a custom cell editor can be set',
       },
     },
   },
