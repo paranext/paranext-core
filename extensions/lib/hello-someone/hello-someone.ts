@@ -262,8 +262,8 @@ export async function activate(context: ExecutionActivationContext) {
   );
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
-    papi.commands.registerCommand('hello-someone.hello-someone', (someone: string) => {
-      return `Hello ${someone}!`;
+    papi.commands.registerCommand('hello-someone.hello-someone', (name: string) => {
+      return `Hello ${name}!`;
     }),
     papi.commands.registerCommand(
       'hello-someone.echo-someone-renderer',

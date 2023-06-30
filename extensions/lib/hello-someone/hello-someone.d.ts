@@ -1,6 +1,5 @@
 import type IDataProvider from '@shared/models/data-provider.interface';
 import type { DataProviderDataType } from '@shared/models/data-provider.model';
-import type { CommandHandlerTypes } from '@shared/services/command.service';
 
 declare module 'hello-someone' {
   export type Person = {
@@ -28,9 +27,7 @@ declare module 'hello-someone' {
 
 declare module '@shared/services/command.service' {
   export interface CommandHandlers {
-    'hello-someone.hello-someone': CommandHandlerTypes<(someone: string) => string>;
-    'hello-someone.echo-someone-renderer': CommandHandlerTypes<
-      (message: string) => Promise<string>
-    >;
+    'hello-someone.hello-someone': (name: string) => string;
+    'hello-someone.echo-someone-renderer': (message: string) => Promise<string>;
   }
 }

@@ -1043,46 +1043,20 @@ declare module '@shared/services/network.service' {
 }
 declare module '@shared/services/command.service' {
   import { UnsubscriberAsync } from '@shared/utils/papi-util';
-  export type CommandTypes<TParams extends Array<any> = Array<any>, TReturn = any> = {
-    params: TParams;
-    returnType: TReturn;
-  };
-  export type CommandHandlerTypes<TCommandHandler extends (...args: any) => any> = CommandTypes<
-    Parameters<TCommandHandler>,
-    ReturnType<TCommandHandler>
-  >;
-  /**
-   * Handler function for a command. Called when a command is executed.
-   */
-  export type CommandHandler<TCommandTypes extends CommandTypes> = (
-    ...args: TCommandTypes['params']
-  ) => Promise<TCommandTypes['returnType']> | TCommandTypes['returnType'];
   export interface CommandHandlers {
-    addThree: CommandHandlerTypes<typeof addThree>;
-    squareAndConcat: CommandHandlerTypes<typeof squareAndConcat>;
-    echo: CommandTypes<[message: string], string>;
-    echoRenderer: CommandHandlerTypes<(message: string) => Promise<string>>;
-    echoExtensionHost: CommandHandlerTypes<(message: string) => Promise<string>>;
-    throwError: CommandHandlerTypes<(message: string) => void>;
-    quit: CommandHandlerTypes<() => Promise<void>>;
-    addMany: CommandHandlerTypes<(...nums: number[]) => number>;
-    throwErrorExtensionHost: CommandHandlerTypes<(message: string) => void>;
+    addThree: typeof addThree;
+    squareAndConcat: typeof squareAndConcat;
+    echo: (message: string) => string;
+    echoRenderer: (message: string) => Promise<string>;
+    echoExtensionHost: (message: string) => Promise<string>;
+    throwError: (message: string) => void;
+    quit: () => Promise<void>;
+    addMany: (...nums: number[]) => number;
+    throwErrorExtensionHost: (message: string) => void;
   }
   export type CommandNames = keyof CommandHandlers;
   function addThree(a: number, b: number, c: number): Promise<number>;
   function squareAndConcat(a: number, b: string): Promise<string>;
-  /**
-   * Register a command on the papi to be handled here.
-   *
-   * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use registerCommand
-   * @param commandName command name to register for handling here
-   * @param handler function to run when the command is invoked
-   * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
-   */
-  export const registerCommandUnsafe: <CommandName extends keyof CommandHandlers>(
-    commandName: CommandName,
-    handler: CommandHandler<CommandHandlers[CommandName]>,
-  ) => Promise<UnsubscriberAsync>;
   /** Sets up the CommandService. Only runs once and always returns the same promise after that */
   export const initialize: () => Promise<void>;
   /**
@@ -1090,8 +1064,8 @@ declare module '@shared/services/command.service' {
    */
   export const sendCommand: <CommandName extends keyof CommandHandlers>(
     commandName: CommandName,
-    ...args: CommandHandlers[CommandName]['params']
-  ) => Promise<Awaited<CommandHandlers[CommandName]['returnType']>>;
+    ...args: Parameters<CommandHandlers[CommandName]>
+  ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
   /**
    * Creates a function that is a command function with a baked commandName.
    * This is also nice because you get TypeScript type support using this function.
@@ -1101,8 +1075,8 @@ declare module '@shared/services/command.service' {
   export const createSendCommandFunction: <CommandName extends keyof CommandHandlers>(
     commandName: CommandName,
   ) => (
-    ...args: CommandHandlers[CommandName]['params']
-  ) => Promise<Awaited<CommandHandlers[CommandName]['returnType']>>;
+    ...args: Parameters<CommandHandlers[CommandName]>
+  ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
   /**
    * Register a command on the papi to be handled here
    * @param commandName command name to register for handling here
@@ -1111,7 +1085,7 @@ declare module '@shared/services/command.service' {
    */
   export const registerCommand: <CommandName extends CommandNames>(
     commandName: CommandName,
-    handler: CommandHandler<CommandHandlers[CommandName]>,
+    handler: CommandHandlers[CommandName],
   ) => Promise<UnsubscriberAsync>;
 }
 declare module '@shared/data/web-view.model' {

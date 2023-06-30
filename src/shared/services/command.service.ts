@@ -13,45 +13,22 @@ import {
 import { isClient, isRenderer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
 
-// We want to be able to use `CommandTypes` as a catch-all for creating command handler maps, so we
-// need `any`, not just `unknown`, because `unknown` does not match to actual functions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type CommandTypes<TParams extends Array<any> = Array<any>, TReturn = any> = {
-  params: TParams;
-  returnType: TReturn;
-};
-
-// Can't use Function type because it is not compatible with Parameters or ReturnType, so we spell
-// out any function type here
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type CommandHandlerTypes<TCommandHandler extends (...args: any) => any> = CommandTypes<
-  Parameters<TCommandHandler>,
-  ReturnType<TCommandHandler>
->;
-
-/**
- * Handler function for a command. Called when a command is executed.
- */
-export type CommandHandler<TCommandTypes extends CommandTypes> = (
-  ...args: TCommandTypes['params']
-) => Promise<TCommandTypes['returnType']> | TCommandTypes['returnType'];
-
-// TODO: Adding an index type removes type checking on the key :( How do we make sure extensions provide only CommandTypes?
+// TODO: Adding an index type removes type checking on the key :( How do we make sure extensions provide only functions?
 export interface CommandHandlers {
-  addThree: CommandHandlerTypes<typeof addThree>;
-  squareAndConcat: CommandHandlerTypes<typeof squareAndConcat>;
+  addThree: typeof addThree;
+  squareAndConcat: typeof squareAndConcat;
   // These commands are provided in `main.ts`. They are only here because I needed them to use in
   // other places, but building `papi-dts` wasn't working because it didn't see `main.ts`
-  echo: CommandTypes<[message: string], string>;
-  echoRenderer: CommandHandlerTypes<(message: string) => Promise<string>>;
-  echoExtensionHost: CommandHandlerTypes<(message: string) => Promise<string>>;
-  throwError: CommandHandlerTypes<(message: string) => void>;
-  quit: CommandHandlerTypes<() => Promise<void>>;
+  echo: (message: string) => string;
+  echoRenderer: (message: string) => Promise<string>;
+  echoExtensionHost: (message: string) => Promise<string>;
+  throwError: (message: string) => void;
+  quit: () => Promise<void>;
   // These commands are provided in `extension-host.ts`. They are only here because I needed them to
   // use in other places, but building `papi-dts` wasn't working because it didn't see
   // `extension-host.ts`
-  addMany: CommandHandlerTypes<(...nums: number[]) => number>;
-  throwErrorExtensionHost: CommandHandlerTypes<(message: string) => void>;
+  addMany: (...nums: number[]) => number;
+  throwErrorExtensionHost: (message: string) => void;
 }
 
 export type CommandNames = keyof CommandHandlers;
@@ -72,7 +49,9 @@ async function squareAndConcat(a: number, b: string) {
   return a * a + b.toString();
 }
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
-const rendererCommandFunctions: { [CommandName in CommandNames]?: CommandHandler<CommandTypes> } = {
+// This map should allow any functions because commands can be any function type
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rendererCommandFunctions: { [CommandName in CommandNames]?: (...args: any[]) => any } = {
   addThree,
   squareAndConcat,
 };
@@ -84,12 +63,12 @@ const rendererCommandFunctions: { [CommandName in CommandNames]?: CommandHandler
  */
 const sendCommandUnsafe = async <CommandName extends CommandNames>(
   commandName: CommandName,
-  ...args: CommandHandlers[CommandName]['params']
-): Promise<Awaited<CommandHandlers[CommandName]['returnType']>> => {
+  ...args: Parameters<CommandHandlers[CommandName]>
+): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> => {
   return networkService.request(
     serializeRequestType(CATEGORY_COMMAND, commandName),
     ...args,
-  ) as Promise<Awaited<CommandHandlers[CommandName]['returnType']>>;
+  ) as Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
 };
 
 /**
@@ -100,9 +79,9 @@ const sendCommandUnsafe = async <CommandName extends CommandNames>(
  * @param handler function to run when the command is invoked
  * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
  */
-export const registerCommandUnsafe = <CommandName extends CommandNames>(
+const registerCommandUnsafe = <CommandName extends CommandNames>(
   commandName: CommandName,
-  handler: CommandHandler<CommandHandlers[CommandName]>,
+  handler: CommandHandlers[CommandName],
 ): Promise<UnsubscriberAsync> => {
   return networkService.registerRequestHandler(
     serializeRequestType(CATEGORY_COMMAND, commandName),
@@ -164,8 +143,8 @@ export const initialize = () => {
  */
 export const sendCommand = async <CommandName extends CommandNames>(
   commandName: CommandName,
-  ...args: CommandHandlers[CommandName]['params']
-): Promise<Awaited<CommandHandlers[CommandName]['returnType']>> => {
+  ...args: Parameters<CommandHandlers[CommandName]>
+): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> => {
   await initialize();
   return sendCommandUnsafe(commandName, ...args);
 };
@@ -180,8 +159,8 @@ export const createSendCommandFunction = <CommandName extends CommandNames>(
   commandName: CommandName,
 ) => {
   return async (
-    ...args: CommandHandlers[CommandName]['params']
-  ): Promise<Awaited<CommandHandlers[CommandName]['returnType']>> =>
+    ...args: Parameters<CommandHandlers[CommandName]>
+  ): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> =>
     sendCommand(commandName, ...args);
 };
 
@@ -193,7 +172,7 @@ export const createSendCommandFunction = <CommandName extends CommandNames>(
  */
 export const registerCommand: <CommandName extends CommandNames>(
   commandName: CommandName,
-  handler: CommandHandler<CommandHandlers[CommandName]>,
+  handler: CommandHandlers[CommandName],
 ) => Promise<UnsubscriberAsync> = createSafeRegisterFn(
   registerCommandUnsafe,
   isInitialized,

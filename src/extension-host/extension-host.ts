@@ -8,7 +8,7 @@ import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
 import { getErrorMessage } from '@shared/utils/util';
-import { CommandHandler, CommandNames, CommandTypes } from '@shared/services/command.service';
+import { CommandNames } from '@shared/services/command.service';
 
 // #region Test logs
 
@@ -23,7 +23,9 @@ logger.warn('Extension host example warning');
 
 // `extension-host.ts`'s command handler declarations are in `command.service.ts` so they can be
 // picked up by papi-dts
-const commandHandlers: { [commandName: string]: CommandHandler<CommandTypes> } = {
+// This map should allow any functions because commands can be any function type
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
   // Set up test handlers
   addMany: async (...nums: number[]) => {
     /* const start = performance.now(); */
