@@ -14,10 +14,10 @@ const PAPI_DTS_PATH = 'papi.d.ts';
 // Load the papi.d.ts file for editing
 let papiDTS = fs.readFileSync(PAPI_DTS_PATH, 'utf8');
 
-// Rename module 'shared/services/papi.service' to 'papi' so extensions can import just 'papi'
+// Rename papi modules to 'papi-whatever' so extensions can import just 'papi-whatever'
 papiDTS = papiDTS
-  .replaceAll("'renderer/services/papi-frontend.service'", "'papi-frontend'")
-  .replaceAll("'extension-host/services/papi-backend.service'", "'papi-backend'");
+  .replaceAll('"renderer/services/papi-frontend.service"', '"papi-frontend"')
+  .replaceAll('"extension-host/services/papi-backend.service"', '"papi-backend"');
 
 // Fix all the path-aliased imports. For some reason, generating `papi.d.ts` removes the @ from path
 // aliases on module declarations and static imports but not on dynamic imports to other modules.
@@ -61,12 +61,12 @@ if (paths) {
 
     // For module declarations
     papiDTS = papiDTS.replace(
-      new RegExp(`^(declare module ')(${pathAliasNoAtRegex})`, 'gm'),
+      new RegExp(`^(declare module ["'])(${pathAliasNoAtRegex})`, 'gm'),
       '$1@$2',
     );
 
     // For static imports
-    papiDTS = papiDTS.replace(new RegExp(`( from ')(${pathAliasNoAtRegex})`, 'g'), '$1@$2');
+    papiDTS = papiDTS.replace(new RegExp(`( from ["'])(${pathAliasNoAtRegex})`, 'g'), '$1@$2');
   });
 }
 

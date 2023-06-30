@@ -26,7 +26,7 @@
   "main": "",
   "types": "papi.d.ts",
   "scripts": {
-    "build": "tsc && prettier --write papi.d.ts && ts-node edit-papi-d-ts.ts",
+    "build": "tsc && ts-node edit-papi-d-ts.ts && prettier --write papi.d.ts",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:staged": "lint-staged -q"
   },
