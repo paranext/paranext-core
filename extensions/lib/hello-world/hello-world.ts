@@ -1,12 +1,12 @@
 import papi from 'papi-backend';
-import { UnsubscriberAsync } from 'shared/utils/papi-util';
+import { UnsubscriberAsync } from '@shared/utils/papi-util';
 import type {
   WebViewContentType,
   WebViewDefinition,
   SavedWebViewDefinition,
-} from 'shared/data/web-view.model';
+} from '@shared/data/web-view.model';
 import type { PeopleDataProvider } from 'hello-someone';
-import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloWorldReactWebView from './hello-world.web-view';
 import helloWorldReactWebViewStyles from './hello-world.web-view.scss?inline';

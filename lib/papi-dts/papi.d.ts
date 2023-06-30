@@ -1,5 +1,6 @@
+/// <reference types="react" />
 /// <reference types="node" />
-declare module 'shared/global-this.model' {
+declare module '@shared/global-this.model' {
   import { FunctionComponent } from 'react';
   /**
    * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts (renderer), and extension-host.ts (extension host)
@@ -24,7 +25,7 @@ declare module 'shared/global-this.model' {
     ExtensionHost = 'extension-host',
   }
 }
-declare module 'shared/utils/util' {
+declare module '@shared/utils/util' {
   export function newGuid(): string;
   /**
    * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically random.
@@ -99,8 +100,8 @@ declare module 'shared/utils/util' {
    */
   export function getAllObjectFunctionNames(obj: NonNullable<any>): string[];
 }
-declare module 'shared/utils/papi-util' {
-  import { ProcessType } from 'shared/global-this.model';
+declare module '@shared/utils/papi-util' {
+  import { ProcessType } from '@shared/global-this.model';
   /** Function to run to dispose of something. Returns true if successfully unsubscribed */
   export type Unsubscriber = () => boolean;
   /**
@@ -211,8 +212,8 @@ declare module 'shared/utils/papi-util' {
    */
   export function getModuleSimilarApiMessage(moduleName: string): string;
 }
-declare module 'shared/models/papi-event.model' {
-  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
+declare module '@shared/models/papi-event.model' {
+  import { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
   /** Callback function that accepts an event and should run when an event is emitted */
   export type PapiEventHandler<T> = (event: T) => void;
   /**
@@ -228,11 +229,11 @@ declare module 'shared/models/papi-event.model' {
    */
   export type PapiEventAsync<T> = (callback: PapiEventHandler<T>) => Promise<UnsubscriberAsync>;
 }
-declare module 'shared/models/papi-event-emitter.model' {
+declare module '@shared/models/papi-event-emitter.model' {
   /**
    * Interfaces, classes, and functions related to events and event emitters
    */
-  import { PapiEvent } from 'shared/models/papi-event.model';
+  import { PapiEvent } from '@shared/models/papi-event.model';
   /**
    * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
    * Use eventEmitter.event(callback) to subscribe to the event.
@@ -283,12 +284,12 @@ declare module 'shared/models/papi-event-emitter.model' {
     protected disposeFn(): void;
   }
 }
-declare module 'shared/data/internal-connection.model' {
+declare module '@shared/data/internal-connection.model' {
   /**
    * Types that are internal to the communication we do through WebSocket.
    * These types should not need to be used outside of NetworkConnectors and ConnectionService.ts
    */
-  import { ComplexRequest, ComplexResponse } from 'shared/utils/papi-util';
+  import { ComplexRequest, ComplexResponse } from '@shared/utils/papi-util';
   /** Represents when the client id has not been assigned by the server */
   export const CLIENT_ID_UNASSIGNED = -1;
   /** "Client id" for the server */
@@ -369,7 +370,7 @@ declare module 'shared/data/internal-connection.model' {
   /** Handler for events from on the network */
   export type NetworkEventHandler = <T>(eventType: string, event: T) => void;
 }
-declare module 'shared/services/network-connector.interface' {
+declare module '@shared/services/network-connector.interface' {
   import {
     ConnectionStatus,
     InternalEvent,
@@ -378,7 +379,7 @@ declare module 'shared/services/network-connector.interface' {
     NetworkConnectorEventHandlers,
     NetworkConnectorInfo,
     RequestRouter,
-  } from 'shared/data/internal-connection.model';
+  } from '@shared/data/internal-connection.model';
   /**
    * Interface that defines the network connection functionality the server and the client must implement.
    * Used by NetworkConnectorFactory to supply the right kind of NetworkConnector to ConnectionService
@@ -433,11 +434,11 @@ declare module 'shared/services/network-connector.interface' {
     emitEventOnNetwork: <T>(eventType: string, event: InternalEvent<T>) => Promise<void>;
   }
 }
-declare module 'shared/utils/internal-util' {
+declare module '@shared/utils/internal-util' {
   /**
    * Utility functions specific to the internal technologies we are using.
    */
-  import { ProcessType } from 'shared/global-this.model';
+  import { ProcessType } from '@shared/global-this.model';
   /**
    * Determine if running on a client process (renderer, extension-host) or on the server.
    * @returns Returns true if running on a client, false otherwise
@@ -464,7 +465,7 @@ declare module 'shared/utils/internal-util' {
    */
   export const getProcessType: () => ProcessType;
 }
-declare module 'shared/data/network-connector.model' {
+declare module '@shared/data/network-connector.model' {
   /**
    * Types that are relevant particularly to the implementation of communication on NetworkConnector.ts files
    * Do not use these types outside of ClientNetworkConnector.ts and ServerNetworkConnector.ts
@@ -474,7 +475,7 @@ declare module 'shared/data/network-connector.model' {
     InternalRequest,
     InternalResponse,
     NetworkConnectorInfo,
-  } from 'shared/data/internal-connection.model';
+  } from '@shared/data/internal-connection.model';
   /** Port to use for the webSocket */
   export const WEBSOCKET_PORT = 8876;
   /** Number of attempts a client will make to connect to the WebSocket server before failing */
@@ -533,7 +534,7 @@ declare module 'shared/data/network-connector.model' {
     | WebSocketResponse
     | WebSocketEvent<unknown>;
 }
-declare module 'shared/services/logger.service' {
+declare module '@shared/services/logger.service' {
   import log from 'electron-log';
   export const WARN_TAG = '<WARN>';
   /**
@@ -549,7 +550,7 @@ declare module 'shared/services/logger.service' {
   };
   export default logger;
 }
-declare module 'client/services/web-socket.interface' {
+declare module '@client/services/web-socket.interface' {
   /**
    * Interface that defines the webSocket functionality the extension host and the renderer must implement.
    * Used by WebSocketFactory to supply the right kind of WebSocket to ClientNetworkConnector.
@@ -558,28 +559,28 @@ declare module 'client/services/web-socket.interface' {
    */
   export type IWebSocket = WebSocket;
 }
-declare module 'renderer/services/renderer-web-socket.model' {
+declare module '@renderer/services/renderer-web-socket.model' {
   /**
    * The renderer's implementation of WebSocket is the browser-supplied WebSocket, which doesn't work in Node
    */
   export default WebSocket;
 }
-declare module 'extension-host/services/extension-host-web-socket.model' {
+declare module '@extension-host/services/extension-host-web-socket.model' {
   import ws from 'ws';
   /**
    * extension-host client uses ws as its WebSocket client, but the renderer can't use it. So we need to exclude it from the renderer webpack bundle like this.
    */
   export default ws;
 }
-declare module 'client/services/web-socket.factory' {
-  import { IWebSocket } from 'client/services/web-socket.interface';
+declare module '@client/services/web-socket.factory' {
+  import { IWebSocket } from '@client/services/web-socket.interface';
   /**
    * Creates a WebSocket for the renderer or extension host depending on where you're running
    * @returns WebSocket
    */
   export const createWebSocket: (url: string) => Promise<IWebSocket>;
 }
-declare module 'client/services/client-network-connector.service' {
+declare module '@client/services/client-network-connector.service' {
   import {
     ConnectionStatus,
     InternalEvent,
@@ -589,8 +590,8 @@ declare module 'client/services/client-network-connector.service' {
     InternalResponse,
     NetworkConnectorInfo,
     RequestRouter,
-  } from 'shared/data/internal-connection.model';
-  import INetworkConnector from 'shared/services/network-connector.interface';
+  } from '@shared/data/internal-connection.model';
+  import INetworkConnector from '@shared/services/network-connector.interface';
   /**
    * Handles the connection from the client to the server
    */
@@ -686,7 +687,7 @@ declare module 'client/services/client-network-connector.service' {
     private handleEventMessage;
   }
 }
-declare module 'main/services/server-network-connector.service' {
+declare module '@main/services/server-network-connector.service' {
   import {
     ConnectionStatus,
     InternalEvent,
@@ -697,8 +698,8 @@ declare module 'main/services/server-network-connector.service' {
     NetworkConnectorEventHandlers,
     NetworkConnectorInfo,
     RequestRouter,
-  } from 'shared/data/internal-connection.model';
-  import INetworkConnector from 'shared/services/network-connector.interface';
+  } from '@shared/data/internal-connection.model';
+  import INetworkConnector from '@shared/services/network-connector.interface';
   /**
    * Handles the endpoint and connections from the server to the clients
    */
@@ -828,15 +829,15 @@ declare module 'main/services/server-network-connector.service' {
     private handleEventMessage;
   }
 }
-declare module 'shared/services/network-connector.factory' {
-  import INetworkConnector from 'shared/services/network-connector.interface';
+declare module '@shared/services/network-connector.factory' {
+  import INetworkConnector from '@shared/services/network-connector.interface';
   /**
    * Creates a NetworkConnector for the client or the server depending on where you're running
    * @returns NetworkConnector
    */
   export const createNetworkConnector: () => Promise<INetworkConnector>;
 }
-declare module 'shared/services/connection.service' {
+declare module '@shared/services/connection.service' {
   /**
    * Handles setting up a connection to the electron backend and exchanging simple messages.
    * Do not use outside NetworkService.ts. For communication, use NetworkService.ts as it is an abstraction over this.
@@ -846,8 +847,8 @@ declare module 'shared/services/connection.service' {
     NetworkEventHandler,
     RequestHandler,
     RequestRouter,
-  } from 'shared/data/internal-connection.model';
-  import { ComplexResponse } from 'shared/utils/papi-util';
+  } from '@shared/data/internal-connection.model';
+  import { ComplexResponse } from '@shared/utils/papi-util';
   /**
    * Send a request to the server and resolve after receiving a response
    * @param requestType the type of request
@@ -884,9 +885,9 @@ declare module 'shared/services/connection.service' {
   /** Gets this connection's clientId */
   export const getClientId: () => number;
 }
-declare module 'shared/models/papi-network-event-emitter.model' {
-  import { PapiEventHandler } from 'shared/models/papi-event.model';
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+declare module '@shared/models/papi-network-event-emitter.model' {
+  import { PapiEventHandler } from '@shared/models/papi-event.model';
+  import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
   /**
    * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted.
    * Events on NetworkEventEmitters can be emitted across processes. They are coordinated between processes by their type.
@@ -924,21 +925,24 @@ declare module 'shared/models/papi-network-event-emitter.model' {
     dispose: () => void;
   }
 }
-declare module 'shared/services/network.service' {
+declare module '@shared/services/network.service' {
   /**
    * Handles requests, responses, subscriptions, etc. to the backend.
    * Likely shouldn't need/want to expose this whole service on papi,
    * but there are a few things that are exposed via papiNetworkService
    */
-  import { ClientConnectEvent, ClientDisconnectEvent } from 'shared/data/internal-connection.model';
+  import {
+    ClientConnectEvent,
+    ClientDisconnectEvent,
+  } from '@shared/data/internal-connection.model';
   import {
     ComplexRequest,
     ComplexResponse,
     RequestHandlerType,
     UnsubscriberAsync,
-  } from 'shared/utils/papi-util';
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
-  import { PapiEvent } from 'shared/models/papi-event.model';
+  } from '@shared/utils/papi-util';
+  import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+  import { PapiEvent } from '@shared/models/papi-event.model';
   /**
    * Args handler function for a request. Called when a request is handled.
    * The function should accept the spread of the contents array of the request as its parameters.
@@ -1037,8 +1041,8 @@ declare module 'shared/services/network.service' {
     getNetworkEvent: <T_1>(eventType: string) => PapiEvent<T_1>;
   };
 }
-declare module 'shared/services/command.service' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+declare module '@shared/services/command.service' {
+  import { UnsubscriberAsync } from '@shared/utils/papi-util';
   export type CommandTypes<TParams extends Array<any> = Array<any>, TReturn = any> = {
     params: TParams;
     returnType: TReturn;
@@ -1110,7 +1114,7 @@ declare module 'shared/services/command.service' {
     handler: CommandHandler<CommandHandlers[CommandName]>,
   ) => Promise<UnsubscriberAsync>;
 }
-declare module 'shared/data/web-view.model' {
+declare module '@shared/data/web-view.model' {
   import { ReactNode } from 'react';
   /**
    * Saved information used to recreate a tab.
@@ -1283,7 +1287,7 @@ declare module 'shared/data/web-view.model' {
     createNewIfNotFound?: boolean;
   };
 }
-declare module 'shared/utils/async-variable' {
+declare module '@shared/utils/async-variable' {
   /**
    * This class provides a convenient way for one task to wait on a variable that another task sets.
    */
@@ -1329,9 +1333,9 @@ declare module 'shared/utils/async-variable' {
     private complete;
   }
 }
-declare module 'shared/models/disposal.model' {
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+declare module '@shared/models/disposal.model' {
+  import { PapiEvent } from '@shared/models/papi-event.model';
+  import { UnsubscriberAsync } from '@shared/utils/papi-util';
   /** Require a `dispose` function */
   export interface Dispose {
     /** Release resources and notify dependent services when tearing down an object */
@@ -1353,13 +1357,13 @@ declare module 'shared/models/disposal.model' {
   /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
   export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
 }
-declare module 'shared/services/network-object.service' {
+declare module '@shared/services/network-object.service' {
   import {
     NetworkObject,
     DisposableNetworkObject,
     NetworkableObject,
     LocalObjectToProxyCreator,
-  } from 'shared/models/network-object.model';
+  } from '@shared/models/network-object.model';
   /**
    * Network objects are distributed objects within PAPI for TS/JS objects.
    * @see https://en.wikipedia.org/wiki/Distributed_object
@@ -1396,13 +1400,13 @@ declare module 'shared/services/network-object.service' {
   };
   export default networkObjectService;
 }
-declare module 'shared/models/network-object.model' {
+declare module '@shared/models/network-object.model' {
   import {
     Dispose,
     OnDidDispose,
     CannotHaveOnDidDispose,
     CanHaveOnDidDispose,
-  } from 'shared/models/disposal.model';
+  } from '@shared/models/disposal.model';
   /**
    * An object of this type is returned from {@link networkObjectService.get}.
    *
@@ -1454,18 +1458,18 @@ declare module 'shared/models/network-object.model' {
     networkObjectPromise: Promise<NetworkObject<T>>,
   ) => Partial<NetworkableObject>;
 }
-declare module 'shared/models/web-view-provider.model' {
+declare module '@shared/models/web-view-provider.model' {
   import {
     GetWebViewOptions,
     WebViewDefinition,
     SavedWebViewDefinition,
-  } from 'shared/data/web-view.model';
+  } from '@shared/data/web-view.model';
   import {
     DisposableNetworkObject,
     NetworkObject,
     NetworkableObject,
-  } from 'shared/models/network-object.model';
-  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
+  } from '@shared/models/network-object.model';
+  import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
   export interface IWebViewProvider extends NetworkableObject {
     /**
      * @param savedWebView filled out if an existing webview is being called for (matched by id).
@@ -1484,7 +1488,7 @@ declare module 'shared/models/web-view-provider.model' {
     extends DisposableNetworkObject<NetworkableObject>,
       Omit<WebViewProvider, 'dispose'> {}
 }
-declare module 'shared/services/web-view-provider.service' {
+declare module '@shared/services/web-view-provider.service' {
   /**
    * Handles registering web view providers and serving web views around the papi.
    * Exposed on the papi.
@@ -1493,7 +1497,7 @@ declare module 'shared/services/web-view-provider.service' {
     DisposableWebViewProvider,
     IWebViewProvider,
     WebViewProvider,
-  } from 'shared/models/web-view-provider.model';
+  } from '@shared/models/web-view-provider.model';
   /**
    * Indicate if we are aware of an existing web view provider with the given type. If a web view
    * provider with the given type is somewhere else on the network, this function won't tell you about
@@ -1532,8 +1536,8 @@ declare module 'shared/services/web-view-provider.service' {
   };
   export default webViewProviderService;
 }
-declare module 'shared/services/web-view.service' {
-  import { Unsubscriber } from 'shared/utils/papi-util';
+declare module '@shared/services/web-view.service' {
+  import { Unsubscriber } from '@shared/utils/papi-util';
   import { MutableRefObject } from 'react';
   import {
     AddWebViewEvent,
@@ -1546,7 +1550,7 @@ declare module 'shared/services/web-view.service' {
     GetWebViewOptions,
     WebViewDefinition,
     SavedWebViewDefinition,
-  } from 'shared/data/web-view.model';
+  } from '@shared/data/web-view.model';
   import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
   /** rc-dock's onLayoutChange prop made asynchronous - resolves */
   export type OnLayoutChangeRCDock = (
@@ -1576,7 +1580,7 @@ declare module 'shared/services/web-view.service' {
     testLayout: LayoutBase;
   };
   /** Event that emits with webView info when a webView is added */
-  export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+  export const onDidAddWebView: import('@shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
   /**
    * Basic `saveTabInfo` that simply strips the properties added by {@link TabInfo} off of the object
    * and returns it as a {@link SavedTabInfo}. Runs as the {@link TabSaver} by default if the tab type
@@ -1619,11 +1623,11 @@ declare module 'shared/services/web-view.service' {
   export const initialize: () => Promise<void>;
   export const registerWebViewProvider: (
     webViewType: string,
-    webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
-  ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+    webViewProvider: import('@shared/models/web-view-provider.model').IWebViewProvider,
+  ) => Promise<import('@shared/models/web-view-provider.model').DisposableWebViewProvider>;
   /** All the exports in this service that are to be exposed on the PAPI */
   export const papiWebViewService: {
-    onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+    onDidAddWebView: import('@shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
     getWebView: (
       webViewType: WebViewType,
       layout?: Layout,
@@ -1632,20 +1636,20 @@ declare module 'shared/services/web-view.service' {
     initialize: () => Promise<void>;
     registerWebViewProvider: (
       webViewType: string,
-      webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
-    ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+      webViewProvider: import('@shared/models/web-view-provider.model').IWebViewProvider,
+    ) => Promise<import('@shared/models/web-view-provider.model').DisposableWebViewProvider>;
   };
 }
-declare module 'shared/services/internet.service' {
+declare module '@shared/services/internet.service' {
   const internetService: {
     fetch: typeof fetch;
   };
   export default internetService;
 }
-declare module 'shared/models/data-provider.model' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import { PapiEventHandler } from 'shared/models/papi-event.model';
-  import { NetworkableObject } from 'shared/models/network-object.model';
+declare module '@shared/models/data-provider.model' {
+  import { UnsubscriberAsync } from '@shared/utils/papi-util';
+  import { PapiEventHandler } from '@shared/models/papi-event.model';
+  import { NetworkableObject } from '@shared/models/network-object.model';
   /** Various options to adjust how the data provider subscriber emits updates */
   export type DataProviderSubscriberOptions = {
     /**
@@ -1847,9 +1851,9 @@ declare module 'shared/models/data-provider.model' {
   >(fnName: string): DataTypeNames<TDataTypes>;
   export default DataProviderInternal;
 }
-declare module 'shared/models/data-provider.interface' {
-  import DataProviderInternal, { DataProviderDataTypes } from 'shared/models/data-provider.model';
-  import { DisposableNetworkObject, NetworkObject } from 'shared/models/network-object.model';
+declare module '@shared/models/data-provider.interface' {
+  import DataProviderInternal, { DataProviderDataTypes } from '@shared/models/data-provider.model';
+  import { DisposableNetworkObject, NetworkObject } from '@shared/models/network-object.model';
   /**
    * An object on the papi that manages data and has methods for interacting with that data.
    * Created by the papi and layers over an IDataProviderEngine provided by an extension.
@@ -1871,14 +1875,14 @@ declare module 'shared/models/data-provider.interface' {
     TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
   > = DisposableNetworkObject<Omit<IDataProvider<TDataTypes>, 'dispose'>>;
 }
-declare module 'shared/models/data-provider-engine.model' {
+declare module '@shared/models/data-provider-engine.model' {
   import {
     DataProviderDataTypes,
     DataProviderGetters,
     DataProviderUpdateInstructions,
     DataProviderSetters,
-  } from 'shared/models/data-provider.model';
-  import { NetworkableObject } from 'shared/models/network-object.model';
+  } from '@shared/models/data-provider.model';
+  import { NetworkableObject } from '@shared/models/network-object.model';
   /**
    * Method to run to send clients updates for a specific data type outside of the `set<data_type>` method.
    * papi overwrites this function on the DataProviderEngine itself to emit an update after running
@@ -1993,16 +1997,16 @@ declare module 'shared/models/data-provider-engine.model' {
       Partial<WithNotifyUpdate<TDataTypes>>;
   export default IDataProviderEngine;
 }
-declare module 'shared/services/data-provider.service' {
+declare module '@shared/services/data-provider.service' {
   /**
    * Handles registering data providers and serving data around the papi.
    * Exposed on the papi.
    */
-  import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
-  import { DataProviderDataTypes } from 'shared/models/data-provider.model';
+  import IDataProvider, { IDisposableDataProvider } from '@shared/models/data-provider.interface';
+  import { DataProviderDataTypes } from '@shared/models/data-provider.model';
   import IDataProviderEngine, {
     DataProviderEngineNotifyUpdate,
-  } from 'shared/models/data-provider-engine.model';
+  } from '@shared/models/data-provider-engine.model';
   /**
    * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes.
    * If a data provider engine class extends this class, it doesn't have to specify its own
@@ -2097,46 +2101,46 @@ declare module 'shared/services/data-provider.service' {
   };
   export default dataProviderService;
 }
-declare module 'shared/services/papi.service' {
+declare module '@shared/services/papi.service' {
   /**
    * Unified module for accessing API features in extensions.
    *
    * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
    */
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
-  import * as commandService from 'shared/services/command.service';
-  import * as papiUtil from 'shared/utils/papi-util';
+  import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+  import * as commandService from '@shared/services/command.service';
+  import * as papiUtil from '@shared/utils/papi-util';
   const papi: {
     EventEmitter: typeof PapiEventEmitter;
     fetch: typeof fetch;
     commands: typeof commandService;
     util: typeof papiUtil;
     webViews: {
-      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/web-view.model').AddWebViewEvent
+      onDidAddWebView: import('@shared/models/papi-event.model').PapiEvent<
+        import('@shared/data/web-view.model').AddWebViewEvent
       >;
       getWebView: (
         webViewType: string,
-        layout?: import('shared/data/web-view.model').Layout,
-        options?: import('shared/data/web-view.model').GetWebViewOptions,
+        layout?: import('@shared/data/web-view.model').Layout,
+        options?: import('@shared/data/web-view.model').GetWebViewOptions,
       ) => Promise<string | undefined>;
       initialize: () => Promise<void>;
       registerWebViewProvider: (
         webViewType: string,
-        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
-      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+        webViewProvider: import('@shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('@shared/models/web-view-provider.model').DisposableWebViewProvider>;
     };
     network: {
-      onDidClientConnect: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/internal-connection.model').ClientConnectEvent
+      onDidClientConnect: import('@shared/models/papi-event.model').PapiEvent<
+        import('@shared/data/internal-connection.model').ClientConnectEvent
       >;
-      onDidClientDisconnect: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/internal-connection.model').ClientDisconnectEvent
+      onDidClientDisconnect: import('@shared/models/papi-event.model').PapiEvent<
+        import('@shared/data/internal-connection.model').ClientDisconnectEvent
       >;
       createNetworkEventEmitter: <T>(eventType: string) => PapiEventEmitter<T>;
       getNetworkEvent: <T_1>(
         eventType: string,
-      ) => import('shared/models/papi-event.model').PapiEvent<T_1>;
+      ) => import('@shared/models/papi-event.model').PapiEvent<T_1>;
     };
     logger: import('electron-log').Logger & {
       default: import('electron-log').Logger;
@@ -2147,14 +2151,14 @@ declare module 'shared/services/papi.service' {
     dataProvider: {
       hasKnown: (providerName: string) => boolean;
       registerEngine: <
-        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+        TDataTypes extends import('@shared/models/data-provider.model').DataProviderDataTypes,
       >(
         providerName: string,
-        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes>,
+        dataProviderEngine: import('@shared/models/data-provider-engine.model').default<TDataTypes>,
       ) => Promise<
-        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes>
+        import('@shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes>
       >;
-      get: <T_2 extends import('shared/models/data-provider.interface').default<any>>(
+      get: <T_2 extends import('@shared/models/data-provider.interface').default<any>>(
         providerName: string,
       ) => Promise<T_2 | undefined>;
       decorators: {
@@ -2168,19 +2172,19 @@ declare module 'shared/services/papi.service' {
         };
       };
       DataProviderEngine: abstract new <
-        TDataTypes_1 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+        TDataTypes_1 extends import('@shared/models/data-provider.model').DataProviderDataTypes,
       >() => {
-        notifyUpdate: import('shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_1>;
+        notifyUpdate: import('@shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_1>;
       };
     };
   };
   export default papi;
 }
-declare module 'renderer/context/papi-context/test.context' {
+declare module '@renderer/context/papi-context/test.context' {
   const TestContext: import('react').Context<string>;
   export default TestContext;
 }
-declare module 'renderer/context/papi-context/index' {
+declare module '@renderer/context/papi-context/index' {
   /** All React contexts to be exposed on the papi */
   const papiContext: {
     TestContext: import('react').Context<string>;
@@ -2188,7 +2192,7 @@ declare module 'renderer/context/papi-context/index' {
   export default papiContext;
   export type PapiContext = typeof papiContext;
 }
-declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
+declare module '@renderer/hooks/papi-hooks/use-promise.hook' {
   /**
    * Awaits a promise and returns a loading value while the promise is unresolved
    * @param promiseFactoryCallback a function that returns the promise to await. If the promise resolves to null, the value will not change.
@@ -2210,8 +2214,8 @@ declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
   ) => [value: T, isLoading: boolean];
   export default usePromise;
 }
-declare module 'renderer/hooks/papi-hooks/use-event.hook' {
-  import { PapiEvent, PapiEventHandler } from 'shared/models/papi-event.model';
+declare module '@renderer/hooks/papi-hooks/use-event.hook' {
+  import { PapiEvent, PapiEventHandler } from '@shared/models/papi-event.model';
   /**
    * Adds an event handler to an event so the event handler runs when the event is emitted
    * @param event the event to subscribe to. Can be either a string or an Event
@@ -2228,8 +2232,8 @@ declare module 'renderer/hooks/papi-hooks/use-event.hook' {
   ) => void;
   export default useEvent;
 }
-declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
-  import { PapiEvent, PapiEventAsync, PapiEventHandler } from 'shared/models/papi-event.model';
+declare module '@renderer/hooks/papi-hooks/use-event-async.hook' {
+  import { PapiEvent, PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.model';
   /**
    * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler runs when the event is emitted
    * @param event the asynchronously (un)subscribing event to subscribe to. Can be either a string or an Event
@@ -2246,8 +2250,8 @@ declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
   ) => void;
   export default useEventAsync;
 }
-declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
-  import IDataProvider from 'shared/models/data-provider.interface';
+declare module '@renderer/hooks/papi-hooks/use-data-provider.hook' {
+  import IDataProvider from '@shared/models/data-provider.interface';
   /**
    * Gets a data provider with specified provider name
    * @param dataProviderSource string name of the data provider to get OR dataProvider (result of useDataProvider if you
@@ -2264,13 +2268,13 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
   ): T | undefined;
   export default useDataProvider;
 }
-declare module 'renderer/hooks/papi-hooks/use-data.hook' {
+declare module '@renderer/hooks/papi-hooks/use-data.hook' {
   import {
     DataProviderDataTypes,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import IDataProvider from 'shared/models/data-provider.interface';
+  } from '@shared/models/data-provider.model';
+  import IDataProvider from '@shared/models/data-provider.interface';
   type UseDataHook = {
     [DataType in string]: <TDataTypes extends DataProviderDataTypes, TDataType extends DataType>(
       dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
@@ -2324,8 +2328,8 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   const useData: UseDataHook;
   export default useData;
 }
-declare module 'renderer/hooks/papi-hooks/index' {
-  import useDataProvider from 'renderer/hooks/papi-hooks/use-data-provider.hook';
+declare module '@renderer/hooks/papi-hooks/index' {
+  import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
   /** All React hooks to be exposed on the papi */
   const papiHooks: {
     usePromise: <T>(
@@ -2334,31 +2338,31 @@ declare module 'renderer/hooks/papi-hooks/index' {
       preserveValue?: boolean,
     ) => [value: T, isLoading: boolean];
     useEvent: <T_1>(
-      event: string | import('shared/models/papi-event.model').PapiEvent<T_1> | undefined,
-      eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_1>,
+      event: string | import('@shared/models/papi-event.model').PapiEvent<T_1> | undefined,
+      eventHandler: import('@shared/models/papi-event.model').PapiEventHandler<T_1>,
     ) => void;
     useEventAsync: <T_2>(
       event:
         | string
-        | import('shared/models/papi-event.model').PapiEvent<T_2>
-        | import('shared/models/papi-event.model').PapiEventAsync<T_2>
+        | import('@shared/models/papi-event.model').PapiEvent<T_2>
+        | import('@shared/models/papi-event.model').PapiEventAsync<T_2>
         | undefined,
-      eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_2>,
+      eventHandler: import('@shared/models/papi-event.model').PapiEventHandler<T_2>,
     ) => void;
     useDataProvider: typeof useDataProvider;
     useData: {
       [x: string]: <
-        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+        TDataTypes extends import('@shared/models/data-provider.model').DataProviderDataTypes,
         TDataType extends string,
       >(
         dataProviderSource:
           | string
-          | import('shared/models/data-provider.interface').default<TDataTypes>
+          | import('@shared/models/data-provider.interface').default<TDataTypes>
           | undefined,
         selector: TDataTypes[TDataType]['selector'],
         defaultValue: TDataTypes[TDataType]['getData'],
         subscriberOptions?:
-          | import('shared/models/data-provider.model').DataProviderSubscriberOptions
+          | import('@shared/models/data-provider.model').DataProviderSubscriberOptions
           | undefined,
       ) => [
         TDataTypes[TDataType]['getData'],
@@ -2366,7 +2370,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
           | ((
               newData: TDataTypes[TDataType]['setData'],
             ) => Promise<
-              import('shared/models/data-provider.model').DataProviderUpdateInstructions<TDataTypes>
+              import('@shared/models/data-provider.model').DataProviderUpdateInstructions<TDataTypes>
             >)
           | undefined
         ),
@@ -2390,31 +2394,31 @@ declare module 'papi-frontend' {
           preserveValue?: boolean,
         ) => [value: T, isLoading: boolean];
         useEvent: <T_1>(
-          event: string | import('shared/models/papi-event.model').PapiEvent<T_1> | undefined,
-          eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_1>,
+          event: string | import('@shared/models/papi-event.model').PapiEvent<T_1> | undefined,
+          eventHandler: import('@shared/models/papi-event.model').PapiEventHandler<T_1>,
         ) => void;
         useEventAsync: <T_2>(
           event:
             | string
-            | import('shared/models/papi-event.model').PapiEvent<T_2>
-            | import('shared/models/papi-event.model').PapiEventAsync<T_2>
+            | import('@shared/models/papi-event.model').PapiEvent<T_2>
+            | import('@shared/models/papi-event.model').PapiEventAsync<T_2>
             | undefined,
-          eventHandler: import('shared/models/papi-event.model').PapiEventHandler<T_2>,
+          eventHandler: import('@shared/models/papi-event.model').PapiEventHandler<T_2>,
         ) => void;
-        useDataProvider: typeof import('renderer/hooks/papi-hooks/use-data-provider.hook').default;
+        useDataProvider: typeof import('@renderer/hooks/papi-hooks/use-data-provider.hook').default;
         useData: {
           [x: string]: <
-            TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+            TDataTypes extends import('@shared/models/data-provider.model').DataProviderDataTypes,
             TDataType extends string,
           >(
             dataProviderSource:
               | string
-              | import('shared/models/data-provider.interface').default<TDataTypes>
+              | import('@shared/models/data-provider.interface').default<TDataTypes>
               | undefined,
             selector: TDataTypes[TDataType]['selector'],
             defaultValue: TDataTypes[TDataType]['getData'],
             subscriberOptions?:
-              | import('shared/models/data-provider.model').DataProviderSubscriberOptions
+              | import('@shared/models/data-provider.model').DataProviderSubscriberOptions
               | undefined,
           ) => [
             TDataTypes[TDataType]['getData'],
@@ -2422,7 +2426,7 @@ declare module 'papi-frontend' {
               | ((
                   newData: TDataTypes[TDataType]['setData'],
                 ) => Promise<
-                  import('shared/models/data-provider.model').DataProviderUpdateInstructions<TDataTypes>
+                  import('@shared/models/data-provider.model').DataProviderUpdateInstructions<TDataTypes>
                 >)
               | undefined
             ),
@@ -2431,38 +2435,38 @@ declare module 'papi-frontend' {
         };
       };
     };
-    EventEmitter: typeof import('shared/models/papi-event-emitter.model').default;
+    EventEmitter: typeof import('@shared/models/papi-event-emitter.model').default;
     fetch: typeof fetch;
-    commands: typeof import('shared/services/command.service');
-    util: typeof import('shared/utils/papi-util');
+    commands: typeof import('@shared/services/command.service');
+    util: typeof import('@shared/utils/papi-util');
     webViews: {
-      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/web-view.model').AddWebViewEvent
+      onDidAddWebView: import('@shared/models/papi-event.model').PapiEvent<
+        import('@shared/data/web-view.model').AddWebViewEvent
       >;
       getWebView: (
         webViewType: string,
-        layout?: import('shared/data/web-view.model').Layout,
-        options?: import('shared/data/web-view.model').GetWebViewOptions,
+        layout?: import('@shared/data/web-view.model').Layout,
+        options?: import('@shared/data/web-view.model').GetWebViewOptions,
       ) => Promise<string | undefined>;
       initialize: () => Promise<void>;
       registerWebViewProvider: (
         webViewType: string,
-        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
-      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+        webViewProvider: import('@shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('@shared/models/web-view-provider.model').DisposableWebViewProvider>;
     };
     network: {
-      onDidClientConnect: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/internal-connection.model').ClientConnectEvent
+      onDidClientConnect: import('@shared/models/papi-event.model').PapiEvent<
+        import('@shared/data/internal-connection.model').ClientConnectEvent
       >;
-      onDidClientDisconnect: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/internal-connection.model').ClientDisconnectEvent
+      onDidClientDisconnect: import('@shared/models/papi-event.model').PapiEvent<
+        import('@shared/data/internal-connection.model').ClientDisconnectEvent
       >;
       createNetworkEventEmitter: <T_3>(
         eventType: string,
-      ) => import('shared/models/papi-event-emitter.model').default<T_3>;
+      ) => import('@shared/models/papi-event-emitter.model').default<T_3>;
       getNetworkEvent: <T_4>(
         eventType: string,
-      ) => import('shared/models/papi-event.model').PapiEvent<T_4>;
+      ) => import('@shared/models/papi-event.model').PapiEvent<T_4>;
     };
     logger: import('electron-log').Logger & {
       default: import('electron-log').Logger;
@@ -2473,14 +2477,14 @@ declare module 'papi-frontend' {
     dataProvider: {
       hasKnown: (providerName: string) => boolean;
       registerEngine: <
-        TDataTypes_1 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+        TDataTypes_1 extends import('@shared/models/data-provider.model').DataProviderDataTypes,
       >(
         providerName: string,
-        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes_1>,
+        dataProviderEngine: import('@shared/models/data-provider-engine.model').default<TDataTypes_1>,
       ) => Promise<
-        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes_1>
+        import('@shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes_1>
       >;
-      get: <T_5 extends import('shared/models/data-provider.interface').default<any>>(
+      get: <T_5 extends import('@shared/models/data-provider.interface').default<any>>(
         providerName: string,
       ) => Promise<T_5 | undefined>;
       decorators: {
@@ -2494,16 +2498,16 @@ declare module 'papi-frontend' {
         };
       };
       DataProviderEngine: abstract new <
-        TDataTypes_2 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+        TDataTypes_2 extends import('@shared/models/data-provider.model').DataProviderDataTypes,
       >() => {
-        notifyUpdate: import('shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_2>;
+        notifyUpdate: import('@shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_2>;
       };
     };
   };
   export default papi;
   export type Papi = typeof papi;
 }
-declare module 'shared/data/file-system.model' {
+declare module '@shared/data/file-system.model' {
   /**
    * Types to use with file system operations
    */
@@ -2517,8 +2521,8 @@ declare module 'shared/data/file-system.model' {
    */
   export type Uri = string;
 }
-declare module 'node/utils/util' {
-  import { Uri } from 'shared/data/file-system.model';
+declare module '@node/utils/util' {
+  import { Uri } from '@shared/data/file-system.model';
   export function resolveHtmlPath(htmlFileName: string): string;
   /**
    * Gets the platform-specific user appdata folder for this application
@@ -2539,8 +2543,8 @@ declare module 'node/utils/util' {
    */
   export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
 }
-declare module 'node/services/node-file-system.service' {
-  import { Uri } from 'shared/data/file-system.model';
+declare module '@node/services/node-file-system.service' {
+  import { Uri } from '@shared/data/file-system.model';
   /**
    * Reads a text file asynchronously
    * @param uri Uri of file
@@ -2579,7 +2583,7 @@ declare module 'node/services/node-file-system.service' {
    */
   export function readDir(uri: Uri, filter: (x: string) => boolean): Promise<DirectoryEntries>;
 }
-declare module 'node/utils/crypto-util' {
+declare module '@node/utils/crypto-util' {
   export function createUuid(): string;
   /**
    * Create a cryptographically secure nonce that is at least 128 bits long
@@ -2593,7 +2597,7 @@ declare module 'node/utils/crypto-util' {
    */
   export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
 }
-declare module 'node/models/execution-token.model' {
+declare module '@node/models/execution-token.model' {
   /** For now this is just for extensions, but maybe we will want to expand this in the future */
   export type ExecutionTokenType = 'extension';
   /** Execution tokens can be passed into API calls to provide context about their identity */
@@ -2605,8 +2609,8 @@ declare module 'node/models/execution-token.model' {
     getHash(): string;
   }
 }
-declare module 'node/services/execution-token.service' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
+declare module '@node/services/execution-token.service' {
+  import { ExecutionToken } from '@node/models/execution-token.model';
   /** This should be called when extensions are being loaded
    *  @param extensionName Name of the extension to register
    *  @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers.
@@ -2633,8 +2637,8 @@ declare module 'node/services/execution-token.service' {
   };
   export default executionTokenService;
 }
-declare module 'extension-host/services/extension-storage.service' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
+declare module '@extension-host/services/extension-storage.service' {
+  import { ExecutionToken } from '@node/models/execution-token.model';
   import { Buffer } from 'buffer';
   /** This is only intended to be called by the extension service.
    *  This service cannot call into the extension service or it causes a circular dependency.
@@ -2700,59 +2704,59 @@ declare module 'papi-backend' {
   const papi: {
     storage: {
       readTextFileFromInstallDirectory: (
-        token: import('node/models/execution-token.model').ExecutionToken,
+        token: import('@node/models/execution-token.model').ExecutionToken,
         fileName: string,
       ) => Promise<string>;
       readBinaryFileFromInstallDirectory: (
-        token: import('node/models/execution-token.model').ExecutionToken,
+        token: import('@node/models/execution-token.model').ExecutionToken,
         fileName: string,
       ) => Promise<Buffer>;
       readUserData: (
-        token: import('node/models/execution-token.model').ExecutionToken,
+        token: import('@node/models/execution-token.model').ExecutionToken,
         key: string,
       ) => Promise<string>;
       writeUserData: (
-        token: import('node/models/execution-token.model').ExecutionToken,
+        token: import('@node/models/execution-token.model').ExecutionToken,
         key: string,
         data: string,
       ) => Promise<void>;
       deleteUserData: (
-        token: import('node/models/execution-token.model').ExecutionToken,
+        token: import('@node/models/execution-token.model').ExecutionToken,
         key: string,
       ) => Promise<void>;
     };
-    EventEmitter: typeof import('shared/models/papi-event-emitter.model').default;
+    EventEmitter: typeof import('@shared/models/papi-event-emitter.model').default;
     fetch: typeof fetch;
-    commands: typeof import('shared/services/command.service');
-    util: typeof import('shared/utils/papi-util');
+    commands: typeof import('@shared/services/command.service');
+    util: typeof import('@shared/utils/papi-util');
     webViews: {
-      onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/web-view.model').AddWebViewEvent
+      onDidAddWebView: import('@shared/models/papi-event.model').PapiEvent<
+        import('@shared/data/web-view.model').AddWebViewEvent
       >;
       getWebView: (
         webViewType: string,
-        layout?: import('shared/data/web-view.model').Layout,
-        options?: import('shared/data/web-view.model').GetWebViewOptions,
+        layout?: import('@shared/data/web-view.model').Layout,
+        options?: import('@shared/data/web-view.model').GetWebViewOptions,
       ) => Promise<string | undefined>;
       initialize: () => Promise<void>;
       registerWebViewProvider: (
         webViewType: string,
-        webViewProvider: import('shared/models/web-view-provider.model').IWebViewProvider,
-      ) => Promise<import('shared/models/web-view-provider.model').DisposableWebViewProvider>;
+        webViewProvider: import('@shared/models/web-view-provider.model').IWebViewProvider,
+      ) => Promise<import('@shared/models/web-view-provider.model').DisposableWebViewProvider>;
     };
     network: {
-      onDidClientConnect: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/internal-connection.model').ClientConnectEvent
+      onDidClientConnect: import('@shared/models/papi-event.model').PapiEvent<
+        import('@shared/data/internal-connection.model').ClientConnectEvent
       >;
-      onDidClientDisconnect: import('shared/models/papi-event.model').PapiEvent<
-        import('shared/data/internal-connection.model').ClientDisconnectEvent
+      onDidClientDisconnect: import('@shared/models/papi-event.model').PapiEvent<
+        import('@shared/data/internal-connection.model').ClientDisconnectEvent
       >;
       createNetworkEventEmitter: <T>(
         eventType: string,
-      ) => import('shared/models/papi-event-emitter.model').default<T>;
+      ) => import('@shared/models/papi-event-emitter.model').default<T>;
       getNetworkEvent: <T_1>(
         eventType: string,
-      ) => import('shared/models/papi-event.model').PapiEvent<T_1>;
+      ) => import('@shared/models/papi-event.model').PapiEvent<T_1>;
     };
     logger: import('electron-log').Logger & {
       default: import('electron-log').Logger;
@@ -2763,14 +2767,14 @@ declare module 'papi-backend' {
     dataProvider: {
       hasKnown: (providerName: string) => boolean;
       registerEngine: <
-        TDataTypes extends import('shared/models/data-provider.model').DataProviderDataTypes,
+        TDataTypes extends import('@shared/models/data-provider.model').DataProviderDataTypes,
       >(
         providerName: string,
-        dataProviderEngine: import('shared/models/data-provider-engine.model').default<TDataTypes>,
+        dataProviderEngine: import('@shared/models/data-provider-engine.model').default<TDataTypes>,
       ) => Promise<
-        import('shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes>
+        import('@shared/models/data-provider.interface').IDisposableDataProvider<TDataTypes>
       >;
-      get: <T_2 extends import('shared/models/data-provider.interface').default<any>>(
+      get: <T_2 extends import('@shared/models/data-provider.interface').default<any>>(
         providerName: string,
       ) => Promise<T_2 | undefined>;
       decorators: {
@@ -2784,24 +2788,24 @@ declare module 'papi-backend' {
         };
       };
       DataProviderEngine: abstract new <
-        TDataTypes_1 extends import('shared/models/data-provider.model').DataProviderDataTypes,
+        TDataTypes_1 extends import('@shared/models/data-provider.model').DataProviderDataTypes,
       >() => {
-        notifyUpdate: import('shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_1>;
+        notifyUpdate: import('@shared/models/data-provider-engine.model').DataProviderEngineNotifyUpdate<TDataTypes_1>;
       };
     };
   };
   export default papi;
 }
-declare module 'extension-host/extension-types/extension-activation-context.model' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
+declare module '@extension-host/extension-types/extension-activation-context.model' {
+  import { ExecutionToken } from '@node/models/execution-token.model';
   /** An object of this type is passed into `activate()` for each extension during initialization */
   export type ExecutionActivationContext = {
     executionToken: ExecutionToken;
   };
 }
-declare module 'extension-host/extension-types/extension.interface' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+declare module '@extension-host/extension-types/extension.interface' {
+  import { UnsubscriberAsync } from '@shared/utils/papi-util';
+  import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
   /** Interface for all extensions to implement */
   export interface IExtension {
     /**

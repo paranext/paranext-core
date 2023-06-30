@@ -2,15 +2,19 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "baseUrl": "../../src",
+    "module": "ESNext",
     "declaration": true,
     "emitDeclarationOnly": true,
     "outFile": "papi.d.ts",
     // typeRoots should be all of root tsconfig.json's typeRoots but without extensions
-    "typeRoots": ["./node_modules/@types", "src/@types"]
+    "typeRoots": ["../../node_modules/@types", "../../src/@types"]
   },
   "files": [
     "../../src/renderer/services/papi-frontend.service.ts",
     "../../src/extension-host/services/papi-backend.service.ts",
     "../../src/extension-host/extension-types/extension.interface.ts"
-  ]
+  ],
+  "ts-node": {
+    "esm": true
+  }
 }

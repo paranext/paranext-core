@@ -13,7 +13,7 @@ import {
 import type { QuickVerseDataTypes } from 'quick-verse';
 import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'external-usfm-data-provider';
-import type { DataProviderDataType } from 'shared/models/data-provider.model';
+import type { DataProviderDataType } from '@shared/models/data-provider.model';
 import { Key, useCallback, useContext, useMemo, useState } from 'react';
 
 type Row = {

@@ -3,6 +3,8 @@
  */
 
 import fs from 'fs';
+import typescript from 'typescript';
+import escapeStringRegexp from 'escape-string-regexp';
 
 const start = performance.now();
 
@@ -17,9 +19,59 @@ papiDTS = papiDTS
   .replaceAll("'renderer/services/papi-frontend.service'", "'papi-frontend'")
   .replaceAll("'extension-host/services/papi-backend.service'", "'papi-backend'");
 
+// Fix all the path-aliased imports. For some reason, generating `papi.d.ts` removes the @ from path
+// aliases on module declarations and static imports but not on dynamic imports to other modules.
+// We want the modules to be named the same in core and extension development so we can share types
+// for things like extensible interfaces (see CommandHandlers in `command.service.ts` for example)
+// Get this tsconfig
+let tsconfig = typescript.parseConfigFileTextToJson(
+  'tsconfig.json',
+  fs.readFileSync('tsconfig.json', 'utf8'),
+);
+// If this tsconfig doesn't have paths, check parents for paths
+while (!tsconfig.config.compilerOptions.paths && tsconfig.config.extends) {
+  tsconfig = typescript.parseConfigFileTextToJson(
+    'tsconfig.json',
+    fs.readFileSync(tsconfig.config.extends, 'utf8'),
+  );
+}
+const {
+  config: {
+    compilerOptions: { paths },
+  },
+}: // The types don't really matter that much to us here
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+Record<string, any> = tsconfig;
+
+// Replace all module declarations and static imports for @ path aliases with the appropriate path
+// alias including @
+if (paths) {
+  Object.keys(paths).forEach((path) => {
+    if (!path.startsWith('@')) return;
+
+    const asteriskIndex = path.indexOf('*');
+    // Get the path alias without the * at the end
+    const pathAlias = path.substring(0, asteriskIndex);
+    // Get the path alias without the @ at the start
+    const pathAliasNoAt = pathAlias.substring(1);
+    // Regex-escaped path alias without @ to be used in a regex string
+    const pathAliasNoAtRegex = escapeStringRegexp(pathAliasNoAt);
+
+    // Add @ to the beginning of all the path aliases that had it removed
+
+    // For module declarations
+    papiDTS = papiDTS.replace(
+      new RegExp(`^(declare module ')(${pathAliasNoAtRegex})`, 'gm'),
+      '$1@$2',
+    );
+
+    // For static imports
+    papiDTS = papiDTS.replace(new RegExp(`( from ')(${pathAliasNoAtRegex})`, 'g'), '$1@$2');
+  });
+}
+
 // Remove all the @ from the @imports except @mui/material  - not sure why these show up
 // as they are all defined other than the css files and external modules
-papiDTS = papiDTS.replace(/'@(?!mui\/material)(.+)'/g, "'$1'");
 
 // Save the papi.d.ts file with edits
 fs.writeFileSync(PAPI_DTS_PATH, papiDTS);

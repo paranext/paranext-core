@@ -1,6 +1,7 @@
 {
   "name": "papi-dts",
   "version": "0.0.1",
+  "type": "module",
   "description": "TypeScript definitions for Paranext's PAPI",
   "homepage": "https://github.com/paranext/paranext-core/tree/main/lib/papi-dts",
   "bugs": {
@@ -43,6 +44,8 @@
       "prettier --ignore-path .eslintignore --single-quote --write"
     ]
   },
-  "dependencies": {},
-  "typeScriptVersion": "5.1.3"
+  "devDependencies": {
+    "escape-string-regexp": "^5.0.0",
+    "typescript": "^5.1.3"
+  }
 }
