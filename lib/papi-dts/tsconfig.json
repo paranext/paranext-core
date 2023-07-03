@@ -5,10 +5,18 @@
     "module": "ESNext",
     "declaration": true,
     "emitDeclarationOnly": true,
-    "outFile": "papi.d.ts"
+    "outFile": "papi.d.ts",
     // typeRoots should be all of root tsconfig.json's typeRoots but without extensions
+    // plus the src/declarations folder because these modules for some reason do not get picked up
+    "typeRoots": [
+      "./node_modules/@types",
+      "../../node_modules/@types",
+      "../../src/@types",
+      "../../src/declarations"
+    ]
   },
-  "files": [
+  "include": [
+    "../../src/declarations/*",
     "../../src/renderer/services/papi-frontend.service.ts",
     "../../src/extension-host/services/papi-backend.service.ts",
     "../../src/extension-host/extension-types/extension.interface.ts"
