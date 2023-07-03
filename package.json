@@ -41,7 +41,7 @@
   ],
   "main": "./src/main/main.ts",
   "scripts": {
-    "build": "concurrently \"npm:build:main\" \"npm:build:extension-host\" \"npm:build:renderer\" \"npm:build:types\" \"npm:build:extensions\" \"npm:build:data-release\"",
+    "build": "concurrently --kill-others-on-fail \"npm:build:main\" \"npm:build:extension-host\" \"npm:build:renderer\" \"npm:build:types\" \"npm:build:extensions\" \"npm:build:data-release\"",
     "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.main.prod.ts",
     "build:extension-host": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.extension-host.prod.ts",
     "build:extensions": "cd extensions && npm run build",
@@ -70,6 +70,7 @@
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
     "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
+    "stop": "ts-node stop-processes.mjs",
     "test": "jest",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build"
@@ -165,6 +166,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-storybook": "^0.6.12",
     "file-loader": "^6.2.0",
+    "fkill": "^8.1.0",
     "html-webpack-plugin": "^5.5.0",
     "husky": "^8.0.3",
     "identity-obj-proxy": "^3.0.0",
