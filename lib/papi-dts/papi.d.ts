@@ -1,6 +1,22 @@
 /// <reference types="react" />
 /// <reference types="node" />
 declare module 'papi-commands' {
+  /**
+     * Function types for each command available on the papi. Each extension can extend this interface
+     * to add commands that it registers on the papi.
+     *
+     * @example An extension can extend this interface to add types for the commands it registers by
+     * adding the following to its `.d.ts` file:
+     *
+     * ```typescript
+     * declare module 'papi-commands' {
+         export interface CommandHandlers {
+           'myExtension.myCommand1': (foo: string, bar: number) => string;
+           'myExtension.myCommand2': (foo: string) => Promise<void>;
+         }
+       }
+     * ```
+     */
   interface CommandHandlers {
     echo: (message: string) => string;
     echoRenderer: (message: string) => Promise<string>;
