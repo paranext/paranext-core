@@ -21,9 +21,10 @@ namespace Paranext.DataProvider.NetworkObjects
             ParatextGlobals.Initialize(dataFolderPath);
         }
 
-        protected override void StartDataProvider()
+        protected override Task StartDataProvider()
         {
             _scrText = ScrTextCollection.Find(_collectionName);
+            return Task.CompletedTask;
         }
 
         protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
