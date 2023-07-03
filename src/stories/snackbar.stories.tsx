@@ -9,7 +9,6 @@ const meta: Meta<typeof Snackbar> = {
   tags: ['autodocs'],
   argTypes: {
     isOpen: { control: 'boolean' },
-    message: { control: 'text' },
     autoHideDuration: { control: 'number' },
     className: { control: 'text' },
     /*
