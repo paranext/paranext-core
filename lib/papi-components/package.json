@@ -1,6 +1,7 @@
 {
   "name": "papi-components",
   "version": "0.0.1",
+  "type": "module",
   "description": "React components to use in Paranext - packaged to include styles sheets.",
   "license": "MIT",
   "homepage": "https://github.com/paranext/paranext-core/tree/main/lib/papi-components",
@@ -63,5 +64,8 @@
     "tslib": "^2.4.1",
     "typescript": "^5.1.3",
     "vite": "^4.3.9"
+  },
+  "dependencies": {
+    "@senojs/rollup-plugin-style-inject": "^0.2.3"
   }
 }
