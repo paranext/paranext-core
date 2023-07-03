@@ -11,7 +11,7 @@ import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import type { PeopleDataProvider } from 'hello-someone';
 import type { QuickVerseDataTypes } from 'quick-verse';
-import { CommandNames } from '@shared/services/command.service';
+import { CommandNames } from 'papi-commands';
 
 export const TAB_TYPE_BUTTONS = 'buttons';
 

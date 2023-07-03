@@ -9,6 +9,7 @@ const srcMainPath = path.join(srcPath, 'main');
 const srcExtensionHostPath = path.join(srcPath, 'extension-host');
 const srcRendererPath = path.join(srcPath, 'renderer');
 const srcSharedPath = path.join(srcPath, 'shared');
+const srcDeclarationsPath = path.join(srcPath, 'declarations');
 
 const releasePath = path.join(rootPath, 'release');
 const appPath = path.join(releasePath, 'app');
@@ -34,6 +35,7 @@ const webpackPaths = {
   srcExtensionHostPath,
   srcRendererPath,
   srcSharedPath,
+  srcDeclarationsPath,
   releasePath,
   appPath,
   appPackagePath,

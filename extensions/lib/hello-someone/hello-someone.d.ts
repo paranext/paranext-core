@@ -25,7 +25,7 @@ declare module 'hello-someone' {
   export type PeopleDataProvider = IDataProvider<PeopleDataTypes> & PeopleDataMethods;
 }
 
-declare module '@shared/services/command.service' {
+declare module 'papi-commands' {
   export interface CommandHandlers {
     'hello-someone.hello-someone': (name: string) => string;
     'hello-someone.echo-someone-renderer': (message: string) => Promise<string>;
