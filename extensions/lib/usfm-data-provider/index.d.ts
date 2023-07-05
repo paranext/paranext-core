@@ -1,7 +1,7 @@
 import type { DataProviderDataType } from 'shared/models/data-provider.model';
 import type IDataProvider from 'shared/models/data-provider.interface';
 
-declare module 'external-usfm-data-provider' {
+declare module 'usfm-data-provider' {
   // An enum might be nice here, but they don't serialize into messages properly
   export type Versification =
     | 'Unknown'

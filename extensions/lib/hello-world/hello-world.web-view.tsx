@@ -12,7 +12,7 @@ import {
 } from 'papi-components';
 import type { QuickVerseDataTypes } from 'quick-verse';
 import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
-import type { UsfmProviderDataTypes } from 'external-usfm-data-provider';
+import type { UsfmProviderDataTypes } from 'usfm-data-provider';
 import type { DataProviderDataType } from '@shared/models/data-provider.model';
 import { Key, useCallback, useContext, useMemo, useState } from 'react';
 
