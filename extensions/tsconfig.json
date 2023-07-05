@@ -15,10 +15,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "typeRoots": ["./node_modules/@types", "./dist", "../lib"],
-    "paths": {
-      "papi-extensions/*": ["./dist/*"]
-    },
+    "typeRoots": ["./node_modules/@types", "./lib", "../lib"],
     "experimentalDecorators": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
