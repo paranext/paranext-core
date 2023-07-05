@@ -17,10 +17,43 @@ import {
 // https://vitejs.dev/config/
 const webViewConfig = defineConfig(async ({ mode }) => {
   /** List of TypeScript WebView files to transpile */
-  const tsxWebViews = await getWebViewTsxPaths();
+  const tsxWebViewPaths = await getWebViewTsxPaths();
+  const tsxWebViewFileInfos = tsxWebViewPaths.map((webViewPath) => path.parse(webViewPath));
 
-  /** Tracks which entry file we're working with in determining the file name. */
-  let entryFileIndex = 0;
+  /** Tracks the last entry file vite worked with */
+  let lastRequestedWebViewFileInfoIndex = -1;
+
+  /**
+   * Get file information for either the current web view or the requested one
+   * @param webViewFileName if string, gets info for the web view file with this name.
+   * If undefined, gets info for the last-retrieved web view file.
+   * @param action description of what you're doing to log if there's a problem
+   * @returns file info for the last-retrieved or requested web view file
+   *
+   * Note: We aren't actually making sure all web views get accessed or that they get accessed
+   * evenly, which should theoretically be the case
+   */
+  function getWebViewFileInfo(webViewFileName: string | undefined, action: string) {
+    // if webViewFileName is undefined and we have not gotten a web view file yet, we don't know what web view to get. Error
+    if (webViewFileName === undefined && lastRequestedWebViewFileInfoIndex === -1) {
+      throw new Error(
+        `Error ${action} in Vite: Cannot get last requested web view file info as one has not been accessed!`,
+      );
+    }
+
+    // Get the corresponding webView file for this entry
+    const webViewFilePathIndex =
+      webViewFileName !== undefined
+        ? tsxWebViewFileInfos.findIndex(
+            (webViewFileInfo) => webViewFileInfo.name === webViewFileName,
+          )
+        : lastRequestedWebViewFileInfoIndex;
+    const webViewFileInfo = tsxWebViewFileInfos[webViewFilePathIndex];
+    console.log(`context: ${lastRequestedWebViewFileInfoIndex}: ${webViewFileInfo.name}`);
+    lastRequestedWebViewFileInfoIndex = webViewFilePathIndex;
+
+    return webViewFileInfo;
+  }
 
   return {
     plugins: [
@@ -34,28 +67,15 @@ const webViewConfig = defineConfig(async ({ mode }) => {
       // This project is a library as it is being used in Paranext
       lib: {
         // List each WebView file as an entry file because each needs to be transpiled
-        entry: tsxWebViews.map((webView) => path.resolve(__dirname, '../', webView)),
+        entry: tsxWebViewPaths.map((webView) => path.resolve(__dirname, '../', webView)),
         /**
          * Get the output file name for each WebView.
-         *
-         * WARNING: We're assuming the file name function runs in order. We will
-         * throw if we notice any issues with this assumption, but there is a
-         * possibility that two different WebViews named the same in two different
-         * files could get swapped if Vite doesn't play by our assumption.
          */
         fileName: (moduleFormat, entryName) => {
-          // Get the corresponding webView file for this entry
-          const webViewFilePath = tsxWebViews[entryFileIndex];
-          const webViewFileInfo = path.parse(webViewFilePath);
-          if (entryName !== webViewFileInfo.name)
-            throw new Error(
-              `Error building in Vite: entryName ${entryName} does not match WebView file name ${webViewFileInfo.name}! File path: ${webViewFilePath} entryFileIndex ${entryFileIndex}`,
-            );
-
-          // Set up the next call to this function to get the next WebView file
-          // Vite does not get the config every time it rebuilds during watching, so we need to wrap the index manually as
-          // Vite does not re-run the config and set the index back to zero
-          entryFileIndex = (entryFileIndex + 1) % tsxWebViews.length;
+          const webViewFileInfo = getWebViewFileInfo(entryName, 'determining entry file name');
+          // We should not need to get the last requested web view file. Only need to do so when
+          // chunking, so let's reset it here to make the chunking code less error-prone
+          lastRequestedWebViewFileInfoIndex = -1;
 
           // Put transpiled WebViews in a temp folder in the same directory as the original WebView
           return path.join(
@@ -71,6 +91,14 @@ const webViewConfig = defineConfig(async ({ mode }) => {
       rollupOptions: {
         // Do not bundle papi because it will be imported in Paranext
         external: paranextProvidedModules,
+        output: {
+          // Split code chunks into one file per webView. Extension WebViews must each be a single file
+          manualChunks: (id: string, { getModuleInfo }) => {
+            // If this is an entry file, it is the next web view file. Otherwise, bundle it into the previous web view file
+            const webViewFileName = getModuleInfo(id).isEntry ? path.parse(id).name : undefined;
+            return getWebViewFileInfo(webViewFileName, 'chunking').base;
+          },
+        },
       },
       // Bundle the sourcemap into the webview file since it will be injected as a string
       // into the main file
