@@ -35,6 +35,7 @@
     "@vitejs/plugin-react": "^3.1.0",
     "escape-string-regexp": "^5.0.0",
     "glob": "^10.2.2",
+    "papi-components": "file:../lib/papi-components",
     "papi-dts": "file:../lib/papi-dts",
     "patch-package": "^7.0.0",
     "rollup-plugin-import-manager": "^0.6.2",

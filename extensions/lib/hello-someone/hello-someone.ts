@@ -18,6 +18,8 @@ import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
+// @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
+import helloSomeoneReactWebView from './hello-someone.web-view';
 
 const { logger } = papi;
 logger.info('Hello Someone is importing!');
@@ -253,6 +255,25 @@ const peopleWebViewProvider: IWebViewProvider = {
   },
 };
 
+const peopleWebViewTypeReact = 'hello-someone.people-viewer-react';
+
+/**
+ * Simple web view provider that provides People web views when papi requests them
+ */
+const peopleWebViewProviderReact: IWebViewProvider = {
+  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== peopleWebViewTypeReact)
+      throw new Error(
+        `${peopleWebViewTypeReact} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+    return {
+      ...savedWebView,
+      title: 'People',
+      content: helloSomeoneReactWebView,
+    };
+  },
+};
+
 export async function activate(context: ExecutionActivationContext) {
   logger.info('Hello Someone is activating!');
 
@@ -264,6 +285,11 @@ export async function activate(context: ExecutionActivationContext) {
   const peopleWebViewProviderPromise = papi.webViews.registerWebViewProvider(
     peopleWebViewType,
     peopleWebViewProvider,
+  );
+
+  const peopleWebViewProviderReactPromise = papi.webViews.registerWebViewProvider(
+    peopleWebViewTypeReact,
+    peopleWebViewProviderReact,
   );
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
@@ -318,11 +344,13 @@ export async function activate(context: ExecutionActivationContext) {
   // For now, let's just make things easy and await the registration promises at the end so we don't hold everything else up
   const peopleDataProvider = await peopleDataProviderPromise;
   const peopleWebViewProviderResolved = await peopleWebViewProviderPromise;
+  const peopleWebViewProviderReactResolved = await peopleWebViewProviderReactPromise;
 
   const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
     (await Promise.all(unsubPromises)).concat([
       peopleDataProvider.dispose,
       peopleWebViewProviderResolved.dispose,
+      peopleWebViewProviderReactResolved.dispose,
     ]),
   );
   logger.info('Hello Someone is finished activating!');
