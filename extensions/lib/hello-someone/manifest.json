@@ -2,7 +2,7 @@
   "name": "hello-someone",
   "version": "0.0.1",
   "description": "Simple hello someone extension for Paranext",
-  "author": "TJ Couch",
+  "author": "Paranext",
   "license": "MIT",
   "main": "hello-someone.ts",
   "activationEvents": [

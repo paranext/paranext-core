@@ -2,7 +2,7 @@
   "name": "hello-world",
   "version": "0.0.1",
   "description": "Simple hello world extension for Paranext",
-  "author": "TJ Couch",
+  "author": "Paranext",
   "license": "MIT",
   "main": "hello-world.ts",
   "activationEvents": ["onCommand:hello-world.hello-world", "onCommand:hello-world.hello-exception"]
