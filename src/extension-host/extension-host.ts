@@ -65,12 +65,12 @@ networkService
   const testEH = await networkObjectService.set('test-extension-host', {
     getVerse: async () => {
       try {
-        const verse = await papi.fetch('https://bible-api.com/matthew+24:14');
-        const verseJson = await verse.json();
-        const results = `test-extension-host got verse: ${verseJson.text.replace(/\\n/g, '')}`;
+        const exampleData = await (await papi.fetch('https://www.example.com')).text();
+        const results = `test-extension-host got data: ${exampleData.substring(0, 100)}`;
         logger.info(results);
         return results;
       } catch (e) {
+        logger.error(`test-extension-host.getVerse() threw ${e}`);
         return getErrorMessage(e);
       }
     },
