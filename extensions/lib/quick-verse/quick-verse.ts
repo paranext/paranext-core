@@ -65,7 +65,7 @@ class QuickVerseDataProviderEngine
   verses: { [scrRef: string]: { text: string; isChanged?: boolean } } = {};
 
   /** Latest updated verse reference */
-  latestVerseRef = 'jhn 11:35';
+  latestVerseRef = 'JHN 11:35';
 
   usfmDataProviderPromise = papi.dataProvider.get<UsfmDataProvider>('usfm');
 
@@ -168,7 +168,7 @@ class QuickVerseDataProviderEngine
   getVerse = async (verseRef: string) => {
     // Just get notifications of updates with the 'notify' selector
     if (verseRef === 'notify') return undefined;
-    const selector = this.#getSelector(verseRef.trim());
+    const selector = this.#getSelector(verseRef);
 
     // Lookup the cached data first
     let responseVerse = this.verses[selector];
@@ -258,7 +258,7 @@ class QuickVerseDataProviderEngine
    * @returns selector for use internally
    */
   #getSelector(selector: string) {
-    const selectorL = selector.toLowerCase();
+    const selectorL = selector.toLowerCase().trim();
     return selectorL === 'latest' ? this.latestVerseRef : selectorL;
   }
 }
