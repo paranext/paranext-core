@@ -28,7 +28,7 @@ async function tryImports() {
 
   try {
     // This should always work because `fetch` is replaced with `papi.fetch`.
-    await fetch('https://bible-api.com/1%20thessalonians+5:16');
+    await fetch('https://www.example.com');
     logger.info('Evil: fetch is working.');
   } catch (e) {
     logger.error(`Evil: Error on fetch! ${e}`);
@@ -60,9 +60,8 @@ async function tryImports() {
 
   try {
     // This should always work.
-    const verse = await papi.fetch('https://bible-api.com/1%20thessalonians+5:16');
-    const verseJson = await verse.json();
-    logger.info(`Evil: could papi.fetch verse 1TH 5:16 "${verseJson.text.replace(/\n/g, '')}"`);
+    const genericFetch = await (await papi.fetch('https://www.example.com')).text();
+    logger.info(`Evil: could papi.fetch example.com "${genericFetch.substring(0, 100)}"`);
   } catch (e) {
     logger.error(`Evil: Error on papi.fetch! ${e}`);
   }

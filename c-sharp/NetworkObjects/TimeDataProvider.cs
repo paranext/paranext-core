@@ -16,7 +16,7 @@ namespace Paranext.DataProvider.NetworkObjects
         public TimeDataProvider(PapiClient papiClient)
             : base("current-time", papiClient) { }
 
-        protected override void StartDataProvider()
+        protected override Task StartDataProvider()
         {
             _timer.Elapsed += (_, _) =>
             {
@@ -24,6 +24,7 @@ namespace Paranext.DataProvider.NetworkObjects
             };
             _timer.AutoReset = true;
             _timer.Enabled = true;
+            return Task.CompletedTask;
         }
 
         protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)

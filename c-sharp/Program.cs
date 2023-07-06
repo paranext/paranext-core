@@ -23,20 +23,20 @@ public static class Program
                 return;
             }
 
-            if (!papi.RegisterRequestHandler(RequestType.AddOne, RequestAddOne))
+            if (!await papi.RegisterRequestHandler(RequestType.AddOne, RequestAddOne))
             {
                 Console.WriteLine("Paranext data provider could not register request handler");
                 return;
             }
 
             var tdp = new TimeDataProvider(papi);
-            tdp.RegisterDataProvider();
+            await tdp.RegisterDataProvider();
 
             var sdp = new UsfmDataProvider(papi, "assets", "WEB");
-            sdp.RegisterDataProvider();
+            await sdp.RegisterDataProvider();
 
             Console.WriteLine("Paranext data provider ready!");
-            papi.BlockUntilMessageHandlingComplete();
+            await papi.MessageHandlingCompleteTask;
             Console.WriteLine("Paranext data provider message handling complete");
         }
         finally

@@ -16,8 +16,6 @@ internal sealed class PapiClient : IDisposable
 {
     #region Delegates/Constants/Member variables
 
-    private const int CONNECT_TIMEOUT = 30000;
-    private const int DISCONNECT_TIMEOUT = 2000;
     private const int RECEIVE_BUFFER_LENGTH = 2048;
     private const int MAX_OUTGOING_MESSAGES = 10;
     private static readonly Encoding s_utf8WithoutBom = new UTF8Encoding();
@@ -29,10 +27,11 @@ internal sealed class PapiClient : IDisposable
     private readonly ConcurrentDictionary<int, IMessageHandler> _messageHandlersForMyRequests =
         new();
     private readonly ClientWebSocket _webSocket = new();
-    private readonly Thread _incomingMessageThread;
-    private readonly Thread _outgoingMessageThread;
-    private readonly ManualResetEventSlim _clientInitializationComplete = new(false);
-    private readonly ManualResetEventSlim _messagingComplete = new(false);
+    private readonly Task _incomingMessageTask;
+    private readonly Task _outgoingMessageTask;
+    private readonly TimeSpan _connectTimeout = TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _disconnectTimeout = TimeSpan.FromSeconds(2);
+    private readonly TaskCompletionSource<bool> _clientInitializationComplete = new();
     private readonly BlockingCollection<Message> _outgoingMessages = new(MAX_OUTGOING_MESSAGES);
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly CancellationToken _cancellationToken;
@@ -52,24 +51,20 @@ internal sealed class PapiClient : IDisposable
 
     public PapiClient()
     {
-        _incomingMessageThread = new(HandleIncomingMessages) { Name = "Incoming" };
-        _outgoingMessageThread = new(HandleOutgoingMessages) { Name = "Outgoing" };
-
         _cancellationToken = _cancellationTokenSource.Token;
-        _cancellationToken.Register(() =>
-        {
-            Console.WriteLine("Cancellation requested on " + Thread.CurrentThread.Name);
-        });
+
+        _incomingMessageTask = new Task(HandleIncomingMessages, _cancellationToken);
+        _outgoingMessageTask = new Task(HandleOutgoingMessages, _cancellationToken);
 
         _messageHandlersByMessageType[MessageType.Event] = new MessageHandlerEvent();
         _messageHandlersByMessageType[MessageType.InitClient] = new MessageHandlerInitClient(
             (int clientId) =>
             {
-                if (_clientInitializationComplete.IsSet)
+                if (_clientInitializationComplete.Task.IsCompletedSuccessfully)
                     throw new InvalidOperationException("Reinitializing client is not allowed");
 
                 _clientId = clientId;
-                _clientInitializationComplete.Set();
+                _clientInitializationComplete.TrySetResult(true);
             }
         );
         _messageHandlersByMessageType[MessageType.Request] =
@@ -104,8 +99,7 @@ internal sealed class PapiClient : IDisposable
         if (isDisposing)
         {
             _webSocket.Dispose();
-            _clientInitializationComplete.Dispose();
-            _messagingComplete.Dispose();
+            _clientInitializationComplete.Task.Dispose();
             _cancellationTokenSource.Dispose();
             _outgoingMessages.Dispose();
         }
@@ -121,9 +115,15 @@ internal sealed class PapiClient : IDisposable
     #region Properties
 
     /// <summary>
-    /// Gets whether connection is open to the server
+    /// Gets whether a connection is open to the server
     /// </summary>
     public bool Connected => !_isDisposed && _webSocket.State == WebSocketState.Open;
+
+    /// <summary>
+    /// Gets a task that completes once incoming and outgoing message handling is finished
+    /// </summary>
+    public Task MessageHandlingCompleteTask =>
+        _isDisposed ? Task.CompletedTask : Task.WhenAll(_incomingMessageTask, _outgoingMessageTask);
 
     #endregion
 
@@ -134,7 +134,7 @@ internal sealed class PapiClient : IDisposable
     /// If true is returned, then <see cref="DisconnectAsync"/> should be called before <see cref="Dispose"/> for a proper cleanup of resources.
     /// If false is returned, then there is no need to call <see cref="DisconnectAsync"/> before calling <see cref="Dispose"/>.
     /// </summary>
-    /// <returns><see cref="Task"/> will resolve to true if the connection initialized properly, false otherwise</returns>
+    /// <returns><see cref="Task"/> that will resolve to true if the connection initialized properly, false otherwise</returns>
     public async Task<bool> ConnectAsync()
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
@@ -142,10 +142,16 @@ internal sealed class PapiClient : IDisposable
         Console.WriteLine("PapiClient connecting");
 
         await _webSocket.ConnectAsync(s_connectionUri, _cancellationToken);
-        _incomingMessageThread.Start();
-        _outgoingMessageThread.Start();
+        _incomingMessageTask.Start();
+        _outgoingMessageTask.Start();
 
-        if (!_clientInitializationComplete.Wait(CONNECT_TIMEOUT))
+        if (
+            !await IsTaskCompleted(
+                _clientInitializationComplete.Task,
+                _connectTimeout,
+                _cancellationToken
+            )
+        )
         {
             Console.WriteLine("PapiClient did not connect");
             await DisconnectAsync();
@@ -168,10 +174,8 @@ internal sealed class PapiClient : IDisposable
 
         SignalToBeginGracefulDisconnect();
 
-        if (_incomingMessageThread.IsAlive && !_incomingMessageThread.Join(DISCONNECT_TIMEOUT))
-            Console.WriteLine("Incoming message thread did not shut down properly");
-        if (_outgoingMessageThread.IsAlive && !_outgoingMessageThread.Join(DISCONNECT_TIMEOUT))
-            Console.WriteLine("Outgoing message thread did not shut down properly");
+        if (!await IsTaskCompletedNoCancellation(MessageHandlingCompleteTask, _disconnectTimeout))
+            Console.WriteLine("Message handling tasks did not shut down properly");
 
         if (Connected)
         {
@@ -184,45 +188,13 @@ internal sealed class PapiClient : IDisposable
     }
 
     /// <summary>
-    /// Return once message handling is complete.
-    /// </summary>
-    public void BlockUntilMessageHandlingComplete()
-    {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
-
-        bool done = false;
-
-        while (!done)
-        {
-            Console.WriteLine("BlockUntilMessageHandlingComplete: checking thread state");
-
-            if (_incomingMessageThread.IsAlive)
-                _incomingMessageThread.Join();
-            Console.WriteLine($"Incoming thread state={_incomingMessageThread.ThreadState}");
-
-            if (_outgoingMessageThread.IsAlive)
-                _outgoingMessageThread.Join();
-            Console.WriteLine($"Outgoing thread state={_outgoingMessageThread.ThreadState}");
-
-            _messagingComplete.Wait(_cancellationToken);
-            Console.WriteLine($"Web socket state={_webSocket.State}");
-
-            done =
-                !_incomingMessageThread.IsAlive
-                && !_outgoingMessageThread.IsAlive
-                && _webSocket.State != WebSocketState.Open
-                && _webSocket.State != WebSocketState.Connecting;
-        }
-    }
-
-    /// <summary>
     /// Register a request handler with the server.
     /// </summary>
     /// <param name="requestType">The request type to register</param>
     /// <param name="requestHandler">Method that is called when a request of the specified type is received from the server</param>
     /// <param name="responseTimeoutInMs">Number of milliseconds to wait for the registration response to be received</param>
-    /// <returns>True if the registration was successful</returns>
-    public bool RegisterRequestHandler(
+    /// <returns><see cref="Task"/> that will resolve to true if registration was successful, false otherwise</returns>
+    public async Task<bool> RegisterRequestHandler(
         Enum<RequestType> requestType,
         Func<dynamic, ResponseToRequest> requestHandler,
         int responseTimeoutInMs = 1000
@@ -232,7 +204,8 @@ internal sealed class PapiClient : IDisposable
 
         Console.WriteLine($"Registering handler for request type {requestType}...");
         bool registrationSucceeded = false;
-        using ManualResetEventSlim registrationComplete = new(false);
+        TaskCompletionSource registrationSource = new();
+        using Task registrationTask = registrationSource.Task;
 
         var requestMessage = new MessageRequest(
             RequestType.RegisterRequest,
@@ -261,18 +234,17 @@ internal sealed class PapiClient : IDisposable
                     registrationSucceeded = true;
                 }
 
-                // ReSharper disable once AccessToDisposedClosure
-                registrationComplete.Set();
+                if (!registrationSource.TrySetResult())
+                    Console.WriteLine("Couldn't signal that registration is complete");
             }
         );
 
         QueueOutgoingMessage(requestMessage);
-        if (!registrationComplete.Wait(responseTimeoutInMs))
-        {
-            Console.WriteLine(
-                $"No response came back when registering request type \"{requestType}\""
-            );
-        }
+
+        var timeout = TimeSpan.FromMilliseconds(responseTimeoutInMs);
+        if (!await IsTaskCompleted(registrationTask, timeout, _cancellationToken))
+            Console.WriteLine($"No response when registering request type \"{requestType}\"");
+
         return registrationSucceeded;
     }
 
@@ -340,7 +312,7 @@ internal sealed class PapiClient : IDisposable
     private void SignalToBeginGracefulDisconnect()
     {
         Console.WriteLine(
-            $"SignalToBeginGracefulDisconnect: webSocketState={_webSocket.State}, closeStatus={_webSocket.CloseStatus}, closeStatusDescription=\"{_webSocket.CloseStatusDescription}\", currentThreadName={Thread.CurrentThread.Name}"
+            $"SignalToBeginGracefulDisconnect: webSocketState={_webSocket.State}, closeStatus={_webSocket.CloseStatus}, closeStatusDescription=\"{_webSocket.CloseStatusDescription}\""
         );
 
         // This should shut down the socket and messaging threads
@@ -350,12 +322,49 @@ internal sealed class PapiClient : IDisposable
         _outgoingMessages.CompleteAdding();
     }
 
-    #endregion
-
-    #region Private methods for the outgoing messaging thread to use exclusively
+    /// <summary>
+    /// Check if the given task has completed.  If not, give it until the timeout to complete.
+    /// </summary>
+    /// <param name="task">Task to verify</param>
+    /// <param name="timeout">How long to wait for the task to complete</param>
+    /// <returns><see cref="Task"/> that will resolve to true if the given task completed, false otherwise</returns>
+    private static Task<bool> IsTaskCompletedNoCancellation(Task task, TimeSpan timeout)
+    {
+        return IsTaskCompleted(task, timeout, CancellationToken.None);
+    }
 
     /// <summary>
-    /// Entry point for the outgoing messaging thread
+    /// Check if the given task has completed.  If not, give it until the timeout to complete.
+    /// </summary>
+    /// <param name="task">Task to verify</param>
+    /// <param name="timeout">How long to wait for the task to complete</param>
+    /// <param name="cancellationToken">Cancellation token that could interrupt waiting</param>
+    /// <returns><see cref="Task"/> that will resolve to true if the given task completed, false otherwise</returns>
+    private static async Task<bool> IsTaskCompleted(
+        Task task,
+        TimeSpan timeout,
+        CancellationToken cancellationToken
+    )
+    {
+        if (task.IsCompleted)
+            return true;
+
+        try
+        {
+            if (!cancellationToken.IsCancellationRequested)
+                await task.WaitAsync(timeout, cancellationToken);
+        }
+        catch (TimeoutException) { }
+
+        return task.IsCompleted;
+    }
+
+    #endregion
+
+    #region Private methods for the outgoing messaging task to use exclusively
+
+    /// <summary>
+    /// Entry point for the outgoing messaging task
     /// Pulls messages out of the queue and sends them to the server
     /// </summary>
     private async void HandleOutgoingMessages()
@@ -384,7 +393,6 @@ internal sealed class PapiClient : IDisposable
         catch (ObjectDisposedException) { }
         finally
         {
-            _messagingComplete.Set();
             Console.WriteLine(
                 $"PapiClient HandleOutgoingMessages finishing: cancel={_cancellationToken.IsCancellationRequested}, connected={Connected}"
             );
@@ -407,10 +415,10 @@ internal sealed class PapiClient : IDisposable
 
     #endregion
 
-    #region Private methods for the incoming messaging thread to use exclusively
+    #region Private methods for the incoming messaging task to use exclusively
 
     /// <summary>
-    /// Entry point for the incoming messaging thread
+    /// Entry point for the incoming messaging task
     /// Receives and processes messages coming from the server
     /// </summary>
     private async void HandleIncomingMessages()
@@ -446,7 +454,6 @@ internal sealed class PapiClient : IDisposable
         catch (ObjectDisposedException) { }
         finally
         {
-            _messagingComplete.Set();
             Console.WriteLine(
                 $"PapiClient HandleIncomingMessages finishing: cancel={_cancellationToken.IsCancellationRequested}, connected={Connected}"
             );
