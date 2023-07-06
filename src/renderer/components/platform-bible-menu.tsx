@@ -1,5 +1,4 @@
-import Grid from '@mui/material/Grid';
-import { MenuItem } from 'papi-components';
+import { GridMenu } from 'papi-components';
 import * as commandService from '@shared/services/command.service';
 import logger from 'electron-log';
 import './platform-bible-menu.css';
@@ -17,58 +16,67 @@ export default function PlatformBibleMenu() {
     logger.info(`command:echoExtensionHost '${command}'`);
   }
 
+  // TODO: Figure out how to pass "children" so the menu items can have text, icons, etc.
+
   return (
-    <Grid container spacing={0} className="multi-colum-menu" columns={4}>
-      <Grid item xs={1}>
-        <h3 className="menu">Project</h3>
-        <MenuItem
-          className="menu-item"
-          isDense
-          onClick={() => {
-            sendCommand('Download/Install Resources');
-          }}
-        >
-          Download/Install Resources...
-        </MenuItem>
-        <MenuItem
-          className="menu-item"
-          isDense
-          hasDivider
-          onClick={() => {
-            sendCommand('Open Text Collection');
-          }}
-        >
-          Open Text Collection...
-        </MenuItem>
-        <MenuItem
-          className="menu-item"
-          isDense
-          hasDivider
-          onClick={() => {
-            sendCommand('Settings');
-          }}
-        >
-          Settings...
-        </MenuItem>
-        <MenuItem className="menu-item" isDense onClick={onExit}>
-          Exit
-        </MenuItem>
-      </Grid>
-      <Grid item xs={1}>
-        <h3 className="menu">Window</h3>
-      </Grid>
-      <Grid item xs={1}>
-        <h3 className="menu">Layout</h3>
-      </Grid>
-      <Grid item xs={1}>
-        <h3 className="menu">Help</h3>
-        <MenuItem className="menu-item" isDense onClick={visitSupportPage}>
-          Visit Support.Bible
-        </MenuItem>
-        <MenuItem className="menu-item" isDense>
-          About Platform.Bible...
-        </MenuItem>
-      </Grid>
-    </Grid>
+    <GridMenu
+      columns={[
+        {
+          name: 'Project',
+          items: [
+            {
+              // name:'Download/Install Resources...'
+              onClick: () => {
+                sendCommand('Download/Install Resources');
+              },
+            },
+            {
+              // name:'Open Text Collection...'
+              hasDivider: true,
+              onClick: () => {
+                sendCommand('Open Text Collection');
+              },
+            },
+            {
+              // name:'Settings...'
+              hasDivider: true,
+              onClick: () => {
+                sendCommand('Settings');
+              },
+            },
+            {
+              // name:'Exit'
+              hasDivider: true,
+              onClick: () => {
+                onExit();
+              },
+            },
+          ],
+        },
+        {
+          name: 'Window',
+          items: [],
+        },
+        {
+          name: 'Layout',
+          items: [],
+        },
+        {
+          name: 'Help',
+          items: [
+            {
+              // name:'Visit Support.Bible'
+              onClick: () => {
+                visitSupportPage();
+              },
+            },
+            {
+              // name:'About Platform.Bible...'
+              onClick: () => {},
+            },
+          ],
+        },
+      ]}
+    />
   );
 }

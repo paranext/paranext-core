@@ -794,5 +794,30 @@ export declare function Table<R>({
   onScroll,
   className,
 }: TableProps<R>): import('react/jsx-runtime').JSX.Element;
+export type MenuColumn = {
+  /**
+   * The name of the menu (displayed as the column header).
+   */
+  name: string;
+  items: MenuItemProps[];
+};
+export type GridMenuProps = {
+  /**
+   * The columns to display on the dropdown menu.
+   */
+  columns: MenuColumn[];
+};
+export function GridMenu({ columns }: GridMenuProps): import('react/jsx-runtime').JSX.Element;
+export type ToolbarProps = {
+  /**
+   * The optional grid menu to display. If not specified, the "hamburger" menu will not display.
+   */
+  menu?: GridMenuProps;
+  /**
+   * The controls to include on the toolbar.
+   */
+  children?: ReactElement<any, any>;
+};
+export function Toolbar(props: ToolbarProps): import('react/jsx-runtime').JSX.Element;
 
 export {};

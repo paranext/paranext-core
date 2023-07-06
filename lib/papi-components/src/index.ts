@@ -10,6 +10,10 @@ export { default as TextField } from './text-field.component';
 export { default as Snackbar } from './snackbar.component';
 export { default as MenuItem } from './menu-item.component';
 export { default as Table } from './table.component';
+export type { MenuColumn, GridMenuProps } from './grid-menu.component';
+export { default as GridMenu } from './grid-menu.component';
+export type { ToolbarProps } from './toolbar.component';
+export { default as Toolbar } from './toolbar.component';
 export type {
   TableCalculatedColumn,
   TableCellClickArgs,

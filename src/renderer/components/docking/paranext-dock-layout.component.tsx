@@ -309,7 +309,7 @@ export default function ParanextDockLayout() {
 
   return (
     <>
-      <PlatformBibleToolbar referenceChanged={handleReferenceChanged} scrRef={scrRef} />
+      <PlatformBibleToolbar referenceChanged={handleReferenceChanged} scrRef={scrRef}/>
       <DockLayout
         ref={dockLayoutRef}
         groups={groups}
