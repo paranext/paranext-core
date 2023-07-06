@@ -262,20 +262,17 @@ export async function activate(context: ExecutionActivationContext) {
   );
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
-    papi.commands.registerCommand('hello-someone.hello-someone', (name: string) => {
+    papi.commands.registerCommand('helloSomeone.helloSomeone', (name: string) => {
       return `Hello ${name}!`;
     }),
-    papi.commands.registerCommand(
-      'hello-someone.echo-someone-renderer',
-      async (message: string) => {
-        return `echo-someone-renderer: ${await papi.commands.sendCommand(
-          'addThree',
-          2,
-          4,
-          6,
-        )}! ${message}`;
-      },
-    ),
+    papi.commands.registerCommand('helloSomeone.echoSomeoneRenderer', async (message: string) => {
+      return `echo-someone-renderer: ${await papi.commands.sendCommand(
+        'test.addThree',
+        2,
+        4,
+        6,
+      )}! ${message}`;
+    }),
   ];
 
   // Create a webview or get the existing webview if ours already exists

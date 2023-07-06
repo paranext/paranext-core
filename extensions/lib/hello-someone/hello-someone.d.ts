@@ -27,7 +27,7 @@ declare module 'hello-someone' {
 
 declare module 'papi-commands' {
   export interface CommandHandlers {
-    'hello-someone.hello-someone': (name: string) => string;
-    'hello-someone.echo-someone-renderer': (message: string) => Promise<string>;
+    'helloSomeone.helloSomeone': (name: string) => string;
+    'helloSomeone.echoSomeoneRenderer': (message: string) => Promise<string>;
   }
 }

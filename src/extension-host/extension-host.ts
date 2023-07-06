@@ -27,15 +27,15 @@ logger.warn('Extension host example warning');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
   // Set up test handlers
-  addMany: async (...nums: number[]) => {
+  'test.addMany': async (...nums: number[]) => {
     /* const start = performance.now(); */
-    /* const result = await papi.commands.sendCommand('addThree', 1, 4, 9); */
+    /* const result = await papi.commands.sendCommand('test.addThree', 1, 4, 9); */
     /* logger.info(
-      `addThree(...) = ${result} took ${performance.now() - start} ms`,
+      `test.addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return nums.reduce((acc, current) => acc + current, 0);
   },
-  throwErrorExtensionHost: async (message: string) => {
+  'test.throwErrorExtensionHost': async (message: string) => {
     throw new Error(`Test Error thrown in throwErrorExtensionHost command: ${message}`);
   },
 };

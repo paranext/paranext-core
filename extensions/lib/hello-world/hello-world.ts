@@ -83,8 +83,8 @@ export async function activate(): Promise<UnsubscriberAsync> {
   );
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
-    papi.commands.registerCommand('hello-world.hello-world', helloWorld),
-    papi.commands.registerCommand('hello-world.hello-exception', helloException),
+    papi.commands.registerCommand('helloWorld.helloWorld', helloWorld),
+    papi.commands.registerCommand('helloWorld.helloException', helloException),
   ];
 
   papi

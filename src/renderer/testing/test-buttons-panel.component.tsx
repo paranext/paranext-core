@@ -24,33 +24,33 @@ const test = async () => {
   return result;
 };
 
-const addOne = async (num: number) => commandService.sendCommand('addOne', num);
+const addOne = async (num: number) => commandService.sendCommand('test.addOne', num);
 
-const echo = commandService.createSendCommandFunction('echo');
+const echo = commandService.createSendCommandFunction('test.echo');
 
-const echoRenderer = commandService.createSendCommandFunction('echoRenderer');
+const echoRenderer = commandService.createSendCommandFunction('test.echoRenderer');
 
-const echoExtensionHost = commandService.createSendCommandFunction('echoExtensionHost');
+const echoExtensionHost = commandService.createSendCommandFunction('test.echoExtensionHost');
 
 const echoSomeoneRenderer = commandService.createSendCommandFunction(
-  'hello-someone.echo-someone-renderer',
+  'helloSomeone.echoSomeoneRenderer',
 );
 
-const addThree = commandService.createSendCommandFunction('addThree');
+const addThree = commandService.createSendCommandFunction('test.addThree');
 
-const addMany = commandService.createSendCommandFunction('addMany');
+const addMany = commandService.createSendCommandFunction('test.addMany');
 
-const helloWorld = commandService.createSendCommandFunction('hello-world.hello-world');
+const helloWorld = commandService.createSendCommandFunction('helloWorld.helloWorld');
 
-const throwErrorHelloWorld = commandService.createSendCommandFunction(
-  'hello-world.hello-exception',
+const throwErrorHelloWorld = commandService.createSendCommandFunction('helloWorld.helloException');
+
+const helloSomeone = commandService.createSendCommandFunction('helloSomeone.helloSomeone');
+
+const throwError = commandService.createSendCommandFunction('test.throwError');
+
+const throwErrorExtensionHost = commandService.createSendCommandFunction(
+  'test.throwErrorExtensionHost',
 );
-
-const helloSomeone = commandService.createSendCommandFunction('hello-someone.hello-someone');
-
-const throwError = commandService.createSendCommandFunction('throwError');
-
-const throwErrorExtensionHost = commandService.createSendCommandFunction('throwErrorExtensionHost');
 
 const executeMany = async <T,>(fn: () => Promise<T>) => {
   const numRequests = 10000;
@@ -196,7 +196,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echo('Echo Stuff'));
-            logger.info(`command:echo '${result}' took ${performance.now() - start} ms`);
+            logger.info(`command:test.echo '${result}' took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -210,7 +210,9 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echoRenderer('Echo Renderer Stuff'));
-            logger.info(`command:echoRenderer '${result}' took ${performance.now() - start} ms`);
+            logger.info(
+              `command:test.echoRenderer '${result}' took ${performance.now() - start} ms`,
+            );
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -225,7 +227,7 @@ export default function TestButtonsPanel() {
             const start = performance.now();
             const result = await runPromise(() => echoExtensionHost('Echo Extension Host Stuff'));
             logger.info(
-              `command:echoExtensionHost '${result}' took ${performance.now() - start} ms`,
+              `command:test.echoExtensionHost '${result}' took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {
@@ -243,7 +245,7 @@ export default function TestButtonsPanel() {
               echoSomeoneRenderer('Echo Someone Renderer Stuff'),
             );
             logger.info(
-              `command:hello-someone.echo-someone-renderer '${result}' took ${
+              `command:helloSomeone.echoSomeoneRenderer '${result}' took ${
                 performance.now() - start
               } ms`,
             );
@@ -260,7 +262,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addThree(1, 2, 3));
-            logger.info(`command:addThree ${result} took ${performance.now() - start} ms`);
+            logger.info(`command:test.addThree ${result} took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -274,7 +276,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
-            logger.info(`command:addMany ${result} took ${performance.now() - start} ms`);
+            logger.info(`command:test.addMany ${result} took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -289,7 +291,7 @@ export default function TestButtonsPanel() {
             runPromise(async () => {
               const addResult = await addOne(addOneResult);
               setAddOneResult(addResult);
-              return `C# addOne: ${addResult}`;
+              return `C# test.addOne: ${addResult}`;
             })
           }
           onContextMenu={(e) => {
@@ -305,7 +307,7 @@ export default function TestButtonsPanel() {
             const start = performance.now();
             const result = await runPromise(() => helloWorld());
             logger.info(
-              `command:hello-world.hello-world ${result} took ${performance.now() - start} ms`,
+              `command:helloWorld.helloWorld ${result} took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {
@@ -321,7 +323,7 @@ export default function TestButtonsPanel() {
             const start = performance.now();
             const result = await runPromise(() => helloSomeone('Paranext user'));
             logger.info(
-              `command:hello-someone.hello-someone ${result} took ${performance.now() - start} ms`,
+              `command:helloSomeone.helloSomeone ${result} took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {

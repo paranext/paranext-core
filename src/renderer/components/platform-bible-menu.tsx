@@ -6,7 +6,7 @@ import './platform-bible-menu.css';
 
 export default function PlatformBibleMenu() {
   const onExit = () => {
-    commandService.sendCommand('quit');
+    commandService.sendCommand('platform.quit');
   };
 
   const visitSupportPage = () => {
@@ -14,7 +14,7 @@ export default function PlatformBibleMenu() {
   };
 
   function sendCommand(command: string) {
-    logger.info(`command:echoExtensionHost '${command}'`);
+    logger.info(`command:test.echoExtensionHost '${command}'`);
   }
 
   return (

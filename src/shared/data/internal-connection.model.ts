@@ -16,6 +16,9 @@ export const CONNECTOR_INFO_DISCONNECTED = Object.freeze({
   clientId: CLIENT_ID_UNASSIGNED,
 });
 
+/** Prefix on requests that indicates that the request is a command */
+export const CATEGORY_COMMAND = 'command';
+
 /** Information about the network connector */
 export type NetworkConnectorInfo = Readonly<{
   clientId: number;

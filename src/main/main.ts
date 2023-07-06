@@ -28,26 +28,26 @@ import { CommandNames } from 'papi-commands';
 // This map should allow any functions because commands can be any function type
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
-  echo: async (message: string) => {
+  'test.echo': async (message: string) => {
     return message;
   },
-  echoRenderer: async (message: string) => {
+  'test.echoRenderer': async (message: string) => {
     /* const start = performance.now(); */
-    /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
+    /* const result =  */ await papi.commands.sendCommand('test.addThree', 1, 4, 9);
     /* logger.info(
-      `addThree(...) = ${result} took ${performance.now() - start} ms`,
+      `test.addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return message;
   },
-  echoExtensionHost: async (message: string) => {
-    await papi.commands.sendCommand('addMany', 3, 5, 7, 1, 4);
+  'test.echoExtensionHost': async (message: string) => {
+    await papi.commands.sendCommand('test.addMany', 3, 5, 7, 1, 4);
     return message;
   },
-  throwError: async (message: string) => {
+  'test.throwError': async (message: string) => {
     throw new Error(`Test Error thrown in throwError command: ${message}`);
   },
   // This is a temporary hack (per TJ) to allow the Exit menu to have a way to exit the app.
-  quit: async () => {
+  'platform.quit': async () => {
     app.exit();
   },
 };
@@ -73,7 +73,9 @@ async function main() {
 
   // Extension host test
   setTimeout(async () => {
-    logger.info(`Add Many (from EH): ${await papi.commands.sendCommand('addMany', 2, 5, 9, 7)}`);
+    logger.info(
+      `Add Many (from EH): ${await papi.commands.sendCommand('test.addMany', 2, 5, 9, 7)}`,
+    );
   }, 20000);
 
   // #region Start the renderer

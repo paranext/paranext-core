@@ -5,6 +5,9 @@ declare module 'papi-commands' {
      * Function types for each command available on the papi. Each extension can extend this interface
      * to add commands that it registers on the papi.
      *
+     * Note: Command names must consist of two string separated by at least one period. We recommend
+     * one period and lower camel case in case we expand the api in the future to allow dot notation.
+     *
      * @example An extension can extend this interface to add types for the commands it registers by
      * adding the following to its `.d.ts` file:
      *
@@ -18,14 +21,23 @@ declare module 'papi-commands' {
      * ```
      */
   interface CommandHandlers {
-    echo: (message: string) => string;
-    echoRenderer: (message: string) => Promise<string>;
-    echoExtensionHost: (message: string) => Promise<string>;
-    throwError: (message: string) => void;
-    quit: () => Promise<void>;
-    addMany: (...nums: number[]) => number;
-    throwErrorExtensionHost: (message: string) => void;
+    'test.echo': (message: string) => string;
+    'test.echoRenderer': (message: string) => Promise<string>;
+    'test.echoExtensionHost': (message: string) => Promise<string>;
+    'test.throwError': (message: string) => void;
+    'platform.quit': () => Promise<void>;
+    'test.addMany': (...nums: number[]) => number;
+    'test.throwErrorExtensionHost': (message: string) => void;
   }
+  /**
+   * Names for each command available on the papi. Automatically includes all extensions' commands
+   * that are added to {@link CommandHandlers}.
+   *
+   * Note: Command names must consist of two string separated by at least one period. We recommend
+   * one period and lower camel case in case we expand the api in the future to allow dot notation.
+   *
+   * @example 'platform.quit'
+   */
   type CommandNames = keyof CommandHandlers;
 }
 declare module 'shared/global-this.model' {
@@ -326,6 +338,8 @@ declare module 'shared/data/internal-connection.model' {
   export const CONNECTOR_INFO_DISCONNECTED: Readonly<{
     clientId: -1;
   }>;
+  /** Prefix on requests that indicates that the request is a command */
+  export const CATEGORY_COMMAND = 'command';
   /** Information about the network connector */
   export type NetworkConnectorInfo = Readonly<{
     clientId: number;
@@ -1071,8 +1085,8 @@ declare module 'shared/services/command.service' {
   import { CommandHandlers, CommandNames } from 'papi-commands';
   module 'papi-commands' {
     interface CommandHandlers {
-      addThree: typeof addThree;
-      squareAndConcat: typeof squareAndConcat;
+      'test.addThree': typeof addThree;
+      'test.squareAndConcat': typeof squareAndConcat;
     }
   }
   function addThree(a: number, b: number, c: number): Promise<number>;
@@ -1100,6 +1114,8 @@ declare module 'shared/services/command.service' {
   /**
    * Register a command on the papi to be handled here
    * @param commandName command name to register for handling here
+   *   - Note: Command names must consist of two string separated by at least one period. We recommend
+   *   one period and lower camel case in case we expand the api in the future to allow dot notation.
    * @param handler function to run when the command is invoked
    * @returns true if successfully registered, throws with error message if not
    */

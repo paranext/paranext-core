@@ -11,12 +11,14 @@ import {
   NetworkEventHandler,
   RequestHandler,
   RequestRouter,
+  CATEGORY_COMMAND,
 } from '@shared/data/internal-connection.model';
 import {
   aggregateUnsubscriberAsyncs,
   ComplexRequest,
   ComplexResponse,
   createSafeRegisterFn,
+  deserializeRequestType,
   RequestHandlerType,
   serializeRequestType,
   UnsubscriberAsync,
@@ -120,6 +122,35 @@ type RoutedRequestHandler<TParam = any, TReturn = any> =
   | ArgsRequestHandler<TParam[], TReturn>
   | ContentsRequestHandler<TParam, TReturn>
   | ComplexRequestHandler<TParam, TReturn>;
+
+// #region request type format validators
+
+/** Ensure the command name consists of two strings separated by at least one period */
+function validateCommandFormatting(commandName: string) {
+  if (!commandName)
+    throw new Error(`Invalid command name ${commandName}: must be a non-empty string`);
+  const periodIndex = commandName.indexOf('.');
+  if (periodIndex < 0)
+    throw new Error(`Invalid command name ${commandName}: must have at least one period`);
+  if (periodIndex === 0)
+    throw new Error(
+      `Invalid command name ${commandName}: must have non-empty string before a period`,
+    );
+  if (periodIndex >= commandName.length - 1)
+    throw new Error(
+      `Invalid command name ${commandName}: must have a non-empty string after a period`,
+    );
+}
+
+/** Check to make sure the request follows any request registration rules */
+function validateRequestTypeFormatting(requestType: string) {
+  const requestParts = deserializeRequestType(requestType);
+  if (requestParts.category === CATEGORY_COMMAND) {
+    validateCommandFormatting(requestParts.directive);
+  }
+}
+
+// #endregion
 
 // #region Private unsafe functions (do not call manually outside of initialization)
 
@@ -271,6 +302,8 @@ async function registerRequestHandlerUnsafe(
     throw Error(`requestType ${requestType} already has a local handler registered`);
   }
 
+  validateRequestTypeFormatting(requestType);
+
   // Check with the server if it already has a handler for this requestType
   if (isClient()) {
     // If we are the client, try to register with the server because server has all registrations
@@ -404,6 +437,8 @@ const registerRemoteRequestHandler = async (
   if (requestRegistrations.has(requestType)) {
     throw new Error(`requestType ${requestType} already has a remote handler registered`);
   }
+
+  validateRequestTypeFormatting(requestType);
 
   // Once we have checked that this is the first registration for this requestType, set up the handler
   requestRegistrations.set(requestType, {

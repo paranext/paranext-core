@@ -6,7 +6,7 @@
   "license": "MIT",
   "main": "hello-someone.ts",
   "activationEvents": [
-    "onCommand:hello-someone.hello-someone",
-    "onCommand:hello-someone.echo-someone-renderer"
+    "onCommand:helloSomeone.helloSomeone",
+    "onCommand:helloSomeone.echoSomeoneRenderer"
   ]
 }

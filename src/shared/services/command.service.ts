@@ -13,17 +13,15 @@ import {
 import { isClient, isRenderer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
 import { CommandHandlers, CommandNames } from 'papi-commands';
+import { CATEGORY_COMMAND } from '@shared/data/internal-connection.model';
 
 // Commands that this file supplies
 declare module 'papi-commands' {
   export interface CommandHandlers {
-    addThree: typeof addThree;
-    squareAndConcat: typeof squareAndConcat;
+    'test.addThree': typeof addThree;
+    'test.squareAndConcat': typeof squareAndConcat;
   }
 }
-
-/** Prefix on requests that indicates that the request is a command */
-const CATEGORY_COMMAND = 'command';
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -41,8 +39,8 @@ async function squareAndConcat(a: number, b: string) {
 // This map should allow any functions because commands can be any function type
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rendererCommandFunctions: { [CommandName in CommandNames]?: (...args: any[]) => any } = {
-  addThree,
-  squareAndConcat,
+  'test.addThree': addThree,
+  'test.squareAndConcat': squareAndConcat,
 };
 
 /**
@@ -65,6 +63,8 @@ const sendCommandUnsafe = async <CommandName extends CommandNames>(
  *
  * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use registerCommand
  * @param commandName command name to register for handling here
+ *   - Note: Command names must consist of two string separated by at least one period. We recommend
+ *   one period and lower camel case in case we expand the api in the future to allow dot notation.
  * @param handler function to run when the command is invoked
  * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
  */
@@ -111,10 +111,10 @@ export const initialize = () => {
 
     if (isClient()) {
       const start = performance.now();
-      sendCommandUnsafe('echo', 'Hi server!')
+      sendCommandUnsafe('test.echo', 'Hi server!')
         .then((response) =>
           logger.info(
-            'command:echo Response!!!',
+            'command:test.echo Response!!!',
             response,
             'Response time:',
             performance.now() - start,
@@ -156,6 +156,8 @@ export const createSendCommandFunction = <CommandName extends CommandNames>(
 /**
  * Register a command on the papi to be handled here
  * @param commandName command name to register for handling here
+ *   - Note: Command names must consist of two string separated by at least one period. We recommend
+ *   one period and lower camel case in case we expand the api in the future to allow dot notation.
  * @param handler function to run when the command is invoked
  * @returns true if successfully registered, throws with error message if not
  */

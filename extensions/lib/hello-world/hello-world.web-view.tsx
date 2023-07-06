@@ -62,7 +62,7 @@ globalThis.webViewComponent = function HelloWorld() {
       // Not using the promise's resolved value
       // eslint-disable-next-line no-promise-executor-return
       await new Promise<void>((resolve) => setTimeout(() => resolve(), 3000));
-      return papi.commands.sendCommand('echoRenderer', `From ${NAME}`);
+      return papi.commands.sendCommand('test.echoRenderer', `From ${NAME}`);
     }, []),
     'retrieving',
   );
