@@ -12,7 +12,6 @@ import {
   TableSortColumn,
   TableEditorProps,
 } from 'papi-components';
-import 'papi-components/dist/style.css';
 import { ChangeEvent, Key, ReactElement, UIEvent } from 'react';
 
 type Row = {
