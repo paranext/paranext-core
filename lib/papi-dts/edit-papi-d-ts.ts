@@ -16,18 +16,25 @@ let papiDTS = fs.readFileSync(PAPI_DTS_PATH, 'utf8');
 
 // Rename papi modules to 'papi-whatever' so extensions can import just 'papi-whatever'
 papiDTS = papiDTS
-  .replaceAll('"renderer/services/papi-frontend.service"', '"papi-frontend"')
-  .replaceAll('"extension-host/services/papi-backend.service"', '"papi-backend"');
+  .replace(
+    new RegExp(escapeStringRegexp('"renderer/services/papi-frontend.service"'), 'g'),
+    '"papi-frontend"',
+  )
+  .replace(
+    new RegExp(escapeStringRegexp('"extension-host/services/papi-backend.service"'), 'g'),
+    '"papi-backend"',
+  );
 
 // Fix all the path-aliased imports. For some reason, generating `papi.d.ts` removes the @ from path
 // aliases on module declarations and static imports but not on dynamic imports to other modules.
+// Though we could go either way, we will remove the @ on dynamic imports to avoid confusing core
 
 // Get this tsconfig
 let tsconfig = typescript.parseConfigFileTextToJson(
   'tsconfig.json',
   fs.readFileSync('tsconfig.json', 'utf8'),
 );
-// If this tsconfig doesn't have paths, check parents for paths
+// If this tsconfig doesn't have paths, check parents for paths until we find them
 while (!tsconfig.config.compilerOptions.paths && tsconfig.config.extends) {
   tsconfig = typescript.parseConfigFileTextToJson(
     'tsconfig.json',
@@ -42,30 +49,21 @@ const {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 Record<string, any> = tsconfig;
 
-// Replace all module declarations and static imports for @ path aliases with the appropriate path
-// alias including @
+// Replace all dynamic imports for @ path aliases with the path alias without @
 if (paths) {
   Object.keys(paths).forEach((path) => {
     if (!path.startsWith('@')) return;
 
     const asteriskIndex = path.indexOf('*');
-    // Get the path alias without the * at the end
+    // Get the path alias without the * at the end but with the @
     const pathAlias = path.substring(0, asteriskIndex);
     // Get the path alias without the @ at the start
     const pathAliasNoAt = pathAlias.substring(1);
     // Regex-escaped path alias without @ to be used in a regex string
     const pathAliasNoAtRegex = escapeStringRegexp(pathAliasNoAt);
 
-    // Add @ to the beginning of all the path aliases that had it removed
-
-    // For module declarations
-    papiDTS = papiDTS.replace(
-      new RegExp(`^(declare module ["'])(${pathAliasNoAtRegex})`, 'gm'),
-      '$1@$2',
-    );
-
-    // For static imports
-    papiDTS = papiDTS.replace(new RegExp(`( from ["'])(${pathAliasNoAtRegex})`, 'g'), '$1@$2');
+    // Remove @ to the beginning of all the dynamic import path aliases that left it in
+    papiDTS = papiDTS.replace(new RegExp(`(import\\(["'])@(${pathAliasNoAtRegex})`, 'g'), '$1$2');
   });
 }
 

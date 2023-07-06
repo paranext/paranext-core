@@ -27,6 +27,7 @@
   "types": "papi.d.ts",
   "scripts": {
     "build": "tsc && ts-node edit-papi-d-ts.ts && prettier --write papi.d.ts",
+    "build:fresh": "rimraf papi.tsbuildinfo && npm run build",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:staged": "lint-staged -q"
   },
@@ -46,6 +47,7 @@
   },
   "devDependencies": {
     "escape-string-regexp": "^5.0.0",
+    "rimraf": "^4.4.0",
     "typescript": "^5.1.3"
   }
 }
