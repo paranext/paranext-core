@@ -20,7 +20,7 @@ namespace Paranext.DataProvider.NetworkObjects
         /// <param name="networkObjectName">Services access this network object using this name</param>
         /// <param name="requestHandler">Function that will handle calls from services to this network object</param>
         /// <exception cref="Exception">Throws if the network object could not be registered properly</exception>
-        protected void RegisterNetworkObject(
+        protected async Task RegisterNetworkObject(
             string networkObjectName,
             Func<dynamic, ResponseToRequest> requestHandler
         )
@@ -29,10 +29,10 @@ namespace Paranext.DataProvider.NetworkObjects
             var getReqType = new Enum<RequestType>($"object:{networkObjectName}.get");
             var functionReqType = new Enum<RequestType>($"object:{networkObjectName}.function");
 
-            if (!PapiClient.RegisterRequestHandler(getReqType, HandleGet))
+            if (!await PapiClient.RegisterRequestHandler(getReqType, HandleGet))
                 throw new Exception($"Could not register GET for {networkObjectName}");
 
-            if (!PapiClient.RegisterRequestHandler(functionReqType, requestHandler))
+            if (!await PapiClient.RegisterRequestHandler(functionReqType, requestHandler))
                 throw new Exception($"Could not register FUNCTION for {networkObjectName}");
         }
 

@@ -88,10 +88,8 @@ export async function activate(): Promise<UnsubscriberAsync> {
   ];
 
   papi
-    .fetch('https://bible-api.com/matthew+24:14')
-    .then((res) => res.json())
-    .then((scr) => logger.info(scr.text.replace(/\n/g, '')))
-    .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
+    .fetch('https://www.example.com')
+    .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
   // Create webviews or get an existing webview if one already exists for this type
   // Note: here, we are using `existingId: '?'` to indicate we do not want to create a new webview

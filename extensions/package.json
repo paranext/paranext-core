@@ -11,7 +11,7 @@
     "build:types": "cd .. && npm run build:types",
     "start:vite1": "vite build --watch --config vite/vite-web-view.config.ts",
     "start:vite2": "vite build --watch --config vite/vite.config.ts",
-    "start:vite": "concurrently \"npm:start:vite1\" \"npm:start:vite2\"",
+    "start:vite": "concurrently --kill-others-on-fail \"npm:start:vite1\" \"npm:start:vite2\"",
     "start:core": "npm start",
     "start": "cd .. && npm start",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",

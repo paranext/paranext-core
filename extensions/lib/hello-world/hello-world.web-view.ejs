@@ -34,10 +34,8 @@
 
       // Test fetching
       papi
-        .fetch('https://bible-api.com/matthew+24:14')
-        .then((res) => res.json())
-        .then((scr) => logger.info(scr.text.replace(/\\n/g, '')))
-        .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
+        .fetch('https://www.example.com', { mode: 'no-cors' })
+        .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
       function HelloWorld() {
         const [myState, setMyState] = useState(0);
@@ -125,10 +123,8 @@
 
         // Test fetching
         papi
-          .fetch('https://bible-api.com/matthew+24:14')
-          .then((res) => res.json())
-          .then((scr) => logger.info(scr.text.replace(/\\n/g, '')))
-          .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
+          .fetch('https://www.example.com', { mode: 'no-cors' })
+          .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
       });
 
       //# sourceURL=hello-world.web-view.ejs

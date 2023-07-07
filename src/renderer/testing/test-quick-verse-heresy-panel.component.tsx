@@ -9,7 +9,7 @@ import { TextField } from 'papi-components';
 export const TAB_TYPE_QUICK_VERSE_HERESY = 'quick-verse-heresy';
 
 export function TestQuickVerseHeresyPanel() {
-  const [verseRef, setVerseRef] = useState<string>('John 11:35');
+  const [verseRef, setVerseRef] = useState<string>('JHN 11:35');
   // Displayed verse ref while debouncing the actual verse ref
   const [verseRefIntermediate, setVerseRefIntermediate] = useState<string>(verseRef);
   const setVerseRefDebounced = useMemo(

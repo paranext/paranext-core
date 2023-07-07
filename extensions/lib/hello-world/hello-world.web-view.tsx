@@ -8,7 +8,6 @@ import {
   Switch,
   TextField,
   Table,
-  TableTextEditor,
 } from 'papi-components';
 import type { QuickVerseDataTypes } from 'quick-verse';
 import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
@@ -45,10 +44,8 @@ const initializeRows = (): Row[] => {
 
 // Test fetching
 papi
-  .fetch('https://bible-api.com/matthew+24:14')
-  .then((res) => res.json())
-  .then((scr) => logger.info(scr.text.replace(/\\n/g, '')))
-  .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
+  .fetch('https://www.example.com', { mode: 'no-cors' })
+  .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
 globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
@@ -114,10 +111,8 @@ globalThis.webViewComponent = function HelloWorld() {
             logger.info(`${NAME} Button clicked!`);
             setMyState((myStateCurrent) => myStateCurrent + 1);
             papi
-              .fetch('https://bible-api.com/matthew+24:14')
-              .then((res) => res.json())
-              .then((scr) => logger.info(`Got it! ${scr.text.replace(/\\n/g, '')}`))
-              .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
+              .fetch('https://example.com', { mode: 'no-cors' })
+              .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
           }}
         >
           Hello World Button {myState}
@@ -163,12 +158,12 @@ globalThis.webViewComponent = function HelloWorld() {
             {
               key: 'title',
               name: 'Title',
-              renderEditCell: TableTextEditor<Row>,
+              editable: true,
             },
             {
               key: 'subtitle',
               name: 'Subtitle',
-              renderEditCell: TableTextEditor<Row>,
+              editable: true,
             },
           ]}
           rows={rows}

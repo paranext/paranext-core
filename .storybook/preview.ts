@@ -1,7 +1,5 @@
 import type { Preview } from '@storybook/react';
 
-import 'papi-components/dist/style.css';
-
 const preview: Preview = {
   parameters: {
     backgrounds: {

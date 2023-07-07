@@ -195,6 +195,10 @@ dotnet tool restore
 dotnet csharpier .
 ```
 
+## Thanks
+
+Some important decisions in this project were inspired by the work done in [Visual Studio Code](https://code.visualstudio.com/api). Thanks VS Code developers for some great ideas!
+
 ## License
 
 MIT © [SIL International](https://www.sil.org/)

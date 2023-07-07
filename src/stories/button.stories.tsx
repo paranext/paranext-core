@@ -1,6 +1,5 @@
 ﻿import type { Meta, StoryObj } from '@storybook/react';
 import { Button } from 'papi-components';
-import 'papi-components/dist/style.css';
 
 const meta: Meta<typeof Button> = {
   title: 'Basics/Button',

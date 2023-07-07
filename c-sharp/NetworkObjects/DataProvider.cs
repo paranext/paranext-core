@@ -43,10 +43,10 @@ namespace Paranext.DataProvider.NetworkObjects
         /// <summary>
         /// Register this data provider on the network so that other services can use it
         /// </summary>
-        public void RegisterDataProvider()
+        public async Task RegisterDataProvider()
         {
-            RegisterNetworkObject(DataProviderName, FunctionHandler);
-            StartDataProvider();
+            await RegisterNetworkObject(DataProviderName, FunctionHandler);
+            await StartDataProvider();
         }
 
         // An array of strings serialized as JSON will be sent here.
@@ -92,7 +92,7 @@ namespace Paranext.DataProvider.NetworkObjects
         /// <summary>
         /// Once a data provider has started, it should send out update events whenever its data changes.
         /// </summary>
-        protected abstract void StartDataProvider();
+        protected abstract Task StartDataProvider();
 
         /// <summary>
         /// Handle a request from a service using this data provider

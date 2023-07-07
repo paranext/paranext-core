@@ -10,7 +10,6 @@ export { default as TextField } from './text-field.component';
 export { default as Snackbar } from './snackbar.component';
 export { default as MenuItem } from './menu-item.component';
 export { default as Table } from './table.component';
-export { TableTextEditor } from './table.component';
 export type {
   TableCalculatedColumn,
   TableCellClickArgs,
