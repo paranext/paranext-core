@@ -5,7 +5,7 @@ import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import type { QuickVerseDataTypes, QuickVerseSetData } from 'quick-verse';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
-import { UsfmDataProvider } from '@extensions/external-usfm-data-provider';
+import type { UsfmDataProvider } from 'usfm-data-provider';
 
 const {
   logger,
