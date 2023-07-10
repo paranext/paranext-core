@@ -1,3 +1,4 @@
+import { ScrVers, VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
 import {
   Button,
@@ -94,13 +95,13 @@ globalThis.webViewComponent = function HelloWorld() {
 
   const [psalm1] = useData.Chapter<UsfmProviderDataTypes, 'Chapter'>(
     'usfm',
-    useMemo(() => ({ book: 'PSA', chapter: '1', verse: '1', versification: 'English' }), []),
+    useMemo(() => new VerseRef('PSA', '1', '1', ScrVers.English), []),
     'Loading Psalm 1...',
   );
 
   const [john11] = useData.Verse<UsfmProviderDataTypes, 'Verse'>(
     'usfm',
-    useMemo(() => ({ verseString: 'JHN 1:1' }), []),
+    useMemo(() => new VerseRef('JHN 1:1'), []),
     'Loading John 1:1...',
   );
 
