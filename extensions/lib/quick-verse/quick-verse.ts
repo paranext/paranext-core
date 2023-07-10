@@ -286,7 +286,7 @@ export async function activate(context: ExecutionActivationContext): Promise<Uns
   engine.heresyCount = storedHeresyCount;
 
   const quickVerseDataProvider = await papi.dataProvider.registerEngine<QuickVerseDataTypes>(
-    'quick-verse.quick-verse',
+    'quickVerse.quickVerse',
     engine,
   );
 

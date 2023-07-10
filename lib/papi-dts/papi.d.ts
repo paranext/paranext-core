@@ -2317,12 +2317,12 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * Usage: Specify the data type on the data provider with `useData.<data_type>` and use like any other
    * React hook. For example, `useData.Verse` lets you subscribe to verses from a data provider.
    *
-   * @example When subscribing to John 11:35 on the `'quick-verse.quick-verse'` data provider, we need
+   * @example When subscribing to John 11:35 on the `'quickVerse.quickVerse'` data provider, we need
    * to tell the useData.Verse hook what types we are using, so we use the QuickVerseDataTypes and specify
    * that we are using the 'Verse' data types as follows:
    * ```typescript
    * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
-   *   'quick-verse.quick-verse',
+   *   'quickVerse.quickVerse',
    *   'John 11:35',
    *   'Verse text goes here',
    * );

@@ -227,8 +227,8 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
 };
 papi.dataProvider.decorators.ignore(peopleDataProviderEngine.getPerson);
 
-const peopleWebViewType = 'hello-someone.people-viewer';
-const peopleWebViewIdKey = 'people-web-view-id';
+const peopleWebViewType = 'helloSomeone.peopleViewer';
+const peopleWebViewIdKey = 'peopleWebViewId';
 
 /**
  * Simple web view provider that provides People web views when papi requests them
@@ -252,7 +252,7 @@ export async function activate(context: ExecutionActivationContext) {
   logger.info('Hello Someone is activating!');
 
   const peopleDataProviderPromise = papi.dataProvider.registerEngine<PeopleDataTypes>(
-    'hello-someone.people',
+    'helloSomeone.people',
     peopleDataProviderEngine,
   );
 

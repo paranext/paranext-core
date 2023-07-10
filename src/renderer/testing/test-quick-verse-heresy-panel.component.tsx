@@ -29,7 +29,7 @@ export function TestQuickVerseHeresyPanel() {
   );
 
   const [heresyText, setHeresyText] = useData.Heresy<QuickVerseDataTypes, 'Heresy'>(
-    'quick-verse.quick-verse',
+    'quickVerse.quickVerse',
     verseRef,
     'Verse text goes here',
   );

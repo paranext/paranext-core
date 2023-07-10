@@ -19,7 +19,7 @@ logger.info('Hello world is importing!');
 
 const unsubscribers: UnsubscriberAsync[] = [];
 
-const htmlWebViewType = 'hello-world.html';
+const htmlWebViewType = 'helloWorld.html';
 
 /**
  * Simple web view provider that provides sample html web views when papi requests them
@@ -39,7 +39,7 @@ const htmlWebViewProvider: IWebViewProvider = {
   },
 };
 
-const reactWebViewType = 'hello-world.react';
+const reactWebViewType = 'helloWorld.react';
 
 /**
  * Simple web view provider that provides React web views when papi requests them
@@ -99,9 +99,7 @@ export async function activate(): Promise<UnsubscriberAsync> {
   papi.webViews.getWebView(htmlWebViewType, undefined, { existingId: '?' });
   papi.webViews.getWebView(reactWebViewType, undefined, { existingId: '?' });
 
-  const peopleDataProvider = await papi.dataProvider.get<PeopleDataProvider>(
-    'hello-someone.people',
-  );
+  const peopleDataProvider = await papi.dataProvider.get<PeopleDataProvider>('helloSomeone.people');
 
   if (peopleDataProvider) {
     // Test subscribing to a data provider

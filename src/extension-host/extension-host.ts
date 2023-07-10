@@ -66,15 +66,15 @@ networkService
 // #region network object test
 
 (async () => {
-  const testEH = await networkObjectService.set('test-extension-host', {
+  const testEH = await networkObjectService.set('testExtensionHost', {
     getVerse: async () => {
       try {
         const exampleData = await (await papi.fetch('https://www.example.com')).text();
-        const results = `test-extension-host got data: ${exampleData.substring(0, 100)}`;
+        const results = `testExtensionHost got data: ${exampleData.substring(0, 100)}`;
         logger.info(results);
         return results;
       } catch (e) {
-        logger.error(`test-extension-host.getVerse() threw ${e}`);
+        logger.error(`testExtensionHost.getVerse() threw ${e}`);
         return getErrorMessage(e);
       }
     },
@@ -82,7 +82,7 @@ networkService
 
   if (testEH) {
     testEH.onDidDispose(() => {
-      logger.info('test-extension-host disposed in extension-host');
+      logger.info('testExtensionHost disposed in extension-host');
     });
   }
 
@@ -92,13 +92,13 @@ networkService
 setTimeout(async () => {
   let testMain = await networkObjectService.get<{
     doStuff: (stuff: string) => Promise<string>;
-  }>('test-main');
+  }>('testMain');
   if (testMain) {
     testMain?.onDidDispose(async () => {
-      logger.info('test-main disposed in extension-host');
+      logger.info('testMain disposed in extension-host');
       testMain = undefined;
     });
-  } else logger.error('Could not get test-main from extension host');
+  } else logger.error('Could not get testMain from extension host');
 
   logger.info(`do stuff: ${await testMain?.doStuff('extension host things')}`);
 }, 5000);

@@ -65,7 +65,7 @@ globalThis.webViewComponent = function HelloWorld() {
   );
 
   const [latestVerseText] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
-    'quick-verse.quick-verse',
+    'quickVerse.quickVerse',
     'latest',
     'Loading latest Scripture text...',
   );
@@ -78,15 +78,15 @@ globalThis.webViewComponent = function HelloWorld() {
 
   const [name, setName] = useState('Bill');
 
-  const peopleDataProvider = useDataProvider<PeopleDataProvider>('hello-someone.people');
+  const peopleDataProvider = useDataProvider<PeopleDataProvider>('helloSomeone.people');
 
   const [personGreeting] = useData.Greeting<PeopleDataTypes, 'Greeting'>(
-    'hello-someone.people',
+    'helloSomeone.people',
     name,
     'Greeting loading',
   );
 
-  const [personAge] = useData.Age<PeopleDataTypes, 'Age'>('hello-someone.people', name, -1);
+  const [personAge] = useData.Age<PeopleDataTypes, 'Age'>('helloSomeone.people', name, -1);
 
   const [psalm1] = useData.Chapter<UsfmProviderDataTypes, 'Chapter'>(
     'usfm',

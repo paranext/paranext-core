@@ -275,23 +275,23 @@ async function main() {
 
   const testMain = {
     doStuff: (stuff: string) => {
-      const result = `test-main did stuff: ${stuff}!`;
+      const result = `testMain did stuff: ${stuff}!`;
       logger.info(result);
       return result;
     },
     dispose: () => {
-      logger.info('testMain.dispose() ran in test-main');
+      logger.info('testMain.dispose() ran in testMain');
       return Promise.resolve(true);
     },
   };
 
-  const testMainDisposer = await networkObjectService.set('test-main', testMain);
+  const testMainDisposer = await networkObjectService.set('testMain', testMain);
   testMain.doStuff('main things');
   testMainDisposer.onDidDispose(() => {
-    logger.info('test-main disposed in main message #1');
+    logger.info('testMain disposed in main message #1');
   });
   testMainDisposer.onDidDispose(() => {
-    logger.info('test-main disposed in main message #2');
+    logger.info('testMain disposed in main message #2');
   });
 
   setTimeout(testMainDisposer.dispose, 20000);
@@ -299,14 +299,14 @@ async function main() {
   setTimeout(async () => {
     let testExtensionHost = await networkObjectService.get<{
       getVerse: () => Promise<string>;
-    }>('test-extension-host');
+    }>('testExtensionHost');
     if (testExtensionHost) {
       logger.info(`get verse: ${await testExtensionHost.getVerse()}`);
       testExtensionHost.onDidDispose(() => {
-        logger.info('test-extension-host disposed in main');
+        logger.info('testExtensionHost disposed in main');
         testExtensionHost = undefined;
       });
-    } else logger.error('Could not get test-extension-host from main');
+    } else logger.error('Could not get testExtensionHost from main');
   }, 5000);
 
   // #endregion

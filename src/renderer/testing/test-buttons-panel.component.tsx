@@ -143,7 +143,7 @@ export default function TestButtonsPanel() {
 
   // Test a method on a data provider engine that isn't on the interface to see if you can actually do this
   const [hasTestedRandomMethod, setHasTestedRandomMethod] = useState(false);
-  const peopleDataProvider = useDataProvider<PeopleDataProvider>('hello-someone.people');
+  const peopleDataProvider = useDataProvider<PeopleDataProvider>('helloSomeone.people');
   if (!hasTestedRandomMethod && peopleDataProvider) {
     setHasTestedRandomMethod(true);
     (async () => {
@@ -168,7 +168,7 @@ export default function TestButtonsPanel() {
   // We need to tell the useData.Verse hook what types we are using, so we get the Verse data types
   // from the quick verse data types
   const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
-    'quick-verse.quick-verse',
+    'quickVerse.quickVerse',
     verseRef,
     'Verse text goes here',
   );
