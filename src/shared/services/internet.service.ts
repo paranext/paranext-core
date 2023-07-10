@@ -10,7 +10,12 @@ const papiFetch: typeof fetch = (...args) => {
   return fetchOriginal(...args);
 };
 
-const internetService = {
+// Declare an interface for the object we're exporting so that JSDoc comments propagate
+export interface InternetService {
+  fetch: typeof papiFetch;
+}
+
+const internetService: InternetService = {
   fetch: papiFetch,
 };
 export default internetService;
