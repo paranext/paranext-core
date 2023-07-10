@@ -22,6 +22,7 @@ import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
 import { wait } from '@shared/utils/util';
 import { CommandNames } from 'papi-commands';
+import { SerializedRequestType } from '@shared/utils/papi-util';
 
 // `main.ts`'s command handler declarations are in `command.service.ts` so they can be picked up
 // by papi-dts
@@ -46,9 +47,8 @@ const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
   'test.throwError': async (message: string) => {
     throw new Error(`Test Error thrown in throwError command: ${message}`);
   },
-  // This is a temporary hack (per TJ) to allow the Exit menu to have a way to exit the app.
   'platform.quit': async () => {
-    app.exit();
+    app.quit();
   },
 };
 
@@ -231,7 +231,7 @@ async function main() {
       ...args: any[]
     ) => Promise<unknown> | unknown;
   } = {
-    'electronAPI.env.test': (_event, message: string) => `From main.ts: test ${message}`,
+    'electronAPI:env.test': (_event, message: string) => `From main.ts: test ${message}`,
   };
 
   app
@@ -255,8 +255,9 @@ async function main() {
     .catch(logger.info);
 
   Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
-    networkService.registerRequestHandler(ipcHandle, async (...args: unknown[]) =>
-      handler({} as IpcMainInvokeEvent, ...args),
+    networkService.registerRequestHandler(
+      ipcHandle as SerializedRequestType,
+      async (...args: unknown[]) => handler({} as IpcMainInvokeEvent, ...args),
     );
   });
 

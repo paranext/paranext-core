@@ -6,6 +6,7 @@
 import cloneDeep from 'lodash/cloneDeep';
 import { isRenderer } from '@shared/utils/internal-util';
 import {
+  SerializedRequestType,
   Unsubscriber,
   aggregateUnsubscriberAsyncs,
   serializeRequestType,
@@ -542,7 +543,7 @@ export const initialize = () => {
     if (isRenderer()) {
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
       const unsubPromises = Object.entries(rendererRequestHandlers).map(([requestType, handler]) =>
-        networkService.registerRequestHandler(requestType, handler),
+        networkService.registerRequestHandler(requestType as SerializedRequestType, handler),
       );
 
       // Wait to successfully register all requests

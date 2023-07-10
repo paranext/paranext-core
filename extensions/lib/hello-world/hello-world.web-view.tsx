@@ -13,7 +13,7 @@ import type { QuickVerseDataTypes } from 'quick-verse';
 import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
 import { Key, useCallback, useContext, useMemo, useState } from 'react';
-import type { TimeDataType } from 'c-sharp-provider-test';
+import type { TimeDataTypes } from 'c-sharp-provider-test';
 
 type Row = {
   id: string;
@@ -70,9 +70,9 @@ globalThis.webViewComponent = function HelloWorld() {
     'Loading latest Scripture text...',
   );
 
-  const [currentTime] = useData.Time<TimeDataType, 'TimeData'>(
+  const [currentTime] = useData.Time<TimeDataTypes, 'TimeData'>(
     'current-time',
-    '*',
+    undefined,
     'Loading current time',
   );
 

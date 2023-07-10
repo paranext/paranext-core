@@ -1,8 +1,6 @@
 import type { DataProviderDataType } from 'shared/models/data-provider.model';
 import type IDataProvider from 'shared/models/data-provider.interface';
 
-// TODO: Move these types to quick-verse.ts and generate this file from quick-verse.ts in the future?
-
 declare module 'quick-verse' {
   export type QuickVerseSetData = string | { text: string; isHeresy: boolean };
 

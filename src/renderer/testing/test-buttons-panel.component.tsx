@@ -15,7 +15,7 @@ import type { QuickVerseDataTypes } from 'quick-verse';
 export const TAB_TYPE_BUTTONS = 'buttons';
 
 const testBase: (message: string) => Promise<string> =
-  networkService.createRequestFunction('electronAPI.env.test');
+  networkService.createRequestFunction('electronAPI:env.test');
 
 const test = async () => {
   /* const start = performance.now(); */

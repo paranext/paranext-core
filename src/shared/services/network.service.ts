@@ -20,6 +20,7 @@ import {
   createSafeRegisterFn,
   deserializeRequestType,
   RequestHandlerType,
+  SerializedRequestType,
   serializeRequestType,
   UnsubscriberAsync,
 } from '@shared/utils/papi-util';
@@ -60,7 +61,7 @@ const networkEventEmitters = new Map<
 /** Request handler that is a local function and can be handled locally */
 type LocalRequestRegistration<TParam, TReturn> = {
   registrationType: 'local';
-  requestType: string;
+  requestType: SerializedRequestType;
   handlerType: RequestHandlerType;
   handler: RoutedRequestHandler<TParam, TReturn> | RoutedRequestHandler<TParam[], TReturn>;
 };
@@ -68,7 +69,7 @@ type LocalRequestRegistration<TParam, TReturn> = {
 /** Request handler that is not on this network service and must be requested on the network. Server-only as clients will all just send to the server */
 type RemoteRequestRegistration = {
   registrationType: 'remote';
-  requestType: string;
+  requestType: SerializedRequestType;
   clientId: number;
 };
 
@@ -143,10 +144,10 @@ function validateCommandFormatting(commandName: string) {
 }
 
 /** Check to make sure the request follows any request registration rules */
-function validateRequestTypeFormatting(requestType: string) {
-  const requestParts = deserializeRequestType(requestType);
-  if (requestParts.category === CATEGORY_COMMAND) {
-    validateCommandFormatting(requestParts.directive);
+function validateRequestTypeFormatting(requestType: SerializedRequestType) {
+  const { category, directive } = deserializeRequestType(requestType);
+  if (category === CATEGORY_COMMAND) {
+    validateCommandFormatting(directive);
   }
 }
 
@@ -165,7 +166,7 @@ function validateRequestTypeFormatting(requestType: string) {
  * @returns promise that resolves with the response message
  */
 const requestRawUnsafe = async <TParam, TReturn>(
-  requestType: string,
+  requestType: SerializedRequestType,
   contents: TParam,
 ): Promise<ComplexResponse<TReturn>> => {
   if (!isInitialized)
@@ -202,7 +203,7 @@ const requestRawUnsafe = async <TParam, TReturn>(
  * @returns promise that resolves with the response message
  */
 const requestUnsafe = async <TParam extends Array<unknown>, TReturn>(
-  requestType: string,
+  requestType: SerializedRequestType,
   ...args: TParam
 ) => {
   if (!isInitialized)
@@ -224,7 +225,7 @@ const requestUnsafe = async <TParam extends Array<unknown>, TReturn>(
  * Likely will never need to be exported from this file. Just use registerRequestHandler, which returns a matching unsubscriber function that runs this.
  */
 async function unregisterRequestHandlerUnsafe(
-  requestType: string,
+  requestType: SerializedRequestType,
   handler: RoutedRequestHandler,
 ): Promise<boolean> {
   const requestRegistration = requestRegistrations.get(requestType);
@@ -272,22 +273,22 @@ async function unregisterRequestHandlerUnsafe(
  * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
  */
 async function registerRequestHandlerUnsafe(
-  requestType: string,
+  requestType: SerializedRequestType,
   handler: ArgsRequestHandler,
   handlerType?: RequestHandlerType,
 ): Promise<UnsubscriberAsync>;
 async function registerRequestHandlerUnsafe(
-  requestType: string,
+  requestType: SerializedRequestType,
   handler: ContentsRequestHandler,
   handlerType?: RequestHandlerType,
 ): Promise<UnsubscriberAsync>;
 async function registerRequestHandlerUnsafe(
-  requestType: string,
+  requestType: SerializedRequestType,
   handler: ComplexRequestHandler,
   handlerType?: RequestHandlerType,
 ): Promise<UnsubscriberAsync>;
 async function registerRequestHandlerUnsafe(
-  requestType: string,
+  requestType: SerializedRequestType,
   handler: RoutedRequestHandler,
   handlerType = RequestHandlerType.Args,
 ): Promise<UnsubscriberAsync> {
@@ -402,7 +403,7 @@ const createNetworkEventEmitterUnsafe = <T>(
  * @returns true if successfully unregistered, false otherwise
  */
 const unregisterRemoteRequestHandler = async (
-  requestType: string,
+  requestType: SerializedRequestType,
   clientId: number,
 ): Promise<boolean> => {
   const requestRegistration = requestRegistrations.get(requestType);
@@ -427,7 +428,7 @@ const unregisterRemoteRequestHandler = async (
  * @param clientId clientId of the client who wants to register the handler
  */
 const registerRemoteRequestHandler = async (
-  requestType: string,
+  requestType: SerializedRequestType,
   clientId: number,
 ): Promise<void> => {
   // TODO: Consider a good way to expose senderId in this scenario instead of just passing it as an argument.
@@ -458,7 +459,7 @@ const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
     throw new Error(`NetworkService cannot disconnect itself! clientId: ${clientId}`);
 
   // Collect which registrations are for that clientId
-  const requestTypesToRemove: string[] = [];
+  const requestTypesToRemove: SerializedRequestType[] = [];
   requestRegistrations.forEach((requestRegistration) => {
     if (
       requestRegistration.registrationType === 'remote' &&
@@ -493,7 +494,7 @@ let unsubscribeServerRequestHandlers: UnsubscriberAsync | undefined;
  * @returns promise of response to the request
  */
 const handleRequestLocal: RequestHandler = async <TParam, TReturn>(
-  requestType: string,
+  requestType: SerializedRequestType,
   incomingRequest: ComplexRequest<TParam>,
 ): Promise<ComplexResponse<TReturn>> => {
   const registration = requestRegistrations.get(requestType);
@@ -636,7 +637,8 @@ export const initialize = () => {
       onDidClientDisconnect(handleClientDisconnect);
 
       const registrationUnsubscribers = Object.entries(serverRequestHandlers).map(
-        ([requestType, handler]) => registerRequestHandlerUnsafe(requestType, handler),
+        ([requestType, handler]) =>
+          registerRequestHandlerUnsafe(requestType as SerializedRequestType, handler),
       );
       // Wait to successfully register all requests
       unsubscribeServerRequestHandlers = aggregateUnsubscriberAsyncs(
@@ -667,7 +669,7 @@ export const initialize = () => {
  * @returns promise that resolves with the response message
  */
 export const request = async <TParam extends Array<unknown>, TReturn>(
-  requestType: string,
+  requestType: SerializedRequestType,
   ...args: TParam
 ) => {
   await initialize();
@@ -688,22 +690,22 @@ const registerRequestHandlerInternal = createSafeRegisterFn(
  * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
  */
 export function registerRequestHandler(
-  requestType: string,
+  requestType: SerializedRequestType,
   handler: ArgsRequestHandler,
   handlerType?: RequestHandlerType,
 ): Promise<UnsubscriberAsync>;
 export function registerRequestHandler(
-  requestType: string,
+  requestType: SerializedRequestType,
   handler: ContentsRequestHandler,
   handlerType?: RequestHandlerType,
 ): Promise<UnsubscriberAsync>;
 export function registerRequestHandler(
-  requestType: string,
+  requestType: SerializedRequestType,
   handler: ComplexRequestHandler,
   handlerType?: RequestHandlerType,
 ): Promise<UnsubscriberAsync>;
 export function registerRequestHandler(
-  requestType: string,
+  requestType: SerializedRequestType,
   handler: RoutedRequestHandler,
   handlerType = RequestHandlerType.Args,
 ): Promise<UnsubscriberAsync> {
@@ -759,7 +761,7 @@ export const getNetworkEvent = <T>(eventType: string): PapiEvent<T> => {
  * @returns function to call with arguments of request that performs the request and resolves with the response contents
  */
 export const createRequestFunction = <TParam extends Array<unknown>, TReturn>(
-  requestType: string,
+  requestType: SerializedRequestType,
 ) => {
   return async (...args: TParam) => request<TParam, TReturn>(requestType, ...args);
 };

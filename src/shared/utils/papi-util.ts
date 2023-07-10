@@ -112,6 +112,8 @@ export function deepEqual(a: unknown, b: unknown) {
   return equal(a, b);
 }
 
+const REQUEST_TYPE_SEPARATOR = ':';
+
 /** Information about a request that tells us what to do with it */
 export type RequestType = {
   /** the general category of request */
@@ -120,7 +122,12 @@ export type RequestType = {
   directive: string;
 };
 
-const REQUEST_TYPE_SEPARATOR = ':';
+/**
+ * String version of a request type that tells us what to do with a request.
+ *
+ * Consists of two strings concatenated by a colon
+ */
+export type SerializedRequestType = `${string}${typeof REQUEST_TYPE_SEPARATOR}${string}`;
 
 /**
  * Create a request message requestType string from a category and a directive
@@ -128,7 +135,7 @@ const REQUEST_TYPE_SEPARATOR = ':';
  * @param directive specific identifier for this type of request
  * @returns full requestType for use in network calls
  */
-export function serializeRequestType(category: string, directive: string): string {
+export function serializeRequestType(category: string, directive: string): SerializedRequestType {
   if (!category) throw new Error('serializeRequestType: "category" is not defined or empty.');
   if (!directive) throw new Error('serializeRequestType: "directive" is not defined or empty.');
 
@@ -136,9 +143,16 @@ export function serializeRequestType(category: string, directive: string): strin
 }
 
 /** Split a request message requestType string into its parts */
-export function deserializeRequestType(requestType: string): RequestType {
-  const [category, ...directiveParts] = requestType.split(REQUEST_TYPE_SEPARATOR);
-  const directive = directiveParts.join(REQUEST_TYPE_SEPARATOR);
+export function deserializeRequestType(requestType: SerializedRequestType): RequestType {
+  if (!requestType) throw new Error('deserializeRequestType: must be a non-empty string');
+
+  const colonIndex = requestType.indexOf(REQUEST_TYPE_SEPARATOR);
+  if (colonIndex <= 0 || colonIndex >= requestType.length - 1)
+    throw new Error(
+      `deserializeRequestType: Must have two parts divided by a ${REQUEST_TYPE_SEPARATOR}`,
+    );
+  const category = requestType.substring(0, colonIndex);
+  const directive = requestType.substring(colonIndex + 1);
   return { category, directive };
 }
 

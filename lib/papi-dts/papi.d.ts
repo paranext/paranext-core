@@ -210,6 +210,7 @@ declare module 'shared/utils/papi-util' {
   }
   /** Check that two objects are deeply equal, comparing members of each object and such */
   export function deepEqual(a: unknown, b: unknown): boolean;
+  const REQUEST_TYPE_SEPARATOR = ':';
   /** Information about a request that tells us what to do with it */
   export type RequestType = {
     /** the general category of request */
@@ -218,14 +219,20 @@ declare module 'shared/utils/papi-util' {
     directive: string;
   };
   /**
+   * String version of a request type that tells us what to do with a request.
+   *
+   * Consists of two strings concatenated by a colon
+   */
+  export type SerializedRequestType = `${string}${typeof REQUEST_TYPE_SEPARATOR}${string}`;
+  /**
    * Create a request message requestType string from a category and a directive
    * @param category the general category of request
    * @param directive specific identifier for this type of request
    * @returns full requestType for use in network calls
    */
-  export function serializeRequestType(category: string, directive: string): string;
+  export function serializeRequestType(category: string, directive: string): SerializedRequestType;
   /** Split a request message requestType string into its parts */
-  export function deserializeRequestType(requestType: string): RequestType;
+  export function deserializeRequestType(requestType: SerializedRequestType): RequestType;
   /**
    * HTML Encodes the provided string.
    * Thanks to ChatGPT
@@ -329,7 +336,7 @@ declare module 'shared/data/internal-connection.model' {
    * Types that are internal to the communication we do through WebSocket.
    * These types should not need to be used outside of NetworkConnectors and ConnectionService.ts
    */
-  import { ComplexRequest, ComplexResponse } from 'shared/utils/papi-util';
+  import { ComplexRequest, ComplexResponse, SerializedRequestType } from 'shared/utils/papi-util';
   /** Represents when the client id has not been assigned by the server */
   export const CLIENT_ID_UNASSIGNED = -1;
   /** "Client id" for the server */
@@ -392,7 +399,7 @@ declare module 'shared/data/internal-connection.model' {
   ) => Promise<InternalResponse<TReturn>>;
   /** Handler for requests from the server */
   export type RequestHandler = <TParam, TReturn>(
-    requestType: string,
+    requestType: SerializedRequestType,
     request: ComplexRequest<TParam>,
   ) => Promise<ComplexResponse<TReturn>>;
   /** Function that returns a clientId to which to send the request based on the requestType */
@@ -978,6 +985,7 @@ declare module 'shared/services/network.service' {
     ComplexRequest,
     ComplexResponse,
     RequestHandlerType,
+    SerializedRequestType,
     UnsubscriberAsync,
   } from 'shared/utils/papi-util';
   import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
@@ -1021,7 +1029,7 @@ declare module 'shared/services/network.service' {
    * @returns promise that resolves with the response message
    */
   export const request: <TParam extends unknown[], TReturn>(
-    requestType: string,
+    requestType: SerializedRequestType,
     ...args: TParam
   ) => Promise<TReturn>;
   /**
@@ -1032,17 +1040,17 @@ declare module 'shared/services/network.service' {
    * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
    */
   export function registerRequestHandler(
-    requestType: string,
+    requestType: SerializedRequestType,
     handler: ArgsRequestHandler,
     handlerType?: RequestHandlerType,
   ): Promise<UnsubscriberAsync>;
   export function registerRequestHandler(
-    requestType: string,
+    requestType: SerializedRequestType,
     handler: ContentsRequestHandler,
     handlerType?: RequestHandlerType,
   ): Promise<UnsubscriberAsync>;
   export function registerRequestHandler(
-    requestType: string,
+    requestType: SerializedRequestType,
     handler: ComplexRequestHandler,
     handlerType?: RequestHandlerType,
   ): Promise<UnsubscriberAsync>;
@@ -1070,7 +1078,7 @@ declare module 'shared/services/network.service' {
    * @returns function to call with arguments of request that performs the request and resolves with the response contents
    */
   export const createRequestFunction: <TParam extends unknown[], TReturn>(
-    requestType: string,
+    requestType: SerializedRequestType,
   ) => (...args: TParam) => Promise<TReturn>;
   /** All the exports in this service that are to be exposed on the PAPI */
   export const papiNetworkService: {

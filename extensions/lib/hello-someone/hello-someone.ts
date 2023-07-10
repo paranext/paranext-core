@@ -266,7 +266,7 @@ export async function activate(context: ExecutionActivationContext) {
       return `Hello ${name}!`;
     }),
     papi.commands.registerCommand('helloSomeone.echoSomeoneRenderer', async (message: string) => {
-      return `echo-someone-renderer: ${await papi.commands.sendCommand(
+      return `echoSomeoneRenderer: ${await papi.commands.sendCommand(
         'test.addThree',
         2,
         4,
