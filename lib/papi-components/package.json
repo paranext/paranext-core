@@ -34,6 +34,7 @@
     "build": "npm run build:basic && npm run format:scripts && npm run lint:scripts && npm run format:styles && npm run lint:styles",
     "watch": "tsc && vite build --watch",
     "lint:scripts": "eslint . --ext .ts",
+    "postinstall": "cd ../.. && npm install --ignore-scripts",
     "lint:styles": "stylelint ./**/*.{css,scss}",
     "format:scripts": "prettier . --write",
     "format:styles": "stylelint ./**/*.{css,scss} --fix"
