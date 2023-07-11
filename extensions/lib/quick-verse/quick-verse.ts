@@ -1,3 +1,4 @@
+import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-backend';
 import type { ExecutionToken } from 'node/models/execution-token.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
@@ -179,7 +180,7 @@ class QuickVerseDataProviderEngine
       try {
         const usfmDataProvider = await this.usfmDataProviderPromise;
         if (!usfmDataProvider) throw Error('Unable to get USFM data provider');
-        const verseData = usfmDataProvider.getVerse({ verseString: selector });
+        const verseData = usfmDataProvider.getVerse(new VerseRef(selector));
         responseVerse = { text: (await verseData) ?? `${selector} not found` };
         // Cache the verse text, track the latest cached verse, and send an update
         this.verses[selector] = responseVerse;

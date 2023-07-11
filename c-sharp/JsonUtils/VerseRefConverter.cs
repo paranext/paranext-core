@@ -38,53 +38,43 @@ namespace Paranext.DataProvider.JsonUtils
 
             ScrVers? versification = null;
             if (parsedArgs.TryGetValue("versification", out var versificationText))
-                versification = new ScrVers(versificationText.Value<string>());
+                if (versificationText is JObject versificationObject)
+                {
+                    if (versificationObject.TryGetValue("_type", out var versificationType))
+                        versification = new ScrVers((ScrVersType)versificationType.Value<int>());
+                    else if (versificationObject.TryGetValue("name", out var versificationName))
+                        versification = new ScrVers(versificationName.Value<string>());
+                }
+                else
+                    versification = new ScrVers(versificationText.Value<string>());
 
-            if (parsedArgs.TryGetValue("verseString", out var verseString))
-            {
-                verseRef =
-                    (versification != null)
-                        ? new VerseRef(verseString.Value<string>(), versification)
-                        : new VerseRef(verseString.Value<string>());
-                return true;
-            }
-
-            if (parsedArgs.TryGetValue("bookChapterVerse", out var bookChapterVerse))
-            {
-                verseRef =
-                    (versification != null)
-                        ? new VerseRef(bookChapterVerse.Value<int>(), versification)
-                        : new VerseRef(bookChapterVerse.Value<int>());
-                return true;
-            }
-
-            if (!parsedArgs.ContainsKey("book"))
+            if (!parsedArgs.ContainsKey("book") && !parsedArgs.ContainsKey("_bookNum"))
             {
                 errorMessage = $"Invalid VerseRef ({jsonString}): No recognized properties";
                 return false;
             }
 
-            if (parsedArgs["book"]!.Type == JTokenType.Integer)
+            if (parsedArgs.ContainsKey("_bookNum"))
             {
                 verseRef =
                     (versification != null)
                         ? new VerseRef(
-                            parsedArgs["book"]!.Value<int>(),
-                            parsedArgs["chapter"]!.Value<int>(),
-                            parsedArgs["verse"]!.Value<int>(),
+                            parsedArgs["_bookNum"]!.Value<int>(),
+                            parsedArgs["_chapterNum"]!.Value<int>(),
+                            parsedArgs["_verseNum"]!.Value<int>(),
                             versification
                         )
                         : new VerseRef(
-                            parsedArgs["book"]!.Value<int>(),
-                            parsedArgs["chapter"]!.Value<int>(),
-                            parsedArgs["verse"]!.Value<int>()
+                            parsedArgs["_bookNum"]!.Value<int>(),
+                            parsedArgs["_chapterNum"]!.Value<int>(),
+                            parsedArgs["_verseNum"]!.Value<int>()
                         );
             }
             else
             {
                 if (versification == null)
                     throw new Exception(
-                        "Versification required when book, chapter, and verse are strings"
+                        "Versification required with book, chapter, and verse strings"
                     );
                 verseRef = new VerseRef(
                     parsedArgs["book"]!.Value<string>(),
