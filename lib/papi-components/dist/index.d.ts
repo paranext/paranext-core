@@ -3,6 +3,7 @@
 import {
   AutocompleteChangeDetails,
   AutocompleteChangeReason,
+  AutocompleteValue,
   SnackbarCloseReason,
   SnackbarOrigin,
 } from '@mui/material';
@@ -127,9 +128,10 @@ export declare function Checkbox({
   className,
   onChange,
 }: CheckboxProps): import('react/jsx-runtime').JSX.Element;
-export type ComboBoxChangeDetails<T = string> = AutocompleteChangeDetails<T>;
+export type ComboBoxValue<T, X, Y, Z> = AutocompleteValue<T, X, Y, Z>;
+export type ComboBoxChangeDetails<T> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
-export type ComboBoxProps = {
+export type ComboBoxProps<T> = {
   /**
    * Text label title for combobox
    */
@@ -161,12 +163,7 @@ export type ComboBoxProps = {
   /**
    * List of available options for the dropdown menu
    */
-  options?: readonly (
-    | string
-    | {
-        label: string;
-      }
-  )[];
+  options?: readonly T[];
   /**
    * Additional css classes to help with unique styling of the combo box
    */
@@ -174,15 +171,15 @@ export type ComboBoxProps = {
   /**
    * The selected value that the combo box currently holds
    */
-  value?: string;
+  value?: T;
   /**
    * Triggers when content of textfield is changed
    */
   onChange?: (
     event: SyntheticEvent<Element, Event>,
-    value: unknown,
+    value: ComboBoxValue<T, boolean | undefined, boolean | undefined, boolean | undefined>,
     reason?: ComboBoxChangeReason,
-    details?: ComboBoxChangeDetails<unknown> | undefined,
+    details?: ComboBoxChangeDetails<T> | undefined,
   ) => void;
   /**
    * Triggers when textfield gets focus
@@ -199,7 +196,13 @@ export type ComboBoxProps = {
  * Thanks to MUI for heavy inspiration and documentation
  * https://mui.com/material-ui/getting-started/overview/
  */
-export declare function ComboBox({
+export declare function ComboBox<
+  T =
+    | string
+    | {
+        label: string;
+      },
+>({
   title,
   isDisabled,
   isClearable,
@@ -212,7 +215,7 @@ export declare function ComboBox({
   onChange,
   onFocus,
   onBlur,
-}: ComboBoxProps): import('react/jsx-runtime').JSX.Element;
+}: ComboBoxProps<T>): import('react/jsx-runtime').JSX.Element;
 export interface ScriptureReference {
   book: number;
   chapter: number;

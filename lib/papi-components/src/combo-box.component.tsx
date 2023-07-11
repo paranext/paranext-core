@@ -3,14 +3,16 @@ import {
   AutocompleteChangeDetails,
   AutocompleteChangeReason,
   TextField as MuiTextField,
+  AutocompleteValue,
 } from '@mui/material';
 import { FocusEventHandler, SyntheticEvent } from 'react';
 import './combo-box.component.css';
 
-export type ComboBoxChangeDetails<T = string> = AutocompleteChangeDetails<T>;
+export type ComboBoxValue<T, X, Y, Z> = AutocompleteValue<T, X, Y, Z>;
+export type ComboBoxChangeDetails<T> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
 
-export type ComboBoxProps = {
+export type ComboBoxProps<T> = {
   /**
    * Text label title for combobox
    */
@@ -42,7 +44,7 @@ export type ComboBoxProps = {
   /**
    * List of available options for the dropdown menu
    */
-  options?: readonly (string | { label: string })[];
+  options?: readonly T[];
   /**
    * Additional css classes to help with unique styling of the combo box
    */
@@ -50,15 +52,15 @@ export type ComboBoxProps = {
   /**
    * The selected value that the combo box currently holds
    */
-  value?: string;
+  value?: T;
   /**
    * Triggers when content of textfield is changed
    */
   onChange?: (
     event: SyntheticEvent<Element, Event>,
-    value: unknown,
+    value: ComboBoxValue<T, boolean | undefined, boolean | undefined, boolean | undefined>,
     reason?: ComboBoxChangeReason,
-    details?: ComboBoxChangeDetails<unknown> | undefined,
+    details?: ComboBoxChangeDetails<T> | undefined,
   ) => void;
   /**
    * Triggers when textfield gets focus
@@ -76,7 +78,7 @@ export type ComboBoxProps = {
  * Thanks to MUI for heavy inspiration and documentation
  * https://mui.com/material-ui/getting-started/overview/
  */
-function ComboBox({
+function ComboBox<T = string | { label: string }>({
   title,
   isDisabled = false,
   isClearable = true,
@@ -89,9 +91,9 @@ function ComboBox({
   onChange,
   onFocus,
   onBlur,
-}: ComboBoxProps) {
+}: ComboBoxProps<T>) {
   return (
-    <MuiComboBox
+    <MuiComboBox<T, boolean | undefined, boolean | undefined, boolean | undefined>
       disablePortal
       disabled={isDisabled}
       disableClearable={!isClearable}
