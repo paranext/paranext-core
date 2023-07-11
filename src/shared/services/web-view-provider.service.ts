@@ -128,7 +128,6 @@ const webViewProviderService: WebViewProviderService = {
   get,
 };
 
-// TODO: refactor? Put all provider service stuff in webview service?
 export const papiWebViewProviderService: PapiWebViewProviderService = {
   register,
 };
