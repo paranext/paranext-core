@@ -13,7 +13,7 @@ import { PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.mode
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import { isString } from '@shared/utils/util';
 
-export type UseDataHook = {
+type UseDataHook = {
   [DataType in string]: <TDataTypes extends DataProviderDataTypes, TDataType extends DataType>(
     dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
     selector: TDataTypes[TDataType]['selector'],

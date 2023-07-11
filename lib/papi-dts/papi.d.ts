@@ -2131,19 +2131,24 @@ declare module 'shared/services/papi.service' {
   import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
   import * as commandService from 'shared/services/command.service';
   import * as papiUtil from 'shared/utils/papi-util';
+  import { PapiNetworkService } from 'shared/services/network.service';
+  import { PapiWebViewService } from 'shared/services/web-view.service';
+  import { PapiWebViewProviderService } from 'shared/services/web-view-provider.service';
+  import { InternetService } from 'shared/services/internet.service';
+  import { DataProviderService } from 'shared/services/data-provider.service';
   const papi: {
     EventEmitter: typeof PapiEventEmitter;
     fetch: typeof fetch;
     commands: typeof commandService;
     util: typeof papiUtil;
-    webViews: import('shared/services/web-view.service').PapiWebViewService;
-    webViewProviders: import('shared/services/web-view-provider.service').PapiWebViewProviderService;
-    network: import('shared/services/network.service').PapiNetworkService;
+    webViews: PapiWebViewService;
+    webViewProviders: PapiWebViewProviderService;
+    network: PapiNetworkService;
     logger: import('electron-log').Logger & {
       default: import('electron-log').Logger;
     };
-    internet: import('shared/services/internet.service').InternetService;
-    dataProvider: import('shared/services/data-provider.service').DataProviderService;
+    internet: InternetService;
+    dataProvider: DataProviderService;
   };
   export default papi;
 }
@@ -2243,7 +2248,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import IDataProvider from 'shared/models/data-provider.interface';
-  export type UseDataHook = {
+  type UseDataHook = {
     [DataType in string]: <TDataTypes extends DataProviderDataTypes, TDataType extends DataType>(
       dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
       selector: TDataTypes[TDataType]['selector'],
@@ -2347,10 +2352,12 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export default papiHooks;
 }
 declare module 'papi-frontend' {
+  import { PapiContext } from 'renderer/context/papi-context/index';
+  import { PapiHooks } from 'renderer/hooks/papi-hooks/index';
   const papi: {
     react: {
-      context: import('renderer/context/papi-context').PapiContext;
-      hooks: import('renderer/hooks/papi-hooks').PapiHooks;
+      context: PapiContext;
+      hooks: PapiHooks;
     };
     EventEmitter: typeof import('shared/models/papi-event-emitter.model').default;
     fetch: typeof fetch;
@@ -2562,8 +2569,9 @@ declare module 'extension-host/services/extension-storage.service' {
   export default extensionStorageService;
 }
 declare module 'papi-backend' {
+  import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
   const papi: {
-    storage: import('extension-host/services/extension-storage.service').ExtensionStorageService;
+    storage: ExtensionStorageService;
     EventEmitter: typeof import('shared/models/papi-event-emitter.model').default;
     fetch: typeof fetch;
     commands: typeof import('shared/services/command.service');
