@@ -1,3 +1,4 @@
+import { Canon } from '@sillsdev/scripture';
 import { BookInfo, ScriptureReference } from './scripture.model';
 
 const scrBookData: BookInfo[] = [
@@ -70,159 +71,56 @@ const scrBookData: BookInfo[] = [
   { shortName: 'REV', fullNames: ['Revelation'], chapters: 22 },
 ];
 
+export interface BookNameOption {
+  bookId: string;
+  label: string;
+}
+
+/**
+ * Gets ComboBox options for book names. Use the _bookId_ for reference rather than the _label_ to
+ * aid in localization.
+ * @remarks This can be localized by loading _label_ with the localized book name.
+ * @returns An array of ComboBox options for book names.
+ */
+export function getBookNameOptions(): BookNameOption[] {
+  return Canon.allBookIds.map((bookId) => ({
+    bookId,
+    label: Canon.bookIdToEnglishName(bookId),
+  }));
+}
+
+export function bookNumToBookOption(bookNum: number): BookNameOption {
+  return {
+    bookId: Canon.bookNumberToId(bookNum),
+    label: Canon.bookNumberToEnglishName(bookNum),
+  };
+}
+
 export const FIRST_SCR_BOOK_NUM = 1;
 export const LAST_SCR_BOOK_NUM = scrBookData.length - 1;
 export const FIRST_SCR_CHAPTER_NUM = 1;
 export const FIRST_SCR_VERSE_NUM = 1;
 
-export const getBookNumFromName = (bookName: string): number => {
-  return scrBookData.findIndex((bookNames) => bookNames.fullNames.includes(bookName));
-};
-
-export const getBookShortNameFromNum = (bookNum: number): string => {
-  return scrBookData[bookNum < FIRST_SCR_BOOK_NUM || bookNum > LAST_SCR_BOOK_NUM ? 0 : bookNum]
-    .shortName;
-};
-
-export const getBookLongNameFromNum = (bookNum: number): string => {
-  return scrBookData[bookNum < FIRST_SCR_BOOK_NUM || bookNum > LAST_SCR_BOOK_NUM ? 0 : bookNum]
-    .fullNames[0];
-};
-
-export const getAllBookNames = (): string[] => {
-  const bookNames: string[] = [];
-
-  scrBookData.slice(1).forEach((books) => {
-    const fullName = books.fullNames[0];
-    bookNames.push(fullName);
-  });
-
-  return bookNames;
-};
-
 export const getChaptersForBook = (bookNum: number): number => {
-  return scrBookData[bookNum].chapters;
+  return scrBookData[bookNum]?.chapters ?? -1;
 };
 
 export const offsetBook = (scrRef: ScriptureReference, offset: number): ScriptureReference => ({
-  book: Math.max(FIRST_SCR_BOOK_NUM, Math.min(scrRef.book + offset, LAST_SCR_BOOK_NUM)),
-  chapter: 1,
-  verse: 1,
+  bookNum: Math.max(FIRST_SCR_BOOK_NUM, Math.min(scrRef.bookNum + offset, LAST_SCR_BOOK_NUM)),
+  chapterNum: 1,
+  verseNum: 1,
 });
 
 export const offsetChapter = (scrRef: ScriptureReference, offset: number): ScriptureReference => ({
   ...scrRef,
-  chapter: Math.min(
-    Math.max(FIRST_SCR_CHAPTER_NUM, scrRef.chapter + offset),
-    scrBookData[scrRef.book].chapters,
+  chapterNum: Math.min(
+    Math.max(FIRST_SCR_CHAPTER_NUM, scrRef.chapterNum + offset),
+    getChaptersForBook(scrRef.bookNum),
   ),
-  verse: 1,
+  verseNum: 1,
 });
 
 export const offsetVerse = (scrRef: ScriptureReference, offset: number): ScriptureReference => ({
   ...scrRef,
-  verse: Math.max(FIRST_SCR_VERSE_NUM, scrRef.verse + offset),
+  verseNum: Math.max(FIRST_SCR_VERSE_NUM, scrRef.verseNum + offset),
 });
-
-/** Parse a verse number from a string */
-export const parseVerse = (verseText: string): number | undefined => {
-  const verseNum = parseInt(verseText, 10);
-  return isValidValue(verseNum) ? verseNum : undefined;
-};
-
-/** Parse a chapter number from a string */
-export const parseChapter = (chapterText: string): number | undefined => {
-  // For now, this is the same as parseVerse. Maybe there could be other constraints in the future
-  return parseVerse(chapterText);
-};
-
-const regexpScrRefFull = /(\d )?([a-zA-Z ]+) ([^:]+):(.+)/;
-const regexpScrRefChapter = /([^ ]+) ([^:]+)/;
-const regexpScrRefBook = /(\d )?([a-zA-Z ]+)/;
-export const getScrRefFromText = (
-  refText: string,
-  defaultChapter = 1,
-  defaultVerse = 1,
-): ScriptureReference => {
-  // No text entered. Return error
-  if (!refText) return { book: -1, chapter: -1, verse: -1 };
-  const scrRefMatchFull = refText.match(regexpScrRefFull);
-
-  // If we have the whole reference, use it
-  if (scrRefMatchFull && scrRefMatchFull.length === 5)
-    return {
-      book: getBookNumFromName(
-        `${scrRefMatchFull[1] ? scrRefMatchFull[1] : ''}${scrRefMatchFull[2]}`,
-      ),
-      chapter: parseInt(scrRefMatchFull[3], 10),
-      verse: parseInt(scrRefMatchFull[4], 10),
-    };
-
-  const scrRefMatchChapter = refText.match(regexpScrRefChapter);
-  // If we have the reference to the chapter, use it
-  if (scrRefMatchChapter && scrRefMatchChapter.length === 3)
-    return {
-      book: getBookNumFromName(
-        `${scrRefMatchChapter[1] ? scrRefMatchChapter[1] : ''}${scrRefMatchChapter[2]}`,
-      ),
-      chapter: parseInt(scrRefMatchChapter[3], 10),
-      verse: defaultVerse,
-    };
-
-  const scrRefMatchBook = refText.match(regexpScrRefBook);
-  // If we have the reference to the book, use it
-  if (scrRefMatchBook && scrRefMatchBook.length === 2)
-    return {
-      book: getBookNumFromName(
-        `${scrRefMatchBook[1] ? scrRefMatchBook[1] : ''}${scrRefMatchBook[2]}`,
-      ),
-      chapter: defaultChapter,
-      verse: defaultVerse,
-    };
-
-  // Nothing matched. Return error
-  return { book: -1, chapter: -1, verse: -1 };
-};
-
-export const getTextFromScrRef = (scrRef: ScriptureReference): string =>
-  `${getBookLongNameFromNum(scrRef.book)} ${scrRef.chapter}${
-    scrRef.verse >= 0 ? `:${scrRef.verse}` : ''
-  }`;
-
-export const areScrRefsEqual = (
-  scrRef1: ScriptureReference | string,
-  scrRef2: ScriptureReference | string,
-): boolean => {
-  if (scrRef1 === scrRef2) return true;
-
-  const scrRef1Final: ScriptureReference = isString(scrRef1)
-    ? getScrRefFromText(scrRef1 as string)
-    : (scrRef1 as ScriptureReference);
-  const scrRef2Final: ScriptureReference = isString(scrRef2)
-    ? getScrRefFromText(scrRef2 as string)
-    : (scrRef2 as ScriptureReference);
-  return (
-    scrRef1Final.book === scrRef2Final.book &&
-    scrRef1Final.chapter === scrRef2Final.chapter &&
-    scrRef1Final.verse === scrRef2Final.verse
-  );
-};
-
-// thanks to DRAX at https://stackoverflow.com/a/9436948
-/**
- * Determine whether the object is a string
- * @param o object to determine if it is a string
- * @returns true if the object is a string; false otherwise
- */
-export function isString(o: unknown): o is string {
-  return typeof o === 'string' || o instanceof String;
-}
-
-/**
- * Evaluates if the value is truthy, false, or 0
- * @param val value to evaluate
- * @returns whether the value is truthy, false, or 0
- */
-export function isValidValue(val: unknown): val is NonNullable<unknown> {
-  return !!val || val === false || val === 0;
-}

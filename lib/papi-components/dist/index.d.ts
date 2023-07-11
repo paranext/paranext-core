@@ -217,9 +217,9 @@ export declare function ComboBox<
   onBlur,
 }: ComboBoxProps<T>): import('react/jsx-runtime').JSX.Element;
 export interface ScriptureReference {
-  book: number;
-  chapter: number;
-  verse: number;
+  bookNum: number;
+  chapterNum: number;
+  verseNum: number;
 }
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
