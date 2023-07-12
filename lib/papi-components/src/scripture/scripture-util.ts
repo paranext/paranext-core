@@ -1,5 +1,6 @@
 import { Canon } from '@sillsdev/scripture';
 import { BookInfo, ScriptureReference } from './scripture.model';
+import { ComboBoxLabelOption } from '../combo-box.component';
 
 const scrBookData: BookInfo[] = [
   { shortName: 'ERR', fullNames: ['ERROR'], chapters: -1 },
@@ -71,9 +72,8 @@ const scrBookData: BookInfo[] = [
   { shortName: 'REV', fullNames: ['Revelation'], chapters: 22 },
 ];
 
-export interface BookNameOption {
+export interface BookNameOption extends ComboBoxLabelOption {
   bookId: string;
-  label: string;
 }
 
 /**
