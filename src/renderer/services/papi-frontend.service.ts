@@ -5,8 +5,13 @@
  */
 
 import papiShared from '@shared/services/papi.service';
-import papiContext from '@renderer/context/papi-context';
-import papiHooks from '@renderer/hooks/papi-hooks';
+// Leave the "unused" type imports below in place.  It causes Intellisense problems if you remove them.
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import papiContext, { PapiContext } from '@renderer/context/papi-context';
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import papiHooks, { PapiHooks } from '@renderer/hooks/papi-hooks';
 
 const papi = {
   ...papiShared,

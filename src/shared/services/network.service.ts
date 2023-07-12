@@ -766,8 +766,16 @@ export const createRequestFunction = <TParam extends Array<unknown>, TReturn>(
   return async (...args: TParam) => request<TParam, TReturn>(requestType, ...args);
 };
 
+// Declare an interface for the object we're exporting so that JSDoc comments propagate
+export interface PapiNetworkService {
+  onDidClientConnect: typeof onDidClientConnect;
+  onDidClientDisconnect: typeof onDidClientDisconnect;
+  createNetworkEventEmitter: typeof createNetworkEventEmitter;
+  getNetworkEvent: typeof getNetworkEvent;
+}
+
 /** All the exports in this service that are to be exposed on the PAPI */
-export const papiNetworkService = {
+export const papiNetworkService: PapiNetworkService = {
   onDidClientConnect,
   onDidClientDisconnect,
   createNetworkEventEmitter,

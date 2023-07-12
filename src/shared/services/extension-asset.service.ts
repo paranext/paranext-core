@@ -59,7 +59,13 @@ const initialize = async () => {
   return initializePromise;
 };
 
-const extensionAssetService = {
+// Declare an interface for the object we're exporting so that JSDoc comments propagate
+export interface ExtensionAssetService {
+  initialize: typeof initialize;
+  getExtensionAsset: typeof getExtensionAsset;
+}
+
+const extensionAssetService: ExtensionAssetService = {
   initialize,
   getExtensionAsset,
 };

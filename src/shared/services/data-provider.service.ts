@@ -581,7 +581,16 @@ async function get<T extends IDataProvider<any>>(providerName: string): Promise<
   return dataProvider;
 }
 
-const dataProviderService = {
+// Declare an interface for the object we're exporting so that JSDoc comments propagate
+export interface DataProviderService {
+  hasKnown: typeof hasKnown;
+  registerEngine: typeof registerEngine;
+  get: typeof get;
+  decorators: typeof decorators;
+  DataProviderEngine: typeof DataProviderEngine;
+}
+
+const dataProviderService: DataProviderService = {
   hasKnown,
   registerEngine,
   get,

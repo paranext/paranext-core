@@ -72,12 +72,12 @@ function helloException(message: string) {
 export async function activate(): Promise<UnsubscriberAsync> {
   logger.info('Hello world is activating!');
 
-  const htmlWebViewProviderPromise = papi.webViews.registerWebViewProvider(
+  const htmlWebViewProviderPromise = papi.webViewProviders.register(
     htmlWebViewType,
     htmlWebViewProvider,
   );
 
-  const reactWebViewProviderPromise = papi.webViews.registerWebViewProvider(
+  const reactWebViewProviderPromise = papi.webViewProviders.register(
     reactWebViewType,
     reactWebViewProvider,
   );

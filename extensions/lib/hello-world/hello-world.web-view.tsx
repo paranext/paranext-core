@@ -149,7 +149,10 @@ globalThis.webViewComponent = function HelloWorld() {
         <Switch /> {/* no label available */}
         <ComboBox title="Test Me" options={['option 1', 'option 2']} />
         <Slider /> {/* no label available */}
-        <RefSelector scrRef={{ book: 1, chapter: 1, verse: 1 }} handleSubmit={(): void => {}} />
+        <RefSelector
+          scrRef={{ bookNum: 1, chapterNum: 1, verseNum: 1 }}
+          handleSubmit={(): void => {}}
+        />
         <Table<Row>
           columns={[
             {
