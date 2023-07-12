@@ -210,6 +210,7 @@ declare module 'shared/utils/papi-util' {
   }
   /** Check that two objects are deeply equal, comparing members of each object and such */
   export function deepEqual(a: unknown, b: unknown): boolean;
+  /** Separator between parts of a serialized request */
   const REQUEST_TYPE_SEPARATOR = ':';
   /** Information about a request that tells us what to do with it */
   export type RequestType = {
