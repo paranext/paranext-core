@@ -112,6 +112,7 @@ export function deepEqual(a: unknown, b: unknown) {
   return equal(a, b);
 }
 
+/** Separator between parts of a serialized request */
 const REQUEST_TYPE_SEPARATOR = ':';
 
 /** Information about a request that tells us what to do with it */
