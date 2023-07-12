@@ -16,12 +16,41 @@ import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import logger from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import papi from '@shared/services/papi.service';
-import { CommandHandler } from '@shared/utils/papi-util';
 import { resolveHtmlPath } from '@node/utils/util';
 import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
 import { wait } from '@shared/utils/util';
+import { CommandNames } from 'papi-commands';
+import { SerializedRequestType } from '@shared/utils/papi-util';
+
+// `main.ts`'s command handler declarations are in `command.service.ts` so they can be picked up
+// by papi-dts
+// This map should allow any functions because commands can be any function type
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
+  'test.echo': async (message: string) => {
+    return message;
+  },
+  'test.echoRenderer': async (message: string) => {
+    /* const start = performance.now(); */
+    /* const result =  */ await papi.commands.sendCommand('test.addThree', 1, 4, 9);
+    /* logger.info(
+      `test.addThree(...) = ${result} took ${performance.now() - start} ms`,
+    ); */
+    return message;
+  },
+  'test.echoExtensionHost': async (message: string) => {
+    await papi.commands.sendCommand('test.addMany', 3, 5, 7, 1, 4);
+    return message;
+  },
+  'test.throwError': async (message: string) => {
+    throw new Error(`Test Error thrown in throwError command: ${message}`);
+  },
+  'platform.quit': async () => {
+    app.quit();
+  },
+};
 
 async function main() {
   // The network service relies on nothing else, and other things rely on it, so start it first
@@ -44,7 +73,9 @@ async function main() {
 
   // Extension host test
   setTimeout(async () => {
-    logger.info(`Add Many (from EH): ${await papi.commands.sendCommand('addMany', 2, 5, 9, 7)}`);
+    logger.info(
+      `Add Many (from EH): ${await papi.commands.sendCommand('test.addMany', 2, 5, 9, 7)}`,
+    );
   }, 20000);
 
   // #region Start the renderer
@@ -200,7 +231,7 @@ async function main() {
       ...args: any[]
     ) => Promise<unknown> | unknown;
   } = {
-    'electronAPI.env.test': (_event, message: string) => `From main.ts: test ${message}`,
+    'electronAPI:env.test': (_event, message: string) => `From main.ts: test ${message}`,
   };
 
   app
@@ -224,8 +255,9 @@ async function main() {
     .catch(logger.info);
 
   Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
-    networkService.registerRequestHandler(ipcHandle, async (...args: unknown[]) =>
-      handler({} as IpcMainInvokeEvent, ...args),
+    networkService.registerRequestHandler(
+      ipcHandle as SerializedRequestType,
+      async (...args: unknown[]) => handler({} as IpcMainInvokeEvent, ...args),
     );
   });
 
@@ -233,33 +265,8 @@ async function main() {
 
   // #region Register test command handlers
 
-  const commandHandlers: { [commandName: string]: CommandHandler } = {
-    echo: async (message: string) => {
-      return message;
-    },
-    echoRenderer: async (message: string) => {
-      /* const start = performance.now(); */
-      /* const result =  */ await papi.commands.sendCommand('addThree', 1, 4, 9);
-      /* logger.info(
-      `addThree(...) = ${result} took ${performance.now() - start} ms`,
-    ); */
-      return message;
-    },
-    echoExtensionHost: async (message: string) => {
-      await papi.commands.sendCommand('addMany', 3, 5, 7, 1, 4);
-      return message;
-    },
-    throwError: async (message: string) => {
-      throw new Error(`Test Error thrown in throwError command: ${message}`);
-    },
-    // This is a temporary hack (per TJ) to allow the Exit menu to have a way to exit the app.
-    quit: async () => {
-      app.exit();
-    },
-  };
-
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-    papi.commands.registerCommand(commandName, handler);
+    papi.commands.registerCommand(commandName as CommandNames, handler);
   });
 
   // #endregion
@@ -268,23 +275,23 @@ async function main() {
 
   const testMain = {
     doStuff: (stuff: string) => {
-      const result = `test-main did stuff: ${stuff}!`;
+      const result = `testMain did stuff: ${stuff}!`;
       logger.info(result);
       return result;
     },
     dispose: () => {
-      logger.info('testMain.dispose() ran in test-main');
+      logger.info('testMain.dispose() ran in testMain');
       return Promise.resolve(true);
     },
   };
 
-  const testMainDisposer = await networkObjectService.set('test-main', testMain);
+  const testMainDisposer = await networkObjectService.set('testMain', testMain);
   testMain.doStuff('main things');
   testMainDisposer.onDidDispose(() => {
-    logger.info('test-main disposed in main message #1');
+    logger.info('testMain disposed in main message #1');
   });
   testMainDisposer.onDidDispose(() => {
-    logger.info('test-main disposed in main message #2');
+    logger.info('testMain disposed in main message #2');
   });
 
   setTimeout(testMainDisposer.dispose, 20000);
@@ -292,14 +299,14 @@ async function main() {
   setTimeout(async () => {
     let testExtensionHost = await networkObjectService.get<{
       getVerse: () => Promise<string>;
-    }>('test-extension-host');
+    }>('testExtensionHost');
     if (testExtensionHost) {
       logger.info(`get verse: ${await testExtensionHost.getVerse()}`);
       testExtensionHost.onDidDispose(() => {
-        logger.info('test-extension-host disposed in main');
+        logger.info('testExtensionHost disposed in main');
         testExtensionHost = undefined;
       });
-    } else logger.error('Could not get test-extension-host from main');
+    } else logger.error('Could not get testExtensionHost from main');
   }, 5000);
 
   // #endregion

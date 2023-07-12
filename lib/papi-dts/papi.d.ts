@@ -1,5 +1,45 @@
 /// <reference types="react" />
 /// <reference types="node" />
+declare module 'papi-commands' {
+  /**
+     * Function types for each command available on the papi. Each extension can extend this interface
+     * to add commands that it registers on the papi.
+     *
+     * Note: Command names must consist of two string separated by at least one period. We recommend
+     * one period and lower camel case in case we expand the api in the future to allow dot notation.
+     *
+     * @example An extension can extend this interface to add types for the commands it registers by
+     * adding the following to its `.d.ts` file:
+     *
+     * ```typescript
+     * declare module 'papi-commands' {
+         export interface CommandHandlers {
+           'myExtension.myCommand1': (foo: string, bar: number) => string;
+           'myExtension.myCommand2': (foo: string) => Promise<void>;
+         }
+       }
+     * ```
+     */
+  interface CommandHandlers {
+    'test.echo': (message: string) => string;
+    'test.echoRenderer': (message: string) => Promise<string>;
+    'test.echoExtensionHost': (message: string) => Promise<string>;
+    'test.throwError': (message: string) => void;
+    'platform.quit': () => Promise<void>;
+    'test.addMany': (...nums: number[]) => number;
+    'test.throwErrorExtensionHost': (message: string) => void;
+  }
+  /**
+   * Names for each command available on the papi. Automatically includes all extensions' commands
+   * that are added to {@link CommandHandlers}.
+   *
+   * Note: Command names must consist of two string separated by at least one period. We recommend
+   * one period and lower camel case in case we expand the api in the future to allow dot notation.
+   *
+   * @example 'platform.quit'
+   */
+  type CommandNames = keyof CommandHandlers;
+}
 declare module 'shared/global-this.model' {
   import { FunctionComponent } from 'react';
   /**
@@ -168,16 +208,10 @@ declare module 'shared/utils/papi-util' {
     Contents = 'contents',
     Complex = 'complex',
   }
-  /**
-   * Handler function for a command. Called when a command is executed.
-   * The function should accept the command's parameters as its parameters.
-   * The function should return a promise that resolves with the "return" value of the command.
-   */
-  export type CommandHandler<TParam extends Array<unknown> = any[], TReturn = any> = (
-    ...args: TParam
-  ) => Promise<TReturn> | TReturn;
   /** Check that two objects are deeply equal, comparing members of each object and such */
   export function deepEqual(a: unknown, b: unknown): boolean;
+  /** Separator between parts of a serialized request */
+  const REQUEST_TYPE_SEPARATOR = ':';
   /** Information about a request that tells us what to do with it */
   export type RequestType = {
     /** the general category of request */
@@ -186,14 +220,20 @@ declare module 'shared/utils/papi-util' {
     directive: string;
   };
   /**
+   * String version of a request type that tells us what to do with a request.
+   *
+   * Consists of two strings concatenated by a colon
+   */
+  export type SerializedRequestType = `${string}${typeof REQUEST_TYPE_SEPARATOR}${string}`;
+  /**
    * Create a request message requestType string from a category and a directive
    * @param category the general category of request
    * @param directive specific identifier for this type of request
    * @returns full requestType for use in network calls
    */
-  export function serializeRequestType(category: string, directive: string): string;
+  export function serializeRequestType(category: string, directive: string): SerializedRequestType;
   /** Split a request message requestType string into its parts */
-  export function deserializeRequestType(requestType: string): RequestType;
+  export function deserializeRequestType(requestType: SerializedRequestType): RequestType;
   /**
    * HTML Encodes the provided string.
    * Thanks to ChatGPT
@@ -297,7 +337,7 @@ declare module 'shared/data/internal-connection.model' {
    * Types that are internal to the communication we do through WebSocket.
    * These types should not need to be used outside of NetworkConnectors and ConnectionService.ts
    */
-  import { ComplexRequest, ComplexResponse } from 'shared/utils/papi-util';
+  import { ComplexRequest, ComplexResponse, SerializedRequestType } from 'shared/utils/papi-util';
   /** Represents when the client id has not been assigned by the server */
   export const CLIENT_ID_UNASSIGNED = -1;
   /** "Client id" for the server */
@@ -306,6 +346,8 @@ declare module 'shared/data/internal-connection.model' {
   export const CONNECTOR_INFO_DISCONNECTED: Readonly<{
     clientId: -1;
   }>;
+  /** Prefix on requests that indicates that the request is a command */
+  export const CATEGORY_COMMAND = 'command';
   /** Information about the network connector */
   export type NetworkConnectorInfo = Readonly<{
     clientId: number;
@@ -358,7 +400,7 @@ declare module 'shared/data/internal-connection.model' {
   ) => Promise<InternalResponse<TReturn>>;
   /** Handler for requests from the server */
   export type RequestHandler = <TParam, TReturn>(
-    requestType: string,
+    requestType: SerializedRequestType,
     request: ComplexRequest<TParam>,
   ) => Promise<ComplexResponse<TReturn>>;
   /** Function that returns a clientId to which to send the request based on the requestType */
@@ -941,10 +983,10 @@ declare module 'shared/services/network.service' {
    */
   import { ClientConnectEvent, ClientDisconnectEvent } from 'shared/data/internal-connection.model';
   import {
-    CommandHandler,
     ComplexRequest,
     ComplexResponse,
     RequestHandlerType,
+    SerializedRequestType,
     UnsubscriberAsync,
   } from 'shared/utils/papi-util';
   import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
@@ -955,10 +997,9 @@ declare module 'shared/services/network.service' {
    * The function should return an object that becomes the contents object of the response.
    * This type of handler is a normal function.
    */
-  type ArgsRequestHandler<TParam extends Array<unknown> = any[], TReturn = any> = CommandHandler<
-    TParam,
-    TReturn
-  >;
+  type ArgsRequestHandler<TParam extends Array<unknown> = any[], TReturn = any> = (
+    ...args: TParam
+  ) => Promise<TReturn> | TReturn;
   /**
    * Contents handler function for a request. Called when a request is handled.
    * The function should accept the contents object of the request as its single parameter.
@@ -989,7 +1030,7 @@ declare module 'shared/services/network.service' {
    * @returns promise that resolves with the response message
    */
   export const request: <TParam extends unknown[], TReturn>(
-    requestType: string,
+    requestType: SerializedRequestType,
     ...args: TParam
   ) => Promise<TReturn>;
   /**
@@ -1000,17 +1041,17 @@ declare module 'shared/services/network.service' {
    * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
    */
   export function registerRequestHandler(
-    requestType: string,
+    requestType: SerializedRequestType,
     handler: ArgsRequestHandler,
     handlerType?: RequestHandlerType,
   ): Promise<UnsubscriberAsync>;
   export function registerRequestHandler(
-    requestType: string,
+    requestType: SerializedRequestType,
     handler: ContentsRequestHandler,
     handlerType?: RequestHandlerType,
   ): Promise<UnsubscriberAsync>;
   export function registerRequestHandler(
-    requestType: string,
+    requestType: SerializedRequestType,
     handler: ComplexRequestHandler,
     handlerType?: RequestHandlerType,
   ): Promise<UnsubscriberAsync>;
@@ -1038,7 +1079,7 @@ declare module 'shared/services/network.service' {
    * @returns function to call with arguments of request that performs the request and resolves with the response contents
    */
   export const createRequestFunction: <TParam extends unknown[], TReturn>(
-    requestType: string,
+    requestType: SerializedRequestType,
   ) => (...args: TParam) => Promise<TReturn>;
   export interface PapiNetworkService {
     onDidClientConnect: typeof onDidClientConnect;
@@ -1050,46 +1091,47 @@ declare module 'shared/services/network.service' {
   export const papiNetworkService: PapiNetworkService;
 }
 declare module 'shared/services/command.service' {
-  import { CommandHandler, UnsubscriberAsync } from 'shared/utils/papi-util';
-  /**
-   * Register a command on the papi to be handled here.
-   *
-   * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use registerCommand
-   * @param commandName command name to register for handling here
-   * @param handler function to run when the command is invoked
-   * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
-   */
-  export const registerCommandUnsafe: (
-    commandName: string,
-    handler: CommandHandler,
-  ) => Promise<UnsubscriberAsync>;
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import { CommandHandlers, CommandNames } from 'papi-commands';
+  module 'papi-commands' {
+    interface CommandHandlers {
+      'test.addThree': typeof addThree;
+      'test.squareAndConcat': typeof squareAndConcat;
+    }
+  }
+  function addThree(a: number, b: number, c: number): Promise<number>;
+  function squareAndConcat(a: number, b: string): Promise<string>;
   /** Sets up the CommandService. Only runs once and always returns the same promise after that */
   export const initialize: () => Promise<void>;
   /**
    * Send a command to the backend.
    */
-  export const sendCommand: <TParam extends unknown[], TReturn>(
-    commandName: string,
-    ...args: TParam
-  ) => Promise<TReturn>;
+  export const sendCommand: <CommandName extends keyof CommandHandlers>(
+    commandName: CommandName,
+    ...args: Parameters<CommandHandlers[CommandName]>
+  ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
   /**
    * Creates a function that is a command function with a baked commandName.
    * This is also nice because you get TypeScript type support using this function.
    * @param commandName command name for command function
    * @returns function to call with arguments of command that sends the command and resolves with the result of the command
    */
-  export const createSendCommandFunction: <TParam extends unknown[], TReturn>(
-    commandName: string,
-  ) => (...args: TParam) => Promise<TReturn>;
+  export const createSendCommandFunction: <CommandName extends keyof CommandHandlers>(
+    commandName: CommandName,
+  ) => (
+    ...args: Parameters<CommandHandlers[CommandName]>
+  ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
   /**
    * Register a command on the papi to be handled here
    * @param commandName command name to register for handling here
+   *   - Note: Command names must consist of two string separated by at least one period. We recommend
+   *   one period and lower camel case in case we expand the api in the future to allow dot notation.
    * @param handler function to run when the command is invoked
    * @returns true if successfully registered, throws with error message if not
    */
-  export const registerCommand: (
-    commandName: string,
-    handler: CommandHandler,
+  export const registerCommand: <CommandName extends CommandNames>(
+    commandName: CommandName,
+    handler: CommandHandlers[CommandName],
   ) => Promise<UnsubscriberAsync>;
 }
 declare module 'shared/data/web-view.model' {
@@ -2272,12 +2314,12 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * Usage: Specify the data type on the data provider with `useData.<data_type>` and use like any other
    * React hook. For example, `useData.Verse` lets you subscribe to verses from a data provider.
    *
-   * @example When subscribing to JHN 11:35 on the `'quick-verse.quick-verse'` data provider, we need
+   * @example When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we need
    * to tell the useData.Verse hook what types we are using, so we use the QuickVerseDataTypes and specify
    * that we are using the 'Verse' data types as follows:
    * ```typescript
    * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
-   *   'quick-verse.quick-verse',
+   *   'quickVerse.quickVerse',
    *   'JHN 11:35',
    *   'Verse text goes here',
    * );
@@ -2446,10 +2488,13 @@ declare module 'node/services/node-file-system.service' {
   /**
    * Reads a directory and returns lists of entries in the directory by entry type
    * @param uri uri of directory
-   * @param filter function to filter out directories based on their names
+   * @param entryFilter function to filter out entries in the directory based on their names
    * @returns map of entry type to list of uris for each entry in the directory with that type
    */
-  export function readDir(uri: Uri, filter: (x: string) => boolean): Promise<DirectoryEntries>;
+  export function readDir(
+    uri: Uri,
+    entryFilter?: (entryName: string) => boolean,
+  ): Promise<DirectoryEntries>;
 }
 declare module 'node/utils/crypto-util' {
   export function createUuid(): string;

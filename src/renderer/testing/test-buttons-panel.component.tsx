@@ -9,13 +9,13 @@ import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
-import { PeopleDataProvider } from '@extensions/hello-someone/hello-someone';
-import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
+import type { PeopleDataProvider } from 'hello-someone';
+import type { QuickVerseDataTypes } from 'quick-verse';
 
 export const TAB_TYPE_BUTTONS = 'buttons';
 
 const testBase: (message: string) => Promise<string> =
-  networkService.createRequestFunction('electronAPI.env.test');
+  networkService.createRequestFunction('electronAPI:env.test');
 
 const test = async () => {
   /* const start = performance.now(); */
@@ -24,43 +24,32 @@ const test = async () => {
   return result;
 };
 
-const addOne = async (num: number) => commandService.sendCommand<[number], number>('addOne', num);
+const addOne = async (num: number) => commandService.sendCommand('test.addOne', num);
 
-const echo: (message: string) => Promise<string> = commandService.createSendCommandFunction<
-  [string],
-  string
->('echo');
+const echo = commandService.createSendCommandFunction('test.echo');
 
-const echoRenderer = commandService.createSendCommandFunction<[string], string>('echoRenderer');
+const echoRenderer = commandService.createSendCommandFunction('test.echoRenderer');
 
-const echoExtensionHost = commandService.createSendCommandFunction<[string], string>(
-  'echoExtensionHost',
+const echoExtensionHost = commandService.createSendCommandFunction('test.echoExtensionHost');
+
+const echoSomeoneRenderer = commandService.createSendCommandFunction(
+  'helloSomeone.echoSomeoneRenderer',
 );
 
-const echoSomeoneRenderer = commandService.createSendCommandFunction<[string], string>(
-  'hello-someone.echo-someone-renderer',
-);
+const addThree = commandService.createSendCommandFunction('test.addThree');
 
-const addThree = commandService.createSendCommandFunction<[number, number, number], number>(
-  'addThree',
-);
+const addMany = commandService.createSendCommandFunction('test.addMany');
 
-const addMany = commandService.createSendCommandFunction<number[], number>('addMany');
+const helloWorld = commandService.createSendCommandFunction('helloWorld.helloWorld');
 
-const helloWorld = commandService.createSendCommandFunction<[], string>('hello-world.hello-world');
+const throwErrorHelloWorld = commandService.createSendCommandFunction('helloWorld.helloException');
 
-const throwErrorHelloWorld = commandService.createSendCommandFunction<[string], string>(
-  'hello-world.hello-exception',
-);
+const helloSomeone = commandService.createSendCommandFunction('helloSomeone.helloSomeone');
 
-const helloSomeone = commandService.createSendCommandFunction<[string], string>(
-  'hello-someone.hello-someone',
-);
+const throwError = commandService.createSendCommandFunction('test.throwError');
 
-const throwError = commandService.createSendCommandFunction<[string], string>('throwError');
-
-const throwErrorExtensionHost = commandService.createSendCommandFunction<[string], string>(
-  'throwErrorExtensionHost',
+const throwErrorExtensionHost = commandService.createSendCommandFunction(
+  'test.throwErrorExtensionHost',
 );
 
 const executeMany = async <T,>(fn: () => Promise<T>) => {
@@ -154,7 +143,7 @@ export default function TestButtonsPanel() {
 
   // Test a method on a data provider engine that isn't on the interface to see if you can actually do this
   const [hasTestedRandomMethod, setHasTestedRandomMethod] = useState(false);
-  const peopleDataProvider = useDataProvider<PeopleDataProvider>('hello-someone.people');
+  const peopleDataProvider = useDataProvider<PeopleDataProvider>('helloSomeone.people');
   if (!hasTestedRandomMethod && peopleDataProvider) {
     setHasTestedRandomMethod(true);
     (async () => {
@@ -179,7 +168,7 @@ export default function TestButtonsPanel() {
   // We need to tell the useData.Verse hook what types we are using, so we get the Verse data types
   // from the quick verse data types
   const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
-    'quick-verse.quick-verse',
+    'quickVerse.quickVerse',
     verseRef,
     'Verse text goes here',
   );
@@ -207,7 +196,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echo('Echo Stuff'));
-            logger.info(`command:echo '${result}' took ${performance.now() - start} ms`);
+            logger.info(`command:test.echo '${result}' took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -221,7 +210,9 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echoRenderer('Echo Renderer Stuff'));
-            logger.info(`command:echoRenderer '${result}' took ${performance.now() - start} ms`);
+            logger.info(
+              `command:test.echoRenderer '${result}' took ${performance.now() - start} ms`,
+            );
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -236,7 +227,7 @@ export default function TestButtonsPanel() {
             const start = performance.now();
             const result = await runPromise(() => echoExtensionHost('Echo Extension Host Stuff'));
             logger.info(
-              `command:echoExtensionHost '${result}' took ${performance.now() - start} ms`,
+              `command:test.echoExtensionHost '${result}' took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {
@@ -254,7 +245,7 @@ export default function TestButtonsPanel() {
               echoSomeoneRenderer('Echo Someone Renderer Stuff'),
             );
             logger.info(
-              `command:hello-someone.echo-someone-renderer '${result}' took ${
+              `command:helloSomeone.echoSomeoneRenderer '${result}' took ${
                 performance.now() - start
               } ms`,
             );
@@ -271,7 +262,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addThree(1, 2, 3));
-            logger.info(`command:addThree ${result} took ${performance.now() - start} ms`);
+            logger.info(`command:test.addThree ${result} took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -285,7 +276,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
-            logger.info(`command:addMany ${result} took ${performance.now() - start} ms`);
+            logger.info(`command:test.addMany ${result} took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -300,7 +291,7 @@ export default function TestButtonsPanel() {
             runPromise(async () => {
               const addResult = await addOne(addOneResult);
               setAddOneResult(addResult);
-              return `C# addOne: ${addResult}`;
+              return `C# test.addOne: ${addResult}`;
             })
           }
           onContextMenu={(e) => {
@@ -316,7 +307,7 @@ export default function TestButtonsPanel() {
             const start = performance.now();
             const result = await runPromise(() => helloWorld());
             logger.info(
-              `command:hello-world.hello-world ${result} took ${performance.now() - start} ms`,
+              `command:helloWorld.helloWorld ${result} took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {
@@ -332,7 +323,7 @@ export default function TestButtonsPanel() {
             const start = performance.now();
             const result = await runPromise(() => helloSomeone('Paranext user'));
             logger.info(
-              `command:hello-someone.hello-someone ${result} took ${performance.now() - start} ms`,
+              `command:helloSomeone.helloSomeone ${result} took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {

@@ -12,7 +12,6 @@
       "@assets/*": ["../assets/*"],
       "@client/*": ["./client/*"],
       "@extension-host/*": ["./extension-host/*"],
-      "@extensions/*": ["../extensions/dist/*"],
       "@main/*": ["./main/*"],
       "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],
@@ -20,7 +19,7 @@
       "@node_modules/*": ["../node_modules/*"]
     },
     "experimentalDecorators": true,
-    "typeRoots": ["./node_modules/@types", "./extensions/dist", "src/@types"],
+    "typeRoots": ["./node_modules/@types", "./extensions/lib", "src/@types"],
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

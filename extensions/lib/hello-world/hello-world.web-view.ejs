@@ -43,7 +43,7 @@
         const [echoResult] = usePromise(
           useCallback(async () => {
             await new Promise((resolve) => setTimeout(() => resolve(), 3000));
-            return papi.commands.sendCommand('echoRenderer', `From ${NAME}`);
+            return papi.commands.sendCommand('test.echoRenderer', `From ${NAME}`);
           }, []),
           'retrieving',
         );
@@ -78,11 +78,13 @@
         // Attach handler for echo-renderer
         const echoRendererButton = document.getElementById('echo-renderer');
         echoRendererButton.addEventListener('click', () =>
-          papi.commands.sendCommand('echoRenderer', 'From Hello World WebView').then((message) => {
-            const echoRendererOutput = document.getElementById('echo-renderer-output');
-            echoRendererOutput.textContent = papi.util.htmlEncode(message);
-            print(message);
-          }),
+          papi.commands
+            .sendCommand('test.echoRenderer', 'From Hello World WebView')
+            .then((message) => {
+              const echoRendererOutput = document.getElementById('echo-renderer-output');
+              echoRendererOutput.textContent = papi.util.htmlEncode(message);
+              print(message);
+            }),
         );
         echoRendererButton.addEventListener('contextmenu', (e) => {
           e.preventDefault();
@@ -96,7 +98,7 @@
         const helloSomeoneButton = document.getElementById('hello-someone');
         helloSomeoneButton.addEventListener('click', () =>
           papi.commands
-            .sendCommand('hello-someone.hello-someone', "'Hello World WebView'")
+            .sendCommand('helloSomeone.helloSomeone', "'Hello World WebView'")
             .then((message) => {
               const helloSomeoneOutput = document.getElementById('hello-someone-output');
               helloSomeoneOutput.textContent = papi.util.htmlEncode(message);
@@ -108,7 +110,7 @@
           const promises = new Array(10000);
           for (let i = 0; i < 10000; i += 1)
             promises[i] = papi.commands.sendCommand(
-              'hello-someone.hello-someone',
+              'helloSomeone.helloSomeone',
               "'Hello World WebView'",
             );
           Promise.all(promises).then(() => print('Done'));

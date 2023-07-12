@@ -6,16 +6,22 @@
 import * as networkService from '@shared/services/network.service';
 import {
   aggregateUnsubscriberAsyncs,
-  CommandHandler,
   createSafeRegisterFn,
   serializeRequestType,
   UnsubscriberAsync,
 } from '@shared/utils/papi-util';
 import { isClient, isRenderer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
+import { CommandHandlers, CommandNames } from 'papi-commands';
+import { CATEGORY_COMMAND } from '@shared/data/internal-connection.model';
 
-/** Prefix on requests that indicates that the request is a command */
-const CATEGORY_COMMAND = 'command';
+// Commands that this file supplies
+declare module 'papi-commands' {
+  export interface CommandHandlers {
+    'test.addThree': typeof addThree;
+    'test.squareAndConcat': typeof squareAndConcat;
+  }
+}
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
@@ -30,9 +36,11 @@ async function squareAndConcat(a: number, b: string) {
   return a * a + b.toString();
 }
 /** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
-const rendererCommandFunctions: { [commandName: string]: CommandHandler } = {
-  addThree,
-  squareAndConcat,
+// This map should allow any functions because commands can be any function type
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rendererCommandFunctions: { [CommandName in CommandNames]?: (...args: any[]) => any } = {
+  'test.addThree': addThree,
+  'test.squareAndConcat': squareAndConcat,
 };
 
 /**
@@ -40,11 +48,14 @@ const rendererCommandFunctions: { [commandName: string]: CommandHandler } = {
  *
  * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use sendCommand
  */
-const sendCommandUnsafe = async <TParam extends Array<unknown>, TReturn>(
-  commandName: string,
-  ...args: TParam
-): Promise<TReturn> => {
-  return networkService.request(serializeRequestType(CATEGORY_COMMAND, commandName), ...args);
+const sendCommandUnsafe = async <CommandName extends CommandNames>(
+  commandName: CommandName,
+  ...args: Parameters<CommandHandlers[CommandName]>
+): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> => {
+  return networkService.request(
+    serializeRequestType(CATEGORY_COMMAND, commandName),
+    ...args,
+  ) as Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
 };
 
 /**
@@ -52,12 +63,14 @@ const sendCommandUnsafe = async <TParam extends Array<unknown>, TReturn>(
  *
  * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use registerCommand
  * @param commandName command name to register for handling here
+ *   - Note: Command names must consist of two string separated by at least one period. We recommend
+ *   one period and lower camel case in case we expand the api in the future to allow dot notation.
  * @param handler function to run when the command is invoked
  * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
  */
-export const registerCommandUnsafe = (
-  commandName: string,
-  handler: CommandHandler,
+const registerCommandUnsafe = <CommandName extends CommandNames>(
+  commandName: CommandName,
+  handler: CommandHandlers[CommandName],
 ): Promise<UnsubscriberAsync> => {
   return networkService.registerRequestHandler(
     serializeRequestType(CATEGORY_COMMAND, commandName),
@@ -81,7 +94,7 @@ export const initialize = () => {
     if (isRenderer()) {
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
       const unsubPromises = Object.entries(rendererCommandFunctions).map(([commandName, handler]) =>
-        registerCommandUnsafe(commandName, handler),
+        registerCommandUnsafe(commandName as CommandNames, handler),
       );
 
       // Wait to successfully register all commands
@@ -98,10 +111,10 @@ export const initialize = () => {
 
     if (isClient()) {
       const start = performance.now();
-      sendCommandUnsafe('echo', 'Hi server!')
+      sendCommandUnsafe('test.echo', 'Hi server!')
         .then((response) =>
           logger.info(
-            'command:echo Response!!!',
+            'command:test.echo Response!!!',
             response,
             'Response time:',
             performance.now() - start,
@@ -117,10 +130,10 @@ export const initialize = () => {
 /**
  * Send a command to the backend.
  */
-export const sendCommand = async <TParam extends Array<unknown>, TReturn>(
-  commandName: string,
-  ...args: TParam
-): Promise<TReturn> => {
+export const sendCommand = async <CommandName extends CommandNames>(
+  commandName: CommandName,
+  ...args: Parameters<CommandHandlers[CommandName]>
+): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> => {
   await initialize();
   return sendCommandUnsafe(commandName, ...args);
 };
@@ -131,21 +144,26 @@ export const sendCommand = async <TParam extends Array<unknown>, TReturn>(
  * @param commandName command name for command function
  * @returns function to call with arguments of command that sends the command and resolves with the result of the command
  */
-export const createSendCommandFunction = <TParam extends Array<unknown>, TReturn>(
-  commandName: string,
+export const createSendCommandFunction = <CommandName extends CommandNames>(
+  commandName: CommandName,
 ) => {
-  return async (...args: TParam) => sendCommand<TParam, TReturn>(commandName, ...args);
+  return async (
+    ...args: Parameters<CommandHandlers[CommandName]>
+  ): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> =>
+    sendCommand(commandName, ...args);
 };
 
 /**
  * Register a command on the papi to be handled here
  * @param commandName command name to register for handling here
+ *   - Note: Command names must consist of two string separated by at least one period. We recommend
+ *   one period and lower camel case in case we expand the api in the future to allow dot notation.
  * @param handler function to run when the command is invoked
  * @returns true if successfully registered, throws with error message if not
  */
-export const registerCommand: (
-  commandName: string,
-  handler: CommandHandler,
+export const registerCommand: <CommandName extends CommandNames>(
+  commandName: CommandName,
+  handler: CommandHandlers[CommandName],
 ) => Promise<UnsubscriberAsync> = createSafeRegisterFn(
   registerCommandUnsafe,
   isInitialized,

@@ -2,10 +2,16 @@ import { isExtensionHost } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
 import logger from '@shared/services/logger.service';
 import type { GetAsset } from '@extension-host/services/asset-retrieval.service';
+import { serializeRequestType } from '@shared/utils/papi-util';
 
 let getAsset: GetAsset;
 let isInitialized: boolean = false;
 let initializePromise: Promise<void>;
+
+/** Prefix on requests that indicates that the request is on the extension asset service */
+export const CATEGORY_EXTENSION_ASSET = 'extensionAsset';
+/** Name for request to get an extension asset */
+const GET_EXTENSION_ASSET_REQUEST = 'getExtensionAsset';
 
 /** Load an asset from the given extension's installation directory
  *  @param extensionName Name of the extension
@@ -24,7 +30,11 @@ const getExtensionAsset = async (
       return undefined;
     }
   } else {
-    return networkService.request('getExtensionAsset', extensionName, assetName);
+    return networkService.request(
+      serializeRequestType(CATEGORY_EXTENSION_ASSET, GET_EXTENSION_ASSET_REQUEST),
+      extensionName,
+      assetName,
+    );
   }
 };
 
@@ -37,7 +47,7 @@ const initialize = async () => {
     if (isInitialized) return;
     getAsset = (await import('@extension-host/services/asset-retrieval.service')).default;
     await networkService.registerRequestHandler(
-      'getExtensionAsset',
+      serializeRequestType(CATEGORY_EXTENSION_ASSET, GET_EXTENSION_ASSET_REQUEST),
       async (extensionName: string, assetName: string) => {
         return getExtensionAsset(extensionName, assetName);
       },

@@ -1,4 +1,4 @@
-import { deserializeRequestType, serializeRequestType } from './papi-util';
+import { SerializedRequestType, deserializeRequestType, serializeRequestType } from './papi-util';
 
 describe('PAPI Utils', () => {
   it('can serialize and deserialize request types', () => {
@@ -29,13 +29,10 @@ describe('PAPI Utils', () => {
     expect(directive).toEqual(DIRECTIVE);
   });
 
-  it('can deserialize with no separator', () => {
+  it('will throw on deserialize with no separator', () => {
     const CATEGORY = 'myCategory';
 
-    const { category, directive } = deserializeRequestType(CATEGORY);
-
-    expect(category).toEqual(CATEGORY);
-    expect(directive).toEqual('');
+    expect(() => deserializeRequestType(CATEGORY as SerializedRequestType)).toThrow();
   });
 
   it('will throw on serialize if either input is undefined or empty', () => {

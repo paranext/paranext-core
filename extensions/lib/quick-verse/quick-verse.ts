@@ -4,9 +4,9 @@ import type { ExecutionToken } from 'node/models/execution-token.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
-import { QuickVerseDataTypes, QuickVerseSetData } from '@extensions/quick-verse/quick-verse';
+import type { QuickVerseDataTypes, QuickVerseSetData } from 'quick-verse';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
-import { UsfmDataProvider } from '@extensions/external-usfm-data-provider';
+import type { UsfmDataProvider } from 'usfm-data-provider';
 
 const {
   logger,
@@ -287,7 +287,7 @@ export async function activate(context: ExecutionActivationContext): Promise<Uns
   engine.heresyCount = storedHeresyCount;
 
   const quickVerseDataProvider = await papi.dataProvider.registerEngine<QuickVerseDataTypes>(
-    'quick-verse.quick-verse',
+    'quickVerse.quickVerse',
     engine,
   );
 

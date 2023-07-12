@@ -1,0 +1,9 @@
+{
+  "name": "usfm-data-provider",
+  "version": "0.0.1",
+  "description": "USFM Data Provider for Paranext - provided by C# data provider",
+  "author": "Paranext",
+  "license": "MIT",
+  "main": null,
+  "activationEvents": []
+}

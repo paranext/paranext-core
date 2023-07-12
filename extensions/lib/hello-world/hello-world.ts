@@ -5,7 +5,7 @@ import type {
   WebViewDefinition,
   SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
-import { PeopleDataProvider } from '@extensions/hello-someone/hello-someone';
+import type { PeopleDataProvider } from 'hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 // @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
 import helloWorldReactWebView from './hello-world.web-view';
@@ -19,7 +19,7 @@ logger.info('Hello world is importing!');
 
 const unsubscribers: UnsubscriberAsync[] = [];
 
-const htmlWebViewType = 'hello-world.html';
+const htmlWebViewType = 'helloWorld.html';
 
 /**
  * Simple web view provider that provides sample html web views when papi requests them
@@ -39,7 +39,7 @@ const htmlWebViewProvider: IWebViewProvider = {
   },
 };
 
-const reactWebViewType = 'hello-world.react';
+const reactWebViewType = 'helloWorld.react';
 
 /**
  * Simple web view provider that provides React web views when papi requests them
@@ -59,6 +59,16 @@ const reactWebViewProvider: IWebViewProvider = {
   },
 };
 
+/** Simple function to return hello world. Registered as a command handler */
+function helloWorld() {
+  return 'Hello world!';
+}
+
+/** Simple function to throw a customized exception. Registered as a command handler */
+function helloException(message: string) {
+  throw new Error(`Hello World Exception! ${message}`);
+}
+
 export async function activate(): Promise<UnsubscriberAsync> {
   logger.info('Hello world is activating!');
 
@@ -73,12 +83,8 @@ export async function activate(): Promise<UnsubscriberAsync> {
   );
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
-    papi.commands.registerCommand('hello-world.hello-world', () => {
-      return 'Hello world!';
-    }),
-    papi.commands.registerCommand('hello-world.hello-exception', (message: string) => {
-      throw new Error(`Hello World Exception! ${message}`);
-    }),
+    papi.commands.registerCommand('helloWorld.helloWorld', helloWorld),
+    papi.commands.registerCommand('helloWorld.helloException', helloException),
   ];
 
   papi
@@ -93,9 +99,7 @@ export async function activate(): Promise<UnsubscriberAsync> {
   papi.webViews.getWebView(htmlWebViewType, undefined, { existingId: '?' });
   papi.webViews.getWebView(reactWebViewType, undefined, { existingId: '?' });
 
-  const peopleDataProvider = await papi.dataProvider.get<PeopleDataProvider>(
-    'hello-someone.people',
-  );
+  const peopleDataProvider = await papi.dataProvider.get<PeopleDataProvider>('helloSomeone.people');
 
   if (peopleDataProvider) {
     // Test subscribing to a data provider
