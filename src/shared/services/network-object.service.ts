@@ -451,6 +451,14 @@ const set = async <T extends NetworkableObject>(
 
 // #endregion
 
+// Declare an interface for the object we're exporting so that JSDoc comments propagate
+interface NetworkObjectService {
+  initialize: typeof initialize;
+  hasKnown: typeof hasKnown;
+  get: typeof get;
+  set: typeof set;
+}
+
 /**
  * Network objects are distributed objects within PAPI for TS/JS objects.
  * @see https://en.wikipedia.org/wiki/Distributed_object
@@ -473,7 +481,7 @@ const set = async <T extends NetworkableObject>(
  * event handler will be called. After an object is disposed, calls to its functions will no longer
  * be proxied to the original object.
  */
-const networkObjectService = {
+const networkObjectService: NetworkObjectService = {
   initialize,
   hasKnown,
   get,

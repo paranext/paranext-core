@@ -261,7 +261,7 @@ export async function activate(context: ExecutionActivationContext) {
     peopleDataProviderEngine,
   );
 
-  const peopleWebViewProviderPromise = papi.webViews.registerWebViewProvider(
+  const peopleWebViewProviderPromise = papi.webViewProviders.register(
     peopleWebViewType,
     peopleWebViewProvider,
   );

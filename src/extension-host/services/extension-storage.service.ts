@@ -135,11 +135,20 @@ async function deleteUserData(token: ExecutionToken, key: string): Promise<void>
 
 // #endregion
 
+// Declare an interface for the object we're exporting so that JSDoc comments propagate
+export interface ExtensionStorageService {
+  readTextFileFromInstallDirectory: typeof readTextFileFromInstallDirectory;
+  readBinaryFileFromInstallDirectory: typeof readBinaryFileFromInstallDirectory;
+  readUserData: typeof readUserData;
+  writeUserData: typeof writeUserData;
+  deleteUserData: typeof deleteUserData;
+}
+
 /** This service provides extensions in the extension host the ability to read/write data
  *  based on the extension identity and current user (as identified by the OS). This service will
  *  not work within the renderer.
  */
-const extensionStorageService = {
+const extensionStorageService: ExtensionStorageService = {
   readTextFileFromInstallDirectory,
   readBinaryFileFromInstallDirectory,
   readUserData,
@@ -148,5 +157,3 @@ const extensionStorageService = {
 };
 
 export default extensionStorageService;
-
-export type ExtensionStorageService = typeof extensionStorageService;
