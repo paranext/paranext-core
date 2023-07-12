@@ -5,19 +5,16 @@
  */
 
 import papiShared from '@shared/services/papi.service';
-// Leave the "unused" type imports below in place.  It causes Intellisense problems if you remove them.
-// @ts-ignore
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import papiContext, { PapiContext } from '@renderer/context/papi-context';
-// @ts-ignore
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import papiHooks, { PapiHooks } from '@renderer/hooks/papi-hooks';
 
+// Note: we need to provide type assertions for all members so they carry the JSDoc comments on the
+// papi.d.ts file so extension developers see the comments. Please add to all properties you add.
 const papi = {
   ...papiShared,
   react: {
-    context: papiContext,
-    hooks: papiHooks,
+    context: papiContext as PapiContext,
+    hooks: papiHooks as PapiHooks,
   },
 };
 export default papi;
