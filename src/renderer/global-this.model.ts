@@ -6,6 +6,7 @@ import React from 'react';
 import * as ReactJsxRuntime from 'react/jsx-runtime';
 import * as ReactDOM from 'react-dom';
 import * as ReactDOMClient from 'react-dom/client';
+import * as SillsdevScripture from '@sillsdev/scripture';
 import { ProcessType } from '@shared/global-this.model';
 import papi, { Papi } from '@renderer/services/papi-frontend.service';
 import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
@@ -30,14 +31,17 @@ function webViewRequire(module: string) {
   if (module === 'react/jsx-runtime') return ReactJsxRuntime;
   if (module === 'react-dom') return ReactDOM;
   if (module === 'react-dom/client') return ReactDOMClient;
+  if (module === '@sillsdev/scripture') return SillsdevScripture;
   // Tell the extension dev if there is an api similar to what they want to import
-  const message = `Requiring other than papi-frontend, react, react-dom, and react-dom/client is not allowed in WebViews! ${getModuleSimilarApiMessage(
+  const message = `Requiring other than papi-frontend, react, react-dom, react-dom/client, and @sillsdev/scripture is not allowed in WebViews! ${getModuleSimilarApiMessage(
     module,
   )}`;
   throw new Error(message);
 }
 
 type ReactJsxRuntimeType = typeof ReactJsxRuntime;
+type ReactDOMClientType = typeof ReactDOMClient;
+type SillsdevScriptureType = typeof SillsdevScripture;
 type WebViewRequire = typeof webViewRequire;
 
 /* eslint-disable vars-on-top */
@@ -49,7 +53,9 @@ declare global {
   // For some reason, TypeScript throws an index signature error on assignment to
   // globalThis.ReactDOM, so this is ReactDom, not ReactDOM
   var ReactDom: typeof ReactDOM;
+  var ReactDOMClient: ReactDOMClientType;
   var createRoot: typeof ReactDOMClient.createRoot;
+  var SillsdevScripture: SillsdevScriptureType;
   var webViewRequire: WebViewRequire;
 }
 /* eslint-enable */
@@ -68,7 +74,9 @@ globalThis.papi = papi;
 globalThis.React = React;
 globalThis.ReactJsxRuntime = ReactJsxRuntime;
 globalThis.ReactDom = ReactDOM;
+globalThis.ReactDOMClient = ReactDOMClient;
 globalThis.createRoot = ReactDOMClient.createRoot;
+globalThis.SillsdevScripture = SillsdevScripture;
 globalThis.webViewRequire = webViewRequire;
 
 // #endregion
