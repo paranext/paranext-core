@@ -8,6 +8,7 @@ import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
 import { UnsubscriberAsync, getModuleSimilarApiMessage } from '@shared/utils/papi-util';
 import Module from 'module';
+import * as SillsdevScripture from '@sillsdev/scripture';
 import logger from '@shared/services/logger.service';
 import {
   ARG_EXTENSION_DIRS,
@@ -211,8 +212,9 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
   // Shim out require so extensions can't use it
   const requireOriginal = Module.prototype.require;
   Module.prototype.require = ((moduleName: string) => {
-    // Allow the extension to import papi
+    // Allow the extension to import papi and some other things
     if (moduleName === 'papi-backend') return papi;
+    if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithFiles.find(
