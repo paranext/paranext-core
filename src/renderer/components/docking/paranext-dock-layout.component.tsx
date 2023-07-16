@@ -41,7 +41,6 @@ import {
   saveTabInfoBase,
 } from '@shared/services/web-view.service';
 import { getErrorMessage } from '@shared/utils/util';
-import PlatformBibleToolbar from '../platform-bible-toolbar';
 
 type TabType = string;
 
@@ -301,19 +300,16 @@ export default function ParanextDockLayout() {
   }, []);
 
   return (
-    <>
-      <PlatformBibleToolbar />
-      <DockLayout
-        ref={dockLayoutRef}
-        groups={groups}
-        defaultLayout={{ dockbox: { mode: 'horizontal', children: [] } }}
-        dropMode="edge"
-        loadTab={loadTab}
-        saveTab={saveTab}
-        onLayoutChange={(...args) => {
-          if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);
-        }}
-      />
-    </>
+    <DockLayout
+      ref={dockLayoutRef}
+      groups={groups}
+      defaultLayout={{ dockbox: { mode: 'horizontal', children: [] } }}
+      dropMode="edge"
+      loadTab={loadTab}
+      saveTab={saveTab}
+      onLayoutChange={(...args) => {
+        if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);
+      }}
+    />
   );
 }

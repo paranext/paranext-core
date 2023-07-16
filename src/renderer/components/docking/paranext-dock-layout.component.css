@@ -1,8 +1,6 @@
 .dock-layout {
-  width: calc(100% - 8px);
-  height: calc(100% - 8px);
-  margin-left: 4px;
-  margin-top: 4px;
+  flex-grow: 1;
+  margin: 4px;
 }
 
 .dock-layout .dock-panel.dock-style-paranext {
