@@ -503,51 +503,94 @@ export declare function Snackbar({
   ContentProps,
   children,
 }: SnackbarProps): import('react/jsx-runtime').JSX.Element;
-export type MenuItemProps = PropsWithChildren<{
+export type MenuColumn = {
   /**
-   * If true, list item is focused during the first mount
-   * @default false
+   * The name of the menu (displayed as the column header).
    */
-  hasAutoFocus?: boolean;
+  name: string;
+  items: MenuItemInfo[];
+};
+export type GridMenuInfo = {
   /**
-   * Additional css classes to help with unique styling of the button
+   * The columns to display on the dropdown menu.
+   */
+  columns: MenuColumn[];
+};
+export type GridMenuProps = GridMenuInfo & {
+  doCommand: CommandHandler;
+};
+export function GridMenu({
+  doCommand,
+  columns,
+}: GridMenuProps): import('react/jsx-runtime').JSX.Element;
+export interface CommandHandler {
+  (command: Command): void;
+}
+export type Command = {
+  /**
+   * Text (displayable in the UI) as the name of the command
+   */
+  name: string;
+  /**
+   * Command to execute (string.string)
+   */
+  command: string;
+};
+export type ToolbarProps = {
+  /**
+   * The handler to use for menu commands (and eventually toolbar commands).
+   */
+  commandHandler: CommandHandler;
+  /**
+   * The optional grid menu to display. If not specified, the "hamburger" menu will not display.
+   */
+  menu?: GridMenuInfo;
+  /**
+   * Additional css classes to help with unique styling of the toolbar
    */
   className?: string;
   /**
-   * If true, compact vertical padding designed for keyboard and mouse
-   * input is used.
-   * @default false
+   * The controls to include on the toolbar.
    */
-  isDense?: boolean;
-  /**
-   * If true, the left and right padding is removed
-   * @default false
-   */
-  hasDisabledGutters?: boolean;
-  /**
-   * If true, a 1px light border is added to bottom of menu item
-   * @default false
-   */
-  hasDivider?: boolean;
-  /**
-   * Help identify which element has keyboard focus
-   */
-  focusVisibleClassName?: string;
-  /**
-   * Optional click handler
-   */
-  onClick?: MouseEventHandler<HTMLLIElement> | undefined;
-}>;
-export declare function MenuItem({
-  hasAutoFocus,
-  className,
-  isDense,
-  hasDisabledGutters,
-  hasDivider,
-  focusVisibleClassName,
-  onClick,
-  children,
-}: MenuItemProps): import('react/jsx-runtime').JSX.Element;
+  children?: ReactElement<any, any>;
+};
+export function Toolbar(props: ToolbarProps): import('react/jsx-runtime').JSX.Element;
+export type MenuItemProps = MenuItemInfo & {
+  onClick: () => void;
+};
+export type MenuItemInfo = Command &
+  PropsWithChildren<{
+    /**
+     * If true, list item is focused during the first mount
+     * @default false
+     */
+    hasAutoFocus?: boolean;
+    /**
+     * Additional css classes to help with unique styling of the button
+     */
+    className?: string;
+    /**
+     * If true, compact vertical padding designed for keyboard and mouse
+     * input is used.
+     * @default true
+     */
+    isDense?: boolean;
+    /**
+     * If true, the left and right padding is removed
+     * @default false
+     */
+    hasDisabledGutters?: boolean;
+    /**
+     * If true, a 1px light border is added to bottom of menu item
+     * @default false
+     */
+    hasDivider?: boolean;
+    /**
+     * Help identify which element has keyboard focus
+     */
+    focusVisibleClassName?: string;
+  }>;
+export declare function MenuItem(props: MenuItemProps): import('react/jsx-runtime').JSX.Element;
 export interface TableCalculatedColumn<R> extends TableColumn<R> {
   readonly idx: number;
   readonly width: number | string;
@@ -794,30 +837,5 @@ export declare function Table<R>({
   onScroll,
   className,
 }: TableProps<R>): import('react/jsx-runtime').JSX.Element;
-export type MenuColumn = {
-  /**
-   * The name of the menu (displayed as the column header).
-   */
-  name: string;
-  items: MenuItemProps[];
-};
-export type GridMenuProps = {
-  /**
-   * The columns to display on the dropdown menu.
-   */
-  columns: MenuColumn[];
-};
-export function GridMenu({ columns }: GridMenuProps): import('react/jsx-runtime').JSX.Element;
-export type ToolbarProps = {
-  /**
-   * The optional grid menu to display. If not specified, the "hamburger" menu will not display.
-   */
-  menu?: GridMenuProps;
-  /**
-   * The controls to include on the toolbar.
-   */
-  children?: ReactElement<any, any>;
-};
-export function Toolbar(props: ToolbarProps): import('react/jsx-runtime').JSX.Element;
 
 export {};

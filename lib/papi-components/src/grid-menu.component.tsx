@@ -1,6 +1,7 @@
 import { Grid } from '@mui/material';
-import MenuItem, { MenuItemProps } from './menu-item.component';
+import MenuItem, { MenuItemInfo } from './menu-item.component';
 import './grid-menu.component.css';
+import { CommandHandler } from 'toolbar.component';
 
 export type MenuColumn = {
   /**
@@ -10,24 +11,29 @@ export type MenuColumn = {
   /*
    * The menu items to include.
    */
-  items: MenuItemProps[];
+  items: MenuItemInfo[];
 };
 
 type MenuColumnProps = MenuColumn & {
+  doCommand: CommandHandler;
   /**
    * The index of the menu column.
    */
   index: number;
 };
 
-export type GridMenuProps = {
+export type GridMenuInfo = {
   /**
    * The columns to display on the dropdown menu.
    */
   columns: MenuColumn[];
 };
 
-function MenuColumn({ name, index, items }: MenuColumnProps) {
+export type GridMenuProps = GridMenuInfo & {
+  doCommand: CommandHandler;
+};
+
+function MenuColumn({ doCommand, name, index, items }: MenuColumnProps) {
   return (
     <Grid item xs={index}>
       <h3 className="menu">{name}</h3>
@@ -35,22 +41,19 @@ function MenuColumn({ name, index, items }: MenuColumnProps) {
         <MenuItem
           key={index}
           className={`menu-item ${menuItem.className}`}
-          isDense={menuItem.isDense}
-          hasDivider={menuItem.hasDivider}
-          onClick={menuItem.onClick}
-        >
-          {menuItem.children}
-        </MenuItem>
+          onClick={() => doCommand(menuItem)}
+          {...menuItem}
+        />
       ))}
     </Grid>
   );
 }
 
-export default function GridMenu({ columns }: GridMenuProps) {
+export default function GridMenu({ doCommand, columns }: GridMenuProps) {
   return (
     <Grid container spacing={0} className="multi-colum-menu" columns={columns.length}>
       {columns.map((col, index) => (
-        <MenuColumn name={col.name} index={index} items={col.items} />
+        <MenuColumn doCommand={doCommand} name={col.name} index={index} items={col.items} />
       ))}
     </Grid>
   );

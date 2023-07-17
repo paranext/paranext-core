@@ -1,59 +1,62 @@
 import { MenuItem as MuiMenuItem } from '@mui/material';
 import './menu-item.component.css';
-import { PropsWithChildren, MouseEventHandler } from 'react';
+import { PropsWithChildren } from 'react';
+import { Command } from 'toolbar.component';
 
-export type MenuItemProps = PropsWithChildren<{
-  /**
-   * If true, list item is focused during the first mount
-   * @default false
-   */
-  hasAutoFocus?: boolean;
+export type MenuItemProps = MenuItemInfo & {
+  onClick: () => void;
+};
 
-  /**
-   * Additional css classes to help with unique styling of the button
-   */
-  className?: string;
+export type MenuItemInfo = Command &
+  PropsWithChildren<{
+    /**
+     * If true, list item is focused during the first mount
+     * @default false
+     */
+    hasAutoFocus?: boolean;
 
-  /**
-   * If true, compact vertical padding designed for keyboard and mouse
-   * input is used.
-   * @default false
-   */
-  isDense?: boolean;
+    /**
+     * Additional css classes to help with unique styling of the button
+     */
+    className?: string;
 
-  /**
-   * If true, the left and right padding is removed
-   * @default false
-   */
-  hasDisabledGutters?: boolean;
+    /**
+     * If true, compact vertical padding designed for keyboard and mouse
+     * input is used.
+     * @default true
+     */
+    isDense?: boolean;
 
-  /**
-   * If true, a 1px light border is added to bottom of menu item
-   * @default false
-   */
-  hasDivider?: boolean;
+    /**
+     * If true, the left and right padding is removed
+     * @default false
+     */
+    hasDisabledGutters?: boolean;
 
-  /**
-   * Help identify which element has keyboard focus
-   */
-  focusVisibleClassName?: string;
+    /**
+     * If true, a 1px light border is added to bottom of menu item
+     * @default false
+     */
+    hasDivider?: boolean;
 
-  /**
-   * Optional click handler
-   */
-  onClick?: MouseEventHandler<HTMLLIElement> | undefined;
-}>;
+    /**
+     * Help identify which element has keyboard focus
+     */
+    focusVisibleClassName?: string;
+  }>;
 
-function MenuItem({
-  hasAutoFocus = false,
-  className,
-  isDense = false,
-  hasDisabledGutters = false,
-  hasDivider = false,
-  focusVisibleClassName,
-  onClick,
-  children,
-}: MenuItemProps) {
+function MenuItem(props: MenuItemProps) {
+  const {
+    onClick,
+    name,
+    hasAutoFocus = false,
+    className,
+    isDense = true,
+    hasDisabledGutters = false,
+    hasDivider = false,
+    focusVisibleClassName,
+  } = props;
+
   return (
     <MuiMenuItem
       autoFocus={hasAutoFocus}
@@ -64,7 +67,7 @@ function MenuItem({
       focusVisibleClassName={focusVisibleClassName}
       onClick={onClick}
     >
-      {children}
+      {name}
     </MuiMenuItem>
   );
 }

@@ -626,7 +626,17 @@
   padding-top: 2px;
 }
 
-.toolbar {
+.papi-toolbar {
   background-color: #f5f5f5;
   color: #000;
+}
+
+.papi-toolbar.paratext {
+  background-color: #006400;
+  color: #adff2f;
+}
+
+.papi-toolbar.paratext.bright {
+  background-color: #adff2f;
+  color: #006400;
 }

@@ -1,4 +1,14 @@
-.toolbar {
+.papi-toolbar {
   background-color: rgb(245, 245, 245);
   color: black;
+}
+
+.papi-toolbar.paratext {
+  background-color: darkgreen;
+  color: greenyellow;
+}
+
+.papi-toolbar.paratext.bright {
+  background-color: greenyellow;
+  color: darkgreen;
 }
