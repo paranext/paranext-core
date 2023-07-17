@@ -19,7 +19,7 @@ const config = defineConfig({
       fileName: (format) => `index.${format}.js`,
     },
     rollupOptions: {
-      external: ['react', 'react-data-grid', 'react-dom'],
+      external: ['react', 'react-dom'],
       output: {
         globals: {
           react: 'React',
