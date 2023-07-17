@@ -66,7 +66,11 @@ export const WithMenu: Story = {
           ],
         },
         {
-          name: 'Second Menu',
+          name: 'Empty Menu',
+          items: [],
+        },
+        {
+          name: 'Last Menu',
           items: [
             {
               name: 'Log a message',
@@ -75,7 +79,7 @@ export const WithMenu: Story = {
             },
             {
               name: 'Nonexistent command',
-              command: 'storybookToolbar.nonexistant',
+              command: 'storybookToolbar.nonexistent',
               isDense: true,
             },
           ],

@@ -1,3 +1,13 @@
 .papi-menu-item {
   line-height: 0.8;
 }
+
+.papi-menu-item.paratext {
+  background-color: darkgreen;
+  color: greenyellow;
+}
+
+.papi-menu-item.paratext.bright {
+  background-color: greenyellow;
+  color: darkgreen;
+}

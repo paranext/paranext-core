@@ -517,10 +517,15 @@ export type GridMenuInfo = {
   columns: MenuColumn[];
 };
 export type GridMenuProps = GridMenuInfo & {
-  doCommand: CommandHandler;
+  commandHandler: CommandHandler;
+  /**
+   * Additional css classes to help with unique styling of the toolbar
+   */
+  className?: string;
 };
 export function GridMenu({
-  doCommand,
+  commandHandler,
+  className,
   columns,
 }: GridMenuProps): import('react/jsx-runtime').JSX.Element;
 export interface CommandHandler {

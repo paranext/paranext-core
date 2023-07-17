@@ -59,7 +59,7 @@ export default function Toolbar(props: ToolbarProps) {
         {props.menu ? (
           <IconButton
             edge="start"
-            className="menuButton"
+            className={`papi-menuButton ${props.className ?? ''}`}
             color="inherit"
             aria-label="open drawer"
             onClick={() => {
@@ -72,7 +72,7 @@ export default function Toolbar(props: ToolbarProps) {
         {props.children}
         {props.menu ? (
           <Drawer
-            className="menu-drawer"
+            className={`papi-menu-drawer ${props.className ?? ''}`}
             anchor="left"
             variant="temporary"
             open={menuOpen}
@@ -81,7 +81,7 @@ export default function Toolbar(props: ToolbarProps) {
             }}
             PaperProps={{ style: { top: '40px', width: '95%', height: '170px' } }}
           >
-            <GridMenu doCommand={props.commandHandler} columns={props.menu?.columns} />
+            <GridMenu commandHandler={props.commandHandler} columns={props.menu?.columns} />
           </Drawer>
         ) : null}
       </MuiToolbar>

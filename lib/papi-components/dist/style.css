@@ -203,6 +203,16 @@
 .papi-menu-item {
   line-height: 0.8;
 }
+
+.papi-menu-item.paratext {
+  background-color: #006400;
+  color: #adff2f;
+}
+
+.papi-menu-item.paratext.bright {
+  background-color: #adff2f;
+  color: #006400;
+}
 @layer rdg.MeasuringCell {
   .m1l09lto7-0-0-beta-33 {
     contain: strict;
@@ -610,13 +620,15 @@
   color: #adff2f;
 }
 
-.multi-colum-menu {
+.papi-multi-column-menu {
   background-color: #d3d3d3;
   display: flex;
   flex-direction: column;
+  padding-left: 3px;
+  padding-right: 3px;
 }
 
-.menu {
+.papi-menu {
   background-color: #919191;
   font-size: 11pt;
   font-weight: 600;

@@ -15,11 +15,12 @@ export type MenuColumn = {
 };
 
 type MenuColumnProps = MenuColumn & {
-  doCommand: CommandHandler;
+  commandHandler: CommandHandler;
+
   /**
-   * The index of the menu column.
+   * Additional css classes to help with unique styling of the toolbar
    */
-  index: number;
+  className?: string;
 };
 
 export type GridMenuInfo = {
@@ -30,18 +31,23 @@ export type GridMenuInfo = {
 };
 
 export type GridMenuProps = GridMenuInfo & {
-  doCommand: CommandHandler;
+  commandHandler: CommandHandler;
+
+  /**
+   * Additional css classes to help with unique styling of the toolbar
+   */
+  className?: string;
 };
 
-function MenuColumn({ doCommand, name, index, items }: MenuColumnProps) {
+function MenuColumn({ commandHandler, name, className, items }: MenuColumnProps) {
   return (
-    <Grid item xs={index}>
-      <h3 className="menu">{name}</h3>
+    <Grid item xs={1} className={`papi-menu-column ${className ?? ''}`}>
+      <h3 className={`papi-menu ${className ?? ''}`}>{name}</h3>
       {items.map((menuItem, index) => (
         <MenuItem
           key={index}
-          className={`menu-item ${menuItem.className}`}
-          onClick={() => doCommand(menuItem)}
+          className={`papi-menu-item ${menuItem.className}`}
+          onClick={() => commandHandler(menuItem)}
           {...menuItem}
         />
       ))}
@@ -49,11 +55,21 @@ function MenuColumn({ doCommand, name, index, items }: MenuColumnProps) {
   );
 }
 
-export default function GridMenu({ doCommand, columns }: GridMenuProps) {
+export default function GridMenu({ commandHandler, className, columns }: GridMenuProps) {
   return (
-    <Grid container spacing={0} className="multi-colum-menu" columns={columns.length}>
-      {columns.map((col, index) => (
-        <MenuColumn doCommand={doCommand} name={col.name} index={index} items={col.items} />
+    <Grid
+      container
+      spacing={0}
+      className={`papi-multi-column-menu ${className ?? ''}`}
+      columns={columns.length}
+    >
+      {columns.map((col) => (
+        <MenuColumn
+          commandHandler={commandHandler}
+          name={col.name}
+          className={className}
+          items={col.items}
+        />
       ))}
     </Grid>
   );

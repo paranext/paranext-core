@@ -1,10 +1,12 @@
-.multi-colum-menu {
+.papi-multi-column-menu {
   background-color: lightgray;
   display: flex;
   flex-direction: column;
+  padding-left: 3px;
+  padding-right: 3px;
 }
 
-.menu {
+.papi-menu {
   background-color: rgb(145, 145, 145);
   font-size: 11pt;
   font-weight: 600;
