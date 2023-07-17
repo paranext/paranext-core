@@ -1,6 +1,7 @@
-import { useRef } from 'react';
 import Typography from '@mui/material/Typography';
 import { Toolbar, RefSelector, ScriptureReference } from 'papi-components';
+import standardMenuLayout from './platform-bible-menu.data';
+import { HandleMenuCommand } from './platform-bible-menu.commands';
 import './platform-bible-toolbar.css';
 
 export default function PlatformBibleToolbar(props: {
@@ -10,12 +11,8 @@ export default function PlatformBibleToolbar(props: {
   const { referenceChanged } = props;
   const { scrRef } = props;
 
-  // This ref will always be defined
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const toolbarRef = useRef<HTMLDivElement>(null);
-
   return (
-    <Toolbar ref={toolbarRef}>
+    <Toolbar menu={standardMenuLayout} commandHandler={HandleMenuCommand}>
       <Typography className="title" variant="h6" noWrap>
         <RefSelector handleSubmit={referenceChanged} scrRef={scrRef} />
       </Typography>
