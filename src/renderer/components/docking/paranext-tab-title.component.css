@@ -1,6 +1,7 @@
 .title {
-  align-content: start;
   display: flex;
+  align-items: center;
+  margin-right: 5px;
 }
 
 .tabMenuButton {
@@ -9,7 +10,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  background-image: url(../../../../assets/icon.png);
+  background-image: url(/assets/icon.png);
   background-size: 100%;
   width: 16px;
   height: 16px;

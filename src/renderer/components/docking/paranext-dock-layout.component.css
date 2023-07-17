@@ -8,8 +8,9 @@
 }
 
 /*
- * There is a bug where this placeholder box can't receive float windows. If you close all windows but a float window,
- * you will not be able to dock that float window. Submitted and tracking at https://github.com/ticlo/rc-dock/issues/199
+ * There is a bug where this placeholder box can't receive float windows. If you close all windows
+ * but a float window, you will not be able to dock that float window. Submitted and tracking at
+ * https://github.com/ticlo/rc-dock/issues/199
  */
 /* Hide the fake placeholder box that shows up if you have nothing but a floating window */
 .dock-layout .dock-panel.dock-style-place-holder {
@@ -25,6 +26,10 @@
   border: 1px solid #5c5c5c;
   background: #bfbfbf;
   color: #191919;
+}
+
+.dock-layout .dock-panel.dock-style-paranext .dock-tab > div {
+  padding-left: 7px;
 }
 
 /*
@@ -47,7 +52,7 @@
 .dock-layout .dock-panel.dock-style-paranext .dock-tab.dock-tab-active {
   background: #a6c9ff;
   color: #191919;
-  border-bottom: 1px solid #ffffff;
+  border-bottom: 1px solid #a6c9ff;
 }
 
 /* Curved corners including on floating window */
@@ -88,14 +93,15 @@
 .dock-layout .dock-panel.dock-style-paranext .dock-nav-list {
   flex-grow: 1;
 }
-
 .dock-layout .dock-panel.dock-style-paranext .dock-tab {
   flex: 1 0 auto;
 }
 
 /* global dock layout styles */
 .dock-layout > .dock-drop-indicator {
-  border: solid 1px #a6c9ff;
+  /* darken(#a6c9ff, 40%) = #0055d9 */
+  border: solid 1px #0055d9;
+  box-shadow: inset 0 0 10px #0055d9;
   background: #a6c9ff;
 }
 
