@@ -128,6 +128,10 @@ export declare function Checkbox({
   className,
   onChange,
 }: CheckboxProps): import('react/jsx-runtime').JSX.Element;
+export type ComboBoxLabelOption = {
+  label: string;
+};
+export type ComboBoxOption = string | ComboBoxLabelOption;
 export type ComboBoxValue<T, X, Y, Z> = AutocompleteValue<T, X, Y, Z>;
 export type ComboBoxChangeDetails<T> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
@@ -196,13 +200,7 @@ export type ComboBoxProps<T> = {
  * Thanks to MUI for heavy inspiration and documentation
  * https://mui.com/material-ui/getting-started/overview/
  */
-export declare function ComboBox<
-  T =
-    | string
-    | {
-        label: string;
-      },
->({
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   title,
   isDisabled,
   isClearable,
