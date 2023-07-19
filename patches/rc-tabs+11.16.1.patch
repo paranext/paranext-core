@@ -1,0 +1,39 @@
+diff --git a/node_modules/rc-tabs/es/TabNavList/index.js b/node_modules/rc-tabs/es/TabNavList/index.js
+index 60d1095..9c3de28 100644
+--- a/node_modules/rc-tabs/es/TabNavList/index.js
++++ b/node_modules/rc-tabs/es/TabNavList/index.js
+@@ -5,7 +5,8 @@ import _objectSpread from "@babel/runtime/helpers/esm/objectSpread2";
+ import _slicedToArray from "@babel/runtime/helpers/esm/slicedToArray";
+ import _typeof from "@babel/runtime/helpers/esm/typeof";
+ import * as React from 'react';
+-import { useState, useRef, useEffect } from 'react';
++import { useCallback, useState, useRef, useEffect } from 'react';
++import debounce from 'lodash/debounce';
+ import classNames from 'classnames';
+ import raf from "rc-util/es/raf";
+ import ResizeObserver from 'rc-resize-observer';
+@@ -419,9 +420,22 @@ function TabNavList(props, ref) {
+     onListHolderResize();
+   }, [rtl, tabBarGutter, activeKey, tabs.map(function (tab) {
+     return tab.key;
+-  }).join('_')]); // ========================= Render ========================
++  }).join('_')]);
+ 
+-  var hasDropdown = !!hiddenTabs.length;
++  var _useState17 = useState(),
++  _useState18 = _slicedToArray(_useState17, 2),
++  hasDropdown = _useState18[0],
++  setHasDropdown = _useState18[1];
++
++  var debounceHasDropdown = useCallback(debounce(function (_hasDropdown) {
++    setHasDropdown(_hasDropdown);
++  }, 30), []);
++
++  useEffect(function () {
++    debounceHasDropdown(!!hiddenTabs.length)
++  }, [hiddenTabs]);
++
++  // ========================= Render ========================
+   var wrapPrefix = "".concat(prefixCls, "-nav-wrap");
+   var pingLeft;
+   var pingRight;
