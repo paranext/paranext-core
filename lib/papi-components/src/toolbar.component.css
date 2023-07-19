@@ -12,3 +12,9 @@
   background-color: greenyellow;
   color: darkgreen;
 }
+
+.papi-menu-drawer {
+  /* margin-right: auto; */
+  position: relative;
+  width: 100%;
+}

@@ -47,44 +47,71 @@ export default function Toolbar(props: ToolbarProps) {
 
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const containerRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   return (
-    <AppBar position="static">
-      <MuiToolbar
-        className={`papi-toolbar ${props.className ?? ''}`}
-        ref={toolbarRef}
-        variant="dense"
-      >
-        {props.menu ? (
-          <IconButton
-            edge="start"
-            className={`papi-menuButton ${props.className ?? ''}`}
-            color="inherit"
-            aria-label="open drawer"
-            onClick={() => {
-              setMenuOpen((prev) => !prev);
-            }}
-          >
-            <MenuIcon />
-          </IconButton>
-        ) : null}
-        {props.children}
-        {props.menu ? (
-          <Drawer
-            className={`papi-menu-drawer ${props.className ?? ''}`}
-            anchor="left"
-            variant="temporary"
-            open={menuOpen}
-            onClose={() => {
-              if (menuOpen) setMenuOpen(false);
-            }}
-            PaperProps={{ style: { top: '40px', width: '95%', height: '170px' } }}
-          >
-            <GridMenu commandHandler={props.commandHandler} columns={props.menu?.columns} />
-          </Drawer>
-        ) : null}
-      </MuiToolbar>
-    </AppBar>
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <AppBar position="static">
+        <MuiToolbar
+          className={`papi-toolbar ${props.className ?? ''}`}
+          ref={toolbarRef}
+          variant="dense"
+        >
+          {props.menu ? (
+            <IconButton
+              edge="start"
+              className={`papi-menuButton ${props.className ?? ''}`}
+              color="inherit"
+              aria-label="open drawer"
+              onClick={() => {
+                setMenuOpen((prev) => !prev);
+              }}
+            >
+              <MenuIcon />
+            </IconButton>
+          ) : null}
+          {props.children}
+          {props.menu ? (
+            <Drawer
+              className={`papi-menu-drawer ${props.className ?? ''}`}
+              anchor="left"
+              variant="persistent"
+              open={menuOpen}
+              onClose={() => {
+                if (menuOpen) setMenuOpen(false);
+              }}
+              style={{
+                position: 'relative',
+                // top: `${
+                //   toolbarRef.current === null
+                //     ? 2
+                //     : Number(
+                //         window
+                //           .getComputedStyle(toolbarRef.current, null)
+                //           .getPropertyValue('min-height'),
+                //       ) / 2
+                // }`,
+              }}
+              PaperProps={{
+                style: {
+                  top: '24px',
+                  // top: `${
+                  //   (toolbarRef.current?.parentElement?.offsetTop ?? 0) +
+                  //   (toolbarRef.current?.offsetTop ?? 0) +
+                  //   (toolbarRef.current?.clientHeight ?? 40)
+                  // }px`,
+                  height: '190px',
+                  position: 'absolute',
+                  width: '95%',
+                },
+              }}
+            >
+              <GridMenu commandHandler={props.commandHandler} columns={props.menu?.columns} />
+            </Drawer>
+          ) : null}
+        </MuiToolbar>
+      </AppBar>
+    </div>
   );
 }

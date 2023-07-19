@@ -652,3 +652,8 @@
   background-color: #adff2f;
   color: #006400;
 }
+
+.papi-menu-drawer {
+  position: relative;
+  width: 100%;
+}
