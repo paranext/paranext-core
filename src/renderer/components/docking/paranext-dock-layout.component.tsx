@@ -1,6 +1,6 @@
 import 'rc-dock/dist/rc-dock.css';
 import './paranext-dock-layout.component.css';
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import DockLayout, {
   BoxData,
   FloatPosition,
@@ -41,8 +41,6 @@ import {
   saveTabInfoBase,
 } from '@shared/services/web-view.service';
 import { getErrorMessage } from '@shared/utils/util';
-import { ScriptureReference } from 'papi-components';
-import PlatformBibleToolbar from '../platform-bible-toolbar';
 
 type TabType = string;
 
@@ -274,8 +272,6 @@ export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayo
 // #endregion
 
 export default function ParanextDockLayout() {
-  const [scrRef, setScrRef] = useState({ book: 40, chapter: 1, verse: 1 });
-
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const dockLayoutRef = useRef<DockLayout>(null!);
@@ -303,24 +299,17 @@ export default function ParanextDockLayout() {
     // Is there any situation where dockLayoutRef will change? We need to add to dependencies if so
   }, []);
 
-  const handleReferenceChanged = (newScrRef: ScriptureReference) => {
-    setScrRef(newScrRef);
-  };
-
   return (
-    <>
-      <PlatformBibleToolbar referenceChanged={handleReferenceChanged} scrRef={scrRef}/>
-      <DockLayout
-        ref={dockLayoutRef}
-        groups={groups}
-        defaultLayout={{ dockbox: { mode: 'horizontal', children: [] } }}
-        dropMode="edge"
-        loadTab={loadTab}
-        saveTab={saveTab}
-        onLayoutChange={(...args) => {
-          if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);
-        }}
-      />
-    </>
+    <DockLayout
+      ref={dockLayoutRef}
+      groups={groups}
+      defaultLayout={{ dockbox: { mode: 'horizontal', children: [] } }}
+      dropMode="edge"
+      loadTab={loadTab}
+      saveTab={saveTab}
+      onLayoutChange={(...args) => {
+        if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);
+      }}
+    />
   );
 }
