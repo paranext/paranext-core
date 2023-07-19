@@ -6,8 +6,8 @@ Official extensions provided by Paranext
 
 This is a Vite project configured to build Paranext's official extensions included in the product.
 
-- `lib` contains the source code for each extension
-  - Each sub-folder in `lib` with a `manifest.json` in it is an extension
+- `src` contains the source code for each extension
+  - Each sub-folder in `src` with a `manifest.json` in it is an extension
     - The main entry file is likely named the same as the extension name
     - `manifest.json` is the manifest file that defines the extension
     - `package.json` defines the npm package for this extension and is required for Paranext to use it appropriately
@@ -35,7 +35,7 @@ Note: The extensions will be the `dist` folder. These extension files will be wa
 
 ### Building your extension independently
 
-To watch extension files (in `lib`) for changes:
+To watch extension files (in `src`) for changes:
 
 `npm start:vite`
 
@@ -69,5 +69,5 @@ Vite packages the extensions together into the `dist` folder:
 Note: When performing the second build step, the following line may occur in your console. Please feel free to ignore it as it is a false positive. It is likely showing because WebViews are embedded in the entry file:
 
 ```bash
-transforming (1) lib\main.ts[plugin:ImportManager] It seems like there are multiple imports of module 'react'. You should examine that.
+transforming (1) src\main.ts[plugin:ImportManager] It seems like there are multiple imports of module 'react'. You should examine that.
 ```
