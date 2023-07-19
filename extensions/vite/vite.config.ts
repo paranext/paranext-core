@@ -33,7 +33,7 @@ const extensionConfig = defineConfig(async () => {
       // Redirect WebView imports to their version built in the first build step
       importManager({
         // Need to include all files that could import WebViews
-        include: 'lib/**/*.{ts,tsx,js,jsx}',
+        include: 'src/**/*.{ts,tsx,js,jsx}',
         units: tsxWebViews.map((webView) => {
           const webViewInfo = path.parse(webView);
           // Get the file name without the extension if it is tsx as tsx is inferred when importing

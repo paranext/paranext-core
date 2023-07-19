@@ -15,13 +15,20 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "typeRoots": ["./node_modules/@types", "./lib", "../lib"],
+    "typeRoots": [
+      // Include default type declarations
+      "./node_modules/@types",
+      // Include these bundled extensions' type declarations
+      "./src",
+      // Include papi-dts type declarations (for papi.d.ts)
+      "../lib"
+    ],
     "experimentalDecorators": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["lib"],
+  "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

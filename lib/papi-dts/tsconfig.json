@@ -9,9 +9,13 @@
     // typeRoots should be all of root tsconfig.json's typeRoots but without extensions
     // plus the src/declarations folder because these modules for some reason do not get picked up
     "typeRoots": [
+      // Include default type declarations
       "./node_modules/@types",
+      // Include root default type declarations
       "../../node_modules/@types",
+      // Include additions and overrides
       "../../src/@types",
+      // Include type declarations shared between core and extensions
       "../../src/declarations"
     ]
   },
