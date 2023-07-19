@@ -19,7 +19,14 @@
       "@node_modules/*": ["../node_modules/*"]
     },
     "experimentalDecorators": true,
-    "typeRoots": ["./node_modules/@types", "./extensions/lib", "src/@types"],
+    "typeRoots": [
+      // Include default type declarations
+      "./node_modules/@types",
+      // Include extensions' type declarations
+      "./extensions/src",
+      // Include additions and overrides
+      "src/@types"
+    ],
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

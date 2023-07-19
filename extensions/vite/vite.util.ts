@@ -5,7 +5,7 @@ import { glob } from 'glob';
 
 // #region not shared with others
 
-export const sourceFolder = 'lib';
+export const sourceFolder = 'src';
 
 /** List of static files to copy from each extension's source directory */
 export const staticFiles = [
