@@ -32,6 +32,16 @@
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="68.2.0.9" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
   </ItemGroup>
 
+  <!--
+    IMPORTANT: The version number below should match the version from the icu.net PackageReference
+    For some reason, the .config file only copies inconsistently from the NuGet package without this explicit reference.
+  -->
+  <ItemGroup>
+    <None Update="$(NuGetPackageRoot)\icu.net\2.9.0\contentFiles\any\any\icu.net.dll.config">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="assets\**\*.*">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
