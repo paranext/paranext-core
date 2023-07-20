@@ -46,6 +46,7 @@ const activeExtensions = new Map<string, ActiveExtension>();
  */
 type ExtensionManifest = {
   name: string;
+  version: string;
   /**
    * The JavaScript file to run in the extension host.
    *

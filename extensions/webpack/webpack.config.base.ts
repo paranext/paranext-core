@@ -1,13 +1,14 @@
-// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.config.base.ts
-
 import path from 'path';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import webpack from 'webpack';
 
+const isDev = process.env.NODE_ENV !== 'production';
+const shouldGenerateSourceMaps = isDev || process.env.DEBUG_PROD;
+
+// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.config.base.ts
+
 /** The base directory from which webpack should operate (should be the root repo folder) */
 export const rootDir = path.resolve(__dirname, '..');
-
-const isDev = process.env.NODE_ENV !== 'production';
 
 // Note: we do not want to do any chunking because neither webViews nor main can import dependencies
 // other than those listed in configBase.externals. Each webView must contain all its dependency
@@ -18,7 +19,7 @@ const configBase: webpack.Configuration = {
   context: rootDir,
   mode: isDev ? 'development' : 'production',
   // Bundle the sourcemap into the file since webviews are injected as strings into the main file
-  devtool: isDev ? 'inline-source-map' : false,
+  devtool: shouldGenerateSourceMaps ? 'inline-source-map' : false,
   watchOptions: {
     ignored: ['**/node_modules'],
   },
