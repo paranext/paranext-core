@@ -1,17 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useArgs } from '@storybook/client-api';
-import { RefSelector, ScrRefSelectorProps } from 'papi-components';
+import { RefSelector, ScrRefSelectorProps, ScriptureReference } from 'papi-components';
 import { ReactElement } from 'react';
-
-type Ref = { book: number; chapter: number; verse: number };
 
 function RefSelectorDecorator(
   Story: (update?: { args: Partial<ScrRefSelectorProps> }) => ReactElement,
 ) {
   const [args, updateArgs] = useArgs();
 
-  const handleSubmit = (ref: Ref) => {
-    updateArgs({ scrRef: ref });
+  const handleSubmit = (scrRef: ScriptureReference) => {
+    updateArgs({ scrRef });
   };
 
   return (
@@ -37,6 +35,6 @@ type Story = StoryObj<typeof RefSelector>;
 
 export const Default: Story = {
   args: {
-    scrRef: { book: 5, chapter: 4, verse: 3 },
+    scrRef: { bookNum: 5, chapterNum: 4, verseNum: 3 },
   },
 };
