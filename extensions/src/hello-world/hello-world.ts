@@ -7,11 +7,9 @@ import type {
 } from 'shared/data/web-view.model';
 import type { PeopleDataProvider } from 'hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
-// @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
-import helloWorldReactWebView from './hello-world.web-view';
+import helloWorldReactWebView from './hello-world.web-view?inline';
 import helloWorldReactWebViewStyles from './hello-world.web-view.scss?inline';
-// @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
-import helloWorldHtmlWebView from './hello-world.web-view.ejs';
+import helloWorldHtmlWebView from './hello-world.web-view.html?inline';
 
 const { logger } = papi;
 
