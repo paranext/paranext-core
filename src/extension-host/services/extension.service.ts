@@ -83,8 +83,8 @@ function parseManifest(extensionManifestJson: string) {
 
 /**
  * Get information for all the extensions present
- * TODO: figure out if we can share this code with vite.config.ts
  */
+// TODO: figure out if we can share this code with webpack.util.ts
 const getExtensions = async (): Promise<ExtensionInfo[]> => {
   const extensionFolders: Uri[] = (
     await Promise.all(

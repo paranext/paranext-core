@@ -4,17 +4,19 @@ Official extensions provided by Paranext
 
 ## Summary
 
-This is a Vite project configured to build Paranext's official extensions included in the product.
+This is a webpack project configured to build Paranext's official extensions included in the product.
 
 - `src` contains the source code for each extension
   - Each sub-folder in `src` with a `manifest.json` in it is an extension
     - The main entry file is likely named the same as the extension name
-    - `manifest.json` is the manifest file that defines the extension
-    - `package.json` defines the npm package for this extension and is required for Paranext to use it appropriately
-    - `<extension_name>.d.ts` is this extension's types file that other extensions can use
-    - `*.web-view.tsx` files are React WebViews
-    - `*.web-view.ejs` files are HTML WebViews
-- `dist` is a generated folder containing your built extension files
+    - `manifest.json` is the manifest file that defines the extension and important properties for Paranext
+    - `package.json` contains information about this extension npm package. It is required for Paranext to use the extension properly. It is copied into the build folder
+    - `<extension_name>.d.ts` is this extension's types file that defines how other extensions can use this extension through the `papi`
+    - `*.web-view.tsx` files will be treated as React WebViews
+    - `*.web-view.html` files are a conventional way to provide HTML WebViews (no special functionality)
+    - `assets` contains asset files the extension and its WebViews can retrieve using the `papi-extension:` protocol
+- `dist` is a generated folder containing the built extension files
+- `release` is a generated folder containing zips of the built extension files
 
 ## To install
 
@@ -37,37 +39,18 @@ Note: The extensions will be the `dist` folder. These extension files will be wa
 
 To watch extension files (in `src`) for changes:
 
-`npm start:vite`
+`npm run watch`
 
 To build the extensions once:
 
-`npm run build:vite` or `npm run build`
+`npm run build`
 
-## Vite Build Explanation
+## To package for distribution
 
-These extensions are built by Vite in two steps: a WebView transpilation step and a packaging step:
+To package your extension into a zip file for distribution:
 
-## Build 1: TypeScript WebView transpilation
+`npm run package`
 
-Vite prepares TypeScript WebViews for use and outputs them into `temp-vite` folders adjacent to the WebView files:
+## Special features of this project
 
-- Formats WebViews to match how they should look to work in Paranext
-- Transpiles React/TypeScript WebViews into JavaScript
-- Packages dependencies into the WebViews
-- Embeds Sourcemaps into the WebViews inline
-
-## Built 2: Packaging
-
-Vite packages the extensions together into the `dist` folder:
-
-- Transpiles each main TypeScript file and its imported modules into JavaScript
-- Injects the WebViews into the main files
-- Packages dependencies into the main files
-- Generates sourcemaps for the files
-- Packages everything up into each extension folder in `dist`
-
-Note: When performing the second build step, the following line may occur in your console. Please feel free to ignore it as it is a false positive. It is likely showing because WebViews are embedded in the entry file:
-
-```bash
-transforming (1) src\main.ts[plugin:ImportManager] It seems like there are multiple imports of module 'react'. You should examine that.
-```
+This project has special features and specific configuration to make building extensions for Paranext easier. See [Special features of `paranext-extension-template`](https://github.com/paranext/paranext-extension-template#special-features-of-the-template) for information on these special features.
