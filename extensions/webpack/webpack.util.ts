@@ -187,6 +187,7 @@ export function getMainEntries(extensions: ExtensionInfo[]): webpack.EntryObject
  */
 type ExtensionManifest = {
   name: string;
+  version: string;
   /**
    * The JavaScript file to run in the extension host.
    *
@@ -204,6 +205,8 @@ export type ExtensionInfo = {
   entryFileName: string;
   /** The path to the manifest.main file relative to root */
   entryFilePath: string;
+  /** The extension's version */
+  version: string;
   /**
    * Whether to skip this extension when building. If the manifest main is null, there is no
    * JavaScript to build
@@ -245,11 +248,13 @@ export async function getExtensions(): Promise<ExtensionInfo[]> {
             dirName: extensionFolderName,
             entryFileName: path.parse(extensionManifest.main).name,
             entryFilePath: path.join(sourceFolder, extensionFolderName, extensionManifest.main),
+            version: extensionManifest.version,
           }
         : {
             dirName: extensionFolderName,
             entryFileName: '',
             entryFilePath: '',
+            version: extensionManifest.version,
             skipBuildingJavaScript: true,
           };
     }),
