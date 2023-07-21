@@ -7,6 +7,8 @@ import type {
 } from 'shared/data/web-view.model';
 import type { PeopleDataProvider } from 'hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+import type PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+import type { HelloWorldEvent } from 'hello-world';
 import helloWorldReactWebView from './web-views/hello-world.web-view?inline';
 import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?inline';
 import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
@@ -76,8 +78,21 @@ const reactWebView2Provider: IWebViewProvider & { webViewType: string } = {
   },
 };
 
-/** Simple function to return hello world. Registered as a command handler */
+/** Number of times the `helloWorld` function has been called */
+let helloWorldCount = 0;
+/** Emitter to inform subscribers when `helloWorld` is called */
+let onHelloWorldEmitter: PapiEventEmitter<HelloWorldEvent>;
+const onHelloWorldEventType = 'helloWorld.onHelloWorld';
+
+/**
+ * Simple function to return hello world. Registered as a command handler.
+ *
+ * Also counts up how many times anyone has called this function and sends events notifying
+ * subscribers when someone has called this function.
+ */
 function helloWorld() {
+  helloWorldCount += 1;
+  onHelloWorldEmitter?.emit({ times: helloWorldCount });
   return 'Hello world!';
 }
 
@@ -103,6 +118,9 @@ export async function activate(): Promise<UnsubscriberAsync> {
     reactWebView2Provider.webViewType,
     reactWebView2Provider,
   );
+
+  onHelloWorldEmitter =
+    papi.network.createNetworkEventEmitter<HelloWorldEvent>(onHelloWorldEventType);
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
     papi.commands.registerCommand('helloWorld.helloWorld', helloWorld),
@@ -144,6 +162,10 @@ export async function activate(): Promise<UnsubscriberAsync> {
       htmlWebViewProviderResolved.dispose,
       reactWebViewProviderResolved.dispose,
       reactWebView2ProviderResolved.dispose,
+      () => {
+        onHelloWorldEmitter.dispose();
+        return Promise.resolve(true);
+      },
     ]),
   );
   logger.info('Hello World is finished activating!');

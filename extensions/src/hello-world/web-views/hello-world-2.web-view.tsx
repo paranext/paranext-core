@@ -1,9 +1,22 @@
 import papi from 'papi-frontend';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from 'papi-components';
+import type { HelloWorldEvent } from 'hello-world';
+
+const {
+  react: {
+    hooks: { useEvent },
+  },
+} = papi;
 
 globalThis.webViewComponent = function HelloWorld2() {
   const [clicks, setClicks] = useState(0);
+
+  // Update the clicks when we are informed helloWorld has been run
+  useEvent(
+    'helloWorld.onHelloWorld',
+    useCallback(({ times }: HelloWorldEvent) => setClicks(times), []),
+  );
 
   return (
     <>
@@ -12,8 +25,8 @@ globalThis.webViewComponent = function HelloWorld2() {
       </div>
       <div>
         <Button
-          onClick={async () => {
-            await papi.commands.sendCommand('helloWorld.helloWorld');
+          onClick={() => {
+            papi.commands.sendCommand('helloWorld.helloWorld');
             setClicks(clicks + 1);
           }}
         >

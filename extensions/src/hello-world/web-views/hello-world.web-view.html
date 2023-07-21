@@ -9,6 +9,7 @@
   </head>
   <body>
     <div class="title">Hello World!!</div>
+    <div><button id="hello-world" type="button">Hello World 0</button></div>
     <div><button id="echo-renderer" type="button">Echo Renderer</button></div>
     <div id="echo-renderer-output"></div>
     <div><button id="hello-someone" type="button">Hello Someone</button></div>
@@ -25,7 +26,7 @@
       const { createElement, useCallback, useState } = React;
       const {
         react: {
-          hooks: { usePromise },
+          hooks: { usePromise, useEvent },
         },
         logger,
       } = papi;
@@ -38,7 +39,13 @@
         .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
       function HelloWorld() {
-        const [myState, setMyState] = useState(0);
+        const [clicks, setClicks] = useState(0);
+
+        // Update the clicks when we are informed helloWorld has been run
+        useEvent(
+          'helloWorld.onHelloWorld',
+          useCallback(({ times }) => setClicks(times), []),
+        );
 
         const [echoResult] = usePromise(
           useCallback(async () => {
@@ -59,12 +66,12 @@
               {
                 type: 'button',
                 onClick: () => {
-                  logger.info(`${NAME} Button clicked!`);
-                  setMyState((myStateCurrent) => myStateCurrent + 1);
+                  papi.commands.sendCommand('helloWorld.helloWorld');
+                  setClicks(clicks + 1);
                 },
               },
-              'Hello World Button ',
-              myState,
+              'Hello World ',
+              clicks,
             ),
           ),
           createElement('div', null, echoResult),
@@ -75,6 +82,29 @@
         papi.logger.info(input);
       }
       document.addEventListener('DOMContentLoaded', function () {
+        // Keep track of the times helloWorld has been run with the event
+        let helloWorldClicks = 0;
+        function updateHelloWorldClicks(clicks) {
+          helloWorldClicks = clicks;
+          const helloWorldButton = document.getElementById('hello-world');
+          helloWorldButton.textContent = papi.util.htmlEncode(`Hello World ${helloWorldClicks}`);
+        }
+
+        // Update the clicks when we are informed helloWorld has been run
+        const onHelloWorldEvent = papi.network.getNetworkEvent('helloWorld.onHelloWorld');
+        onHelloWorldEvent(({ times }) => {
+          updateHelloWorldClicks(times);
+        });
+
+        // Attach handler for hello-world
+        const helloWorldButton = document.getElementById('hello-world');
+        helloWorldButton.addEventListener('click', () => {
+          papi.commands.sendCommand('helloWorld.helloWorld').then((message) => {
+            print(message);
+          });
+          updateHelloWorldClicks(helloWorldClicks + 1);
+        });
+
         // Attach handler for echo-renderer
         const echoRendererButton = document.getElementById('echo-renderer');
         echoRendererButton.addEventListener('click', () =>
