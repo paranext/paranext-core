@@ -30,7 +30,7 @@ async function tryImports() {
     await fetch('https://www.example.com');
     logger.info('Evil: fetch is working.');
   } catch (e) {
-    logger.error(`Evil: Good error on fetch! ${e}`);
+    logger.error(`Evil: Bad error on fetch! ${e}`);
   }
 
   try {

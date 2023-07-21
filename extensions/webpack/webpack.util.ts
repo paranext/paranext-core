@@ -88,6 +88,13 @@ const sourceFolder = 'src';
 /** Folder containing the built extension files */
 export const outputFolder = 'dist';
 
+/** dirNames of extensions that should be copied to the output folder but not bundled */
+const extensionsNotBundled = [
+  // Webpack wouldn't leave the requires alone even with webpackIgnore: true. Apparently webpack
+  // catches errors and returns {} when it can't find a module :(
+  'evil',
+];
+
 /** List of static files to copy from each extension's source directory */
 const staticFiles = [
   // Distribute the extension's assets
@@ -112,6 +119,15 @@ function getStaticFileName(staticFile: string, extensionInfo: ExtensionInfo) {
 /** Get CopyFile plugin patterns for copying static files for an extension */
 function getCopyFilePatternsForExtension(extension: ExtensionInfo) {
   return staticFiles.map((staticFile): Pattern => {
+    // If the extension should just be copied over, not bundled, copy the whole folder
+    if (extensionsNotBundled.includes(extension.dirName)) {
+      return {
+        from: path.join(sourceFolder, extension.dirName),
+        to: extension.dirName,
+      };
+    }
+
+    // The extension should be bundled normally
     /** The path to the file to copy but without the source or the output folder */
     const internalFilePath = path.join(extension.dirName, getStaticFileName(staticFile, extension));
     return {
@@ -154,7 +170,11 @@ function replaceExtension(filePath: string, newExtension: string): string {
 export function getMainEntries(extensions: ExtensionInfo[]): webpack.EntryObject {
   const mainEntries: webpack.EntryObject = Object.fromEntries(
     extensions
-      .filter((extension) => !extension.skipBuildingJavaScript)
+      // Don't bundle extensions with no main and and extensions that should just be copied over
+      .filter(
+        (extension) =>
+          !extension.skipBuildingJavaScript && !extensionsNotBundled.includes(extension.dirName),
+      )
       .map((extension) => [
         extension.entryFileName,
         {
