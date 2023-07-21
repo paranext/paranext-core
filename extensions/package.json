@@ -13,7 +13,7 @@
     "watch:production": "npm run build:production -- --watch",
     "zip": "ts-node lib/zip-extensions.ts",
     "package": "npm run build:production && npm run zip",
-    "package:debug": "npm run build && npm run zip",
+    "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "build:types": "cd .. && npm run build:types",
     "start": "cd .. && npm start",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",

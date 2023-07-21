@@ -1,11 +1,11 @@
+// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.config.base.ts
+
 import path from 'path';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import webpack from 'webpack';
 
 const isDev = process.env.NODE_ENV !== 'production';
 const shouldGenerateSourceMaps = isDev || process.env.DEBUG_PROD;
-
-// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.config.base.ts
 
 /** The base directory from which webpack should operate (should be the root repo folder) */
 export const rootDir = path.resolve(__dirname, '..');
