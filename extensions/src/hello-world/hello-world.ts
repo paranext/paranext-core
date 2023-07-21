@@ -7,9 +7,11 @@ import type {
 } from 'shared/data/web-view.model';
 import type { PeopleDataProvider } from 'hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
-import helloWorldReactWebView from './hello-world.web-view?inline';
-import helloWorldReactWebViewStyles from './hello-world.web-view.scss?inline';
-import helloWorldHtmlWebView from './hello-world.web-view.html?inline';
+import helloWorldReactWebView from './web-views/hello-world.web-view?inline';
+import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?inline';
+import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
+import helloWorldReactWebView2Styles from './web-views/hello-world-2.web-view.scss?inline';
+import helloWorldHtmlWebView from './web-views/hello-world.web-view.html?inline';
 
 const { logger } = papi;
 
@@ -17,16 +19,15 @@ logger.info('Hello world is importing!');
 
 const unsubscribers: UnsubscriberAsync[] = [];
 
-const htmlWebViewType = 'helloWorld.html';
-
 /**
  * Simple web view provider that provides sample html web views when papi requests them
  */
-const htmlWebViewProvider: IWebViewProvider = {
+const htmlWebViewProvider: IWebViewProvider & { webViewType: string } = {
+  webViewType: 'helloWorld.html',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== htmlWebViewType)
+    if (savedWebView.webViewType !== this.webViewType)
       throw new Error(
-        `${htmlWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+        `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     return {
       ...savedWebView,
@@ -37,22 +38,40 @@ const htmlWebViewProvider: IWebViewProvider = {
   },
 };
 
-const reactWebViewType = 'helloWorld.react';
-
 /**
  * Simple web view provider that provides React web views when papi requests them
  */
-const reactWebViewProvider: IWebViewProvider = {
+const reactWebViewProvider: IWebViewProvider & { webViewType: string } = {
+  webViewType: 'helloWorld.react',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== reactWebViewType)
+    if (savedWebView.webViewType !== this.webViewType)
       throw new Error(
-        `${reactWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+        `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     return {
       ...savedWebView,
       title: 'Hello World React',
       content: helloWorldReactWebView,
       styles: helloWorldReactWebViewStyles,
+    };
+  },
+};
+
+/**
+ * Simple web view provider that provides other React web views when papi requests them
+ */
+const reactWebView2Provider: IWebViewProvider & { webViewType: string } = {
+  webViewType: 'helloWorld.react2',
+  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== this.webViewType)
+      throw new Error(
+        `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+    return {
+      ...savedWebView,
+      title: 'Hello World React 2',
+      content: helloWorldReactWebView2,
+      styles: helloWorldReactWebView2Styles,
     };
   },
 };
@@ -71,13 +90,18 @@ export async function activate(): Promise<UnsubscriberAsync> {
   logger.info('Hello world is activating!');
 
   const htmlWebViewProviderPromise = papi.webViewProviders.register(
-    htmlWebViewType,
+    htmlWebViewProvider.webViewType,
     htmlWebViewProvider,
   );
 
   const reactWebViewProviderPromise = papi.webViewProviders.register(
-    reactWebViewType,
+    reactWebViewProvider.webViewType,
     reactWebViewProvider,
+  );
+
+  const reactWebView2ProviderPromise = papi.webViewProviders.register(
+    reactWebView2Provider.webViewType,
+    reactWebView2Provider,
   );
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
@@ -94,8 +118,9 @@ export async function activate(): Promise<UnsubscriberAsync> {
   // if one already exists. The webview that already exists could have been created by anyone
   // anywhere; it just has to match `webViewType`. See `hello-someone.ts` for an example of keeping
   // an existing webview that was specifically created by `hello-someone`.
-  papi.webViews.getWebView(htmlWebViewType, undefined, { existingId: '?' });
-  papi.webViews.getWebView(reactWebViewType, undefined, { existingId: '?' });
+  papi.webViews.getWebView(htmlWebViewProvider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.getWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.getWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
 
   const peopleDataProvider = await papi.dataProvider.get<PeopleDataProvider>('helloSomeone.people');
 
@@ -112,11 +137,13 @@ export async function activate(): Promise<UnsubscriberAsync> {
   // For now, let's just make things easy and await the registration promises at the end so we don't hold everything else up
   const htmlWebViewProviderResolved = await htmlWebViewProviderPromise;
   const reactWebViewProviderResolved = await reactWebViewProviderPromise;
+  const reactWebView2ProviderResolved = await reactWebView2ProviderPromise;
 
   const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
     (await Promise.all(unsubPromises)).concat([
       htmlWebViewProviderResolved.dispose,
       reactWebViewProviderResolved.dispose,
+      reactWebView2ProviderResolved.dispose,
     ]),
   );
   logger.info('Hello World is finished activating!');
