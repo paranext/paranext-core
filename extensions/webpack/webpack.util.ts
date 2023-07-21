@@ -72,7 +72,7 @@ export async function getWebViewEntries(): Promise<webpack.EntryObject> {
       {
         import: webViewPath,
         filename: getWebViewTempPath(webViewPath),
-      },
+      } as webpack.EntryObject[string],
     ]),
   );
   return webViewEntries;
@@ -191,7 +191,7 @@ export function getMainEntries(extensions: ExtensionInfo[]): webpack.EntryObject
             name: extension.dirName,
             type: 'umd',
           },
-        },
+        } as webpack.EntryObject[string],
       ]),
   );
   return mainEntries;

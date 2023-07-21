@@ -67,6 +67,9 @@ declare global {
 globalThis.processType = ProcessType.Renderer;
 globalThis.isPackaged = webpackRenderer.isPackaged;
 globalThis.resourcesPath = 'resources://';
+// renderer currently does not support setting logLevel via command-line
+// TODO: support command-line logLevel in renderer
+globalThis.logLevel = globalThis.isPackaged ? 'error' : 'info';
 
 // Note: these items are used in `src\shared\services\web-view.service.ts`. Putting them here breaks
 // the circular dependency since `papi` uses the webview service.
