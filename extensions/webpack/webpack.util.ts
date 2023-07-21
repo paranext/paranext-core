@@ -53,7 +53,7 @@ export function getWebViewTempPath(
   const webViewName = webViewInfo.ext === webViewTag ? webViewInfo.base : webViewInfo.name;
   // Put transpiled WebViews in a temp folder in the same directory as the original WebView
   // Make sure to preserve the ./ to indicate it is a relative path
-  return `${webViewInfo.dir === '.' ? './' : ''}${join(
+  return `${webViewPath.startsWith('./') ? './' : ''}${join(
     webViewInfo.dir,
     join(webViewTempDir, `${webViewName}.js`),
   )}`;
