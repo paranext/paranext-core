@@ -259,6 +259,11 @@ declare module 'shared/utils/papi-util' {
    * @returns string that says the import was rejected and a similar api to try
    */
   export function getModuleSimilarApiMessage(moduleName: string): string;
+  /**
+   * papiUtil is a collection of functions, objects, and types that are used as helpers in other services.
+   * Extensions should not use or rely on anything in papiUtil unless some other service requires it.
+   */
+  export type moduleSummaryComments = {};
 }
 declare module 'shared/models/papi-event.model' {
   import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
@@ -595,6 +600,9 @@ declare module 'shared/services/logger.service' {
    * @returns formatted string of a service message
    */
   export function formatLog(message: string, serviceName: string, tag?: string): string;
+  /**
+   * All extensions and services should use this logger to provide a unified output of logs
+   */
   const logger: log.MainLogger & {
     default: log.MainLogger;
   };
@@ -1087,7 +1095,9 @@ declare module 'shared/services/network.service' {
     createNetworkEventEmitter: typeof createNetworkEventEmitter;
     getNetworkEvent: typeof getNetworkEvent;
   }
-  /** All the exports in this service that are to be exposed on the PAPI */
+  /**
+   * Service that provides a way to send and receive network events
+   */
   export const papiNetworkService: PapiNetworkService;
 }
 declare module 'shared/services/command.service' {
@@ -1133,6 +1143,12 @@ declare module 'shared/services/command.service' {
     commandName: CommandName,
     handler: CommandHandlers[CommandName],
   ) => Promise<UnsubscriberAsync>;
+  /**
+   * The command service allows you to exchange messages with other components in the platform.
+   * You can register a command that other services and extensions can send you.
+   * You can send commands to other services and extensions that have registered commands.
+   */
+  export type moduleSummaryComments = {};
 }
 declare module 'shared/data/web-view.model' {
   import { ReactNode } from 'react';
@@ -1588,6 +1604,9 @@ declare module 'shared/services/web-view-provider.service' {
     register: typeof register;
   }
   const webViewProviderService: WebViewProviderService;
+  /**
+   * Interface for registering webView providers
+   */
   export const papiWebViewProviderService: PapiWebViewProviderService;
   export default webViewProviderService;
 }
@@ -1676,15 +1695,14 @@ declare module 'shared/services/web-view.service' {
   ) => Promise<WebViewId | undefined>;
   /** Sets up the WebViewService. Runs only once */
   export const initialize: () => Promise<void>;
-  /**
-   * Service exposing various functions related to using webViews
-   */
   export interface PapiWebViewService {
     onDidAddWebView: typeof onDidAddWebView;
     getWebView: typeof getWebView;
     initialize: typeof initialize;
   }
-  /** All the exports in this service that are to be exposed on the PAPI */
+  /**
+   * Service exposing various functions related to using webViews
+   */
   export const papiWebViewService: PapiWebViewService;
 }
 declare module 'shared/services/internet.service' {
@@ -1693,6 +1711,9 @@ declare module 'shared/services/internet.service' {
   export interface InternetService {
     fetch: typeof papiFetch;
   }
+  /**
+   * Service that provides a way to call `fetch` since the original function is not available
+   */
   const internetService: InternetService;
   export default internetService;
 }
@@ -2164,38 +2185,11 @@ declare module 'shared/services/data-provider.service' {
     decorators: typeof decorators;
     DataProviderEngine: typeof DataProviderEngine;
   }
+  /**
+   * Service that allows extensions to send and receive data to/from other extensions
+   */
   const dataProviderService: DataProviderService;
   export default dataProviderService;
-}
-declare module 'shared/services/papi.service' {
-  /**
-   * Unified module for accessing API features in extensions.
-   *
-   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
-   */
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
-  import * as commandService from 'shared/services/command.service';
-  import * as papiUtil from 'shared/utils/papi-util';
-  import { PapiNetworkService } from 'shared/services/network.service';
-  import { PapiWebViewService } from 'shared/services/web-view.service';
-  import { PapiWebViewProviderService } from 'shared/services/web-view-provider.service';
-  import { InternetService } from 'shared/services/internet.service';
-  import { DataProviderService } from 'shared/services/data-provider.service';
-  const papi: {
-    EventEmitter: typeof PapiEventEmitter;
-    fetch: typeof fetch;
-    commands: typeof commandService;
-    util: typeof papiUtil;
-    webViews: PapiWebViewService;
-    webViewProviders: PapiWebViewProviderService;
-    network: PapiNetworkService;
-    logger: import('electron-log').MainLogger & {
-      default: import('electron-log').MainLogger;
-    };
-    internet: InternetService;
-    dataProvider: DataProviderService;
-  };
-  export default papi;
 }
 declare module 'renderer/context/papi-context/test.context' {
   const TestContext: import('react').Context<string>;
@@ -2206,7 +2200,9 @@ declare module 'renderer/context/papi-context/index' {
   export interface PapiContext {
     TestContext: typeof TestContext;
   }
-  /** All React contexts to be exposed on the papi */
+  /**
+   * All React contexts to be exposed on the papi
+   */
   const papiContext: PapiContext;
   export default papiContext;
 }
@@ -2398,30 +2394,81 @@ declare module 'renderer/hooks/papi-hooks/index' {
      */
     useData: typeof useData;
   }
-  /** All React hooks to be exposed on the papi */
+  /**
+   * All React hooks to be exposed on the papi
+   */
   const papiHooks: PapiHooks;
   export default papiHooks;
 }
 declare module 'papi-frontend' {
+  /**
+   * Unified module for accessing API features in the renderer.
+   *
+   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
+   */
+  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+  import * as commandService from 'shared/services/command.service';
+  import * as papiUtil from 'shared/utils/papi-util';
+  import { PapiNetworkService } from 'shared/services/network.service';
+  import { PapiWebViewService } from 'shared/services/web-view.service';
+  import { InternetService } from 'shared/services/internet.service';
+  import { DataProviderService } from 'shared/services/data-provider.service';
   import { PapiContext } from 'renderer/context/papi-context/index';
   import { PapiHooks } from 'renderer/hooks/papi-hooks/index';
   const papi: {
-    react: {
-      context: PapiContext;
-      hooks: PapiHooks;
-    };
-    EventEmitter: typeof import('shared/models/papi-event-emitter.model').default;
+    /**
+     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
+     * Use eventEmitter.event(callback) to subscribe to the event.
+     * Use eventEmitter.emit(event) to run the subscriptions.
+     * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
+     * but anyone can subscribe to the event.
+     */
+    EventEmitter: typeof PapiEventEmitter;
+    /** This is just an alias for internet.fetch */
     fetch: typeof fetch;
-    commands: typeof import('shared/services/command.service');
-    util: typeof import('shared/utils/papi-util');
-    webViews: import('shared/services/web-view.service').PapiWebViewService;
-    webViewProviders: import('shared/services/web-view-provider.service').PapiWebViewProviderService;
-    network: import('shared/services/network.service').PapiNetworkService;
+    /**
+     * The command service allows you to exchange messages with other components in the platform.
+     * You can register a command that other services and extensions can send you.
+     * You can send commands to other services and extensions that have registered commands.
+     */
+    commands: typeof commandService;
+    /**
+     * papiUtil is a collection of functions, objects, and types that are used as helpers in other services.
+     * Extensions should not use or rely on anything in papiUtil unless some other service requires it.
+     */
+    util: typeof papiUtil;
+    /**
+     * Service exposing various functions related to using webViews
+     */
+    webViews: PapiWebViewService;
+    /**
+     * Service that provides a way to send and receive network events
+     */
+    network: PapiNetworkService;
+    /**
+     * All extensions and services should use this logger to provide a unified output of logs
+     */
     logger: import('electron-log').MainLogger & {
       default: import('electron-log').MainLogger;
     };
-    internet: import('shared/services/internet.service').InternetService;
-    dataProvider: import('shared/services/data-provider.service').DataProviderService;
+    /**
+     * Service that provides a way to call `fetch` since the original function is not available
+     */
+    internet: InternetService;
+    /**
+     * Service that allows extensions to send and receive data to/from other extensions
+     */
+    dataProvider: DataProviderService;
+    react: {
+      /**
+       * All React contexts to be exposed on the papi
+       */
+      context: PapiContext;
+      /**
+       * All React hooks to be exposed on the papi
+       */
+      hooks: PapiHooks;
+    };
   };
   export default papi;
   export type Papi = typeof papi;
@@ -2615,29 +2662,83 @@ declare module 'extension-host/services/extension-storage.service' {
     writeUserData: typeof writeUserData;
     deleteUserData: typeof deleteUserData;
   }
-  /** This service provides extensions in the extension host the ability to read/write data
-   *  based on the extension identity and current user (as identified by the OS). This service will
-   *  not work within the renderer.
+  /**
+   * This service provides extensions in the extension host the ability to read/write data
+   * based on the extension identity and current user (as identified by the OS). This service will
+   * not work within the renderer.
    */
   const extensionStorageService: ExtensionStorageService;
   export default extensionStorageService;
 }
 declare module 'papi-backend' {
+  /**
+   * Unified module for accessing API features in the extension host.
+   *
+   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
+   */
+  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+  import * as commandService from 'shared/services/command.service';
+  import * as papiUtil from 'shared/utils/papi-util';
+  import { PapiNetworkService } from 'shared/services/network.service';
+  import { PapiWebViewService } from 'shared/services/web-view.service';
+  import { PapiWebViewProviderService } from 'shared/services/web-view-provider.service';
+  import { InternetService } from 'shared/services/internet.service';
+  import { DataProviderService } from 'shared/services/data-provider.service';
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
   const papi: {
-    storage: ExtensionStorageService;
-    EventEmitter: typeof import('shared/models/papi-event-emitter.model').default;
+    /**
+     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
+     * Use eventEmitter.event(callback) to subscribe to the event.
+     * Use eventEmitter.emit(event) to run the subscriptions.
+     * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
+     * but anyone can subscribe to the event.
+     */
+    EventEmitter: typeof PapiEventEmitter;
+    /** This is just an alias for internet.fetch */
     fetch: typeof fetch;
-    commands: typeof import('shared/services/command.service');
-    util: typeof import('shared/utils/papi-util');
-    webViews: import('shared/services/web-view.service').PapiWebViewService;
-    webViewProviders: import('shared/services/web-view-provider.service').PapiWebViewProviderService;
-    network: import('shared/services/network.service').PapiNetworkService;
+    /**
+     * The command service allows you to exchange messages with other components in the platform.
+     * You can register a command that other services and extensions can send you.
+     * You can send commands to other services and extensions that have registered commands.
+     */
+    commands: typeof commandService;
+    /**
+     * papiUtil is a collection of functions, objects, and types that are used as helpers in other services.
+     * Extensions should not use or rely on anything in papiUtil unless some other service requires it.
+     */
+    util: typeof papiUtil;
+    /**
+     * Service exposing various functions related to using webViews
+     */
+    webViews: PapiWebViewService;
+    /**
+     * Interface for registering webView providers
+     */
+    webViewProviders: PapiWebViewProviderService;
+    /**
+     * Service that provides a way to send and receive network events
+     */
+    network: PapiNetworkService;
+    /**
+     * All extensions and services should use this logger to provide a unified output of logs
+     */
     logger: import('electron-log').MainLogger & {
       default: import('electron-log').MainLogger;
     };
-    internet: import('shared/services/internet.service').InternetService;
-    dataProvider: import('shared/services/data-provider.service').DataProviderService;
+    /**
+     * Service that provides a way to call `fetch` since the original function is not available
+     */
+    internet: InternetService;
+    /**
+     * Service that allows extensions to send and receive data to/from other extensions
+     */
+    dataProvider: DataProviderService;
+    /**
+     * This service provides extensions in the extension host the ability to read/write data
+     * based on the extension identity and current user (as identified by the OS). This service will
+     * not work within the renderer.
+     */
+    storage: ExtensionStorageService;
   };
   export default papi;
 }

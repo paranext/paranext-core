@@ -563,17 +563,15 @@ export const initialize = () => {
 };
 
 // Declare an interface for the object we're exporting so that JSDoc comments propagate
-/**
- * Service exposing various functions related to using webViews
- */
-// TODO: expose the above JSDoc comment on papi.webViews on papi.d.ts (or put it somewhere else) https://github.com/paranext/paranext-core/issues/292
 export interface PapiWebViewService {
   onDidAddWebView: typeof onDidAddWebView;
   getWebView: typeof getWebView;
   initialize: typeof initialize;
 }
 
-/** All the exports in this service that are to be exposed on the PAPI */
+/** JSDOC SOURCE papiWebViewService
+ * Service exposing various functions related to using webViews
+ */
 export const papiWebViewService: PapiWebViewService = {
   onDidAddWebView,
   getWebView,

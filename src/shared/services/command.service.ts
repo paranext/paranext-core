@@ -169,3 +169,10 @@ export const registerCommand: <CommandName extends CommandNames>(
   isInitialized,
   initialize,
 );
+
+/** JSDOC SOURCE commandService
+ * The command service allows you to exchange messages with other components in the platform.
+ * You can register a command that other services and extensions can send you.
+ * You can send commands to other services and extensions that have registered commands.
+ */
+export type moduleSummaryComments = {};

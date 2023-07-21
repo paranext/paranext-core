@@ -774,7 +774,9 @@ export interface PapiNetworkService {
   getNetworkEvent: typeof getNetworkEvent;
 }
 
-/** All the exports in this service that are to be exposed on the PAPI */
+/** JSDOC SOURCE papiNetworkService
+ * Service that provides a way to send and receive network events
+ */
 export const papiNetworkService: PapiNetworkService = {
   onDidClientConnect,
   onDidClientDisconnect,

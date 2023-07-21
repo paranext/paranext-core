@@ -5,6 +5,7 @@
 import fs from 'fs';
 import typescript from 'typescript';
 import escapeStringRegexp from 'escape-string-regexp';
+import { exit } from 'process';
 
 const start = performance.now();
 
@@ -24,6 +25,53 @@ papiDTS = papiDTS
     new RegExp(escapeStringRegexp('"extension-host/services/papi-backend.service"'), 'g'),
     '"papi-backend"',
   );
+
+// #region Copy "JSDOC DESTINATION" blocks to "JSDOC SOURCE" blocks
+
+type target = {
+  name: string;
+  block: string;
+};
+
+const jsdocSources = new Map<string, string>();
+const jsdocDestinations = new Set<target>();
+
+// Find all sources and destinations in one pass through the file
+const jsdocRegex = /\/\*\*[\s]*?JSDOC (SOURCE|DESTINATION) (\w+)[\s\S]*?\*\//g;
+let match: RegExpExecArray | null;
+/* eslint no-cond-assign: ["error", "except-parens"] */
+while ((match = jsdocRegex.exec(papiDTS)) !== null) {
+  const [block, sourceOrDestination, name] = match;
+  if (sourceOrDestination === 'SOURCE') {
+    if (jsdocSources.has(name)) {
+      console.error(`JSDOC SOURCE for ${name} was defined more than once`);
+      exit(-1);
+    }
+    jsdocSources.set(name, block);
+  } else if (sourceOrDestination === 'DESTINATION') jsdocDestinations.add({ name, block });
+  else {
+    console.error('BAD REGEX!');
+    exit(-1);
+  }
+}
+
+// Now replace destinations with sources
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+jsdocDestinations.forEach((destinationItem, _) => {
+  const { name, block } = destinationItem;
+  const sourceBlock = jsdocSources.get(name);
+  if (sourceBlock) {
+    papiDTS = papiDTS.replace(block, sourceBlock);
+  } else {
+    console.error(`No JSDOC SOURCE found for ${name}`);
+    exit(-1);
+  }
+});
+
+// Remove all the "JSDOC SOURCE targetName" portions of the comments as a final clean up
+papiDTS = papiDTS.replace(/\/\*\*[\s]*JSDOC SOURCE \w+\n/g, '/**\n');
+
+// #endregion
 
 // Fix all the path-aliased imports. For some reason, generating `papi.d.ts` removes the @ from path
 // aliases on module declarations and static imports but not on dynamic imports to other modules.

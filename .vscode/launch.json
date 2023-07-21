@@ -72,6 +72,14 @@
       "runtimeArgs": ["run", "storybook"],
       "skipFiles": ["<node_internals>/**"],
       "env": { "autoAttachChildProcesses": true }
+    },
+    {
+      "name": "Debug building papi.d.ts",
+      "request": "launch",
+      "runtimeArgs": ["run", "build:types"],
+      "runtimeExecutable": "npm",
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
     }
   ],
   "compounds": [

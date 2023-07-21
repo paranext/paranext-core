@@ -128,6 +128,9 @@ const webViewProviderService: WebViewProviderService = {
   get,
 };
 
+/** JSDOC SOURCE papiWebViewProviderService
+ * Interface for registering webView providers
+ */
 export const papiWebViewProviderService: PapiWebViewProviderService = {
   register,
 };

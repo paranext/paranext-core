@@ -171,5 +171,8 @@ if (isClient()) {
   log.transports.file.level = level;
 }
 
+/** JSDOC SOURCE logger
+ * All extensions and services should use this logger to provide a unified output of logs
+ */
 const logger = log;
 export default logger;

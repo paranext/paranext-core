@@ -15,7 +15,7 @@ import '@main/global-this.model';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
 import logger from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
-import papi from '@shared/services/papi.service';
+import * as commandService from '@shared/services/command.service';
 import { resolveHtmlPath } from '@node/utils/util';
 import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/network-object.service';
@@ -34,14 +34,14 @@ const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
   },
   'test.echoRenderer': async (message: string) => {
     /* const start = performance.now(); */
-    /* const result =  */ await papi.commands.sendCommand('test.addThree', 1, 4, 9);
+    /* const result =  */ await commandService.sendCommand('test.addThree', 1, 4, 9);
     /* logger.info(
       `test.addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return message;
   },
   'test.echoExtensionHost': async (message: string) => {
-    await papi.commands.sendCommand('test.addMany', 3, 5, 7, 1, 4);
+    await commandService.sendCommand('test.addMany', 3, 5, 7, 1, 4);
     return message;
   },
   'test.throwError': async (message: string) => {
@@ -74,7 +74,7 @@ async function main() {
   // Extension host test
   setTimeout(async () => {
     logger.info(
-      `Add Many (from EH): ${await papi.commands.sendCommand('test.addMany', 2, 5, 9, 7)}`,
+      `Add Many (from EH): ${await commandService.sendCommand('test.addMany', 2, 5, 9, 7)}`,
     );
   }, 20000);
 
@@ -266,7 +266,7 @@ async function main() {
   // #region Register test command handlers
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-    papi.commands.registerCommand(commandName as CommandNames, handler);
+    commandService.registerCommand(commandName as CommandNames, handler);
   });
 
   // #endregion

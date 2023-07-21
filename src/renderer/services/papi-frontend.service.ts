@@ -4,16 +4,47 @@
  * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
  */
 
-import papiShared from '@shared/services/papi.service';
+import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+import * as commandService from '@shared/services/command.service';
+import * as papiUtil from '@shared/utils/papi-util';
+import logger from '@shared/services/logger.service';
+import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
+import { papiWebViewService, PapiWebViewService } from '@shared/services/web-view.service';
+import internetService, { InternetService } from '@shared/services/internet.service';
+import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
 import papiContext, { PapiContext } from '@renderer/context/papi-context';
 import papiHooks, { PapiHooks } from '@renderer/hooks/papi-hooks';
 
 // Note: we need to provide type assertions for all members so they carry the JSDoc comments on the
 // papi.d.ts file so extension developers see the comments. Please add to all properties you add.
 const papi = {
-  ...papiShared,
+  // Classes
+  /** JSDOC DESTINATION PapiEventEmitter */
+  EventEmitter: PapiEventEmitter,
+
+  // Functions
+  /** This is just an alias for internet.fetch */
+  fetch: internetService.fetch,
+
+  // Services/modules
+  /** JSDOC DESTINATION commandService */
+  commands: commandService,
+  /** JSDOC DESTINATION papiUtil */
+  util: papiUtil,
+  /** JSDOC DESTINATION papiWebViewService */
+  webViews: papiWebViewService as PapiWebViewService,
+  /** JSDOC DESTINATION papiNetworkService */
+  network: papiNetworkService as PapiNetworkService,
+  /** JSDOC DESTINATION logger */
+  logger,
+  /** JSDOC DESTINATION internetService */
+  internet: internetService as InternetService,
+  /** JSDOC DESTINATION dataProviderService */
+  dataProvider: dataProviderService as DataProviderService,
   react: {
+    /** JSDOC DESTINATION papiContext */
     context: papiContext as PapiContext,
+    /** JSDOC DESTINATION papiHooks */
     hooks: papiHooks as PapiHooks,
   },
 };
