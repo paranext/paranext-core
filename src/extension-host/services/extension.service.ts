@@ -72,6 +72,17 @@ type ActiveExtension = {
   deactivator: UnsubscriberAsync;
 };
 
+/**
+ * A dynamically imported extension module which could be an ES Module or a CommonJS module.
+ *
+ * For some reason, it seems we import modules as CommonJS in development and ES Modules in
+ * production. This is due in part to using webpack's umd module definition, which attempts to form
+ * the module according to the environment it believes it's in. For now, we will support both.
+ */
+type AmbiguousExtensionModule =
+  | ({ __esModule: true } & IExtension)
+  | { __esModule: false | undefined; default: IExtension };
+
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string) {
   const extensionManifest = JSON.parse(extensionManifestJson) as ExtensionManifest;
@@ -162,7 +173,21 @@ const activateExtension = async (
   // Import the extension file. Tell webpack to ignore it because extension files are not in the
   // bundle and should not be looked up in the bundle
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
-  const extensionModule = (await import(/* webpackIgnore: true */ extensionFilePath)) as IExtension;
+  const extensionModuleAmbiguous = (await import(
+    /* webpackIgnore: true */ extensionFilePath
+  )) as AmbiguousExtensionModule;
+  // Get the actual extension module based on what kind of module it is
+  // __esModule is a property built into node. We're just using it here
+  // eslint-disable-next-line no-underscore-dangle
+  const extensionModule: IExtension = extensionModuleAmbiguous.__esModule
+    ? extensionModuleAmbiguous
+    : extensionModuleAmbiguous.default;
+  logger.info(
+    `Extension.Service: extensionModule for ${
+      extension.name
+    } at ${extensionFilePath}: ${JSON.stringify(extensionModule, null, 2)}
+    OwnPropertyNames: ${Object.getOwnPropertyNames(extensionModule)}`,
+  );
 
   // IMPORTANT: Only give the token to the extension when it is activated. Don't store it or its
   // nonce anywhere else. It is okay to give the token's getHash() value to something for purposes
@@ -213,6 +238,7 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
   // Shim out require so extensions can't use it
   const requireOriginal = Module.prototype.require;
   Module.prototype.require = ((moduleName: string) => {
+    logger.info(`Extension.Service: Importing ${moduleName}`);
     // Allow the extension to import papi and some other things
     if (moduleName === 'papi-backend') return papi;
     if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
@@ -237,6 +263,7 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
     const message = `Requiring other than papi is not allowed in extensions! ${getModuleSimilarApiMessage(
       moduleName,
     )}`;
+    logger.error(`Extension.Service: ${message}`);
     throw new Error(message);
   }) as typeof Module.prototype.require;
 

@@ -5,6 +5,9 @@
 import {
   ARG_EXTENSION_DIRS,
   ARG_EXTENSIONS,
+  ARG_LOG_LEVEL,
+  ARG_PACKAGED,
+  ARG_RESOURCES_PATH,
   getCommandLineArgumentsGroup,
 } from '@node/utils/command-line.util';
 import logger, { formatLog, WARN_TAG } from '@shared/services/logger.service';
@@ -93,15 +96,17 @@ function startExtensionHost() {
   // In development, spawn nodemon to watch the extension-host
   /** Arguments that will be passed to the extension host no matter how we start the process */
   const sharedArgs = [
-    '--resourcesPath',
+    ARG_RESOURCES_PATH,
     globalThis.resourcesPath,
+    ARG_LOG_LEVEL,
+    globalThis.logLevel,
     ...getCommandLineArgumentsToForward(),
   ];
 
   if (app.isPackaged) {
     extensionHost = fork(
       path.join(__dirname, '../extension-host/extension-host.js'),
-      ['--packaged', ...sharedArgs],
+      [ARG_PACKAGED, ...sharedArgs],
       {
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       },
