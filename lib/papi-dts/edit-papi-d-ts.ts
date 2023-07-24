@@ -28,18 +28,18 @@ papiDTS = papiDTS
 
 // #region Copy "JSDOC DESTINATION" blocks to "JSDOC SOURCE" blocks
 
-type target = {
+type Target = {
   name: string;
   block: string;
 };
 
 const jsdocSources = new Map<string, string>();
-const jsdocDestinations = new Set<target>();
+const jsdocDestinations = new Set<Target>();
 
 // Find all sources and destinations in one pass through the file
 const jsdocRegex = /\/\*\*[\s]*?JSDOC (SOURCE|DESTINATION) (\w+)[\s\S]*?\*\//g;
 let match: RegExpExecArray | null;
-/* eslint no-cond-assign: ["error", "except-parens"] */
+// eslint-disable-next-line no-cond-assign
 while ((match = jsdocRegex.exec(papiDTS)) !== null) {
   const [block, sourceOrDestination, name] = match;
   if (sourceOrDestination === 'SOURCE') {
@@ -56,8 +56,7 @@ while ((match = jsdocRegex.exec(papiDTS)) !== null) {
 }
 
 // Now replace destinations with sources
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-jsdocDestinations.forEach((destinationItem, _) => {
+jsdocDestinations.forEach((destinationItem) => {
   const { name, block } = destinationItem;
   const sourceBlock = jsdocSources.get(name);
   if (sourceBlock) {
