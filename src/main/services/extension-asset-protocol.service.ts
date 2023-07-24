@@ -2,13 +2,6 @@ import { protocol } from 'electron';
 import { StatusCodes } from 'http-status-codes';
 import extensionAssetService from '@shared/services/extension-asset.service';
 
-/** The real list of Chromium error codes is really big.  We're just using a small subset. */
-// https://source.chromium.org/chromium/chromium/src/+/main:net/base/net_error_list.h
-const netErrors = {
-  FAILED: -2,
-  FILE_NOT_FOUND: -6,
-};
-
 /** Here some of the most common MIME types that we expect to handle */
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
 // An example of a more complete list: https://www.freeformatter.com/mime-types-list.html
@@ -47,17 +40,13 @@ function getMimeTypeForFileName(fileName: string): string {
 }
 
 /** Create an HTTP response to pass back to the renderer */
-function errorObject(
-  url: string,
-  httpErrorNumber: number,
-  netErrorNumber: number = netErrors.FAILED,
-) {
-  return {
-    error: netErrorNumber,
-    statusCode: httpErrorNumber,
-    mimeType: 'text/plain',
-    data: `Failed to load resource: ${url}`,
-  };
+function errorResponse(url: string, httpErrorNumber: number): Response {
+  return new Response(`Failed to load resource: ${url}`, {
+    status: httpErrorNumber,
+    headers: {
+      'Content-Type': 'text/plain',
+    },
+  });
 }
 
 const protocolName: string = 'papi-extension';
@@ -70,7 +59,7 @@ const initialize = () => {
   if (initializePromise) return initializePromise;
 
   initializePromise = (async (): Promise<void> => {
-    protocol.registerBufferProtocol(protocolName, async (request, callback) => {
+    protocol.handle(protocolName, async (request) => {
       // Ideas to consider:
       // 1) Check the referer for localhost to block arbitrary internet content from getting extension assets.
       // 2) Use request headers to pass along the extension name so extension code doesn't have to embed its name in URLs.
@@ -80,16 +69,14 @@ const initialize = () => {
 
       // There have to be at least 2 parts to the URI divided by a slash
       if (!uri.includes('/')) {
-        callback(errorObject(request.url, StatusCodes.BAD_REQUEST));
-        return;
+        return errorResponse(request.url, StatusCodes.BAD_REQUEST);
       }
 
       const slash = uri.indexOf('/');
       let extension = uri.substring(0, slash);
       let asset = uri.substring(slash + 1);
       if (!extension || !asset) {
-        callback(errorObject(request.url, StatusCodes.BAD_REQUEST));
-        return;
+        return errorResponse(request.url, StatusCodes.BAD_REQUEST);
       }
 
       // It's possible the extension and/or asset were encoded because they have characters not
@@ -97,8 +84,7 @@ const initialize = () => {
       extension = decodeURIComponent(extension);
       asset = decodeURIComponent(asset);
       if (extension.length > 100 || asset.length > 100) {
-        callback(errorObject(request.url, StatusCodes.BAD_REQUEST));
-        return;
+        return errorResponse(request.url, StatusCodes.BAD_REQUEST);
       }
 
       // Actually get the data
@@ -107,15 +93,15 @@ const initialize = () => {
         asset,
       );
       if (!base64Data) {
-        callback(errorObject(request.url, StatusCodes.NOT_FOUND, netErrors.FILE_NOT_FOUND));
-        return;
+        return errorResponse(request.url, StatusCodes.NOT_FOUND);
       }
 
       // Pass back the data to the renderer
-      callback({
-        statusCode: StatusCodes.OK,
-        mimeType: getMimeTypeForFileName(asset),
-        data: Buffer.from(base64Data, 'base64'),
+      return new Response(Buffer.from(base64Data, 'base64'), {
+        status: StatusCodes.OK,
+        headers: {
+          'Content-Type': getMimeTypeForFileName(asset),
+        },
       });
     });
   })();
