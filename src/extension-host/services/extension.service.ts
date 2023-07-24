@@ -75,13 +75,13 @@ type ActiveExtension = {
 /**
  * A dynamically imported extension module which could be an ES Module or a CommonJS module.
  *
- * For some reason, it seems we import modules as CommonJS in development and ES Modules in
- * production. This is due in part to using webpack's umd module definition, which attempts to form
- * the module according to the environment it believes it's in. For now, we will support both.
+ * For some reason, it seems we usually import modules as CommonJS in development and ES Modules in
+ * production. This may be due in part to using webpack's umd module definition, which attempts to
+ * form the module according to the environment it believes it's in. But then there are times when
+ * it imports with __esModule: true and with the actual module inside `module.default`, so, at least
+ * for now, we will support anything.
  */
-type AmbiguousExtensionModule =
-  | ({ __esModule: true } & IExtension)
-  | { __esModule: false | undefined; default: IExtension };
+type AmbiguousExtensionModule = IExtension | { default: IExtension };
 
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string) {
@@ -136,7 +136,6 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
               `Extension folder ${extensionFolder} failed to load. Reason: ${e}`,
             );
             logger.warn(error);
-            logger.warn('stuff');
             throw error;
           }
         }),
@@ -177,17 +176,10 @@ const activateExtension = async (
     /* webpackIgnore: true */ extensionFilePath
   )) as AmbiguousExtensionModule;
   // Get the actual extension module based on what kind of module it is
-  // __esModule is a property built into node. We're just using it here
-  // eslint-disable-next-line no-underscore-dangle
-  const extensionModule: IExtension = extensionModuleAmbiguous.__esModule
-    ? extensionModuleAmbiguous
-    : extensionModuleAmbiguous.default;
-  logger.info(
-    `Extension.Service: extensionModule for ${
-      extension.name
-    } at ${extensionFilePath}: ${JSON.stringify(extensionModule, null, 2)}
-    OwnPropertyNames: ${Object.getOwnPropertyNames(extensionModule)}`,
-  );
+  const extensionModule =
+    'activate' in extensionModuleAmbiguous
+      ? extensionModuleAmbiguous
+      : extensionModuleAmbiguous.default;
 
   // IMPORTANT: Only give the token to the extension when it is activated. Don't store it or its
   // nonce anywhere else. It is okay to give the token's getHash() value to something for purposes
@@ -238,7 +230,6 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
   // Shim out require so extensions can't use it
   const requireOriginal = Module.prototype.require;
   Module.prototype.require = ((moduleName: string) => {
-    logger.info(`Extension.Service: Importing ${moduleName}`);
     // Allow the extension to import papi and some other things
     if (moduleName === 'papi-backend') return papi;
     if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
@@ -263,7 +254,6 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
     const message = `Requiring other than papi is not allowed in extensions! ${getModuleSimilarApiMessage(
       moduleName,
     )}`;
-    logger.error(`Extension.Service: ${message}`);
     throw new Error(message);
   }) as typeof Module.prototype.require;
 
