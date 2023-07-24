@@ -21,7 +21,7 @@ import {
 import INetworkConnector from '@shared/services/network-connector.interface';
 import { createNetworkConnector } from '@shared/services/network-connector.factory';
 import logger from '@shared/services/logger.service';
-import { ComplexResponse } from '@shared/utils/papi-util';
+import { ComplexResponse, SerializedRequestType } from '@shared/utils/papi-util';
 
 /** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
 let connectionStatus = ConnectionStatus.Disconnected;
@@ -129,7 +129,12 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
   if (!requestHandler) throw new Error('Handling request without a requestHandler!');
 
   // Not sure if it's really responsible to put the whole incomingRequest in. Might want to destructure and just pass ComplexRequest members
-  const response = await requestHandler<TParam, TReturn>(requestType, incomingRequest);
+  const response = await requestHandler<TParam, TReturn>(
+    // We don't require requestType to be SerializedRequestType in this service, but they should all
+    // be SerializedRequestType if they are all registered as such. Doesn't matter much to us here
+    requestType as SerializedRequestType,
+    incomingRequest,
+  );
   return {
     ...response,
     senderId: clientId,

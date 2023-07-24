@@ -1,10 +1,16 @@
 import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import styleInject from '@senojs/rollup-plugin-style-inject';
 
 const config = defineConfig({
   base: './',
-  plugins: [react()],
+  plugins: [
+    react(),
+    styleInject({
+      insertAt: 'top',
+    }),
+  ],
   build: {
     sourcemap: true,
     lib: {

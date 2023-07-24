@@ -1,4 +1,3 @@
-import Typography from '@mui/material/Typography';
 import { Toolbar, RefSelector, ScriptureReference } from 'papi-components';
 import standardMenuLayout from './platform-bible-menu.data';
 import { HandleMenuCommand } from './platform-bible-menu.commands';
@@ -11,11 +10,11 @@ export default function PlatformBibleToolbar(props: {
   const { referenceChanged } = props;
   const { scrRef } = props;
 
+  console.log(`Platform.bible ref: ${scrRef.bookNum} ${scrRef.chapterNum}:${scrRef.verseNum}`);
+
   return (
     <Toolbar menu={standardMenuLayout} commandHandler={HandleMenuCommand}>
-      <Typography className="title" variant="h6" noWrap>
-        <RefSelector handleSubmit={referenceChanged} scrRef={scrRef} />
-      </Typography>
+      <RefSelector handleSubmit={referenceChanged} scrRef={scrRef} />
     </Toolbar>
   );
 }

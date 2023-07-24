@@ -6,6 +6,7 @@
 import cloneDeep from 'lodash/cloneDeep';
 import { isRenderer } from '@shared/utils/internal-util';
 import {
+  SerializedRequestType,
   Unsubscriber,
   aggregateUnsubscriberAsyncs,
   serializeRequestType,
@@ -542,7 +543,7 @@ export const initialize = () => {
     if (isRenderer()) {
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
       const unsubPromises = Object.entries(rendererRequestHandlers).map(([requestType, handler]) =>
-        networkService.registerRequestHandler(requestType, handler),
+        networkService.registerRequestHandler(requestType as SerializedRequestType, handler),
       );
 
       // Wait to successfully register all requests
@@ -561,16 +562,20 @@ export const initialize = () => {
   return initializePromise;
 };
 
-// Pulled out registering web view providers because it feels better to have these services split
-// up internally but combined externally.
-// TODO: once we fix the dependency loop mentioned below on `papiWebViewService`, we can remove this
-// line since we don't need to export the registration twice.
-export const registerWebViewProvider = webViewProviderService.register;
+// Declare an interface for the object we're exporting so that JSDoc comments propagate
+/**
+ * Service exposing various functions related to using webViews
+ */
+// TODO: expose the above JSDoc comment on papi.webViews on papi.d.ts (or put it somewhere else) https://github.com/paranext/paranext-core/issues/292
+export interface PapiWebViewService {
+  onDidAddWebView: typeof onDidAddWebView;
+  getWebView: typeof getWebView;
+  initialize: typeof initialize;
+}
 
 /** All the exports in this service that are to be exposed on the PAPI */
-export const papiWebViewService = {
+export const papiWebViewService: PapiWebViewService = {
   onDidAddWebView,
   getWebView,
   initialize,
-  registerWebViewProvider,
 };

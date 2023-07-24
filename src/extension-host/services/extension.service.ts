@@ -45,13 +45,20 @@ const activeExtensions = new Map<string, ActiveExtension>();
  */
 type ExtensionManifest = {
   name: string;
-  main: string;
+  /**
+   * The JavaScript file to run in the extension host.
+   *
+   * Must be specified. Can be `null` if the extension does not have any JavaScript to run.
+   */
+  main: string | null;
   activationEvents: string[];
 };
 
 /** Information about an extension and extra metadata about it that we generate */
 type ExtensionInfo = Readonly<
   ExtensionManifest & {
+    /** We filtered out undefined and null in `getExtensions`, so this should now be defined */
+    main: string;
     /** Uri to this extension's directory. Not provided in actual manifest, but added while parsing the manifest */
     dirUri: Uri;
   }
@@ -67,7 +74,7 @@ type ActiveExtension = {
 function parseManifest(extensionManifestJson: string) {
   const extensionManifest = JSON.parse(extensionManifestJson) as ExtensionManifest;
   // Replace ts with js so people can list their source code ts name but run the transpiled js
-  if (extensionManifest.main.endsWith('.ts'))
+  if (extensionManifest.main && extensionManifest.main.endsWith('.ts'))
     extensionManifest.main = `${extensionManifest.main.slice(0, -3)}.js`;
 
   return extensionManifest;
@@ -85,9 +92,7 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
         ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
           (extensionDirPath) => `file://${extensionDirPath}`,
         ),
-      ].map((extensionDirUri) =>
-        readDir(extensionDirUri, (dirName) => !dirName.startsWith('external-')),
-      ),
+      ].map((extensionDirUri) => readDir(extensionDirUri)),
     )
   )
     .flatMap((dirEntries) => dirEntries[EntryType.Directory])
@@ -112,7 +117,7 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
             return Object.freeze({
               ...parseManifest(extensionManifestJson),
               dirUri: extensionFolder,
-            });
+            }) as ExtensionInfo;
           } catch (e) {
             const error = new Error(
               `Extension folder ${extensionFolder} failed to load. Reason: ${e}`,
@@ -124,7 +129,18 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
         }),
     )
   )
-    .filter((settled) => settled.status === 'fulfilled')
+    .filter((settled) => {
+      // Ignore failed to load manifest issues - already logged those issues
+      if (settled.status !== 'fulfilled') return false;
+      if ((settled.value.main as Partial<ExtensionManifest>) === undefined) {
+        logger.warn(
+          `Extension ${settled.value.name} failed to load. Must provide property \`main\` in \`manifest.json\`. If you do not have JavaScript code to run, provide \`"main": null\``,
+        );
+        return false;
+      }
+      // If main is null, having no JavaScript is intentional. Do not load this extension
+      return settled.value.main !== null;
+    })
     .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value);
 };
 

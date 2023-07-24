@@ -5,12 +5,7 @@ import type {
   SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
 import { UnsubscriberAsync } from 'shared/utils/papi-util';
-import type {
-  PeopleData,
-  PeopleDataMethods,
-  PeopleDataTypes,
-  Person,
-} from '@extensions/hello-someone/hello-someone';
+import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
@@ -232,8 +227,8 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
 };
 papi.dataProvider.decorators.ignore(peopleDataProviderEngine.getPerson);
 
-const peopleWebViewType = 'hello-someone.people-viewer';
-const peopleWebViewIdKey = 'people-web-view-id';
+const peopleWebViewType = 'helloSomeone.peopleViewer';
+const peopleWebViewIdKey = 'peopleWebViewId';
 
 /**
  * Simple web view provider that provides People web views when papi requests them
@@ -257,30 +252,27 @@ export async function activate(context: ExecutionActivationContext) {
   logger.info('Hello Someone is activating!');
 
   const peopleDataProviderPromise = papi.dataProvider.registerEngine<PeopleDataTypes>(
-    'hello-someone.people',
+    'helloSomeone.people',
     peopleDataProviderEngine,
   );
 
-  const peopleWebViewProviderPromise = papi.webViews.registerWebViewProvider(
+  const peopleWebViewProviderPromise = papi.webViewProviders.register(
     peopleWebViewType,
     peopleWebViewProvider,
   );
 
   const unsubPromises: Promise<UnsubscriberAsync>[] = [
-    papi.commands.registerCommand('hello-someone.hello-someone', (someone: string) => {
-      return `Hello ${someone}!`;
+    papi.commands.registerCommand('helloSomeone.helloSomeone', (name: string) => {
+      return `Hello ${name}!`;
     }),
-    papi.commands.registerCommand(
-      'hello-someone.echo-someone-renderer',
-      async (message: string) => {
-        return `echo-someone-renderer: ${await papi.commands.sendCommand(
-          'addThree',
-          2,
-          4,
-          6,
-        )}! ${message}`;
-      },
-    ),
+    papi.commands.registerCommand('helloSomeone.echoSomeoneRenderer', async (message: string) => {
+      return `echoSomeoneRenderer: ${await papi.commands.sendCommand(
+        'test.addThree',
+        2,
+        4,
+        6,
+      )}! ${message}`;
+    }),
   ];
 
   // Create a webview or get the existing webview if ours already exists

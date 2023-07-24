@@ -1,7 +1,6 @@
 import '@extension-host/global-this.model';
 import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
-import { CommandHandler } from '@shared/utils/papi-util';
 import * as ExtensionService from '@extension-host/services/extension.service';
 import papi from '@extension-host/services/papi-backend.service';
 import logger from '@shared/services/logger.service';
@@ -9,6 +8,7 @@ import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
 import { getErrorMessage } from '@shared/utils/util';
+import { CommandNames } from 'papi-commands';
 
 // #region Test logs
 
@@ -21,17 +21,21 @@ logger.warn('Extension host example warning');
 
 // #region Services setup
 
-const commandHandlers: { [commandName: string]: CommandHandler } = {
+// `extension-host.ts`'s command handler declarations are in `command.service.ts` so they can be
+// picked up by papi-dts
+// This map should allow any functions because commands can be any function type
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
   // Set up test handlers
-  addMany: async (...nums: number[]) => {
+  'test.addMany': async (...nums: number[]) => {
     /* const start = performance.now(); */
-    /* const result = await papi.commands.sendCommand('addThree', 1, 4, 9); */
+    /* const result = await papi.commands.sendCommand('test.addThree', 1, 4, 9); */
     /* logger.info(
-      `addThree(...) = ${result} took ${performance.now() - start} ms`,
+      `test.addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return nums.reduce((acc, current) => acc + current, 0);
   },
-  throwErrorExtensionHost: async (message: string) => {
+  'test.throwErrorExtensionHost': async (message: string) => {
     throw new Error(`Test Error thrown in throwErrorExtensionHost command: ${message}`);
   },
 };
@@ -42,7 +46,7 @@ networkService
     // Set up network commands
     await Promise.all(
       Object.entries(commandHandlers).map(async ([commandName, handler]) => {
-        await papi.commands.registerCommand(commandName, handler);
+        await papi.commands.registerCommand(commandName as CommandNames, handler);
       }),
     );
 
@@ -62,15 +66,15 @@ networkService
 // #region network object test
 
 (async () => {
-  const testEH = await networkObjectService.set('test-extension-host', {
+  const testEH = await networkObjectService.set('testExtensionHost', {
     getVerse: async () => {
       try {
-        const verse = await papi.fetch('https://bible-api.com/matthew+24:14');
-        const verseJson = await verse.json();
-        const results = `test-extension-host got verse: ${verseJson.text.replace(/\\n/g, '')}`;
+        const exampleData = await (await papi.fetch('https://www.example.com')).text();
+        const results = `testExtensionHost got data: ${exampleData.substring(0, 100)}`;
         logger.info(results);
         return results;
       } catch (e) {
+        logger.error(`testExtensionHost.getVerse() threw ${e}`);
         return getErrorMessage(e);
       }
     },
@@ -78,7 +82,7 @@ networkService
 
   if (testEH) {
     testEH.onDidDispose(() => {
-      logger.info('test-extension-host disposed in extension-host');
+      logger.info('testExtensionHost disposed in extension-host');
     });
   }
 
@@ -88,13 +92,13 @@ networkService
 setTimeout(async () => {
   let testMain = await networkObjectService.get<{
     doStuff: (stuff: string) => Promise<string>;
-  }>('test-main');
+  }>('testMain');
   if (testMain) {
     testMain?.onDidDispose(async () => {
-      logger.info('test-main disposed in extension-host');
+      logger.info('testMain disposed in extension-host');
       testMain = undefined;
     });
-  } else logger.error('Could not get test-main from extension host');
+  } else logger.error('Could not get testMain from extension host');
 
   logger.info(`do stuff: ${await testMain?.doStuff('extension host things')}`);
 }, 5000);

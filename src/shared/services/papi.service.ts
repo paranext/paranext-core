@@ -6,13 +6,19 @@
 
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as commandService from '@shared/services/command.service';
-import { papiNetworkService } from '@shared/services/network.service';
-import { papiWebViewService } from '@shared/services/web-view.service';
-import logger from '@shared/services/logger.service';
-import internetService from '@shared/services/internet.service';
-import dataProviderService from '@shared/services/data-provider.service';
 import * as papiUtil from '@shared/utils/papi-util';
+import logger from '@shared/services/logger.service';
+import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
+import { papiWebViewService, PapiWebViewService } from '@shared/services/web-view.service';
+import {
+  papiWebViewProviderService,
+  PapiWebViewProviderService,
+} from '@shared/services/web-view-provider.service';
+import internetService, { InternetService } from '@shared/services/internet.service';
+import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
 
+// Note: we need to provide type assertions for all members so they carry the JSDoc comments on the
+// papi.d.ts file so extension developers see the comments. Please add to all properties you add.
 const papi = {
   // Classes
   EventEmitter: PapiEventEmitter,
@@ -23,10 +29,11 @@ const papi = {
   // Services/modules
   commands: commandService,
   util: papiUtil,
-  webViews: papiWebViewService,
-  network: papiNetworkService,
+  webViews: papiWebViewService as PapiWebViewService,
+  webViewProviders: papiWebViewProviderService as PapiWebViewProviderService,
+  network: papiNetworkService as PapiNetworkService,
   logger,
-  internet: internetService,
-  dataProvider: dataProviderService,
+  internet: internetService as InternetService,
+  dataProvider: dataProviderService as DataProviderService,
 };
 export default papi;

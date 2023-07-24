@@ -1,7 +1,7 @@
 export interface ScriptureReference {
-  book: number;
-  chapter: number;
-  verse: number;
+  bookNum: number;
+  chapterNum: number;
+  verseNum: number;
 }
 
 export interface BookInfo {

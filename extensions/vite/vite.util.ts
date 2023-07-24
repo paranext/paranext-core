@@ -12,6 +12,7 @@ export const staticFiles = [
   'assets',
   'manifest.json',
   'package.json',
+  'index.d.ts',
   // TODO: check each extension's package.json -> "types" property for this instead of assuming
   // it will be the same as the entry file name.
   '<entry_file_name>.d.ts',
@@ -104,10 +105,18 @@ export function insertWebViewTempDir(moduleSourceRaw: string) {
 
 // #region sort-of shared with extension.service.ts
 
-/** Information about an extension provided by the extension developer */
+/**
+ * Information about an extension provided by the extension developer.
+ * This will be transformed and frozen into an ExtensionInfo before use
+ */
 type ExtensionManifest = {
   name: string;
-  main: string;
+  /**
+   * The JavaScript file to run in the extension host.
+   *
+   * Must be specified. Can be `null` if the extension does not have any JavaScript to run.
+   */
+  main: string | null;
   activationEvents: string[];
 };
 
@@ -119,6 +128,11 @@ export type ExtensionInfo = {
   entryFileName: string;
   /** The path to the manifest.main file */
   entryFilePath: string;
+  /**
+   * Whether to skip this extension when building. If the manifest main is null, there is no
+   * JavaScript to build
+   */
+  skipBuildingJavaScript?: boolean;
 };
 
 /**
@@ -126,7 +140,7 @@ export type ExtensionInfo = {
  * TODO: figure out if we can share this code with extension.service.ts.
  *   Note that this does not transform the main file .ts into .js unlike extension.service
  */
-export async function getInternalExtensions(): Promise<ExtensionInfo[]> {
+export async function getExtensions(): Promise<ExtensionInfo[]> {
   // Get names of each folder in the source folder
   const extensionFolderNames = (
     await fs.promises.readdir(sourceFolder, {
@@ -134,7 +148,6 @@ export async function getInternalExtensions(): Promise<ExtensionInfo[]> {
     })
   )
     .filter((dirEntry) => dirEntry.isDirectory())
-    .filter((dirEntry) => !dirEntry.name.startsWith('external-'))
     .map((dirEntry) => dirEntry.name);
 
   // Return extension info for each extension folder
@@ -150,25 +163,18 @@ export async function getInternalExtensions(): Promise<ExtensionInfo[]> {
       });
 
       // Get main file path from the manifest and return extension info
-      return {
-        dirName: extensionFolderName,
-        entryFileName: path.parse(extensionManifest.main).name,
-        entryFilePath: path.join(sourceFolder, extensionFolderName, extensionManifest.main),
-      };
+      return extensionManifest.main !== null
+        ? {
+            dirName: extensionFolderName,
+            entryFileName: path.parse(extensionManifest.main).name,
+            entryFilePath: path.join(sourceFolder, extensionFolderName, extensionManifest.main),
+          }
+        : {
+            dirName: extensionFolderName,
+            entryFileName: '',
+            entryFilePath: '',
+            skipBuildingJavaScript: true,
+          };
     }),
   );
-}
-
-/**
- * Gets a list of the external extension folders
- */
-export async function getExternalExtensions(): Promise<string[]> {
-  // Get names of each folder in the source folder
-  return (
-    await fs.promises.readdir(sourceFolder, {
-      withFileTypes: true,
-    })
-  )
-    .filter((dirEntry) => dirEntry.name.startsWith('external-'))
-    .map((dirEntry) => dirEntry.name);
 }

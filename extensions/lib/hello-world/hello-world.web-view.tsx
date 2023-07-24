@@ -1,3 +1,4 @@
+import { ScrVers, VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
 import {
   Button,
@@ -9,11 +10,11 @@ import {
   TextField,
   Table,
 } from 'papi-components';
-import { QuickVerseDataTypes } from '@extensions/quick-verse/quick-verse';
-import { PeopleDataProvider, PeopleDataTypes } from '@extensions/hello-someone/hello-someone';
-import type { UsfmProviderDataTypes } from '@extensions/external-usfm-data-provider';
-import type { DataProviderDataType } from 'shared/models/data-provider.model';
+import type { QuickVerseDataTypes } from 'quick-verse';
+import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
+import type { UsfmProviderDataTypes } from 'usfm-data-provider';
 import { Key, useCallback, useContext, useMemo, useState } from 'react';
+import type { TimeDataTypes } from 'c-sharp-provider-test';
 
 type Row = {
   id: string;
@@ -44,10 +45,8 @@ const initializeRows = (): Row[] => {
 
 // Test fetching
 papi
-  .fetch('https://bible-api.com/matthew+24:14')
-  .then((res) => res.json())
-  .then((scr) => logger.info(scr.text.replace(/\\n/g, '')))
-  .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
+  .fetch('https://www.example.com', { mode: 'no-cors' })
+  .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
 globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
@@ -61,48 +60,44 @@ globalThis.webViewComponent = function HelloWorld() {
       // Not using the promise's resolved value
       // eslint-disable-next-line no-promise-executor-return
       await new Promise<void>((resolve) => setTimeout(() => resolve(), 3000));
-      return papi.commands.sendCommand<[string], string>('echoRenderer', `From ${NAME}`);
+      return papi.commands.sendCommand('test.echoRenderer', `From ${NAME}`);
     }, []),
     'retrieving',
   );
 
   const [latestVerseText] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
-    'quick-verse.quick-verse',
+    'quickVerse.quickVerse',
     'latest',
     'Loading latest Scripture text...',
   );
 
-  type TimeDataType = {
-    TimeData: DataProviderDataType<string, string | undefined, string>;
-  };
-
-  const [currentTime] = useData.Time<TimeDataType, 'TimeData'>(
+  const [currentTime] = useData.Time<TimeDataTypes, 'TimeData'>(
     'current-time',
-    '*',
+    undefined,
     'Loading current time',
   );
 
   const [name, setName] = useState('Bill');
 
-  const peopleDataProvider = useDataProvider<PeopleDataProvider>('hello-someone.people');
+  const peopleDataProvider = useDataProvider<PeopleDataProvider>('helloSomeone.people');
 
   const [personGreeting] = useData.Greeting<PeopleDataTypes, 'Greeting'>(
-    'hello-someone.people',
+    'helloSomeone.people',
     name,
     'Greeting loading',
   );
 
-  const [personAge] = useData.Age<PeopleDataTypes, 'Age'>('hello-someone.people', name, -1);
+  const [personAge] = useData.Age<PeopleDataTypes, 'Age'>('helloSomeone.people', name, -1);
 
   const [psalm1] = useData.Chapter<UsfmProviderDataTypes, 'Chapter'>(
     'usfm',
-    useMemo(() => ({ book: 'PSA', chapter: '1', verse: '1', versification: 'English' }), []),
+    useMemo(() => new VerseRef('PSA', '1', '1', ScrVers.English), []),
     'Loading Psalm 1...',
   );
 
   const [john11] = useData.Verse<UsfmProviderDataTypes, 'Verse'>(
     'usfm',
-    useMemo(() => ({ verseString: 'JHN 1:1' }), []),
+    useMemo(() => new VerseRef('JHN 1:1'), []),
     'Loading John 1:1...',
   );
 
@@ -117,10 +112,8 @@ globalThis.webViewComponent = function HelloWorld() {
             logger.info(`${NAME} Button clicked!`);
             setMyState((myStateCurrent) => myStateCurrent + 1);
             papi
-              .fetch('https://bible-api.com/matthew+24:14')
-              .then((res) => res.json())
-              .then((scr) => logger.info(`Got it! ${scr.text.replace(/\\n/g, '')}`))
-              .catch((e) => logger.error(`Could not get Scripture from bible-api! Reason: ${e}`));
+              .fetch('https://example.com', { mode: 'no-cors' })
+              .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
           }}
         >
           Hello World Button {myState}
@@ -156,7 +149,10 @@ globalThis.webViewComponent = function HelloWorld() {
         <Switch /> {/* no label available */}
         <ComboBox title="Test Me" options={['option 1', 'option 2']} />
         <Slider /> {/* no label available */}
-        <RefSelector scrRef={{ book: 1, chapter: 1, verse: 1 }} handleSubmit={(): void => {}} />
+        <RefSelector
+          scrRef={{ bookNum: 1, chapterNum: 1, verseNum: 1 }}
+          handleSubmit={(): void => {}}
+        />
         <Table<Row>
           columns={[
             {

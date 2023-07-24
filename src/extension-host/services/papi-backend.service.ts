@@ -5,10 +5,14 @@
  */
 
 import papiShared from '@shared/services/papi.service';
-import extensionStorageService from '@extension-host/services/extension-storage.service';
+import extensionStorageService, {
+  ExtensionStorageService,
+} from '@extension-host/services/extension-storage.service';
 
+// Note: we need to provide type assertions for all members so they carry the JSDoc comments on the
+// papi.d.ts file so extension developers see the comments. Please add to all properties you add.
 const papi = {
   ...papiShared,
-  storage: extensionStorageService,
+  storage: extensionStorageService as ExtensionStorageService,
 };
 export default papi;

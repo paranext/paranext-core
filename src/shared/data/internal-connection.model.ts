@@ -3,7 +3,7 @@
  * These types should not need to be used outside of NetworkConnectors and ConnectionService.ts
  */
 
-import { ComplexRequest, ComplexResponse } from '@shared/utils/papi-util';
+import { ComplexRequest, ComplexResponse, SerializedRequestType } from '@shared/utils/papi-util';
 
 /** Represents when the client id has not been assigned by the server */
 export const CLIENT_ID_UNASSIGNED = -1;
@@ -15,6 +15,9 @@ export const CLIENT_ID_SERVER = 0;
 export const CONNECTOR_INFO_DISCONNECTED = Object.freeze({
   clientId: CLIENT_ID_UNASSIGNED,
 });
+
+/** Prefix on requests that indicates that the request is a command */
+export const CATEGORY_COMMAND = 'command';
 
 /** Information about the network connector */
 export type NetworkConnectorInfo = Readonly<{
@@ -74,7 +77,7 @@ export type InternalRequestHandler = <TParam, TReturn>(
 
 /** Handler for requests from the server */
 export type RequestHandler = <TParam, TReturn>(
-  requestType: string,
+  requestType: SerializedRequestType,
   request: ComplexRequest<TParam>,
 ) => Promise<ComplexResponse<TReturn>>;
 

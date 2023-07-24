@@ -8,7 +8,7 @@ import PlatformBibleToolbar from './components/platform-bible-toolbar';
 
 
 function Main() {
-  const [scrRef, setScrRef] = useState({ book: 40, chapter: 1, verse: 1 });
+  const [scrRef, setScrRef] = useState({ bookNum: 40, chapterNum: 1, verseNum: 1 });
 
   const handleReferenceChanged = (newScrRef: ScriptureReference) => {
     setScrRef(newScrRef);

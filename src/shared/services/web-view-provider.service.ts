@@ -109,15 +109,26 @@ async function get(webViewType: string): Promise<WebViewProvider | undefined> {
   return webViewProvider;
 }
 
-const webViewProviderService = {
+// Declare interfaces for the objects we're exporting so that JSDoc comments propagate
+export interface WebViewProviderService {
+  initialize: typeof initialize;
+  hasKnown: typeof hasKnown;
+  register: typeof register;
+  get: typeof get;
+}
+
+export interface PapiWebViewProviderService {
+  register: typeof register;
+}
+
+const webViewProviderService: WebViewProviderService = {
   initialize,
   hasKnown,
   register,
   get,
 };
 
-// TODO: refactor? Put all provider service stuff in webview service?
-export const papiWebViewProviderService = {
+export const papiWebViewProviderService: PapiWebViewProviderService = {
   register,
 };
 

@@ -7,6 +7,18 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Paranext.DataProvider</RootNamespace>
     <SelfContained>true</SelfContained>
+    <Company>SIL International</Company>
+    <Copyright>SIL International</Copyright>
+    <Authors>sillsdev</Authors>
+    <Product>Paratext Data Provider for Platform.Bible</Product>
+    <Title>Paratext Data Provider for Platform.Bible</Title>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionSuffix>$([System.DateTime]::UtcNow.ToString(`yyyyMMddHHmmss`))</VersionSuffix>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageProjectUrl>https://github.com/paranext</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/paranext/paranext-core</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +36,14 @@
     <Content Include="assets\**\*.*">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\assets\icon.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>

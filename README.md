@@ -59,12 +59,6 @@ cd paranext-core
 npm install
 ```
 
-To build extensions including the declaration type files for the core extensions, run the following:
-
-```bash
-npm run build:extensions
-```
-
 To build the declaration type file `papi.d.ts` for extensions to use, run the following:
 
 ```bash
@@ -200,6 +194,10 @@ cd c-sharp
 dotnet tool restore
 dotnet csharpier .
 ```
+
+## Thanks
+
+Some important decisions in this project were inspired by the work done in [Visual Studio Code](https://code.visualstudio.com/api). Thanks VS Code developers for some great ideas!
 
 ## License
 
