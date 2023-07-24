@@ -32,15 +32,15 @@
     ]
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^3.1.0",
+    "@vitejs/plugin-react": "^4.0.3",
     "escape-string-regexp": "^5.0.0",
-    "glob": "^10.2.2",
+    "glob": "^10.3.3",
     "papi-dts": "file:../lib/papi-dts",
-    "patch-package": "^7.0.0",
-    "rollup-plugin-import-manager": "^0.6.2",
+    "patch-package": "^7.0.2",
+    "rollup-plugin-import-manager": "^0.6.4",
     "rollup-plugin-string": "^3.0.0",
-    "sass": "^1.62.1",
-    "vite": "^4.3.9",
-    "vite-plugin-static-copy": "^0.14.0"
+    "sass": "^1.64.1",
+    "vite": "^4.4.6",
+    "vite-plugin-static-copy": "^0.17.0"
   }
 }

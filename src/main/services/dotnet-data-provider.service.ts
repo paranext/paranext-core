@@ -1,4 +1,4 @@
-import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
+import { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio, spawn } from 'child_process';
 import path from 'path';
 import logger, { formatLog } from '@shared/services/logger.service';
 import { waitForDuration } from '@shared/utils/util';
@@ -54,18 +54,21 @@ function startDotnetDataProvider() {
   // default values for development
   let command = 'dotnet';
   let args: string[] = ['watch', '--project', 'c-sharp/ParanextDataProvider.csproj'];
+  let options: SpawnOptionsWithoutStdio | undefined;
 
   if (process.env.NODE_ENV === 'production') {
+    const dotnetPath: string = path.join(process.resourcesPath, 'dotnet');
     if (process.platform === 'win32') {
-      command = path.join(process.resourcesPath, 'dotnet', 'ParanextDataProvider.exe');
+      command = path.join(dotnetPath, 'ParanextDataProvider.exe');
       args = [];
     } else {
-      command = path.join(process.resourcesPath, 'dotnet', 'ParanextDataProvider');
+      command = path.join(dotnetPath, 'ParanextDataProvider');
       args = [];
     }
+    options = { cwd: dotnetPath };
   }
 
-  dotnet = spawn(command, args);
+  dotnet = spawn(command, args, options);
 
   dotnet.stdout.on('data', logProcessInfo);
   dotnet.stderr.on('data', logProcessError);

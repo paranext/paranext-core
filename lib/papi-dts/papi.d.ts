@@ -595,8 +595,8 @@ declare module 'shared/services/logger.service' {
    * @returns formatted string of a service message
    */
   export function formatLog(message: string, serviceName: string, tag?: string): string;
-  const logger: log.Logger & {
-    default: log.Logger;
+  const logger: log.MainLogger & {
+    default: log.MainLogger;
   };
   export default logger;
 }
@@ -2189,8 +2189,8 @@ declare module 'shared/services/papi.service' {
     webViews: PapiWebViewService;
     webViewProviders: PapiWebViewProviderService;
     network: PapiNetworkService;
-    logger: import('electron-log').Logger & {
-      default: import('electron-log').Logger;
+    logger: import('electron-log').MainLogger & {
+      default: import('electron-log').MainLogger;
     };
     internet: InternetService;
     dataProvider: DataProviderService;
@@ -2417,8 +2417,8 @@ declare module 'papi-frontend' {
     webViews: import('shared/services/web-view.service').PapiWebViewService;
     webViewProviders: import('shared/services/web-view-provider.service').PapiWebViewProviderService;
     network: import('shared/services/network.service').PapiNetworkService;
-    logger: import('electron-log').Logger & {
-      default: import('electron-log').Logger;
+    logger: import('electron-log').MainLogger & {
+      default: import('electron-log').MainLogger;
     };
     internet: import('shared/services/internet.service').InternetService;
     dataProvider: import('shared/services/data-provider.service').DataProviderService;
@@ -2633,8 +2633,8 @@ declare module 'papi-backend' {
     webViews: import('shared/services/web-view.service').PapiWebViewService;
     webViewProviders: import('shared/services/web-view-provider.service').PapiWebViewProviderService;
     network: import('shared/services/network.service').PapiNetworkService;
-    logger: import('electron-log').Logger & {
-      default: import('electron-log').Logger;
+    logger: import('electron-log').MainLogger & {
+      default: import('electron-log').MainLogger;
     };
     internet: import('shared/services/internet.service').InternetService;
     dataProvider: import('shared/services/data-provider.service').DataProviderService;
