@@ -10,6 +10,16 @@ const shouldGenerateSourceMaps = isDev || process.env.DEBUG_PROD;
 /** The base directory from which webpack should operate (should be the root repo folder) */
 export const rootDir = path.resolve(__dirname, '..');
 
+/**
+ * The module format of library we want webpack to use for externals and create for our extensions
+ *
+ * @see webpack.Configuration['externalsTye'] for info about external import format
+ * @see webpack.LibraryOptions['type'] for info about library format
+ */
+// commonjs-static formats the code to export everything on module.exports.<export_name> so it works
+// well in cjs or esm https://webpack.js.org/configuration/output/#type-commonjs-static
+export const LIBRARY_TYPE: NonNullable<webpack.Configuration['externalsType']> = 'commonjs-static';
+
 // Note: we do not want to do any chunking because neither webViews nor main can import dependencies
 // other than those listed in configBase.externals. Each webView must contain all its dependency
 // code, and main must contain all its dependency code.
@@ -25,7 +35,7 @@ const configBase: webpack.Configuration = {
   },
   // Use require for externals as it is the only type of importing that Paranext supports
   // https://webpack.js.org/configuration/externals/#externalstypecommonjs
-  externalsType: 'commonjs',
+  externalsType: LIBRARY_TYPE,
   // Modules that Paranext supplies to extensions https://webpack.js.org/configuration/externals/
   // All other dependencies must be bundled into the extension
   externals: [

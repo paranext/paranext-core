@@ -3,6 +3,7 @@ import path from 'path';
 import { glob } from 'glob';
 import fs from 'fs';
 import { Pattern } from 'copy-webpack-plugin';
+import { LIBRARY_TYPE } from './webpack.config.base';
 
 // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.util.ts
 
@@ -27,6 +28,9 @@ const webViewTsxGlob = '**/*.web-view.tsx';
 export const webViewTsxRegex = /.+\.web-view(\.[tj]sx)?$/;
 /** Name of adjacent folder used to store bundled WebView files */
 export const webViewTempDir = 'temp-build';
+
+/** Folder containing the built extension files */
+export const outputFolder = 'dist';
 
 /**
  * Get a list of TypeScript WebView files to bundle.
@@ -84,9 +88,6 @@ export async function getWebViewEntries(): Promise<webpack.EntryObject> {
 
 /** Folder containing the source files for the extensions */
 const sourceFolder = 'src';
-
-/** Folder containing the built extension files */
-export const outputFolder = 'dist';
 
 /** dirNames of extensions that should be copied to the output folder but not bundled */
 const extensionsNotBundled = [
@@ -188,8 +189,7 @@ export function getMainEntries(extensions: ExtensionInfo[]): webpack.EntryObject
           ),
           // Exposing multiple libraries https://webpack.js.org/concepts/entry-points/#entrydescription-object
           library: {
-            name: extension.dirName,
-            type: 'umd',
+            type: LIBRARY_TYPE,
           },
         } as webpack.EntryObject[string],
       ]),

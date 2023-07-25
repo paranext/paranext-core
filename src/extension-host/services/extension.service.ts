@@ -75,11 +75,9 @@ type ActiveExtension = {
 /**
  * A dynamically imported extension module which could be an ES Module or a CommonJS module.
  *
- * For some reason, it seems we usually import modules as CommonJS in development and ES Modules in
- * production. This may be due in part to using webpack's umd module definition, which attempts to
- * form the module according to the environment it believes it's in. But then there are times when
- * it imports with __esModule: true and with the actual module inside `module.default`, so, at least
- * for now, we will support anything.
+ * Using webpack's 'commonjs-static' library type as we use in our extensions, the import is the
+ * extension module with its exports directly in the object; there is no need to go into `default`.
+ * However, it probably doesn't hurt to support multiple shapes of modules.
  */
 type AmbiguousExtensionModule = IExtension | { default: IExtension };
 
@@ -175,7 +173,9 @@ const activateExtension = async (
   const extensionModuleAmbiguous = (await import(
     /* webpackIgnore: true */ extensionFilePath
   )) as AmbiguousExtensionModule;
-  // Get the actual extension module based on what kind of module it is
+  // Some modules import with their exports directly on the module object, while others put their
+  // exports in a `default` member on the module. Let's use the module object itself if `activate`
+  // is on it, and let's go into `default` otherwise.
   const extensionModule =
     'activate' in extensionModuleAmbiguous
       ? extensionModuleAmbiguous

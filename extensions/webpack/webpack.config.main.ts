@@ -2,7 +2,7 @@ import webpack from 'webpack';
 import path from 'path';
 import merge from 'webpack-merge';
 import CopyPlugin from 'copy-webpack-plugin';
-import configBase, { rootDir } from './webpack.config.base';
+import configBase, { LIBRARY_TYPE, rootDir } from './webpack.config.base';
 import WebViewResolveWebpackPlugin from './web-view-resolve-webpack-plugin';
 import {
   outputFolder,
@@ -24,6 +24,17 @@ const configMain: () => Promise<webpack.Configuration> = async () => {
     name: 'main',
     // wait until webView bundling finishes - webpack.config.web-view.ts
     dependencies: ['webView'],
+    // Instructions on what output to create
+    output: {
+      // extension output directory
+      path: path.resolve(rootDir, outputFolder),
+      // Exporting the library https://webpack.js.org/guides/author-libraries/#expose-the-library
+      library: {
+        type: LIBRARY_TYPE,
+      },
+      // Empty the output folder before building
+      clean: true,
+    },
     resolve: {
       plugins: [
         // Get web view files from the temp dir where they are built
@@ -35,17 +46,6 @@ const configMain: () => Promise<webpack.Configuration> = async () => {
 
     // instructions to build each extension main source file
     entry: () => getMainEntries(extensions),
-    output: {
-      // extension output directory
-      path: path.resolve(rootDir, outputFolder),
-      // Exporting the library https://webpack.js.org/guides/author-libraries/#expose-the-library
-      globalObject: 'globalThis',
-      library: {
-        type: 'umd',
-      },
-      // Empty the output folder before building
-      clean: true,
-    },
     plugins: [
       // Copy static files to the output folder https://webpack.js.org/plugins/copy-webpack-plugin/
       new CopyPlugin({

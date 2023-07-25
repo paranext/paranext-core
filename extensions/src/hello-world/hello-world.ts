@@ -15,6 +15,8 @@ import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
 import helloWorldReactWebView2Styles from './web-views/hello-world-2.web-view.scss?inline';
 import helloWorldHtmlWebView from './web-views/hello-world.web-view.html?inline';
 
+type IWebViewProviderWithType = IWebViewProvider & { webViewType: string };
+
 const { logger } = papi;
 
 logger.info('Hello world is importing!');
@@ -24,7 +26,7 @@ const unsubscribers: UnsubscriberAsync[] = [];
 /**
  * Simple web view provider that provides sample html web views when papi requests them
  */
-const htmlWebViewProvider: IWebViewProvider & { webViewType: string } = {
+const htmlWebViewProvider: IWebViewProviderWithType = {
   webViewType: 'helloWorld.html',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== this.webViewType)
@@ -43,7 +45,7 @@ const htmlWebViewProvider: IWebViewProvider & { webViewType: string } = {
 /**
  * Simple web view provider that provides React web views when papi requests them
  */
-const reactWebViewProvider: IWebViewProvider & { webViewType: string } = {
+const reactWebViewProvider: IWebViewProviderWithType = {
   webViewType: 'helloWorld.react',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== this.webViewType)
@@ -62,7 +64,7 @@ const reactWebViewProvider: IWebViewProvider & { webViewType: string } = {
 /**
  * Simple web view provider that provides other React web views when papi requests them
  */
-const reactWebView2Provider: IWebViewProvider & { webViewType: string } = {
+const reactWebView2Provider: IWebViewProviderWithType = {
   webViewType: 'helloWorld.react2',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== this.webViewType)
