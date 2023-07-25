@@ -38,9 +38,8 @@ const jsdocDestinations = new Set<Target>();
 
 // Find all sources and destinations in one pass through the file
 const jsdocRegex = /\/\*\*[\s]*?JSDOC (SOURCE|DESTINATION) (\w+)[\s\S]*?\*\//g;
-let match: RegExpExecArray | null;
-// eslint-disable-next-line no-cond-assign
-while ((match = jsdocRegex.exec(papiDTS)) !== null) {
+let match = jsdocRegex.exec(papiDTS);
+while (match !== null) {
   const [block, sourceOrDestination, name] = match;
   if (sourceOrDestination === 'SOURCE') {
     if (jsdocSources.has(name)) {
@@ -53,6 +52,7 @@ while ((match = jsdocRegex.exec(papiDTS)) !== null) {
     console.error('BAD REGEX!');
     exit(-1);
   }
+  match = jsdocRegex.exec(papiDTS);
 }
 
 // Now replace destinations with sources
