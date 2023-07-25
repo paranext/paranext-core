@@ -15,6 +15,9 @@ export interface InternetService {
   fetch: typeof papiFetch;
 }
 
+/** JSDOC SOURCE internetService
+ * Service that provides a way to call `fetch` since the original function is not available
+ */
 const internetService: InternetService = {
   fetch: papiFetch,
 };

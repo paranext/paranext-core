@@ -205,3 +205,9 @@ export function getModuleSimilarApiMessage(moduleName: string) {
     similarApiName ? ` using ${similarApiName} or` : ''
   } bundling the module into your code with a build tool like Vite`;
 }
+
+/** JSDOC SOURCE papiUtil
+ * papiUtil is a collection of functions, objects, and types that are used as helpers in other services.
+ * Extensions should not use or rely on anything in papiUtil unless some other service requires it.
+ */
+export type moduleSummaryComments = {};

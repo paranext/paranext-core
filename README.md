@@ -195,6 +195,33 @@ dotnet tool restore
 dotnet csharpier .
 ```
 
+## Documentation in `papi.d.ts`
+
+VSCode renders JSDoc comments in the UI to make it easier for developers to use functions and properties as intended. However, those comments do not always propagate from modules to the `d.ts` type definition file when those modules are re-exported. To help with this problem in `papi.d.ts` that we export for extensions to reference, we added some custom functionality.
+
+If you want comments to be copied from one location in `papi.d.ts` to another, do the following:
+
+- In the JSDoc comments that you want copied elsewhere, add "JSDOC SOURCE myServiceName" in the JSDoc comments like this:
+
+```typescript
+/** JSDOC SOURCE myService
+  * myService is amazing. Here are more details about it.
+  * ...
+  */
+const myService = {
+  ...
+}
+```
+
+- In the location where you want the docs copied, add "JSDOC DESTINATION myServiceName" like this:
+
+```typescript
+const papi = {
+  ...
+  /** JSDOC DESTINATION myService */
+  myService,
+```
+
 ## Thanks
 
 Some important decisions in this project were inspired by the work done in [Visual Studio Code](https://code.visualstudio.com/api). Thanks VS Code developers for some great ideas!
