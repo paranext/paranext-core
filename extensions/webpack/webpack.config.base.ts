@@ -13,7 +13,7 @@ export const rootDir = path.resolve(__dirname, '..');
 /**
  * The module format of library we want webpack to use for externals and create for our extensions
  *
- * @see webpack.Configuration['externalsTye'] for info about external import format
+ * @see webpack.Configuration['externalsType'] for info about external import format
  * @see webpack.LibraryOptions['type'] for info about library format
  */
 // commonjs-static formats the code to export everything on module.exports.<export_name> so it works

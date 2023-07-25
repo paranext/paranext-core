@@ -18,6 +18,10 @@ import ComboBox from './combo-box.component';
 import Button from './button.component';
 import TextField from './text-field.component';
 
+function compareBookOptions(a: BookNameOption, b: BookNameOption) {
+  return a.bookId === b.bookId && a.label === b.label;
+}
+
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
@@ -58,6 +62,7 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
         value={currentBookOption}
         isClearable={false}
         width={200}
+        checkIsOptionEqualToValue={compareBookOptions}
       />
       <Button
         onClick={() => onChangeBook(offsetBook(scrRef, -1))}
