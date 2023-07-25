@@ -28,47 +28,65 @@ papiDTS = papiDTS
 
 // #region Copy "JSDOC DESTINATION" blocks to "JSDOC SOURCE" blocks
 
-type Target = {
+type Source = {
+  name: string;
+  block: string;
+  used: boolean;
+};
+
+type Destination = {
   name: string;
   block: string;
 };
 
-const jsdocSources = new Map<string, string>();
-const jsdocDestinations = new Set<Target>();
+const jsdocSources = new Map<string, Source>();
+const jsdocDestinations = new Set<Destination>();
 
 // Find all sources and destinations in one pass through the file
 const jsdocRegex = /\/\*\*[\s]*?JSDOC (SOURCE|DESTINATION) (\w+)[\s\S]*?\*\//g;
+let hitFatalError = false;
 let match = jsdocRegex.exec(papiDTS);
 while (match !== null) {
   const [block, sourceOrDestination, name] = match;
   if (sourceOrDestination === 'SOURCE') {
     if (jsdocSources.has(name)) {
       console.error(`JSDOC SOURCE for ${name} was defined more than once`);
-      exit(-1);
+      hitFatalError = true;
     }
-    jsdocSources.set(name, block);
+    jsdocSources.set(name, { name, block, used: false });
   } else if (sourceOrDestination === 'DESTINATION') jsdocDestinations.add({ name, block });
   else {
     console.error('BAD REGEX!');
-    exit(-1);
+    hitFatalError = true;
   }
   match = jsdocRegex.exec(papiDTS);
 }
 
-// Now replace destinations with sources
+// Replace destinations with sources
 jsdocDestinations.forEach((destinationItem) => {
   const { name, block } = destinationItem;
-  const sourceBlock = jsdocSources.get(name);
-  if (sourceBlock) {
-    papiDTS = papiDTS.replace(block, sourceBlock);
+  const source = jsdocSources.get(name);
+  if (source) {
+    papiDTS = papiDTS.replace(block, source.block);
+    source.used = true;
   } else {
     console.error(`No JSDOC SOURCE found for ${name}`);
-    exit(-1);
+    hitFatalError = true;
   }
 });
 
+// Make sure all sources were used
+jsdocSources.forEach((sourceValueItem) => {
+  if (!sourceValueItem.used) {
+    console.error(`No JSDOC DESTINATION found for ${sourceValueItem.name}`);
+    hitFatalError = true;
+  }
+});
+
+if (hitFatalError) exit(-1);
+
 // Remove all the "JSDOC SOURCE targetName" portions of the comments as a final clean up
-papiDTS = papiDTS.replace(/\/\*\*[\s]*JSDOC SOURCE \w+\n/g, '/**\n');
+papiDTS = papiDTS.replace(/\/\*\*[\s]*JSDOC SOURCE \w+(\n?)/g, '/**$1');
 
 // #endregion
 
