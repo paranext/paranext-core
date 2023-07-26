@@ -15,6 +15,7 @@ import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
 import { Key, useCallback, useContext, useMemo, useState } from 'react';
 import type { TimeDataTypes } from 'c-sharp-provider-test';
+import type { HelloWorldEvent } from 'hello-world';
 
 type Row = {
   id: string;
@@ -25,7 +26,7 @@ type Row = {
 const {
   react: {
     context: { TestContext },
-    hooks: { useData, useDataProvider, usePromise },
+    hooks: { useData, useDataProvider, usePromise, useEvent },
   },
   logger,
 } = papi;
@@ -51,9 +52,15 @@ papi
 globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
-  const [myState, setMyState] = useState(0);
+  const [clicks, setClicks] = useState(0);
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
+
+  // Update the clicks when we are informed helloWorld has been run
+  useEvent(
+    'helloWorld.onHelloWorld',
+    useCallback(({ times }: HelloWorldEvent) => setClicks(times), []),
+  );
 
   const [echoResult] = usePromise(
     useCallback(async () => {
@@ -109,14 +116,14 @@ globalThis.webViewComponent = function HelloWorld() {
       <div>
         <Button
           onClick={() => {
-            logger.info(`${NAME} Button clicked!`);
-            setMyState((myStateCurrent) => myStateCurrent + 1);
+            papi.commands.sendCommand('helloWorld.helloWorld');
+            setClicks(clicks + 1);
             papi
               .fetch('https://example.com', { mode: 'no-cors' })
               .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
           }}
         >
-          Hello World Button {myState}
+          Hello World {clicks}
         </Button>
       </div>
       <div>{test}</div>

@@ -11,12 +11,16 @@ import path from 'path';
 import polyfillLocalStorage from '@node/polyfills/local-storage.polyfill';
 import { ProcessType } from '@shared/global-this.model';
 import { app } from 'electron';
+import { ARG_LOG_LEVEL, getCommandLineArgument } from '@node/utils/command-line.util';
+import { LogLevel } from 'electron-log';
 
 // #region globalThis setup
 
 globalThis.processType = ProcessType.Main;
 globalThis.isPackaged = app.isPackaged;
 globalThis.resourcesPath = app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../');
+globalThis.logLevel =
+  (getCommandLineArgument(ARG_LOG_LEVEL) as LogLevel) ?? (globalThis.isPackaged ? 'error' : 'info');
 
 // #endregion
 

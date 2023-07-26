@@ -1,6 +1,12 @@
 import type { Config } from 'jest';
 import { pathsToModuleNameMapper } from 'ts-jest';
-import { compilerOptions } from './tsconfig.json';
+import fs from 'fs';
+import typescript from 'typescript';
+
+// Get this tsconfig
+const {
+  config: { compilerOptions },
+} = typescript.parseConfigFileTextToJson('tsconfig.json', fs.readFileSync('tsconfig.json', 'utf8'));
 
 const config: Config = {
   moduleDirectories: ['node_modules', 'release/app/node_modules', 'src'],

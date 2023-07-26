@@ -5,7 +5,9 @@ export interface PapiContext {
   TestContext: typeof TestContext;
 }
 
-/** All React contexts to be exposed on the papi */
+/** JSDOC SOURCE papiContext
+ * All React contexts to be exposed on the papi
+ */
 const papiContext: PapiContext = {
   TestContext,
 };

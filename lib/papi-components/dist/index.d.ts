@@ -193,6 +193,13 @@ export type ComboBoxProps<T> = {
    * Triggers when textfield loses focus
    */
   onBlur?: FocusEventHandler<HTMLDivElement>;
+  /**
+   * Function that determines which option is the selected value. Defaults to strict equality `===`
+   * @param option an option passed in via the `options` prop
+   * @param value the currently selected value according to the `value` prop
+   * @returns true if this option is the selected value; false otherwise
+   */
+  checkIsOptionEqualToValue?: (option: T, value: T) => boolean;
 };
 /**
  * Dropdown selector displaying various options from which to choose
@@ -213,6 +220,7 @@ export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   onChange,
   onFocus,
   onBlur,
+  checkIsOptionEqualToValue,
 }: ComboBoxProps<T>): import('react/jsx-runtime').JSX.Element;
 export interface ScriptureReference {
   bookNum: number;
