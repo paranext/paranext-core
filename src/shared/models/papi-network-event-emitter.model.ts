@@ -50,5 +50,6 @@ export default class PapiNetworkEventEmitter<T> extends PapiEventEmitter<T> {
     // TODO: Do we need to set networkSubscriber to undefined? Had to remove readonly from it to do this
     this.networkSubscriber = undefined as unknown as PapiEventHandler<T>;
     this.networkDisposer();
+    return Promise.resolve(true);
   };
 }

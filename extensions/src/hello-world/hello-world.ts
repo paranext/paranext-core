@@ -1,5 +1,5 @@
 import papi from 'papi-backend';
-import { UnsubscriberAsync } from 'shared/utils/papi-util';
+import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import type {
   WebViewContentType,
   WebViewDefinition,
@@ -20,8 +20,6 @@ type IWebViewProviderWithType = IWebViewProvider & { webViewType: string };
 const { logger } = papi;
 
 logger.info('Hello world is importing!');
-
-const unsubscribers: UnsubscriberAsync[] = [];
 
 /**
  * Simple web view provider that provides sample html web views when papi requests them
@@ -103,7 +101,7 @@ function helloException(message: string) {
   throw new Error(`Hello World Exception! ${message}`);
 }
 
-export async function activate(): Promise<UnsubscriberAsync> {
+export default async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello world is activating!');
 
   const htmlWebViewProviderPromise = papi.webViewProviders.register(
@@ -124,10 +122,12 @@ export async function activate(): Promise<UnsubscriberAsync> {
   onHelloWorldEmitter =
     papi.network.createNetworkEventEmitter<HelloWorldEvent>(onHelloWorldEventType);
 
-  const unsubPromises: Promise<UnsubscriberAsync>[] = [
-    papi.commands.registerCommand('helloWorld.helloWorld', helloWorld),
-    papi.commands.registerCommand('helloWorld.helloException', helloException),
-  ];
+  const helloWorldPromise = papi.commands.registerCommand('helloWorld.helloWorld', helloWorld);
+
+  const helloExceptionPromise = papi.commands.registerCommand(
+    'helloWorld.helloException',
+    helloException,
+  );
 
   papi
     .fetch('https://www.example.com')
@@ -151,29 +151,18 @@ export async function activate(): Promise<UnsubscriberAsync> {
       (billGreeting: string | undefined) => logger.info(`Bill's greeting: ${billGreeting}`),
     );
 
-    unsubscribers.push(unsubGreetings);
+    context.registrations.add(unsubGreetings);
   }
 
-  // For now, let's just make things easy and await the registration promises at the end so we don't hold everything else up
-  const htmlWebViewProviderResolved = await htmlWebViewProviderPromise;
-  const reactWebViewProviderResolved = await reactWebViewProviderPromise;
-  const reactWebView2ProviderResolved = await reactWebView2ProviderPromise;
-
-  const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
-    (await Promise.all(unsubPromises)).concat([
-      htmlWebViewProviderResolved.dispose,
-      reactWebViewProviderResolved.dispose,
-      reactWebView2ProviderResolved.dispose,
-      () => {
-        onHelloWorldEmitter.dispose();
-        return Promise.resolve(true);
-      },
-    ]),
+  // Await the registration promises at the end so we don't hold everything else up
+  context.registrations.add(
+    await htmlWebViewProviderPromise,
+    await reactWebViewProviderPromise,
+    await reactWebView2ProviderPromise,
+    onHelloWorldEmitter,
+    await helloWorldPromise,
+    await helloExceptionPromise,
   );
-  logger.info('Hello World is finished activating!');
-  return combinedUnsubscriber;
-}
 
-export async function deactivate() {
-  return Promise.all(unsubscribers.map((unsubscriber) => unsubscriber()));
+  logger.info('Hello World is finished activating!');
 }
