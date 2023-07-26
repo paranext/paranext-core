@@ -1,0 +1,9 @@
+{
+  "FullName": "Bible in USFM format",
+  "Name": "Bible",
+  "Id": "aeaf859b-5718-4299-af35-08d730c95e45",
+  "Directory": "Resources",
+  "Full path": "FullPath/Resources",
+  "BooksPresentSet": "111111111111111111111111111111111111111111111111111111111111111111",
+  "USFM": "\\id JHN English: Good News Translation 2nd Ed. 1992\n\\ide Unicode (UTF8)\n\\rem For any non-Paratext use of this text, permission must be obtained from the copyright holder.\n\\rem CAP Information: checked/corrected 2008\n\\h John\n\\toc3 Jn\n\\toc2 JOHN\n\\toc1 John\n\\mt2 The Gospel according to\n\\mt1 JOHN\n\\c 1\n\\s The Word of Life\n\\p\n\\v 1 In the beginning the Word already existed; the Word was with God, and the Word was God.\n\\v 2 From the very beginning the Word was with God."
+}
