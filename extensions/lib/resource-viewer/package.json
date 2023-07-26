@@ -8,5 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Katherine Jensen",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "usfm-js": "^3.4.2"
+  }
 }
