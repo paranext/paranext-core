@@ -287,11 +287,36 @@ declare module 'shared/models/papi-event.model' {
    */
   export type PapiEventAsync<T> = (callback: PapiEventHandler<T>) => Promise<UnsubscriberAsync>;
 }
+declare module 'shared/models/disposal.model' {
+  import { PapiEvent } from 'shared/models/papi-event.model';
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  /** Require a `dispose` function */
+  export interface Dispose {
+    /** Release resources and notify dependent services when tearing down an object */
+    dispose: UnsubscriberAsync;
+  }
+  /** Require an `onDidDispose` event */
+  export interface OnDidDispose {
+    /** Event that emits when `dispose` is called on an object */
+    onDidDispose: PapiEvent<void>;
+  }
+  /** Indicates than an object cannot have an `onDidDispose` event.
+   *  Also allows an object to include a `dispose` function. */
+  export interface CannotHaveOnDidDispose {
+    /** Release resources and notify dependent services when tearing down an object */
+    dispose?: UnsubscriberAsync;
+    /** Event that emits when `dispose` is called on an object */
+    onDidDispose?: undefined;
+  }
+  /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
+  export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
+}
 declare module 'shared/models/papi-event-emitter.model' {
   /**
    * Interfaces, classes, and functions related to events and event emitters
    */
   import { PapiEvent } from 'shared/models/papi-event.model';
+  import { Dispose } from 'shared/models/disposal.model';
   /**
    * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
    * Use eventEmitter.event(callback) to subscribe to the event.
@@ -299,7 +324,7 @@ declare module 'shared/models/papi-event-emitter.model' {
    * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
    * but anyone can subscribe to the event.
    */
-  export default class PapiEventEmitter<T> {
+  export default class PapiEventEmitter<T> implements Dispose {
     /**
      * Subscribes a function to run when this event is emitted.
      * @alias event
@@ -321,7 +346,7 @@ declare module 'shared/models/papi-event-emitter.model' {
      */
     get event(): PapiEvent<T>;
     /** Disposes of this event, preparing it to release from memory */
-    dispose: () => void;
+    dispose: () => Promise<boolean>;
     /**
      * Runs the subscriptions for the event
      * @param event event data to provide to subscribed callbacks
@@ -985,7 +1010,7 @@ declare module 'shared/models/papi-network-event-emitter.model' {
      * @param event event data to provide to subscribed callbacks
      */
     emitLocal(event: T): void;
-    dispose: () => void;
+    dispose: () => Promise<boolean>;
   }
 }
 declare module 'shared/services/network.service' {
@@ -1373,30 +1398,6 @@ declare module 'shared/utils/async-variable' {
      */
     private complete;
   }
-}
-declare module 'shared/models/disposal.model' {
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Require a `dispose` function */
-  export interface Dispose {
-    /** Release resources and notify dependent services when tearing down an object */
-    dispose: UnsubscriberAsync;
-  }
-  /** Require an `onDidDispose` event */
-  export interface OnDidDispose {
-    /** Event that emits when `dispose` is called on an object */
-    onDidDispose: PapiEvent<void>;
-  }
-  /** Indicates than an object cannot have an `onDidDispose` event.
-   *  Also allows an object to include a `dispose` function. */
-  export interface CannotHaveOnDidDispose {
-    /** Release resources and notify dependent services when tearing down an object */
-    dispose?: UnsubscriberAsync;
-    /** Event that emits when `dispose` is called on an object */
-    onDidDispose?: undefined;
-  }
-  /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
-  export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
 }
 declare module 'shared/services/network-object.service' {
   import {
@@ -2747,11 +2748,37 @@ declare module 'papi-backend' {
   };
   export default papi;
 }
+declare module 'extension-host/extension-types/unsubscriber-async-list' {
+  import { Dispose } from 'shared/models/disposal.model';
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  /**
+   * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
+   */
+  export default class UnsubscriberAsyncList {
+    readonly unsubscribers: Set<UnsubscriberAsync>;
+    /**
+     * Add unsubscribers to the list. Note that duplicates are not added twice.
+     * @param unsubscribers Objects that were returned from a registration process
+     */
+    add(...unsubscribers: (UnsubscriberAsync | Dispose)[]): void;
+    /**
+     * Run all unsubscribers added to this list and then clear the list
+     * @returns `true` if all unsubscribers succeeded, `false` otherwise
+     */
+    runAllUnsubscribers(): Promise<boolean>;
+  }
+}
 declare module 'extension-host/extension-types/extension-activation-context.model' {
   import { ExecutionToken } from 'node/models/execution-token.model';
+  import UnsubscriberAsyncList from 'extension-host/extension-types/unsubscriber-async-list';
   /** An object of this type is passed into `activate()` for each extension during initialization */
   export type ExecutionActivationContext = {
+    /** Canonical name of the extension */
+    name: string;
+    /** Used to save and load data from the storage service. */
     executionToken: ExecutionToken;
+    /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
+    registrations: UnsubscriberAsyncList;
   };
 }
 declare module 'extension-host/extension-types/extension.interface' {
@@ -2762,11 +2789,10 @@ declare module 'extension-host/extension-types/extension.interface' {
     /**
      * Sets up this extension! Runs when paranext wants this extension to activate. For example, activate() should register commands for this extension
      * @param context data and utilities that are specific to this particular extension
-     * @returns unsubscriber to run to deactivate this extension
      */
-    activate: (context: ExecutionActivationContext) => Promise<UnsubscriberAsync>;
+    activate: (context: ExecutionActivationContext) => Promise<void>;
     /**
-     * Deactivate anything in this extension that is not covered by the unsubscriber returned from the activate function, unsubscribing from things and such.
+     * Deactivate anything in this extension that is not covered by the registrations in the context object given to activate().
      * @returns promise that resolves to true if successfully deactivated
      */
     deactivate?: UnsubscriberAsync;
