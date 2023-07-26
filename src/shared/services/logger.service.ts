@@ -106,10 +106,8 @@ export function formatLog(message: string, serviceName: string, tag = '') {
  * Abstract and shim the logger
  */
 
-const isProduction = process.env.NODE_ENV === 'production';
-const level = isProduction ? 'error' : 'info';
 if (isClient()) {
-  log.transports.console.level = level;
+  log.transports.console.level = globalThis.logLevel;
   if (isRenderer())
     // On the renderer, insert formatting before sending
     log.hooks.push((message) => {
@@ -140,7 +138,7 @@ if (isClient()) {
     });
 } else {
   log.initialize();
-  log.transports.console.level = level;
+  log.transports.console.level = globalThis.logLevel;
   log.transports.console.format = '{h}:{i}:{s} {text}';
   log.transports.console.writeFn = ({ message: msg }) => {
     let message = `${msg.data}`;
@@ -168,7 +166,7 @@ if (isClient()) {
     }
     /* eslint-enable */
   };
-  log.transports.file.level = level;
+  log.transports.file.level = globalThis.logLevel;
 }
 
 /** JSDOC SOURCE logger

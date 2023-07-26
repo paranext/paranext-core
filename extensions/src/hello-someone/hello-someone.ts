@@ -11,8 +11,7 @@ import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
-// @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
-import helloSomeoneHtmlWebView from './hello-someone.web-view.ejs';
+import helloSomeoneHtmlWebView from './hello-someone.web-view.html?inline';
 
 const { logger } = papi;
 logger.info('Hello Someone is importing!');

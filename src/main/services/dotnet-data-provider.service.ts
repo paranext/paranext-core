@@ -56,7 +56,7 @@ function startDotnetDataProvider() {
   let args: string[] = ['watch', '--project', 'c-sharp/ParanextDataProvider.csproj'];
   let options: SpawnOptionsWithoutStdio | undefined;
 
-  if (process.env.NODE_ENV === 'production') {
+  if (globalThis.isPackaged) {
     const dotnetPath: string = path.join(process.resourcesPath, 'dotnet');
     if (process.platform === 'win32') {
       command = path.join(dotnetPath, 'ParanextDataProvider.exe');

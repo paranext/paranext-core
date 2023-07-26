@@ -1,6 +1,7 @@
 /* eslint-disable vars-on-top */
 /* eslint-disable no-var */
 
+import { LogLevel } from 'electron-log';
 import { FunctionComponent } from 'react';
 
 /**
@@ -14,6 +15,10 @@ declare global {
   var isPackaged: boolean;
   /** Path to the app's resources directory. This is a string representation of the resources uri on frontend */
   var resourcesPath: string;
+  /**
+   * How much logging should be recorded. Defaults to 'info' if not packaged, 'error' if packaged
+   */
+  var logLevel: LogLevel;
   /**
    * A function that each React WebView extension must provide for Paranext to display it.
    * Only used in WebView iframes

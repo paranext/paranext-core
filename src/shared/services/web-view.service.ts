@@ -385,7 +385,11 @@ export const getWebView = async (
   const imports = `
   var papi = window.parent.papi;
   var React = window.parent.React;
+  var ReactJsxRuntime = window.parent.ReactJsxRuntime;
+  var ReactDom = window.parent.ReactDom;
+  var ReactDOMClient = window.parent.ReactDOMClient;
   var createRoot = window.parent.createRoot;
+  var SillsdevScripture = window.parent.SillsdevScripture;
   var require = window.parent.webViewRequire;
   window.fetch = papi.fetch;
   delete window.parent;

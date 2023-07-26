@@ -3,7 +3,10 @@
  */
 
 import React from 'react';
-import { createRoot } from 'react-dom/client';
+import * as ReactJsxRuntime from 'react/jsx-runtime';
+import * as ReactDOM from 'react-dom';
+import * as ReactDOMClient from 'react-dom/client';
+import * as SillsdevScripture from '@sillsdev/scripture';
 import { ProcessType } from '@shared/global-this.model';
 import papi, { Papi } from '@renderer/services/papi-frontend.service';
 import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
@@ -25,15 +28,20 @@ declare const webpackRenderer: {
 function webViewRequire(module: string) {
   if (module === 'papi-frontend') return papi;
   if (module === 'react') return React;
-  if (module === 'react-dom/client') return { createRoot };
+  if (module === 'react/jsx-runtime') return ReactJsxRuntime;
+  if (module === 'react-dom') return ReactDOM;
+  if (module === 'react-dom/client') return ReactDOMClient;
+  if (module === '@sillsdev/scripture') return SillsdevScripture;
   // Tell the extension dev if there is an api similar to what they want to import
-  const message = `Requiring other than papi, react, and react-dom/client > createRoot is not allowed in WebViews! ${getModuleSimilarApiMessage(
+  const message = `Requiring other than papi-frontend, react, react-dom, react-dom/client, and @sillsdev/scripture is not allowed in WebViews! ${getModuleSimilarApiMessage(
     module,
   )}`;
   throw new Error(message);
 }
 
-type CreateRoot = typeof createRoot;
+type ReactJsxRuntimeType = typeof ReactJsxRuntime;
+type ReactDOMClientType = typeof ReactDOMClient;
+type SillsdevScriptureType = typeof SillsdevScripture;
 type WebViewRequire = typeof webViewRequire;
 
 /* eslint-disable vars-on-top */
@@ -41,7 +49,13 @@ type WebViewRequire = typeof webViewRequire;
 declare global {
   var papi: Papi;
   var React: typeof React;
-  var createRoot: CreateRoot;
+  var ReactJsxRuntime: ReactJsxRuntimeType;
+  // For some reason, TypeScript throws an index signature error on assignment to
+  // globalThis.ReactDOM, so this is ReactDom, not ReactDOM
+  var ReactDom: typeof ReactDOM;
+  var ReactDOMClient: ReactDOMClientType;
+  var createRoot: typeof ReactDOMClient.createRoot;
+  var SillsdevScripture: SillsdevScriptureType;
   var webViewRequire: WebViewRequire;
 }
 /* eslint-enable */
@@ -53,12 +67,19 @@ declare global {
 globalThis.processType = ProcessType.Renderer;
 globalThis.isPackaged = webpackRenderer.isPackaged;
 globalThis.resourcesPath = 'resources://';
+// renderer currently does not support setting logLevel via command-line
+// TODO: support command-line logLevel in renderer
+globalThis.logLevel = globalThis.isPackaged ? 'error' : 'info';
 
 // Note: these items are used in `src\shared\services\web-view.service.ts`. Putting them here breaks
 // the circular dependency since `papi` uses the webview service.
 globalThis.papi = papi;
 globalThis.React = React;
-globalThis.createRoot = createRoot;
+globalThis.ReactJsxRuntime = ReactJsxRuntime;
+globalThis.ReactDom = ReactDOM;
+globalThis.ReactDOMClient = ReactDOMClient;
+globalThis.createRoot = ReactDOMClient.createRoot;
+globalThis.SillsdevScripture = SillsdevScripture;
 globalThis.webViewRequire = webViewRequire;
 
 // #endregion

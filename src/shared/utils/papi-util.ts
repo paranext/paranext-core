@@ -179,8 +179,8 @@ export const htmlEncode = (str: string): string =>
 export const MODULE_SIMILAR_APIS: Readonly<{
   [moduleName: string]: string | { [process in ProcessType | 'default']?: string } | undefined;
 }> = Object.freeze({
-  http: 'papi.fetch',
-  https: 'papi.fetch',
+  http: 'fetch',
+  https: 'fetch',
   fs: {
     [ProcessType.Renderer]: 'the papi-extension: protocol',
     [ProcessType.ExtensionHost]: 'papi.storage',
@@ -203,7 +203,7 @@ export function getModuleSimilarApiMessage(moduleName: string) {
     }
   return `Rejected require('${moduleName}'). Try${
     similarApiName ? ` using ${similarApiName} or` : ''
-  } bundling the module into your code with a build tool like Vite`;
+  } bundling the module into your code with a build tool like webpack`;
 }
 
 /** JSDOC SOURCE papiUtil

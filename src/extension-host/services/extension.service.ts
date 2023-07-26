@@ -8,6 +8,7 @@ import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
 import { UnsubscriberAsync, getModuleSimilarApiMessage } from '@shared/utils/papi-util';
 import Module from 'module';
+import * as SillsdevScripture from '@sillsdev/scripture';
 import logger from '@shared/services/logger.service';
 import {
   ARG_EXTENSION_DIRS,
@@ -45,6 +46,7 @@ const activeExtensions = new Map<string, ActiveExtension>();
  */
 type ExtensionManifest = {
   name: string;
+  version: string;
   /**
    * The JavaScript file to run in the extension host.
    *
@@ -70,6 +72,15 @@ type ActiveExtension = {
   deactivator: UnsubscriberAsync;
 };
 
+/**
+ * A dynamically imported extension module which could be an ES Module or a CommonJS module.
+ *
+ * Using webpack's 'commonjs-static' library type as we use in our extensions, the import is the
+ * extension module with its exports directly in the object; there is no need to go into `default`.
+ * However, it probably doesn't hurt to support multiple shapes of modules.
+ */
+type AmbiguousExtensionModule = IExtension | { default: IExtension };
+
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string) {
   const extensionManifest = JSON.parse(extensionManifestJson) as ExtensionManifest;
@@ -82,8 +93,8 @@ function parseManifest(extensionManifestJson: string) {
 
 /**
  * Get information for all the extensions present
- * TODO: figure out if we can share this code with vite.config.ts
  */
+// TODO: figure out if we can share this code with webpack.util.ts
 const getExtensions = async (): Promise<ExtensionInfo[]> => {
   const extensionFolders: Uri[] = (
     await Promise.all(
@@ -123,7 +134,6 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
               `Extension folder ${extensionFolder} failed to load. Reason: ${e}`,
             );
             logger.warn(error);
-            logger.warn('stuff');
             throw error;
           }
         }),
@@ -160,7 +170,16 @@ const activateExtension = async (
   // Import the extension file. Tell webpack to ignore it because extension files are not in the
   // bundle and should not be looked up in the bundle
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
-  const extensionModule = (await import(/* webpackIgnore: true */ extensionFilePath)) as IExtension;
+  const extensionModuleAmbiguous = (await import(
+    /* webpackIgnore: true */ extensionFilePath
+  )) as AmbiguousExtensionModule;
+  // Some modules import with their exports directly on the module object, while others put their
+  // exports in a `default` member on the module. Let's use the module object itself if `activate`
+  // is on it, and let's go into `default` otherwise.
+  const extensionModule =
+    'activate' in extensionModuleAmbiguous
+      ? extensionModuleAmbiguous
+      : extensionModuleAmbiguous.default;
 
   // IMPORTANT: Only give the token to the extension when it is activated. Don't store it or its
   // nonce anywhere else. It is okay to give the token's getHash() value to something for purposes
@@ -211,8 +230,9 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
   // Shim out require so extensions can't use it
   const requireOriginal = Module.prototype.require;
   Module.prototype.require = ((moduleName: string) => {
-    // Allow the extension to import papi
+    // Allow the extension to import papi and some other things
     if (moduleName === 'papi-backend') return papi;
+    if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithFiles.find(
