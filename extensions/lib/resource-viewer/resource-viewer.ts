@@ -48,7 +48,11 @@ class ResourceDataProviderEngine
   };
 
   getUsfm = async () => {
-    return resourceData.Usfm;
+    return resourceData.USFM;
+  };
+
+  getResource = async (name: string) => {
+    return resourceData.USFM;
   };
 
   async setName(selector: string) {
@@ -85,9 +89,13 @@ class ResourceDataProviderEngine
     logger.log('This method should never be called. Tried to set: ' + selector);
     return false; //Read only resource viewer right now
   }
+
+  async setResource(name: string, usfm: string) {
+    return true;
+  }
 }
 
-const resourceWebViewType = 'resource-viewer.react';
+const resourceWebViewType = 'resourceViewer.react';
 
 /**
  * Simple web view provider that provides Resource web views when papi requests them
@@ -114,14 +122,14 @@ export async function activate() {
     new ResourceDataProviderEngine(),
   );
 
-  const resourceWebViewProviderPromise = papi.webViews.registerWebViewProvider(
+  const resourceWebViewProviderPromise = papi.webViewProviders.register(
     resourceWebViewType,
     resourceWebViewProvider,
   );
 
   const unsubPromises = [
-    papi.commands.registerCommand('resource-viewer.get-usfm', () => {
-      return resourceDataProvider.getUsfm();
+    papi.commands.registerCommand('resourceViewer.getUsfm', () => {
+      return resourceDataProvider.getUsfm('1');
     }),
   ];
 
@@ -135,7 +143,7 @@ export async function activate() {
     // Test subscribing to a data provider
     const unsubResources = await resourceDataProvider.subscribeResource(
       'aeaf859b-5718-4299-af35-08d730c95e45',
-      (mockUsfm: ResourceDataTypes.Usfm) =>
+      (mockUsfm: string) =>
         logger.info(`Resource with id, aeaf859b-5718-4299-af35-08d730c95e45, has usfm:${mockUsfm}`),
     );
     unsubscribers.push(unsubResources);

@@ -1,17 +1,19 @@
 import type { DataProviderDataType } from 'shared/models/data-provider.model';
 import type IDataProvider from 'shared/models/data-provider.interface';
-import { newGuid } from 'shared/utils/util';
+
+declare module 'resource-viewer' {}
 
 // TODO: Should this eventually be turned into ScrText or should it utilize ScrText?
 export type ResourceDataTypes = {
   Name: DataProviderDataType<string, string, string>;
   FullName: DataProviderDataType<string, string, string>;
-  Id: DataProviderDataType<string, newGuid, newGuid>;
+  Id: DataProviderDataType<string, string, string>;
   Directory: DataProviderDataType<string, string, string>;
   FullPath: DataProviderDataType<string, string, string>;
   BooksPresentSet: DataProviderDataType<string, string, string>;
   // TODO: Change this to use VerseRef when it is ready
   Usfm: DataProviderDataType<string, string, string>;
+  Resource: DataProviderDataType<string, string, string>;
 };
 
 /**
@@ -24,3 +26,10 @@ export type ResourceDataTypes = {
  *  number type is sneezeId and will update an existing sneeze
  */
 export type ResourceDataProvider = IDataProvider<ResourceDataTypes>;
+
+declare module 'papi-commands' {
+  export interface CommandHandlers {
+    'resourceViewer.resources': () => Promise<string>;
+    'resourceViewer.getUsfm': () => Promise<string>;
+  }
+}

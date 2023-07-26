@@ -1,8 +1,7 @@
 import papi from 'papi-frontend';
-import {
-  ResourceDataProvider,
-  ResourceDataTypes,
-} from '@extensions/resource-viewer/resource-viewer';
+import { ResourceDataProvider, ResourceDataTypes } from 'resource-viewer';
+// @ts-ignore usfm-js has no typescript and thus no type declarations
+import { usfmToJson, jsonToUSFM, removeMarker } from 'usfm-js';
 import { useState, useEffect } from 'react';
 
 const {
@@ -17,7 +16,7 @@ globalThis.webViewComponent = function ResourceViewer() {
 
   const dataProvider = useDataProvider<ResourceDataProvider>('resource-viewer.resources');
 
-  //const usfm = useData.Usfm<ResourceDataTypes, 'Usfm'>('resource-viewer.resources', '', []);
+  const usfm = useData.Usfm<ResourceDataTypes, 'Usfm'>('resource-viewer.resources', '', '');
 
   //   const verbose = true;
   //   const docSetId = 'Xxx/en_tit'; // just dummy values
@@ -55,10 +54,10 @@ globalThis.webViewComponent = function ResourceViewer() {
   //       verse: '1',
   //     },
   //   };
-  //   return (
-  //     <>
-  //       <div>Editor:</div>
-  //       <Editor {...usfmEditorProps} />
-  //     </>
-  //   );
+  return (
+    <>
+      <div>USFM Resource:</div>
+      <div>{usfmToJson(usfm)}</div>
+    </>
+  );
 };
