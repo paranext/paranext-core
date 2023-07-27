@@ -24,6 +24,8 @@ import { wait } from '@shared/utils/util';
 import { CommandNames } from 'papi-commands';
 import { SerializedRequestType } from '@shared/utils/papi-util';
 
+const PROCESS_CLOSE_TIME_OUT = 2000;
+
 // `main.ts`'s command handler declarations are in `command.service.ts` so they can be picked up
 // by papi-dts
 // This map should allow any functions because commands can be any function type
@@ -46,6 +48,9 @@ const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
   },
   'test.throwError': async (message: string) => {
     throw new Error(`Test Error thrown in throwError command: ${message}`);
+  },
+  'platform.restartExtensionHost': async () => {
+    restartExtensionHost();
   },
   'platform.quit': async () => {
     app.quit();
@@ -197,7 +202,6 @@ async function main() {
     }
   });
 
-  const PROCESS_CLOSE_TIME_OUT = 2000;
   let isClosing = false;
   app.on('will-quit', async (e) => {
     if (!isClosing) {
@@ -208,8 +212,8 @@ async function main() {
 
       networkService.shutdown();
       await Promise.all([
-        dotnetDataProvider.wait(PROCESS_CLOSE_TIME_OUT),
-        extensionHostService.wait(PROCESS_CLOSE_TIME_OUT),
+        dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT),
+        extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT),
       ]);
 
       // In development, the dotnet watcher was killed so we have to wait here.
@@ -310,6 +314,11 @@ async function main() {
   }, 5000);
 
   // #endregion
+}
+
+async function restartExtensionHost() {
+  await extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT);
+  extensionHostService.start();
 }
 
 (async () => {
