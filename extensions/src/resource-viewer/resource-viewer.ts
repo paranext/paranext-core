@@ -1,6 +1,5 @@
 ﻿import papi from 'papi-backend';
-// @ts-expect-error ts(1192) this file has no default export; the text is exported by rollup
-import resourceViewerWebView from './resource-viewer.web-view';
+import resourceViewerWebView from './resource-viewer.web-view?inline';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import { IWebViewProvider } from 'shared/models/web-view-provider.model';
 import { SavedWebViewDefinition, WebViewDefinition } from 'shared/data/web-view.model';
