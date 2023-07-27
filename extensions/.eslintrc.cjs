@@ -10,6 +10,13 @@ module.exports = {
         strict: 'off',
       },
     },
+    {
+      // Don't require extensions to have a default export for "activate()"
+      files: ['*.ts'],
+      rules: {
+        'import/prefer-default-export': 'off',
+      },
+    },
   ],
   settings: {
     'import/resolver': {
