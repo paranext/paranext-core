@@ -102,28 +102,6 @@ const configBase: webpack.Configuration = {
         ],
       },
       /**
-       * Load images as data uris
-       *
-       * Note: it is advised to use the `papi-extension:` protocol to load assets as data uris are
-       * not currently supported in Platform.Bible
-       */
-      // https://webpack.js.org/guides/asset-management/#loading-images
-      {
-        test: /\.(png|svg|jpg|jpeg|gif)$/i,
-        type: 'asset/inline',
-      },
-      /**
-       * Load fonts as data uris
-       *
-       * Note: it is advised to use the `papi-extension:` protocol to load assets as data uris are
-       * not currently supported in Platform.Bible
-       */
-      // https://webpack.js.org/guides/asset-management/#loading-fonts
-      {
-        test: /\.(woff|woff2|eot|ttf|otf)$/i,
-        type: 'asset/inline',
-      },
-      /**
        * Import files with no transformation as strings with "./file?raw"
        */
       // This must be the last rule in order to be applied before all other transformations
