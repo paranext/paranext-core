@@ -364,7 +364,7 @@ declare module 'shared/models/papi-event-emitter.model' {
      * Disposes of this event, preparing it to release from memory.
      * Added here so children can override emit and still call the base functionality.
      */
-    protected disposeFn(): void;
+    protected disposeFn(): Promise<boolean>;
   }
 }
 declare module 'shared/data/internal-connection.model' {
@@ -2750,17 +2750,17 @@ declare module 'papi-backend' {
 }
 declare module 'extension-host/extension-types/unsubscriber-async-list' {
   import { Dispose } from 'shared/models/disposal.model';
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
   /**
    * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
    */
   export default class UnsubscriberAsyncList {
-    readonly unsubscribers: Set<UnsubscriberAsync>;
+    readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
     /**
      * Add unsubscribers to the list. Note that duplicates are not added twice.
      * @param unsubscribers Objects that were returned from a registration process
      */
-    add(...unsubscribers: (UnsubscriberAsync | Dispose)[]): void;
+    add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
     /**
      * Run all unsubscribers added to this list and then clear the list
      * @returns `true` if all unsubscribers succeeded, `false` otherwise
