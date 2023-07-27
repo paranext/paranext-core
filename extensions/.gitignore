@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+release
 dist-ssr
 *.local
 
@@ -21,5 +22,5 @@ dist-ssr
 *.sln
 *.sw?
 
-# Vite-built temp WebView files
-temp-vite
+# Temporary intermediate build files
+temp-build

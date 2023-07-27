@@ -3,4 +3,5 @@ node_modules
 
 # Built files
 dist
-temp-vite
+release
+temp-build

@@ -2,17 +2,19 @@
   "name": "paranext-extensions",
   "private": true,
   "version": "0.0.1",
-  "type": "module",
+  "author": "Paranext",
+  "license": "MIT",
   "scripts": {
-    "build:vite1": "vite build --config vite/vite-web-view.config.ts",
-    "build:vite2": "vite build --config vite/vite.config.ts",
-    "build:vite": "npm run build:vite1 && npm run build:vite2",
-    "build": "npm run build:vite",
+    "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
+    "build:main": "webpack --config ./webpack/webpack.config.main.ts",
+    "build": "webpack",
+    "watch": "npm run build -- --watch",
+    "build:production": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=false webpack",
+    "watch:production": "npm run build:production -- --watch",
+    "zip": "ts-node lib/zip-extensions.ts",
+    "package": "npm run build:production && npm run zip",
+    "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "build:types": "cd .. && npm run build:types",
-    "start:vite1": "vite build --watch --config vite/vite-web-view.config.ts",
-    "start:vite2": "vite build --watch --config vite/vite.config.ts",
-    "start:vite": "concurrently --kill-others-on-fail \"npm:start:vite1\" \"npm:start:vite2\"",
-    "start:core": "npm start",
     "start": "cd .. && npm start",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:staged": "lint-staged -q"
@@ -31,16 +33,27 @@
       "prettier --ignore-path .eslintignore --single-quote --write"
     ]
   },
+  "peerDependencies": {
+    "@sillsdev/scripture": "^1.4.0",
+    "react": ">=18.2.0",
+    "react-dom": ">=18.2.0"
+  },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.0.3",
+    "@types/webpack": "^5.28.1",
+    "copy-webpack-plugin": "^11.0.0",
+    "css-loader": "^6.8.1",
     "escape-string-regexp": "^5.0.0",
     "glob": "^10.3.3",
     "papi-dts": "file:../lib/papi-dts",
-    "patch-package": "^7.0.2",
-    "rollup-plugin-import-manager": "^0.6.4",
-    "rollup-plugin-string": "^3.0.0",
     "sass": "^1.64.1",
-    "vite": "^4.4.6",
-    "vite-plugin-static-copy": "^0.17.0"
+    "sass-loader": "^13.3.2",
+    "swc-loader": "^0.2.3",
+    "ts-node": "^10.9.1",
+    "tsconfig-paths": "^4.2.0",
+    "tsconfig-paths-webpack-plugin": "^4.0.1",
+    "webpack": "^5.88.1",
+    "webpack-cli": "^5.1.4",
+    "webpack-merge": "^5.9.0",
+    "zip-folder-promise": "^1.2.0"
   }
 }

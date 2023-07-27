@@ -144,9 +144,10 @@ export interface ExtensionStorageService {
   deleteUserData: typeof deleteUserData;
 }
 
-/** This service provides extensions in the extension host the ability to read/write data
- *  based on the extension identity and current user (as identified by the OS). This service will
- *  not work within the renderer.
+/** JSDOC SOURCE extensionStorageService
+ * This service provides extensions in the extension host the ability to read/write data
+ * based on the extension identity and current user (as identified by the OS). This service will
+ * not work within the renderer.
  */
 const extensionStorageService: ExtensionStorageService = {
   readTextFileFromInstallDirectory,

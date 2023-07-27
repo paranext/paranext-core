@@ -119,8 +119,7 @@ const useDataCachedHooks: UseDataHook = {};
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this object. JSDoc does not usually allow these on the object. One day, we may be able to
 // put this comment on an actual function, so we can fix the comments back to using real @
-// **** Keep these comments in sync with the comments in index.ts ****
-/**
+/** JSDOC SOURCE UseDataHook
  * Special React hook that subscribes to run a callback on a data provider's data with specified
  * selector on any data type that data provider serves.
  *

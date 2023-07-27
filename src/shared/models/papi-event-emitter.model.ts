@@ -4,7 +4,7 @@
 
 import { PapiEvent, PapiEventHandler } from '@shared/models/papi-event.model';
 
-/**
+/** JSDOC SOURCE PapiEventEmitter
  * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
  * Use eventEmitter.event(callback) to subscribe to the event.
  * Use eventEmitter.emit(event) to run the subscriptions.

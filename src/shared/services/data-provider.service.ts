@@ -590,6 +590,9 @@ export interface DataProviderService {
   DataProviderEngine: typeof DataProviderEngine;
 }
 
+/** JSDOC SOURCE dataProviderService
+ * Service that allows extensions to send and receive data to/from other extensions
+ */
 const dataProviderService: DataProviderService = {
   hasKnown,
   registerEngine,
