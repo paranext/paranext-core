@@ -91,6 +91,6 @@ function startDotnetDataProvider() {
 const dotnetDataProvider = {
   start: startDotnetDataProvider,
   kill: killDotnetDataProvider,
-  wait: waitForDotnetDataProvider,
+  waitForClose: waitForDotnetDataProvider,
 };
 export default dotnetDataProvider;

@@ -26,6 +26,7 @@ declare module 'papi-commands' {
     'test.echoRenderer': (message: string) => Promise<string>;
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
+    'platform.restartExtensionHost': () => Promise<void>;
     'platform.quit': () => Promise<void>;
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
