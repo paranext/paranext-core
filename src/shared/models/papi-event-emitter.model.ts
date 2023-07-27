@@ -66,8 +66,7 @@ export default class PapiEventEmitter<T> implements Dispose {
 
   /** Disposes of this event, preparing it to release from memory */
   dispose = () => {
-    this.disposeFn();
-    return Promise.resolve(true);
+    return this.disposeFn();
   };
 
   /**
@@ -105,5 +104,6 @@ export default class PapiEventEmitter<T> implements Dispose {
     this.isDisposed = true;
     this.subscriptions = undefined;
     this.lazyEvent = undefined;
+    return Promise.resolve(true);
   }
 }
