@@ -71,7 +71,7 @@ export default function Toolbar(props: ToolbarProps) {
               <MenuIcon />
             </IconButton>
           ) : null}
-          {props.children}
+          {props.children ? <div style={{ padding: 10 }}>{props.children}</div> : null}
           {props.menu ? (
             <Drawer
               className={`papi-menu-drawer ${props.className ?? ''}`}
@@ -82,7 +82,7 @@ export default function Toolbar(props: ToolbarProps) {
                 if (menuOpen) setMenuOpen(false);
               }}
               style={{
-                position: 'relative',
+                position: 'absolute',
                 // top: `${
                 //   toolbarRef.current === null
                 //     ? 2
@@ -101,9 +101,9 @@ export default function Toolbar(props: ToolbarProps) {
                   //   (toolbarRef.current?.offsetTop ?? 0) +
                   //   (toolbarRef.current?.clientHeight ?? 40)
                   // }px`,
-                  height: '190px',
+                  height: 'auto',
                   position: 'absolute',
-                  width: '95%',
+                  width: '80%',
                 },
               }}
             >
