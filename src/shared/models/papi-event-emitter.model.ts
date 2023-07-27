@@ -3,6 +3,7 @@
  */
 
 import { PapiEvent, PapiEventHandler } from '@shared/models/papi-event.model';
+import { Dispose } from '@shared/models/disposal.model';
 
 /** JSDOC SOURCE PapiEventEmitter
  * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
@@ -11,7 +12,7 @@ import { PapiEvent, PapiEventHandler } from '@shared/models/papi-event.model';
  * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
  * but anyone can subscribe to the event.
  */
-export default class PapiEventEmitter<T> {
+export default class PapiEventEmitter<T> implements Dispose {
   /**
    * Subscribes a function to run when this event is emitted.
    * @alias event
@@ -65,7 +66,7 @@ export default class PapiEventEmitter<T> {
 
   /** Disposes of this event, preparing it to release from memory */
   dispose = () => {
-    this.disposeFn();
+    return this.disposeFn();
   };
 
   /**
@@ -103,5 +104,6 @@ export default class PapiEventEmitter<T> {
     this.isDisposed = true;
     this.subscriptions = undefined;
     this.lazyEvent = undefined;
+    return Promise.resolve(true);
   }
 }
