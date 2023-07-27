@@ -101,7 +101,7 @@ function helloException(message: string) {
   throw new Error(`Hello World Exception! ${message}`);
 }
 
-export default async function activate(context: ExecutionActivationContext): Promise<void> {
+export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello world is activating!');
 
   const htmlWebViewProviderPromise = papi.webViewProviders.register(

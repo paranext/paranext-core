@@ -244,7 +244,7 @@ const peopleWebViewProvider: IWebViewProvider = {
   },
 };
 
-export default async function activate(context: ExecutionActivationContext): Promise<void> {
+export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello Someone is activating!');
 
   const peopleDataProviderPromise = papi.dataProvider.registerEngine<PeopleDataTypes>(

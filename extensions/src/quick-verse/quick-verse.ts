@@ -261,7 +261,7 @@ class QuickVerseDataProviderEngine
   }
 }
 
-export default async function activate(context: ExecutionActivationContext): Promise<void> {
+export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Quick Verse is activating!');
 
   const token: ExecutionToken = context.executionToken;
