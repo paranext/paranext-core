@@ -70,7 +70,7 @@ type ExtensionInfo = Readonly<
 /** Information about an active extension */
 type ActiveExtension = {
   info: ExtensionInfo;
-  deactivator: UnsubscriberAsyncList;
+  registrations: UnsubscriberAsyncList;
 };
 
 /**
@@ -202,15 +202,16 @@ const activateExtension = async (
 
   // Add registrations that the extension didn't explicitly make itself
   if (extensionModule.deactivate) context.registrations.add(extensionModule.deactivate);
-  context.registrations.add(async () => {
-    return executionTokenService.unregisterExtension(tokenName, tokenHash);
-  });
-  context.registrations.add(async () => {
-    return activeExtensions.delete(context.name);
-  });
+  context.registrations.add(async () =>
+    executionTokenService.unregisterExtension(tokenName, tokenHash),
+  );
+  context.registrations.add(async () => activeExtensions.delete(context.name));
 
   // Store information about our newly activated extension
-  const activeExtension: ActiveExtension = { info: extension, deactivator: context.registrations };
+  const activeExtension: ActiveExtension = {
+    info: extension,
+    registrations: context.registrations,
+  };
   activeExtensions.set(extension.name, activeExtension);
   return activeExtension;
 };
