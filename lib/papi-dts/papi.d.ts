@@ -163,7 +163,7 @@ declare module 'shared/utils/papi-util' {
    * @returns function that unsubscribes from all passed in unsubscribers when run
    */
   export const aggregateUnsubscriberAsyncs: (
-    unsubscribers: UnsubscriberAsync[],
+    unsubscribers: (UnsubscriberAsync | Unsubscriber)[],
   ) => UnsubscriberAsync;
   /**
    * Creates a safe version of a register function that returns a Promise<UnsubscriberAsync>.

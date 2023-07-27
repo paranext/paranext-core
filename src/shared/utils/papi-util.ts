@@ -34,11 +34,13 @@ export type UnsubscriberAsync = () => Promise<boolean>;
  * @returns function that unsubscribes from all passed in unsubscribers when run
  */
 export const aggregateUnsubscriberAsyncs = (
-  unsubscribers: UnsubscriberAsync[],
+  unsubscribers: (UnsubscriberAsync | Unsubscriber)[],
 ): UnsubscriberAsync => {
   return async (...args) => {
     // Run the unsubscriber for each handler
-    const unsubPromises = unsubscribers.map((unsubscriber) => unsubscriber(...args));
+    const unsubPromises = unsubscribers.map((unsubscriber) =>
+      Promise.resolve(unsubscriber(...args)),
+    );
 
     // If all the unsubscribers resolve to truthiness, we succeed
     return (await Promise.all(unsubPromises)).every((success) => success);
