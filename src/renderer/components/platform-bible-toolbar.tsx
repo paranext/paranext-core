@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, MouseEvent } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import IconButton from '@mui/material/IconButton';
@@ -14,10 +14,24 @@ export default function PlatformBibleToolbar() {
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hasShiftModifier, setHasShiftModifier] = useState(false);
 
   const handleMenuClose = useCallback(() => {
     if (menuOpen) setMenuOpen(false);
+    setHasShiftModifier(false);
   }, [menuOpen, setMenuOpen]);
+
+  const handleMenuButtonClick = useCallback(
+    (e: MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      setMenuOpen((prevIsOpen) => {
+        const isOpening = !prevIsOpen;
+        if (isOpening && e.shiftKey) setHasShiftModifier(true);
+        return isOpening;
+      });
+    },
+    [setMenuOpen, setHasShiftModifier],
+  );
 
   return (
     <AppBar position="static">
@@ -27,9 +41,7 @@ export default function PlatformBibleToolbar() {
           className="menuButton"
           color="inherit"
           aria-label="open drawer"
-          onClick={() => {
-            setMenuOpen((prev) => !prev);
-          }}
+          onClick={handleMenuButtonClick}
         >
           <MenuIcon />
         </IconButton>
@@ -45,7 +57,10 @@ export default function PlatformBibleToolbar() {
           onClose={handleMenuClose}
           PaperProps={{ style: { top: '40px', width: '95%', height: 'fit-content' } }}
         >
-          <PlatformBibleMenu closeMenu={handleMenuClose} />
+          <PlatformBibleMenu
+            closeMenu={handleMenuClose}
+            isSupportAndDevelopment={hasShiftModifier}
+          />
         </Drawer>
       </Toolbar>
     </AppBar>

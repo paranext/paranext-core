@@ -5,10 +5,19 @@ import logger from 'electron-log';
 import './platform-bible-menu.css';
 
 export type PlatformMenuProps = {
+  isSupportAndDevelopment?: boolean;
   closeMenu: () => void;
 };
 
-export default function PlatformBibleMenu({ closeMenu }: PlatformMenuProps) {
+export default function PlatformBibleMenu({
+  isSupportAndDevelopment = false,
+  closeMenu,
+}: PlatformMenuProps) {
+  const onRestartExtensionHost = () => {
+    commandService.sendCommand('platform.restartExtensionHost');
+    closeMenu();
+  };
+
   const onExit = () => {
     commandService.sendCommand('platform.quit');
     closeMenu();
@@ -59,6 +68,11 @@ export default function PlatformBibleMenu({ closeMenu }: PlatformMenuProps) {
         >
           Settings...
         </MenuItem>
+        {isSupportAndDevelopment ? (
+          <MenuItem className="menu-item" isDense onClick={onRestartExtensionHost}>
+            Reload Extensions
+          </MenuItem>
+        ) : undefined}
         <MenuItem className="menu-item" isDense onClick={onExit}>
           Exit
         </MenuItem>
