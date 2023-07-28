@@ -81,29 +81,12 @@ export default function Toolbar(props: ToolbarProps) {
               onClose={() => {
                 if (menuOpen) setMenuOpen(false);
               }}
-              style={{
-                position: 'absolute',
-                // top: `${
-                //   toolbarRef.current === null
-                //     ? 2
-                //     : Number(
-                //         window
-                //           .getComputedStyle(toolbarRef.current, null)
-                //           .getPropertyValue('min-height'),
-                //       ) / 2
-                // }`,
-              }}
               PaperProps={{
                 style: {
                   top: '24px',
-                  // top: `${
-                  //   (toolbarRef.current?.parentElement?.offsetTop ?? 0) +
-                  //   (toolbarRef.current?.offsetTop ?? 0) +
-                  //   (toolbarRef.current?.clientHeight ?? 40)
-                  // }px`,
                   height: 'auto',
                   position: 'absolute',
-                  width: '80%',
+                  width: 'auto',
                 },
               }}
             >

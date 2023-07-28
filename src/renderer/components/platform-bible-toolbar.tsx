@@ -10,9 +10,6 @@ export default function PlatformBibleToolbar(props: {
   const { referenceChanged } = props;
   const { scrRef } = props;
 
-  // eslint-disable-next-line no-console
-  console.log(`Platform.bible ref: ${scrRef.bookNum} ${scrRef.chapterNum}:${scrRef.verseNum}`);
-
   return (
     <Toolbar menu={standardMenuLayout} commandHandler={HandleMenuCommand}>
       <RefSelector handleSubmit={referenceChanged} scrRef={scrRef} />

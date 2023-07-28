@@ -41,7 +41,7 @@ export type GridMenuProps = GridMenuInfo & {
 
 function MenuColumn({ commandHandler, name, className, items }: MenuColumnProps) {
   return (
-    <Grid item xs={1} className={`papi-menu-column ${className ?? ''}`}>
+    <Grid item xs={'auto'} className={`papi-menu-column ${className ?? ''}`}>
       <h3 className={`papi-menu ${className ?? ''}`}>{name}</h3>
       {items.map((menuItem, index) => (
         <MenuItem
