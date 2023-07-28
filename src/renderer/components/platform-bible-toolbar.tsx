@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import IconButton from '@mui/material/IconButton';
@@ -9,11 +9,15 @@ import PlatformBibleMenu from './platform-bible-menu';
 import './platform-bible-toolbar.css';
 
 export default function PlatformBibleToolbar() {
-  const [menuOpen, setMenuOpen] = useState(false);
-
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const toolbarRef = useRef<HTMLDivElement>(null);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const handleMenuClose = useCallback(() => {
+    if (menuOpen) setMenuOpen(false);
+  }, [menuOpen, setMenuOpen]);
 
   return (
     <AppBar position="static">
@@ -38,12 +42,10 @@ export default function PlatformBibleToolbar() {
           anchor="left"
           variant="temporary"
           open={menuOpen}
-          onClose={() => {
-            if (menuOpen) setMenuOpen(false);
-          }}
-          PaperProps={{ style: { top: '40px', width: '95%', height: '170px' } }}
+          onClose={handleMenuClose}
+          PaperProps={{ style: { top: '40px', width: '95%', height: 'fit-content' } }}
         >
-          <PlatformBibleMenu />
+          <PlatformBibleMenu closeMenu={handleMenuClose} />
         </Drawer>
       </Toolbar>
     </AppBar>
