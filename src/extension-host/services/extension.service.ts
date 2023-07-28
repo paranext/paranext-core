@@ -6,7 +6,7 @@ import { IExtension } from '@extension-host/extension-types/extension.interface'
 import { EntryType, readDir, readFileText } from '@node/services/node-file-system.service';
 import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
-import { UnsubscriberAsync, getModuleSimilarApiMessage } from '@shared/utils/papi-util';
+import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import logger from '@shared/services/logger.service';
@@ -18,6 +18,7 @@ import {
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import papi from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
+import UnsubscriberAsyncList from '@extension-host/extension-types/unsubscriber-async-list';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 
 /**
@@ -69,7 +70,7 @@ type ExtensionInfo = Readonly<
 /** Information about an active extension */
 type ActiveExtension = {
   info: ExtensionInfo;
-  deactivator: UnsubscriberAsync;
+  registrations: UnsubscriberAsyncList;
 };
 
 /**
@@ -189,25 +190,29 @@ const activateExtension = async (
   const tokenHash: string = executionToken.getHash();
 
   // Build up the context for this particular extension
-  const context: ExecutionActivationContext = { executionToken };
+  const context: ExecutionActivationContext = {
+    name: extension.name,
+    executionToken,
+    registrations: new UnsubscriberAsyncList(),
+  };
   Object.freeze(context);
 
   // Activate the extension
-  const extensionUnsubscriber = await extensionModule.activate(context);
+  await extensionModule.activate(context);
 
+  // Add registrations that the extension didn't explicitly make itself
+  if (extensionModule.deactivate) context.registrations.add(extensionModule.deactivate);
+  context.registrations.add(async () =>
+    executionTokenService.unregisterExtension(tokenName, tokenHash),
+  );
+  context.registrations.add(async () => activeExtensions.delete(context.name));
+
+  // Store information about our newly activated extension
   const activeExtension: ActiveExtension = {
     info: extension,
-    deactivator: async () => {
-      let unsubResult = await extensionUnsubscriber();
-      if (extensionModule.deactivate) {
-        unsubResult = (await extensionModule.deactivate()) && unsubResult;
-      }
-      unsubResult = executionTokenService.unregisterExtension(tokenName, tokenHash) && unsubResult;
-      activeExtensions.delete(activeExtension.info.name);
-      return unsubResult;
-    },
+    registrations: context.registrations,
   };
-  activeExtensions.set(activeExtension.info.name, activeExtension);
+  activeExtensions.set(extension.name, activeExtension);
   return activeExtension;
 };
 
