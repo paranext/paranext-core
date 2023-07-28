@@ -173,7 +173,7 @@ function startExtensionHost() {
 const extensionHostService = {
   start: startExtensionHost,
   kill: killExtensionHost,
-  wait: waitForExtensionHost,
+  waitForClose: waitForExtensionHost,
 };
 
 export default extensionHostService;

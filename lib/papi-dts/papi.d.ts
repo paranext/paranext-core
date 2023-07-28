@@ -25,6 +25,7 @@ declare module 'papi-commands' {
     'test.echoRenderer': (message: string) => Promise<string>;
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
+    'platform.restartExtensionHost': () => Promise<void>;
     'platform.quit': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
