@@ -81,12 +81,14 @@ export default function Toolbar(props: ToolbarProps) {
               onClose={() => {
                 if (menuOpen) setMenuOpen(false);
               }}
+              // style={{
+              //   position: 'absolute',
+              // }}
               PaperProps={{
                 style: {
                   top: '24px',
-                  height: 'auto',
+                  height: 'fit-content',
                   position: 'absolute',
-                  width: 'auto',
                 },
               }}
             >
