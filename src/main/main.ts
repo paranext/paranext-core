@@ -71,7 +71,7 @@ async function main() {
   // Some extensions inside the extension host rely on the renderer to accept 'getWebView' commands.
   // The renderer relies on the extension host, so something has to break the dependency loop.
   // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
-  extensionHostService.start();
+  await extensionHostService.start();
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
@@ -98,36 +98,28 @@ async function main() {
   let mainWindow: BrowserWindow | null = null;
 
   if (process.env.NODE_ENV === 'production') {
-    // eslint-disable-next-line global-require
-    const sourceMapSupport = require('source-map-support');
+    const sourceMapSupport = await import('source-map-support');
     sourceMapSupport.install();
   }
 
   const isDebug = process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
 
   if (isDebug) {
-    // eslint-disable-next-line global-require
-    require('electron-debug')();
+    const electronDebug = await import('electron-debug');
+    electronDebug.default();
   }
 
   /** Install extensions into the Chromium renderer process */
-  const installExtensions = async () => {
-    // eslint-disable-next-line global-require
-    const installer = require('electron-devtools-installer');
+  async function installExtensions() {
+    const installer = await import('electron-devtools-installer');
     const forceDownload = !!process.env.UPGRADE_EXTENSIONS;
-    const extensions = ['REACT_DEVELOPER_TOOLS'];
+    const extensions = [installer.REACT_DEVELOPER_TOOLS];
+    return installer.default(extensions, forceDownload).catch(logger.info);
+  }
 
-    return installer
-      .default(
-        extensions.map((name) => installer[name]),
-        forceDownload,
-      )
-      .catch(logger.info);
-  };
-
-  const getAssetPath = (...paths: string[]): string => {
+  function getAssetPath(...paths: string[]): string {
     return path.join(globalThis.resourcesPath, 'assets', ...paths);
-  };
+  }
 
   /** Sets up the electron BrowserWindow renderer process */
   const createWindow = async () => {
@@ -318,7 +310,7 @@ async function main() {
 
 async function restartExtensionHost() {
   await extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT);
-  extensionHostService.start();
+  await extensionHostService.start();
 }
 
 (async () => {

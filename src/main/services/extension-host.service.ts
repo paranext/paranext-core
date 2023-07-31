@@ -89,7 +89,7 @@ function getExternalExtensionPaths() {
 /**
  * Starts the extension host process if it isn't already running.
  */
-function startExtensionHost() {
+async function startExtensionHost() {
   if (extensionHost) return;
 
   // In production, fork a new process for the extension host
@@ -116,11 +116,9 @@ function startExtensionHost() {
     // external extension directories
     // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
     // For this dev-only code, it is useful to be able to synchronously get the nodemon.json file
-    // eslint-disable-next-line import/no-dynamic-require, global-require
-    const nodemonConfig = require(/* webpackIgnore: true */ path.join(
-      globalThis.resourcesPath,
-      'nodemon.json',
-    ));
+    const nodemonConfig = await import(
+      /* webpackIgnore: true */ path.join(globalThis.resourcesPath, 'nodemon.json')
+    );
     const nodemonWatchPaths = nodemonConfig?.watch ? nodemonConfig.watch : [];
 
     extensionHost = spawn(
