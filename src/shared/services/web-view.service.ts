@@ -35,6 +35,7 @@ import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
 import AsyncVariable from '@shared/utils/async-variable';
 import logger from '@shared/services/logger.service';
 import LogError from '@shared/log-error.model';
+import memoizeOne from 'memoize-one';
 
 /** rc-dock's onLayoutChange prop made asynchronous - resolves */
 export type OnLayoutChangeRCDock = (
@@ -93,7 +94,7 @@ export const ALLOWED_IFRAME_SANDBOX_VALUES = ['allow-same-origin', 'allow-script
  */
 export const DEFAULT_IFRAME_SANDBOX = ALLOWED_IFRAME_SANDBOX_VALUES.join(' ');
 /**
- * Regex to test stack traces against for creating script tags on the renderer document. Only
+ * Get Regex to test stack traces against for creating script tags on the renderer document. Only
  * renderer code is allowed to create script tags. script tags coming from any other source
  * throw an error.
  *
@@ -122,9 +123,11 @@ Error
 	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/stuffnthings)
 	at evil.web-view.htmlfile://app.asar
 */
-const RENDERER_SCRIPT_REGEX = globalThis.isPackaged
-  ? /^.+\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)\s+.+ \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)/
-  : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/\S*\/renderer\.dev\.js\S*\)/;
+const getRendererScriptRegex = memoizeOne(() =>
+  globalThis.isPackaged
+    ? /^.+\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)\s+.+ \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)/
+    : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/\S*\/renderer\.dev\.js\S*\)/,
+);
 /**
  * The HTML tags that are not allowed at all in the main renderer window. Our MutationObserver
  * deletes these immediately if it sees them.
@@ -532,6 +535,9 @@ export const getWebView = async (
    * Content security policy header for the webview - controls what resources scripts and other things can access.
    *
    * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+   *
+   * Please uncomment the image creation arbitrary code execution in `evil.js`'s WebView when you
+   * make changes so we can double check it is still successfully blocked.
    */
   // default-src 'none' so things can't happen unless we allow them
   // script-src allows them to use script tags and in-line attribute scripts
@@ -560,7 +566,8 @@ export const getWebView = async (
   // form-action 'self' lets the form submit to us
   //    TODO: not sure if this is needed. If we can attach handlers to forms, we can probably remove this
   // navigate-to 'none' prevents them from redirecting this iframe somewhere else
-  //    WARNING: This is experimental and does not work as of July 2023!
+  //    WARNING: This is experimental and does not work as of July 2023! It is here for future
+  //    compatibility in case they add support for it
   // object-src 'none' to prevent insecure object and embed until we have a reason to use them
   const contentSecurityPolicy = `<meta http-equiv="Content-Security-Policy"
     content="
@@ -616,8 +623,8 @@ const rendererRequestHandlers = {
  * elements including iframes with improper sandboxing
  */
 function removeForbiddenElements(mutationList: MutationRecord[]) {
-  // If this is too slow, it may be necessary to use getElementsByTagName instead of looping through
-  // the mutations. Thanks for the idea to https://stackoverflow.com/a/39332340
+  // If this becomes too slow, it may be necessary to use getElementsByTagName instead of looping
+  // through the mutations. Thanks for the idea to https://stackoverflow.com/a/39332340
   mutationList.forEach((m) => {
     // If for some reason this mutation is not added or removed nodes, forget it
     if (m.type !== 'childList') return;
@@ -630,9 +637,10 @@ function removeForbiddenElements(mutationList: MutationRecord[]) {
       const tag = element.tagName.toLowerCase();
 
       /** Remove the element */
-      logger.log(`New ${tag}`);
       const removeElement = () => {
-        logger.log(`${tag} rejected!`);
+        logger.warn(
+          `${tag} rejected! An extension may have been trying to execute code with higher privileges!`,
+        );
         m.target.removeChild(element);
       };
       if (tag === 'iframe') {
@@ -686,10 +694,10 @@ export const initialize = () => {
       // things simpler
       // eslint-disable-next-line func-names
       document.createElement = function (...args: Parameters<Document['createElement']>) {
-        const stackTrace = Error().stack ?? '';
         const [tagName] = args;
         if (tagName.toLowerCase() === 'script') {
-          const isInRenderer = RENDERER_SCRIPT_REGEX.test(stackTrace);
+          const stackTrace = Error().stack ?? '';
+          const isInRenderer = getRendererScriptRegex().test(stackTrace);
           if (isInRenderer) {
             logger.debug(
               // TODO: Should we only print this stacktrace in development, not when

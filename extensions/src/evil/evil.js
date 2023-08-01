@@ -22,6 +22,9 @@ const EVIL_WEBVIEW = `
       unsandboxedIFrame.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-modals');
 
       // If one of these evil iframes already existed, replace it. Otherwise create a new one
+      papi.logger.warn(
+        'Evil is trying to execute code with higher privileges as a test! You should see one more warning soon after this. Only these two warnings are expected.'
+      );
       const oldIFrame = window.top.document.getElementById(unsandboxedId);
       if (oldIFrame != null) oldIFrame.replaceWith(unsandboxedIFrame);
       else window.top.document.body.appendChild(unsandboxedIFrame);
@@ -40,13 +43,18 @@ const EVIL_WEBVIEW = `
       }
 
       // Try to create an image outside the iframe with arbitrary code execution in it
+      // This creates a CSP error in the console, so let's just leave it out for now. Test anytime
+      // the CSP changes!
+      /*
       const imgWithAttributeScript = window.top.document.createElement("img");
       imgWithAttributeScript.setAttribute("src", "invalid");
       imgWithAttributeScript.setAttribute("onerror", \`alert(
         '<<BAD>> evil created an img outside its iframe with a script attribute that executed');\`);
       // Note that you don't even have to put the image on the document to get it to run onerror
       // window.top.document.body.appendChild(imgWithAttributeScript);
+      */
 
+      // Note: we are using this sourceURL in web-view.service.ts, so keep it up-to-date with this
       //# sourceURL=evil.web-view.html
     </script>
     <div>

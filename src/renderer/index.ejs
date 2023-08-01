@@ -7,6 +7,9 @@
 
       DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
 
+      Please uncomment the image creation arbitrary code execution in `evil.js`'s WebView when you
+      make changes so we can double check it is still successfully blocked.
+
       default-src 'none' so things can't happen unless we allow them
       script-src-elem allows script tags but not in-line attribute scripts. That way, we can remove
         scripts we don't want using MutationObserver and not have to worry about in-line scripts
@@ -45,7 +48,8 @@
       form-action 'self' lets the form submit to us
         TODO: not sure if this is needed. If we can attach handlers to forms, we might be able to remove this
       navigate-to 'none' prevents them from redirecting this iframe somewhere else
-        WARNING: This is experimental and does not work as of July 2023!
+        WARNING: This is experimental and does not work as of July 2023! It is here for future
+        compatibility in case they add support for it
     -->
     <meta
       http-equiv="Content-Security-Policy"
