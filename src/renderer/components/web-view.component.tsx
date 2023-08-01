@@ -11,6 +11,7 @@ import {
   getWebView,
   saveTabInfoBase,
   convertWebViewDefinitionToSaved,
+  DEFAULT_IFRAME_SANDBOX,
 } from '@shared/services/web-view.service';
 import logger from '@shared/services/logger.service';
 
@@ -35,22 +36,13 @@ export default function WebView({ webViewType, content, title, contentType }: We
     <iframe
       ref={iframeRef}
       title={getTitle({ webViewType, title, contentType })}
-      // TODO: csp?
-      // TODO: credentialless?
-      // TODO: referrerpolicy?
       /**
-       * Sandbox attribute for the webview - controls what resources scripts and other things can access.
+       * Sandbox attribute for the webview - controls what resources scripts and other things can
+       * access. See `ALLOWED_IFRAME_SANDBOX_VALUES` in `web-view.service.ts` for more information.
        *
        * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
        */
-      // allow-same-origin so the iframe can get papi and communicate and such
-      // allow-scripts so the iframe can actually do things
-      // allow-pointer-lock so the iframe can lock the pointer as desired
-      // Note: Mozilla's iframe page 'allow-same-origin' and 'allow-scripts' warns that listing both of these
-      // allows the child scripts to remove this sandbox attribute from the iframe. This means the
-      // sandboxing will do nothing for a determined hacker. We must distrust the whole renderer due
-      // to this issue. We will probably want to stay vigilant on security in this area.
-      sandbox="allow-same-origin allow-scripts allow-pointer-lock"
+      sandbox={DEFAULT_IFRAME_SANDBOX}
       srcDoc={content}
     />
   );

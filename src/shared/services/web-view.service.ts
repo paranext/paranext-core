@@ -34,6 +34,8 @@ import webViewProviderService from '@shared/services/web-view-provider.service';
 import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
 import AsyncVariable from '@shared/utils/async-variable';
 import logger from '@shared/services/logger.service';
+import LogError from '@shared/log-error.model';
+import memoizeOne from 'memoize-one';
 
 /** rc-dock's onLayoutChange prop made asynchronous - resolves */
 export type OnLayoutChangeRCDock = (
@@ -63,6 +65,81 @@ type PapiDockLayout = {
    */
   testLayout: LayoutBase;
 };
+
+/**
+ * The only `sandbox` attribute values we allow iframes to have including WebView iframes and any
+ * others. The `sandbox` attribute controls what privileges iframe scripts and other things have.
+ *
+ * `allow-same-origin` so the iframe can get papi and communicate and such
+ *
+ * `allow-scripts` so the iframe can actually do things
+ *
+ * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+ *
+ * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
+ * allows the child scripts to remove this sandbox attribute from the iframe. We use a
+ * `MutationObserver` in `web-view.service.ts` to remove any iframes that do not comply with these
+ * sandbox requirements. This successfully prevents iframes with too many privileges from executing
+ * as of July 2023. However, this means the sandboxing could do nothing for a determined hacker if
+ * they ever find a way around all this. We must distrust the whole renderer due to this issue. We
+ * will probably want to stay vigilant on security in this area.
+ */
+// TODO: csp?
+// TODO: credentialless?
+// TODO: referrerpolicy?
+export const ALLOWED_IFRAME_SANDBOX_VALUES = ['allow-same-origin', 'allow-scripts'];
+/**
+ * The most lenient iframe sandboxing we allow. See {@link ALLOWED_IFRAME_SANDBOX_VALUES} for more
+ * information on our sandboxing methods and why we chose these values.
+ */
+export const DEFAULT_IFRAME_SANDBOX = ALLOWED_IFRAME_SANDBOX_VALUES.join(' ');
+/**
+ * Get Regex to test stack traces against for creating script tags on the renderer document. Only
+ * renderer code is allowed to create script tags. script tags coming from any other source
+ * throw an error.
+ *
+ * Note that sourceURLs can't have spaces in them, so we explicitly test for a space before the
+ * source so bad actors can't put these special words into their sourceURL
+ */
+/* In development, safe errors look like this:
+Error
+	at document.createElement (http://localhost/renderer.dev.js...)
+	at __webpack_require__.l (http://localhost/renderer.dev.js...)
+  ...
+*/
+/* In development, bad errors look more like this:
+Error
+	at document.createElement (http://localhost/renderer.dev.js...)
+	at evil.web-view.htmlfile://app.asar
+*/
+/* In production, safe errors look like this:
+Error
+	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/renderer.js...)
+	at i.l (file:///C:/Users/app.asar/dist/renderer/renderer.js...)
+  ...
+*/
+/* In production, bad errors look more like this:
+Error
+	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/stuffnthings)
+	at evil.web-view.htmlfile://app.asar
+*/
+const getRendererScriptRegex = memoizeOne(() =>
+  globalThis.isPackaged
+    ? /^.+\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)\s+.+ \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)/
+    : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/\S*\/renderer\.dev\.js\S*\)/,
+);
+/**
+ * The HTML tags that are not allowed at all in the main renderer window. Our MutationObserver
+ * deletes these immediately if it sees them.
+ *
+ * WARNING: These are all untested. The MutationObserver was not fast enough to remove script tags
+ * before they executed code, so there is some chance these could do bad things too.
+ *
+ * TODO: Test these sometime
+ */
+// Maybe we don't actually need this... Maybe we should evaluate if we want this.
+// Would lag things up if we changed our MutationObserver to use getElementsByTagName
+const FORBIDDEN_HTML_TAGS = ['object', 'base', 'embed', 'frame', 'frameset'];
 
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
@@ -458,6 +535,9 @@ export const getWebView = async (
    * Content security policy header for the webview - controls what resources scripts and other things can access.
    *
    * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+   *
+   * Please uncomment the image creation arbitrary code execution in `evil.js`'s WebView when you
+   * make changes so we can double check it is still successfully blocked.
    */
   // default-src 'none' so things can't happen unless we allow them
   // script-src allows them to use script tags and in-line attribute scripts
@@ -486,6 +566,9 @@ export const getWebView = async (
   // form-action 'self' lets the form submit to us
   //    TODO: not sure if this is needed. If we can attach handlers to forms, we can probably remove this
   // navigate-to 'none' prevents them from redirecting this iframe somewhere else
+  //    WARNING: This is experimental and does not work as of July 2023! It is here for future
+  //    compatibility in case they add support for it
+  // object-src 'none' to prevent insecure object and embed until we have a reason to use them
   const contentSecurityPolicy = `<meta http-equiv="Content-Security-Policy"
     content="
       default-src 'none';
@@ -497,6 +580,7 @@ export const getWebView = async (
       font-src 'self' papi-extension:;
       form-action 'self';
       navigate-to 'none';
+      object-src 'none';
     ">`;
 
   // Add a script at the start of the head to give access to papi
@@ -534,6 +618,47 @@ const rendererRequestHandlers = {
   [serializeRequestType(CATEGORY_WEB_VIEW, GET_WEB_VIEW_REQUEST)]: getWebView,
 };
 
+/**
+ * Reads through the list of document changes detected by our MutationObserver and deletes forbidden
+ * elements including iframes with improper sandboxing
+ */
+function removeForbiddenElements(mutationList: MutationRecord[]) {
+  // If this becomes too slow, it may be necessary to use getElementsByTagName instead of looping
+  // through the mutations. Thanks for the idea to https://stackoverflow.com/a/39332340
+  mutationList.forEach((m) => {
+    // If for some reason this mutation is not added or removed nodes, forget it
+    if (m.type !== 'childList') return;
+
+    // Check if each added node is a forbidden element
+    m.addedNodes.forEach((node) => {
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+      const element = node as Element;
+      const tag = element.tagName.toLowerCase();
+
+      /** Remove the element */
+      const removeElement = () => {
+        logger.warn(
+          `${tag} rejected! An extension may have been trying to execute code with higher privileges!`,
+        );
+        m.target.removeChild(element);
+      };
+      if (tag === 'iframe') {
+        const sandbox = element.attributes.getNamedItem('sandbox');
+        const sandboxValues = sandbox?.value?.split(' ');
+        if (
+          !sandbox ||
+          !sandboxValues ||
+          sandboxValues.some(
+            (sandboxValue) => !ALLOWED_IFRAME_SANDBOX_VALUES.includes(sandboxValue),
+          )
+        )
+          removeElement();
+      } else if (FORBIDDEN_HTML_TAGS.includes(tag)) removeElement();
+    });
+  });
+}
+
 /** Sets up the WebViewService. Runs only once */
 export const initialize = () => {
   if (initializePromise) return initializePromise;
@@ -543,8 +668,57 @@ export const initialize = () => {
 
     // Set up subscriptions that the service needs to work
 
-    // Register built-in requests
+    // Do some setup only in the renderer
     if (isRenderer()) {
+      // We do not want iframes to be able to create their own iframes and scripts in the main window
+      // context so they cannot execute arbitrary scripts without sandboxing. This prevents them from
+      // showing modals, navigating to different pages, etc.
+      // These methods work as of July 2023
+
+      // Create a MutationObserver that watches the document for added iframes that do not have
+      // permission to be running and removes them before they execute any code.
+      const observer = new MutationObserver(removeForbiddenElements);
+      // We want the observer to watch for all elements added or removed in this document
+      // This does not pay attention to elements in iframes. They already have sandboxing, so there
+      // is no need
+      // We don't need to watch attributes to make sure the sandbox attribute doesn't change because
+      // sandbox doesn't update unless an iframe is removed and added
+      // https://stackoverflow.com/a/16135502/8535752
+      observer.observe(document, { subtree: true, childList: true });
+
+      // Monkey-patch document.createElement so new script tags cannot be added by anything but our
+      // code (since we load renderer files in chunks)
+      const createElementOriginal = document.createElement.bind(document);
+      // If we name this function, we will need to change the regex testing the stack traces, and we
+      // may also have trouble with minifying production code. Leaving this function unnamed keeps
+      // things simpler
+      // eslint-disable-next-line func-names
+      document.createElement = function (...args: Parameters<Document['createElement']>) {
+        const [tagName] = args;
+        if (tagName.toLowerCase() === 'script') {
+          const stackTrace = Error().stack ?? '';
+          const isInRenderer = getRendererScriptRegex().test(stackTrace);
+          if (isInRenderer) {
+            logger.debug(
+              // TODO: Should we only print this stacktrace in development, not when
+              // `globalThis.isPackaged === true`? Awaiting decision from
+              // https://github.com/paranext/paranext-core/issues/337
+              `Allowed script on renderer document. If this isn't recognized, this is a very serious error.\nStack: ${stackTrace}`,
+            );
+          } else {
+            const message = `Cannot create new script tags on renderer document! Try creating one in an iframe.\nStack: ${stackTrace}`;
+            // LogError puts an error in the console and throws an error. We don't want to scare
+            // anyone with the script tag evil adds to test this feature, so let's not log an error
+            // in development. But no exceptions when packaged
+            if (globalThis.isPackaged || !stackTrace.includes('at evil.web-view.html'))
+              throw new LogError(message);
+            throw new Error(message);
+          }
+        }
+        return createElementOriginal(...args);
+      };
+
+      // Register built-in requests
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
       const unsubPromises = Object.entries(rendererRequestHandlers).map(([requestType, handler]) =>
         networkService.registerRequestHandler(requestType as SerializedRequestType, handler),
