@@ -540,6 +540,9 @@ export function GridMenu({
 export interface CommandHandler {
   (command: Command): void;
 }
+export interface DataHandler {
+  (isSupportAndDevelopment: boolean): GridMenuInfo;
+}
 export type Command = {
   /**
    * Text (displayable in the UI) as the name of the command
@@ -555,6 +558,10 @@ export type ToolbarProps = {
    * The handler to use for menu commands (and eventually toolbar commands).
    */
   commandHandler: CommandHandler;
+  /**
+   * The handler to use for menu data if there is no menu provided.
+   */
+  dataHandler?: DataHandler;
   /**
    * The optional grid menu to display. If not specified, the "hamburger" menu will not display.
    */

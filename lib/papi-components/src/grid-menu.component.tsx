@@ -47,7 +47,9 @@ function MenuColumn({ commandHandler, name, className, items }: MenuColumnProps)
         <MenuItem
           key={index}
           className={`papi-menu-item ${menuItem.className}`}
-          onClick={() => commandHandler(menuItem)}
+          onClick={() => {
+            commandHandler(menuItem);
+          }}
           {...menuItem}
         />
       ))}

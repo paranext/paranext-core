@@ -12,11 +12,26 @@ export function HandleMenuCommand(command: Command) {
     case 'platformBible.downloadAndInstallResources':
       logger.info(`TODO: display UI to select resources'`);
       break;
-    case 'platformBible.quit':
-      commandService.sendCommand<[number], void>('quit', 1);
+    case 'platformBible.openTextCollection':
+      logger.info(`TODO: display text collection modal'`);
+      break;
+    case 'platformBible.settings':
+      logger.info(`TODO: display settings'`);
+      break;
+    case 'platform.quit':
+      commandService.sendCommand(command.command);
+      break;
+    case 'platformBible.visitSupportPage':
+      VisitPage('https://support.bible');
+      break;
+    case 'platformBible.about':
+      logger.info(`TODO: display about'`);
+      break;
+    case 'platform.restartExtensionHost':
+      commandService.sendCommand(command.command);
       break;
     default:
-      logger.info(`command:echoExtensionHost '${command}'`);
+      logger.info(`command:echoExtensionHost '${command.command}'`);
       break;
   }
 }
