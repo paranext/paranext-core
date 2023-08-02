@@ -1,5 +1,4 @@
 import { Toolbar, RefSelector, ScriptureReference } from 'papi-components';
-// import standardMenuLayout from './platform-bible-menu.data';
 import { HandleMenuCommand } from './platform-bible-menu.commands';
 import { HandleMenuData } from './platform-bible-menu.data';
 import './platform-bible-toolbar.css';

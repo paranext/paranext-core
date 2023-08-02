@@ -25,6 +25,7 @@ declare module 'papi-commands' {
     'test.echoRenderer': (message: string) => Promise<string>;
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
+    'platform.restartExtensionHost': () => Promise<void>;
     'platform.quit': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
@@ -1616,6 +1617,14 @@ declare module 'shared/services/web-view-provider.service' {
   export const papiWebViewProviderService: PapiWebViewProviderService;
   export default webViewProviderService;
 }
+declare module 'shared/log-error.model' {
+  /**
+   * Error that force logs the error message before throwing. Useful for debugging in some situations.
+   */
+  export default class LogError extends Error {
+    constructor(message?: string);
+  }
+}
 declare module 'shared/services/web-view.service' {
   import { Unsubscriber } from 'shared/utils/papi-util';
   import { MutableRefObject } from 'react';
@@ -1659,6 +1668,30 @@ declare module 'shared/services/web-view.service' {
      */
     testLayout: LayoutBase;
   };
+  /**
+   * The only `sandbox` attribute values we allow iframes to have including WebView iframes and any
+   * others. The `sandbox` attribute controls what privileges iframe scripts and other things have.
+   *
+   * `allow-same-origin` so the iframe can get papi and communicate and such
+   *
+   * `allow-scripts` so the iframe can actually do things
+   *
+   * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+   *
+   * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
+   * allows the child scripts to remove this sandbox attribute from the iframe. We use a
+   * `MutationObserver` in `web-view.service.ts` to remove any iframes that do not comply with these
+   * sandbox requirements. This successfully prevents iframes with too many privileges from executing
+   * as of July 2023. However, this means the sandboxing could do nothing for a determined hacker if
+   * they ever find a way around all this. We must distrust the whole renderer due to this issue. We
+   * will probably want to stay vigilant on security in this area.
+   */
+  export const ALLOWED_IFRAME_SANDBOX_VALUES: string[];
+  /**
+   * The most lenient iframe sandboxing we allow. See {@link ALLOWED_IFRAME_SANDBOX_VALUES} for more
+   * information on our sandboxing methods and why we chose these values.
+   */
+  export const DEFAULT_IFRAME_SANDBOX: string;
   /** Event that emits with webView info when a webView is added */
   export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
   /**
