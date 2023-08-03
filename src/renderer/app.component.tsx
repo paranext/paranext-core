@@ -6,7 +6,6 @@ import TestContext from '@renderer/context/papi-context/test.context';
 import { useState } from 'react';
 import PlatformBibleToolbar from './components/platform-bible-toolbar';
 
-
 function Main() {
   const [scrRef, setScrRef] = useState({ bookNum: 40, chapterNum: 1, verseNum: 1 });
 
