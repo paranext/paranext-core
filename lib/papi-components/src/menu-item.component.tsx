@@ -1,7 +1,24 @@
 import { MenuItem as MuiMenuItem } from '@mui/material';
 import './menu-item.component.css';
 import { PropsWithChildren } from 'react';
-import { Command } from 'toolbar.component';
+
+export type Command = {
+  /**
+   * Text (displayable in the UI) as the name of the command
+   */
+  name: string;
+
+  /**
+   * Command to execute (string.string)
+   */
+  // Command is embedded into MenuItemInfo, and GridMenu is using this command property but MenuItem doesn't need it
+  // eslint-disable-next-line react/no-unused-prop-types
+  command: string;
+};
+
+export interface CommandHandler {
+  (command: Command): void;
+}
 
 export type MenuItemProps = MenuItemInfo & {
   onClick: () => void;

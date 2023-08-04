@@ -1,30 +1,15 @@
-import { useRef, useState, useCallback, useEffect, ReactElement, MouseEvent } from 'react';
+import { useRef, useState, useCallback, useEffect, MouseEvent, PropsWithChildren } from 'react';
 import { AppBar, Toolbar as MuiToolbar, IconButton, Drawer } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
 import GridMenu, { GridMenuInfo } from './grid-menu.component';
 import './toolbar.component.css';
-
-export interface CommandHandler {
-  (command: Command): void;
-}
+import { Command, CommandHandler } from './menu-item.component';
 
 export interface DataHandler {
   (isSupportAndDevelopment: boolean): GridMenuInfo;
 }
 
-export type Command = {
-  /**
-   * Text (displayable in the UI) as the name of the command
-   */
-  name: string;
-
-  /**
-   * Command to execute (string.string)
-   */
-  command: string;
-};
-
-export type ToolbarProps = {
+export type ToolbarProps = PropsWithChildren<{
   /**
    * The handler to use for menu commands (and eventually toolbar commands).
    */
@@ -44,67 +29,60 @@ export type ToolbarProps = {
    * Additional css classes to help with unique styling of the toolbar
    */
   className?: string;
+}>;
 
-  /**
-   * The controls to include on the toolbar.
-   */
-  children?: ReactElement<any, any>;
-};
-
-export default function Toolbar(props: ToolbarProps) {
+export default function Toolbar({
+  menu: propsMenu,
+  dataHandler,
+  commandHandler,
+  className,
+  children,
+}: ToolbarProps) {
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [hasShiftModifier, setHasShiftModifier] = useState(false);
 
   const handleMenuClose = useCallback(() => {
     if (isMenuOpen) setMenuOpen(false);
     setHasShiftModifier(false);
-  }, [isMenuOpen, setMenuOpen]);
+  }, [isMenuOpen]);
 
-  const handleMenuButtonClick = useCallback(
-    (e: MouseEvent<HTMLButtonElement>) => {
-      e.stopPropagation();
-      setMenuOpen((prevIsOpen) => {
-        const isOpening = !prevIsOpen;
-        if (isOpening && e.shiftKey) setHasShiftModifier(true);
-        return isOpening;
-      });
-    },
-    [setMenuOpen, setHasShiftModifier],
-  );
+  const handleMenuButtonClick = useCallback((e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setMenuOpen((prevIsOpen) => {
+      const isOpening = !prevIsOpen;
+      if (isOpening && e.shiftKey) setHasShiftModifier(true);
+      return isOpening;
+    });
+  }, []);
 
-  // This ref will always be defined
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const containerRef = useRef<HTMLDivElement>(null);
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  const childrenRef = useRef<HTMLDivElement>(null);
 
-  const [toolbarHeightRef, setToolbarHeightRef] = useState(0);
+  const [toolbarHeight, setToolbarHeight] = useState(0);
   useEffect(() => {
     if (isMenuOpen && containerRef.current) {
-      setToolbarHeightRef(containerRef.current?.clientHeight);
+      setToolbarHeight(containerRef.current.clientHeight);
     }
-  }, [isMenuOpen, containerRef.current]);
+  }, [isMenuOpen]);
 
-  function ToolbarCommandHandler(command: Command) {
-    handleMenuClose();
-    return props.commandHandler(command);
-  }
+  const toolbarCommandHandler = useCallback(
+    (command: Command) => {
+      handleMenuClose();
+      return commandHandler(command);
+    },
+    [commandHandler, handleMenuClose],
+  );
 
-  let menu = props.menu;
-  if (!menu && props.dataHandler) menu = props.dataHandler(hasShiftModifier);
+  let menu = propsMenu;
+  if (!menu && dataHandler) menu = dataHandler(hasShiftModifier);
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
       <AppBar position="static">
-        <MuiToolbar
-          className={`papi-toolbar ${props.className ?? ''}`}
-          ref={toolbarRef}
-          variant="dense"
-        >
+        <MuiToolbar className={`papi-toolbar ${className ?? ''}`} variant="dense">
           {menu ? (
             <IconButton
               edge="start"
-              className={`papi-menuButton ${props.className ?? ''}`}
+              className={`papi-menuButton ${className ?? ''}`}
               color="inherit"
               aria-label="open drawer"
               onClick={handleMenuButtonClick}
@@ -112,26 +90,22 @@ export default function Toolbar(props: ToolbarProps) {
               <MenuIcon />
             </IconButton>
           ) : null}
-          {props.children ? (
-            <div ref={childrenRef} style={{ padding: 10 }}>
-              {props.children}
-            </div>
-          ) : null}
+          {children ? <div className="papi-menu-children">{children}</div> : null}
           {menu ? (
             <Drawer
-              className={`papi-menu-drawer ${props.className ?? ''}`}
+              className={`papi-menu-drawer ${className ?? ''}`}
               anchor="left"
               variant="persistent"
               open={isMenuOpen}
               onClose={handleMenuClose}
               PaperProps={{
+                className: 'papi-menu-drawer-paper',
                 style: {
-                  top: toolbarHeightRef,
-                  height: 'fit-content',
+                  top: toolbarHeight,
                 },
               }}
             >
-              <GridMenu commandHandler={ToolbarCommandHandler} columns={menu.columns} />
+              <GridMenu commandHandler={toolbarCommandHandler} columns={menu.columns} />
             </Drawer>
           ) : null}
         </MuiToolbar>

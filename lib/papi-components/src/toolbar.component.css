@@ -14,6 +14,14 @@
 }
 
 .papi-menu-drawer {
-  position: absolute;
+  position: relative;
   width: 100%;
+}
+
+.papi-menu-drawer-paper {
+  height: fit-content !important;
+}
+
+.papi-menu-children {
+  padding: 10px;
 }

@@ -7,8 +7,7 @@ export default function PlatformBibleToolbar(props: {
   scrRef: ScriptureReference;
   referenceChanged: (scrRef: ScriptureReference) => void;
 }) {
-  const { referenceChanged } = props;
-  const { scrRef } = props;
+  const { referenceChanged, scrRef } = props;
 
   return (
     <Toolbar className="toolbar" dataHandler={HandleMenuData} commandHandler={HandleMenuCommand}>

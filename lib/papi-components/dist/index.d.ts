@@ -222,6 +222,80 @@ export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   onBlur,
   checkIsOptionEqualToValue,
 }: ComboBoxProps<T>): import('react/jsx-runtime').JSX.Element;
+export type Command = {
+  /**
+   * Text (displayable in the UI) as the name of the command
+   */
+  name: string;
+  /**
+   * Command to execute (string.string)
+   */
+  command: string;
+};
+export interface CommandHandler {
+  (command: Command): void;
+}
+export type MenuItemProps = MenuItemInfo & {
+  onClick: () => void;
+};
+export type MenuItemInfo = Command &
+  PropsWithChildren<{
+    /**
+     * If true, list item is focused during the first mount
+     * @default false
+     */
+    hasAutoFocus?: boolean;
+    /**
+     * Additional css classes to help with unique styling of the button
+     */
+    className?: string;
+    /**
+     * If true, compact vertical padding designed for keyboard and mouse
+     * input is used.
+     * @default true
+     */
+    isDense?: boolean;
+    /**
+     * If true, the left and right padding is removed
+     * @default false
+     */
+    hasDisabledGutters?: boolean;
+    /**
+     * If true, a 1px light border is added to bottom of menu item
+     * @default false
+     */
+    hasDivider?: boolean;
+    /**
+     * Help identify which element has keyboard focus
+     */
+    focusVisibleClassName?: string;
+  }>;
+export declare function MenuItem(props: MenuItemProps): import('react/jsx-runtime').JSX.Element;
+type MenuColumnInfo = {
+  /**
+   * The name of the menu (displayed as the column header).
+   */
+  name: string;
+  items: MenuItemInfo[];
+};
+export type GridMenuInfo = {
+  /**
+   * The columns to display on the dropdown menu.
+   */
+  columns: MenuColumnInfo[];
+};
+export type GridMenuProps = GridMenuInfo & {
+  commandHandler: CommandHandler;
+  /**
+   * Additional css classes to help with unique styling of the toolbar
+   */
+  className?: string;
+};
+export function GridMenu({
+  commandHandler,
+  className,
+  columns,
+}: GridMenuProps): import('react/jsx-runtime').JSX.Element;
 export interface ScriptureReference {
   bookNum: number;
   chapterNum: number;
@@ -325,130 +399,6 @@ export declare function Slider({
   onChange,
   onChangeCommitted,
 }: SliderProps): import('react/jsx-runtime').JSX.Element;
-export type SwitchProps = {
-  /**
-   * If `true`, the component is checked.
-   */
-  isChecked?: boolean;
-  /**
-   * Enabled status of switch
-   * @default false
-   */
-  isDisabled?: boolean;
-  /**
-   * True when (input related to) switch is erroneous
-   * @default false
-   */
-  hasError?: boolean;
-  /**
-   * Additional css classes to help with unique styling of the switch
-   */
-  className?: string;
-  /**
-   * Callback fired when the state is changed.
-   * @param event The event source of the callback. You can pull out the new value by accessing event.target.value (string).
-   * You can pull out the new checked state by accessing event.target.checked (boolean).
-   */
-  onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
-};
-/**
- * Switch to toggle on and off
- *
- * Thanks to MUI for heavy inspiration and documentation
- * https://mui.com/material-ui/getting-started/overview/
- */
-export declare function Switch({
-  isChecked: checked,
-  isDisabled,
-  hasError,
-  className,
-  onChange,
-}: SwitchProps): import('react/jsx-runtime').JSX.Element;
-export type TextFieldProps = {
-  /**
-   * The variant to use.
-   * @default 'outlined'
-   */
-  variant?: 'outlined' | 'filled';
-  /**
-   * If `true`, the component is disabled.
-   * @default false
-   */
-  isDisabled?: boolean;
-  /**
-   * If `true`, the label is displayed in an error state.
-   * @default false
-   */
-  hasError?: boolean;
-  /**
-   * If `true`, the input will take up the full width of its container.
-   * @default false
-   */
-  isFullWidth?: boolean;
-  /**
-   * Text that gives the user instructions on what contents the TextField expects
-   */
-  helperText?: string;
-  /**
-   * The title of the TextField
-   */
-  label?: string;
-  /**
-   * The short hint displayed in the `input` before the user enters a value.
-   */
-  placeholder?: string;
-  /**
-   * If `true`, the label is displayed as required and the `input` element is required.
-   * @default false
-   */
-  isRequired?: boolean;
-  /**
-   * Additional css classes to help with unique styling of the button
-   */
-  className?: string;
-  /**
-   * Starting value for the text field if it is not controlled
-   */
-  defaultValue?: unknown;
-  /**
-   * Value of the text field if controlled
-   */
-  value?: unknown;
-  /**
-   * Triggers when content of textfield is changed
-   */
-  onChange?: ChangeEventHandler<HTMLInputElement>;
-  /**
-   * Triggers when textfield gets focus
-   */
-  onFocus?: FocusEventHandler<HTMLInputElement>;
-  /**
-   * Triggers when textfield loses focus
-   */
-  onBlur?: FocusEventHandler<HTMLInputElement>;
-};
-/**
- * Text input field
- *
- * Thanks to MUI for heavy inspiration and documentation
- * https://mui.com/material-ui/getting-started/overview/
- */
-export declare function TextField({
-  variant,
-  isDisabled,
-  hasError,
-  isFullWidth,
-  helperText,
-  label,
-  placeholder,
-  isRequired,
-  className,
-  defaultValue,
-  value,
-  onChange,
-  onFocus,
-  onBlur,
-}: TextFieldProps): import('react/jsx-runtime').JSX.Element;
 export type CloseReason = SnackbarCloseReason;
 export type AnchorOrigin = SnackbarOrigin;
 export type SnackbarContentProps = {
@@ -512,106 +462,45 @@ export declare function Snackbar({
   ContentProps,
   children,
 }: SnackbarProps): import('react/jsx-runtime').JSX.Element;
-export type MenuColumn = {
+export type SwitchProps = {
   /**
-   * The name of the menu (displayed as the column header).
+   * If `true`, the component is checked.
    */
-  name: string;
-  items: MenuItemInfo[];
-};
-export type GridMenuInfo = {
+  isChecked?: boolean;
   /**
-   * The columns to display on the dropdown menu.
+   * Enabled status of switch
+   * @default false
    */
-  columns: MenuColumn[];
-};
-export type GridMenuProps = GridMenuInfo & {
-  commandHandler: CommandHandler;
+  isDisabled?: boolean;
   /**
-   * Additional css classes to help with unique styling of the toolbar
+   * True when (input related to) switch is erroneous
+   * @default false
+   */
+  hasError?: boolean;
+  /**
+   * Additional css classes to help with unique styling of the switch
    */
   className?: string;
+  /**
+   * Callback fired when the state is changed.
+   * @param event The event source of the callback. You can pull out the new value by accessing event.target.value (string).
+   * You can pull out the new checked state by accessing event.target.checked (boolean).
+   */
+  onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
 };
-export function GridMenu({
-  commandHandler,
+/**
+ * Switch to toggle on and off
+ *
+ * Thanks to MUI for heavy inspiration and documentation
+ * https://mui.com/material-ui/getting-started/overview/
+ */
+export declare function Switch({
+  isChecked: checked,
+  isDisabled,
+  hasError,
   className,
-  columns,
-}: GridMenuProps): import('react/jsx-runtime').JSX.Element;
-export interface CommandHandler {
-  (command: Command): void;
-}
-export interface DataHandler {
-  (isSupportAndDevelopment: boolean): GridMenuInfo;
-}
-export type Command = {
-  /**
-   * Text (displayable in the UI) as the name of the command
-   */
-  name: string;
-  /**
-   * Command to execute (string.string)
-   */
-  command: string;
-};
-export type ToolbarProps = {
-  /**
-   * The handler to use for menu commands (and eventually toolbar commands).
-   */
-  commandHandler: CommandHandler;
-  /**
-   * The handler to use for menu data if there is no menu provided.
-   */
-  dataHandler?: DataHandler;
-  /**
-   * The optional grid menu to display. If not specified, the "hamburger" menu will not display.
-   */
-  menu?: GridMenuInfo;
-  /**
-   * Additional css classes to help with unique styling of the toolbar
-   */
-  className?: string;
-  /**
-   * The controls to include on the toolbar.
-   */
-  children?: ReactElement<any, any>;
-};
-export function Toolbar(props: ToolbarProps): import('react/jsx-runtime').JSX.Element;
-export type MenuItemProps = MenuItemInfo & {
-  onClick: () => void;
-};
-export type MenuItemInfo = Command &
-  PropsWithChildren<{
-    /**
-     * If true, list item is focused during the first mount
-     * @default false
-     */
-    hasAutoFocus?: boolean;
-    /**
-     * Additional css classes to help with unique styling of the button
-     */
-    className?: string;
-    /**
-     * If true, compact vertical padding designed for keyboard and mouse
-     * input is used.
-     * @default true
-     */
-    isDense?: boolean;
-    /**
-     * If true, the left and right padding is removed
-     * @default false
-     */
-    hasDisabledGutters?: boolean;
-    /**
-     * If true, a 1px light border is added to bottom of menu item
-     * @default false
-     */
-    hasDivider?: boolean;
-    /**
-     * Help identify which element has keyboard focus
-     */
-    focusVisibleClassName?: string;
-  }>;
-export declare function MenuItem(props: MenuItemProps): import('react/jsx-runtime').JSX.Element;
+  onChange,
+}: SwitchProps): import('react/jsx-runtime').JSX.Element;
 export interface TableCalculatedColumn<R> extends TableColumn<R> {
   readonly idx: number;
   readonly width: number | string;
@@ -858,5 +747,120 @@ export declare function Table<R>({
   onScroll,
   className,
 }: TableProps<R>): import('react/jsx-runtime').JSX.Element;
+export type TextFieldProps = {
+  /**
+   * The variant to use.
+   * @default 'outlined'
+   */
+  variant?: 'outlined' | 'filled';
+  /**
+   * If `true`, the component is disabled.
+   * @default false
+   */
+  isDisabled?: boolean;
+  /**
+   * If `true`, the label is displayed in an error state.
+   * @default false
+   */
+  hasError?: boolean;
+  /**
+   * If `true`, the input will take up the full width of its container.
+   * @default false
+   */
+  isFullWidth?: boolean;
+  /**
+   * Text that gives the user instructions on what contents the TextField expects
+   */
+  helperText?: string;
+  /**
+   * The title of the TextField
+   */
+  label?: string;
+  /**
+   * The short hint displayed in the `input` before the user enters a value.
+   */
+  placeholder?: string;
+  /**
+   * If `true`, the label is displayed as required and the `input` element is required.
+   * @default false
+   */
+  isRequired?: boolean;
+  /**
+   * Additional css classes to help with unique styling of the button
+   */
+  className?: string;
+  /**
+   * Starting value for the text field if it is not controlled
+   */
+  defaultValue?: unknown;
+  /**
+   * Value of the text field if controlled
+   */
+  value?: unknown;
+  /**
+   * Triggers when content of textfield is changed
+   */
+  onChange?: ChangeEventHandler<HTMLInputElement>;
+  /**
+   * Triggers when textfield gets focus
+   */
+  onFocus?: FocusEventHandler<HTMLInputElement>;
+  /**
+   * Triggers when textfield loses focus
+   */
+  onBlur?: FocusEventHandler<HTMLInputElement>;
+};
+/**
+ * Text input field
+ *
+ * Thanks to MUI for heavy inspiration and documentation
+ * https://mui.com/material-ui/getting-started/overview/
+ */
+export declare function TextField({
+  variant,
+  isDisabled,
+  hasError,
+  isFullWidth,
+  helperText,
+  label,
+  placeholder,
+  isRequired,
+  className,
+  defaultValue,
+  value,
+  onChange,
+  onFocus,
+  onBlur,
+}: TextFieldProps): import('react/jsx-runtime').JSX.Element;
+export interface DataHandler {
+  (isSupportAndDevelopment: boolean): GridMenuInfo;
+}
+export type ToolbarProps = PropsWithChildren<{
+  /**
+   * The handler to use for menu commands (and eventually toolbar commands).
+   */
+  commandHandler: CommandHandler;
+  /**
+   * The handler to use for menu data if there is no menu provided.
+   */
+  dataHandler?: DataHandler;
+  /**
+   * The optional grid menu to display. If not specified, the "hamburger" menu will not display.
+   */
+  menu?: GridMenuInfo;
+  /**
+   * Additional css classes to help with unique styling of the toolbar
+   */
+  className?: string;
+}>;
+export function Toolbar({
+  menu: propsMenu,
+  dataHandler,
+  commandHandler,
+  className,
+  children,
+}: ToolbarProps): import('react/jsx-runtime').JSX.Element;
+
+export { MenuColumnInfo as MenuColumn };
 
 export {};
