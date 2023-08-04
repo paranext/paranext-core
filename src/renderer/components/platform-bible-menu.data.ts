@@ -111,7 +111,7 @@ export const supportAndDevelopmentMenuLayout: GridMenuInfo = {
   ],
 };
 
-export function HandleMenuData(isSupportAndDevelopment: boolean) {
+export function handleMenuData(isSupportAndDevelopment: boolean) {
   if (isSupportAndDevelopment) return supportAndDevelopmentMenuLayout;
   return standardMenuLayout;
 }

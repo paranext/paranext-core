@@ -1,6 +1,6 @@
 import { Toolbar, RefSelector, ScriptureReference } from 'papi-components';
-import { HandleMenuCommand } from './platform-bible-menu.commands';
-import { HandleMenuData } from './platform-bible-menu.data';
+import { handleMenuCommand } from './platform-bible-menu.commands';
+import { handleMenuData } from './platform-bible-menu.data';
 import './platform-bible-toolbar.css';
 
 export default function PlatformBibleToolbar(props: {
@@ -10,7 +10,7 @@ export default function PlatformBibleToolbar(props: {
   const { referenceChanged, scrRef } = props;
 
   return (
-    <Toolbar className="toolbar" dataHandler={HandleMenuData} commandHandler={HandleMenuCommand}>
+    <Toolbar className="toolbar" dataHandler={handleMenuData} commandHandler={handleMenuCommand}>
       <RefSelector handleSubmit={referenceChanged} scrRef={scrRef} />
     </Toolbar>
   );

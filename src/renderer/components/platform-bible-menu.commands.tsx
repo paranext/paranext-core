@@ -8,7 +8,7 @@ export function VisitPage(url: string) {
   window.open(url);
 }
 
-export function HandleMenuCommand(command: Command) {
+export function handleMenuCommand(command: Command) {
   switch (command.command) {
     case 'platformBible.downloadAndInstallResources':
       logger.info(`TODO: display UI to select resources'`);
