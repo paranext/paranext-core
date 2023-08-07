@@ -1,9 +1,8 @@
 import { Canon } from '@sillsdev/scripture';
-import { SyntheticEvent, useState } from 'react';
+import { SyntheticEvent, useMemo } from 'react';
 import {
   BookNameOption,
   getBookNameOptions,
-  bookNumToBookOption,
   offsetBook,
   offsetChapter,
   offsetVerse,
@@ -18,22 +17,15 @@ import ComboBox from './combo-box.component';
 import Button from './button.component';
 import TextField from './text-field.component';
 
-function compareBookOptions(a: BookNameOption, b: BookNameOption) {
-  return a.bookId === b.bookId && a.label === b.label;
-}
-
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
 }
 
 function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
-  const [currentBookOption, setCurrentBookOption] = useState<BookNameOption>(
-    bookNumToBookOption(scrRef.bookNum),
-  );
+  const bookNames = useMemo(() => getBookNameOptions(), []);
 
   const onChangeBook = (newRef: ScriptureReference) => {
-    setCurrentBookOption(bookNumToBookOption(newRef.bookNum));
     handleSubmit(newRef);
   };
 
@@ -57,12 +49,11 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
       <ComboBox
         title="Book"
         className="papi-ref-selector book"
-        options={getBookNameOptions()}
+        value={bookNames[scrRef.bookNum - 1]}
+        options={bookNames}
         onChange={onSelectBook}
-        value={currentBookOption}
         isClearable={false}
         width={200}
-        checkIsOptionEqualToValue={compareBookOptions}
       />
       <Button
         onClick={() => onChangeBook(offsetBook(scrRef, -1))}
@@ -72,7 +63,7 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
       </Button>
       <Button
         onClick={() => onChangeBook(offsetBook(scrRef, 1))}
-        isDisabled={scrRef.bookNum >= getBookNameOptions().length}
+        isDisabled={scrRef.bookNum >= bookNames.length}
       >
         &gt;
       </Button>
