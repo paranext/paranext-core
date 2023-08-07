@@ -1,0 +1,23 @@
+.papi-toolbar {
+  background-color: rgb(245, 245, 245);
+  color: black;
+}
+
+.papi-toolbar.paratext {
+  background-color: darkgreen;
+  color: greenyellow;
+}
+
+.papi-toolbar.paratext.bright {
+  background-color: greenyellow;
+  color: darkgreen;
+}
+
+.papi-menu-drawer-paper {
+  height: fit-content !important;
+}
+
+.papi-menu-children {
+  padding: 10px;
+  position: relative;
+}

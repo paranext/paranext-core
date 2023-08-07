@@ -39,6 +39,19 @@ jest.mock('@renderer/components/docking/paranext-dock-layout.component', () => (
   __esModule: true,
   default: /** ParanextDockLayout Mock */ () => undefined,
 }));
+// Mock all of the papi-components because they should test themselves
+jest.mock(
+  'papi-components',
+  () =>
+    new Proxy(
+      {},
+      {
+        get() {
+          return function MockComponent() {};
+        },
+      },
+    ),
+);
 
 describe('App', () => {
   it('should render', async () => {
