@@ -58,6 +58,7 @@ export default function Toolbar({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [toolbarHeight, setToolbarHeight] = useState(0);
+
   useEffect(() => {
     if (isMenuOpen && containerRef.current) {
       setToolbarHeight(containerRef.current.clientHeight);

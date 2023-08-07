@@ -7,7 +7,7 @@ const meta: Meta<typeof Toolbar> = {
   component: Toolbar,
   tags: ['autodocs'],
   argTypes: {
-    menu: { control: 'text' },
+    menu: { control: 'object' },
   },
 };
 export default meta;
