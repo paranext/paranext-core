@@ -66,8 +66,11 @@ export default function GridMenu({ commandHandler, className, columns }: GridMen
       className={`papi-multi-column-menu ${className ?? ''}`}
       columns={columns.length}
     >
-      {columns.map((col) => (
+      {columns.map((col, index) => (
         <MenuColumn
+          // By design, menu items will never get reordered. So the index works as a key.
+          // eslint-disable-next-line react/no-array-index-key
+          key={index}
           commandHandler={commandHandler}
           name={col.name}
           className={className}
