@@ -40,12 +40,12 @@ const standardMenuLayout: GridMenuInfo = {
       items: [
         {
           name: 'Visit Support.Bible',
-          command: 'platformBible.visitSupportPage',
+          command: 'platform.visitSupportPage',
           hasDivider: true,
         },
         {
           name: 'About Platform.Bible...',
-          command: 'platformBible.about',
+          command: 'platform.about',
           hasDivider: true,
         },
       ],
@@ -98,12 +98,12 @@ export const supportAndDevelopmentMenuLayout: GridMenuInfo = {
       items: [
         {
           name: 'Visit Support.Bible',
-          command: 'platformBible.visitSupportPage',
+          command: 'platform.visitSupportPage',
           hasDivider: true,
         },
         {
           name: 'About Platform.Bible...',
-          command: 'platformBible.about',
+          command: 'platform.about',
           hasDivider: true,
         },
       ],
