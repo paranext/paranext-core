@@ -28,6 +28,7 @@ const config = defineConfig({
         '@emotion/styled',
         '@mui/material',
         '@mui/styled-engine-sc',
+        '@mui/styled-engine',
       ],
       output: {
         globals: {
