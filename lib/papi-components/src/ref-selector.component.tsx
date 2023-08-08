@@ -23,8 +23,6 @@ export interface ScrRefSelectorProps {
 }
 
 function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
-  const bookNames = useMemo(() => getBookNameOptions(), []);
-
   const onChangeBook = (newRef: ScriptureReference) => {
     handleSubmit(newRef);
   };
@@ -49,8 +47,8 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
       <ComboBox
         title="Book"
         className="papi-ref-selector book"
-        value={bookNames[scrRef.bookNum - 1]}
-        options={bookNames}
+        value={useMemo(() => getBookNameOptions()[scrRef.bookNum - 1], [scrRef.bookNum])}
+        options={getBookNameOptions()}
         onChange={onSelectBook}
         isClearable={false}
         width={200}
@@ -63,7 +61,7 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
       </Button>
       <Button
         onClick={() => onChangeBook(offsetBook(scrRef, 1))}
-        isDisabled={scrRef.bookNum >= bookNames.length}
+        isDisabled={scrRef.bookNum >= getBookNameOptions().length}
       >
         &gt;
       </Button>
