@@ -42,12 +42,14 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
     handleSubmit({ ...scrRef, verseNum: +event.target.value });
   };
 
+  const currentBookName = useMemo(() => getBookNameOptions()[scrRef.bookNum - 1], [scrRef.bookNum]);
+
   return (
     <>
       <ComboBox
         title="Book"
         className="papi-ref-selector book"
-        value={useMemo(() => getBookNameOptions()[scrRef.bookNum - 1], [scrRef.bookNum])}
+        value={currentBookName}
         options={getBookNameOptions()}
         onChange={onSelectBook}
         isClearable={false}

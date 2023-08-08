@@ -82,32 +82,17 @@ export interface BookNameOption extends ComboBoxLabelOption {
  * @remarks This can be localized by loading _label_ with the localized book name.
  * @returns An array of ComboBox options for book names.
  */
-function fetchBookNameOptions(): BookNameOption[] {
-  return Canon.allBookIds.map((bookId) => ({
-    bookId,
-    label: Canon.bookIdToEnglishName(bookId),
-  }));
-}
+let bookNameOptions: BookNameOption[];
 
-const memoize = <T>(fn: () => T) => {
-  let cache: T | null = null;
-
-  return (() => {
-    if (cache === null) {
-      cache = fn();
-    }
-    return cache;
-  }) as () => T;
+export const getBookNameOptions = () => {
+  if (!bookNameOptions) {
+    bookNameOptions = Canon.allBookIds.map((bookId) => ({
+      bookId,
+      label: Canon.bookIdToEnglishName(bookId),
+    }));
+  }
+  return bookNameOptions;
 };
-
-export const getBookNameOptions = memoize(fetchBookNameOptions);
-
-export function bookNumToBookOption(bookNum: number): BookNameOption {
-  return {
-    bookId: Canon.bookNumberToId(bookNum),
-    label: Canon.bookNumberToEnglishName(bookNum),
-  };
-}
 
 export const FIRST_SCR_BOOK_NUM = 1;
 export const LAST_SCR_BOOK_NUM = scrBookData.length - 1;
