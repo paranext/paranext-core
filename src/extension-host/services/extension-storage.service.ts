@@ -1,8 +1,8 @@
 import { joinUriPaths } from '@node/utils/util';
 import {
   readFileText,
-  writeFileText,
   readFileBinary,
+  writeFile,
   deleteFile,
 } from '@node/services/node-file-system.service';
 import { ExecutionToken } from '@node/models/execution-token.model';
@@ -120,7 +120,7 @@ async function readUserData(token: ExecutionToken, key: string): Promise<string>
  */
 async function writeUserData(token: ExecutionToken, key: string, data: string): Promise<void> {
   // This could be changed to some store other than the file system
-  return writeFileText(buildUserDataPath(token, key), data);
+  return writeFile(buildUserDataPath(token, key), data);
 }
 
 /** Delete data previously written that is specific to the user (as identified by the OS)
