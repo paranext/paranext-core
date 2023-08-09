@@ -7,8 +7,12 @@
 
       DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
 
+      Please uncomment the image creation arbitrary code execution in `evil.js`'s WebView when you
+      make changes so we can double check it is still successfully blocked.
+
       default-src 'none' so things can't happen unless we allow them
-      script-src allows them to use script tags and in-line attribute scripts
+      script-src-elem allows script tags but not in-line attribute scripts. That way, we can remove
+        scripts we don't want using MutationObserver and not have to worry about in-line scripts
         'self' so scripts can be loaded from us
         papi-extension: so scripts can be loaded from installed extensions
         'unsafe-inline' because web view iframes use srcdoc right now, which inherits CSP from parent frames
@@ -20,6 +24,7 @@
         'unsafe-inline' because that's how our styles are currently loaded in by hot reloading
           TODO: PLEASE FIX THIS IN PRODUCTION. paranext-core#89
       frame-src 'self' so frame contents can be loaded from us
+      object-src 'none' to prevent insecure object and embed until we have a reason to use them
       worker-src 'self' so web workers can be loaded from us
       manifest-src 'self' so we can load our manifest
         TODO: What exactly does this do?
@@ -42,21 +47,26 @@
         https: so fonts can be loaded over secure connections
       form-action 'self' lets the form submit to us
         TODO: not sure if this is needed. If we can attach handlers to forms, we might be able to remove this
+      navigate-to 'none' prevents them from redirecting this iframe somewhere else
+        WARNING: This is experimental and does not work as of July 2023! It is here for future
+        compatibility in case they add support for it
     -->
     <meta
       http-equiv="Content-Security-Policy"
       content="
         default-src 'none';
-        script-src 'self' papi-extension: 'unsafe-inline';
+        script-src-elem 'self' papi-extension: 'unsafe-inline';
         style-src 'self' papi-extension: 'unsafe-inline';
         frame-src 'self';
+        object-src 'none';
         worker-src 'self';
         manifest-src 'self';
         connect-src 'self' https: ws:;
         img-src 'self' papi-extension: https:;
         media-src 'self' papi-extension: https:;
         font-src 'self' papi-extension: https:;
-        form-action 'self';"
+        form-action 'self';
+        navigate-to 'none';"
     />
     <title>Platform.Bible</title>
   </head>

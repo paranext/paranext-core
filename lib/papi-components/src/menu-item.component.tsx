@@ -1,59 +1,79 @@
 import { MenuItem as MuiMenuItem } from '@mui/material';
 import './menu-item.component.css';
-import { PropsWithChildren, MouseEventHandler } from 'react';
+import { PropsWithChildren } from 'react';
 
-export type MenuItemProps = PropsWithChildren<{
+export type Command = {
   /**
-   * If true, list item is focused during the first mount
-   * @default false
+   * Text (displayable in the UI) as the name of the command
    */
-  hasAutoFocus?: boolean;
-
-  /**
-   * Additional css classes to help with unique styling of the button
-   */
-  className?: string;
+  name: string;
 
   /**
-   * If true, compact vertical padding designed for keyboard and mouse
-   * input is used.
-   * @default false
+   * Command to execute (string.string)
    */
-  isDense?: boolean;
+  // Command is embedded into MenuItemInfo, and GridMenu is using this command property but MenuItem doesn't need it
+  // eslint-disable-next-line react/no-unused-prop-types
+  command: string;
+};
 
-  /**
-   * If true, the left and right padding is removed
-   * @default false
-   */
-  hasDisabledGutters?: boolean;
+export interface CommandHandler {
+  (command: Command): void;
+}
 
-  /**
-   * If true, a 1px light border is added to bottom of menu item
-   * @default false
-   */
-  hasDivider?: boolean;
+export type MenuItemProps = MenuItemInfo & {
+  onClick: () => void;
+};
 
-  /**
-   * Help identify which element has keyboard focus
-   */
-  focusVisibleClassName?: string;
+export type MenuItemInfo = Command &
+  PropsWithChildren<{
+    /**
+     * If true, list item is focused during the first mount
+     * @default false
+     */
+    hasAutoFocus?: boolean;
 
-  /**
-   * Optional click handler
-   */
-  onClick?: MouseEventHandler<HTMLLIElement> | undefined;
-}>;
+    /**
+     * Additional css classes to help with unique styling of the button
+     */
+    className?: string;
 
-function MenuItem({
-  hasAutoFocus = false,
-  className,
-  isDense = false,
-  hasDisabledGutters = false,
-  hasDivider = false,
-  focusVisibleClassName,
-  onClick,
-  children,
-}: MenuItemProps) {
+    /**
+     * If true, compact vertical padding designed for keyboard and mouse
+     * input is used.
+     * @default true
+     */
+    isDense?: boolean;
+
+    /**
+     * If true, the left and right padding is removed
+     * @default false
+     */
+    hasDisabledGutters?: boolean;
+
+    /**
+     * If true, a 1px light border is added to bottom of menu item
+     * @default false
+     */
+    hasDivider?: boolean;
+
+    /**
+     * Help identify which element has keyboard focus
+     */
+    focusVisibleClassName?: string;
+  }>;
+
+function MenuItem(props: MenuItemProps) {
+  const {
+    onClick,
+    name,
+    hasAutoFocus = false,
+    className,
+    isDense = true,
+    hasDisabledGutters = false,
+    hasDivider = false,
+    focusVisibleClassName,
+  } = props;
+
   return (
     <MuiMenuItem
       autoFocus={hasAutoFocus}
@@ -64,7 +84,7 @@ function MenuItem({
       focusVisibleClassName={focusVisibleClassName}
       onClick={onClick}
     >
-      {children}
+      {name}
     </MuiMenuItem>
   );
 }

@@ -14,8 +14,8 @@ import type { QuickVerseDataTypes } from 'quick-verse';
 import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
 import { Key, useCallback, useContext, useMemo, useState } from 'react';
-import type { TimeDataTypes } from 'c-sharp-provider-test';
 import type { HelloWorldEvent } from 'hello-world';
+import Clock from './components/clock.component';
 
 type Row = {
   id: string;
@@ -78,12 +78,6 @@ globalThis.webViewComponent = function HelloWorld() {
     'Loading latest Scripture text...',
   );
 
-  const [currentTime] = useData.Time<TimeDataTypes, 'TimeData'>(
-    'current-time',
-    undefined,
-    'Loading current time',
-  );
-
   const [name, setName] = useState('Bill');
 
   const peopleDataProvider = useDataProvider<PeopleDataProvider>('helloSomeone.people');
@@ -138,7 +132,7 @@ globalThis.webViewComponent = function HelloWorld() {
         </Button>
       </div>
       <div>{latestVerseText}</div>
-      <div>{currentTime}</div>
+      <Clock />
       <div>
         <input value={name} onChange={(e) => setName(e.target.value)} />
         <Button onClick={() => peopleDataProvider?.deletePerson(name)}>Delete {name}</Button>

@@ -2,12 +2,18 @@ import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
 import './app.component.css';
 import ParanextDockLayout from '@renderer/components/docking/paranext-dock-layout.component';
 import TestContext from '@renderer/context/papi-context/test.context';
+import { useState } from 'react';
 import PlatformBibleToolbar from './components/platform-bible-toolbar';
 
 function Main() {
+  const [scrRef, setScrRef] = useState({ bookNum: 40, chapterNum: 1, verseNum: 1 });
+
   return (
     <TestContext.Provider value="test">
-      <PlatformBibleToolbar />
+      <PlatformBibleToolbar
+        referenceChanged={(newScrRef) => setScrRef(newScrRef)}
+        scrRef={scrRef}
+      />
       <ParanextDockLayout />
     </TestContext.Provider>
   );

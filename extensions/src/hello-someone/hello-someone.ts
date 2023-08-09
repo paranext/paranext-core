@@ -1,22 +1,19 @@
 import papi from 'papi-backend';
+import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import type {
   WebViewContentType,
   WebViewDefinition,
   SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
-import { UnsubscriberAsync } from 'shared/utils/papi-util';
 import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
-import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import helloSomeoneHtmlWebView from './hello-someone.web-view.html?inline';
 
 const { logger } = papi;
 logger.info('Hello Someone is importing!');
-
-const unsubscribers: UnsubscriberAsync[] = [];
 
 /**
  * Example data provider engine that provides information about people.
@@ -247,7 +244,7 @@ const peopleWebViewProvider: IWebViewProvider = {
   },
 };
 
-export async function activate(context: ExecutionActivationContext) {
+export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello Someone is activating!');
 
   const peopleDataProviderPromise = papi.dataProvider.registerEngine<PeopleDataTypes>(
@@ -260,19 +257,24 @@ export async function activate(context: ExecutionActivationContext) {
     peopleWebViewProvider,
   );
 
-  const unsubPromises: Promise<UnsubscriberAsync>[] = [
-    papi.commands.registerCommand('helloSomeone.helloSomeone', (name: string) => {
+  const helloSomeoneCommandPromise = papi.commands.registerCommand(
+    'helloSomeone.helloSomeone',
+    (name: string) => {
       return `Hello ${name}!`;
-    }),
-    papi.commands.registerCommand('helloSomeone.echoSomeoneRenderer', async (message: string) => {
+    },
+  );
+
+  const echoSomeoneRendererPromise = papi.commands.registerCommand(
+    'helloSomeone.echoSomeoneRenderer',
+    async (message: string) => {
       return `echoSomeoneRenderer: ${await papi.commands.sendCommand(
         'test.addThree',
         2,
         4,
         6,
       )}! ${message}`;
-    }),
-  ];
+    },
+  );
 
   // Create a webview or get the existing webview if ours already exists
   // Note: here, we are storing a created webview's id when we create it, and using that id on
@@ -306,20 +308,13 @@ export async function activate(context: ExecutionActivationContext) {
     peopleWebViewId || '',
   );
 
-  // For now, let's just make things easy and await the registration promises at the end so we don't hold everything else up
-  const peopleDataProvider = await peopleDataProviderPromise;
-  const peopleWebViewProviderResolved = await peopleWebViewProviderPromise;
-
-  const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
-    (await Promise.all(unsubPromises)).concat([
-      peopleDataProvider.dispose,
-      peopleWebViewProviderResolved.dispose,
-    ]),
+  // Await the registration promises at the end so we don't hold everything else up
+  context.registrations.add(
+    await peopleDataProviderPromise,
+    await peopleWebViewProviderPromise,
+    await helloSomeoneCommandPromise,
+    await echoSomeoneRendererPromise,
   );
-  logger.info('Hello Someone is finished activating!');
-  return combinedUnsubscriber;
-}
 
-export async function deactivate() {
-  return Promise.all(unsubscribers.map((unsubscriber) => unsubscriber()));
+  logger.info('Hello Someone is finished activating!');
 }

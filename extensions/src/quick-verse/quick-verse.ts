@@ -1,9 +1,8 @@
 import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-backend';
+import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import type { ExecutionToken } from 'node/models/execution-token.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
-import { UnsubscriberAsync } from 'shared/utils/papi-util';
-import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import type { QuickVerseDataTypes, QuickVerseSetData } from 'quick-verse';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 import type { UsfmDataProvider } from 'usfm-data-provider';
@@ -14,8 +13,6 @@ const {
 } = papi;
 
 logger.info('Quick Verse is importing!');
-
-const unsubscribers: UnsubscriberAsync[] = [];
 
 /**
  * Example data provider engine that provides easy access to Scripture from an internet API.
@@ -264,10 +261,8 @@ class QuickVerseDataProviderEngine
   }
 }
 
-export async function activate(context: ExecutionActivationContext): Promise<UnsubscriberAsync> {
+export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Quick Verse is activating!');
-
-  const unsubPromises: Promise<UnsubscriberAsync>[] = [];
 
   const token: ExecutionToken = context.executionToken;
   const warning = await papi.storage.readTextFileFromInstallDirectory(
@@ -297,13 +292,8 @@ export async function activate(context: ExecutionActivationContext): Promise<Uns
     papi.storage.writeUserData(token, 'heresy-count', String(storedHeresyCount));
   });
 
-  const combinedUnsubscriber: UnsubscriberAsync = papi.util.aggregateUnsubscriberAsyncs(
-    (await Promise.all(unsubPromises)).concat([quickVerseDataProvider.dispose]),
-  );
-  logger.info('Quick Verse is finished activating!');
-  return combinedUnsubscriber;
-}
+  // Await the registration promises at the end so we don't hold everything else up
+  context.registrations.add(quickVerseDataProvider);
 
-export async function deactivate() {
-  return Promise.all(unsubscribers.map((unsubscriber) => unsubscriber()));
+  logger.info('Quick Verse is finished activating!');
 }
