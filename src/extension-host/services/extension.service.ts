@@ -2,8 +2,11 @@
  * Handles setting up activation of and running of extensions
  */
 
+import * as os from 'os';
+import JSZip from 'jszip';
+import path from 'path';
 import { IExtension } from '@extension-host/extension-types/extension.interface';
-import { EntryType, readDir, readFileText } from '@node/services/node-file-system.service';
+import * as nodeFS from '@node/services/node-file-system.service';
 import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
 import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
@@ -92,22 +95,98 @@ function parseManifest(extensionManifestJson: string) {
   return extensionManifest;
 }
 
+/** This is the location where we will store decompressed extension ZIP files */
+const userUnzippedExtensionsCacheUri: string = `file://${path.join(
+  os.homedir(),
+  '.platform.bible/extensions',
+)}`;
+
+/** These are all the directories that might contain extension folders and/or ZIP files */
+const extensionRootUris = [
+  `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
+  userUnzippedExtensionsCacheUri,
+  ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
+    (extensionDirPath) => `file://${extensionDirPath}`,
+  ),
+];
+
+/** Process all ZIP file extensions we can find. It might be nice to store unzipped extensions
+ *  in memory, but the ESM loader doesn't make that easy. Store them in the file system.
+ */
+async function unzipCompressedExtensionFiles(): Promise<void> {
+  const allUris = await Promise.all(
+    extensionRootUris.map((extensionDirUri) => nodeFS.readDir(extensionDirUri)),
+  );
+  logger.info(`${allUris.length}`);
+  const zipUris: Uri[] = (
+    await Promise.all(extensionRootUris.map((extensionDirUri) => nodeFS.readDir(extensionDirUri)))
+  )
+    .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.File])
+    .filter((extensionFileUri) => extensionFileUri)
+    .filter((extensionFileUri) => extensionFileUri.toLowerCase().endsWith('.zip'));
+
+  await Promise.all(
+    zipUris.map(async (zipUri) => {
+      try {
+        await unzipCompressedExtensionFile(zipUri);
+      } catch (error) {
+        logger.error(`Failed to unpack extension ZIP file "${zipUri}": ${error}`);
+      }
+    }),
+  );
+}
+
+/** Unpack a single ZIP file into a known location so we can try to load an extension from it */
+async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
+  logger.info(`Unpacking zipped extension: ${zipUri}`);
+  const parsedZipUri: path.ParsedPath = path.parse(zipUri);
+  const zipData: Buffer = await nodeFS.readFileBinary(zipUri);
+  const zip: JSZip = await JSZip.loadAsync(zipData);
+  const zipEntries = Object.entries(zip.files).filter(([, zipObj]) => !zipObj.dir);
+
+  // Make sure there is a manifest.json file present and nothing tries to walk up the directory tree
+  let zipEntriesInProperDirectory: boolean = true;
+  let foundManifestFile: boolean = false;
+  await Promise.all(
+    zipEntries.map(async ([fileName]) => {
+      const parsedPath = path.parse(fileName);
+      if (fileName.includes('..')) {
+        logger.warn(`Invalid extension ZIP file entry in "${zipUri}": ${fileName}`);
+        zipEntriesInProperDirectory = false;
+      }
+      if (parsedPath.base === MANIFEST_FILE_NAME) foundManifestFile = true;
+    }),
+  );
+  if (!zipEntriesInProperDirectory) return;
+  if (!foundManifestFile) {
+    logger.warn(`Ignoring extension ZIP file without a manifest: ${zipUri}`);
+    return;
+  }
+
+  // Ensure all files from "abc.zip" match corresponding files under "/abc" in the output directory
+  await Promise.all(
+    zipEntries.map(async ([fileName, file]) => {
+      const outputUri = joinUriPaths(userUnzippedExtensionsCacheUri, parsedZipUri.name, fileName);
+      const outputFileStats = await nodeFS.getFileStats(outputUri);
+      if (outputFileStats && BigInt(file.date.getTime()) === outputFileStats.mtimeMs) return;
+      // The file modify timestamp is different, so just overwrite the file with the one in the ZIP
+      // We could compare the file size first, but then we would need to hold a big buffer in memory
+      await nodeFS.writeFile(outputUri, await file.async('nodebuffer'));
+      await nodeFS.touchFile(outputUri, new Date(file.date.getTime()));
+      logger.info(`Wrote extension file to ${outputUri}`);
+    }),
+  );
+}
+
 /**
  * Get information for all the extensions present
  */
 // TODO: figure out if we can share this code with webpack.util.ts
 const getExtensions = async (): Promise<ExtensionInfo[]> => {
   const extensionFolders: Uri[] = (
-    await Promise.all(
-      [
-        `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
-        ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
-          (extensionDirPath) => `file://${extensionDirPath}`,
-        ),
-      ].map((extensionDirUri) => readDir(extensionDirUri)),
-    )
+    await Promise.all(extensionRootUris.map((extensionDirUri) => nodeFS.readDir(extensionDirUri)))
   )
-    .flatMap((dirEntries) => dirEntries[EntryType.Directory])
+    .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.Directory])
     .filter((extensionDirUri) => extensionDirUri);
 
   return (
@@ -123,7 +202,7 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
         )
         .map(async (extensionFolder) => {
           try {
-            const extensionManifestJson = await readFileText(
+            const extensionManifestJson = await nodeFS.readFileText(
               joinUriPaths(extensionFolder, MANIFEST_FILE_NAME),
             );
             return Object.freeze({
@@ -306,6 +385,9 @@ export const initialize = () => {
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
 
+    // Unzip any extension ZIPs
+    await unzipCompressedExtensionFiles();
+
     // Get a list of extensions
     availableExtensions = await getExtensions();
 
@@ -313,6 +395,7 @@ export const initialize = () => {
     const uriMap: Map<string, string> = new Map();
     availableExtensions.forEach((extensionInfo) => {
       uriMap.set(extensionInfo.name, extensionInfo.dirUri);
+      logger.info(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
     });
     setExtensionUris(uriMap);
 

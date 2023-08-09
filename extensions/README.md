@@ -51,6 +51,10 @@ To package your extension into a zip file for distribution:
 
 `npm run package`
 
+## Working with extensions in ZIP files
+
+To have Paranext recognize your extension ZIP file, run it with the `--extensionDirs` command line argument. For example, `--extensionDirs C:\my-extensions` if you have your packaged extension ZIP files inside of the `C:\my-extensions` directory on your local computer.
+
 ## Special features of this project
 
 This project has special features and specific configuration to make building extensions for Paranext easier. See [Special features of `paranext-extension-template`](https://github.com/paranext/paranext-extension-template#special-features-of-the-template) for information on these special features.
