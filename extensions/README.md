@@ -53,7 +53,10 @@ To package your extension into a zip file for distribution:
 
 ## Working with extensions in ZIP files
 
-To have Paranext recognize your extension ZIP file, run it with the `--extensionDirs` command line argument. For example, `--extensionDirs C:\my-extensions` if you have your packaged extension ZIP files inside of the `C:\my-extensions` directory on your local computer.
+To have Paranext recognize your extension ZIP files, run it with the `--extensions` or `--extensionDirs` command line argument. For example:
+
+- `--extensionDirs C:\my-extensions` if you have your packaged extension ZIP files inside of the `C:\my-extensions` directory on your local computer
+- `--extensions C:\path\to\my\extension.zip` if you want to load a specific extension from a ZIP file in a known location on your local computer
 
 ## Special features of this project
 

@@ -114,16 +114,17 @@ const extensionRootUris = [
  *  in memory, but the ESM loader doesn't make that easy. Store them in the file system.
  */
 async function unzipCompressedExtensionFiles(): Promise<void> {
-  const allUris = await Promise.all(
-    extensionRootUris.map((extensionDirUri) => nodeFS.readDir(extensionDirUri)),
-  );
-  logger.info(`${allUris.length}`);
   const zipUris: Uri[] = (
     await Promise.all(extensionRootUris.map((extensionDirUri) => nodeFS.readDir(extensionDirUri)))
   )
     .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.File])
     .filter((extensionFileUri) => extensionFileUri)
-    .filter((extensionFileUri) => extensionFileUri.toLowerCase().endsWith('.zip'));
+    .filter((extensionFileUri) => extensionFileUri.toLowerCase().endsWith('.zip'))
+    .concat(
+      getCommandLineArgumentsGroup(ARG_EXTENSIONS)
+        .filter((extensionUri) => extensionUri.toLowerCase().endsWith('.zip'))
+        .map((extensionPath) => `file://${extensionPath}`),
+    );
 
   await Promise.all(
     zipUris.map(async (zipUri) => {
@@ -202,6 +203,9 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
         )
         .map(async (extensionFolder) => {
           try {
+            // Can't put this in a filter above because it's async
+            if ((await nodeFS.getFileStats(extensionFolder))?.isFile()) return Promise.resolve();
+
             const extensionManifestJson = await nodeFS.readFileText(
               joinUriPaths(extensionFolder, MANIFEST_FILE_NAME),
             );
@@ -221,7 +225,7 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
   )
     .filter((settled) => {
       // Ignore failed to load manifest issues - already logged those issues
-      if (settled.status !== 'fulfilled') return false;
+      if (settled.status !== 'fulfilled' || !settled.value) return false;
       if ((settled.value.main as Partial<ExtensionManifest>) === undefined) {
         logger.warn(
           `Extension ${settled.value.name} failed to load. Must provide property \`main\` in \`manifest.json\`. If you do not have JavaScript code to run, provide \`"main": null\``,
