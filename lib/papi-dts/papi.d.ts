@@ -2556,19 +2556,19 @@ declare module 'node/services/node-file-system.service' {
   import { BigIntStats } from 'fs';
   import { Uri } from 'shared/data/file-system.model';
   /**
-   * Reads a text file asynchronously
+   * Read a text file
    * @param uri URI of file
    * @returns promise that resolves to the contents of the file
    */
   export function readFileText(uri: Uri): Promise<string>;
   /**
-   * Reads a binary file asynchronously
+   * Read a binary file
    * @param uri URI of file
    * @returns promise that resolves to the contents of the file
    */
   export function readFileBinary(uri: Uri): Promise<Buffer>;
   /**
-   * Writes the data to a file asynchronously
+   * Write data to a file
    * @param uri URI of file
    * @param fileContents string or Buffer to write into the file
    * @returns promise that resolves after writing the file
@@ -2581,18 +2581,18 @@ declare module 'node/services/node-file-system.service' {
    */
   export function deleteFile(uri: Uri): Promise<void>;
   /**
-   * Get stats about the file. Note that BigInts are used instead of ints to avoid
+   * Get stats about the file or directory. Note that BigInts are used instead of ints to avoid.
    * https://en.wikipedia.org/wiki/Year_2038_problem
-   * @param uri URI of file
-   * @returns Promise to object of type https://nodejs.org/api/fs.html#class-fsstats representing the file stats
+   * @param uri URI of file or directory
+   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if file or directory exists, undefined if it doesn't
    */
-  export function getFileStats(uri: Uri): Promise<BigIntStats | undefined>;
+  export function getStats(uri: Uri): Promise<BigIntStats | undefined>;
   /**
-   * Set the last modified and accessed times for the file
-   * @param uri URI of file
-   * @returns Promise that resolves if the operation completed, rejects otherwise
+   * Set the last modified and accessed times for the file or directory
+   * @param uri URI of file or directory
+   * @returns Promise that resolves once the touch operation finishes
    */
-  export function touchFile(uri: Uri, date: Date): Promise<void>;
+  export function touch(uri: Uri, date: Date): Promise<void>;
   /** Type of file system item in a directory */
   export enum EntryType {
     File = 'file',
@@ -2622,10 +2622,9 @@ declare module 'node/services/node-file-system.service' {
   /**
    * Remove a directory and all its contents recursively from the file system
    * @param uri URI of directory
-   * @param force Boolean indicating whether to pass the `force` flag to the system call, defaults to `false`
-   * @returns Promise that resolves to true if the directory existed and was deleted, false if it didn't exist
+   * @returns Promise that resolves when the delete operation finishes
    */
-  export function deleteDir(uri: Uri, force?: boolean): Promise<boolean>;
+  export function deleteDir(uri: Uri): Promise<void>;
 }
 declare module 'node/utils/crypto-util' {
   export function createUuid(): string;
