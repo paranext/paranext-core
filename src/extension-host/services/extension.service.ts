@@ -101,21 +101,14 @@ const userUnzippedExtensionsCacheUri: string = `file://${path.join(
   '.platform.bible/extensions',
 )}`;
 
-/** These are all the directories that might contain extension folders and/or ZIP files */
-const extensionRootUris = [
-  `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
-  userUnzippedExtensionsCacheUri,
-  ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
-    (extensionDirPath) => `file://${extensionDirPath}`,
-  ),
-];
-
-/** Process all ZIP file extensions we can find. It might be nice to store unzipped extensions
- *  in memory, but the ESM loader doesn't make that easy. Store them in the file system.
- */
-async function unzipCompressedExtensionFiles(): Promise<void> {
-  const zipUris: Uri[] = (
-    await Promise.all(extensionRootUris.map((extensionDirUri) => nodeFS.readDir(extensionDirUri)))
+/** All of the URIs of ZIP files for extensions we want to load */
+const extensionZipUris: Promise<Uri[]> = (async () => {
+  return (
+    await Promise.all(
+      getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS)
+        .map((extensionDirPath) => `file://${extensionDirPath}`)
+        .map((extensionDirUri) => nodeFS.readDir(extensionDirUri)),
+    )
   )
     .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.File])
     .filter((extensionFileUri) => extensionFileUri)
@@ -125,7 +118,56 @@ async function unzipCompressedExtensionFiles(): Promise<void> {
         .filter((extensionUri) => extensionUri.toLowerCase().endsWith('.zip'))
         .map((extensionPath) => `file://${extensionPath}`),
     );
+})();
 
+/** All of the URIs of extensions to load */
+const extensionUrisToLoad: Promise<Uri[]> = (async () => {
+  // Get all subdirectories for bundled extensions and command line ARG_EXTENSION_DIRS values
+  let extensionFolders: Uri[] = (
+    await Promise.all(
+      [
+        `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
+        ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
+          (extensionDirPath) => `file://${extensionDirPath}`,
+        ),
+      ].map((extensionUri) => nodeFS.readDir(extensionUri)),
+    )
+  )
+    .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.Directory])
+    .filter((extensionDirUri) => extensionDirUri);
+
+  // Add in all directories explicitly provided by the ARG_EXTENSIONS command line arguments
+  const extensionFolderPromises = extensionFolders
+    .concat(
+      getCommandLineArgumentsGroup(ARG_EXTENSIONS).map((extensionDirPath) => {
+        const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
+          ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
+          : extensionDirPath;
+        return `file://${extensionFolder}`;
+      }),
+    )
+    .map(async (extensionFolder) => {
+      return (await nodeFS.getStats(extensionFolder))?.isFile() ? '' : extensionFolder;
+    });
+
+  // Remove any explicitly provided ARG_EXTENSIONS values that were files instead of directories
+  extensionFolders = (await Promise.all(extensionFolderPromises)).filter(
+    (extensionFolder) => extensionFolder,
+  );
+
+  // Now add in the cache directories for all ZIP files
+  return extensionFolders.concat(
+    (await extensionZipUris).map((zipUri) =>
+      joinUriPaths(userUnzippedExtensionsCacheUri, path.parse(zipUri).name),
+    ),
+  );
+})();
+
+/** Process all ZIP file extensions we can find. It might be nice to store unzipped extensions
+ *  in memory, but the ESM loader doesn't make that easy. Store them in the file system.
+ */
+async function unzipCompressedExtensionFiles(): Promise<void> {
+  const zipUris = await extensionZipUris;
   await Promise.all(
     zipUris.map(async (zipUri) => {
       try {
@@ -184,47 +226,20 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
  */
 // TODO: figure out if we can share this code with webpack.util.ts
 const getExtensions = async (): Promise<ExtensionInfo[]> => {
-  // Get all subdirectories of the extension root directories
-  let extensionFolders: Uri[] = (
-    await Promise.all(extensionRootUris.map((extensionDirUri) => nodeFS.readDir(extensionDirUri)))
-  )
-    .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.Directory])
-    .filter((extensionDirUri) => extensionDirUri);
-
-  // Add in all directories explicitly provided by the ARG_EXTENSIONS command line argument
-  const extensionFolderPromises = extensionFolders
-    .concat(
-      getCommandLineArgumentsGroup(ARG_EXTENSIONS).map((extensionDirPath) => {
-        const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
-          ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
-          : extensionDirPath;
-        return `file://${extensionFolder}`;
-      }),
-    )
-    .map(async (extensionFolder) => {
-      return (await nodeFS.getStats(extensionFolder))?.isFile() ? '' : extensionFolder;
-    });
-
-  // Remove any explicitly provided ARG_EXTENSIONS values that were files instead of directories
-  extensionFolders = (await Promise.all(extensionFolderPromises)).filter(
-    (extensionFolder) => extensionFolder,
-  );
-
+  const extensionUris = await extensionUrisToLoad;
   return (
     await Promise.allSettled(
-      extensionFolders.map(async (extensionFolder) => {
+      extensionUris.map(async (extensionUri) => {
         try {
           const extensionManifestJson = await nodeFS.readFileText(
-            joinUriPaths(extensionFolder, MANIFEST_FILE_NAME),
+            joinUriPaths(extensionUri, MANIFEST_FILE_NAME),
           );
           return Object.freeze({
             ...parseManifest(extensionManifestJson),
-            dirUri: extensionFolder,
+            dirUri: extensionUri,
           }) as ExtensionInfo;
         } catch (e) {
-          const error = new Error(
-            `Extension folder ${extensionFolder} failed to load. Reason: ${e}`,
-          );
+          const error = new Error(`Extension folder ${extensionUri} failed to load. Reason: ${e}`);
           logger.warn(error);
           throw error;
         }
