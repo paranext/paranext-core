@@ -8,7 +8,7 @@ import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
 import { getErrorMessage } from '@shared/utils/util';
-import { CommandNames } from 'papi-commands';
+import { CommandNames } from 'papi-shared-types';
 
 // #region Test logs
 
