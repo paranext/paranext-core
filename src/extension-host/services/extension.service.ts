@@ -168,12 +168,12 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
   await Promise.all(
     zipEntries.map(async ([fileName, file]) => {
       const outputUri = joinUriPaths(userUnzippedExtensionsCacheUri, parsedZipUri.name, fileName);
-      const outputFileStats = await nodeFS.getFileStats(outputUri);
+      const outputFileStats = await nodeFS.getStats(outputUri);
       if (outputFileStats && BigInt(file.date.getTime()) === outputFileStats.mtimeMs) return;
       // The file modify timestamp is different, so just overwrite the file with the one in the ZIP
       // We could compare the file size first, but then we would need to hold a big buffer in memory
       await nodeFS.writeFile(outputUri, await file.async('nodebuffer'));
-      await nodeFS.touchFile(outputUri, new Date(file.date.getTime()));
+      await nodeFS.touch(outputUri, new Date(file.date.getTime()));
       logger.info(`Wrote extension file to ${outputUri}`);
     }),
   );
@@ -204,7 +204,7 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
         .map(async (extensionFolder) => {
           try {
             // Can't put this in a filter above because it's async
-            if ((await nodeFS.getFileStats(extensionFolder))?.isFile()) return Promise.resolve();
+            if ((await nodeFS.getStats(extensionFolder))?.isFile()) return Promise.resolve();
 
             const extensionManifestJson = await nodeFS.readFileText(
               joinUriPaths(extensionFolder, MANIFEST_FILE_NAME),
