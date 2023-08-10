@@ -57,7 +57,7 @@ export async function deleteFile(uri: Uri): Promise<void> {
  */
 export async function getStats(uri: Uri): Promise<BigIntStats | undefined> {
   try {
-    return fs.promises.stat(getPathFromUri(uri), { bigint: true });
+    return await fs.promises.stat(getPathFromUri(uri), { bigint: true });
   } catch (error) {
     return undefined;
   }
