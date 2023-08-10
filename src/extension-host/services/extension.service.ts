@@ -101,15 +101,23 @@ const userUnzippedExtensionsCacheUri: string = `file://${path.join(
   '.platform.bible/extensions',
 )}`;
 
+/** Contents of `nodeFS.readDir()` for all parent folders of extensions
+ *  This is expected to be a mixture of directories and ZIP files.
+ */
+const extensionRootDirectoryContents = (async () => {
+  return Promise.all(
+    [
+      `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
+      ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
+        (extensionDirPath) => `file://${extensionDirPath}`,
+      ),
+    ].map((extensionUri) => nodeFS.readDir(extensionUri)),
+  );
+})();
+
 /** All of the URIs of ZIP files for extensions we want to load */
 const extensionZipUris: Promise<Uri[]> = (async () => {
-  return (
-    await Promise.all(
-      getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS)
-        .map((extensionDirPath) => `file://${extensionDirPath}`)
-        .map((extensionDirUri) => nodeFS.readDir(extensionDirUri)),
-    )
-  )
+  return (await extensionRootDirectoryContents)
     .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.File])
     .filter((extensionFileUri) => extensionFileUri)
     .filter((extensionFileUri) => extensionFileUri.toLowerCase().endsWith('.zip'))
@@ -123,16 +131,7 @@ const extensionZipUris: Promise<Uri[]> = (async () => {
 /** All of the URIs of extensions to load */
 const extensionUrisToLoad: Promise<Uri[]> = (async () => {
   // Get all subdirectories for bundled extensions and command line ARG_EXTENSION_DIRS values
-  let extensionFolders: Uri[] = (
-    await Promise.all(
-      [
-        `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
-        ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
-          (extensionDirPath) => `file://${extensionDirPath}`,
-        ),
-      ].map((extensionUri) => nodeFS.readDir(extensionUri)),
-    )
-  )
+  let extensionFolders: Uri[] = (await extensionRootDirectoryContents)
     .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.Directory])
     .filter((extensionDirUri) => extensionDirUri);
 
