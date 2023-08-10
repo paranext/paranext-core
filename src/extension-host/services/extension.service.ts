@@ -184,48 +184,56 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
  */
 // TODO: figure out if we can share this code with webpack.util.ts
 const getExtensions = async (): Promise<ExtensionInfo[]> => {
-  const extensionFolders: Uri[] = (
+  // Get all subdirectories of the extension root directories
+  let extensionFolders: Uri[] = (
     await Promise.all(extensionRootUris.map((extensionDirUri) => nodeFS.readDir(extensionDirUri)))
   )
     .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.Directory])
     .filter((extensionDirUri) => extensionDirUri);
 
+  // Add in all directories explicitly provided by the ARG_EXTENSIONS command line argument
+  const extensionFolderPromises = extensionFolders
+    .concat(
+      getCommandLineArgumentsGroup(ARG_EXTENSIONS).map((extensionDirPath) => {
+        const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
+          ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
+          : extensionDirPath;
+        return `file://${extensionFolder}`;
+      }),
+    )
+    .map(async (extensionFolder) => {
+      return (await nodeFS.getStats(extensionFolder))?.isFile() ? '' : extensionFolder;
+    });
+
+  // Remove any explicitly provided ARG_EXTENSIONS values that were files instead of directories
+  extensionFolders = (await Promise.all(extensionFolderPromises)).filter(
+    (extensionFolder) => extensionFolder,
+  );
+
   return (
     await Promise.allSettled(
-      extensionFolders
-        .concat(
-          getCommandLineArgumentsGroup(ARG_EXTENSIONS).map((extensionDirPath) => {
-            const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
-              ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
-              : extensionDirPath;
-            return `file://${extensionFolder}`;
-          }),
-        )
-        .map(async (extensionFolder) => {
-          try {
-            // Can't put this in a filter above because it's async
-            if ((await nodeFS.getStats(extensionFolder))?.isFile()) return Promise.resolve();
-
-            const extensionManifestJson = await nodeFS.readFileText(
-              joinUriPaths(extensionFolder, MANIFEST_FILE_NAME),
-            );
-            return Object.freeze({
-              ...parseManifest(extensionManifestJson),
-              dirUri: extensionFolder,
-            }) as ExtensionInfo;
-          } catch (e) {
-            const error = new Error(
-              `Extension folder ${extensionFolder} failed to load. Reason: ${e}`,
-            );
-            logger.warn(error);
-            throw error;
-          }
-        }),
+      extensionFolders.map(async (extensionFolder) => {
+        try {
+          const extensionManifestJson = await nodeFS.readFileText(
+            joinUriPaths(extensionFolder, MANIFEST_FILE_NAME),
+          );
+          return Object.freeze({
+            ...parseManifest(extensionManifestJson),
+            dirUri: extensionFolder,
+          }) as ExtensionInfo;
+        } catch (e) {
+          const error = new Error(
+            `Extension folder ${extensionFolder} failed to load. Reason: ${e}`,
+          );
+          logger.warn(error);
+          throw error;
+        }
+      }),
     )
   )
     .filter((settled) => {
       // Ignore failed to load manifest issues - already logged those issues
-      if (settled.status !== 'fulfilled' || !settled.value) return false;
+      if (settled.status !== 'fulfilled') return false;
       if ((settled.value.main as Partial<ExtensionManifest>) === undefined) {
         logger.warn(
           `Extension ${settled.value.name} failed to load. Must provide property \`main\` in \`manifest.json\`. If you do not have JavaScript code to run, provide \`"main": null\``,
