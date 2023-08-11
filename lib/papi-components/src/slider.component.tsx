@@ -47,6 +47,11 @@ export type SliderProps = {
    */
   defaultValue?: number;
   /**
+   * The value of the slider.
+   * For ranged sliders, provide an array with two values.
+   */
+  value?: number | number[];
+  /**
    * Controls when the value label is displayed:
    *
    * - `auto` the value label will display when the thumb is hovered or focused.
@@ -93,6 +98,7 @@ function Slider({
   step = 1,
   showMarks = false,
   defaultValue,
+  value,
   valueLabelDisplay = 'off',
   className,
   onChange,
@@ -108,6 +114,7 @@ function Slider({
       step={step}
       marks={showMarks}
       defaultValue={defaultValue}
+      value={value}
       valueLabelDisplay={valueLabelDisplay}
       className={`papi-slider ${orientation} ${className ?? ''}`}
       onChange={onChange}
