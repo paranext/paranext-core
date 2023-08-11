@@ -324,39 +324,38 @@ function Table<R>({
   }, [columns, enableSelectColumn, selectColumnWidth]);
 
   return (
-    <div id={id}>
-      <DataGrid<R>
-        columns={cachedColumns}
-        defaultColumnOptions={{
-          width: defaultColumnWidth,
-          minWidth: defaultColumnMinWidth,
-          maxWidth: defaultColumnMaxWidth,
-          sortable: defaultColumnSortable,
-          resizable: defaultColumnResizable,
-        }}
-        sortColumns={sortColumns}
-        onSortColumnsChange={onSortColumnsChange}
-        onColumnResize={onColumnResize}
-        rows={rows}
-        rowKeyGetter={rowKeyGetter}
-        rowHeight={rowHeight}
-        headerRowHeight={headerRowHeight}
-        selectedRows={selectedRows}
-        onSelectedRowsChange={onSelectedRowsChange}
-        onRowsChange={onRowsChange}
-        onCellClick={onCellClick}
-        onCellDoubleClick={onCellDoubleClick}
-        onCellContextMenu={onCellContextMenu}
-        onCellKeyDown={onCellKeyDown}
-        direction={direction}
-        enableVirtualization={enableVirtualization}
-        onCopy={onCopy}
-        onPaste={onPaste}
-        onScroll={onScroll}
-        renderers={{ renderCheckbox }}
-        className={className ?? 'rdg-light'}
-      />
-    </div>
+    <DataGrid<R>
+      columns={cachedColumns}
+      defaultColumnOptions={{
+        width: defaultColumnWidth,
+        minWidth: defaultColumnMinWidth,
+        maxWidth: defaultColumnMaxWidth,
+        sortable: defaultColumnSortable,
+        resizable: defaultColumnResizable,
+      }}
+      sortColumns={sortColumns}
+      onSortColumnsChange={onSortColumnsChange}
+      onColumnResize={onColumnResize}
+      rows={rows}
+      rowKeyGetter={rowKeyGetter}
+      rowHeight={rowHeight}
+      headerRowHeight={headerRowHeight}
+      selectedRows={selectedRows}
+      onSelectedRowsChange={onSelectedRowsChange}
+      onRowsChange={onRowsChange}
+      onCellClick={onCellClick}
+      onCellDoubleClick={onCellDoubleClick}
+      onCellContextMenu={onCellContextMenu}
+      onCellKeyDown={onCellKeyDown}
+      direction={direction}
+      enableVirtualization={enableVirtualization}
+      onCopy={onCopy}
+      onPaste={onPaste}
+      onScroll={onScroll}
+      renderers={{ renderCheckbox }}
+      className={className ?? 'rdg-light'}
+      id={id}
+    />
   );
 }
 

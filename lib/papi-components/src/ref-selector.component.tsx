@@ -54,7 +54,7 @@ function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
   };
 
   return (
-    <div id={id}>
+    <span id={id}>
       <ComboBox
         title="Book"
         className="papi-ref-selector book"
@@ -108,7 +108,7 @@ function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
         &lt;
       </Button>
       <Button onClick={() => handleSubmit(offsetVerse(scrRef, 1))}>&gt;</Button>
-    </div>
+    </span>
   );
 }
 
