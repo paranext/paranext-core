@@ -4,6 +4,10 @@ import './button.component.css';
 
 export type ButtonProps = PropsWithChildren<{
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+  /**
    * Enabled status of button
    * @default false
    */
@@ -28,9 +32,17 @@ export type ButtonProps = PropsWithChildren<{
  * Thanks to MUI for heavy inspiration and documentation
  * https://mui.com/material-ui/getting-started/overview/
  */
-function Button({ isDisabled = false, className, onClick, onContextMenu, children }: ButtonProps) {
+function Button({
+  id,
+  isDisabled = false,
+  className,
+  onClick,
+  onContextMenu,
+  children,
+}: ButtonProps) {
   return (
     <MuiButton
+      id={id}
       disabled={isDisabled}
       className={`papi-button ${className ?? ''}`}
       onClick={onClick}

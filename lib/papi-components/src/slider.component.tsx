@@ -4,6 +4,10 @@ import './slider.component.css';
 
 export type SliderProps = {
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+  /**
    * If `true`, the component is disabled.
    * @default false
    */
@@ -81,6 +85,7 @@ export type SliderProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 function Slider({
+  id,
   isDisabled = false,
   orientation = 'horizontal',
   min = 0,
@@ -95,6 +100,7 @@ function Slider({
 }: SliderProps) {
   return (
     <MuiSlider
+      id={id}
       disabled={isDisabled}
       orientation={orientation}
       min={min}

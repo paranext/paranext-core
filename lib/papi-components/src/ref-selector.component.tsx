@@ -25,9 +25,10 @@ function compareBookOptions(a: BookNameOption, b: BookNameOption) {
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
+  id?: string;
 }
 
-function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
+function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
   const [currentBookOption, setCurrentBookOption] = useState<BookNameOption>(
     bookNumToBookOption(scrRef.bookNum),
   );
@@ -53,7 +54,7 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
   };
 
   return (
-    <>
+    <div id={id}>
       <ComboBox
         title="Book"
         className="papi-ref-selector book"
@@ -107,7 +108,7 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
         &lt;
       </Button>
       <Button onClick={() => handleSubmit(offsetVerse(scrRef, 1))}>&gt;</Button>
-    </>
+    </div>
   );
 }
 

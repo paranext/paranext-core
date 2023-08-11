@@ -348,7 +348,7 @@ function Table<R>({
       onPaste={onPaste}
       onScroll={onScroll}
       renderers={{ renderCheckbox }}
-      className={`${className ?? 'rdg-light'}`}
+      className={className ?? 'rdg-light'}
     />
   );
 }
