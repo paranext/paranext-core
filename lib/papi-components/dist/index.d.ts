@@ -751,6 +751,10 @@ export type TableProps<R> = {
    * Additional css classes to help with unique styling of the table
    */
   className?: string;
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
 };
 /**
  * Configurable table component
@@ -787,6 +791,7 @@ export declare function Table<R>({
   onPaste,
   onScroll,
   className,
+  id,
 }: TableProps<R>): import('react/jsx-runtime').JSX.Element;
 export type TextFieldProps = {
   /**

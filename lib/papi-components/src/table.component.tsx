@@ -106,7 +106,7 @@ function TableTextEditor<R>({ onRowChange, row, column }: TableEditorProps<R>): 
 }
 
 const renderCheckbox = ({ onChange, disabled, checked, ...props }: RenderCheckboxProps) => {
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleChange(e: ChangeEvent<HTMLInputElement>) {
     onChange(e.target.checked, (e.nativeEvent as MouseEvent).shiftKey);
   }
 
@@ -253,6 +253,10 @@ export type TableProps<R> = {
    * Additional css classes to help with unique styling of the table
    */
   className?: string;
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
 };
 
 /**
@@ -290,6 +294,7 @@ function Table<R>({
   onPaste,
   onScroll,
   className,
+  id,
 }: TableProps<R>) {
   const cachedColumns = useMemo(() => {
     const editableColumns = columns.map((column) => {
@@ -316,40 +321,42 @@ function Table<R>({
     return enableSelectColumn
       ? [{ ...SelectColumn, minWidth: selectColumnWidth }, ...editableColumns]
       : editableColumns;
-  }, [enableSelectColumn, columns]);
+  }, [columns, enableSelectColumn, selectColumnWidth]);
 
   return (
-    <DataGrid<R>
-      columns={cachedColumns}
-      defaultColumnOptions={{
-        width: defaultColumnWidth,
-        minWidth: defaultColumnMinWidth,
-        maxWidth: defaultColumnMaxWidth,
-        sortable: defaultColumnSortable,
-        resizable: defaultColumnResizable,
-      }}
-      sortColumns={sortColumns}
-      onSortColumnsChange={onSortColumnsChange}
-      onColumnResize={onColumnResize}
-      rows={rows}
-      rowKeyGetter={rowKeyGetter}
-      rowHeight={rowHeight}
-      headerRowHeight={headerRowHeight}
-      selectedRows={selectedRows}
-      onSelectedRowsChange={onSelectedRowsChange}
-      onRowsChange={onRowsChange}
-      onCellClick={onCellClick}
-      onCellDoubleClick={onCellDoubleClick}
-      onCellContextMenu={onCellContextMenu}
-      onCellKeyDown={onCellKeyDown}
-      direction={direction}
-      enableVirtualization={enableVirtualization}
-      onCopy={onCopy}
-      onPaste={onPaste}
-      onScroll={onScroll}
-      renderers={{ renderCheckbox }}
-      className={className ?? 'rdg-light'}
-    />
+    <div id={id}>
+      <DataGrid<R>
+        columns={cachedColumns}
+        defaultColumnOptions={{
+          width: defaultColumnWidth,
+          minWidth: defaultColumnMinWidth,
+          maxWidth: defaultColumnMaxWidth,
+          sortable: defaultColumnSortable,
+          resizable: defaultColumnResizable,
+        }}
+        sortColumns={sortColumns}
+        onSortColumnsChange={onSortColumnsChange}
+        onColumnResize={onColumnResize}
+        rows={rows}
+        rowKeyGetter={rowKeyGetter}
+        rowHeight={rowHeight}
+        headerRowHeight={headerRowHeight}
+        selectedRows={selectedRows}
+        onSelectedRowsChange={onSelectedRowsChange}
+        onRowsChange={onRowsChange}
+        onCellClick={onCellClick}
+        onCellDoubleClick={onCellDoubleClick}
+        onCellContextMenu={onCellContextMenu}
+        onCellKeyDown={onCellKeyDown}
+        direction={direction}
+        enableVirtualization={enableVirtualization}
+        onCopy={onCopy}
+        onPaste={onPaste}
+        onScroll={onScroll}
+        renderers={{ renderCheckbox }}
+        className={className ?? 'rdg-light'}
+      />
+    </div>
   );
 }
 
