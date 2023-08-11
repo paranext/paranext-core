@@ -91,6 +91,8 @@ export type TableEditorProps<R> = {
   column: TableCalculatedColumn<R>;
   row: R;
   onRowChange: (row: R, commitChanges?: boolean) => void;
+  // Unused currently, but needed to commit changes from editing
+  // eslint-disable-next-line react/no-unused-prop-types
   onClose: (commitChanges?: boolean) => void;
 };
 export type TablePasteEvent<R> = PasteEvent<R>;
@@ -106,9 +108,9 @@ function TableTextEditor<R>({ onRowChange, row, column }: TableEditorProps<R>): 
 }
 
 const renderCheckbox = ({ onChange, disabled, checked, ...props }: RenderCheckboxProps) => {
-  function handleChange(e: ChangeEvent<HTMLInputElement>) {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.checked, (e.nativeEvent as MouseEvent).shiftKey);
-  }
+  };
 
   return (
     <Checkbox
