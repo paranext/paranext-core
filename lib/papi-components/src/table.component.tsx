@@ -257,9 +257,8 @@ export type TableProps<R> = {
   className?: string;
   /**
    *  Optional unique identifier
-   *  Patched react-data-grid@7.0.0-beta.34 to add this prop
-   *  Link to issue in react-data-grid: https://github.com/adazzle/react-data-grid/issues/3305
    */
+  // Patched react-data-grid@7.0.0-beta.34 to add this prop, link to issue: https://github.com/adazzle/react-data-grid/issues/3305
   id?: string;
 };
 
