@@ -24,24 +24,6 @@ import executionTokenService from '@node/services/execution-token.service';
 import UnsubscriberAsyncList from '@extension-host/extension-types/unsubscriber-async-list';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 
-/**
- * Name of the file describing the extension and its capabilities. Provided by the extension
- * developer
- */
-const MANIFEST_FILE_NAME = 'manifest.json';
-
-/** Whether this service has finished setting up */
-let isInitialized = false;
-
-/** Promise that resolves when this service is finished initializing */
-let initializePromise: Promise<void> | undefined;
-
-/** Extensions that are available to us */
-let availableExtensions: ExtensionInfo[];
-
-/** Map of extension name to extension that is currently active and running */
-const activeExtensions = new Map<string, ActiveExtension>();
-
 /** Extension manifest before it is finalized and frozen */
 
 /**
@@ -85,6 +67,31 @@ type ActiveExtension = {
  */
 type AmbiguousExtensionModule = IExtension | { default: IExtension };
 
+/**
+ * Name of the file describing the extension and its capabilities. Provided by the extension
+ * developer
+ */
+const MANIFEST_FILE_NAME = 'manifest.json';
+
+/** This is the location where we will store decompressed extension ZIP files */
+const userUnzippedExtensionsCacheUri: string = `file://${path.join(
+  os.homedir(),
+  '.platform.bible',
+  'extensions',
+)}`;
+
+/** Map of extension name to extension that is currently active and running */
+const activeExtensions = new Map<string, ActiveExtension>();
+
+/** Whether this service has finished setting up */
+let isInitialized = false;
+
+/** Promise that resolves when this service is finished initializing */
+let initializePromise: Promise<void> | undefined;
+
+/** Extensions that are available to us */
+let availableExtensions: ExtensionInfo[];
+
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string) {
   const extensionManifest = JSON.parse(extensionManifestJson) as ExtensionManifest;
@@ -95,12 +102,6 @@ function parseManifest(extensionManifestJson: string) {
   return extensionManifest;
 }
 
-/** This is the location where we will store decompressed extension ZIP files */
-const userUnzippedExtensionsCacheUri: string = `file://${path.join(
-  os.homedir(),
-  '.platform.bible/extensions',
-)}`;
-
 /** Contents of `nodeFS.readDir()` for all parent folders of extensions
  *  This is expected to be a mixture of directories and ZIP files.
  */
@@ -109,7 +110,7 @@ const extensionRootDirectoryContents = (async () => {
     [
       `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
       ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
-        (extensionDirPath) => `file://${extensionDirPath}`,
+        (extensionDirPath) => `file://${path.resolve(extensionDirPath)}`,
       ),
     ].map((extensionUri) => nodeFS.readDir(extensionUri)),
   );
@@ -124,7 +125,7 @@ const extensionZipUris: Promise<Uri[]> = (async () => {
     .concat(
       getCommandLineArgumentsGroup(ARG_EXTENSIONS)
         .filter((extensionUri) => extensionUri.toLowerCase().endsWith('.zip'))
-        .map((extensionPath) => `file://${extensionPath}`),
+        .map((extensionPath) => `file://${path.resolve(extensionPath)}`),
     );
 })();
 
@@ -142,7 +143,7 @@ const extensionUrisToLoad: Promise<Uri[]> = (async () => {
         const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
           ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
           : extensionDirPath;
-        return `file://${extensionFolder}`;
+        return `file://${path.resolve(extensionFolder)}`;
       }),
     )
     .map(async (extensionFolder) => {
@@ -224,7 +225,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
  * Get information for all the extensions present
  */
 // TODO: figure out if we can share this code with webpack.util.ts
-const getExtensions = async (): Promise<ExtensionInfo[]> => {
+async function getExtensions(): Promise<ExtensionInfo[]> {
   const extensionUris = await extensionUrisToLoad;
   return (
     await Promise.allSettled(
@@ -258,7 +259,7 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
       return settled.value.main !== null;
     })
     .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value);
-};
+}
 
 /**
  * Loads an extension and runs its activate function.
@@ -269,10 +270,10 @@ const getExtensions = async (): Promise<ExtensionInfo[]> => {
  * @param extensionFilePath path to extension main file to import
  * @returns unsubscriber that deactivates the extension
  */
-const activateExtension = async (
+async function activateExtension(
   extension: ExtensionInfo,
   extensionFilePath: string,
-): Promise<ActiveExtension> => {
+): Promise<ActiveExtension> {
   // Import the extension file. Tell webpack to ignore it because extension files are not in the
   // bundle and should not be looked up in the bundle
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
@@ -319,14 +320,14 @@ const activateExtension = async (
   };
   activeExtensions.set(extension.name, activeExtension);
   return activeExtension;
-};
+}
 
 /**
  * Load extensions and runs their activate functions.
  * @param extensions extension info for the extensions we want to activate
  * @returns unsubscriber that deactivates the extension
  */
-const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveExtension[]> => {
+async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveExtension[]> {
   /** The path to each extension along with whether that extension has already been imported */
   const extensionsWithFiles = extensions.map((extension) => ({
     extension,
@@ -398,7 +399,7 @@ const activateExtensions = async (extensions: ExtensionInfo[]): Promise<ActiveEx
   ).filter((activeExtension) => activeExtension !== null) as ActiveExtension[];
 
   return extensionsActive;
-};
+}
 
 /**
  * Sets up the ExtensionService. Runs only once
