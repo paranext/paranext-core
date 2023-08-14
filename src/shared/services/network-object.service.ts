@@ -136,6 +136,9 @@ onDidDisposeNetworkObject((id: string) => {
 
     // Dispose of the proxy
     networkObjectRegistration.revokeProxy();
+
+    // Dispose of the network object registration
+    networkObjectRegistrations.delete(id);
   }
 });
 
@@ -250,10 +253,10 @@ interface IDisposableObject {
 }
 
 /** If `dispose` already exists on `objectToMutate`, we will call it in addition to `newDispose` */
-const overrideDispose = (
+export function overrideDispose(
   objectToMutate: IDisposableObject,
   newDispose: UnsubscriberAsync,
-): void => {
+): void {
   if (objectToMutate.dispose) {
     const oldDispose = objectToMutate.dispose.bind(objectToMutate);
 
@@ -261,7 +264,7 @@ const overrideDispose = (
   } else {
     objectToMutate.dispose = newDispose;
   }
-};
+}
 
 // #endregion
 

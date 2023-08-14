@@ -161,7 +161,7 @@ declare module 'shared/utils/papi-util' {
   export type UnsubscriberAsync = () => Promise<boolean>;
   /**
    * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
-   * @param unsubscribers all unsubscribers to aggregate into one unsubscriber
+   * @param unsubscribers - all unsubscribers to aggregate into one unsubscriber.
    * @returns function that unsubscribes from all passed in unsubscribers when run
    */
   export const aggregateUnsubscriberAsyncs: (
@@ -1402,6 +1402,7 @@ declare module 'shared/utils/async-variable' {
   }
 }
 declare module 'shared/services/network-object.service' {
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
   import {
     NetworkObject,
     DisposableNetworkObject,
@@ -1413,6 +1414,14 @@ declare module 'shared/services/network-object.service' {
   /** Search locally known network objects for the given ID. Don't look on the network for more objects.
    *  @returns whether we know of an existing network object with the provided id already on the network */
   const hasKnown: (id: string) => boolean;
+  interface IDisposableObject {
+    dispose?: UnsubscriberAsync;
+  }
+  /** If `dispose` already exists on `objectToMutate`, we will call it in addition to `newDispose` */
+  export function overrideDispose(
+    objectToMutate: IDisposableObject,
+    newDispose: UnsubscriberAsync,
+  ): void;
   /**
    * Get a network object that has previously been set up to be shared on the network.
    * A network object is a proxy to an object living somewhere else that local code can use.
@@ -2529,6 +2538,8 @@ declare module 'shared/data/file-system.model' {
 }
 declare module 'node/utils/util' {
   import { Uri } from 'shared/data/file-system.model';
+  export const FILE_PROTOCOL: string;
+  export const RESOURCES_PROTOCOL: string;
   export function resolveHtmlPath(htmlFileName: string): string;
   /**
    * Gets the platform-specific user appdata folder for this application
@@ -2826,12 +2837,12 @@ declare module 'extension-host/extension-types/unsubscriber-async-list' {
     readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
     /**
      * Add unsubscribers to the list. Note that duplicates are not added twice.
-     * @param unsubscribers Objects that were returned from a registration process
+     * @param unsubscribers - Objects that were returned from a registration process.
      */
     add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
     /**
-     * Run all unsubscribers added to this list and then clear the list
-     * @returns `true` if all unsubscribers succeeded, `false` otherwise
+     * Run all unsubscribers added to this list and then clear the list.
+     * @returns `true` if all unsubscribers succeeded, `false` otherwise.
      */
     runAllUnsubscribers(): Promise<boolean>;
   }

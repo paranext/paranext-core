@@ -30,7 +30,7 @@ export type UnsubscriberAsync = () => Promise<boolean>;
 
 /**
  * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
- * @param unsubscribers all unsubscribers to aggregate into one unsubscriber
+ * @param unsubscribers - all unsubscribers to aggregate into one unsubscriber.
  * @returns function that unsubscribes from all passed in unsubscribers when run
  */
 export const aggregateUnsubscriberAsyncs = (
@@ -38,9 +38,7 @@ export const aggregateUnsubscriberAsyncs = (
 ): UnsubscriberAsync => {
   return async (...args) => {
     // Run the unsubscriber for each handler
-    const unsubPromises = unsubscribers.map((unsubscriber) =>
-      Promise.resolve(unsubscriber(...args)),
-    );
+    const unsubPromises = unsubscribers.map(async (unsubscriber) => unsubscriber(...args));
 
     // If all the unsubscribers resolve to truthiness, we succeed
     return (await Promise.all(unsubPromises)).every((success) => success);

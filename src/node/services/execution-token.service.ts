@@ -5,6 +5,7 @@ const tokenMap = new Map<string, ExecutionToken>();
 function getMapKey(name: string, tokenType: ExecutionTokenType = 'extension'): string {
   if (!name || name.length < 1) throw new Error('name must be defined');
   if (!tokenType || tokenType.length < 1) throw new Error('type must be defined');
+
   return `${tokenType}:${name}`;
 }
 
@@ -15,7 +16,8 @@ function getMapKey(name: string, tokenType: ExecutionTokenType = 'extension'): s
  */
 function registerExtension(extensionName: string): ExecutionToken {
   const mapKey: string = getMapKey(extensionName);
-  if (tokenMap.get(mapKey)) throw new Error(`${extensionName} is already registered!`);
+  if (tokenMap.get(mapKey))
+    throw new Error(`${extensionName} is already registered with the execution token service!`);
 
   const newToken = new ExecutionToken('extension', extensionName);
   tokenMap.set(mapKey, newToken);

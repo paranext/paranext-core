@@ -23,7 +23,7 @@ import * as networkService from '@shared/services/network.service';
 import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
 import { getAllObjectFunctionNames, groupBy, isString } from '@shared/utils/util';
 import { LocalObjectToProxyCreator, NetworkObject } from '@shared/models/network-object.model';
-import networkObjectService from '@shared/services/network-object.service';
+import networkObjectService, { overrideDispose } from '@shared/services/network-object.service';
 import { CannotHaveOnDidDispose } from '@shared/models/disposal.model';
 import logger from '@shared/services/logger.service';
 import AsyncVariable from '@shared/utils/async-variable';
@@ -429,6 +429,7 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
     throw new Error('Data provider engine does not have matching get and set functions!');
 
   // Layer over data provider engine methods to give it control over emitting updates
+
   // Layer over the data provider engine's notifyUpdate with one that actually emits an update
   // or if the dpe doesn't have notifyUpdate, give it one
   const dpeNotifyUpdate = dataProviderEngine.notifyUpdate
@@ -466,6 +467,10 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
         };
     }
   });
+
+  // Layer over the data provider engine's dispose method to make sure its update emitter is
+  // disposed when it is disposed.
+  overrideDispose(dataProviderEngine, async () => onDidUpdateEmitter.dispose());
 
   return createDataProviderProxy(dataProviderEngine, dataProviderPromise, onDidUpdateEmitter.event);
 }
