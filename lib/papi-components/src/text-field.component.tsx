@@ -8,6 +8,10 @@ export type TextFieldProps = {
    */
   variant?: 'outlined' | 'filled';
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+  /**
    * If `true`, the component is disabled.
    * @default false
    */
@@ -73,6 +77,7 @@ export type TextFieldProps = {
  */
 function TextField({
   variant = 'outlined',
+  id,
   isDisabled = false,
   hasError = false,
   isFullWidth = false,
@@ -90,6 +95,7 @@ function TextField({
   return (
     <MuiTextField
       variant={variant}
+      id={id}
       disabled={isDisabled}
       error={hasError}
       fullWidth={isFullWidth}

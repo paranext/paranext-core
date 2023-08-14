@@ -24,6 +24,11 @@ export type SnackbarContentProps = {
 
 export type SnackbarProps = {
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+
+  /**
    * If true, the component is shown
    * @default false
    */
@@ -69,6 +74,7 @@ export type SnackbarProps = {
  */
 function Snackbar({
   autoHideDuration = null,
+  id,
   isOpen = false,
   className,
   onClose,
@@ -88,6 +94,7 @@ function Snackbar({
       onClose={onClose}
       anchorOrigin={anchorOrigin}
       ContentProps={ContentProps}
+      id={id}
     >
       {children}
     </MuiSnackbar>

@@ -33,6 +33,10 @@ import {
 
 export type ButtonProps = PropsWithChildren<{
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+  /**
    * Enabled status of button
    * @default false
    */
@@ -57,6 +61,7 @@ export type ButtonProps = PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Button({
+  id,
   isDisabled,
   className,
   onClick,
@@ -70,6 +75,10 @@ export declare enum LabelPosition {
   Below = 'below',
 }
 export type CheckboxProps = {
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
   /**
    * If `true`, the component is checked.
    */
@@ -118,6 +127,7 @@ export type CheckboxProps = {
  * Primary UI component for user interaction
  */
 export declare function Checkbox({
+  id,
   isChecked,
   labelText,
   labelPosition,
@@ -136,6 +146,10 @@ export type ComboBoxValue<T, X, Y, Z> = AutocompleteValue<T, X, Y, Z>;
 export type ComboBoxChangeDetails<T> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
 export type ComboBoxProps<T> = {
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
   /**
    * Text label title for combobox
    */
@@ -208,6 +222,7 @@ export type ComboBoxProps<T> = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
+  id,
   title,
   isDisabled,
   isClearable,
@@ -236,6 +251,10 @@ export interface CommandHandler {
   (command: Command): void;
 }
 export type MenuItemProps = MenuItemInfo & {
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
   onClick: () => void;
 };
 export type MenuItemInfo = Command &
@@ -285,6 +304,10 @@ export type GridMenuInfo = {
   columns: MenuColumnInfo[];
 };
 export type GridMenuProps = GridMenuInfo & {
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
   commandHandler: CommandHandler;
   /**
    * Additional css classes to help with unique styling of the toolbar
@@ -295,6 +318,7 @@ export function GridMenu({
   commandHandler,
   className,
   columns,
+  id,
 }: GridMenuProps): import('react/jsx-runtime').JSX.Element;
 export interface ScriptureReference {
   bookNum: number;
@@ -304,12 +328,18 @@ export interface ScriptureReference {
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
+  id?: string;
 }
 export declare function RefSelector({
   scrRef,
   handleSubmit,
+  id,
 }: ScrRefSelectorProps): import('react/jsx-runtime').JSX.Element;
 export type SliderProps = {
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
   /**
    * If `true`, the component is disabled.
    * @default false
@@ -392,6 +422,7 @@ export type SliderProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Slider({
+  id,
   isDisabled,
   orientation,
   min,
@@ -422,6 +453,10 @@ export type SnackbarContentProps = {
   className?: string;
 };
 export type SnackbarProps = {
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
   /**
    * If true, the component is shown
    * @default false
@@ -461,6 +496,7 @@ export type SnackbarProps = {
  */
 export declare function Snackbar({
   autoHideDuration,
+  id,
   isOpen,
   className,
   onClose,
@@ -469,6 +505,10 @@ export declare function Snackbar({
   children,
 }: SnackbarProps): import('react/jsx-runtime').JSX.Element;
 export type SwitchProps = {
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
   /**
    * If `true`, the component is checked.
    */
@@ -501,6 +541,7 @@ export type SwitchProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Switch({
+  id,
   isChecked: checked,
   isDisabled,
   hasError,
@@ -716,6 +757,10 @@ export type TableProps<R> = {
    * Additional css classes to help with unique styling of the table
    */
   className?: string;
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
 };
 /**
  * Configurable table component
@@ -752,6 +797,7 @@ export declare function Table<R>({
   onPaste,
   onScroll,
   className,
+  id,
 }: TableProps<R>): import('react/jsx-runtime').JSX.Element;
 export type TextFieldProps = {
   /**
@@ -759,6 +805,10 @@ export type TextFieldProps = {
    * @default 'outlined'
    */
   variant?: 'outlined' | 'filled';
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
   /**
    * If `true`, the component is disabled.
    * @default false
@@ -824,6 +874,7 @@ export type TextFieldProps = {
  */
 export declare function TextField({
   variant,
+  id,
   isDisabled,
   hasError,
   isFullWidth,
@@ -851,6 +902,10 @@ export type ToolbarProps = PropsWithChildren<{
    */
   dataHandler?: DataHandler;
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+  /**
    * The optional grid menu to display. If not specified, the "hamburger" menu will not display.
    */
   menu?: GridMenuInfo;
@@ -864,6 +919,7 @@ export function Toolbar({
   dataHandler,
   commandHandler,
   className,
+  id,
   children,
 }: ToolbarProps): import('react/jsx-runtime').JSX.Element;
 

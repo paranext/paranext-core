@@ -21,6 +21,11 @@ export type ToolbarProps = PropsWithChildren<{
   dataHandler?: DataHandler;
 
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+
+  /**
    * The optional grid menu to display. If not specified, the "hamburger" menu will not display.
    */
   menu?: GridMenuInfo;
@@ -36,6 +41,7 @@ export default function Toolbar({
   dataHandler,
   commandHandler,
   className,
+  id,
   children,
 }: ToolbarProps) {
   const [isMenuOpen, setMenuOpen] = useState(false);
@@ -78,7 +84,7 @@ export default function Toolbar({
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
-      <AppBar position="static">
+      <AppBar position="static" id={id}>
         <MuiToolbar className={`papi-toolbar ${className ?? ''}`} variant="dense">
           {menu ? (
             <IconButton
