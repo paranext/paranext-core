@@ -81,9 +81,9 @@ function Snackbar({
   children,
 }: SnackbarProps) {
   const newContentProps: SnackbarContentProps = {
-    action: ContentProps?.action || children,
+    action: children || ContentProps?.action,
     message: ContentProps?.message,
-    className: ContentProps?.className,
+    className,
   };
 
   return (
