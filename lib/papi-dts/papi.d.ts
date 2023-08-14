@@ -1,5 +1,6 @@
 /// <reference types="react" />
 /// <reference types="node" />
+/// <reference types="node" />
 declare module 'papi-commands' {
   /**
      * Function types for each command available on the papi. Each extension can extend this interface
@@ -2549,27 +2550,49 @@ declare module 'node/utils/util' {
   export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
 }
 declare module 'node/services/node-file-system.service' {
+  /**
+   * File system calls from Node
+   */
+  import { BigIntStats } from 'fs';
   import { Uri } from 'shared/data/file-system.model';
   /**
-   * Reads a text file asynchronously
-   * @param uri Uri of file
+   * Read a text file
+   * @param uri URI of file
    * @returns promise that resolves to the contents of the file
    */
   export function readFileText(uri: Uri): Promise<string>;
   /**
-   * Reads a binary file asynchronously
-   * @param uri Uri of file
+   * Read a binary file
+   * @param uri URI of file
    * @returns promise that resolves to the contents of the file
    */
   export function readFileBinary(uri: Uri): Promise<Buffer>;
   /**
-   * Writes the string to a file asynchronously
-   * @param uri Uri of file
-   * @param fileContents string to write into the file
+   * Write data to a file
+   * @param uri URI of file
+   * @param fileContents string or Buffer to write into the file
    * @returns promise that resolves after writing the file
    */
-  export function writeFileText(uri: Uri, fileContents: string): Promise<void>;
+  export function writeFile(uri: Uri, fileContents: string | Buffer): Promise<void>;
+  /**
+   * Delete a file if it exists
+   * @param uri URI of file
+   * @returns promise that resolves when the file is deleted or determined to not exist
+   */
   export function deleteFile(uri: Uri): Promise<void>;
+  /**
+   * Get stats about the file or directory. Note that BigInts are used instead of ints to avoid.
+   * https://en.wikipedia.org/wiki/Year_2038_problem
+   * @param uri URI of file or directory
+   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if file or directory exists, undefined if it doesn't
+   */
+  export function getStats(uri: Uri): Promise<BigIntStats | undefined>;
+  /**
+   * Set the last modified and accessed times for the file or directory
+   * @param uri URI of file or directory
+   * @returns Promise that resolves once the touch operation finishes
+   */
+  export function touch(uri: Uri, date: Date): Promise<void>;
   /** Type of file system item in a directory */
   export enum EntryType {
     File = 'file',
@@ -2582,7 +2605,7 @@ declare module 'node/services/node-file-system.service' {
   }>;
   /**
    * Reads a directory and returns lists of entries in the directory by entry type
-   * @param uri uri of directory
+   * @param uri URI of directory
    * @param entryFilter function to filter out entries in the directory based on their names
    * @returns map of entry type to list of uris for each entry in the directory with that type
    */
@@ -2590,6 +2613,18 @@ declare module 'node/services/node-file-system.service' {
     uri: Uri,
     entryFilter?: (entryName: string) => boolean,
   ): Promise<DirectoryEntries>;
+  /**
+   * Create a directory in the file system
+   * @param uri URI of directory
+   * @returns Promise that resolves once the directory has been created
+   */
+  export function createDir(uri: Uri): Promise<void>;
+  /**
+   * Remove a directory and all its contents recursively from the file system
+   * @param uri URI of directory
+   * @returns Promise that resolves when the delete operation finishes
+   */
+  export function deleteDir(uri: Uri): Promise<void>;
 }
 declare module 'node/utils/crypto-util' {
   export function createUuid(): string;
