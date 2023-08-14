@@ -175,8 +175,8 @@ async function main() {
     mainWindow.setMenu(null);
 
     // Open urls in the user's browser
-    mainWindow.webContents.setWindowOpenHandler((edata) => {
-      shell.openExternal(edata.url);
+    mainWindow.webContents.setWindowOpenHandler((handlerDetails) => {
+      shell.openExternal(handlerDetails.url);
       return { action: 'deny' };
     });
 
