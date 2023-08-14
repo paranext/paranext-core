@@ -76,17 +76,6 @@ function getCommandLineArgumentsToForward() {
 }
 
 /**
- * Get a list of all the external extension paths provided via command-line so we can watch them
- * with nodemon
- */
-function getExternalExtensionPaths() {
-  return [
-    ...getCommandLineArgumentsGroup(ARG_EXTENSIONS),
-    ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS),
-  ];
-}
-
-/**
  * Starts the extension host process if it isn't already running.
  */
 async function startExtensionHost() {
@@ -119,7 +108,7 @@ async function startExtensionHost() {
     const nodemonConfig = await import(
       /* webpackIgnore: true */ path.join(globalThis.resourcesPath, 'nodemon.json')
     );
-    const nodemonWatchPaths = nodemonConfig?.watch ? nodemonConfig.watch : [];
+    const nodemonWatchPaths: string[] = nodemonConfig?.watch ? nodemonConfig.watch : [];
 
     extensionHost = spawn(
       'node',
@@ -127,10 +116,7 @@ async function startExtensionHost() {
         'node_modules/nodemon/bin/nodemon.js',
         // Provide the nodemon config paths and command-line argument extension paths as watch
         // directories for nodemon
-        ...[...nodemonWatchPaths, ...getExternalExtensionPaths()].flatMap((extensionPath) => [
-          '--watch',
-          extensionPath,
-        ]),
+        ...nodemonWatchPaths.flatMap((watchPath) => ['--watch', watchPath]),
         '--transpile-only',
         './src/extension-host/extension-host.ts',
         '--',

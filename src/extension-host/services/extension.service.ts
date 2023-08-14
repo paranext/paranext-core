@@ -5,6 +5,7 @@
 import * as os from 'os';
 import JSZip from 'jszip';
 import path from 'path';
+import chokidar from 'chokidar';
 import { IExtension } from '@extension-host/extension-types/extension.interface';
 import * as nodeFS from '@node/services/node-file-system.service';
 import { getPathFromUri, joinUriPaths } from '@node/utils/util';
@@ -73,8 +74,10 @@ type AmbiguousExtensionModule = IExtension | { default: IExtension };
  */
 const MANIFEST_FILE_NAME = 'manifest.json';
 
+const FILE_PROTOCOL = 'file://';
+
 /** This is the location where we will store decompressed extension ZIP files */
-const userUnzippedExtensionsCacheUri: string = `file://${path.join(
+const userUnzippedExtensionsCacheUri: string = `${FILE_PROTOCOL}${path.join(
   os.homedir(),
   '.platform.bible',
   'extensions',
@@ -110,7 +113,7 @@ const extensionRootDirectoryContents = (async () => {
     [
       `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
       ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
-        (extensionDirPath) => `file://${path.resolve(extensionDirPath)}`,
+        (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
       ),
     ].map((extensionUri) => nodeFS.readDir(extensionUri)),
   );
@@ -125,7 +128,7 @@ const extensionZipUris: Promise<Uri[]> = (async () => {
     .concat(
       getCommandLineArgumentsGroup(ARG_EXTENSIONS)
         .filter((extensionUri) => extensionUri.toLowerCase().endsWith('.zip'))
-        .map((extensionPath) => `file://${path.resolve(extensionPath)}`),
+        .map((extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`),
     );
 })();
 
@@ -143,7 +146,7 @@ const extensionUrisToLoad: Promise<Uri[]> = (async () => {
         const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
           ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
           : extensionDirPath;
-        return `file://${path.resolve(extensionFolder)}`;
+        return `${FILE_PROTOCOL}${path.resolve(extensionFolder)}`;
       }),
     )
     .map(async (extensionFolder) => {
@@ -262,6 +265,36 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
 }
 
 /**
+ * Gets the filePath if it has the file protocol.
+ * @param uri - URI string
+ * @returns The filePath if the URI starts with the file protocol, `undefined` otherwise.
+ */
+function getFilePathFromUri(uri: Uri): string | undefined {
+  if (uri.startsWith(FILE_PROTOCOL)) return uri.slice(FILE_PROTOCOL.length);
+  return undefined;
+}
+
+/**
+ * Watch for changes to any extension and reload if they have changed.
+ * @param extensions - array of available extensions
+ */
+function watchForExtensionChanges(extensions: ExtensionInfo[]): void {
+  const externalExtensionPaths = extensions
+    .map((extension) => getFilePathFromUri(extension.dirUri))
+    .filter((filePath) => !!filePath) as string[];
+  const builtinExtensionsPath = path.join(
+    globalThis.resourcesPath,
+    'extensions',
+    globalThis.isPackaged ? '' : 'dist',
+  );
+  const targets = [builtinExtensionsPath, ...externalExtensionPaths];
+  chokidar.watch(targets, { ignoreInitial: true, awaitWriteFinish: true }).on('all', () => {
+    logger.info('<platform.restartExtensionHost>');
+    papi.commands.sendCommand('platform.restartExtensionHost');
+  });
+}
+
+/**
  * Loads an extension and runs its activate function.
  *
  * WARNING: This does not shim functionality out of extensions! Do not run this alone. Only run
@@ -331,8 +364,8 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   /** The path to each extension along with whether that extension has already been imported */
   const extensionsWithFiles = extensions.map((extension) => ({
     extension,
-    // When packaged, we need to prefix absolute paths with file:// for some reason
-    filePath: `${globalThis.isPackaged ? 'file://' : ''}${getPathFromUri(
+    // When packaged, we need to prefix absolute paths with `file://` for some reason.
+    filePath: `${globalThis.isPackaged ? FILE_PROTOCOL : ''}${getPathFromUri(
       joinUriPaths(extension.dirUri, extension.main),
     )}`,
     hasBeenImported: false,
@@ -428,6 +461,8 @@ export const initialize = () => {
 
     // And finally activate them
     await activateExtensions(availableExtensions);
+
+    watchForExtensionChanges(availableExtensions);
 
     isInitialized = true;
   })();
