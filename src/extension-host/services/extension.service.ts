@@ -105,7 +105,7 @@ function parseManifest(extensionManifestJson: string) {
 /** Contents of `nodeFS.readDir()` for all parent folders of extensions
  *  This is expected to be a mixture of directories and ZIP files.
  */
-async function extensionRootDirectoryContents() {
+const extensionRootDirectoryContents = (async () => {
   return Promise.all(
     [
       `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
@@ -114,11 +114,11 @@ async function extensionRootDirectoryContents() {
       ),
     ].map((extensionUri) => nodeFS.readDir(extensionUri)),
   );
-}
+})();
 
 /** All of the URIs of ZIP files for extensions we want to load */
-async function extensionZipUris(): Promise<Uri[]> {
-  return (await extensionRootDirectoryContents())
+const extensionZipUris: Promise<Uri[]> = (async () => {
+  return (await extensionRootDirectoryContents)
     .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.File])
     .filter((extensionFileUri) => extensionFileUri)
     .filter((extensionFileUri) => extensionFileUri.toLowerCase().endsWith('.zip'))
@@ -127,12 +127,12 @@ async function extensionZipUris(): Promise<Uri[]> {
         .filter((extensionUri) => extensionUri.toLowerCase().endsWith('.zip'))
         .map((extensionPath) => `file://${path.resolve(extensionPath)}`),
     );
-}
+})();
 
 /** All of the URIs of extensions to load */
-async function extensionUrisToLoad(): Promise<Uri[]> {
+const extensionUrisToLoad: Promise<Uri[]> = (async () => {
   // Get all subdirectories for bundled extensions and command line ARG_EXTENSION_DIRS values
-  let extensionFolders: Uri[] = (await extensionRootDirectoryContents())
+  let extensionFolders: Uri[] = (await extensionRootDirectoryContents)
     .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.Directory])
     .filter((extensionDirUri) => extensionDirUri);
 
@@ -157,17 +157,17 @@ async function extensionUrisToLoad(): Promise<Uri[]> {
 
   // Now add in the cache directories for all ZIP files
   return extensionFolders.concat(
-    (await extensionZipUris()).map((zipUri) =>
+    (await extensionZipUris).map((zipUri) =>
       joinUriPaths(userUnzippedExtensionsCacheUri, path.parse(zipUri).name),
     ),
   );
-}
+})();
 
 /** Process all ZIP file extensions we can find. It might be nice to store unzipped extensions
  *  in memory, but the ESM loader doesn't make that easy. Store them in the file system.
  */
 async function unzipCompressedExtensionFiles(): Promise<void> {
-  const zipUris = await extensionZipUris();
+  const zipUris = await extensionZipUris;
   await Promise.all(
     zipUris.map(async (zipUri) => {
       try {
@@ -226,7 +226,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
  */
 // TODO: figure out if we can share this code with webpack.util.ts
 async function getExtensions(): Promise<ExtensionInfo[]> {
-  const extensionUris = await extensionUrisToLoad();
+  const extensionUris = await extensionUrisToLoad;
   return (
     await Promise.allSettled(
       extensionUris.map(async (extensionUri) => {
