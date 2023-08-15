@@ -16,6 +16,10 @@ export type ComboBoxChangeReason = AutocompleteChangeReason;
 
 export type ComboBoxProps<T> = {
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+  /**
    * Text label title for combobox
    */
   title?: string;
@@ -72,13 +76,6 @@ export type ComboBoxProps<T> = {
    * Triggers when textfield loses focus
    */
   onBlur?: FocusEventHandler<HTMLDivElement>;
-  /**
-   * Function that determines which option is the selected value. Defaults to strict equality `===`
-   * @param option an option passed in via the `options` prop
-   * @param value the currently selected value according to the `value` prop
-   * @returns true if this option is the selected value; false otherwise
-   */
-  checkIsOptionEqualToValue?: (option: T, value: T) => boolean;
 };
 
 /**
@@ -88,6 +85,7 @@ export type ComboBoxProps<T> = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
+  id,
   title,
   isDisabled = false,
   isClearable = true,
@@ -100,10 +98,10 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   onChange,
   onFocus,
   onBlur,
-  checkIsOptionEqualToValue,
 }: ComboBoxProps<T>) {
   return (
     <MuiComboBox<T, boolean | undefined, boolean | undefined, boolean | undefined>
+      id={id}
       disablePortal
       disabled={isDisabled}
       disableClearable={!isClearable}
@@ -114,7 +112,6 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}
-      isOptionEqualToValue={checkIsOptionEqualToValue}
       renderInput={(props) => (
         <MuiTextField
           {...props}

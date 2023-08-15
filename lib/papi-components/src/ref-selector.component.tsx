@@ -1,9 +1,8 @@
 import { Canon } from '@sillsdev/scripture';
-import { SyntheticEvent, useState } from 'react';
+import { SyntheticEvent, useMemo } from 'react';
 import {
   BookNameOption,
   getBookNameOptions,
-  bookNumToBookOption,
   offsetBook,
   offsetChapter,
   offsetVerse,
@@ -18,22 +17,14 @@ import ComboBox from './combo-box.component';
 import Button from './button.component';
 import TextField from './text-field.component';
 
-function compareBookOptions(a: BookNameOption, b: BookNameOption) {
-  return a.bookId === b.bookId && a.label === b.label;
-}
-
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
+  id?: string;
 }
 
-function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
-  const [currentBookOption, setCurrentBookOption] = useState<BookNameOption>(
-    bookNumToBookOption(scrRef.bookNum),
-  );
-
+function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
   const onChangeBook = (newRef: ScriptureReference) => {
-    setCurrentBookOption(bookNumToBookOption(newRef.bookNum));
     handleSubmit(newRef);
   };
 
@@ -52,17 +43,18 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
     handleSubmit({ ...scrRef, verseNum: +event.target.value });
   };
 
+  const currentBookName = useMemo(() => getBookNameOptions()[scrRef.bookNum - 1], [scrRef.bookNum]);
+
   return (
-    <>
+    <span id={id}>
       <ComboBox
         title="Book"
         className="papi-ref-selector book"
+        value={currentBookName}
         options={getBookNameOptions()}
         onChange={onSelectBook}
-        value={currentBookOption}
         isClearable={false}
         width={200}
-        checkIsOptionEqualToValue={compareBookOptions}
       />
       <Button
         onClick={() => onChangeBook(offsetBook(scrRef, -1))}
@@ -107,7 +99,7 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
         &lt;
       </Button>
       <Button onClick={() => handleSubmit(offsetVerse(scrRef, 1))}>&gt;</Button>
-    </>
+    </span>
   );
 }
 
