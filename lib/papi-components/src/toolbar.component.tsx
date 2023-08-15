@@ -57,6 +57,7 @@ export default function Toolbar({
     setMenuOpen((prevIsOpen) => {
       const isOpening = !prevIsOpen;
       if (isOpening && e.shiftKey) setHasShiftModifier(true);
+      else if (!isOpening) setHasShiftModifier(false);
       return isOpening;
     });
   }, []);
