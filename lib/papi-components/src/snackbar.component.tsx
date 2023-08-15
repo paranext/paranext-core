@@ -81,7 +81,7 @@ function Snackbar({
   children,
 }: SnackbarProps) {
   const newContentProps: SnackbarContentProps = {
-    action: children || ContentProps?.action,
+    action: ContentProps?.action || children,
     message: ContentProps?.message,
     className,
   };
@@ -89,7 +89,6 @@ function Snackbar({
   return (
     <MuiSnackbar
       autoHideDuration={autoHideDuration}
-      className={`papi-snackbar ${className ?? ''}`}
       open={isOpen}
       onClose={onClose}
       anchorOrigin={anchorOrigin}
