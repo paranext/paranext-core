@@ -4,6 +4,10 @@ import './slider.component.css';
 
 export type SliderProps = {
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+  /**
    * If `true`, the component is disabled.
    * @default false
    */
@@ -43,6 +47,11 @@ export type SliderProps = {
    */
   defaultValue?: number;
   /**
+   * The value of the slider.
+   * For ranged sliders, provide an array with two values.
+   */
+  value?: number | number[];
+  /**
    * Controls when the value label is displayed:
    *
    * - `auto` the value label will display when the thumb is hovered or focused.
@@ -81,6 +90,7 @@ export type SliderProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 function Slider({
+  id,
   isDisabled = false,
   orientation = 'horizontal',
   min = 0,
@@ -88,6 +98,7 @@ function Slider({
   step = 1,
   showMarks = false,
   defaultValue,
+  value,
   valueLabelDisplay = 'off',
   className,
   onChange,
@@ -95,6 +106,7 @@ function Slider({
 }: SliderProps) {
   return (
     <MuiSlider
+      id={id}
       disabled={isDisabled}
       orientation={orientation}
       min={min}
@@ -102,6 +114,7 @@ function Slider({
       step={step}
       marks={showMarks}
       defaultValue={defaultValue}
+      value={value}
       valueLabelDisplay={valueLabelDisplay}
       className={`papi-slider ${orientation} ${className ?? ''}`}
       onChange={onChange}

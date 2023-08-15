@@ -16,6 +16,10 @@ export type ComboBoxChangeReason = AutocompleteChangeReason;
 
 export type ComboBoxProps<T> = {
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+  /**
    * Text label title for combobox
    */
   title?: string;
@@ -81,6 +85,7 @@ export type ComboBoxProps<T> = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
+  id,
   title,
   isDisabled = false,
   isClearable = true,
@@ -96,6 +101,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
 }: ComboBoxProps<T>) {
   return (
     <MuiComboBox<T, boolean | undefined, boolean | undefined, boolean | undefined>
+      id={id}
       disablePortal
       disabled={isDisabled}
       disableClearable={!isClearable}

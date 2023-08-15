@@ -4,6 +4,10 @@ import './switch.component.css';
 
 export type SwitchProps = {
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+  /**
    * If `true`, the component is checked.
    */
   isChecked?: boolean;
@@ -36,6 +40,7 @@ export type SwitchProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 function Switch({
+  id,
   isChecked: checked,
   isDisabled = false,
   hasError = false,
@@ -44,6 +49,7 @@ function Switch({
 }: SwitchProps) {
   return (
     <MuiSwitch
+      id={id}
       checked={checked}
       disabled={isDisabled}
       className={`papi-switch ${hasError ? 'error' : ''} ${className ?? ''}`}

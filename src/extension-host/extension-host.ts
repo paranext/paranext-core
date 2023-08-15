@@ -1,7 +1,7 @@
 import '@extension-host/global-this.model';
 import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
-import * as ExtensionService from '@extension-host/services/extension.service';
+import * as extensionService from '@extension-host/services/extension.service';
 import papi from '@extension-host/services/papi-backend.service';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
@@ -54,7 +54,7 @@ networkService
     await extensionAssetService.initialize();
 
     // The extension service locks down importing other modules, so be careful what runs after it
-    await ExtensionService.initialize();
+    await extensionService.initialize();
 
     // TODO: Probably should return Promise.all of these registrations
     return undefined;

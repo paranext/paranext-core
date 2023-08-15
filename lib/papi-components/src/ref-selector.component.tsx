@@ -20,9 +20,10 @@ import TextField from './text-field.component';
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
+  id?: string;
 }
 
-function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
+function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
   const onChangeBook = (newRef: ScriptureReference) => {
     handleSubmit(newRef);
   };
@@ -45,7 +46,7 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
   const currentBookName = useMemo(() => getBookNameOptions()[scrRef.bookNum - 1], [scrRef.bookNum]);
 
   return (
-    <>
+    <span id={id}>
       <ComboBox
         title="Book"
         className="papi-ref-selector book"
@@ -98,7 +99,7 @@ function RefSelector({ scrRef, handleSubmit }: ScrRefSelectorProps) {
         &lt;
       </Button>
       <Button onClick={() => handleSubmit(offsetVerse(scrRef, 1))}>&gt;</Button>
-    </>
+    </span>
   );
 }
 
