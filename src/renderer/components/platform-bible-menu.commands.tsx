@@ -10,19 +10,19 @@ export function VisitPage(url: string) {
 
 export function handleMenuCommand(command: Command) {
   switch (command.command) {
-    case 'platformBible.downloadAndInstallResources':
+    case 'platform.downloadAndInstallResources':
       logger.info(`TODO: display UI to select resources'`);
       break;
-    case 'platformBible.openTextCollection':
+    case 'platform.openTextCollection':
       logger.info(`TODO: display text collection modal'`);
       break;
-    case 'platformBible.settings':
+    case 'platform.settings':
       logger.info(`TODO: display settings'`);
       break;
-    case 'platformBible.visitSupportPage':
+    case 'platform.visitSupportPage':
       VisitPage('https://support.bible');
       break;
-    case 'platformBible.about':
+    case 'platform.about':
       logger.info(`TODO: display about'`);
       break;
     default:
