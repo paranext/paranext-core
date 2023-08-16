@@ -47,7 +47,7 @@ export default function Toolbar({
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [hasShiftModifier, setHasShiftModifier] = useState(false);
 
-  const handleMenuClose = useCallback(() => {
+  const handleMenuItemClick = useCallback(() => {
     if (isMenuOpen) setMenuOpen(false);
     setHasShiftModifier(false);
   }, [isMenuOpen]);
@@ -74,10 +74,10 @@ export default function Toolbar({
 
   const toolbarCommandHandler = useCallback(
     (command: Command) => {
-      handleMenuClose();
+      handleMenuItemClick();
       return commandHandler(command);
     },
-    [commandHandler, handleMenuClose],
+    [commandHandler, handleMenuItemClick],
   );
 
   let menu = propsMenu;
@@ -105,7 +105,7 @@ export default function Toolbar({
               anchor="left"
               variant="persistent"
               open={isMenuOpen}
-              onClose={handleMenuClose}
+              onClose={handleMenuItemClick}
               PaperProps={{
                 className: 'papi-menu-drawer-paper',
                 style: {
