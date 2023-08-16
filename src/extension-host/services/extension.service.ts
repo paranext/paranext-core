@@ -3,7 +3,6 @@
  */
 
 import chokidar from 'chokidar';
-import * as os from 'os';
 import JSZip from 'jszip';
 import path from 'path';
 import { IExtension } from '@extension-host/extension-types/extension.interface';
@@ -91,11 +90,7 @@ const requireOriginal = Module.prototype.require;
 const systemRequire = globalThis.isPackaged ? __non_webpack_require__ : require;
 
 /** This is the location where we will store decompressed extension ZIP files */
-const userUnzippedExtensionsCacheUri: string = `${FILE_PROTOCOL}${path.join(
-  os.homedir(),
-  '.platform.bible',
-  'extensions',
-)}`;
+const userUnzippedExtensionsCacheUri: string = joinUriPaths('cache://extensions');
 
 /** Map of extension name to extension that is currently active and running */
 const activeExtensions = new Map<string, ActiveExtension>();
@@ -333,7 +328,7 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   const context: ExecutionActivationContext = {
     name: extension.name,
     executionToken,
-    registrations: new UnsubscriberAsyncList(),
+    registrations: new UnsubscriberAsyncList(extension.name),
   };
   Object.freeze(context);
 
