@@ -432,7 +432,7 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
 /**
  * Deactivates an active extension.
  * @param extensionName - name of the extension.
- * @returns `true` if the extension deactivates, `false` if it at least one deactivation fails,
+ * @returns `true` if the extension deactivates, `false` if at least one deactivation fails,
  * `undefined` otherwise, e.g. not active, not registered.
  */
 async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | undefined> {
@@ -454,12 +454,16 @@ async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | 
  */
 function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | undefined)[]> {
   return Promise.all(
-    extensions.map((extension) =>
-      deactivateExtension(extension).catch((e) => {
+    extensions.map(async (extension) => {
+      try {
+        const isDeactivated = await deactivateExtension(extension);
+        if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
+        return isDeactivated;
+      } catch (e) {
         logger.error(`Extension '${extension.name}' threw while deactivating! ${e}`);
-        return undefined;
-      }),
-    ),
+        return false;
+      }
+    }),
   );
 }
 
