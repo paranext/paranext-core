@@ -1,4 +1,5 @@
 import { Dispose } from '@shared/models/disposal.model';
+import logger from '@shared/services/logger.service';
 import { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
 
 /**
@@ -26,6 +27,10 @@ export default class UnsubscriberAsyncList {
     const unsubs = [...this.unsubscribers].map((unsubscriber) => unsubscriber());
     const results = await Promise.all(unsubs);
     this.unsubscribers.clear();
-    return results.every((unsubscriberSucceeded) => unsubscriberSucceeded);
+    return results.every((unsubscriberSucceeded, index) => {
+      if (!unsubscriberSucceeded) logger.debug(`Unsubscriber at index ${index} failed!`);
+
+      return unsubscriberSucceeded;
+    });
   }
 }

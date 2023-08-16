@@ -436,13 +436,27 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
  * `undefined` otherwise, e.g. not active, not registered.
  */
 async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | undefined> {
-  const isUnsubscribed = await activeExtensions
-    .get(extension.name)
-    ?.registrations?.runAllUnsubscribers();
+  const activeExtension = activeExtensions.get(extension.name);
+
+  if (!activeExtension) logger.error(`Extension '${extension.name}' has no active extension data.`);
+  else if (!activeExtension.registrations)
+    logger.error(
+      `Extension '${extension.name}' does not have a registrations object to unregister.`,
+    );
+
+  const isUnsubscribed = await activeExtension?.registrations?.runAllUnsubscribers();
+
+  if (!isUnsubscribed)
+    logger.error(`Extension '${extension.name}' was not successfully unsubscribed!`);
 
   // Delete the extension module from Node's module cache if we previously loaded it.
   const moduleKey = systemRequire.resolve(getPathFromUri(extension.dirUri));
-  if (moduleKey in systemRequire.cache) delete systemRequire.cache[moduleKey];
+  if (!(moduleKey in systemRequire.cache)) {
+    logger.warn(`Extension '${extension.name}' was not found in the module cache to be removed!`);
+    return isUnsubscribed;
+  }
+
+  delete systemRequire.cache[moduleKey];
 
   return isUnsubscribed;
 }
