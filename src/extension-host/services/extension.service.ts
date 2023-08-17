@@ -90,7 +90,7 @@ const requireOriginal = Module.prototype.require;
 const systemRequire = globalThis.isPackaged ? __non_webpack_require__ : require;
 
 /** This is the location where we will store decompressed extension ZIP files */
-const userUnzippedExtensionsCacheUri: string = joinUriPaths('cache://extensions');
+const userUnzippedExtensionsCacheUri: Uri = 'cache://extensions';
 
 /** Map of extension name to extension that is currently active and running */
 const activeExtensions = new Map<string, ActiveExtension>();
