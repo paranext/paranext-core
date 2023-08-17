@@ -2387,8 +2387,24 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
 }
 declare module 'shared/services/settings.service' {
   import { Unsubscriber } from 'shared/utils/papi-util';
+  /**
+   * Retrieves the value of the specified setting
+   * @param key The string id of the setting for which the value is being retrieved
+   * @returns The value of the specified setting, parsed to an object. Returns `null` if setting is not present or no value is available
+   */
   const getSetting: (key: string) => unknown | null;
+  /**
+   * Sets the value of the specified setting
+   * @param key The string id of the setting for which the value is being retrieved
+   * @param newSetting The value that is to be stored. Setting the new value to `null` is the equivalent of deleting the setting
+   */
   const setSetting: (key: string, newSetting: unknown | null) => void;
+  /**
+   * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the callback function is executed.
+   * @param key The string id of the setting for which the value is being subscribed to
+   * @param callback The function that will be called whenever the specified setting is updated
+   * @returns Unsubscriber that should be called whenever the subscription should be deleted
+   */
   const subscribeToSetting: (key: string, callback: () => void) => Unsubscriber;
   export interface SettingsService {
     get: typeof getSetting;
@@ -2402,12 +2418,13 @@ declare module 'shared/services/settings.service' {
   export default settingsService;
 }
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
-  /** null means setting does not exist
-   *
-   * @param key
+  /**
+   * This hooks layers over useState, and stores the stateful value in local storage too.
+   * Setting the value to `null` is the equivalent of deleting the value from local storage.
+   * @param key The string id that is used to store the setting in local storage
    *
    *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-   * @param defaultState
+   * @param defaultState The default state of the setting. If the setting already has a value set to it in local storage, this parameter will be ignored.
    *
    *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
    *
