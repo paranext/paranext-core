@@ -1,7 +1,7 @@
 /// <reference types="react" />
 /// <reference types="node" />
 /// <reference types="node" />
-declare module 'papi-commands' {
+declare module 'papi-shared-types' {
   /**
      * Function types for each command available on the papi. Each extension can extend this interface
      * to add commands that it registers on the papi.
@@ -13,7 +13,7 @@ declare module 'papi-commands' {
      * adding the following to its `.d.ts` file:
      *
      * ```typescript
-     * declare module 'papi-commands' {
+     * declare module 'papi-shared-types' {
          export interface CommandHandlers {
            'myExtension.myCommand1': (foo: string, bar: number) => string;
            'myExtension.myCommand2': (foo: string) => Promise<void>;
@@ -1134,8 +1134,8 @@ declare module 'shared/services/network.service' {
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import { CommandHandlers, CommandNames } from 'papi-commands';
-  module 'papi-commands' {
+  import { CommandHandlers, CommandNames } from 'papi-shared-types';
+  module 'papi-shared-types' {
     interface CommandHandlers {
       'test.addThree': typeof addThree;
       'test.squareAndConcat': typeof squareAndConcat;
@@ -2385,12 +2385,47 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   const useData: UseDataHook;
   export default useData;
 }
+declare module 'shared/services/settings.service' {
+  import { Unsubscriber } from 'shared/utils/papi-util';
+  const getSetting: (key: string) => unknown | null;
+  const setSetting: (key: string, newSetting: unknown | null) => void;
+  const subscribeToSetting: (key: string, callback: () => void) => Unsubscriber;
+  export interface SettingsService {
+    get: typeof getSetting;
+    set: typeof setSetting;
+    subscribe: typeof subscribeToSetting;
+  }
+  /**
+   * Service that allows to get and set settings in local storage
+   */
+  const settingsService: SettingsService;
+  export default settingsService;
+}
+declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
+  /** null means setting does not exist
+   *
+   * @param key
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+   * @param defaultState
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
+   *
+   * @returns
+   */
+  const useSetting: <T>(
+    key: string,
+    defaultState: T | null,
+  ) => [T | null, (newSetting: T | null) => void];
+  export default useSetting;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   import usePromise from 'renderer/hooks/papi-hooks/use-promise.hook';
   import useEvent from 'renderer/hooks/papi-hooks/use-event.hook';
   import useEventAsync from 'renderer/hooks/papi-hooks/use-event-async.hook';
   import useDataProvider from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   import useData from 'renderer/hooks/papi-hooks/use-data.hook';
+  import useSetting from 'renderer/hooks/papi-hooks/use-setting.hook';
   export interface PapiHooks {
     usePromise: typeof usePromise;
     useEvent: typeof useEvent;
@@ -2433,6 +2468,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
      *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data provider
      */
     useData: typeof useData;
+    useSetting: typeof useSetting;
   }
   /**
    * All React hooks to be exposed on the papi
@@ -2455,6 +2491,7 @@ declare module 'papi-frontend' {
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { PapiContext } from 'renderer/context/papi-context/index';
   import { PapiHooks } from 'renderer/hooks/papi-hooks/index';
+  import { SettingsService } from 'shared/services/settings.service';
   const papi: {
     /**
      * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
@@ -2509,6 +2546,10 @@ declare module 'papi-frontend' {
        */
       hooks: PapiHooks;
     };
+    /**
+     * Service that allows to get and set settings in local storage
+     */
+    settings: SettingsService;
   };
   export default papi;
   export type Papi = typeof papi;
