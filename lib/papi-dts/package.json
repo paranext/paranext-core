@@ -29,7 +29,7 @@
     "build": "tsc && ts-node edit-papi-d-ts.ts && prettier --write papi.d.ts",
     "build:clean": "rimraf papi.tsbuildinfo",
     "build:fresh": "npm run build:clean && npm run build",
-    "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --cache",
     "lint:staged": "lint-staged -q"
   },
   "lint-staged": {
