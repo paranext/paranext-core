@@ -444,7 +444,7 @@ export type SnackbarContentProps = {
    */
   className?: string;
 };
-export type SnackbarProps = {
+export type SnackbarProps = PropsWithChildren<{
   /**
    *  Optional unique identifier
    */
@@ -467,7 +467,7 @@ export type SnackbarProps = {
    * Optional, used to control the open prop
    * event: Event | SyntheticEvent<Element, Event>, reason: string
    */
-  onClose?: (event: SyntheticEvent<any> | Event, reason: CloseReason) => void;
+  onClose?: (event: Event | SyntheticEvent<Element, Event>, reason: CloseReason) => void;
   /**
    * The anchor of the `Snackbar`.
    * the horizontal alignment is ignored.
@@ -475,11 +475,10 @@ export type SnackbarProps = {
    */
   anchorOrigin?: AnchorOrigin;
   /**
-   * Replace the `SnackbarContent` component.
+   * Props applied to the [`SnackbarContent`](/material-ui/api/snackbar-content/) element.
    */
-  children?: ReactElement<any, any>;
   ContentProps?: SnackbarContentProps;
-};
+}>;
 /**
  * Snackbar that provides brief notifications
  *
