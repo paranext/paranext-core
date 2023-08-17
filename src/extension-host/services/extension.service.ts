@@ -3,7 +3,6 @@
  */
 
 import chokidar from 'chokidar';
-import * as os from 'os';
 import JSZip from 'jszip';
 import path from 'path';
 import { IExtension } from '@extension-host/extension-types/extension.interface';
@@ -91,11 +90,7 @@ const requireOriginal = Module.prototype.require;
 const systemRequire = globalThis.isPackaged ? __non_webpack_require__ : require;
 
 /** This is the location where we will store decompressed extension ZIP files */
-const userUnzippedExtensionsCacheUri: string = `${FILE_PROTOCOL}${path.join(
-  os.homedir(),
-  '.platform.bible',
-  'extensions',
-)}`;
+const userUnzippedExtensionsCacheUri: Uri = 'cache://extensions';
 
 /** Map of extension name to extension that is currently active and running */
 const activeExtensions = new Map<string, ActiveExtension>();
@@ -333,7 +328,7 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   const context: ExecutionActivationContext = {
     name: extension.name,
     executionToken,
-    registrations: new UnsubscriberAsyncList(),
+    registrations: new UnsubscriberAsyncList(extension.name),
   };
   Object.freeze(context);
 
@@ -432,17 +427,31 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
 /**
  * Deactivates an active extension.
  * @param extensionName - name of the extension.
- * @returns `true` if the extension deactivates, `false` if it at least one deactivation fails,
+ * @returns `true` if the extension deactivates, `false` if at least one deactivation fails,
  * `undefined` otherwise, e.g. not active, not registered.
  */
 async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | undefined> {
-  const isUnsubscribed = await activeExtensions
-    .get(extension.name)
-    ?.registrations?.runAllUnsubscribers();
+  const activeExtension = activeExtensions.get(extension.name);
+
+  if (!activeExtension) logger.error(`Extension '${extension.name}' has no active extension data.`);
+  else if (!activeExtension.registrations)
+    logger.error(
+      `Extension '${extension.name}' does not have a registrations object to unregister.`,
+    );
+
+  const isUnsubscribed = await activeExtension?.registrations?.runAllUnsubscribers();
+
+  if (!isUnsubscribed)
+    logger.error(`Extension '${extension.name}' was not successfully unsubscribed!`);
 
   // Delete the extension module from Node's module cache if we previously loaded it.
   const moduleKey = systemRequire.resolve(getPathFromUri(extension.dirUri));
-  if (moduleKey in systemRequire.cache) delete systemRequire.cache[moduleKey];
+  if (!(moduleKey in systemRequire.cache)) {
+    logger.warn(`Extension '${extension.name}' was not found in the module cache to be removed!`);
+    return isUnsubscribed;
+  }
+
+  delete systemRequire.cache[moduleKey];
 
   return isUnsubscribed;
 }
@@ -454,12 +463,16 @@ async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | 
  */
 function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | undefined)[]> {
   return Promise.all(
-    extensions.map((extension) =>
-      deactivateExtension(extension).catch((e) => {
+    extensions.map(async (extension) => {
+      try {
+        const isDeactivated = await deactivateExtension(extension);
+        if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
+        return isDeactivated;
+      } catch (e) {
         logger.error(`Extension '${extension.name}' threw while deactivating! ${e}`);
-        return undefined;
-      }),
-    ),
+        return false;
+      }
+    }),
   );
 }
 

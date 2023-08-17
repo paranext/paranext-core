@@ -2542,8 +2542,11 @@ declare module 'node/utils/util' {
   export const RESOURCES_PROTOCOL: string;
   export function resolveHtmlPath(htmlFileName: string): string;
   /**
-   * Gets the platform-specific user appdata folder for this application
-   * Thanks to Luke at https://stackoverflow.com/a/26227660
+   * Gets the platform-specific user Platform.Bible folder for this application
+   *
+   * When running in development: `<repo_directory>/dev-appdata`
+   *
+   * When packaged: `<user_home_directory>/.platform.bible`
    */
   export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
   /**
@@ -2834,7 +2837,9 @@ declare module 'extension-host/extension-types/unsubscriber-async-list' {
    * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
    */
   export default class UnsubscriberAsyncList {
+    private name;
     readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
+    constructor(name?: string);
     /**
      * Add unsubscribers to the list. Note that duplicates are not added twice.
      * @param unsubscribers - Objects that were returned from a registration process.

@@ -1,4 +1,5 @@
 import { Dispose } from '@shared/models/disposal.model';
+import logger from '@shared/services/logger.service';
 import { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
 
 /**
@@ -6,6 +7,8 @@ import { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
  */
 export default class UnsubscriberAsyncList {
   readonly unsubscribers = new Set<UnsubscriberAsync | Unsubscriber>();
+
+  constructor(private name = 'Anonymous') {}
 
   /**
    * Add unsubscribers to the list. Note that duplicates are not added twice.
@@ -26,6 +29,11 @@ export default class UnsubscriberAsyncList {
     const unsubs = [...this.unsubscribers].map((unsubscriber) => unsubscriber());
     const results = await Promise.all(unsubs);
     this.unsubscribers.clear();
-    return results.every((unsubscriberSucceeded) => unsubscriberSucceeded);
+    return results.every((unsubscriberSucceeded, index) => {
+      if (!unsubscriberSucceeded)
+        logger.error(`UnsubscriberAsyncList ${this.name}: Unsubscriber at index ${index} failed!`);
+
+      return unsubscriberSucceeded;
+    });
   }
 }

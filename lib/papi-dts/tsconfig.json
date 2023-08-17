@@ -25,6 +25,7 @@
     "../../src/extension-host/services/papi-backend.service.ts",
     "../../src/extension-host/extension-types/extension.interface.ts"
   ],
+  "exclude": ["node_modules"],
   "ts-node": {
     "esm": true
   }
