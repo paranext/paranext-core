@@ -55,6 +55,9 @@ const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
   'platform.quit': async () => {
     app.quit();
   },
+  'platform.openProjectDialog': async () => {
+    logger.info(`Open Project Dialog- Command Handler`);
+  },
 };
 
 async function main() {

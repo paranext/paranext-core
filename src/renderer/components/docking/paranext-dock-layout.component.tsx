@@ -73,6 +73,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
   [TAB_TYPE_TEST, loadTestTab],
   [TAB_TYPE_WEBVIEW, loadWebViewTab],
+  // [TAB_TYPE_OPEN_PROJECT_DIALOG, createOpenProjectTab],
 ]);
 
 /** tab saver functions for each Paranext tab type that wants to override the default */
