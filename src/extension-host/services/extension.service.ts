@@ -2,12 +2,13 @@
  * Handles setting up activation of and running of extensions
  */
 
+import chokidar from 'chokidar';
 import * as os from 'os';
 import JSZip from 'jszip';
 import path from 'path';
 import { IExtension } from '@extension-host/extension-types/extension.interface';
 import * as nodeFS from '@node/services/node-file-system.service';
-import { getPathFromUri, joinUriPaths } from '@node/utils/util';
+import { FILE_PROTOCOL, getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
 import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
 import Module from 'module';
@@ -23,6 +24,13 @@ import papi from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
 import UnsubscriberAsyncList from '@extension-host/extension-types/unsubscriber-async-list';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
+
+/**
+ * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
+ * https://webpack.js.org/api/module-variables/#__non_webpack_require__-webpack-specific
+ */
+// eslint-disable-next-line camelcase, no-underscore-dangle
+declare const __non_webpack_require__: typeof require;
 
 /** Extension manifest before it is finalized and frozen */
 
@@ -47,7 +55,10 @@ type ExtensionInfo = Readonly<
   ExtensionManifest & {
     /** We filtered out undefined and null in `getExtensions`, so this should now be defined */
     main: string;
-    /** Uri to this extension's directory. Not provided in actual manifest, but added while parsing the manifest */
+    /**
+     * Uri to this extension's directory. Not provided in actual manifest, but added while parsing
+     * the manifest
+     */
     dirUri: Uri;
   }
 >;
@@ -73,8 +84,14 @@ type AmbiguousExtensionModule = IExtension | { default: IExtension };
  */
 const MANIFEST_FILE_NAME = 'manifest.json';
 
+/** Save the original `require` function. */
+const requireOriginal = Module.prototype.require;
+
+// eslint-disable-next-line camelcase
+const systemRequire = globalThis.isPackaged ? __non_webpack_require__ : require;
+
 /** This is the location where we will store decompressed extension ZIP files */
-const userUnzippedExtensionsCacheUri: string = `file://${path.join(
+const userUnzippedExtensionsCacheUri: string = `${FILE_PROTOCOL}${path.join(
   os.homedir(),
   '.platform.bible',
   'extensions',
@@ -93,10 +110,10 @@ let initializePromise: Promise<void> | undefined;
 let availableExtensions: ExtensionInfo[];
 
 /** Parse string extension manifest into an object and perform any transformations needed */
-function parseManifest(extensionManifestJson: string) {
+function parseManifest(extensionManifestJson: string): ExtensionManifest {
   const extensionManifest = JSON.parse(extensionManifestJson) as ExtensionManifest;
   // Replace ts with js so people can list their source code ts name but run the transpiled js
-  if (extensionManifest.main && extensionManifest.main.endsWith('.ts'))
+  if (extensionManifest.main && extensionManifest.main.toLowerCase().endsWith('.ts'))
     extensionManifest.main = `${extensionManifest.main.slice(0, -3)}.js`;
 
   return extensionManifest;
@@ -110,7 +127,7 @@ const extensionRootDirectoryContents = (async () => {
     [
       `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
       ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
-        (extensionDirPath) => `file://${path.resolve(extensionDirPath)}`,
+        (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
       ),
     ].map((extensionUri) => nodeFS.readDir(extensionUri)),
   );
@@ -125,7 +142,7 @@ const extensionZipUris: Promise<Uri[]> = (async () => {
     .concat(
       getCommandLineArgumentsGroup(ARG_EXTENSIONS)
         .filter((extensionUri) => extensionUri.toLowerCase().endsWith('.zip'))
-        .map((extensionPath) => `file://${path.resolve(extensionPath)}`),
+        .map((extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`),
     );
 })();
 
@@ -143,7 +160,7 @@ const extensionUrisToLoad: Promise<Uri[]> = (async () => {
         const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
           ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
           : extensionDirPath;
-        return `file://${path.resolve(extensionFolder)}`;
+        return `${FILE_PROTOCOL}${path.resolve(extensionFolder)}`;
       }),
     )
     .map(async (extensionFolder) => {
@@ -262,24 +279,41 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
 }
 
 /**
+ * Watch for changes to any extension and reload if they have changed.
+ * @param extensions - array of available extensions
+ */
+function watchForExtensionChanges(extensions: ExtensionInfo[]): void {
+  /** Extension paths to watch for changes. */
+  const extensionPaths = extensions.map((extension) => getPathFromUri(extension.dirUri));
+
+  chokidar
+    .watch(extensionPaths, { ignoreInitial: true, awaitWriteFinish: true })
+    .on('all', async (eventName: 'add' | 'addDir' | 'change' | 'unlink' | 'unlinkDir') => {
+      // Ignore non-file changes.
+      if (eventName !== 'add' && eventName !== 'change' && eventName !== 'unlink') return;
+
+      logger.info('Deactivate all extensions');
+      await deactivateExtensions(extensions);
+      logger.info('Reactivate all extensions');
+      await activateExtensions(extensions);
+    });
+}
+
+/**
  * Loads an extension and runs its activate function.
  *
  * WARNING: This does not shim functionality out of extensions! Do not run this alone. Only run
  *   wrapped in activateExtensions().
- * @param extension extension info for the extension to activate
- * @param extensionFilePath path to extension main file to import
- * @returns unsubscriber that deactivates the extension
+ * @param extension - extension info for the extension to activate.
+ * @returns unsubscriber that deactivates the extension.
  */
-async function activateExtension(
-  extension: ExtensionInfo,
-  extensionFilePath: string,
-): Promise<ActiveExtension> {
+async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtension> {
   // Import the extension file. Tell webpack to ignore it because extension files are not in the
   // bundle and should not be looked up in the bundle
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
-  const extensionModuleAmbiguous = (await import(
-    /* webpackIgnore: true */ extensionFilePath
-  )) as AmbiguousExtensionModule;
+  const extensionModuleAmbiguous = systemRequire(
+    /* webpackIgnore: true */ getPathFromUri(extension.dirUri),
+  ) as AmbiguousExtensionModule;
   // Some modules import with their exports directly on the module object, while others put their
   // exports in a `default` member on the module. Let's use the module object itself if `activate`
   // is on it, and let's go into `default` otherwise.
@@ -308,10 +342,8 @@ async function activateExtension(
 
   // Add registrations that the extension didn't explicitly make itself
   if (extensionModule.deactivate) context.registrations.add(extensionModule.deactivate);
-  context.registrations.add(async () =>
-    executionTokenService.unregisterExtension(tokenName, tokenHash),
-  );
-  context.registrations.add(async () => activeExtensions.delete(context.name));
+  context.registrations.add(() => executionTokenService.unregisterExtension(tokenName, tokenHash));
+  context.registrations.add(() => activeExtensions.delete(extension.name));
 
   // Store information about our newly activated extension
   const activeExtension: ActiveExtension = {
@@ -328,27 +360,23 @@ async function activateExtension(
  * @returns unsubscriber that deactivates the extension
  */
 async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveExtension[]> {
-  /** The path to each extension along with whether that extension has already been imported */
-  const extensionsWithFiles = extensions.map((extension) => ({
+  /** Include whether that extension has already been imported */
+  const extensionsWithCheck = extensions.map((extension) => ({
     extension,
-    // When packaged, we need to prefix absolute paths with file:// for some reason
-    filePath: `${globalThis.isPackaged ? 'file://' : ''}${getPathFromUri(
-      joinUriPaths(extension.dirUri, extension.main),
-    )}`,
     hasBeenImported: false,
   }));
 
-  // Shim out require so extensions can't use it
-  const requireOriginal = Module.prototype.require;
+  // Shim out require so extensions can use it only as prescribed.
   Module.prototype.require = ((moduleName: string) => {
     // Allow the extension to import papi and some other things
     if (moduleName === 'papi-backend') return papi;
     if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
 
     // Figure out if we are doing the import for the extension file in activateExtension
-    const extensionFile = extensionsWithFiles.find(
-      (extensionFileToCheck) =>
-        !extensionFileToCheck.hasBeenImported && extensionFileToCheck.filePath === moduleName,
+    const extensionFile = extensionsWithCheck.find(
+      (extensionToCheck) =>
+        !extensionToCheck.hasBeenImported &&
+        getPathFromUri(extensionToCheck.extension.dirUri) === moduleName,
     );
 
     if (extensionFile) {
@@ -387,10 +415,10 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   // Import the extensions and run their activate() functions
   const extensionsActive = (
     await Promise.all(
-      extensionsWithFiles.map((extensionWithFile) =>
-        activateExtension(extensionWithFile.extension, extensionWithFile.filePath).catch((e) => {
+      extensionsWithCheck.map((extensionWithCheck) =>
+        activateExtension(extensionWithCheck.extension).catch((e) => {
           logger.error(
-            `Extension '${extensionWithFile.extension.name}' threw while activating! ${e}`,
+            `Extension '${extensionWithCheck.extension.name}' threw while activating! ${e}`,
           );
           return null;
         }),
@@ -399,6 +427,58 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   ).filter((activeExtension) => activeExtension !== null) as ActiveExtension[];
 
   return extensionsActive;
+}
+
+/**
+ * Deactivates an active extension.
+ * @param extensionName - name of the extension.
+ * @returns `true` if the extension deactivates, `false` if at least one deactivation fails,
+ * `undefined` otherwise, e.g. not active, not registered.
+ */
+async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | undefined> {
+  const activeExtension = activeExtensions.get(extension.name);
+
+  if (!activeExtension) logger.error(`Extension '${extension.name}' has no active extension data.`);
+  else if (!activeExtension.registrations)
+    logger.error(
+      `Extension '${extension.name}' does not have a registrations object to unregister.`,
+    );
+
+  const isUnsubscribed = await activeExtension?.registrations?.runAllUnsubscribers();
+
+  if (!isUnsubscribed)
+    logger.error(`Extension '${extension.name}' was not successfully unsubscribed!`);
+
+  // Delete the extension module from Node's module cache if we previously loaded it.
+  const moduleKey = systemRequire.resolve(getPathFromUri(extension.dirUri));
+  if (!(moduleKey in systemRequire.cache)) {
+    logger.warn(`Extension '${extension.name}' was not found in the module cache to be removed!`);
+    return isUnsubscribed;
+  }
+
+  delete systemRequire.cache[moduleKey];
+
+  return isUnsubscribed;
+}
+
+/**
+ * Deactivate all given extensions.
+ * @param extensions - extension info for the extensions we want to deactivate.
+ * @returns an array of the deactivation results - `true`, `false`, or `undefined`.
+ */
+function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | undefined)[]> {
+  return Promise.all(
+    extensions.map(async (extension) => {
+      try {
+        const isDeactivated = await deactivateExtension(extension);
+        if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
+        return isDeactivated;
+      } catch (e) {
+        logger.error(`Extension '${extension.name}' threw while deactivating! ${e}`);
+        return false;
+      }
+    }),
+  );
 }
 
 /**
@@ -428,6 +508,8 @@ export const initialize = () => {
 
     // And finally activate them
     await activateExtensions(availableExtensions);
+
+    watchForExtensionChanges(availableExtensions);
 
     isInitialized = true;
   })();

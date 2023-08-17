@@ -5,8 +5,6 @@
 .papi-snackbar.primary {
   background: #1ea7fd;
   color: white;
-  height: auto;
-  line-height: auto;
 }
 
 .papi-snackbar.external {

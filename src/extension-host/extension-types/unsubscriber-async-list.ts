@@ -1,4 +1,5 @@
 import { Dispose } from '@shared/models/disposal.model';
+import logger from '@shared/services/logger.service';
 import { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
 
 /**
@@ -9,7 +10,7 @@ export default class UnsubscriberAsyncList {
 
   /**
    * Add unsubscribers to the list. Note that duplicates are not added twice.
-   * @param unsubscribers Objects that were returned from a registration process
+   * @param unsubscribers - Objects that were returned from a registration process.
    */
   add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]) {
     unsubscribers.forEach((unsubscriber) => {
@@ -19,13 +20,17 @@ export default class UnsubscriberAsyncList {
   }
 
   /**
-   * Run all unsubscribers added to this list and then clear the list
-   * @returns `true` if all unsubscribers succeeded, `false` otherwise
+   * Run all unsubscribers added to this list and then clear the list.
+   * @returns `true` if all unsubscribers succeeded, `false` otherwise.
    */
   async runAllUnsubscribers(): Promise<boolean> {
-    const unsubs = [...this.unsubscribers].map((unsubscriber) => Promise.resolve(unsubscriber()));
+    const unsubs = [...this.unsubscribers].map((unsubscriber) => unsubscriber());
     const results = await Promise.all(unsubs);
     this.unsubscribers.clear();
-    return results.every((unsubscriberSucceeded) => unsubscriberSucceeded);
+    return results.every((unsubscriberSucceeded, index) => {
+      if (!unsubscriberSucceeded) logger.debug(`Unsubscriber at index ${index} failed!`);
+
+      return unsubscriberSucceeded;
+    });
   }
 }

@@ -6,6 +6,14 @@ import path from 'path';
 import { Uri } from '@shared/data/file-system.model';
 import memoizeOne from 'memoize-one';
 
+const APP_SCHEME = 'app';
+const RESOURCES_SCHEME = 'resources';
+const FILE_SCHEME = 'file';
+const PROTOCOL_PART = '://';
+
+export const FILE_PROTOCOL = `${FILE_SCHEME}${PROTOCOL_PART}`;
+export const RESOURCES_PROTOCOL = `${RESOURCES_SCHEME}${PROTOCOL_PART}`;
+
 export function resolveHtmlPath(htmlFileName: string) {
   if (process.env.NODE_ENV === 'development') {
     const port = process.env.PORT || 1212;
@@ -13,7 +21,7 @@ export function resolveHtmlPath(htmlFileName: string) {
     url.pathname = htmlFileName;
     return url.href;
   }
-  return `file://${path.resolve(__dirname, '../renderer/', htmlFileName)}`;
+  return `${FILE_PROTOCOL}${path.resolve(__dirname, '../renderer/', htmlFileName)}`;
 }
 
 /**
@@ -35,10 +43,6 @@ export const getAppDir = memoizeOne((): string => {
     : path.join(__dirname, '../../../dev-appdata');
 });
 
-const APP_SCHEME = 'app';
-const RESOURCES_SCHEME = 'resources';
-const FILE_SCHEME = 'file';
-
 /**
  * Get a mapping from scheme to the absolute path to that scheme.
  * TODO: this is currently lazy-loaded because globalThis doesn't get populated until after this file is imported.
@@ -56,9 +60,9 @@ const getSchemePaths = memoizeOne((): { [scheme: string]: string } => ({
  */
 function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
   // Add app scheme to the uri if it doesn't have one
-  const fullUri = uri.includes('://') ? uri : `${APP_SCHEME}://${uri}`;
+  const fullUri = uri.includes(PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
 
-  const [scheme, uriPath] = fullUri.split('://');
+  const [scheme, uriPath] = fullUri.split(PROTOCOL_PART);
   return {
     scheme,
     uriPath,
@@ -83,5 +87,5 @@ export function getPathFromUri(uri: Uri): string {
  */
 export function joinUriPaths(uri: Uri, ...paths: string[]): Uri {
   const { scheme, uriPath } = getPathInfoFromUri(uri);
-  return `${scheme}://${path.join(uriPath, ...paths)}`;
+  return `${scheme}${PROTOCOL_PART}${path.join(uriPath, ...paths)}`;
 }
