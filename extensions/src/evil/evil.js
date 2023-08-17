@@ -165,6 +165,9 @@ async function activate(context) {
 
 function deactivate() {
   logger.info('Evil is deactivated.');
+  logger.error(
+    'Evil is purposely failing to deactivate as a test! You should see one more error soon after this. Only these two errors are expected.',
+  );
 }
 
 exports.activate = activate;

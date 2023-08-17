@@ -67,7 +67,7 @@ function buildUserDataPath(token: ExecutionToken, key: string): string {
   // "the ability to use the encoding result as filename or URL address"
   const encodedKey: string = Buffer.from(key, 'utf-8').toString('base64url');
 
-  return joinUriPaths('app://', subDir, encodedKey);
+  return joinUriPaths('app://extensions', subDir, 'user-data', encodedKey);
 }
 
 // #endregion

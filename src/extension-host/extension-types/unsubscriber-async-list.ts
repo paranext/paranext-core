@@ -8,6 +8,8 @@ import { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
 export default class UnsubscriberAsyncList {
   readonly unsubscribers = new Set<UnsubscriberAsync | Unsubscriber>();
 
+  constructor(private name = 'Anonymous') {}
+
   /**
    * Add unsubscribers to the list. Note that duplicates are not added twice.
    * @param unsubscribers - Objects that were returned from a registration process.
@@ -28,7 +30,8 @@ export default class UnsubscriberAsyncList {
     const results = await Promise.all(unsubs);
     this.unsubscribers.clear();
     return results.every((unsubscriberSucceeded, index) => {
-      if (!unsubscriberSucceeded) logger.debug(`Unsubscriber at index ${index} failed!`);
+      if (!unsubscriberSucceeded)
+        logger.error(`UnsubscriberAsyncList ${this.name}: Unsubscriber at index ${index} failed!`);
 
       return unsubscriberSucceeded;
     });
