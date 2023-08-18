@@ -2,6 +2,7 @@ import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { List, ListItem, ListItemButton, ListItemText } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import logger from '@shared/services/logger.service';
+import './open-project-tab.component.css';
 
 export const TAB_TYPE_OPEN_PROJECT_DIALOG = 'open-project-dialog';
 

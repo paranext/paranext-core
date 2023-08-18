@@ -4,7 +4,7 @@ import { TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
 import { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_QUICK_VERSE_HERESY } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
-// import { TAB_TYPE_OPEN_PROJECT_DIALOG } from '@renderer/components/docking/open-project-tab.component';
+import { TAB_TYPE_OPEN_PROJECT_DIALOG } from '@renderer/components/docking/open-project-tab.component';
 
 export const FIRST_TAB_ID = 'About';
 
@@ -42,21 +42,16 @@ const testLayout: LayoutBase = {
         w: 320,
         h: 190,
       },
+      {
+        tabs: [
+          { id: 'Test Open Project Dialog', tabType: TAB_TYPE_OPEN_PROJECT_DIALOG },
+        ] as SavedTabInfo[],
+        x: 250,
+        y: 170,
+        w: 320,
+        h: 190,
+      },
     ],
   },
-  // floatbox: {
-  //   mode: 'float',
-  //   children: [
-  //     {
-  //       tabs: [
-  //         { id: 'Test Open Project Dialog', tabType: TAB_TYPE_OPEN_PROJECT_DIALOG },
-  //       ] as SavedTabInfo[],
-  //       x: 250,
-  //       y: 170,
-  //       w: 320,
-  //       h: 190,
-  //     },
-  //   ],
-  // },
 };
 export default testLayout;
