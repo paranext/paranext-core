@@ -3,10 +3,15 @@
  */
 import { URL } from 'url';
 import path from 'path';
+import os from 'os';
 import { Uri } from '@shared/data/file-system.model';
 import memoizeOne from 'memoize-one';
 
 const APP_SCHEME = 'app';
+const CACHE_SCHEME = 'cache';
+const CACHE_DIR_NAME = CACHE_SCHEME;
+const DATA_SCHEME = 'data';
+const DATA_DIR_NAME = DATA_SCHEME;
 const RESOURCES_SCHEME = 'resources';
 const FILE_SCHEME = 'file';
 const PROTOCOL_PART = '://';
@@ -25,21 +30,15 @@ export function resolveHtmlPath(htmlFileName: string) {
 }
 
 /**
- * Gets the platform-specific user appdata folder for this application
- * Thanks to Luke at https://stackoverflow.com/a/26227660
+ * Gets the platform-specific user Platform.Bible folder for this application
+ *
+ * When running in development: `<repo_directory>/dev-appdata`
+ *
+ * When packaged: `<user_home_directory>/.platform.bible`
  */
 export const getAppDir = memoizeOne((): string => {
   return globalThis.isPackaged
-    ? path.join(
-        process.env.APPDATA ||
-          (process.platform === 'darwin'
-            ? // Since APPDATA is not defined, we are on a unix-based OS. Therefore HOME will be available
-              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-              path.join(process.env.HOME!, '/Library/Preferences')
-            : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-              path.join(process.env.HOME!, '/.local/share')),
-        '/paranext-core',
-      )
+    ? path.join(os.homedir(), '/.platform.bible')
     : path.join(__dirname, '../../../dev-appdata');
 });
 
@@ -48,11 +47,16 @@ export const getAppDir = memoizeOne((): string => {
  * TODO: this is currently lazy-loaded because globalThis doesn't get populated until after this file is imported.
  * Fix this to be a normal object after fixing globalThis import dependencies.
  */
-const getSchemePaths = memoizeOne((): { [scheme: string]: string } => ({
-  [APP_SCHEME]: getAppDir(),
-  [RESOURCES_SCHEME]: globalThis.resourcesPath,
-  [FILE_SCHEME]: '',
-}));
+const getSchemePaths = memoizeOne((): { [scheme: string]: string } => {
+  const appDir = getAppDir();
+  return {
+    [APP_SCHEME]: appDir,
+    [CACHE_SCHEME]: path.join(appDir, CACHE_DIR_NAME),
+    [DATA_SCHEME]: path.join(appDir, DATA_DIR_NAME),
+    [RESOURCES_SCHEME]: globalThis.resourcesPath,
+    [FILE_SCHEME]: '',
+  };
+});
 
 /**
  * Parse a URI from a string into its original parts.
