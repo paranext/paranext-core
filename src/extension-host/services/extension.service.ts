@@ -21,7 +21,7 @@ import {
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import papi from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
-import UnsubscriberAsyncList from '@extension-host/extension-types/unsubscriber-async-list';
+import UnsubscriberAsyncList from '@shared/utils/unsubscriber-async-list';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 
 /**

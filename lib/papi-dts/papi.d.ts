@@ -289,86 +289,6 @@ declare module 'shared/models/papi-event.model' {
    */
   export type PapiEventAsync<T> = (callback: PapiEventHandler<T>) => Promise<UnsubscriberAsync>;
 }
-declare module 'shared/models/disposal.model' {
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Require a `dispose` function */
-  export interface Dispose {
-    /** Release resources and notify dependent services when tearing down an object */
-    dispose: UnsubscriberAsync;
-  }
-  /** Require an `onDidDispose` event */
-  export interface OnDidDispose {
-    /** Event that emits when `dispose` is called on an object */
-    onDidDispose: PapiEvent<void>;
-  }
-  /** Indicates than an object cannot have an `onDidDispose` event.
-   *  Also allows an object to include a `dispose` function. */
-  export interface CannotHaveOnDidDispose {
-    /** Release resources and notify dependent services when tearing down an object */
-    dispose?: UnsubscriberAsync;
-    /** Event that emits when `dispose` is called on an object */
-    onDidDispose?: undefined;
-  }
-  /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
-  export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
-}
-declare module 'shared/models/papi-event-emitter.model' {
-  /**
-   * Interfaces, classes, and functions related to events and event emitters
-   */
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  import { Dispose } from 'shared/models/disposal.model';
-  /**
-   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
-   * Use eventEmitter.event(callback) to subscribe to the event.
-   * Use eventEmitter.emit(event) to run the subscriptions.
-   * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
-   * but anyone can subscribe to the event.
-   */
-  export default class PapiEventEmitter<T> implements Dispose {
-    /**
-     * Subscribes a function to run when this event is emitted.
-     * @alias event
-     * @param callback function to run with the event when it is emitted
-     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-     */
-    subscribe: PapiEvent<T>;
-    /** All callback functions that will run when this event is emitted. Lazy loaded */
-    private subscriptions?;
-    /** Event for listeners to subscribe to. Lazy loaded */
-    private lazyEvent?;
-    /** Whether this emitter has been disposed */
-    private isDisposed;
-    /**
-     * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
-     * Use like `const unsubscriber = event(callback)`
-     * @param callback function to run with the event when it is emitted
-     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-     */
-    get event(): PapiEvent<T>;
-    /** Disposes of this event, preparing it to release from memory */
-    dispose: () => Promise<boolean>;
-    /**
-     * Runs the subscriptions for the event
-     * @param event event data to provide to subscribed callbacks
-     */
-    emit: (event: T) => void;
-    /**
-     * Function that runs the subscriptions for the event.
-     * Added here so children can override emit and still call the base functionality.
-     * See NetworkEventEmitter.emit for example
-     */
-    protected emitFn(event: T): void;
-    /** Check to make sure this emitter is not disposed. Throw if it is */
-    protected assertNotDisposed(): void;
-    /**
-     * Disposes of this event, preparing it to release from memory.
-     * Added here so children can override emit and still call the base functionality.
-     */
-    protected disposeFn(): Promise<boolean>;
-  }
-}
 declare module 'shared/data/internal-connection.model' {
   /**
    * Types that are internal to the communication we do through WebSocket.
@@ -639,6 +559,86 @@ declare module 'shared/services/logger.service' {
     default: log.MainLogger;
   };
   export default logger;
+}
+declare module 'shared/models/disposal.model' {
+  import { PapiEvent } from 'shared/models/papi-event.model';
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  /** Require a `dispose` function */
+  export interface Dispose {
+    /** Release resources and notify dependent services when tearing down an object */
+    dispose: UnsubscriberAsync;
+  }
+  /** Require an `onDidDispose` event */
+  export interface OnDidDispose {
+    /** Event that emits when `dispose` is called on an object */
+    onDidDispose: PapiEvent<void>;
+  }
+  /** Indicates than an object cannot have an `onDidDispose` event.
+   *  Also allows an object to include a `dispose` function. */
+  export interface CannotHaveOnDidDispose {
+    /** Release resources and notify dependent services when tearing down an object */
+    dispose?: UnsubscriberAsync;
+    /** Event that emits when `dispose` is called on an object */
+    onDidDispose?: undefined;
+  }
+  /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
+  export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
+}
+declare module 'shared/models/papi-event-emitter.model' {
+  /**
+   * Interfaces, classes, and functions related to events and event emitters
+   */
+  import { PapiEvent } from 'shared/models/papi-event.model';
+  import { Dispose } from 'shared/models/disposal.model';
+  /**
+   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
+   * Use eventEmitter.event(callback) to subscribe to the event.
+   * Use eventEmitter.emit(event) to run the subscriptions.
+   * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
+   * but anyone can subscribe to the event.
+   */
+  export default class PapiEventEmitter<T> implements Dispose {
+    /**
+     * Subscribes a function to run when this event is emitted.
+     * @alias event
+     * @param callback function to run with the event when it is emitted
+     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+     */
+    subscribe: PapiEvent<T>;
+    /** All callback functions that will run when this event is emitted. Lazy loaded */
+    private subscriptions?;
+    /** Event for listeners to subscribe to. Lazy loaded */
+    private lazyEvent?;
+    /** Whether this emitter has been disposed */
+    private isDisposed;
+    /**
+     * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
+     * Use like `const unsubscriber = event(callback)`
+     * @param callback function to run with the event when it is emitted
+     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+     */
+    get event(): PapiEvent<T>;
+    /** Disposes of this event, preparing it to release from memory */
+    dispose: () => Promise<boolean>;
+    /**
+     * Runs the subscriptions for the event
+     * @param event event data to provide to subscribed callbacks
+     */
+    emit: (event: T) => void;
+    /**
+     * Function that runs the subscriptions for the event.
+     * Added here so children can override emit and still call the base functionality.
+     * See NetworkEventEmitter.emit for example
+     */
+    protected emitFn(event: T): void;
+    /** Check to make sure this emitter is not disposed. Throw if it is */
+    protected assertNotDisposed(): void;
+    /**
+     * Disposes of this event, preparing it to release from memory.
+     * Added here so children can override emit and still call the base functionality.
+     */
+    protected disposeFn(): Promise<boolean>;
+  }
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -1132,229 +1132,6 @@ declare module 'shared/services/network.service' {
    */
   export const papiNetworkService: PapiNetworkService;
 }
-declare module 'shared/services/command.service' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import { CommandHandlers, CommandNames } from 'papi-commands';
-  module 'papi-commands' {
-    interface CommandHandlers {
-      'test.addThree': typeof addThree;
-      'test.squareAndConcat': typeof squareAndConcat;
-    }
-  }
-  function addThree(a: number, b: number, c: number): Promise<number>;
-  function squareAndConcat(a: number, b: string): Promise<string>;
-  /** Sets up the CommandService. Only runs once and always returns the same promise after that */
-  export const initialize: () => Promise<void>;
-  /**
-   * Send a command to the backend.
-   */
-  export const sendCommand: <CommandName extends keyof CommandHandlers>(
-    commandName: CommandName,
-    ...args: Parameters<CommandHandlers[CommandName]>
-  ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
-  /**
-   * Creates a function that is a command function with a baked commandName.
-   * This is also nice because you get TypeScript type support using this function.
-   * @param commandName command name for command function
-   * @returns function to call with arguments of command that sends the command and resolves with the result of the command
-   */
-  export const createSendCommandFunction: <CommandName extends keyof CommandHandlers>(
-    commandName: CommandName,
-  ) => (
-    ...args: Parameters<CommandHandlers[CommandName]>
-  ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
-  /**
-   * Register a command on the papi to be handled here
-   * @param commandName command name to register for handling here
-   *   - Note: Command names must consist of two string separated by at least one period. We recommend
-   *   one period and lower camel case in case we expand the api in the future to allow dot notation.
-   * @param handler function to run when the command is invoked
-   * @returns true if successfully registered, throws with error message if not
-   */
-  export const registerCommand: <CommandName extends CommandNames>(
-    commandName: CommandName,
-    handler: CommandHandlers[CommandName],
-  ) => Promise<UnsubscriberAsync>;
-  /**
-   * The command service allows you to exchange messages with other components in the platform.
-   * You can register a command that other services and extensions can send you.
-   * You can send commands to other services and extensions that have registered commands.
-   */
-  export type moduleSummaryComments = {};
-}
-declare module 'shared/data/web-view.model' {
-  import { ReactNode } from 'react';
-  /**
-   * Saved information used to recreate a tab.
-   *
-   * {@link TabLoader} loads this into {@link TabInfo}
-   * {@link TabSaver} saves {@link TabInfo} into this
-   */
-  export type SavedTabInfo = {
-    /**
-     * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this id will
-     * match the WebViewDefinition.id
-     */
-    id: string;
-    /**
-     * Type of tab - indicates what kind of built-in tab this info represents
-     */
-    tabType: string;
-    /**
-     * Data needed to load the tab
-     */
-    data?: unknown;
-  };
-  /**
-   * Information that Paranext uses to create a tab in the dock layout.
-   *
-   * {@link TabLoader} loads {@link SavedTabInfo} into this
-   * {@link TabSaver} saves this into {@link SavedTabInfo}
-   */
-  export type TabInfo = SavedTabInfo & {
-    /**
-     * Text to show on the title bar of the tab
-     */
-    tabTitle: string;
-    /**
-     * Content to show inside the tab.
-     */
-    content: ReactNode;
-    /**
-     * (optional) Minimum width that the tab can become
-     */
-    minWidth?: number;
-    /**
-     * (optional) Minimum height that the tab can become
-     */
-    minHeight?: number;
-  };
-  /**
-   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
-   * must provide a {@link TabLoader}.
-   *
-   * For now all tab creators must do their own data type verification
-   */
-  export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
-  /**
-   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
-   * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
-   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
-   */
-  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
-  /** The type of code that defines a webview's content */
-  export enum WebViewContentType {
-    /**
-     * This webview is a React webview. It must specify its component by setting it to
-     * `globalThis.webViewComponent`
-     */
-    React = 'react',
-    /** This webview is a raw HTML/JS/CSS webview. */
-    HTML = 'html',
-  }
-  /** What type a WebView is. Each WebView definition must have a unique type. */
-  export type WebViewType = string;
-  /** Id for a specific WebView. Each WebView has a unique id */
-  export type WebViewId = string;
-  /** Base WebView properties that all WebViews share */
-  type WebViewDefinitionBase = {
-    /** What type of WebView this is. Unique to all other WebView definitions */
-    webViewType: WebViewType;
-    /** Unique id among webviews specific to this webview instance. */
-    id: WebViewId;
-    /** The code for the WebView that papi puts into an iframe */
-    content: string;
-    /** Name of the tab for the WebView */
-    title?: string;
-  };
-  /** WebView representation using React */
-  export type WebViewDefinitionReact = WebViewDefinitionBase & {
-    /** Indicates this WebView uses React */
-    contentType?: WebViewContentType.React;
-    /** String of styles to be loaded into the iframe for this WebView */
-    styles?: string;
-  };
-  /** WebView representation using HTML */
-  export type WebViewDefinitionHtml = WebViewDefinitionBase & {
-    /** Indicates this WebView uses HTML */
-    contentType: WebViewContentType.HTML;
-  };
-  /** Properties defining a type of WebView created by extensions to show web content */
-  export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
-  /**
-   * Saved WebView information that does not contain the actual content of the WebView. Saved into
-   * layouts. Could have as little as the type and id. WebView providers load these into actual
-   * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
-   */
-  export type SavedWebViewDefinition = (
-    | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
-    | Partial<Omit<WebViewDefinitionHtml, 'content'>>
-  ) &
-    Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
-  /** Props that are passed to the web view component */
-  export type WebViewProps = WebViewDefinition;
-  /** Information about a tab in a panel */
-  interface TabLayout {
-    type: 'tab';
-  }
-  /** Information about a floating window */
-  export interface FloatLayout {
-    type: 'float';
-    floatSize?: {
-      width: number;
-      height: number;
-    };
-  }
-  export type PanelDirection =
-    | 'left'
-    | 'right'
-    | 'bottom'
-    | 'top'
-    | 'before-tab'
-    | 'after-tab'
-    | 'maximize'
-    | 'move'
-    | 'active'
-    | 'update';
-  /** Information about a panel */
-  interface PanelLayout {
-    type: 'panel';
-    direction?: PanelDirection;
-    /** If undefined, it will add in the `direction` relative to the previously added tab. */
-    targetTabId?: string;
-  }
-  /** Information about how a Paranext tab fits into the dock layout */
-  export type Layout = TabLayout | FloatLayout | PanelLayout;
-  /** Event emitted when webViews are created */
-  export type AddWebViewEvent = {
-    webView: SavedWebViewDefinition;
-    layout: Layout;
-  };
-  /** Options that affect what `webViews.getWebView` does */
-  export type GetWebViewOptions = {
-    /**
-     * If provided and if a web view with this id exists, requests from the web view provider an
-     * existing WebView with this id if one exists. The web view provider can deny the request if it
-     * chooses to do so.
-     *
-     * Alternatively, set this to '?' to attempt to find any existing web view with the specified
-     * webViewType.
-     *
-     * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
-     * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
-     * `existingId` at all is the only way to specify we are not looking for an existing webView
-     */
-    existingId?: string | '?' | undefined;
-    /**
-     * Whether to create a webview with a new id and a webview with id `existingId` was not found.
-     * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
-     * ignored.
-     *
-     * Defaults to true
-     */
-    createNewIfNotFound?: boolean;
-  };
-}
 declare module 'shared/utils/async-variable' {
   /**
    * This class provides a convenient way for one task to wait on a variable that another task sets.
@@ -1541,230 +1318,6 @@ declare module 'shared/models/network-object.model' {
     id: string,
     networkObjectPromise: Promise<NetworkObject<T>>,
   ) => Partial<NetworkableObject>;
-}
-declare module 'shared/models/web-view-provider.model' {
-  import {
-    GetWebViewOptions,
-    WebViewDefinition,
-    SavedWebViewDefinition,
-  } from 'shared/data/web-view.model';
-  import {
-    DisposableNetworkObject,
-    NetworkObject,
-    NetworkableObject,
-  } from 'shared/models/network-object.model';
-  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
-  export interface IWebViewProvider extends NetworkableObject {
-    /**
-     * @param savedWebView filled out if an existing webview is being called for (matched by id).
-     * Just id if this is a new request or if the web view with the existing id was not found
-     * @param getWebViewOptions
-     */
-    getWebView(
-      savedWebView: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
-    ): Promise<WebViewDefinition | undefined>;
-  }
-  export interface WebViewProvider
-    extends NetworkObject<NetworkableObject>,
-      CanHaveOnDidDispose<IWebViewProvider> {}
-  export interface DisposableWebViewProvider
-    extends DisposableNetworkObject<NetworkableObject>,
-      Omit<WebViewProvider, 'dispose'> {}
-}
-declare module 'shared/services/web-view-provider.service' {
-  /**
-   * Handles registering web view providers and serving web views around the papi.
-   * Exposed on the papi.
-   */
-  import {
-    DisposableWebViewProvider,
-    IWebViewProvider,
-    WebViewProvider,
-  } from 'shared/models/web-view-provider.model';
-  /** Sets up the service. Only runs once and always returns the same promise after that */
-  const initialize: () => Promise<void>;
-  /**
-   * Indicate if we are aware of an existing web view provider with the given type. If a web view
-   * provider with the given type is somewhere else on the network, this function won't tell you about
-   * it unless something else in the existing process is subscribed to it.
-   * @param webViewType type of webView to check for
-   */
-  function hasKnown(webViewType: string): boolean;
-  /**
-   * Register a web view provider to serve webViews for a specified type of webViews
-   *
-   * @param webViewType type of web view to provide
-   * @param webViewProvider object to register as a webView provider including control over disposing
-   * of it.
-   *
-   * WARNING: setting a webView provider mutates the provided object.
-   * @returns `webViewProvider` modified to be a network object
-   */
-  function register(
-    webViewType: string,
-    webViewProvider: IWebViewProvider,
-  ): Promise<DisposableWebViewProvider>;
-  /**
-   * Get a web view provider that has previously been set up
-   * @param webViewType type of webview provider to get
-   * @returns web view provider with the given name if one exists, undefined otherwise
-   */
-  function get(webViewType: string): Promise<WebViewProvider | undefined>;
-  export interface WebViewProviderService {
-    initialize: typeof initialize;
-    hasKnown: typeof hasKnown;
-    register: typeof register;
-    get: typeof get;
-  }
-  export interface PapiWebViewProviderService {
-    register: typeof register;
-  }
-  const webViewProviderService: WebViewProviderService;
-  /**
-   * Interface for registering webView providers
-   */
-  export const papiWebViewProviderService: PapiWebViewProviderService;
-  export default webViewProviderService;
-}
-declare module 'shared/log-error.model' {
-  /**
-   * Error that force logs the error message before throwing. Useful for debugging in some situations.
-   */
-  export default class LogError extends Error {
-    constructor(message?: string);
-  }
-}
-declare module 'shared/services/web-view.service' {
-  import { Unsubscriber } from 'shared/utils/papi-util';
-  import { MutableRefObject } from 'react';
-  import {
-    AddWebViewEvent,
-    Layout,
-    SavedTabInfo,
-    TabInfo,
-    WebViewProps,
-    WebViewType,
-    WebViewId,
-    GetWebViewOptions,
-    WebViewDefinition,
-    SavedWebViewDefinition,
-  } from 'shared/data/web-view.model';
-  import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
-  /** rc-dock's onLayoutChange prop made asynchronous - resolves */
-  export type OnLayoutChangeRCDock = (
-    newLayout: LayoutBase,
-    currentTabId?: string,
-    direction?: DropDirection,
-  ) => Promise<void>;
-  /** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
-  type PapiDockLayout = {
-    /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
-    dockLayout: DockLayout;
-    /**
-     * A ref to a function that runs when the layout changes. We set this ref to our
-     * {@link onLayoutChange} function
-     */
-    onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
-    /** Function to call to add or update a webview in the layout */
-    addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
-    /**
-     * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
-     *
-     * TODO: This should be removed and the `testLayout` imported directly in this file once this
-     * service is refactored to split the code between processes. The only reason this is passed from
-     * `paranext-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
-     * service is currently all shared code. Refactor should happen in #203
-     */
-    testLayout: LayoutBase;
-  };
-  /**
-   * The only `sandbox` attribute values we allow iframes to have including WebView iframes and any
-   * others. The `sandbox` attribute controls what privileges iframe scripts and other things have.
-   *
-   * `allow-same-origin` so the iframe can get papi and communicate and such
-   *
-   * `allow-scripts` so the iframe can actually do things
-   *
-   * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
-   *
-   * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
-   * allows the child scripts to remove this sandbox attribute from the iframe. We use a
-   * `MutationObserver` in `web-view.service.ts` to remove any iframes that do not comply with these
-   * sandbox requirements. This successfully prevents iframes with too many privileges from executing
-   * as of July 2023. However, this means the sandboxing could do nothing for a determined hacker if
-   * they ever find a way around all this. We must distrust the whole renderer due to this issue. We
-   * will probably want to stay vigilant on security in this area.
-   */
-  export const ALLOWED_IFRAME_SANDBOX_VALUES: string[];
-  /**
-   * The most lenient iframe sandboxing we allow. See {@link ALLOWED_IFRAME_SANDBOX_VALUES} for more
-   * information on our sandboxing methods and why we chose these values.
-   */
-  export const DEFAULT_IFRAME_SANDBOX: string;
-  /** Event that emits with webView info when a webView is added */
-  export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
-  /**
-   * Basic `saveTabInfo` that simply strips the properties added by {@link TabInfo} off of the object
-   * and returns it as a {@link SavedTabInfo}. Runs as the {@link TabSaver} by default if the tab type
-   * does not have a specific `TabSaver`
-   */
-  export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
-  /**
-   * Converts web view definition used in an actual docking tab into saveable web view information by
-   * stripping out the members we don't want to save
-   * @param webViewDefinition web view to save
-   * @returns saveable web view information based on `webViewDefinition`
-   */
-  export function convertWebViewDefinitionToSaved(
-    webViewDefinition: WebViewDefinition,
-  ): SavedWebViewDefinition;
-  /**
-   * Register a dock layout React element to be used by this service to perform layout-related
-   * operations
-   * @param dockLayout dock layout element to register along with other important properties
-   * @returns function used to unregister this dock layout
-   */
-  export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber;
-  /**
-   * Creates a new web view or gets an existing one depending on if you request an existing one and
-   * if the web view provider decides to give that existing one to you (it is up to the provider).
-   *
-   * @param webViewType type of WebView to create
-   * @param layout information about where you want the web view to go. Defaults to adding as a tab
-   * @param options options that affect what this function does. For example, you can provide an
-   * existing web view id to request an existing web view with that id.
-   *
-   * @returns promise that resolves to the id of the webview we got.
-   */
-  export const getWebView: (
-    webViewType: WebViewType,
-    layout?: Layout,
-    options?: GetWebViewOptions,
-  ) => Promise<WebViewId | undefined>;
-  /** Sets up the WebViewService. Runs only once */
-  export const initialize: () => Promise<void>;
-  export interface PapiWebViewService {
-    onDidAddWebView: typeof onDidAddWebView;
-    getWebView: typeof getWebView;
-    initialize: typeof initialize;
-  }
-  /**
-   * Service exposing various functions related to using webViews
-   */
-  export const papiWebViewService: PapiWebViewService;
-}
-declare module 'shared/services/internet.service' {
-  /** Our shim over fetch. Allows us to control internet access. */
-  const papiFetch: typeof fetch;
-  export interface InternetService {
-    fetch: typeof papiFetch;
-  }
-  /**
-   * Service that provides a way to call `fetch` since the original function is not available
-   */
-  const internetService: InternetService;
-  export default internetService;
 }
 declare module 'shared/models/data-provider.model' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
@@ -2116,6 +1669,510 @@ declare module 'shared/models/data-provider-engine.model' {
       DataProviderGetters<TDataTypes> &
       Partial<WithNotifyUpdate<TDataTypes>>;
   export default IDataProviderEngine;
+}
+declare module 'declarations/project-data-types' {
+  import type { DataProviderDataType } from 'shared/models/data-provider.model';
+  import type IDataProvider from 'shared/models/data-provider.interface';
+  import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
+  import { VerseRef } from '@sillsdev/scripture';
+  /** All PDP data types must extend from this */
+  export type MandatoryProjectDataTypes = {
+    ExtensionData: DataProviderDataType<string, string | undefined, string>;
+  };
+  /** This is not yet a complete list of the data types available from Paratext projects. */
+  export type ParatextStandardProjectDataTypes = MandatoryProjectDataTypes & {
+    Book: DataProviderDataType<VerseRef, string | undefined, string>;
+    Chapter: DataProviderDataType<VerseRef, string | undefined, string>;
+    Verse: DataProviderDataType<VerseRef, string | undefined, string>;
+  };
+  /** This is just a simple example so we have more than one. It's not intended to be real. */
+  export type NotesOnlyProjectDataTypes = MandatoryProjectDataTypes & {
+    Notes: DataProviderDataType<string, string | undefined, string>;
+  };
+  /**
+   * Data types for each project data provider supported by PAPI. Extensions can add more data types
+   * with corresponding project data provider IDs by adding details to their `d.ts` file.
+   *
+   * @example
+   * ```typescript
+   * declare module 'project-data-types' {
+   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
+   *     myData: DataProviderDataType<string, string, string>;
+   *   }
+   *
+   *   export interface ProjectDataTypes {
+   *     MyExtensionProjectTypeName: MyProjectDataTypes;
+   *   }
+   * }
+   * ```
+   */
+  /** Data types associated with all types of projects */
+  export interface ProjectDataTypes {
+    ParatextStandard: ParatextStandardProjectDataTypes;
+    NotesOnly: NotesOnlyProjectDataTypes;
+  }
+  /**
+   * Identifiers for all project types supported by PAPI. These are not intended to correspond 1:1
+   * to the set of project types available in Paratext.
+   */
+  export type ProjectTypes = keyof ProjectDataTypes;
+  type IDataProviderEngineGeneric<T extends ProjectDataTypes> = {
+    [K in keyof T]: IDataProviderEngine<T[K]>;
+  };
+  /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
+  export type ProjectDataProviderEngineTypes = IDataProviderEngineGeneric<ProjectDataTypes>;
+  type IDataProviderGeneric<T extends ProjectDataTypes> = {
+    [K in keyof T]: IDataProvider<T[K]>;
+  };
+  /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
+  export type ProjectDataProviderTypes = IDataProviderGeneric<ProjectDataTypes>;
+}
+declare module 'shared/services/command.service' {
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import { CommandHandlers, CommandNames } from 'papi-commands';
+  module 'papi-commands' {
+    interface CommandHandlers {
+      'test.addThree': typeof addThree;
+      'test.squareAndConcat': typeof squareAndConcat;
+    }
+  }
+  function addThree(a: number, b: number, c: number): Promise<number>;
+  function squareAndConcat(a: number, b: string): Promise<string>;
+  /** Sets up the CommandService. Only runs once and always returns the same promise after that */
+  export const initialize: () => Promise<void>;
+  /**
+   * Send a command to the backend.
+   */
+  export const sendCommand: <CommandName extends keyof CommandHandlers>(
+    commandName: CommandName,
+    ...args: Parameters<CommandHandlers[CommandName]>
+  ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
+  /**
+   * Creates a function that is a command function with a baked commandName.
+   * This is also nice because you get TypeScript type support using this function.
+   * @param commandName command name for command function
+   * @returns function to call with arguments of command that sends the command and resolves with the result of the command
+   */
+  export const createSendCommandFunction: <CommandName extends keyof CommandHandlers>(
+    commandName: CommandName,
+  ) => (
+    ...args: Parameters<CommandHandlers[CommandName]>
+  ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
+  /**
+   * Register a command on the papi to be handled here
+   * @param commandName command name to register for handling here
+   *   - Note: Command names must consist of two string separated by at least one period. We recommend
+   *   one period and lower camel case in case we expand the api in the future to allow dot notation.
+   * @param handler function to run when the command is invoked
+   * @returns true if successfully registered, throws with error message if not
+   */
+  export const registerCommand: <CommandName extends CommandNames>(
+    commandName: CommandName,
+    handler: CommandHandlers[CommandName],
+  ) => Promise<UnsubscriberAsync>;
+  /**
+   * The command service allows you to exchange messages with other components in the platform.
+   * You can register a command that other services and extensions can send you.
+   * You can send commands to other services and extensions that have registered commands.
+   */
+  export type moduleSummaryComments = {};
+}
+declare module 'shared/data/web-view.model' {
+  import { ReactNode } from 'react';
+  /**
+   * Saved information used to recreate a tab.
+   *
+   * {@link TabLoader} loads this into {@link TabInfo}
+   * {@link TabSaver} saves {@link TabInfo} into this
+   */
+  export type SavedTabInfo = {
+    /**
+     * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this id will
+     * match the WebViewDefinition.id
+     */
+    id: string;
+    /**
+     * Type of tab - indicates what kind of built-in tab this info represents
+     */
+    tabType: string;
+    /**
+     * Data needed to load the tab
+     */
+    data?: unknown;
+  };
+  /**
+   * Information that Paranext uses to create a tab in the dock layout.
+   *
+   * {@link TabLoader} loads {@link SavedTabInfo} into this
+   * {@link TabSaver} saves this into {@link SavedTabInfo}
+   */
+  export type TabInfo = SavedTabInfo & {
+    /**
+     * Text to show on the title bar of the tab
+     */
+    tabTitle: string;
+    /**
+     * Content to show inside the tab.
+     */
+    content: ReactNode;
+    /**
+     * (optional) Minimum width that the tab can become
+     */
+    minWidth?: number;
+    /**
+     * (optional) Minimum height that the tab can become
+     */
+    minHeight?: number;
+  };
+  /**
+   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
+   * must provide a {@link TabLoader}.
+   *
+   * For now all tab creators must do their own data type verification
+   */
+  export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
+  /**
+   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+   * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
+   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
+   */
+  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
+  /** The type of code that defines a webview's content */
+  export enum WebViewContentType {
+    /**
+     * This webview is a React webview. It must specify its component by setting it to
+     * `globalThis.webViewComponent`
+     */
+    React = 'react',
+    /** This webview is a raw HTML/JS/CSS webview. */
+    HTML = 'html',
+  }
+  /** What type a WebView is. Each WebView definition must have a unique type. */
+  export type WebViewType = string;
+  /** Id for a specific WebView. Each WebView has a unique id */
+  export type WebViewId = string;
+  /** Base WebView properties that all WebViews share */
+  type WebViewDefinitionBase = {
+    /** What type of WebView this is. Unique to all other WebView definitions */
+    webViewType: WebViewType;
+    /** Unique id among webviews specific to this webview instance. */
+    id: WebViewId;
+    /** The code for the WebView that papi puts into an iframe */
+    content: string;
+    /** Name of the tab for the WebView */
+    title?: string;
+  };
+  /** WebView representation using React */
+  export type WebViewDefinitionReact = WebViewDefinitionBase & {
+    /** Indicates this WebView uses React */
+    contentType?: WebViewContentType.React;
+    /** String of styles to be loaded into the iframe for this WebView */
+    styles?: string;
+  };
+  /** WebView representation using HTML */
+  export type WebViewDefinitionHtml = WebViewDefinitionBase & {
+    /** Indicates this WebView uses HTML */
+    contentType: WebViewContentType.HTML;
+  };
+  /** Properties defining a type of WebView created by extensions to show web content */
+  export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
+  /**
+   * Saved WebView information that does not contain the actual content of the WebView. Saved into
+   * layouts. Could have as little as the type and id. WebView providers load these into actual
+   * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
+   */
+  export type SavedWebViewDefinition = (
+    | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
+    | Partial<Omit<WebViewDefinitionHtml, 'content'>>
+  ) &
+    Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+  /** Props that are passed to the web view component */
+  export type WebViewProps = WebViewDefinition;
+  /** Information about a tab in a panel */
+  interface TabLayout {
+    type: 'tab';
+  }
+  /** Information about a floating window */
+  export interface FloatLayout {
+    type: 'float';
+    floatSize?: {
+      width: number;
+      height: number;
+    };
+  }
+  export type PanelDirection =
+    | 'left'
+    | 'right'
+    | 'bottom'
+    | 'top'
+    | 'before-tab'
+    | 'after-tab'
+    | 'maximize'
+    | 'move'
+    | 'active'
+    | 'update';
+  /** Information about a panel */
+  interface PanelLayout {
+    type: 'panel';
+    direction?: PanelDirection;
+    /** If undefined, it will add in the `direction` relative to the previously added tab. */
+    targetTabId?: string;
+  }
+  /** Information about how a Paranext tab fits into the dock layout */
+  export type Layout = TabLayout | FloatLayout | PanelLayout;
+  /** Event emitted when webViews are created */
+  export type AddWebViewEvent = {
+    webView: SavedWebViewDefinition;
+    layout: Layout;
+  };
+  /** Options that affect what `webViews.getWebView` does */
+  export type GetWebViewOptions = {
+    /**
+     * If provided and if a web view with this id exists, requests from the web view provider an
+     * existing WebView with this id if one exists. The web view provider can deny the request if it
+     * chooses to do so.
+     *
+     * Alternatively, set this to '?' to attempt to find any existing web view with the specified
+     * webViewType.
+     *
+     * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
+     * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
+     * `existingId` at all is the only way to specify we are not looking for an existing webView
+     */
+    existingId?: string | '?' | undefined;
+    /**
+     * Whether to create a webview with a new id and a webview with id `existingId` was not found.
+     * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
+     * ignored.
+     *
+     * Defaults to true
+     */
+    createNewIfNotFound?: boolean;
+  };
+}
+declare module 'shared/models/web-view-provider.model' {
+  import {
+    GetWebViewOptions,
+    WebViewDefinition,
+    SavedWebViewDefinition,
+  } from 'shared/data/web-view.model';
+  import {
+    DisposableNetworkObject,
+    NetworkObject,
+    NetworkableObject,
+  } from 'shared/models/network-object.model';
+  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
+  export interface IWebViewProvider extends NetworkableObject {
+    /**
+     * @param savedWebView filled out if an existing webview is being called for (matched by id).
+     * Just id if this is a new request or if the web view with the existing id was not found
+     * @param getWebViewOptions
+     */
+    getWebView(
+      savedWebView: SavedWebViewDefinition,
+      getWebViewOptions: GetWebViewOptions,
+    ): Promise<WebViewDefinition | undefined>;
+  }
+  export interface WebViewProvider
+    extends NetworkObject<NetworkableObject>,
+      CanHaveOnDidDispose<IWebViewProvider> {}
+  export interface DisposableWebViewProvider
+    extends DisposableNetworkObject<NetworkableObject>,
+      Omit<WebViewProvider, 'dispose'> {}
+}
+declare module 'shared/services/web-view-provider.service' {
+  /**
+   * Handles registering web view providers and serving web views around the papi.
+   * Exposed on the papi.
+   */
+  import {
+    DisposableWebViewProvider,
+    IWebViewProvider,
+    WebViewProvider,
+  } from 'shared/models/web-view-provider.model';
+  /** Sets up the service. Only runs once and always returns the same promise after that */
+  const initialize: () => Promise<void>;
+  /**
+   * Indicate if we are aware of an existing web view provider with the given type. If a web view
+   * provider with the given type is somewhere else on the network, this function won't tell you about
+   * it unless something else in the existing process is subscribed to it.
+   * @param webViewType type of webView to check for
+   */
+  function hasKnown(webViewType: string): boolean;
+  /**
+   * Register a web view provider to serve webViews for a specified type of webViews
+   *
+   * @param webViewType type of web view to provide
+   * @param webViewProvider object to register as a webView provider including control over disposing
+   * of it.
+   *
+   * WARNING: setting a webView provider mutates the provided object.
+   * @returns `webViewProvider` modified to be a network object
+   */
+  function register(
+    webViewType: string,
+    webViewProvider: IWebViewProvider,
+  ): Promise<DisposableWebViewProvider>;
+  /**
+   * Get a web view provider that has previously been set up
+   * @param webViewType type of webview provider to get
+   * @returns web view provider with the given name if one exists, undefined otherwise
+   */
+  function get(webViewType: string): Promise<WebViewProvider | undefined>;
+  export interface WebViewProviderService {
+    initialize: typeof initialize;
+    hasKnown: typeof hasKnown;
+    register: typeof register;
+    get: typeof get;
+  }
+  export interface PapiWebViewProviderService {
+    register: typeof register;
+  }
+  const webViewProviderService: WebViewProviderService;
+  /**
+   * Interface for registering webView providers
+   */
+  export const papiWebViewProviderService: PapiWebViewProviderService;
+  export default webViewProviderService;
+}
+declare module 'shared/log-error.model' {
+  /**
+   * Error that force logs the error message before throwing. Useful for debugging in some situations.
+   */
+  export default class LogError extends Error {
+    constructor(message?: string);
+  }
+}
+declare module 'shared/services/web-view.service' {
+  import { Unsubscriber } from 'shared/utils/papi-util';
+  import { MutableRefObject } from 'react';
+  import {
+    AddWebViewEvent,
+    Layout,
+    SavedTabInfo,
+    TabInfo,
+    WebViewProps,
+    WebViewType,
+    WebViewId,
+    GetWebViewOptions,
+    WebViewDefinition,
+    SavedWebViewDefinition,
+  } from 'shared/data/web-view.model';
+  import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
+  /** rc-dock's onLayoutChange prop made asynchronous - resolves */
+  export type OnLayoutChangeRCDock = (
+    newLayout: LayoutBase,
+    currentTabId?: string,
+    direction?: DropDirection,
+  ) => Promise<void>;
+  /** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
+  type PapiDockLayout = {
+    /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
+    dockLayout: DockLayout;
+    /**
+     * A ref to a function that runs when the layout changes. We set this ref to our
+     * {@link onLayoutChange} function
+     */
+    onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
+    /** Function to call to add or update a webview in the layout */
+    addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
+    /**
+     * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
+     *
+     * TODO: This should be removed and the `testLayout` imported directly in this file once this
+     * service is refactored to split the code between processes. The only reason this is passed from
+     * `paranext-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
+     * service is currently all shared code. Refactor should happen in #203
+     */
+    testLayout: LayoutBase;
+  };
+  /**
+   * The only `sandbox` attribute values we allow iframes to have including WebView iframes and any
+   * others. The `sandbox` attribute controls what privileges iframe scripts and other things have.
+   *
+   * `allow-same-origin` so the iframe can get papi and communicate and such
+   *
+   * `allow-scripts` so the iframe can actually do things
+   *
+   * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+   *
+   * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
+   * allows the child scripts to remove this sandbox attribute from the iframe. We use a
+   * `MutationObserver` in `web-view.service.ts` to remove any iframes that do not comply with these
+   * sandbox requirements. This successfully prevents iframes with too many privileges from executing
+   * as of July 2023. However, this means the sandboxing could do nothing for a determined hacker if
+   * they ever find a way around all this. We must distrust the whole renderer due to this issue. We
+   * will probably want to stay vigilant on security in this area.
+   */
+  export const ALLOWED_IFRAME_SANDBOX_VALUES: string[];
+  /**
+   * The most lenient iframe sandboxing we allow. See {@link ALLOWED_IFRAME_SANDBOX_VALUES} for more
+   * information on our sandboxing methods and why we chose these values.
+   */
+  export const DEFAULT_IFRAME_SANDBOX: string;
+  /** Event that emits with webView info when a webView is added */
+  export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
+  /**
+   * Basic `saveTabInfo` that simply strips the properties added by {@link TabInfo} off of the object
+   * and returns it as a {@link SavedTabInfo}. Runs as the {@link TabSaver} by default if the tab type
+   * does not have a specific `TabSaver`
+   */
+  export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
+  /**
+   * Converts web view definition used in an actual docking tab into saveable web view information by
+   * stripping out the members we don't want to save
+   * @param webViewDefinition web view to save
+   * @returns saveable web view information based on `webViewDefinition`
+   */
+  export function convertWebViewDefinitionToSaved(
+    webViewDefinition: WebViewDefinition,
+  ): SavedWebViewDefinition;
+  /**
+   * Register a dock layout React element to be used by this service to perform layout-related
+   * operations
+   * @param dockLayout dock layout element to register along with other important properties
+   * @returns function used to unregister this dock layout
+   */
+  export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber;
+  /**
+   * Creates a new web view or gets an existing one depending on if you request an existing one and
+   * if the web view provider decides to give that existing one to you (it is up to the provider).
+   *
+   * @param webViewType type of WebView to create
+   * @param layout information about where you want the web view to go. Defaults to adding as a tab
+   * @param options options that affect what this function does. For example, you can provide an
+   * existing web view id to request an existing web view with that id.
+   *
+   * @returns promise that resolves to the id of the webview we got.
+   */
+  export const getWebView: (
+    webViewType: WebViewType,
+    layout?: Layout,
+    options?: GetWebViewOptions,
+  ) => Promise<WebViewId | undefined>;
+  /** Sets up the WebViewService. Runs only once */
+  export const initialize: () => Promise<void>;
+  export interface PapiWebViewService {
+    onDidAddWebView: typeof onDidAddWebView;
+    getWebView: typeof getWebView;
+    initialize: typeof initialize;
+  }
+  /**
+   * Service exposing various functions related to using webViews
+   */
+  export const papiWebViewService: PapiWebViewService;
+}
+declare module 'shared/services/internet.service' {
+  /** Our shim over fetch. Allows us to control internet access. */
+  const papiFetch: typeof fetch;
+  export interface InternetService {
+    fetch: typeof papiFetch;
+  }
+  /**
+   * Service that provides a way to call `fetch` since the original function is not available
+   */
+  const internetService: InternetService;
+  export default internetService;
 }
 declare module 'shared/services/data-provider.service' {
   /**
@@ -2531,8 +2588,11 @@ declare module 'shared/data/file-system.model' {
    * Has a scheme followed by :// followed by a relative path.
    * If no scheme is provided, the app scheme is used.
    * Available schemes are as follows:
-   *  - app:// - goes to the app's data directory (platform-dependent)
+   *  - app:// - goes to the app's home directory and into `.platform.bible` (platform-dependent)
+   *  - cache:// - goes to the app's temporary file cache at `app://cache`
+   *  - data:// - goes to the app's data storage location at `app://data`
    *  - resources:// - goes to the resources directory installed in the app
+   *  - file:// - an absolute file path from root
    */
   export type Uri = string;
 }
@@ -2830,7 +2890,7 @@ declare module 'papi-backend' {
   };
   export default papi;
 }
-declare module 'extension-host/extension-types/unsubscriber-async-list' {
+declare module 'shared/utils/unsubscriber-async-list' {
   import { Dispose } from 'shared/models/disposal.model';
   import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
   /**
@@ -2854,7 +2914,7 @@ declare module 'extension-host/extension-types/unsubscriber-async-list' {
 }
 declare module 'extension-host/extension-types/extension-activation-context.model' {
   import { ExecutionToken } from 'node/models/execution-token.model';
-  import UnsubscriberAsyncList from 'extension-host/extension-types/unsubscriber-async-list';
+  import UnsubscriberAsyncList from 'shared/utils/unsubscriber-async-list';
   /** An object of this type is passed into `activate()` for each extension during initialization */
   export type ExecutionActivationContext = {
     /** Canonical name of the extension */
