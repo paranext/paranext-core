@@ -1,5 +1,6 @@
 /// <reference types="react" />
 /// <reference types="node" />
+/// <reference types="node" />
 declare module 'papi-commands' {
   /**
      * Function types for each command available on the papi. Each extension can extend this interface
@@ -160,7 +161,7 @@ declare module 'shared/utils/papi-util' {
   export type UnsubscriberAsync = () => Promise<boolean>;
   /**
    * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
-   * @param unsubscribers all unsubscribers to aggregate into one unsubscriber
+   * @param unsubscribers - all unsubscribers to aggregate into one unsubscriber.
    * @returns function that unsubscribes from all passed in unsubscribers when run
    */
   export const aggregateUnsubscriberAsyncs: (
@@ -1401,6 +1402,7 @@ declare module 'shared/utils/async-variable' {
   }
 }
 declare module 'shared/services/network-object.service' {
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
   import {
     NetworkObject,
     DisposableNetworkObject,
@@ -1412,6 +1414,14 @@ declare module 'shared/services/network-object.service' {
   /** Search locally known network objects for the given ID. Don't look on the network for more objects.
    *  @returns whether we know of an existing network object with the provided id already on the network */
   const hasKnown: (id: string) => boolean;
+  interface IDisposableObject {
+    dispose?: UnsubscriberAsync;
+  }
+  /** If `dispose` already exists on `objectToMutate`, we will call it in addition to `newDispose` */
+  export function overrideDispose(
+    objectToMutate: IDisposableObject,
+    newDispose: UnsubscriberAsync,
+  ): void;
   /**
    * Get a network object that has previously been set up to be shared on the network.
    * A network object is a proxy to an object living somewhere else that local code can use.
@@ -2528,10 +2538,15 @@ declare module 'shared/data/file-system.model' {
 }
 declare module 'node/utils/util' {
   import { Uri } from 'shared/data/file-system.model';
+  export const FILE_PROTOCOL: string;
+  export const RESOURCES_PROTOCOL: string;
   export function resolveHtmlPath(htmlFileName: string): string;
   /**
-   * Gets the platform-specific user appdata folder for this application
-   * Thanks to Luke at https://stackoverflow.com/a/26227660
+   * Gets the platform-specific user Platform.Bible folder for this application
+   *
+   * When running in development: `<repo_directory>/dev-appdata`
+   *
+   * When packaged: `<user_home_directory>/.platform.bible`
    */
   export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
   /**
@@ -2549,27 +2564,49 @@ declare module 'node/utils/util' {
   export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
 }
 declare module 'node/services/node-file-system.service' {
+  /**
+   * File system calls from Node
+   */
+  import { BigIntStats } from 'fs';
   import { Uri } from 'shared/data/file-system.model';
   /**
-   * Reads a text file asynchronously
-   * @param uri Uri of file
+   * Read a text file
+   * @param uri URI of file
    * @returns promise that resolves to the contents of the file
    */
   export function readFileText(uri: Uri): Promise<string>;
   /**
-   * Reads a binary file asynchronously
-   * @param uri Uri of file
+   * Read a binary file
+   * @param uri URI of file
    * @returns promise that resolves to the contents of the file
    */
   export function readFileBinary(uri: Uri): Promise<Buffer>;
   /**
-   * Writes the string to a file asynchronously
-   * @param uri Uri of file
-   * @param fileContents string to write into the file
+   * Write data to a file
+   * @param uri URI of file
+   * @param fileContents string or Buffer to write into the file
    * @returns promise that resolves after writing the file
    */
-  export function writeFileText(uri: Uri, fileContents: string): Promise<void>;
+  export function writeFile(uri: Uri, fileContents: string | Buffer): Promise<void>;
+  /**
+   * Delete a file if it exists
+   * @param uri URI of file
+   * @returns promise that resolves when the file is deleted or determined to not exist
+   */
   export function deleteFile(uri: Uri): Promise<void>;
+  /**
+   * Get stats about the file or directory. Note that BigInts are used instead of ints to avoid.
+   * https://en.wikipedia.org/wiki/Year_2038_problem
+   * @param uri URI of file or directory
+   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if file or directory exists, undefined if it doesn't
+   */
+  export function getStats(uri: Uri): Promise<BigIntStats | undefined>;
+  /**
+   * Set the last modified and accessed times for the file or directory
+   * @param uri URI of file or directory
+   * @returns Promise that resolves once the touch operation finishes
+   */
+  export function touch(uri: Uri, date: Date): Promise<void>;
   /** Type of file system item in a directory */
   export enum EntryType {
     File = 'file',
@@ -2582,7 +2619,7 @@ declare module 'node/services/node-file-system.service' {
   }>;
   /**
    * Reads a directory and returns lists of entries in the directory by entry type
-   * @param uri uri of directory
+   * @param uri URI of directory
    * @param entryFilter function to filter out entries in the directory based on their names
    * @returns map of entry type to list of uris for each entry in the directory with that type
    */
@@ -2590,6 +2627,18 @@ declare module 'node/services/node-file-system.service' {
     uri: Uri,
     entryFilter?: (entryName: string) => boolean,
   ): Promise<DirectoryEntries>;
+  /**
+   * Create a directory in the file system
+   * @param uri URI of directory
+   * @returns Promise that resolves once the directory has been created
+   */
+  export function createDir(uri: Uri): Promise<void>;
+  /**
+   * Remove a directory and all its contents recursively from the file system
+   * @param uri URI of directory
+   * @returns Promise that resolves when the delete operation finishes
+   */
+  export function deleteDir(uri: Uri): Promise<void>;
 }
 declare module 'node/utils/crypto-util' {
   export function createUuid(): string;
@@ -2788,15 +2837,17 @@ declare module 'extension-host/extension-types/unsubscriber-async-list' {
    * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
    */
   export default class UnsubscriberAsyncList {
+    private name;
     readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
+    constructor(name?: string);
     /**
      * Add unsubscribers to the list. Note that duplicates are not added twice.
-     * @param unsubscribers Objects that were returned from a registration process
+     * @param unsubscribers - Objects that were returned from a registration process.
      */
     add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
     /**
-     * Run all unsubscribers added to this list and then clear the list
-     * @returns `true` if all unsubscribers succeeded, `false` otherwise
+     * Run all unsubscribers added to this list and then clear the list.
+     * @returns `true` if all unsubscribers succeeded, `false` otherwise.
      */
     runAllUnsubscribers(): Promise<boolean>;
   }

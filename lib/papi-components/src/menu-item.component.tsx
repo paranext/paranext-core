@@ -21,6 +21,11 @@ export interface CommandHandler {
 }
 
 export type MenuItemProps = MenuItemInfo & {
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
+
   onClick: () => void;
 };
 
@@ -72,6 +77,7 @@ function MenuItem(props: MenuItemProps) {
     hasDisabledGutters = false,
     hasDivider = false,
     focusVisibleClassName,
+    id,
   } = props;
 
   return (
@@ -83,6 +89,7 @@ function MenuItem(props: MenuItemProps) {
       divider={hasDivider}
       focusVisibleClassName={focusVisibleClassName}
       onClick={onClick}
+      id={id}
     >
       {name}
     </MuiMenuItem>

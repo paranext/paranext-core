@@ -5,6 +5,10 @@ import LabelPosition from './label-position.model';
 
 export type CheckboxProps = {
   /**
+   *  Optional unique identifier
+   */
+  id?: string;
+  /**
    * If `true`, the component is checked.
    */
   isChecked?: boolean;
@@ -62,6 +66,7 @@ export type CheckboxProps = {
  * Primary UI component for user interaction
  */
 function Checkbox({
+  id,
   isChecked,
   labelText = '',
   labelPosition = LabelPosition.After,
@@ -74,6 +79,7 @@ function Checkbox({
 }: CheckboxProps) {
   const checkBox = (
     <MuiCheckbox
+      id={id}
       checked={isChecked}
       indeterminate={isIndeterminate}
       defaultChecked={isDefaultChecked}

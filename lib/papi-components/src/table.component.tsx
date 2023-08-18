@@ -91,6 +91,8 @@ export type TableEditorProps<R> = {
   column: TableCalculatedColumn<R>;
   row: R;
   onRowChange: (row: R, commitChanges?: boolean) => void;
+  // Unused currently, but needed to commit changes from editing
+  // eslint-disable-next-line react/no-unused-prop-types
   onClose: (commitChanges?: boolean) => void;
 };
 export type TablePasteEvent<R> = PasteEvent<R>;
@@ -106,9 +108,9 @@ function TableTextEditor<R>({ onRowChange, row, column }: TableEditorProps<R>): 
 }
 
 const renderCheckbox = ({ onChange, disabled, checked, ...props }: RenderCheckboxProps) => {
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.checked, (e.nativeEvent as MouseEvent).shiftKey);
-  }
+  };
 
   return (
     <Checkbox
@@ -253,6 +255,11 @@ export type TableProps<R> = {
    * Additional css classes to help with unique styling of the table
    */
   className?: string;
+  /**
+   *  Optional unique identifier
+   */
+  // Patched react-data-grid@7.0.0-beta.34 to add this prop, link to issue: https://github.com/adazzle/react-data-grid/issues/3305
+  id?: string;
 };
 
 /**
@@ -290,6 +297,7 @@ function Table<R>({
   onPaste,
   onScroll,
   className,
+  id,
 }: TableProps<R>) {
   const cachedColumns = useMemo(() => {
     const editableColumns = columns.map((column) => {
@@ -316,7 +324,7 @@ function Table<R>({
     return enableSelectColumn
       ? [{ ...SelectColumn, minWidth: selectColumnWidth }, ...editableColumns]
       : editableColumns;
-  }, [enableSelectColumn, columns]);
+  }, [columns, enableSelectColumn, selectColumnWidth]);
 
   return (
     <DataGrid<R>
@@ -348,7 +356,8 @@ function Table<R>({
       onPaste={onPaste}
       onScroll={onScroll}
       renderers={{ renderCheckbox }}
-      className={`${className ?? 'rdg-light'}`}
+      className={className ?? 'rdg-light'}
+      id={id}
     />
   );
 }

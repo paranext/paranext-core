@@ -1,5 +1,5 @@
 import * as commandService from '@shared/services/command.service';
-import logger from 'electron-log';
+import logger from '@shared/services/logger.service';
 import './platform-bible-menu.css';
 import { Command } from 'papi-components';
 import { CommandNames } from 'papi-commands';

@@ -1,5 +1,5 @@
 import { Snackbar as MuiSnackbar, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
-import { SyntheticEvent, ReactElement, ReactNode } from 'react';
+import { SyntheticEvent, ReactNode, PropsWithChildren } from 'react';
 import './snackbar.component.css';
 
 export type CloseReason = SnackbarCloseReason;
@@ -22,7 +22,12 @@ export type SnackbarContentProps = {
   className?: string;
 };
 
-export type SnackbarProps = {
+export type SnackbarProps = PropsWithChildren<{
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
+
   /**
    * If true, the component is shown
    * @default false
@@ -44,7 +49,7 @@ export type SnackbarProps = {
    * Optional, used to control the open prop
    * event: Event | SyntheticEvent<Element, Event>, reason: string
    */
-  onClose?: (event: SyntheticEvent<any> | Event, reason: CloseReason) => void;
+  onClose?: (event: Event | SyntheticEvent<Element, Event>, reason: CloseReason) => void;
 
   /**
    * The anchor of the `Snackbar`.
@@ -54,12 +59,10 @@ export type SnackbarProps = {
   anchorOrigin?: AnchorOrigin;
 
   /**
-   * Replace the `SnackbarContent` component.
+   * Props applied to the [`SnackbarContent`](/material-ui/api/snackbar-content/) element.
    */
-  children?: ReactElement<any, any>;
-
   ContentProps?: SnackbarContentProps;
-};
+}>;
 
 /**
  * Snackbar that provides brief notifications
@@ -69,30 +72,30 @@ export type SnackbarProps = {
  */
 function Snackbar({
   autoHideDuration = null,
+  id,
   isOpen = false,
   className,
   onClose,
   anchorOrigin = { vertical: 'bottom', horizontal: 'left' },
-  ContentProps = {
-    action: '',
-    message: '',
-    className: `papi-snackbar ${className ?? ''}`,
-  },
+  ContentProps,
   children,
 }: SnackbarProps) {
-  const snackbar = (
+  const newContentProps: SnackbarContentProps = {
+    action: ContentProps?.action || children,
+    message: ContentProps?.message,
+    className,
+  };
+
+  return (
     <MuiSnackbar
       autoHideDuration={autoHideDuration}
-      className={`papi-snackbar ${className ?? ''}`}
       open={isOpen}
       onClose={onClose}
       anchorOrigin={anchorOrigin}
-      ContentProps={ContentProps}
-    >
-      {children}
-    </MuiSnackbar>
+      id={id}
+      ContentProps={newContentProps}
+    />
   );
-  return snackbar;
 }
 
 export default Snackbar;

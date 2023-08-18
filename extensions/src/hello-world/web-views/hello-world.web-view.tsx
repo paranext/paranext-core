@@ -55,6 +55,7 @@ globalThis.webViewComponent = function HelloWorld() {
   const [clicks, setClicks] = useState(0);
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
+  const [scrRef, setScrRef] = useState({ bookNum: 1, chapterNum: 1, verseNum: 1 });
 
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
@@ -151,8 +152,10 @@ globalThis.webViewComponent = function HelloWorld() {
         <ComboBox title="Test Me" options={['option 1', 'option 2']} />
         <Slider /> {/* no label available */}
         <RefSelector
-          scrRef={{ bookNum: 1, chapterNum: 1, verseNum: 1 }}
-          handleSubmit={(): void => {}}
+          scrRef={scrRef}
+          handleSubmit={(newScrRef) => {
+            setScrRef(newScrRef);
+          }}
         />
         <Table<Row>
           columns={[

@@ -14,6 +14,11 @@ export type MenuColumnInfo = {
 };
 
 type MenuColumnProps = MenuColumnInfo & {
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
+
   commandHandler: CommandHandler;
 
   /**
@@ -30,6 +35,11 @@ export type GridMenuInfo = {
 };
 
 export type GridMenuProps = GridMenuInfo & {
+  /**
+   *  Optional unique identifier
+   */
+  id?: string;
+
   commandHandler: CommandHandler;
 
   /**
@@ -38,9 +48,9 @@ export type GridMenuProps = GridMenuInfo & {
   className?: string;
 };
 
-function MenuColumn({ commandHandler, name, className, items }: MenuColumnProps) {
+function MenuColumn({ commandHandler, name, className, items, id }: MenuColumnProps) {
   return (
-    <Grid item xs="auto" className={`papi-menu-column ${className ?? ''}`}>
+    <Grid id={id} item xs="auto" className={`papi-menu-column ${className ?? ''}`}>
       <h3 className={`papi-menu ${className ?? ''}`}>{name}</h3>
       {items.map((menuItem, index) => (
         <MenuItem
@@ -58,13 +68,14 @@ function MenuColumn({ commandHandler, name, className, items }: MenuColumnProps)
   );
 }
 
-export default function GridMenu({ commandHandler, className, columns }: GridMenuProps) {
+export default function GridMenu({ commandHandler, className, columns, id }: GridMenuProps) {
   return (
     <Grid
       container
       spacing={0}
       className={`papi-multi-column-menu ${className ?? ''}`}
       columns={columns.length}
+      id={id}
     >
       {columns.map((col, index) => (
         <MenuColumn
