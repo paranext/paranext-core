@@ -44,7 +44,7 @@ const testLayout: LayoutBase = {
       },
       {
         tabs: [
-          { id: 'Test Open Project Dialog', tabType: TAB_TYPE_OPEN_PROJECT_DIALOG },
+          { id: 'Open Project Dialog', tabType: TAB_TYPE_OPEN_PROJECT_DIALOG },
         ] as SavedTabInfo[],
         x: 250,
         y: 170,

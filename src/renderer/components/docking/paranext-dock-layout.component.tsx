@@ -41,7 +41,7 @@ import {
   saveTabInfoBase,
 } from '@shared/services/web-view.service';
 import { getErrorMessage } from '@shared/utils/util';
-import { TAB_TYPE_OPEN_PROJECT_DIALOG, createOpenProjectTab } from './open-project-tab.component';
+import { loadOpenProjectTab, TAB_TYPE_OPEN_PROJECT_DIALOG } from './open-project-tab.component';
 
 type TabType = string;
 
@@ -74,7 +74,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
   [TAB_TYPE_TEST, loadTestTab],
   [TAB_TYPE_WEBVIEW, loadWebViewTab],
-  [TAB_TYPE_OPEN_PROJECT_DIALOG, createOpenProjectTab],
+  [TAB_TYPE_OPEN_PROJECT_DIALOG, loadOpenProjectTab],
 ]);
 
 /** tab saver functions for each Paranext tab type that wants to override the default */
@@ -299,7 +299,7 @@ export default function ParanextDockLayout() {
       unsub();
     };
     // Is there any situation where dockLayoutRef will change? We need to add to dependencies if so
-  }, [dockLayoutRef]);
+  }, []);
 
   return (
     <DockLayout

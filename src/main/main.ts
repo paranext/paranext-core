@@ -55,9 +55,6 @@ const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
   'platform.quit': async () => {
     app.quit();
   },
-  'platform.openProjectDialog': async () => {
-    openProjectDialog();
-  },
 };
 
 async function main() {
@@ -314,10 +311,6 @@ async function main() {
 async function restartExtensionHost() {
   await extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT);
   await extensionHostService.start();
-}
-
-async function openProjectDialog() {
-  await logger.info(`Opening Project Dialog Command`);
 }
 
 (async () => {

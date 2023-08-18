@@ -2,7 +2,6 @@ import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { List, ListItem, ListItemButton, ListItemText } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import logger from '@shared/services/logger.service';
-import './open-project-tab.component.css';
 
 export const TAB_TYPE_OPEN_PROJECT_DIALOG = 'open-project-dialog';
 
@@ -44,6 +43,7 @@ export default function OpenProjectTab() {
       <List>
         {projects.map((project, index) => (
           <ListItem
+            // Currently projects will not be reordered
             // eslint-disable-next-line react/no-array-index-key
             key={index}
             onClick={() => {
@@ -61,7 +61,7 @@ export default function OpenProjectTab() {
   );
 }
 
-export const createOpenProjectTab = (savedTabInfo: SavedTabInfo): TabInfo => {
+export const loadOpenProjectTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   return {
     ...savedTabInfo,
     tabTitle: 'Open Project',
