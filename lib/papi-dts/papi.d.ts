@@ -1,55 +1,6 @@
 /// <reference types="react" />
 /// <reference types="node" />
 /// <reference types="node" />
-declare module 'papi-shared-types' {
-  /**
-     * Function types for each command available on the papi. Each extension can extend this interface
-     * to add commands that it registers on the papi.
-     *
-     * Note: Command names must consist of two string separated by at least one period. We recommend
-     * one period and lower camel case in case we expand the api in the future to allow dot notation.
-     *
-     * @example An extension can extend this interface to add types for the commands it registers by
-     * adding the following to its `.d.ts` file:
-     *
-     * ```typescript
-     * declare module 'papi-shared-types' {
-         export interface CommandHandlers {
-           'myExtension.myCommand1': (foo: string, bar: number) => string;
-           'myExtension.myCommand2': (foo: string) => Promise<void>;
-         }
-       }
-     * ```
-     */
-  interface CommandHandlers {
-    'test.echo': (message: string) => string;
-    'test.echoRenderer': (message: string) => Promise<string>;
-    'test.echoExtensionHost': (message: string) => Promise<string>;
-    'test.throwError': (message: string) => void;
-    'platform.restartExtensionHost': () => Promise<void>;
-    'platform.quit': () => Promise<void>;
-    'test.addMany': (...nums: number[]) => number;
-    'test.throwErrorExtensionHost': (message: string) => void;
-  }
-  /**
-   * Names for each command available on the papi. Automatically includes all extensions' commands
-   * that are added to {@link CommandHandlers}.
-   *
-   * Note: Command names must consist of two string separated by at least one period. We recommend
-   * one period and lower camel case in case we expand the api in the future to allow dot notation.
-   *
-   * @example 'platform.quit'
-   */
-  type CommandNames = keyof CommandHandlers;
-  interface SettingTypes {
-    'platform.verseRef': {
-      bookNum: number;
-      chapterNum: number;
-      verseNum: number;
-    };
-  }
-  type SettingNames = keyof SettingTypes;
-}
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';
@@ -1409,7 +1360,7 @@ declare module 'shared/models/data-provider.model' {
      * Note: By default, this `subscribe<data_type>` function automatically retrieves the current state of the data
      * and runs the provided callback as soon as possible. That way, if you want to keep your data up-to-date,
      * you do not also have to run `get<data_type>`. You can turn this functionality off in the `options` parameter.
-
+    
      * @param selector tells the provider what data this listener is listening for
      * @param callback function to run with the updated data for this selector
      * @param options various options to adjust how the subscriber emits updates
@@ -1577,10 +1528,59 @@ declare module 'papi-project-data-types' {
     NotesOnly: NotesOnlyProjectDataTypes;
   }
 }
+declare module 'papi-shared-types' {
+  /**
+     * Function types for each command available on the papi. Each extension can extend this interface
+     * to add commands that it registers on the papi.
+     *
+     * Note: Command names must consist of two string separated by at least one period. We recommend
+     * one period and lower camel case in case we expand the api in the future to allow dot notation.
+     *
+     * @example An extension can extend this interface to add types for the commands it registers by
+     * adding the following to its `.d.ts` file:
+     *
+     * ```typescript
+     * declare module 'papi-shared-types' {
+         export interface CommandHandlers {
+           'myExtension.myCommand1': (foo: string, bar: number) => string;
+           'myExtension.myCommand2': (foo: string) => Promise<void>;
+         }
+       }
+     * ```
+     */
+  interface CommandHandlers {
+    'test.echo': (message: string) => string;
+    'test.echoRenderer': (message: string) => Promise<string>;
+    'test.echoExtensionHost': (message: string) => Promise<string>;
+    'test.throwError': (message: string) => void;
+    'platform.restartExtensionHost': () => Promise<void>;
+    'platform.quit': () => Promise<void>;
+    'test.addMany': (...nums: number[]) => number;
+    'test.throwErrorExtensionHost': (message: string) => void;
+  }
+  /**
+   * Names for each command available on the papi. Automatically includes all extensions' commands
+   * that are added to {@link CommandHandlers}.
+   *
+   * Note: Command names must consist of two string separated by at least one period. We recommend
+   * one period and lower camel case in case we expand the api in the future to allow dot notation.
+   *
+   * @example 'platform.quit'
+   */
+  type CommandNames = keyof CommandHandlers;
+  interface SettingTypes {
+    'platform.verseRef': {
+      bookNum: number;
+      chapterNum: number;
+      verseNum: number;
+    };
+  }
+  type SettingNames = keyof SettingTypes;
+}
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import { CommandHandlers, CommandNames } from 'papi-commands';
-  module 'papi-commands' {
+  import { CommandHandlers, CommandNames } from 'papi-shared-types';
+  module 'papi-shared-types' {
     interface CommandHandlers {
       'test.addThree': typeof addThree;
       'test.squareAndConcat': typeof squareAndConcat;
@@ -2765,11 +2765,7 @@ declare module 'shared/data/file-system.model' {
    *  - app:// - goes to the app's home directory and into `.platform.bible` (platform-dependent)
    *  - cache:// - goes to the app's temporary file cache at `app://cache`
    *  - data:// - goes to the app's data storage location at `app://data`
-   *  - app:// - goes to the app's home directory and into `.platform.bible` (platform-dependent)
-   *  - cache:// - goes to the app's temporary file cache at `app://cache`
-   *  - data:// - goes to the app's data storage location at `app://data`
    *  - resources:// - goes to the resources directory installed in the app
-   *  - file:// - an absolute file path from root
    *  - file:// - an absolute file path from root
    */
   export type Uri = string;
