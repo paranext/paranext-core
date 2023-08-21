@@ -16,6 +16,10 @@ import {
 } from '@shared/services/web-view-provider.service';
 import internetService, { InternetService } from '@shared/services/internet.service';
 import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
+import {
+  papiBackendProjectDataProviderService,
+  PapiBackendProjectDataProviderService,
+} from '@shared/services/project-data-provider.service';
 import extensionStorageService, {
   ExtensionStorageService,
 } from '@extension-host/services/extension-storage.service';
@@ -52,6 +56,9 @@ const papi = {
   internet: internetService as InternetService,
   /** JSDOC DESTINATION dataProviderService */
   dataProvider: dataProviderService as DataProviderService,
+  /** JSDOC DESTINATION papiBackendProjectDataProviderService */
+  projectDataProvider:
+    papiBackendProjectDataProviderService as PapiBackendProjectDataProviderService,
   /** JSDOC DESTINATION extensionStorageService */
   storage: extensionStorageService as ExtensionStorageService,
 };

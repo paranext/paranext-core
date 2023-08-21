@@ -1,8 +1,6 @@
-import { ProjectTypes, ProjectDataProviderEngineTypes } from 'declarations/project-data-types';
+import type { DataProviderDataType } from 'shared/models/data-provider.model';
 
-export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
-  createProjectDataProviderEngine(
-    projectId: string,
-    projectStorageInterpreterId: string,
-  ): ProjectDataProviderEngineTypes[ProjectType];
-}
+/** All Project Data Provider data types must extend from this */
+export type MandatoryProjectDataType = {
+  ExtensionData: DataProviderDataType<string, string | undefined, string>;
+};

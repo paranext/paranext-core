@@ -1,3 +1,6 @@
+import type { DataProviderDataType } from 'shared/models/data-provider.model';
+import type { MandatoryProjectDataType } from 'shared/models/project-data-provider.model';
+
 declare module 'hello-world' {
   /** Event containing information about `helloWorld` */
   type HelloWorldEvent = {
@@ -13,5 +16,15 @@ declare module 'papi-shared-types' {
   export interface CommandHandlers {
     'helloWorld.helloWorld': () => string;
     'helloWorld.helloException': (message: string) => void;
+  }
+}
+
+declare module 'papi-project-data-types' {
+  export type MyProjectDataType = MandatoryProjectDataType & {
+    MyProjectData: DataProviderDataType<string, string, string>;
+  };
+
+  export interface ProjectDataTypes {
+    MyExtensionProjectTypeName: MyProjectDataType;
   }
 }
