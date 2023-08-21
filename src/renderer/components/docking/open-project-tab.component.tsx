@@ -10,24 +10,39 @@ export type Project = {
   id: number;
   name: string;
   description: string;
+  isDownloadable: boolean;
+  isDownloaded: boolean;
 };
 
-function fetchProjects(): Project[] {
+export function fetchProjects(): Project[] {
   return [
     {
       id: 1,
       name: 'Project 1',
       description: 'Description of project 1',
+      isDownloadable: true,
+      isDownloaded: false,
     },
     {
       id: 2,
       name: 'Project 2',
       description: 'Description of project 2',
+      isDownloadable: false,
+      isDownloaded: true,
     },
     {
       id: 3,
       name: 'Project 3',
       description: 'Description of project 3',
+      isDownloadable: true,
+      isDownloaded: false,
+    },
+    {
+      id: 4,
+      name: 'Project 4',
+      description: 'Description of project 4',
+      isDownloadable: false,
+      isDownloaded: false,
     },
   ];
 }
