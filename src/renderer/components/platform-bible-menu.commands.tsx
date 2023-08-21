@@ -10,6 +10,9 @@ export function VisitPage(url: string) {
 
 export function handleMenuCommand(command: Command) {
   switch (command.command) {
+    case 'platform.openProjectDialog':
+      logger.info(`Open Project Dialog`);
+      break;
     case 'platform.downloadAndInstallResources':
       logger.info(`TODO: display UI to select resources'`);
       break;
