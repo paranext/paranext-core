@@ -16,7 +16,7 @@
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "build:types": "cd .. && npm run build:types",
     "start": "cd .. && npm start",
-    "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --cache",
     "lint:staged": "lint-staged -q"
   },
   "lint-staged": {

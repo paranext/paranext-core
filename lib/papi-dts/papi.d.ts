@@ -2396,18 +2396,19 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
 }
 declare module 'shared/services/settings.service' {
   import { Unsubscriber } from 'shared/utils/papi-util';
+  type SettingType<T> = T | null;
   /**
    * Retrieves the value of the specified setting
    * @param key The string id of the setting for which the value is being retrieved
    * @returns The value of the specified setting, parsed to an object. Returns `null` if setting is not present or no value is available
    */
-  const getSetting: (key: string) => unknown | null;
+  const getSetting: <T>(key: string) => SettingType<T>;
   /**
    * Sets the value of the specified setting
    * @param key The string id of the setting for which the value is being retrieved
    * @param newSetting The value that is to be stored. Setting the new value to `null` is the equivalent of deleting the setting
    */
-  const setSetting: (key: string, newSetting: unknown | null) => void;
+  const setSetting: <T>(key: string, newSetting: SettingType<T>) => void;
   /**
    * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the callback function is executed.
    * @param key The string id of the setting for which the value is being subscribed to
@@ -2589,8 +2590,11 @@ declare module 'shared/data/file-system.model' {
    * Has a scheme followed by :// followed by a relative path.
    * If no scheme is provided, the app scheme is used.
    * Available schemes are as follows:
-   *  - app:// - goes to the app's data directory (platform-dependent)
+   *  - app:// - goes to the app's home directory and into `.platform.bible` (platform-dependent)
+   *  - cache:// - goes to the app's temporary file cache at `app://cache`
+   *  - data:// - goes to the app's data storage location at `app://data`
    *  - resources:// - goes to the resources directory installed in the app
+   *  - file:// - an absolute file path from root
    */
   export type Uri = string;
 }
@@ -2600,8 +2604,11 @@ declare module 'node/utils/util' {
   export const RESOURCES_PROTOCOL: string;
   export function resolveHtmlPath(htmlFileName: string): string;
   /**
-   * Gets the platform-specific user appdata folder for this application
-   * Thanks to Luke at https://stackoverflow.com/a/26227660
+   * Gets the platform-specific user Platform.Bible folder for this application
+   *
+   * When running in development: `<repo_directory>/dev-appdata`
+   *
+   * When packaged: `<user_home_directory>/.platform.bible`
    */
   export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
   /**
@@ -2892,7 +2899,9 @@ declare module 'extension-host/extension-types/unsubscriber-async-list' {
    * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
    */
   export default class UnsubscriberAsyncList {
+    private name;
     readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
+    constructor(name?: string);
     /**
      * Add unsubscribers to the list. Note that duplicates are not added twice.
      * @param unsubscribers - Objects that were returned from a registration process.
