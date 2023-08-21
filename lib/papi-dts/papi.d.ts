@@ -2429,8 +2429,8 @@ declare module 'shared/services/settings.service' {
 }
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   /**
-   * This hooks layers over useState, and stores the stateful value in local storage too.
-   * Setting the value to `null` is the equivalent of deleting the value from local storage.
+   * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes.
+   * Setting the value to `null` is the equivalent of deleting the setting.
    * @param key The string id that is used to store the setting in local storage
    *
    *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
@@ -2438,7 +2438,9 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *
    *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
    *
-   * @returns
+   * @returns [setting, setSetting]
+   *  - `setting`: The current state of the setting, either the defaultState or the stored state on the papi, if any
+   *  - `setSetting`: Function that updates the setting to a new value
    */
   const useSetting: <T>(
     key: string,
