@@ -4,6 +4,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import UpdateIcon from '@mui/icons-material/Update';
 import DeleteIcon from '@mui/icons-material/Delete';
 import logger from '@shared/services/logger.service';
+import { useMemo } from 'react';
 import { Project, fetchProjects } from './open-project-tab.component';
 import './download-update-project-tab.component.scss';
 
@@ -21,35 +22,23 @@ function deleteProject(project: Project) {
   logger.info(`Deleting Project ${project.name}`);
 }
 
-function fetchDownloadableProjects() {
-  const projects = fetchProjects();
-  const downloadableProjects: Project[] = [];
-  const downloadedProjects: Project[] = [];
-
-  projects.forEach((project) => {
-    if (project.isDownloadable && !project.isDownloaded) downloadableProjects.push(project);
-    else if (project.isDownloaded) downloadedProjects.push(project);
-  });
-
-  return [downloadableProjects, downloadedProjects];
-}
-
 export default function DownloadUpdateProjectTab() {
-  const projects = fetchDownloadableProjects();
-  const downloadableProjects = projects[0];
-  const downloadedProjects = projects[1];
+  const downloadableProjects = useMemo(
+    () => fetchProjects().filter((project) => project.isDownloadable && !project.isDownloaded),
+    [],
+  );
+  const downloadedProjects = useMemo(
+    () => fetchProjects().filter((project) => project.isDownloaded),
+    [],
+  );
 
   return (
     <div className="download-update-project-dialog">
       <nav aria-label="downloadable projects">
         <List>
           <ListSubheader>Downloadable Projects</ListSubheader>
-          {downloadableProjects.map((project, index) => (
-            <ListItem
-              // Currently projects will not be reordered
-              // eslint-disable-next-line react/no-array-index-key
-              key={index}
-            >
+          {downloadableProjects.map((project) => (
+            <ListItem key={project.id}>
               <ListItemButton onClick={() => downloadProject(project)}>
                 <DownloadIcon />
                 <ListItemText primary={project.name} />
@@ -62,12 +51,8 @@ export default function DownloadUpdateProjectTab() {
       <nav aria-label="downloaded projects">
         <List>
           <ListSubheader>Downloaded Projects</ListSubheader>
-          {downloadedProjects.map((project, index) => (
-            <ListItem
-              // Currently projects will not be reordered
-              // eslint-disable-next-line react/no-array-index-key
-              key={index}
-            >
+          {downloadedProjects.map((project) => (
+            <ListItem key={project.id}>
               <ListItemText primary={project.name} />
               <ListItemButton onClick={() => updateProject(project)}>
                 <UpdateIcon />
