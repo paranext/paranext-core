@@ -1,7 +1,7 @@
-import { ScrVers, VerseRef } from '@sillsdev/scripture';
+import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
 import { RefSelector } from 'papi-components';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 // eslint-disable-next-line import/no-unresolved
 import { UsfmProviderDataTypes } from 'usfm-data-provider';
 import UsxEditor from 'usxeditor';
@@ -119,18 +119,13 @@ interface ScriptureTextPanelUsxProps {
 }
 
 /**
- * Scripture text panel that inserts the chapter string into innerHTML or a contentEditable div.
- * Used internally only in this file for displaying different kinds of strings.
- * Originally built for Scripture HTML, so, if something doesn't work, it probably doesn't work because it's not an HTML panel.
+ * Scripture text panel that displays a read only version of a usx editor that displays the current
+ * chapter
  */
 function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div className="text-panel">
-      <RefSelector
-        scrRef={{ bookNum: 1, chapterNum: 1, verseNum: 1 }}
-        handleSubmit={(): void => {}}
-      />
       <UsxEditor
         usx={usx}
         paraMap={UsxEditorParaMap}
@@ -153,11 +148,25 @@ const {
 globalThis.webViewComponent = function ResourceViewer() {
   logger.info('Preparing to display the Resource Viewer');
 
+  const [scrRef, setScrRef] = useState({ bookNum: 1, chapterNum: 1, verseNum: 1 });
   const [usx, , isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
     'usfm',
-    useMemo(() => new VerseRef('GEN', '1', '1', ScrVers.English), []),
-    'Loading Psalm 1...',
+    useMemo(
+      () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
+      [scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum],
+    ),
+    'Loading Scripture...',
   );
 
-  return <div>{isLoading ? 'Loading' : <ScriptureTextPanelUsxEditor usx={usx ?? '<usx/>'} />}</div>;
+  return (
+    <div>
+      <RefSelector
+        scrRef={scrRef}
+        handleSubmit={(newScrRef): void => {
+          setScrRef(newScrRef);
+        }}
+      />
+      {isLoading ? 'Loading' : <ScriptureTextPanelUsxEditor usx={usx ?? '<usx/>'} />}
+    </div>
+  );
 };
