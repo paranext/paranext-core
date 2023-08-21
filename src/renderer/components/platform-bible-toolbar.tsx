@@ -11,7 +11,7 @@ const defaultScrRef = {
 };
 
 export default function PlatformBibleToolbar() {
-  const [scrRef, setScrRef] = useSetting('globalVerseRef', defaultScrRef);
+  const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
 
   const handleReferenceChanged = (newScrRef: {
     bookNum: number;

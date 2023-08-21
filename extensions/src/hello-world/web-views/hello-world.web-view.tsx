@@ -62,7 +62,7 @@ globalThis.webViewComponent = function HelloWorld() {
   const [clicks, setClicks] = useState(0);
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
-  const [scrRef, setScrRef] = useSetting('globalVerseRef', defaultScrRef);
+  const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
 
   // Update the clicks when we are informed helloWorld has been run
   useEvent(

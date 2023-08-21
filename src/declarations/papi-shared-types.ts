@@ -47,7 +47,7 @@ declare module 'papi-shared-types' {
   export type CommandNames = keyof CommandHandlers;
 
   export interface SettingTypes {
-    globalVerseRef: { bookNum: number; chapterNum: number; verseNum: number };
+    'platform.verseRef': { bookNum: number; chapterNum: number; verseNum: number };
   }
 
   export type SettingNames = keyof SettingTypes;

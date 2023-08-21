@@ -41,6 +41,14 @@ declare module 'papi-shared-types' {
    * @example 'platform.quit'
    */
   type CommandNames = keyof CommandHandlers;
+  interface SettingTypes {
+    'platform.verseRef': {
+      bookNum: number;
+      chapterNum: number;
+      verseNum: number;
+    };
+  }
+  type SettingNames = keyof SettingTypes;
 }
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
@@ -2396,26 +2404,35 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
 }
 declare module 'shared/services/settings.service' {
   import { Unsubscriber } from 'shared/utils/papi-util';
-  type SettingType<T> = T | null;
+  import { SettingTypes } from 'papi-shared-types';
+  type Nullable<T> = T | null;
   /**
    * Retrieves the value of the specified setting
    * @param key The string id of the setting for which the value is being retrieved
    * @returns The value of the specified setting, parsed to an object. Returns `null` if setting is not present or no value is available
    */
-  const getSetting: <T>(key: string) => SettingType<T>;
+  const getSetting: <SettingName extends 'platform.verseRef'>(
+    key: SettingName,
+  ) => Nullable<SettingTypes[SettingName]>;
   /**
    * Sets the value of the specified setting
    * @param key The string id of the setting for which the value is being retrieved
    * @param newSetting The value that is to be stored. Setting the new value to `null` is the equivalent of deleting the setting
    */
-  const setSetting: <T>(key: string, newSetting: SettingType<T>) => void;
+  const setSetting: <SettingName extends 'platform.verseRef'>(
+    key: SettingName,
+    newSetting: Nullable<SettingTypes[SettingName]>,
+  ) => void;
   /**
    * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the callback function is executed.
    * @param key The string id of the setting for which the value is being subscribed to
    * @param callback The function that will be called whenever the specified setting is updated
    * @returns Unsubscriber that should be called whenever the subscription should be deleted
    */
-  const subscribeToSetting: (key: string, callback: () => void) => Unsubscriber;
+  const subscribeToSetting: <SettingName extends 'platform.verseRef'>(
+    key: SettingName,
+    callback: (newSetting: Nullable<SettingTypes[SettingName]>) => void,
+  ) => Unsubscriber;
   export interface SettingsService {
     get: typeof getSetting;
     set: typeof setSetting;
@@ -2428,6 +2445,7 @@ declare module 'shared/services/settings.service' {
   export default settingsService;
 }
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
+  import { SettingTypes } from 'papi-shared-types';
   /**
    * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes.
    * Setting the value to `null` is the equivalent of deleting the setting.
@@ -2442,10 +2460,10 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *  - `setting`: The current state of the setting, either the defaultState or the stored state on the papi, if any
    *  - `setSetting`: Function that updates the setting to a new value
    */
-  const useSetting: <T>(
-    key: string,
-    defaultState: T | null,
-  ) => [T | null, (newSetting: T | null) => void];
+  const useSetting: <SettingName extends 'platform.verseRef'>(
+    key: SettingName,
+    defaultState: SettingTypes[SettingName] | null,
+  ) => [SettingTypes[SettingName] | null, (newSetting: SettingTypes[SettingName] | null) => void];
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/index' {
