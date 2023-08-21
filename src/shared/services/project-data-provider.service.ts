@@ -1,13 +1,14 @@
+import { ProjectDataTypes } from 'papi-project-data-types';
 import {
   ProjectTypes,
-  ProjectDataTypes,
   ProjectDataProviderTypes,
   ProjectDataProviderEngineTypes,
-} from 'declarations/project-data-types';
-import { ProjectDataProviderEngineFactory } from '@shared/models/project-data-provider.model';
+  ProjectDataProviderEngineFactory,
+} from '@shared/models/project-data-provider-engine.model';
 import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import { newNonce } from '@shared/utils/util';
+import { Dispose } from '@shared/models/disposal.model';
 import UnsubscriberAsyncList from '@shared/utils/unsubscriber-async-list';
 
 class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
@@ -53,6 +54,9 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
   private async registerProjectDataProvider(
     projectDataProviderEngine: ProjectDataProviderEngineTypes[ProjectType],
   ): Promise<string> {
+    // Add a check for extensions that provide new project types
+    if (!('getExtensionData' in projectDataProviderEngine))
+      throw new Error('projectDataProviderEngine must implement "MandatoryProjectDataTypes"');
     const pdpId: string = newNonce();
     const pdp = await dataProviderService.registerEngine<ProjectDataTypes[ProjectType]>(
       pdpId,
@@ -72,15 +76,15 @@ function getProjectDataProviderFactoryId(projectType: ProjectTypes) {
  * existing factory already that handles the same project type or this operation will fail.
  * @param projectType Type of project that pdpEngineFactory supports
  * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
- * @returns Promise that resolves when the registration operation completes
+ * @returns Promise that resolves to a disposable object when the registration operation completes
  */
 export async function registerProjectDataProviderEngineFactory<ProjectType extends ProjectTypes>(
   projectType: ProjectType,
   pdpEngineFactory: ProjectDataProviderEngineFactory<ProjectType>,
-): Promise<void> {
-  const pdpFactoryId = getProjectDataProviderFactoryId(projectType);
-  const pdpFactory = new ProjectDataProviderFactory(projectType, pdpEngineFactory);
-  await networkObjectService.set<ProjectDataProviderFactory<ProjectType>>(pdpFactoryId, pdpFactory);
+): Promise<Dispose> {
+  const factoryId = getProjectDataProviderFactoryId(projectType);
+  const factory = new ProjectDataProviderFactory(projectType, pdpEngineFactory);
+  return networkObjectService.set<ProjectDataProviderFactory<ProjectType>>(factoryId, factory);
 }
 
 /**
@@ -106,3 +110,29 @@ export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
   if (!pdp) throw new Error(`Cannot create project data provider for project ID ${projectId}`);
   return pdp;
 }
+
+// Declare an interface for the object we're exporting so that JSDoc comments propagate
+export interface PapiBackendProjectDataProviderService {
+  registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
+  getProjectDataProvider: typeof getProjectDataProvider;
+}
+
+/** JSDOC SOURCE papiBackendProjectDataProviderService
+ * Service that registers and gets project data providers
+ */
+export const papiBackendProjectDataProviderService: PapiBackendProjectDataProviderService = {
+  registerProjectDataProviderEngineFactory,
+  getProjectDataProvider,
+};
+
+// Declare an interface for the object we're exporting so that JSDoc comments propagate
+export interface PapiFrontendProjectDataProviderService {
+  getProjectDataProvider: typeof getProjectDataProvider;
+}
+
+/** JSDOC SOURCE papiFrontendProjectDataProviderService
+ * Service that gets project data providers
+ */
+export const papiFrontendProjectDataProviderService = {
+  getProjectDataProvider,
+};

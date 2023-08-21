@@ -1,8 +1,8 @@
-import { ProjectDataProviderEngineFactory } from '@shared/models/project-data-provider.model';
 import {
-  NotesOnlyProjectDataTypes,
   ProjectDataProviderEngineTypes,
-} from 'declarations/project-data-types';
+  ProjectDataProviderEngineFactory,
+} from '@shared/models/project-data-provider-engine.model';
+import type { NotesOnlyProjectDataTypes } from 'papi-project-data-types';
 import {
   registerProjectDataProviderEngineFactory,
   getProjectDataProvider,
@@ -36,6 +36,7 @@ const notesOnlyPdpEngineFactory: ProjectDataProviderEngineFactory<'NotesOnly'> =
 };
 
 export async function initialize(): Promise<void> {
+  // If this service was disposable, we would keep track of the PDP Factory returned here
   await registerProjectDataProviderEngineFactory('NotesOnly', notesOnlyPdpEngineFactory);
 }
 
