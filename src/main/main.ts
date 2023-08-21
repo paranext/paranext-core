@@ -21,7 +21,7 @@ import extensionHostService from '@main/services/extension-host.service';
 import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
 import { wait } from '@shared/utils/util';
-import { CommandNames } from 'papi-commands';
+import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/papi-util';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;

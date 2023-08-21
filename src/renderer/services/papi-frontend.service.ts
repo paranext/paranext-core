@@ -14,6 +14,7 @@ import internetService, { InternetService } from '@shared/services/internet.serv
 import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
 import papiContext, { PapiContext } from '@renderer/context/papi-context';
 import papiHooks, { PapiHooks } from '@renderer/hooks/papi-hooks';
+import settingsService, { SettingsService } from '@shared/services/settings.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-backend.service.ts.
@@ -51,6 +52,8 @@ const papi = {
     /** JSDOC DESTINATION papiHooks */
     hooks: papiHooks as PapiHooks,
   },
+  /** JSDOC DESTINATION settingsService */
+  settings: settingsService as SettingsService,
 };
 export default papi;
 

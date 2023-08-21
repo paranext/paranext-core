@@ -1,7 +1,7 @@
 /// <reference types="react" />
 /// <reference types="node" />
 /// <reference types="node" />
-declare module 'papi-commands' {
+declare module 'papi-shared-types' {
   /**
      * Function types for each command available on the papi. Each extension can extend this interface
      * to add commands that it registers on the papi.
@@ -13,7 +13,7 @@ declare module 'papi-commands' {
      * adding the following to its `.d.ts` file:
      *
      * ```typescript
-     * declare module 'papi-commands' {
+     * declare module 'papi-shared-types' {
          export interface CommandHandlers {
            'myExtension.myCommand1': (foo: string, bar: number) => string;
            'myExtension.myCommand2': (foo: string) => Promise<void>;
@@ -41,6 +41,14 @@ declare module 'papi-commands' {
    * @example 'platform.quit'
    */
   type CommandNames = keyof CommandHandlers;
+  interface SettingTypes {
+    'platform.verseRef': {
+      bookNum: number;
+      chapterNum: number;
+      verseNum: number;
+    };
+  }
+  type SettingNames = keyof SettingTypes;
 }
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
@@ -1134,8 +1142,8 @@ declare module 'shared/services/network.service' {
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import { CommandHandlers, CommandNames } from 'papi-commands';
-  module 'papi-commands' {
+  import { CommandHandlers, CommandNames } from 'papi-shared-types';
+  module 'papi-shared-types' {
     interface CommandHandlers {
       'test.addThree': typeof addThree;
       'test.squareAndConcat': typeof squareAndConcat;
@@ -2394,12 +2402,83 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   const useData: UseDataHook;
   export default useData;
 }
+declare module 'shared/services/settings.service' {
+  import { Unsubscriber } from 'shared/utils/papi-util';
+  import { SettingTypes } from 'papi-shared-types';
+  type Nullable<T> = T | null;
+  /**
+   * Retrieves the value of the specified setting
+   * @param key The string id of the setting for which the value is being retrieved
+   * @returns The value of the specified setting, parsed to an object. Returns `null` if setting is not present or no value is available
+   */
+  const getSetting: <SettingName extends 'platform.verseRef'>(
+    key: SettingName,
+  ) => Nullable<SettingTypes[SettingName]>;
+  /**
+   * Sets the value of the specified setting
+   * @param key The string id of the setting for which the value is being retrieved
+   * @param newSetting The value that is to be stored. Setting the new value to `null` is the equivalent of deleting the setting
+   */
+  const setSetting: <SettingName extends 'platform.verseRef'>(
+    key: SettingName,
+    newSetting: Nullable<SettingTypes[SettingName]>,
+  ) => void;
+  /**
+   * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the callback function is executed.
+   * @param key The string id of the setting for which the value is being subscribed to
+   * @param callback The function that will be called whenever the specified setting is updated
+   * @returns Unsubscriber that should be called whenever the subscription should be deleted
+   */
+  const subscribeToSetting: <SettingName extends 'platform.verseRef'>(
+    key: SettingName,
+    callback: (newSetting: Nullable<SettingTypes[SettingName]>) => void,
+  ) => Unsubscriber;
+  export interface SettingsService {
+    get: typeof getSetting;
+    set: typeof setSetting;
+    subscribe: typeof subscribeToSetting;
+  }
+  /**
+   * Service that allows to get and set settings in local storage
+   */
+  const settingsService: SettingsService;
+  export default settingsService;
+}
+declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
+  import { SettingTypes } from 'papi-shared-types';
+  /**
+   * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes and gets
+   * updated when the setting is changed by others.
+   *
+   * Setting the value to `null` is the equivalent of deleting the setting.
+   * @param key The string id that is used to store the setting in local storage
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not
+   *    be updated every render
+   * @param defaultState The default state of the setting. If the setting already has a value set to
+   * it in local storage, this parameter will be ignored.
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not
+   *    be updated every render
+   *
+   * @returns [setting, setSetting]
+   *  - `setting`: The current state of the setting, either the defaultState or the stored state on
+   *    the papi, if any
+   *  - `setSetting`: Function that updates the setting to a new value
+   */
+  const useSetting: <SettingName extends 'platform.verseRef'>(
+    key: SettingName,
+    defaultState: SettingTypes[SettingName] | null,
+  ) => [SettingTypes[SettingName] | null, (newSetting: SettingTypes[SettingName] | null) => void];
+  export default useSetting;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   import usePromise from 'renderer/hooks/papi-hooks/use-promise.hook';
   import useEvent from 'renderer/hooks/papi-hooks/use-event.hook';
   import useEventAsync from 'renderer/hooks/papi-hooks/use-event-async.hook';
   import useDataProvider from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   import useData from 'renderer/hooks/papi-hooks/use-data.hook';
+  import useSetting from 'renderer/hooks/papi-hooks/use-setting.hook';
   export interface PapiHooks {
     usePromise: typeof usePromise;
     useEvent: typeof useEvent;
@@ -2442,6 +2521,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
      *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data provider
      */
     useData: typeof useData;
+    useSetting: typeof useSetting;
   }
   /**
    * All React hooks to be exposed on the papi
@@ -2464,6 +2544,7 @@ declare module 'papi-frontend' {
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { PapiContext } from 'renderer/context/papi-context/index';
   import { PapiHooks } from 'renderer/hooks/papi-hooks/index';
+  import { SettingsService } from 'shared/services/settings.service';
   const papi: {
     /**
      * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
@@ -2518,6 +2599,10 @@ declare module 'papi-frontend' {
        */
       hooks: PapiHooks;
     };
+    /**
+     * Service that allows to get and set settings in local storage
+     */
+    settings: SettingsService;
   };
   export default papi;
   export type Papi = typeof papi;

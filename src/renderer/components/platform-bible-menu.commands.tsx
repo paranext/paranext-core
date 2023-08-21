@@ -2,7 +2,7 @@ import * as commandService from '@shared/services/command.service';
 import logger from '@shared/services/logger.service';
 import './platform-bible-menu.css';
 import { Command } from 'papi-components';
-import { CommandNames } from 'papi-commands';
+import { CommandNames } from 'papi-shared-types';
 
 export function VisitPage(url: string) {
   window.open(url);

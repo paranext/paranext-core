@@ -12,11 +12,11 @@ import {
 } from '@shared/utils/papi-util';
 import { isClient, isRenderer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
-import { CommandHandlers, CommandNames } from 'papi-commands';
+import { CommandHandlers, CommandNames } from 'papi-shared-types';
 import { CATEGORY_COMMAND } from '@shared/data/internal-connection.model';
 
 // Commands that this file supplies
-declare module 'papi-commands' {
+declare module 'papi-shared-types' {
   export interface CommandHandlers {
     'test.addThree': typeof addThree;
     'test.squareAndConcat': typeof squareAndConcat;
