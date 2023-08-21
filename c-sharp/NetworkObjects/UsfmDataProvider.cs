@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Xml;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
@@ -41,6 +42,7 @@ namespace Paranext.DataProvider.NetworkObjects
                 {
                     "getBookNames" => GetBookNames(),
                     "getChapter" => GetChapter(args[0]!.ToJsonString()),
+                    "getChapterUsx" => GetChapterUsx(args[0]!.ToJsonString()),
                     "getVerse" => GetVerse(args[0]!.ToJsonString()),
                     _ => ResponseToRequest.Failed($"Unexpected function: {functionName}")
                 };
@@ -64,11 +66,56 @@ namespace Paranext.DataProvider.NetworkObjects
                 : ResponseToRequest.Failed(errorMsg);
         }
 
+        private ResponseToRequest GetChapterUsx(string args)
+        {
+            return VerseRefConverter.TryCreateVerseRef(args, out var verseRef, out string errorMsg)
+                ? ResponseToRequest.Succeeded(GetUsx(verseRef))
+                : ResponseToRequest.Failed(errorMsg);
+        }
+
         private ResponseToRequest GetVerse(string args)
         {
             return VerseRefConverter.TryCreateVerseRef(args, out var verseRef, out string errorMsg)
                 ? ResponseToRequest.Succeeded(_scrText!.GetVerseText(verseRef))
                 : ResponseToRequest.Failed(errorMsg);
+        }
+
+        public string GetUsx(VerseRef vref)
+        {
+            XmlDocument usx = GetUsxForChapter(vref.BookNum, vref.ChapterNum);
+            string contents = usx.OuterXml ?? string.Empty;
+            return contents;
+        }
+
+        private XmlDocument GetUsxForChapter(int bookNum, int chapterNum)
+        {
+            return ConvertUsfmToUsx(GetUsfmForChapter(bookNum, chapterNum), bookNum);
+        }
+
+        /// <summary>
+        /// Converts usfm to usx, but does not annotate
+        /// </summary>
+        private XmlDocument ConvertUsfmToUsx(string usfm, int bookNum)
+        {
+            ScrStylesheet scrStylesheet = _scrText!.ScrStylesheet(bookNum);
+            // Tokenize usfm
+            List<UsfmToken> tokens = UsfmToken.Tokenize(scrStylesheet, usfm ?? string.Empty, true);
+
+            XmlDocument doc = new XmlDocument();
+            using (XmlWriter xmlw = doc.CreateNavigator()!.AppendChild())
+            {
+                // Convert to XML
+                UsfmToUsx.ConvertToXmlWriter(scrStylesheet, tokens, xmlw, false);
+                xmlw.Flush();
+            }
+            return doc;
+        }
+
+        private string GetUsfmForChapter(int bookNum, int chapterNum)
+        {
+            VerseRef vref = new(bookNum, chapterNum, 0, _scrText!.Settings.Versification);
+            ScrText projectToUse = _scrText!.GetJoinedText(bookNum);
+            return projectToUse.GetText(vref, true, true);
         }
     }
 }
