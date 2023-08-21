@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import settingsService from '@shared/services/settings.service';
+import { SettingNames, SettingTypes } from 'papi-shared-types';
 
 /**
  * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes.
@@ -15,29 +16,29 @@ import settingsService from '@shared/services/settings.service';
  *  - `setting`: The current state of the setting, either the defaultState or the stored state on the papi, if any
  *  - `setSetting`: Function that updates the setting to a new value
  */
-const useSetting = <T>(
-  key: string,
-  defaultState: T | null,
-): [T | null, (newSetting: T | null) => void] => {
+const useSetting = <SettingName extends SettingNames>(
+  key: SettingName,
+  defaultState: SettingTypes[SettingName] | null,
+): [SettingTypes[SettingName] | null, (newSetting: SettingTypes[SettingName] | null) => void] => {
   const [setting, setSettingInternal] = useState(() => {
-    const initialSetting: T | null = settingsService.get(key) as T | null;
+    const initialSetting = settingsService.get(key);
     return initialSetting !== null ? initialSetting : defaultState;
   });
 
   useEffect(() => {
-    const updateSettingFromService = () => {
-      const initialSetting: T | null = settingsService.get(key) as T | null;
-      if (initialSetting !== null) {
-        setSettingInternal(initialSetting);
+    const updateSettingFromService = (newSetting: SettingTypes[SettingName] | null) => {
+      if (newSetting !== null) {
+        setSettingInternal(newSetting);
       } else {
         setSettingInternal(defaultState);
       }
     };
 
-    updateSettingFromService();
+    const initialSetting = settingsService.get(key);
+    updateSettingFromService(initialSetting);
 
-    const unsubscriber = settingsService.subscribe(key, () => {
-      updateSettingFromService();
+    const unsubscriber = settingsService.subscribe(key, (newSetting) => {
+      updateSettingFromService(newSetting);
     });
 
     return () => {
@@ -46,7 +47,7 @@ const useSetting = <T>(
   }, [key, defaultState]);
 
   const setSetting = useCallback(
-    (newSetting: T | null) => {
+    (newSetting: SettingTypes[SettingName] | null) => {
       settingsService.set(key, newSetting);
       setSettingInternal(newSetting);
     },
