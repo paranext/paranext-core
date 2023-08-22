@@ -48,6 +48,7 @@ declare module 'papi-shared-types' {
 
   export interface SettingTypes {
     'platform.verseRef': { bookNum: number; chapterNum: number; verseNum: number };
+    // Is there a way to use ScriptureReference in here too? I got some build issues when I tried..
   }
 
   export type SettingNames = keyof SettingTypes;

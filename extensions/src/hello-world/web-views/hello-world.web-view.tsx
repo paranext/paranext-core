@@ -45,7 +45,7 @@ const initializeRows = (): Row[] => {
   ];
 };
 
-const defaultScrRef = {
+const defaultScrRef: ScriptureReference = {
   bookNum: 1,
   chapterNum: 1,
   verseNum: 1,
