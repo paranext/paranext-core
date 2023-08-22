@@ -1,5 +1,12 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
-import { List, ListItem, ListItemButton, ListItemText, ListSubheader } from '@mui/material';
+import {
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  ListSubheader,
+} from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import UpdateIcon from '@mui/icons-material/Update';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -39,7 +46,9 @@ export default function DownloadUpdateProjectTab() {
           {downloadableProjects.map((project) => (
             <ListItem key={project.id}>
               <ListItemButton onClick={() => downloadProject(project)}>
-                <DownloadIcon />
+                <ListItemIcon>
+                  <DownloadIcon />
+                </ListItemIcon>
                 <ListItemText primary={project.name} />
               </ListItemButton>
             </ListItem>
@@ -54,10 +63,14 @@ export default function DownloadUpdateProjectTab() {
             <ListItem key={project.id}>
               <ListItemText primary={project.name} />
               <ListItemButton onClick={() => updateProject(project)}>
-                <UpdateIcon />
+                <ListItemIcon>
+                  <UpdateIcon />
+                </ListItemIcon>
               </ListItemButton>
               <ListItemButton onClick={() => deleteProject(project)}>
-                <DeleteIcon />
+                <ListItemIcon>
+                  <DeleteIcon />
+                </ListItemIcon>
               </ListItemButton>
             </ListItem>
           ))}

@@ -1,5 +1,5 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
-import { List, ListItem, ListItemButton, ListItemText } from '@mui/material';
+import { List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import logger from '@shared/services/logger.service';
 import './open-project-tab.component.scss';
@@ -45,6 +45,13 @@ export function fetchProjects(): Project[] {
       isDownloadable: false,
       isDownloaded: false,
     },
+    {
+      id: 'project-5',
+      name: 'Project 5',
+      description: 'Description of project 5',
+      isDownloadable: false,
+      isDownloaded: true,
+    },
   ];
 }
 
@@ -66,7 +73,9 @@ export default function OpenProjectTab() {
             }}
           >
             <ListItemButton>
-              <FolderOpenIcon />
+              <ListItemIcon>
+                <FolderOpenIcon />
+              </ListItemIcon>
               <ListItemText primary={project.name} />
             </ListItemButton>
           </ListItem>
