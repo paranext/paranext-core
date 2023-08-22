@@ -27,6 +27,7 @@ export default function OpenMultipleProjectsTab() {
   };
 
   const handleSubmit = () => {
+    setSelectedProjects([]);
     logger.info(
       'Selected projects:',
       selectedProjects.map((proj) => proj.name),
