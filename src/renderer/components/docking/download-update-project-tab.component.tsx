@@ -23,14 +23,13 @@ function deleteProject(project: Project) {
 }
 
 export default function DownloadUpdateProjectTab() {
-  const downloadableProjects = useMemo(
-    () => fetchProjects().filter((project) => project.isDownloadable && !project.isDownloaded),
-    [],
-  );
-  const downloadedProjects = useMemo(
-    () => fetchProjects().filter((project) => project.isDownloaded),
-    [],
-  );
+  const [downloadableProjects, downloadedProjects] = useMemo(() => {
+    const projects = fetchProjects();
+    return [
+      projects.filter((project) => project.isDownloadable && !project.isDownloaded),
+      projects.filter((project) => project.isDownloaded),
+    ];
+  }, []);
 
   return (
     <div className="download-update-project-dialog">
