@@ -1,7 +1,7 @@
 import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
-import { RefSelector } from 'papi-components';
-import { useMemo, useState } from 'react';
+import { RefSelector, ScriptureReference } from 'papi-components';
+import { useMemo } from 'react';
 // eslint-disable-next-line import/no-unresolved
 import { UsfmProviderDataTypes } from 'usfm-data-provider';
 import UsxEditor from 'usxeditor';
@@ -140,7 +140,7 @@ function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
 
 const {
   react: {
-    hooks: { useData },
+    hooks: { useData, useSetting },
   },
   logger,
 } = papi;
@@ -148,7 +148,13 @@ const {
 globalThis.webViewComponent = function ResourceViewer() {
   logger.info('Preparing to display the Resource Viewer');
 
-  const [scrRef, setScrRef] = useState({ bookNum: 1, chapterNum: 1, verseNum: 1 });
+  const defaultScrRef = {
+    bookNum: 1,
+    chapterNum: 1,
+    verseNum: 1,
+  };
+
+  const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
   const [usx, , isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
     'usfm',
     useMemo(
@@ -161,8 +167,12 @@ globalThis.webViewComponent = function ResourceViewer() {
   return (
     <div>
       <RefSelector
-        scrRef={scrRef}
-        handleSubmit={(newScrRef): void => {
+        scrRef={scrRef as ScriptureReference}
+        handleSubmit={(newScrRef: {
+          bookNum: number;
+          chapterNum: number;
+          verseNum: number;
+        }): void => {
           setScrRef(newScrRef);
         }}
       />

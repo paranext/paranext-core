@@ -2468,8 +2468,8 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    */
   const useSetting: <SettingName extends 'platform.verseRef'>(
     key: SettingName,
-    defaultState: SettingTypes[SettingName] | null,
-  ) => [SettingTypes[SettingName] | null, (newSetting: SettingTypes[SettingName] | null) => void];
+    defaultState: SettingTypes[SettingName],
+  ) => [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void];
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/index' {
