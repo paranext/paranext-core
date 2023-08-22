@@ -33,8 +33,10 @@ export default meta;
 
 type Story = StoryObj<typeof RefSelector>;
 
+const defaultScrRef: ScriptureReference = { bookNum: 5, chapterNum: 4, verseNum: 3 };
+
 export const Default: Story = {
   args: {
-    scrRef: { bookNum: 5, chapterNum: 4, verseNum: 3 },
+    scrRef: defaultScrRef,
   },
 };

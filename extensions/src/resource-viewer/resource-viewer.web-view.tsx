@@ -1,6 +1,6 @@
 import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
-import { RefSelector } from 'papi-components';
+import { RefSelector, ScriptureReference } from 'papi-components';
 import { useMemo, useState } from 'react';
 // eslint-disable-next-line import/no-unresolved
 import { UsfmProviderDataTypes } from 'usfm-data-provider';
@@ -145,16 +145,19 @@ const {
   logger,
 } = papi;
 
+const defaultScrRef: ScriptureReference = {
+  bookNum: 1,
+  chapterNum: 1,
+  verseNum: 1,
+};
+
 globalThis.webViewComponent = function ResourceViewer() {
   logger.info('Preparing to display the Resource Viewer');
 
-  const [scrRef, setScrRef] = useState({ bookNum: 1, chapterNum: 1, verseNum: 1 });
+  const [scrRef, setScrRef] = useState(defaultScrRef);
   const [usx, , isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
     'usfm',
-    useMemo(
-      () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
-      [scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum],
-    ),
+    useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
   );
 

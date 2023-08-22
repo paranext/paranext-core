@@ -1,4 +1,6 @@
 declare module 'papi-shared-types' {
+  import { ScriptureReference } from 'papi-components';
+
   // TODO: Adding an index type removes type checking on the key :( How do we make sure extensions provide only functions?
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -47,7 +49,11 @@ declare module 'papi-shared-types' {
   export type CommandNames = keyof CommandHandlers;
 
   export interface SettingTypes {
-    'platform.verseRef': { bookNum: number; chapterNum: number; verseNum: number };
+    'platform.verseRef': ScriptureReference;
+    // With only one key in this interface, `papi.d.ts` was baking in the literal string when
+    // `SettingNames` was being used. Adding a placeholder key makes TypeScript generate `papi.d.ts`
+    // correctly. When we add another setting, we can remove this placeholder.
+    placeholder: null;
   }
 
   export type SettingNames = keyof SettingTypes;
