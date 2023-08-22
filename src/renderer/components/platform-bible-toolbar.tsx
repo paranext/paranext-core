@@ -4,7 +4,7 @@ import { handleMenuCommand } from './platform-bible-menu.commands';
 import { handleMenuData } from './platform-bible-menu.data';
 import './platform-bible-toolbar.css';
 
-const defaultScrRef = {
+const defaultScrRef: ScriptureReference = {
   bookNum: 1,
   chapterNum: 1,
   verseNum: 1,
@@ -13,11 +13,7 @@ const defaultScrRef = {
 export default function PlatformBibleToolbar() {
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  const handleReferenceChanged = (newScrRef: {
-    bookNum: number;
-    chapterNum: number;
-    verseNum: number;
-  }) => {
+  const handleReferenceChanged = (newScrRef: ScriptureReference) => {
     setScrRef(newScrRef);
   };
 
