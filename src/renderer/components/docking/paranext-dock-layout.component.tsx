@@ -42,6 +42,10 @@ import {
 } from '@shared/services/web-view.service';
 import { getErrorMessage } from '@shared/utils/util';
 import { loadOpenProjectTab, TAB_TYPE_OPEN_PROJECT_DIALOG } from './open-project-tab.component';
+import {
+  loadDownloadUpdateProjectTab,
+  TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
+} from './download-update-project-tab.component';
 
 type TabType = string;
 
@@ -75,6 +79,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_TEST, loadTestTab],
   [TAB_TYPE_WEBVIEW, loadWebViewTab],
   [TAB_TYPE_OPEN_PROJECT_DIALOG, loadOpenProjectTab],
+  [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
 ]);
 
 /** tab saver functions for each Paranext tab type that wants to override the default */

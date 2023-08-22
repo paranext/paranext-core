@@ -13,6 +13,9 @@ export function handleMenuCommand(command: Command) {
     case 'platform.openProjectDialog':
       logger.info(`Open Project Dialog`);
       break;
+    case 'platform.openDownloadUpdateProjectDialog':
+      logger.info(`Download/Update Project Dialog`);
+      break;
     case 'platform.downloadAndInstallResources':
       logger.info(`TODO: display UI to select resources'`);
       break;

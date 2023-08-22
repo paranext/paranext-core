@@ -11,6 +11,11 @@ const standardMenuLayout: GridMenuInfo = {
           hasDivider: true,
         },
         {
+          name: 'Download/Update Project',
+          command: 'platform.openDownloadUpdateProjectDialog',
+          hasDivider: true,
+        },
+        {
           name: 'Download/Install Resources...',
           command: 'platform.downloadAndInstallResources',
           hasDivider: true,
@@ -66,6 +71,11 @@ export const supportAndDevelopmentMenuLayout: GridMenuInfo = {
         {
           name: 'Open',
           command: 'platform.openProjectDialog',
+          hasDivider: true,
+        },
+        {
+          name: 'Download/Update Project',
+          command: 'platform.openDownloadUpdateProjectDialog',
           hasDivider: true,
         },
         {
