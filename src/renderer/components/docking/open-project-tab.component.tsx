@@ -1,19 +1,12 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
-import { List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
+import { ListItemIcon } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import logger from '@shared/services/logger.service';
 import './open-project-tab.component.scss';
 import { useMemo } from 'react';
+import ProjectList, { Project } from './project-list.component';
 
 export const TAB_TYPE_OPEN_PROJECT_DIALOG = 'open-project-dialog';
-
-export type Project = {
-  id: string;
-  name: string;
-  description: string;
-  isDownloadable: boolean;
-  isDownloaded: boolean;
-};
 
 export function fetchProjects(): Project[] {
   return [
@@ -64,23 +57,11 @@ export default function OpenProjectTab() {
 
   return (
     <div className="open-project-dialog">
-      <List>
-        {projects.map((project) => (
-          <ListItem
-            key={project.id}
-            onClick={() => {
-              openProject(project);
-            }}
-          >
-            <ListItemButton>
-              <ListItemIcon>
-                <FolderOpenIcon />
-              </ListItemIcon>
-              <ListItemText primary={project.name} />
-            </ListItemButton>
-          </ListItem>
-        ))}
-      </List>
+      <ProjectList projects={projects} projectClickHandler={openProject}>
+        <ListItemIcon>
+          <FolderOpenIcon />
+        </ListItemIcon>
+      </ProjectList>
     </div>
   );
 }

@@ -12,7 +12,8 @@ import UpdateIcon from '@mui/icons-material/Update';
 import DeleteIcon from '@mui/icons-material/Delete';
 import logger from '@shared/services/logger.service';
 import { useMemo } from 'react';
-import { Project, fetchProjects } from './open-project-tab.component';
+import { fetchProjects } from './open-project-tab.component';
+import ProjectList, { Project } from './project-list.component';
 import './download-update-project-tab.component.scss';
 
 export const TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG = 'download-update-project-dialog';
@@ -41,19 +42,15 @@ export default function DownloadUpdateProjectTab() {
   return (
     <div className="download-update-project-dialog">
       <nav aria-label="downloadable projects">
-        <List>
-          <ListSubheader>Downloadable Projects</ListSubheader>
-          {downloadableProjects.map((project) => (
-            <ListItem key={project.id}>
-              <ListItemButton onClick={() => downloadProject(project)}>
-                <ListItemIcon>
-                  <DownloadIcon />
-                </ListItemIcon>
-                <ListItemText primary={project.name} />
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
+        <ProjectList
+          projects={downloadableProjects}
+          subheader="Downloadable Projects"
+          projectClickHandler={downloadProject}
+        >
+          <ListItemIcon>
+            <DownloadIcon />
+          </ListItemIcon>
+        </ProjectList>
       </nav>
 
       <nav aria-label="downloaded projects">
@@ -61,16 +58,17 @@ export default function DownloadUpdateProjectTab() {
           <ListSubheader>Downloaded Projects</ListSubheader>
           {downloadedProjects.map((project) => (
             <ListItem key={project.id}>
-              <ListItemText primary={project.name} />
               <ListItemButton onClick={() => updateProject(project)}>
                 <ListItemIcon>
                   <UpdateIcon />
                 </ListItemIcon>
+                <ListItemText primary={project.name} />
               </ListItemButton>
               <ListItemButton onClick={() => deleteProject(project)}>
                 <ListItemIcon>
                   <DeleteIcon />
                 </ListItemIcon>
+                <ListItemText primary="Delete" />
               </ListItemButton>
             </ListItem>
           ))}
