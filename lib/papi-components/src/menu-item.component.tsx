@@ -18,16 +18,17 @@ export interface CommandHandler {
   (command: Command): void;
 }
 
-export type MenuItemProps = MenuItemInfo & {
-  /**
-   *  Optional unique identifier
-   */
-  id?: string;
+export type MenuItemProps = Omit<MenuItemInfo, 'command'> &
+  PropsWithChildren<{
+    /**
+     *  Optional unique identifier
+     */
+    id?: string;
 
-  onClick: () => void;
-};
+    onClick: () => void;
+  }>;
 
-export type MenuItemInfo = PropsWithChildren<{
+export type MenuItemInfo = Command & {
   /**
    * If true, list item is focused during the first mount
    * @default false
@@ -62,16 +63,7 @@ export type MenuItemInfo = PropsWithChildren<{
    * Help identify which element has keyboard focus
    */
   focusVisibleClassName?: string;
-
-  /**
-   * Name embedded into MenuItemInfo for use by GridMenu
-   */
-  name?: Command['name'];
-
-  // Command is embedded into MenuItemInfo, and GridMenu is using this command property but MenuItem doesn't need it
-  // eslint-disable-next-line react/no-unused-prop-types
-  command?: Command['command'];
-}>;
+};
 
 function MenuItem(props: MenuItemProps) {
   const {

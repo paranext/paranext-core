@@ -1,5 +1,5 @@
 import { Grid } from '@mui/material';
-import MenuItem, { Command, CommandHandler, MenuItemInfo } from './menu-item.component';
+import MenuItem, { CommandHandler, MenuItemInfo } from './menu-item.component';
 import './grid-menu.component.css';
 
 export type MenuColumnInfo = {
@@ -59,7 +59,7 @@ function MenuColumn({ commandHandler, name, className, items, id }: MenuColumnPr
           key={index}
           className={`papi-menu-item ${menuItem.className}`}
           onClick={() => {
-            commandHandler({ name: menuItem.name, command: menuItem.command } as Command);
+            commandHandler(menuItem);
           }}
           {...menuItem}
         />

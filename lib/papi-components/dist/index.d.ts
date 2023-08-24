@@ -242,14 +242,15 @@ export type Command = {
 export interface CommandHandler {
   (command: Command): void;
 }
-export type MenuItemProps = MenuItemInfo & {
-  /**
-   *  Optional unique identifier
-   */
-  id?: string;
-  onClick: () => void;
-};
-export type MenuItemInfo = PropsWithChildren<{
+export type MenuItemProps = Omit<MenuItemInfo, 'command'> &
+  PropsWithChildren<{
+    /**
+     *  Optional unique identifier
+     */
+    id?: string;
+    onClick: () => void;
+  }>;
+export type MenuItemInfo = Command & {
   /**
    * If true, list item is focused during the first mount
    * @default false
@@ -279,12 +280,7 @@ export type MenuItemInfo = PropsWithChildren<{
    * Help identify which element has keyboard focus
    */
   focusVisibleClassName?: string;
-  /**
-   * Name embedded into MenuItemInfo for use by GridMenu
-   */
-  name?: Command['name'];
-  command?: Command['command'];
-}>;
+};
 export declare function MenuItem(props: MenuItemProps): import('react/jsx-runtime').JSX.Element;
 type MenuColumnInfo = {
   /**
