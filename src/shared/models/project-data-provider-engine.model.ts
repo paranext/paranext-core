@@ -1,4 +1,4 @@
-import { ProjectDataTypes } from 'papi-project-data-types';
+import { ProjectDataTypes } from 'papi-shared-types';
 import type IDataProvider from 'shared/models/data-provider.interface';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 
@@ -17,12 +17,12 @@ type IDataProviderEngineGeneric<T extends ProjectDataTypes> = {
 export type ProjectDataProviderEngineTypes = IDataProviderEngineGeneric<ProjectDataTypes>;
 
 // This enforces all the keys match ProjectDataTypes
-type IDataProviderGeneric<T extends ProjectDataTypes> = {
+type IProjectDataProviderGeneric<T extends ProjectDataTypes> = {
   [K in keyof T]: IDataProvider<T[K]>;
 };
 
 /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
-export type ProjectDataProviderTypes = IDataProviderGeneric<ProjectDataTypes>;
+export type ProjectDataProvider = Omit<IProjectDataProviderGeneric<ProjectDataTypes>, 'dispose'>;
 
 export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
   createProjectDataProviderEngine(

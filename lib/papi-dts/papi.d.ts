@@ -1537,7 +1537,7 @@ declare module 'shared/models/project-data-provider.model' {
     ExtensionData: DataProviderDataType<string, string | undefined, string>;
   };
 }
-declare module 'papi-project-data-types' {
+declare module 'papi-shared-types-dependencies' {
   import type { DataProviderDataType } from 'shared/models/data-provider.model';
   import type { MandatoryProjectDataType } from 'shared/models/project-data-provider.model';
   import { VerseRef } from '@sillsdev/scripture';
@@ -1551,29 +1551,6 @@ declare module 'papi-project-data-types' {
   type NotesOnlyProjectDataTypes = MandatoryProjectDataType & {
     Notes: DataProviderDataType<string, string | undefined, string>;
   };
-  /**
-   * Data types for each project data provider supported by PAPI. Extensions can add more data types
-   * with corresponding project data provider IDs by adding details to their `d.ts` file.
-   *
-   * @example
-   * ```typescript
-   * declare module 'papi-project-data-types' {
-   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
-   *     MyProjectData1: DataProviderDataType<string, string, string>;
-   *     MyProjectData2: DataProviderDataType<string, string, string>;
-   *   }
-   *
-   *   export interface ProjectDataTypes {
-   *     MyExtensionProjectTypeName: MyProjectDataTypes;
-   *   }
-   * }
-   * ```
-   */
-  /** Data types associated with all types of projects */
-  interface ProjectDataTypes {
-    ParatextStandard: ParatextStandardProjectDataTypes;
-    NotesOnly: NotesOnlyProjectDataTypes;
-  }
 }
 declare module 'papi-shared-types' {
   /**
@@ -1623,6 +1600,33 @@ declare module 'papi-shared-types' {
     };
   }
   type SettingNames = keyof SettingTypes;
+  import type {
+    ParatextStandardProjectDataTypes,
+    NotesOnlyProjectDataTypes,
+  } from 'papi-shared-types-dependencies';
+  /**
+   * Data types for each project data provider supported by PAPI. Extensions can add more data types
+   * with corresponding project data provider IDs by adding details to their `d.ts` file. Note that
+   * all project data types should extend `MandatoryProjectDataTypes` like the following example.
+   *
+   * @example
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
+   *     MyProjectData1: DataProviderDataType<string, string, string>;
+   *     MyProjectData2: DataProviderDataType<string, string, string>;
+   *   }
+   *
+   *   export interface ProjectDataTypes {
+   *     MyExtensionProjectTypeName: MyProjectDataTypes;
+   *   }
+   * }
+   * ```
+   */
+  interface ProjectDataTypes {
+    ParatextStandard: ParatextStandardProjectDataTypes;
+    NotesOnly: NotesOnlyProjectDataTypes;
+  }
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
@@ -2341,7 +2345,7 @@ declare module 'shared/services/data-provider.service' {
   export default dataProviderService;
 }
 declare module 'shared/models/project-data-provider-engine.model' {
-  import { ProjectDataTypes } from 'papi-project-data-types';
+  import { ProjectDataTypes } from 'papi-shared-types';
   import type IDataProvider from 'shared/models/data-provider.interface';
   import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
   /**
@@ -2354,11 +2358,11 @@ declare module 'shared/models/project-data-provider-engine.model' {
   };
   /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
   export type ProjectDataProviderEngineTypes = IDataProviderEngineGeneric<ProjectDataTypes>;
-  type IDataProviderGeneric<T extends ProjectDataTypes> = {
+  type IProjectDataProviderGeneric<T extends ProjectDataTypes> = {
     [K in keyof T]: IDataProvider<T[K]>;
   };
   /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
-  export type ProjectDataProviderTypes = IDataProviderGeneric<ProjectDataTypes>;
+  export type ProjectDataProvider = Omit<IProjectDataProviderGeneric<ProjectDataTypes>, 'dispose'>;
   export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
     createProjectDataProviderEngine(
       projectId: string,
@@ -2391,7 +2395,7 @@ declare module 'shared/utils/unsubscriber-async-list' {
 declare module 'shared/services/project-data-provider.service' {
   import {
     ProjectTypes,
-    ProjectDataProviderTypes,
+    ProjectDataProvider,
     ProjectDataProviderEngineFactory,
   } from 'shared/models/project-data-provider-engine.model';
   import { Dispose } from 'shared/models/disposal.model';
@@ -2417,7 +2421,7 @@ declare module 'shared/services/project-data-provider.service' {
     projectId: string,
     projectType: ProjectType,
     storageType: string,
-  ): Promise<ProjectDataProviderTypes[ProjectType]>;
+  ): Promise<ProjectDataProvider[ProjectType]>;
   export interface PapiBackendProjectDataProviderService {
     registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
     getProjectDataProvider: typeof getProjectDataProvider;

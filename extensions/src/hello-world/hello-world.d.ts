@@ -17,9 +17,7 @@ declare module 'papi-shared-types' {
     'helloWorld.helloWorld': () => string;
     'helloWorld.helloException': (message: string) => void;
   }
-}
 
-declare module 'papi-project-data-types' {
   export type MyProjectDataType = MandatoryProjectDataType & {
     MyProjectData: DataProviderDataType<string, string, string>;
   };
