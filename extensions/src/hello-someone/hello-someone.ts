@@ -315,8 +315,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       'MyExtensionProjectTypeName',
       'abc',
     );
-  if (customProjectDataProvider.dispose)
-    context.registrations.add(customProjectDataProvider.dispose);
   if ((await customProjectDataProvider.getMyProjectData('something')) !== 'my project data')
     logger.error('Getting MyProjectData did not return the expected data');
   else logger.info('Getting MyProjectData worked as expected');

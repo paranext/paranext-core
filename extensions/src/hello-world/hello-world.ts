@@ -14,7 +14,7 @@ import type {
   ProjectDataProviderEngineTypes,
 } from 'shared/models/project-data-provider-engine.model';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
-import type { MyProjectDataType } from 'papi-project-data-types';
+import type { MyProjectDataType } from 'papi-shared-types';
 import helloWorldReactWebView from './web-views/hello-world.web-view?inline';
 import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?inline';
 import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';

@@ -1,7 +1,7 @@
-import { ProjectDataTypes } from 'papi-project-data-types';
+import { ProjectDataTypes } from 'papi-shared-types';
 import {
   ProjectTypes,
-  ProjectDataProviderTypes,
+  ProjectDataProvider,
   ProjectDataProviderEngineTypes,
   ProjectDataProviderEngineFactory,
 } from '@shared/models/project-data-provider-engine.model';
@@ -98,15 +98,17 @@ export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
   projectId: string,
   projectType: ProjectType,
   storageType: string,
-): Promise<ProjectDataProviderTypes[ProjectType]> {
+): Promise<ProjectDataProvider[ProjectType]> {
   const pdpFactoryId: string = getProjectDataProviderFactoryId(projectType);
   const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<ProjectType>>(
     pdpFactoryId,
   );
   if (!pdpFactory) throw new Error(`Cannot create project data providers of type ${projectType}`);
 
+  // TODO: Get the appropriate PSI ID and pass it into pdpFactory.getProjectDataProviderId instead
+  // of the storageType. https://github.com/paranext/paranext-core/issues/367
   const pdpId = await pdpFactory.getProjectDataProviderId(projectId, storageType);
-  const pdp = await dataProviderService.get<ProjectDataProviderTypes[ProjectType]>(pdpId);
+  const pdp = await dataProviderService.get<ProjectDataProvider[ProjectType]>(pdpId);
   if (!pdp) throw new Error(`Cannot create project data provider for project ID ${projectId}`);
   return pdp;
 }

@@ -2,7 +2,7 @@ import {
   ProjectDataProviderEngineTypes,
   ProjectDataProviderEngineFactory,
 } from '@shared/models/project-data-provider-engine.model';
-import type { NotesOnlyProjectDataTypes } from 'papi-project-data-types';
+import type { NotesOnlyProjectDataTypes } from 'papi-shared-types-dependencies';
 import {
   registerProjectDataProviderEngineFactory,
   getProjectDataProvider,
