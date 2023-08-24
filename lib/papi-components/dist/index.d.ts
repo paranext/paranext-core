@@ -249,38 +249,42 @@ export type MenuItemProps = MenuItemInfo & {
   id?: string;
   onClick: () => void;
 };
-export type MenuItemInfo = Command &
-  PropsWithChildren<{
-    /**
-     * If true, list item is focused during the first mount
-     * @default false
-     */
-    hasAutoFocus?: boolean;
-    /**
-     * Additional css classes to help with unique styling of the button
-     */
-    className?: string;
-    /**
-     * If true, compact vertical padding designed for keyboard and mouse
-     * input is used.
-     * @default true
-     */
-    isDense?: boolean;
-    /**
-     * If true, the left and right padding is removed
-     * @default false
-     */
-    hasDisabledGutters?: boolean;
-    /**
-     * If true, a 1px light border is added to bottom of menu item
-     * @default false
-     */
-    hasDivider?: boolean;
-    /**
-     * Help identify which element has keyboard focus
-     */
-    focusVisibleClassName?: string;
-  }>;
+export type MenuItemInfo = PropsWithChildren<{
+  /**
+   * If true, list item is focused during the first mount
+   * @default false
+   */
+  hasAutoFocus?: boolean;
+  /**
+   * Additional css classes to help with unique styling of the button
+   */
+  className?: string;
+  /**
+   * If true, compact vertical padding designed for keyboard and mouse
+   * input is used.
+   * @default true
+   */
+  isDense?: boolean;
+  /**
+   * If true, the left and right padding is removed
+   * @default false
+   */
+  hasDisabledGutters?: boolean;
+  /**
+   * If true, a 1px light border is added to bottom of menu item
+   * @default false
+   */
+  hasDivider?: boolean;
+  /**
+   * Help identify which element has keyboard focus
+   */
+  focusVisibleClassName?: string;
+  /**
+   * Name embedded into MenuItemInfo for use by GridMenu
+   */
+  name?: Command['name'];
+  command?: Command['command'];
+}>;
 export declare function MenuItem(props: MenuItemProps): import('react/jsx-runtime').JSX.Element;
 type MenuColumnInfo = {
   /**
