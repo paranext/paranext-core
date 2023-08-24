@@ -33,11 +33,10 @@
     "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
     "build": "npm run build:basic && npm run format:scripts && npm run lint:scripts && npm run format:styles && npm run lint:styles",
     "watch": "tsc && vite build --watch",
-    "lint:scripts": "eslint . --ext .ts,.tsx --cache",
-    "postinstall": "cd ../.. && npm install --ignore-scripts",
-    "lint:styles": "stylelint ./**/*.{css,scss}",
-    "format:scripts": "prettier . --write",
-    "format:styles": "stylelint ./**/*.{css,scss} --fix"
+    "lint": "npm run lint:scripts && npm run lint:styles",
+    "lint:scripts": "prettier --ignore-path .eslintignore --write \"**/*.{ts,tsx,js,jsx}\" && eslint --ext .js,.jsx,.ts,.tsx --cache .",
+    "lint:styles": "stylelint --ignore-path .eslintignore --fix **/*.{css,scss}",
+    "postinstall": "cd ../.. && npm install --ignore-scripts"
   },
   "peerDependencies": {
     "@emotion/react": ">=11.11.1",

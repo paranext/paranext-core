@@ -2,7 +2,6 @@ import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
 import { Toolbar, RefSelector, ScriptureReference } from 'papi-components';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import { handleMenuData } from './platform-bible-menu.data';
-import './platform-bible-toolbar.css';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,

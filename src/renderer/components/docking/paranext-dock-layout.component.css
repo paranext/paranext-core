@@ -4,7 +4,7 @@
 }
 
 .dock-layout .dock-panel.dock-style-paranext {
-  border: none;
+  border: 0;
 }
 
 /*
@@ -18,16 +18,18 @@
 }
 
 .dock-layout .dock-panel.dock-style-place-holder .dock-content-holder {
-  border: none;
+  border: 0;
 }
 
 .dock-layout .dock-panel.dock-style-paranext .dock-tab {
-  margin-right: 0px;
+  margin-right: 0;
   border: 1px solid #5c5c5c;
   background: #bfbfbf;
   color: #191919;
+  flex: 1 0 auto;
 }
 
+/* stylelint-disable-next-line selector-max-compound-selectors */
 .dock-layout .dock-panel.dock-style-paranext .dock-tab > div {
   padding-left: 7px;
 }
@@ -37,11 +39,11 @@
  * so the borders show even when the tabs don't fit in the space and you have to scroll
  */
 .dock-layout .dock-panel.dock-style-paranext .dock-tab:first-child {
-  border-left: none;
+  border-left: 0;
 }
 
 .dock-layout .dock-panel.dock-style-paranext .dock-tab:nth-last-child(2) {
-  border-right: none;
+  border-right: 0;
 }
 
 .dock-layout .dock-panel.dock-style-paranext .dock-nav {
@@ -61,13 +63,13 @@
 .dock-layout .dock-panel.dock-style-paranext .dock-nav,
 .dock-layout .dock-panel.dock-style-paranext .dock-nav-wrap,
 .dock-layout .dock-panel.dock-style-paranext .dock-tab {
-  border-radius: 5px 5px 0px 0px;
+  border-radius: 5px 5px 0 0;
 }
 
 .dock-layout .dock-panel.dock-style-paranext .dock-bar {
   background: #8c8c8c;
   padding: 0;
-  border: none;
+  border: 0;
 }
 
 .dock-layout .dock-panel.dock-style-paranext .dock-tab-hit-area {
@@ -81,7 +83,7 @@
    * Remove the handle bar at the top of each dock-tab. Note: Now, the tab
    * group can only be grabbed by grabbing the intersection between two tabs
    */
-  padding-top: 0px;
+  padding-top: 0;
   /*
    * For some reason, by default, the tabs are moved down one pixel. That
    * makes them blurry, so this removes that transform
@@ -92,9 +94,6 @@
 /* tabs take all the space */
 .dock-layout .dock-panel.dock-style-paranext .dock-nav-list {
   flex-grow: 1;
-}
-.dock-layout .dock-panel.dock-style-paranext .dock-tab {
-  flex: 1 0 auto;
 }
 
 /* global dock layout styles */
@@ -107,7 +106,7 @@
 
 .dock-layout .dock-content-holder {
   border: 1px solid #5c5c5c;
-  border-top: none;
+  border-top: 0;
 }
 
 /* Hide tab group overflow button when the button is not needed */

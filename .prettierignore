@@ -1,3 +1,5 @@
+# Please keep this file in sync with .eslintignore
+
 # Logs
 logs
 *.log
@@ -28,9 +30,17 @@ npm-debug.log.*
 *.sass.d.ts
 *.scss.d.ts
 
-# Vite (or any other packager) output
+# Packager output
 dist
 
 # eslint ignores hidden directories by default:
 # https://github.com/eslint/eslint/issues/8429
 !.erb
+!.storybook
+
+storybook-static
+
+# directories that have separate eslint project
+lib/papi-components
+lib/papi-dts
+extensions
