@@ -1,4 +1,4 @@
-import { VerseRef } from '@sillsdev/scripture';
+﻿import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
 import { RefSelector, ScriptureReference } from 'papi-components';
 import { useMemo } from 'react';
@@ -157,10 +157,7 @@ globalThis.webViewComponent = function ResourceViewer() {
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
   const [usx, , isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
     'usfm',
-    useMemo(
-      () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
-      [scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum],
-    ),
+    useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
   );
 
