@@ -24,7 +24,7 @@
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
-      "prettier --ignore-path .eslintignore --parser json --write",
+      "prettier --ignore-path .eslintignore --write",
       "cross-env NODE_ENV=development eslint --cache"
     ],
     "*.json,.{eslintrc,prettierrc}": [
