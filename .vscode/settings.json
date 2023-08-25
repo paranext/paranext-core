@@ -13,9 +13,9 @@
   "eslint.validate": ["javascript", "javascriptreact", "html", "typescriptreact"],
 
   "files.associations": {
-    ".eslintrc": "jsonc",
-    ".prettierrc": "jsonc",
-    ".eslintignore": "ignore"
+    ".eslintignore": "ignore",
+    ".prettierignore": "ignore",
+    ".stylelintignore": "ignore"
   },
   "files.eol": "\n",
 
