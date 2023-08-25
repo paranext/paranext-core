@@ -1,6 +1,5 @@
-import { ProjectDataTypes } from 'papi-shared-types';
+import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
 import {
-  ProjectTypes,
   ProjectDataProvider,
   ProjectDataProviderEngineTypes,
   ProjectDataProviderEngineFactory,
@@ -57,7 +56,7 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
     // Add a check for extensions that provide new project types
     if (!('getExtensionData' in projectDataProviderEngine))
       throw new Error('projectDataProviderEngine must implement "MandatoryProjectDataTypes"');
-    const pdpId: string = newNonce();
+    const pdpId: string = `${newNonce()}-pdp`;
     const pdp = await dataProviderService.registerEngine<ProjectDataTypes[ProjectType]>(
       pdpId,
       projectDataProviderEngine,
@@ -94,6 +93,8 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
  * @param storageType Storage type of the project referenced by the given ID
  * @returns Data provider with types that are associated with the given project type
  */
+// TODO: Look up projectType and storageType based on the projectId passed in.
+// https://github.com/paranext/paranext-core/issues/357
 export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
   projectId: string,
   projectType: ProjectType,

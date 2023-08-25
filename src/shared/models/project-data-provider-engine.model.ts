@@ -1,12 +1,6 @@
-import { ProjectDataTypes } from 'papi-shared-types';
+import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
 import type IDataProvider from 'shared/models/data-provider.interface';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
-
-/**
- * Identifiers for all project types supported by PAPI. These are not intended to correspond 1:1
- * to the set of project types available in Paratext.
- */
-export type ProjectTypes = keyof ProjectDataTypes;
 
 // This enforces all the keys match ProjectDataTypes
 type IDataProviderEngineGeneric<T extends ProjectDataTypes> = {
@@ -22,7 +16,7 @@ type IProjectDataProviderGeneric<T extends ProjectDataTypes> = {
 };
 
 /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
-export type ProjectDataProvider = Omit<IProjectDataProviderGeneric<ProjectDataTypes>, 'dispose'>;
+export type ProjectDataProvider = IProjectDataProviderGeneric<ProjectDataTypes>;
 
 export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
   createProjectDataProviderEngine(
