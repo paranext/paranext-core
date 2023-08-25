@@ -17,8 +17,10 @@
     "build:types": "cd .. && npm run build:types",
     "start": "cd .. && npm start",
     "lint": "npm run lint:scripts && npm run lint:styles",
-    "lint:scripts": "prettier --ignore-path .eslintignore --write \"**/*.{ts,tsx,js,jsx}\" && cross-env NODE_ENV=development eslint --ext .js,.jsx,.ts,.tsx --cache .",
-    "lint:styles": "stylelint --ignore-path .eslintignore --fix **/*.{css,scss}",
+    "lint:scripts": "cross-env NODE_ENV=development eslint --ext .js,.jsx,.ts,.tsx --cache .",
+    "lint:styles": "stylelint --ignore-path .eslintignore **/*.{css,scss}",
+    "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
+    "lint-fix:scripts": "prettier --ignore-path .eslintignore --write \"**/*.{ts,tsx,js,jsx}\" && npm run lint:scripts",
     "lint:staged": "lint-staged -q",
     "postinstall": "cd src/resource-viewer && npm install"
   },

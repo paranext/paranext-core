@@ -9,9 +9,9 @@
   "rules": {
     "color-named": null,
     "function-parentheses-space-inside": null,
-    "no-descending-specificity": null,
     "max-nesting-depth": 2,
-    "selector-max-id": 1,
-    "selector-max-compound-selectors": 4
+    "no-descending-specificity": null,
+    "selector-max-compound-selectors": 4,
+    "selector-max-id": 1
   }
 }

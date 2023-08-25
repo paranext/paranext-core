@@ -29,7 +29,6 @@
   flex: 1 0 auto;
 }
 
-/* stylelint-disable-next-line selector-max-compound-selectors */
 .dock-layout .dock-panel.dock-style-paranext .dock-tab > div {
   padding-left: 7px;
 }
