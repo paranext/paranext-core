@@ -14,9 +14,14 @@ import {
  * Override the NetworkableObject type's force-undefined onDidDispose to NetworkObject's
  * onDidDispose type because it will have an onDidDispose added.
  *
+ * If an object of type T had `dispose` on it, `networkObjectService.get` will remove the ability
+ * to call that method. This is because we don't want users of network objects to dispose of them.
+ * Only the caller of `networkObjectService.set` should be able to dispose of the network object.
+ *
  * @see networkObjectService
  */
-export type NetworkObject<T extends NetworkableObject> = CanHaveOnDidDispose<T> & OnDidDispose;
+export type NetworkObject<T extends NetworkableObject> = Omit<CanHaveOnDidDispose<T>, 'dispose'> &
+  OnDidDispose;
 
 /**
  * An object of this type is returned from {@link networkObjectService.set}.

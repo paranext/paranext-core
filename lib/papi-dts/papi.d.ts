@@ -1233,9 +1233,14 @@ declare module 'shared/models/network-object.model' {
    * Override the NetworkableObject type's force-undefined onDidDispose to NetworkObject's
    * onDidDispose type because it will have an onDidDispose added.
    *
+   * If an object of type T had `dispose` on it, `networkObjectService.get` will remove the ability
+   * to call that method. This is because we don't want users of network objects to dispose of them.
+   * Only the caller of `networkObjectService.set` should be able to dispose of the network object.
+   *
    * @see networkObjectService
    */
-  export type NetworkObject<T extends NetworkableObject> = CanHaveOnDidDispose<T> & OnDidDispose;
+  export type NetworkObject<T extends NetworkableObject> = Omit<CanHaveOnDidDispose<T>, 'dispose'> &
+    OnDidDispose;
   /**
    * An object of this type is returned from {@link networkObjectService.set}.
    *
@@ -1490,23 +1495,11 @@ declare module 'shared/models/project-data-provider.model' {
     ExtensionData: DataProviderDataType<string, string | undefined, string>;
   };
 }
-declare module 'papi-shared-types-dependencies' {
+declare module 'papi-shared-types' {
+  import { ScriptureReference } from 'papi-components';
   import type { DataProviderDataType } from 'shared/models/data-provider.model';
   import type { MandatoryProjectDataType } from 'shared/models/project-data-provider.model';
   import { VerseRef } from '@sillsdev/scripture';
-  /** This is not yet a complete list of the data types available from Paratext projects. */
-  type ParatextStandardProjectDataTypes = MandatoryProjectDataType & {
-    Book: DataProviderDataType<VerseRef, string | undefined, string>;
-    Chapter: DataProviderDataType<VerseRef, string | undefined, string>;
-    Verse: DataProviderDataType<VerseRef, string | undefined, string>;
-  };
-  /** This is just a simple example so we have more than one. It's not intended to be real. */
-  type NotesOnlyProjectDataTypes = MandatoryProjectDataType & {
-    Notes: DataProviderDataType<string, string | undefined, string>;
-  };
-}
-declare module 'papi-shared-types' {
-  import { ScriptureReference } from 'papi-components';
   /**
      * Function types for each command available on the papi. Each extension can extend this interface
      * to add commands that it registers on the papi.
@@ -1551,10 +1544,16 @@ declare module 'papi-shared-types' {
     placeholder: null;
   }
   type SettingNames = keyof SettingTypes;
-  import type {
-    ParatextStandardProjectDataTypes,
-    NotesOnlyProjectDataTypes,
-  } from 'papi-shared-types-dependencies';
+  /** This is not yet a complete list of the data types available from Paratext projects. */
+  type ParatextStandardProjectDataTypes = MandatoryProjectDataType & {
+    Book: DataProviderDataType<VerseRef, string | undefined, string>;
+    Chapter: DataProviderDataType<VerseRef, string | undefined, string>;
+    Verse: DataProviderDataType<VerseRef, string | undefined, string>;
+  };
+  /** This is just a simple example so we have more than one. It's not intended to be real. */
+  type NotesOnlyProjectDataTypes = MandatoryProjectDataType & {
+    Notes: DataProviderDataType<string, string | undefined, string>;
+  };
   /**
    * Data types for each project data provider supported by PAPI. Extensions can add more data types
    * with corresponding project data provider IDs by adding details to their `d.ts` file. Note that
@@ -1578,6 +1577,11 @@ declare module 'papi-shared-types' {
     ParatextStandard: ParatextStandardProjectDataTypes;
     NotesOnly: NotesOnlyProjectDataTypes;
   }
+  /**
+   * Identifiers for all project types supported by PAPI. These are not intended to correspond 1:1
+   * to the set of project types available in Paratext.
+   */
+  type ProjectTypes = keyof ProjectDataTypes;
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
@@ -2296,14 +2300,9 @@ declare module 'shared/services/data-provider.service' {
   export default dataProviderService;
 }
 declare module 'shared/models/project-data-provider-engine.model' {
-  import { ProjectDataTypes } from 'papi-shared-types';
+  import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
   import type IDataProvider from 'shared/models/data-provider.interface';
   import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  /**
-   * Identifiers for all project types supported by PAPI. These are not intended to correspond 1:1
-   * to the set of project types available in Paratext.
-   */
-  export type ProjectTypes = keyof ProjectDataTypes;
   type IDataProviderEngineGeneric<T extends ProjectDataTypes> = {
     [K in keyof T]: IDataProviderEngine<T[K]>;
   };
@@ -2313,7 +2312,7 @@ declare module 'shared/models/project-data-provider-engine.model' {
     [K in keyof T]: IDataProvider<T[K]>;
   };
   /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
-  export type ProjectDataProvider = Omit<IProjectDataProviderGeneric<ProjectDataTypes>, 'dispose'>;
+  export type ProjectDataProvider = IProjectDataProviderGeneric<ProjectDataTypes>;
   export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
     createProjectDataProviderEngine(
       projectId: string,
@@ -2344,8 +2343,8 @@ declare module 'shared/utils/unsubscriber-async-list' {
   }
 }
 declare module 'shared/services/project-data-provider.service' {
+  import { ProjectTypes } from 'papi-shared-types';
   import {
-    ProjectTypes,
     ProjectDataProvider,
     ProjectDataProviderEngineFactory,
   } from 'shared/models/project-data-provider-engine.model';
