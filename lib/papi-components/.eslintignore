@@ -1,3 +1,5 @@
+# Please keep this file in sync with .prettierignore and .stylelintignore
+
 # Dependency directory
 node_modules
 

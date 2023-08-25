@@ -1,2 +1,4 @@
+# Please keep this file in sync with .prettierignore
+
 # Dependency directory
 node_modules

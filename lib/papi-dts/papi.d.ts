@@ -1854,7 +1854,7 @@ declare module 'shared/models/data-provider.model' {
      * Note: By default, this `subscribe<data_type>` function automatically retrieves the current state of the data
      * and runs the provided callback as soon as possible. That way, if you want to keep your data up-to-date,
      * you do not also have to run `get<data_type>`. You can turn this functionality off in the `options` parameter.
-    
+
      * @param selector tells the provider what data this listener is listening for
      * @param callback function to run with the updated data for this selector
      * @param options various options to adjust how the subscriber emits updates

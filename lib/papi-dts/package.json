@@ -26,26 +26,23 @@
   "main": "",
   "types": "papi.d.ts",
   "scripts": {
-    "build": "tsc && ts-node edit-papi-d-ts.ts && prettier --write papi.d.ts",
+    "build": "tsc && ts-node edit-papi-d-ts.ts && prettier --config ../../.prettierrc --write papi.d.ts",
     "build:clean": "rimraf papi.tsbuildinfo",
     "build:fresh": "npm run build:clean && npm run build",
-    "lint": "cross-env NODE_ENV=development eslint --ext .js,.jsx,.ts,.tsx --cache .",
-    "lint-fix": "prettier --ignore-path .eslintignore --write \"**/*.{ts,tsx,js,jsx}\" && npm run lint",
+    "lint": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
+    "lint-fix": "prettier --config ../../.prettierrc --ignore-path .eslintignore --write \"**/*.{ts,tsx,js,jsx}\" && npm run lint",
     "lint:staged": "lint-staged -q"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx}": [
-      "prettier --ignore-path .eslintignore --write",
+    "*.{cjs,js,jsx,ts,tsx}": [
+      "prettier --config ../../.prettierrc --ignore-path .eslintignore --write",
       "cross-env NODE_ENV=development eslint --cache"
     ],
-    "*.json,.{eslintrc,prettierrc}": [
-      "prettier --ignore-path .eslintignore --parser json --write"
-    ],
-    "*.{css,scss}": [
-      "stylelint --ignore-path .eslintignore --fix"
+    "*.json": [
+      "prettier --config ../../.prettierrc --ignore-path .eslintignore --parser json --write"
     ],
     "*.{html,md,yml}": [
-      "prettier --ignore-path .eslintignore --single-quote --write"
+      "prettier --config ../../.prettierrc --ignore-path .eslintignore --single-quote --write"
     ]
   },
   "devDependencies": {
