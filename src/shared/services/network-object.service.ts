@@ -448,7 +448,7 @@ const set = async <T extends NetworkableObject>(
 
     // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's
     // onDidDispose type because it had an onDidDispose added in overrideOnDidDispose.
-    return objectToShare as CanHaveOnDidDispose<T> as DisposableNetworkObject<T>;
+    return objectToShare as Omit<CanHaveOnDidDispose<T>, 'dispose'> as DisposableNetworkObject<T>;
   });
 };
 

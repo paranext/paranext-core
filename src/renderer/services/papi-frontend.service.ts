@@ -12,6 +12,10 @@ import { papiNetworkService, PapiNetworkService } from '@shared/services/network
 import { papiWebViewService, PapiWebViewService } from '@shared/services/web-view.service';
 import internetService, { InternetService } from '@shared/services/internet.service';
 import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
+import {
+  papiFrontendProjectDataProviderService,
+  PapiFrontendProjectDataProviderService,
+} from '@shared/services/project-data-provider.service';
 import papiContext, { PapiContext } from '@renderer/context/papi-context';
 import papiHooks, { PapiHooks } from '@renderer/hooks/papi-hooks';
 import settingsService, { SettingsService } from '@shared/services/settings.service';
@@ -46,6 +50,9 @@ const papi = {
   internet: internetService as InternetService,
   /** JSDOC DESTINATION dataProviderService */
   dataProvider: dataProviderService as DataProviderService,
+  /** JSDOC DESTINATION papiFrontendProjectDataProviderService */
+  projectDataProvider:
+    papiFrontendProjectDataProviderService as PapiFrontendProjectDataProviderService,
   react: {
     /** JSDOC DESTINATION papiContext */
     context: papiContext as PapiContext,

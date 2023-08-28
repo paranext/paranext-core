@@ -1,53 +1,6 @@
 /// <reference types="react" />
 /// <reference types="node" />
 /// <reference types="node" />
-declare module 'papi-shared-types' {
-  import { ScriptureReference } from 'papi-components';
-  /**
-     * Function types for each command available on the papi. Each extension can extend this interface
-     * to add commands that it registers on the papi.
-     *
-     * Note: Command names must consist of two string separated by at least one period. We recommend
-     * one period and lower camel case in case we expand the api in the future to allow dot notation.
-     *
-     * @example An extension can extend this interface to add types for the commands it registers by
-     * adding the following to its `.d.ts` file:
-     *
-     * ```typescript
-     * declare module 'papi-shared-types' {
-         export interface CommandHandlers {
-           'myExtension.myCommand1': (foo: string, bar: number) => string;
-           'myExtension.myCommand2': (foo: string) => Promise<void>;
-         }
-       }
-     * ```
-     */
-  interface CommandHandlers {
-    'test.echo': (message: string) => string;
-    'test.echoRenderer': (message: string) => Promise<string>;
-    'test.echoExtensionHost': (message: string) => Promise<string>;
-    'test.throwError': (message: string) => void;
-    'platform.restartExtensionHost': () => Promise<void>;
-    'platform.quit': () => Promise<void>;
-    'test.addMany': (...nums: number[]) => number;
-    'test.throwErrorExtensionHost': (message: string) => void;
-  }
-  /**
-   * Names for each command available on the papi. Automatically includes all extensions' commands
-   * that are added to {@link CommandHandlers}.
-   *
-   * Note: Command names must consist of two string separated by at least one period. We recommend
-   * one period and lower camel case in case we expand the api in the future to allow dot notation.
-   *
-   * @example 'platform.quit'
-   */
-  type CommandNames = keyof CommandHandlers;
-  interface SettingTypes {
-    'platform.verseRef': ScriptureReference;
-    placeholder: null;
-  }
-  type SettingNames = keyof SettingTypes;
-}
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';
@@ -294,86 +247,6 @@ declare module 'shared/models/papi-event.model' {
    * Note: The callback itself is not asynchronous.
    */
   export type PapiEventAsync<T> = (callback: PapiEventHandler<T>) => Promise<UnsubscriberAsync>;
-}
-declare module 'shared/models/disposal.model' {
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Require a `dispose` function */
-  export interface Dispose {
-    /** Release resources and notify dependent services when tearing down an object */
-    dispose: UnsubscriberAsync;
-  }
-  /** Require an `onDidDispose` event */
-  export interface OnDidDispose {
-    /** Event that emits when `dispose` is called on an object */
-    onDidDispose: PapiEvent<void>;
-  }
-  /** Indicates than an object cannot have an `onDidDispose` event.
-   *  Also allows an object to include a `dispose` function. */
-  export interface CannotHaveOnDidDispose {
-    /** Release resources and notify dependent services when tearing down an object */
-    dispose?: UnsubscriberAsync;
-    /** Event that emits when `dispose` is called on an object */
-    onDidDispose?: undefined;
-  }
-  /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
-  export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
-}
-declare module 'shared/models/papi-event-emitter.model' {
-  /**
-   * Interfaces, classes, and functions related to events and event emitters
-   */
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  import { Dispose } from 'shared/models/disposal.model';
-  /**
-   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
-   * Use eventEmitter.event(callback) to subscribe to the event.
-   * Use eventEmitter.emit(event) to run the subscriptions.
-   * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
-   * but anyone can subscribe to the event.
-   */
-  export default class PapiEventEmitter<T> implements Dispose {
-    /**
-     * Subscribes a function to run when this event is emitted.
-     * @alias event
-     * @param callback function to run with the event when it is emitted
-     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-     */
-    subscribe: PapiEvent<T>;
-    /** All callback functions that will run when this event is emitted. Lazy loaded */
-    private subscriptions?;
-    /** Event for listeners to subscribe to. Lazy loaded */
-    private lazyEvent?;
-    /** Whether this emitter has been disposed */
-    private isDisposed;
-    /**
-     * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
-     * Use like `const unsubscriber = event(callback)`
-     * @param callback function to run with the event when it is emitted
-     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
-     */
-    get event(): PapiEvent<T>;
-    /** Disposes of this event, preparing it to release from memory */
-    dispose: () => Promise<boolean>;
-    /**
-     * Runs the subscriptions for the event
-     * @param event event data to provide to subscribed callbacks
-     */
-    emit: (event: T) => void;
-    /**
-     * Function that runs the subscriptions for the event.
-     * Added here so children can override emit and still call the base functionality.
-     * See NetworkEventEmitter.emit for example
-     */
-    protected emitFn(event: T): void;
-    /** Check to make sure this emitter is not disposed. Throw if it is */
-    protected assertNotDisposed(): void;
-    /**
-     * Disposes of this event, preparing it to release from memory.
-     * Added here so children can override emit and still call the base functionality.
-     */
-    protected disposeFn(): Promise<boolean>;
-  }
 }
 declare module 'shared/data/internal-connection.model' {
   /**
@@ -645,6 +518,86 @@ declare module 'shared/services/logger.service' {
     default: log.MainLogger;
   };
   export default logger;
+}
+declare module 'shared/models/disposal.model' {
+  import { PapiEvent } from 'shared/models/papi-event.model';
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  /** Require a `dispose` function */
+  export interface Dispose {
+    /** Release resources and notify dependent services when tearing down an object */
+    dispose: UnsubscriberAsync;
+  }
+  /** Require an `onDidDispose` event */
+  export interface OnDidDispose {
+    /** Event that emits when `dispose` is called on an object */
+    onDidDispose: PapiEvent<void>;
+  }
+  /** Indicates than an object cannot have an `onDidDispose` event.
+   *  Also allows an object to include a `dispose` function. */
+  export interface CannotHaveOnDidDispose {
+    /** Release resources and notify dependent services when tearing down an object */
+    dispose?: UnsubscriberAsync;
+    /** Event that emits when `dispose` is called on an object */
+    onDidDispose?: undefined;
+  }
+  /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
+  export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
+}
+declare module 'shared/models/papi-event-emitter.model' {
+  /**
+   * Interfaces, classes, and functions related to events and event emitters
+   */
+  import { PapiEvent } from 'shared/models/papi-event.model';
+  import { Dispose } from 'shared/models/disposal.model';
+  /**
+   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
+   * Use eventEmitter.event(callback) to subscribe to the event.
+   * Use eventEmitter.emit(event) to run the subscriptions.
+   * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
+   * but anyone can subscribe to the event.
+   */
+  export default class PapiEventEmitter<T> implements Dispose {
+    /**
+     * Subscribes a function to run when this event is emitted.
+     * @alias event
+     * @param callback function to run with the event when it is emitted
+     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+     */
+    subscribe: PapiEvent<T>;
+    /** All callback functions that will run when this event is emitted. Lazy loaded */
+    private subscriptions?;
+    /** Event for listeners to subscribe to. Lazy loaded */
+    private lazyEvent?;
+    /** Whether this emitter has been disposed */
+    private isDisposed;
+    /**
+     * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
+     * Use like `const unsubscriber = event(callback)`
+     * @param callback function to run with the event when it is emitted
+     * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+     */
+    get event(): PapiEvent<T>;
+    /** Disposes of this event, preparing it to release from memory */
+    dispose: () => Promise<boolean>;
+    /**
+     * Runs the subscriptions for the event
+     * @param event event data to provide to subscribed callbacks
+     */
+    emit: (event: T) => void;
+    /**
+     * Function that runs the subscriptions for the event.
+     * Added here so children can override emit and still call the base functionality.
+     * See NetworkEventEmitter.emit for example
+     */
+    protected emitFn(event: T): void;
+    /** Check to make sure this emitter is not disposed. Throw if it is */
+    protected assertNotDisposed(): void;
+    /**
+     * Disposes of this event, preparing it to release from memory.
+     * Added here so children can override emit and still call the base functionality.
+     */
+    protected disposeFn(): Promise<boolean>;
+  }
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -1138,6 +1091,498 @@ declare module 'shared/services/network.service' {
    */
   export const papiNetworkService: PapiNetworkService;
 }
+declare module 'shared/utils/async-variable' {
+  /**
+   * This class provides a convenient way for one task to wait on a variable that another task sets.
+   */
+  export default class AsyncVariable<T> {
+    private readonly variableName;
+    private readonly promiseToValue;
+    private resolver;
+    private rejecter;
+    /**
+     * Creates an instance of the class
+     * @param variableName name to use when logging about this variable
+     * @param rejectIfNotSettledWithinMS milliseconds to wait before verifying if the promise was
+     * settled (resolved or rejected); will reject if it has not settled by that time.  Use -1 if you
+     * do not want a timeout at all.
+     */
+    constructor(variableName: string, rejectIfNotSettledWithinMS?: number);
+    /**
+     * Get this variable's promise to a value. This always returns the same promise even after the
+     * value has been resolved or rejected.
+     * @returns the promise for the value to be set
+     */
+    get promise(): Promise<T>;
+    /**
+     * A simple way to see if this variable's promise was resolved or rejected already
+     * @returns whether the variable was already resolved or rejected
+     */
+    get hasSettled(): boolean;
+    /**
+     * Resolve this variable's promise to the given value
+     * @param value this variable's promise will resolve to this value
+     * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
+     */
+    resolveToValue(value: T, throwIfAlreadySettled?: boolean): void;
+    /**
+     * Reject this variable's promise for the value with the given reason
+     * @param reason this variable's promise will be rejected with this reason
+     * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
+     */
+    rejectWithReason(reason: string, throwIfAlreadySettled?: boolean): void;
+    /**
+     * Prevent any further updates to this variable
+     */
+    private complete;
+  }
+}
+declare module 'shared/services/network-object.service' {
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import {
+    NetworkObject,
+    DisposableNetworkObject,
+    NetworkableObject,
+    LocalObjectToProxyCreator,
+  } from 'shared/models/network-object.model';
+  /** Sets up the service. Only runs once and always returns the same promise after that */
+  const initialize: () => Promise<void>;
+  /** Search locally known network objects for the given ID. Don't look on the network for more objects.
+   *  @returns whether we know of an existing network object with the provided id already on the network */
+  const hasKnown: (id: string) => boolean;
+  interface IDisposableObject {
+    dispose?: UnsubscriberAsync;
+  }
+  /** If `dispose` already exists on `objectToMutate`, we will call it in addition to `newDispose` */
+  export function overrideDispose(
+    objectToMutate: IDisposableObject,
+    newDispose: UnsubscriberAsync,
+  ): void;
+  /**
+   * Get a network object that has previously been set up to be shared on the network.
+   * A network object is a proxy to an object living somewhere else that local code can use.
+   *
+   * Running this function twice with the same inputs yields the same network object.
+   * @param id id of the network object - all processes must use this id to look up this network object
+   * @param createLocalObjectToProxy Function that creates an object that the network object proxy
+   * will be based upon. The object this function creates cannot have an `onDidDispose` property.
+   * This function is useful for setting up network events on a network object.
+   * @returns A promise for the network object with specified id if one exists, undefined otherwise
+   */
+  const get: <T extends object>(
+    id: string,
+    createLocalObjectToProxy?: LocalObjectToProxyCreator<T> | undefined,
+  ) => Promise<NetworkObject<T> | undefined>;
+  /**
+   * Set up an object to be shared on the network.
+   * @param id ID of the object to share on the network. All processes must use this ID to look it up.
+   * @param objectToShare The object to set up as a network object. It will have an event named
+   * `onDidDispose` added to its properties. An error will be thrown if the object already had an
+   * `onDidDispose` property on it. If the object already contained a `dispose` function, a new
+   * `dispose` function will be set that calls the existing function (amongst other things). If the
+   * object did not already define a `dispose` function, one will be added.
+   *
+   * WARNING: setting a network object mutates the provided object.
+   * @returns `objectToShare` modified to be a network object
+   */
+  const set: <T extends NetworkableObject>(
+    id: string,
+    objectToShare: T,
+  ) => Promise<DisposableNetworkObject<T>>;
+  interface NetworkObjectService {
+    initialize: typeof initialize;
+    hasKnown: typeof hasKnown;
+    get: typeof get;
+    set: typeof set;
+  }
+  /**
+   * Network objects are distributed objects within PAPI for TS/JS objects.
+   * @see https://en.wikipedia.org/wiki/Distributed_object
+   *
+   * Objects registered via {@link networkObjectService.set} are retrievable using {@link networkObjectService.get}.
+   *
+   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied and
+   * sent to the original objects registered via {@link networkObjectService.set}.
+   *
+   * Functions on a network object will be called asynchronously by other processes regardless of
+   * whether the functions are synchronous or asynchronous, so it is best to make them all
+   * asynchronous. All shared functions' arguments and return values must be serializable to be
+   * called across processes.
+   *
+   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility of
+   * that service, and only that service, to call `dispose` on that object when it is no longer
+   * intended to be shared with other services.
+   *
+   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+   * event handler will be called. After an object is disposed, calls to its functions will no longer
+   * be proxied to the original object.
+   */
+  const networkObjectService: NetworkObjectService;
+  export default networkObjectService;
+}
+declare module 'shared/models/network-object.model' {
+  import {
+    Dispose,
+    OnDidDispose,
+    CannotHaveOnDidDispose,
+    CanHaveOnDidDispose,
+  } from 'shared/models/disposal.model';
+  /**
+   * An object of this type is returned from {@link networkObjectService.get}.
+   *
+   * Override the NetworkableObject type's force-undefined onDidDispose to NetworkObject's
+   * onDidDispose type because it will have an onDidDispose added.
+   *
+   * If an object of type T had `dispose` on it, `networkObjectService.get` will remove the ability
+   * to call that method. This is because we don't want users of network objects to dispose of them.
+   * Only the caller of `networkObjectService.set` should be able to dispose of the network object.
+   *
+   * @see networkObjectService
+   */
+  export type NetworkObject<T extends NetworkableObject> = Omit<CanHaveOnDidDispose<T>, 'dispose'> &
+    OnDidDispose;
+  /**
+   * An object of this type is returned from {@link networkObjectService.set}.
+   *
+   * @see networkObjectService
+   */
+  export type DisposableNetworkObject<T extends NetworkableObject> = NetworkObject<T> & Dispose;
+  /**
+   * An object of this type is passed into {@link networkObjectService.set}.
+   *
+   * @see networkObjectService
+   */
+  export type NetworkableObject<T = object> = T & CannotHaveOnDidDispose;
+  /**
+   * If a network object with the provided ID exists remotely but has not been set up to use inside
+   * this process, this function is run in {@link networkObjectService.get}, and the returned object is used
+   * as a base on which to set up a NetworkObject for use on this process. All properties that are
+   * exposed in the base object will be used as-is, and all other properties will be assumed to exist
+   * on the remote network object.
+   *
+   * @see networkObjectService
+   *
+   * @param id ID of the network object to get
+   *
+   * @param networkObjectContainer Holds a reference to the NetworkObject that will be setup within
+   * {@link networkObjectService.get}. It is passed in to allow the return value to call functions on
+   * the NetworkObject.
+   * NOTE: networkObjectContainer.contents does not point to a real NetworkObject while this function
+   * is running. The real reference is assigned later, but before the NetworkObject will be used. The
+   * return value should always reference the NetworkObject as `networkObjectContainer.contents` to
+   * avoid acting upon an undefined NetworkObject.
+   *
+   * @returns the local object to proxy into a network object.
+   *
+   * Note: This function should return Partial<T>. For some reason, TypeScript can't infer the type
+   * (probably has to do with that it's a wrapped and layered type). Functions that implement this
+   * type should return Partial<T>
+   */
+  export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
+    id: string,
+    networkObjectPromise: Promise<NetworkObject<T>>,
+  ) => Partial<NetworkableObject>;
+}
+declare module 'shared/models/data-provider.model' {
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import { PapiEventHandler } from 'shared/models/papi-event.model';
+  import { NetworkableObject } from 'shared/models/network-object.model';
+  /** Various options to adjust how the data provider subscriber emits updates */
+  export type DataProviderSubscriberOptions = {
+    /**
+     * Whether to immediately retrieve the data for this subscriber and run the callback as soon as possible.
+     *
+     * This allows a subscriber to simply subscribe and provide a callback instead of subscribing, running `get`,
+     * and managing the race condition of an event coming in to update the data and the initial `get` coming back in.
+     * @default true
+     */
+    retrieveDataImmediately?: boolean;
+    /**
+     * Under which conditions to run the callback when we receive updates to the data.
+     *  - `'deeply-equal'` - only run the update callback when the data at this selector has changed.
+     *
+     *    For example, suppose your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3. Your data
+     *    at John 3:5 does not change, and your callback will not run.
+     *  - `'*'` - run the update callback every time the data has been updated whether or not the data
+     *    at this selector has changed.
+     *
+     *    For example, suppose your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3. Your data
+     *    at John 3:5 does not change, but your callback will run again with the same data anyway.
+     *
+     * @default 'deeply-equal'
+     */
+    whichUpdates?: 'deeply-equal' | '*';
+  };
+  /**
+   * Information that papi uses to interpret whether to send out updates on a data provider when the engine
+   * runs `set<data_type>` or `notifyUpdate`.
+   *  - `'*'` update subscriptions for all data types on this data provider
+   *  - `string` name of data type - update subscriptions for this data type
+   *  - `string[]` names of data types - update subscriptions for the data types in the array
+   *  - `true` (or other truthy values other than strings and arrays)
+   *    - In `set<data_type>` - update subscriptions for this data type
+   *    - In `notifyUpdate` - same as '*'
+   *  - `false` (or falsy) do not update subscriptions
+   */
+  export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTypes> =
+    | '*'
+    | DataTypeNames<TDataTypes>
+    | DataTypeNames<TDataTypes>[]
+    | boolean;
+  /**
+   * Set a subset of data according to the selector.
+   *
+   * Note: if a data provider engine does not provide `set` (possibly indicating it is read-only),
+   * this will throw an exception.
+   * @param selector tells the provider what subset of data is being set
+   * @param data the data that determines what to set at the selector
+   * @returns information that papi uses to interpret whether to send out updates. Defaults to `true`
+   * (meaning send updates only for this data type).
+   *
+   * @see DataProviderUpdateInstructions for more info on what to return
+   */
+  export type DataProviderSetter<
+    TDataTypes extends DataProviderDataTypes,
+    DataType extends keyof TDataTypes,
+  > = (
+    selector: TDataTypes[DataType]['selector'],
+    data: TDataTypes[DataType]['setData'],
+  ) => Promise<DataProviderUpdateInstructions<TDataTypes>>;
+  /**
+   * Get a subset of data from the provider according to the selector.
+   *
+   * Note: This is good for retrieving data from a provider once. If you want to keep the data up-to-date,
+   * use `subscribe` instead, which can immediately give you the data and keep it up-to-date.
+   * @param selector tells the provider what subset of data to get
+   * @returns the subset of data represented by the selector
+   */
+  export type DataProviderGetter<TDataType extends DataProviderDataType> = (
+    selector: TDataType['selector'],
+  ) => Promise<TDataType['getData']>;
+  /**
+     * Subscribe to receive updates relevant to the provided selector from this data provider for a specific data type.
+     *
+     * Note: By default, this `subscribe<data_type>` function automatically retrieves the current state of the data
+     * and runs the provided callback as soon as possible. That way, if you want to keep your data up-to-date,
+     * you do not also have to run `get<data_type>`. You can turn this functionality off in the `options` parameter.
+    
+     * @param selector tells the provider what data this listener is listening for
+     * @param callback function to run with the updated data for this selector
+     * @param options various options to adjust how the subscriber emits updates
+     * @returns unsubscriber to stop listening for updates
+     */
+  export type DataProviderSubscriber<TDataType extends DataProviderDataType> = (
+    selector: TDataType['selector'],
+    callback: PapiEventHandler<TDataType['getData']>,
+    options?: DataProviderSubscriberOptions,
+  ) => Promise<UnsubscriberAsync>;
+  /**
+   * A helper type describing the types associated with a data provider's methods for a specific data
+   * type it handles.
+   *
+   * @type `TSelector` - the type of selector used to get some data from this provider at this data type.
+   *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants at this data type.
+   * @type `TGetData` - the type of data provided by this data provider when you run `get<data_type>` based on a provided selector
+   * @type `TSetData` - the type of data ingested by this data provider when you run `set<data_type>` based on a provided selector
+   */
+  export type DataProviderDataType<
+    TSelector = unknown,
+    TGetData = TSelector,
+    TSetData = TGetData,
+  > = {
+    /**
+     * The type of selector used to get some data from this provider at this data type.
+     * A selector is an object a caller provides to the data provider to tell the provider what subset
+     * of data it wants at this data type.
+     */
+    selector: TSelector;
+    /**
+     * The type of data provided by this data provider when you run `get<data_type>` based on a
+     * provided selector
+     */
+    getData: TGetData;
+    /**
+     * The type of data ingested by this data provider when you run `set<data_type>` based on a provided selector
+     */
+    setData: TSetData;
+  };
+  /**
+   * A helper type describing all the data types a data provider handles. Each property on this type
+   * (consisting of a DataProviderDataType, which describes the types that correspond to that data type)
+   * describes a data type that the data provider handles. The data provider has a `set<data_type>`,
+   * `get<data_type>`, and `subscribe<data_type>` for each property (aka data type) listed in this type.
+   *
+   * @example A data provider that handles greeting strings and age numbers (as well as an All data
+   * type that just provides all the data) could have a DataProviderDataTypes that looks like the
+   * following:
+   * ```typescript
+   * {
+   *   Greeting: DataProviderDataType<string, string | undefined, string>;
+   *   Age: DataProviderDataType<string, number | undefined, number>;
+   *   All: DataProviderDataType<undefined, { greeting: string, age: number }, never>;
+   * }
+   * ```
+   */
+  export type DataProviderDataTypes = {
+    [dataType: string]: DataProviderDataType;
+  };
+  /**
+   * Names of data types in a DataProviderDataTypes type. Indicates the data types that a data provider
+   * can handle (so it will have methods with these names like `set<data_type>`)
+   *
+   * @see DataProviderDataTypes for more information
+   */
+  export type DataTypeNames<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    keyof TDataTypes & string;
+  /**
+   * Set of all `set<data_type>` methods that a data provider provides according to its data types.
+   *
+   * @see DataProviderSetter for more information
+   */
+  export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
+    [DataType in keyof TDataTypes as `set${DataType & string}`]: DataProviderSetter<
+      TDataTypes,
+      DataType
+    >;
+  };
+  /**
+   * Set of all `get<data_type>` methods that a data provider provides according to its data types.
+   *
+   * @see DataProviderGetter for more information
+   */
+  export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {
+    [DataType in keyof TDataTypes as `get${DataType & string}`]: DataProviderGetter<
+      TDataTypes[DataType]
+    >;
+  };
+  /**
+   * Set of all `subscribe<data_type>` methods that a data provider provides according to its data types.
+   *
+   * @see DataProviderSubscriber for more information
+   */
+  export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = {
+    [DataType in keyof TDataTypes as `subscribe${DataType & string}`]: DataProviderSubscriber<
+      TDataTypes[DataType]
+    >;
+  };
+  /**
+   * An internal object created locally when someone runs dataProviderService.registerEngine.
+   * This object layers over the data provider engine and runs its methods along with other methods.
+   * This object is transformed into an IDataProvider by networkObjectService.set.
+   *
+   * @see IDataProvider
+   */
+  type DataProviderInternal<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    NetworkableObject<
+      DataProviderSetters<TDataTypes> &
+        DataProviderGetters<TDataTypes> &
+        DataProviderSubscribers<TDataTypes>
+    >;
+  /**
+   * Get the data type for a data provider function based on its name
+   * @param fnName name of data provider function e.g. `getVerse`
+   * @returns data type for that data provider function e.g. `Verse`
+   */
+  export function getDataProviderDataTypeFromFunctionName<
+    TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
+  >(fnName: string): DataTypeNames<TDataTypes>;
+  export default DataProviderInternal;
+}
+declare module 'shared/models/project-data-provider.model' {
+  import type { DataProviderDataType } from 'shared/models/data-provider.model';
+  /** All Project Data Provider data types must extend from this */
+  export type MandatoryProjectDataType = {
+    ExtensionData: DataProviderDataType<string, string | undefined, string>;
+  };
+}
+declare module 'papi-shared-types' {
+  import { ScriptureReference } from 'papi-components';
+  import type { DataProviderDataType } from 'shared/models/data-provider.model';
+  import type { MandatoryProjectDataType } from 'shared/models/project-data-provider.model';
+  import { VerseRef } from '@sillsdev/scripture';
+  /**
+     * Function types for each command available on the papi. Each extension can extend this interface
+     * to add commands that it registers on the papi.
+     *
+     * Note: Command names must consist of two string separated by at least one period. We recommend
+     * one period and lower camel case in case we expand the api in the future to allow dot notation.
+     *
+     * @example An extension can extend this interface to add types for the commands it registers by
+     * adding the following to its `.d.ts` file:
+     *
+     * ```typescript
+     * declare module 'papi-shared-types' {
+         export interface CommandHandlers {
+           'myExtension.myCommand1': (foo: string, bar: number) => string;
+           'myExtension.myCommand2': (foo: string) => Promise<void>;
+         }
+       }
+     * ```
+     */
+  interface CommandHandlers {
+    'test.echo': (message: string) => string;
+    'test.echoRenderer': (message: string) => Promise<string>;
+    'test.echoExtensionHost': (message: string) => Promise<string>;
+    'test.throwError': (message: string) => void;
+    'platform.restartExtensionHost': () => Promise<void>;
+    'platform.quit': () => Promise<void>;
+    'test.addMany': (...nums: number[]) => number;
+    'test.throwErrorExtensionHost': (message: string) => void;
+  }
+  /**
+   * Names for each command available on the papi. Automatically includes all extensions' commands
+   * that are added to {@link CommandHandlers}.
+   *
+   * Note: Command names must consist of two string separated by at least one period. We recommend
+   * one period and lower camel case in case we expand the api in the future to allow dot notation.
+   *
+   * @example 'platform.quit'
+   */
+  type CommandNames = keyof CommandHandlers;
+  interface SettingTypes {
+    'platform.verseRef': ScriptureReference;
+    placeholder: null;
+  }
+  type SettingNames = keyof SettingTypes;
+  /** This is not yet a complete list of the data types available from Paratext projects. */
+  type ParatextStandardProjectDataTypes = MandatoryProjectDataType & {
+    Book: DataProviderDataType<VerseRef, string | undefined, string>;
+    Chapter: DataProviderDataType<VerseRef, string | undefined, string>;
+    Verse: DataProviderDataType<VerseRef, string | undefined, string>;
+  };
+  /** This is just a simple example so we have more than one. It's not intended to be real. */
+  type NotesOnlyProjectDataTypes = MandatoryProjectDataType & {
+    Notes: DataProviderDataType<string, string | undefined, string>;
+  };
+  /**
+   * Data types for each project data provider supported by PAPI. Extensions can add more data types
+   * with corresponding project data provider IDs by adding details to their `d.ts` file. Note that
+   * all project data types should extend `MandatoryProjectDataTypes` like the following example.
+   *
+   * @example
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
+   *     MyProjectData1: DataProviderDataType<string, string, string>;
+   *     MyProjectData2: DataProviderDataType<string, string, string>;
+   *   }
+   *
+   *   export interface ProjectDataTypes {
+   *     MyExtensionProjectTypeName: MyProjectDataTypes;
+   *   }
+   * }
+   * ```
+   */
+  interface ProjectDataTypes {
+    ParatextStandard: ParatextStandardProjectDataTypes;
+    NotesOnly: NotesOnlyProjectDataTypes;
+  }
+  /**
+   * Identifiers for all project types supported by PAPI. These are not intended to correspond 1:1
+   * to the set of project types available in Paratext.
+   */
+  type ProjectTypes = keyof ProjectDataTypes;
+}
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
   import { CommandHandlers, CommandNames } from 'papi-shared-types';
@@ -1360,193 +1805,6 @@ declare module 'shared/data/web-view.model' {
      */
     createNewIfNotFound?: boolean;
   };
-}
-declare module 'shared/utils/async-variable' {
-  /**
-   * This class provides a convenient way for one task to wait on a variable that another task sets.
-   */
-  export default class AsyncVariable<T> {
-    private readonly variableName;
-    private readonly promiseToValue;
-    private resolver;
-    private rejecter;
-    /**
-     * Creates an instance of the class
-     * @param variableName name to use when logging about this variable
-     * @param rejectIfNotSettledWithinMS milliseconds to wait before verifying if the promise was
-     * settled (resolved or rejected); will reject if it has not settled by that time.  Use -1 if you
-     * do not want a timeout at all.
-     */
-    constructor(variableName: string, rejectIfNotSettledWithinMS?: number);
-    /**
-     * Get this variable's promise to a value. This always returns the same promise even after the
-     * value has been resolved or rejected.
-     * @returns the promise for the value to be set
-     */
-    get promise(): Promise<T>;
-    /**
-     * A simple way to see if this variable's promise was resolved or rejected already
-     * @returns whether the variable was already resolved or rejected
-     */
-    get hasSettled(): boolean;
-    /**
-     * Resolve this variable's promise to the given value
-     * @param value this variable's promise will resolve to this value
-     * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
-     */
-    resolveToValue(value: T, throwIfAlreadySettled?: boolean): void;
-    /**
-     * Reject this variable's promise for the value with the given reason
-     * @param reason this variable's promise will be rejected with this reason
-     * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
-     */
-    rejectWithReason(reason: string, throwIfAlreadySettled?: boolean): void;
-    /**
-     * Prevent any further updates to this variable
-     */
-    private complete;
-  }
-}
-declare module 'shared/services/network-object.service' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import {
-    NetworkObject,
-    DisposableNetworkObject,
-    NetworkableObject,
-    LocalObjectToProxyCreator,
-  } from 'shared/models/network-object.model';
-  /** Sets up the service. Only runs once and always returns the same promise after that */
-  const initialize: () => Promise<void>;
-  /** Search locally known network objects for the given ID. Don't look on the network for more objects.
-   *  @returns whether we know of an existing network object with the provided id already on the network */
-  const hasKnown: (id: string) => boolean;
-  interface IDisposableObject {
-    dispose?: UnsubscriberAsync;
-  }
-  /** If `dispose` already exists on `objectToMutate`, we will call it in addition to `newDispose` */
-  export function overrideDispose(
-    objectToMutate: IDisposableObject,
-    newDispose: UnsubscriberAsync,
-  ): void;
-  /**
-   * Get a network object that has previously been set up to be shared on the network.
-   * A network object is a proxy to an object living somewhere else that local code can use.
-   *
-   * Running this function twice with the same inputs yields the same network object.
-   * @param id id of the network object - all processes must use this id to look up this network object
-   * @param createLocalObjectToProxy Function that creates an object that the network object proxy
-   * will be based upon. The object this function creates cannot have an `onDidDispose` property.
-   * This function is useful for setting up network events on a network object.
-   * @returns A promise for the network object with specified id if one exists, undefined otherwise
-   */
-  const get: <T extends object>(
-    id: string,
-    createLocalObjectToProxy?: LocalObjectToProxyCreator<T> | undefined,
-  ) => Promise<NetworkObject<T> | undefined>;
-  /**
-   * Set up an object to be shared on the network.
-   * @param id ID of the object to share on the network. All processes must use this ID to look it up.
-   * @param objectToShare The object to set up as a network object. It will have an event named
-   * `onDidDispose` added to its properties. An error will be thrown if the object already had an
-   * `onDidDispose` property on it. If the object already contained a `dispose` function, a new
-   * `dispose` function will be set that calls the existing function (amongst other things). If the
-   * object did not already define a `dispose` function, one will be added.
-   *
-   * WARNING: setting a network object mutates the provided object.
-   * @returns `objectToShare` modified to be a network object
-   */
-  const set: <T extends NetworkableObject>(
-    id: string,
-    objectToShare: T,
-  ) => Promise<DisposableNetworkObject<T>>;
-  interface NetworkObjectService {
-    initialize: typeof initialize;
-    hasKnown: typeof hasKnown;
-    get: typeof get;
-    set: typeof set;
-  }
-  /**
-   * Network objects are distributed objects within PAPI for TS/JS objects.
-   * @see https://en.wikipedia.org/wiki/Distributed_object
-   *
-   * Objects registered via {@link networkObjectService.set} are retrievable using {@link networkObjectService.get}.
-   *
-   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied and
-   * sent to the original objects registered via {@link networkObjectService.set}.
-   *
-   * Functions on a network object will be called asynchronously by other processes regardless of
-   * whether the functions are synchronous or asynchronous, so it is best to make them all
-   * asynchronous. All shared functions' arguments and return values must be serializable to be
-   * called across processes.
-   *
-   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility of
-   * that service, and only that service, to call `dispose` on that object when it is no longer
-   * intended to be shared with other services.
-   *
-   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
-   * event handler will be called. After an object is disposed, calls to its functions will no longer
-   * be proxied to the original object.
-   */
-  const networkObjectService: NetworkObjectService;
-  export default networkObjectService;
-}
-declare module 'shared/models/network-object.model' {
-  import {
-    Dispose,
-    OnDidDispose,
-    CannotHaveOnDidDispose,
-    CanHaveOnDidDispose,
-  } from 'shared/models/disposal.model';
-  /**
-   * An object of this type is returned from {@link networkObjectService.get}.
-   *
-   * Override the NetworkableObject type's force-undefined onDidDispose to NetworkObject's
-   * onDidDispose type because it will have an onDidDispose added.
-   *
-   * @see networkObjectService
-   */
-  export type NetworkObject<T extends NetworkableObject> = CanHaveOnDidDispose<T> & OnDidDispose;
-  /**
-   * An object of this type is returned from {@link networkObjectService.set}.
-   *
-   * @see networkObjectService
-   */
-  export type DisposableNetworkObject<T extends NetworkableObject> = NetworkObject<T> & Dispose;
-  /**
-   * An object of this type is passed into {@link networkObjectService.set}.
-   *
-   * @see networkObjectService
-   */
-  export type NetworkableObject<T = object> = T & CannotHaveOnDidDispose;
-  /**
-   * If a network object with the provided ID exists remotely but has not been set up to use inside
-   * this process, this function is run in {@link networkObjectService.get}, and the returned object is used
-   * as a base on which to set up a NetworkObject for use on this process. All properties that are
-   * exposed in the base object will be used as-is, and all other properties will be assumed to exist
-   * on the remote network object.
-   *
-   * @see networkObjectService
-   *
-   * @param id ID of the network object to get
-   *
-   * @param networkObjectContainer Holds a reference to the NetworkObject that will be setup within
-   * {@link networkObjectService.get}. It is passed in to allow the return value to call functions on
-   * the NetworkObject.
-   * NOTE: networkObjectContainer.contents does not point to a real NetworkObject while this function
-   * is running. The real reference is assigned later, but before the NetworkObject will be used. The
-   * return value should always reference the NetworkObject as `networkObjectContainer.contents` to
-   * avoid acting upon an undefined NetworkObject.
-   *
-   * @returns the local object to proxy into a network object.
-   *
-   * Note: This function should return Partial<T>. For some reason, TypeScript can't infer the type
-   * (probably has to do with that it's a wrapped and layered type). Functions that implement this
-   * type should return Partial<T>
-   */
-  export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
-    id: string,
-    networkObjectPromise: Promise<NetworkObject<T>>,
-  ) => Partial<NetworkableObject>;
 }
 declare module 'shared/models/web-view-provider.model' {
   import {
@@ -1771,211 +2029,6 @@ declare module 'shared/services/internet.service' {
    */
   const internetService: InternetService;
   export default internetService;
-}
-declare module 'shared/models/data-provider.model' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import { PapiEventHandler } from 'shared/models/papi-event.model';
-  import { NetworkableObject } from 'shared/models/network-object.model';
-  /** Various options to adjust how the data provider subscriber emits updates */
-  export type DataProviderSubscriberOptions = {
-    /**
-     * Whether to immediately retrieve the data for this subscriber and run the callback as soon as possible.
-     *
-     * This allows a subscriber to simply subscribe and provide a callback instead of subscribing, running `get`,
-     * and managing the race condition of an event coming in to update the data and the initial `get` coming back in.
-     * @default true
-     */
-    retrieveDataImmediately?: boolean;
-    /**
-     * Under which conditions to run the callback when we receive updates to the data.
-     *  - `'deeply-equal'` - only run the update callback when the data at this selector has changed.
-     *
-     *    For example, suppose your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3. Your data
-     *    at John 3:5 does not change, and your callback will not run.
-     *  - `'*'` - run the update callback every time the data has been updated whether or not the data
-     *    at this selector has changed.
-     *
-     *    For example, suppose your selector is targeting John 3:5, and the data provider updates its data for Luke 5:3. Your data
-     *    at John 3:5 does not change, but your callback will run again with the same data anyway.
-     *
-     * @default 'deeply-equal'
-     */
-    whichUpdates?: 'deeply-equal' | '*';
-  };
-  /**
-   * Information that papi uses to interpret whether to send out updates on a data provider when the engine
-   * runs `set<data_type>` or `notifyUpdate`.
-   *  - `'*'` update subscriptions for all data types on this data provider
-   *  - `string` name of data type - update subscriptions for this data type
-   *  - `string[]` names of data types - update subscriptions for the data types in the array
-   *  - `true` (or other truthy values other than strings and arrays)
-   *    - In `set<data_type>` - update subscriptions for this data type
-   *    - In `notifyUpdate` - same as '*'
-   *  - `false` (or falsy) do not update subscriptions
-   */
-  export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTypes> =
-    | '*'
-    | DataTypeNames<TDataTypes>
-    | DataTypeNames<TDataTypes>[]
-    | boolean;
-  /**
-   * Set a subset of data according to the selector.
-   *
-   * Note: if a data provider engine does not provide `set` (possibly indicating it is read-only),
-   * this will throw an exception.
-   * @param selector tells the provider what subset of data is being set
-   * @param data the data that determines what to set at the selector
-   * @returns information that papi uses to interpret whether to send out updates. Defaults to `true`
-   * (meaning send updates only for this data type).
-   *
-   * @see DataProviderUpdateInstructions for more info on what to return
-   */
-  export type DataProviderSetter<
-    TDataTypes extends DataProviderDataTypes,
-    DataType extends keyof TDataTypes,
-  > = (
-    selector: TDataTypes[DataType]['selector'],
-    data: TDataTypes[DataType]['setData'],
-  ) => Promise<DataProviderUpdateInstructions<TDataTypes>>;
-  /**
-   * Get a subset of data from the provider according to the selector.
-   *
-   * Note: This is good for retrieving data from a provider once. If you want to keep the data up-to-date,
-   * use `subscribe` instead, which can immediately give you the data and keep it up-to-date.
-   * @param selector tells the provider what subset of data to get
-   * @returns the subset of data represented by the selector
-   */
-  export type DataProviderGetter<TDataType extends DataProviderDataType> = (
-    selector: TDataType['selector'],
-  ) => Promise<TDataType['getData']>;
-  /**
-     * Subscribe to receive updates relevant to the provided selector from this data provider for a specific data type.
-     *
-     * Note: By default, this `subscribe<data_type>` function automatically retrieves the current state of the data
-     * and runs the provided callback as soon as possible. That way, if you want to keep your data up-to-date,
-     * you do not also have to run `get<data_type>`. You can turn this functionality off in the `options` parameter.
-
-     * @param selector tells the provider what data this listener is listening for
-     * @param callback function to run with the updated data for this selector
-     * @param options various options to adjust how the subscriber emits updates
-     * @returns unsubscriber to stop listening for updates
-     */
-  export type DataProviderSubscriber<TDataType extends DataProviderDataType> = (
-    selector: TDataType['selector'],
-    callback: PapiEventHandler<TDataType['getData']>,
-    options?: DataProviderSubscriberOptions,
-  ) => Promise<UnsubscriberAsync>;
-  /**
-   * A helper type describing the types associated with a data provider's methods for a specific data
-   * type it handles.
-   *
-   * @type `TSelector` - the type of selector used to get some data from this provider at this data type.
-   *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants at this data type.
-   * @type `TGetData` - the type of data provided by this data provider when you run `get<data_type>` based on a provided selector
-   * @type `TSetData` - the type of data ingested by this data provider when you run `set<data_type>` based on a provided selector
-   */
-  export type DataProviderDataType<
-    TSelector = unknown,
-    TGetData = TSelector,
-    TSetData = TGetData,
-  > = {
-    /**
-     * The type of selector used to get some data from this provider at this data type.
-     * A selector is an object a caller provides to the data provider to tell the provider what subset
-     * of data it wants at this data type.
-     */
-    selector: TSelector;
-    /**
-     * The type of data provided by this data provider when you run `get<data_type>` based on a
-     * provided selector
-     */
-    getData: TGetData;
-    /**
-     * The type of data ingested by this data provider when you run `set<data_type>` based on a provided selector
-     */
-    setData: TSetData;
-  };
-  /**
-   * A helper type describing all the data types a data provider handles. Each property on this type
-   * (consisting of a DataProviderDataType, which describes the types that correspond to that data type)
-   * describes a data type that the data provider handles. The data provider has a `set<data_type>`,
-   * `get<data_type>`, and `subscribe<data_type>` for each property (aka data type) listed in this type.
-   *
-   * @example A data provider that handles greeting strings and age numbers (as well as an All data
-   * type that just provides all the data) could have a DataProviderDataTypes that looks like the
-   * following:
-   * ```typescript
-   * {
-   *   Greeting: DataProviderDataType<string, string | undefined, string>;
-   *   Age: DataProviderDataType<string, number | undefined, number>;
-   *   All: DataProviderDataType<undefined, { greeting: string, age: number }, never>;
-   * }
-   * ```
-   */
-  export type DataProviderDataTypes = {
-    [dataType: string]: DataProviderDataType;
-  };
-  /**
-   * Names of data types in a DataProviderDataTypes type. Indicates the data types that a data provider
-   * can handle (so it will have methods with these names like `set<data_type>`)
-   *
-   * @see DataProviderDataTypes for more information
-   */
-  export type DataTypeNames<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-    keyof TDataTypes & string;
-  /**
-   * Set of all `set<data_type>` methods that a data provider provides according to its data types.
-   *
-   * @see DataProviderSetter for more information
-   */
-  export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
-    [DataType in keyof TDataTypes as `set${DataType & string}`]: DataProviderSetter<
-      TDataTypes,
-      DataType
-    >;
-  };
-  /**
-   * Set of all `get<data_type>` methods that a data provider provides according to its data types.
-   *
-   * @see DataProviderGetter for more information
-   */
-  export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {
-    [DataType in keyof TDataTypes as `get${DataType & string}`]: DataProviderGetter<
-      TDataTypes[DataType]
-    >;
-  };
-  /**
-   * Set of all `subscribe<data_type>` methods that a data provider provides according to its data types.
-   *
-   * @see DataProviderSubscriber for more information
-   */
-  export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = {
-    [DataType in keyof TDataTypes as `subscribe${DataType & string}`]: DataProviderSubscriber<
-      TDataTypes[DataType]
-    >;
-  };
-  /**
-   * An internal object created locally when someone runs dataProviderService.registerEngine.
-   * This object layers over the data provider engine and runs its methods along with other methods.
-   * This object is transformed into an IDataProvider by networkObjectService.set.
-   *
-   * @see IDataProvider
-   */
-  type DataProviderInternal<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-    NetworkableObject<
-      DataProviderSetters<TDataTypes> &
-        DataProviderGetters<TDataTypes> &
-        DataProviderSubscribers<TDataTypes>
-    >;
-  /**
-   * Get the data type for a data provider function based on its name
-   * @param fnName name of data provider function e.g. `getVerse`
-   * @returns data type for that data provider function e.g. `Verse`
-   */
-  export function getDataProviderDataTypeFromFunctionName<
-    TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
-  >(fnName: string): DataTypeNames<TDataTypes>;
-  export default DataProviderInternal;
 }
 declare module 'shared/models/data-provider.interface' {
   import DataProviderInternal, { DataProviderDataTypes } from 'shared/models/data-provider.model';
@@ -2245,6 +2298,97 @@ declare module 'shared/services/data-provider.service' {
    */
   const dataProviderService: DataProviderService;
   export default dataProviderService;
+}
+declare module 'shared/models/project-data-provider-engine.model' {
+  import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
+  import type IDataProvider from 'shared/models/data-provider.interface';
+  import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
+  type IDataProviderEngineGeneric<T extends ProjectDataTypes> = {
+    [K in keyof T]: IDataProviderEngine<T[K]>;
+  };
+  /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
+  export type ProjectDataProviderEngineTypes = IDataProviderEngineGeneric<ProjectDataTypes>;
+  type IProjectDataProviderGeneric<T extends ProjectDataTypes> = {
+    [K in keyof T]: IDataProvider<T[K]>;
+  };
+  /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
+  export type ProjectDataProvider = IProjectDataProviderGeneric<ProjectDataTypes>;
+  export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
+    createProjectDataProviderEngine(
+      projectId: string,
+      projectStorageInterpreterId: string,
+    ): ProjectDataProviderEngineTypes[ProjectType];
+  }
+}
+declare module 'shared/utils/unsubscriber-async-list' {
+  import { Dispose } from 'shared/models/disposal.model';
+  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
+  /**
+   * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
+   */
+  export default class UnsubscriberAsyncList {
+    private name;
+    readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
+    constructor(name?: string);
+    /**
+     * Add unsubscribers to the list. Note that duplicates are not added twice.
+     * @param unsubscribers - Objects that were returned from a registration process.
+     */
+    add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
+    /**
+     * Run all unsubscribers added to this list and then clear the list.
+     * @returns `true` if all unsubscribers succeeded, `false` otherwise.
+     */
+    runAllUnsubscribers(): Promise<boolean>;
+  }
+}
+declare module 'shared/services/project-data-provider.service' {
+  import { ProjectTypes } from 'papi-shared-types';
+  import {
+    ProjectDataProvider,
+    ProjectDataProviderEngineFactory,
+  } from 'shared/models/project-data-provider-engine.model';
+  import { Dispose } from 'shared/models/disposal.model';
+  /**
+   * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
+   * existing factory already that handles the same project type or this operation will fail.
+   * @param projectType Type of project that pdpEngineFactory supports
+   * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
+   * @returns Promise that resolves to a disposable object when the registration operation completes
+   */
+  export function registerProjectDataProviderEngineFactory<ProjectType extends ProjectTypes>(
+    projectType: ProjectType,
+    pdpEngineFactory: ProjectDataProviderEngineFactory<ProjectType>,
+  ): Promise<Dispose>;
+  /**
+   * Get a Project Data Provider for the given project details.
+   * @param projectId ID for the project to load
+   * @param projectType Type of the project referenced by the given ID
+   * @param storageType Storage type of the project referenced by the given ID
+   * @returns Data provider with types that are associated with the given project type
+   */
+  export function getProjectDataProvider<ProjectType extends ProjectTypes>(
+    projectId: string,
+    projectType: ProjectType,
+    storageType: string,
+  ): Promise<ProjectDataProvider[ProjectType]>;
+  export interface PapiBackendProjectDataProviderService {
+    registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
+    getProjectDataProvider: typeof getProjectDataProvider;
+  }
+  /**
+   * Service that registers and gets project data providers
+   */
+  export const papiBackendProjectDataProviderService: PapiBackendProjectDataProviderService;
+  export interface PapiFrontendProjectDataProviderService {
+    getProjectDataProvider: typeof getProjectDataProvider;
+  }
+  /**
+   * Service that gets project data providers
+   */
+  export const papiFrontendProjectDataProviderService: {
+    getProjectDataProvider: typeof getProjectDataProvider;
+  };
 }
 declare module 'renderer/context/papi-context/test.context' {
   const TestContext: import('react').Context<string>;
@@ -2540,6 +2684,7 @@ declare module 'papi-frontend' {
   import { PapiWebViewService } from 'shared/services/web-view.service';
   import { InternetService } from 'shared/services/internet.service';
   import { DataProviderService } from 'shared/services/data-provider.service';
+  import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { PapiContext } from 'renderer/context/papi-context/index';
   import { PapiHooks } from 'renderer/hooks/papi-hooks/index';
   import { SettingsService } from 'shared/services/settings.service';
@@ -2587,6 +2732,10 @@ declare module 'papi-frontend' {
      * Service that allows extensions to send and receive data to/from other extensions
      */
     dataProvider: DataProviderService;
+    /**
+     * Service that gets project data providers
+     */
+    projectDataProvider: PapiFrontendProjectDataProviderService;
     react: {
       /**
        * All React contexts to be exposed on the papi
@@ -2858,6 +3007,7 @@ declare module 'papi-backend' {
   import { PapiWebViewProviderService } from 'shared/services/web-view-provider.service';
   import { InternetService } from 'shared/services/internet.service';
   import { DataProviderService } from 'shared/services/data-provider.service';
+  import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
   const papi: {
     /**
@@ -2908,6 +3058,10 @@ declare module 'papi-backend' {
      */
     dataProvider: DataProviderService;
     /**
+     * Service that registers and gets project data providers
+     */
+    projectDataProvider: PapiBackendProjectDataProviderService;
+    /**
      * This service provides extensions in the extension host the ability to read/write data
      * based on the extension identity and current user (as identified by the OS). This service will
      * not work within the renderer.
@@ -2916,31 +3070,9 @@ declare module 'papi-backend' {
   };
   export default papi;
 }
-declare module 'extension-host/extension-types/unsubscriber-async-list' {
-  import { Dispose } from 'shared/models/disposal.model';
-  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
-  /**
-   * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
-   */
-  export default class UnsubscriberAsyncList {
-    private name;
-    readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
-    constructor(name?: string);
-    /**
-     * Add unsubscribers to the list. Note that duplicates are not added twice.
-     * @param unsubscribers - Objects that were returned from a registration process.
-     */
-    add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
-    /**
-     * Run all unsubscribers added to this list and then clear the list.
-     * @returns `true` if all unsubscribers succeeded, `false` otherwise.
-     */
-    runAllUnsubscribers(): Promise<boolean>;
-  }
-}
 declare module 'extension-host/extension-types/extension-activation-context.model' {
   import { ExecutionToken } from 'node/models/execution-token.model';
-  import UnsubscriberAsyncList from 'extension-host/extension-types/unsubscriber-async-list';
+  import UnsubscriberAsyncList from 'shared/utils/unsubscriber-async-list';
   /** An object of this type is passed into `activate()` for each extension during initialization */
   export type ExecutionActivationContext = {
     /** Canonical name of the extension */
