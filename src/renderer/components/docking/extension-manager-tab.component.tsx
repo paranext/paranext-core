@@ -1,5 +1,5 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import logger from '@shared/services/logger.service';
 import { Button } from 'papi-components';
 import ExtensionList, { Extension } from './extension-list.component';
@@ -23,7 +23,7 @@ export function fetchExtensions(): Extension[] {
 }
 
 export default function ExtensionManagerTab() {
-  const installedExtensions = fetchExtensions();
+  const installedExtensions = useMemo(() => fetchExtensions(), []);
   // Set the initial value to the extensions pulled so all toggles are checked
   const [toggledExtensions, setToggledExtensions] = useState<string[]>(
     installedExtensions.map((ext) => ext.name),
