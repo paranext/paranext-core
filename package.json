@@ -58,7 +58,7 @@
     "postinstall": "patch-package && ts-node .erb/scripts/check-native-dep.js && electron-builder install-app-deps && cd lib/papi-dts && npm install && cd ../../extensions && npm install && cd .. && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
     "lint": "npm run build:types && npm run lint:scripts && npm run lint:styles && cd lib/papi-dts && npm run lint && cd ../../extensions && npm run lint",
     "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
-    "lint:styles": "stylelint --config .stylelintrc.js --ignore-path .stylelintignore **/*.{css,scss}",
+    "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run build:types && npm run lint-fix:scripts && npm run lint-fix:styles && cd lib/papi-dts && npm run lint-fix && cd ../../extensions && npm run lint-fix",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx}\" && npm run lint:scripts",
     "lint-fix:styles": "npm run lint:styles -- --fix",
@@ -84,7 +84,7 @@
   "lint-staged": {
     "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
     "*.json": ["prettier --parser json --write"],
-    "*.{css,scss}": ["stylelint --config .stylelintrc.js --ignore-path .stylelintignore --fix"],
+    "*.{css,scss}": ["stylelint --fix"],
     "*.{html,md,yml}": ["prettier --single-quote --write"]
   },
   "browserslist": [],

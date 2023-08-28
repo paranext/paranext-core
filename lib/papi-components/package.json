@@ -35,9 +35,9 @@
     "watch": "tsc && vite build --watch",
     "lint": "npm run lint:scripts && npm run lint:styles",
     "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
-    "lint:styles": "stylelint --config ../../.stylelintrc.js --ignore-path .stylelintignore **/*.{css,scss}",
+    "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
-    "lint-fix:scripts": "prettier --config ../../.prettierrc.js --ignore-path .prettierignore --write \"**/*.{ts,tsx,js,jsx}\" && npm run lint:scripts",
+    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx}\" && npm run lint:scripts",
     "postinstall": "cd ../.. && npm install --ignore-scripts"
   },
   "peerDependencies": {

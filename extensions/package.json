@@ -18,24 +18,17 @@
     "start": "cd .. && npm start",
     "lint": "npm run lint:scripts && npm run lint:styles",
     "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
-    "lint:styles": "stylelint --config ../.stylelintrc.js --ignore-path .stylelintignore **/*.{css,scss}",
+    "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
-    "lint-fix:scripts": "prettier --config ../.prettierrc.js --ignore-path .prettierignore --write \"**/*.{ts,tsx,js,jsx}\" && npm run lint:scripts",
+    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx}\" && npm run lint:scripts",
     "lint:staged": "lint-staged -q",
     "postinstall": "cd src/resource-viewer && npm install"
   },
   "lint-staged": {
-    "*.{cjs,js,jsx,ts,tsx}": [
-      "prettier --config ../.prettierrc.js --ignore-path .prettierignore --write",
-      "cross-env NODE_ENV=development eslint --cache"
-    ],
-    "*.json": [
-      "prettier --config ../.prettierrc.js --ignore-path .prettierignore --parser json --write"
-    ],
-    "*.{css,scss}": ["stylelint --config ../.stylelintrc.js --ignore-path .stylelintignore --fix"],
-    "*.{html,md,yml}": [
-      "prettier --config ../.prettierrc.js --ignore-path .prettierignore --single-quote --write"
-    ]
+    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
+    "*.json": ["prettier --parser json --write"],
+    "*.{css,scss}": ["stylelint --fix"],
+    "*.{html,md,yml}": ["prettier --single-quote --write"]
   },
   "peerDependencies": {
     "@sillsdev/scripture": "^1.4.0",
