@@ -118,6 +118,12 @@ interface ScriptureTextPanelUsxProps {
   usx: string;
 }
 
+const defaultScrRef: ScriptureReference = {
+  bookNum: 1,
+  chapterNum: 1,
+  verseNum: 1,
+};
+
 /**
  * Scripture text panel that displays a read only version of a usx editor that displays the current
  * chapter
@@ -148,12 +154,6 @@ const {
 globalThis.webViewComponent = function ResourceViewer() {
   logger.info('Preparing to display the Resource Viewer');
 
-  const defaultScrRef = {
-    bookNum: 1,
-    chapterNum: 1,
-    verseNum: 1,
-  };
-
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
   const [usx, , isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
     'usfm',
@@ -164,12 +164,8 @@ globalThis.webViewComponent = function ResourceViewer() {
   return (
     <div>
       <RefSelector
-        scrRef={scrRef as ScriptureReference}
-        handleSubmit={(newScrRef: {
-          bookNum: number;
-          chapterNum: number;
-          verseNum: number;
-        }): void => {
+        scrRef={scrRef}
+        handleSubmit={(newScrRef): void => {
           setScrRef(newScrRef);
         }}
       />

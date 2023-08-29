@@ -9,7 +9,7 @@
   },
   "author": "Katherine Jensen",
   "license": "MIT",
-  "devDependencies": {
+  "dependencies": {
     "usxeditor": "^0.0.9-alpha"
   }
 }
