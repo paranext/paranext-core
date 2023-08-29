@@ -16,23 +16,19 @@
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "build:types": "cd .. && npm run build:types",
     "start": "cd .. && npm start",
-    "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --cache",
+    "lint": "npm run lint:scripts && npm run lint:styles",
+    "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
+    "lint:styles": "stylelint **/*.{css,scss}",
+    "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
+    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,csj}\" && npm run lint:scripts",
     "lint:staged": "lint-staged -q",
     "postinstall": "cd src/resource-viewer && npm install"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx}": [
-      "cross-env NODE_ENV=development eslint --cache"
-    ],
-    "*.json,.{eslintrc,prettierrc}": [
-      "prettier --ignore-path .eslintignore --parser json --write"
-    ],
-    "*.{css,scss}": [
-      "prettier --ignore-path .eslintignore --single-quote --write"
-    ],
-    "*.{html,md,yml}": [
-      "prettier --ignore-path .eslintignore --single-quote --write"
-    ]
+    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
+    "*.json": ["prettier --parser json --write"],
+    "*.{css,scss}": ["stylelint --fix"],
+    "*.{html,md,yml}": ["prettier --single-quote --write"]
   },
   "peerDependencies": {
     "@sillsdev/scripture": "^1.4.0",

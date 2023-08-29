@@ -1,0 +1,7 @@
+# Please keep this file in sync with .eslintignore and .stylelintignore
+
+# Dependency directory
+node_modules
+
+# Built files
+dist

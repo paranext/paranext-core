@@ -56,13 +56,18 @@
     "build:papi-components": "cd lib/papi-components && npm run build",
     "csharp:tool:restore": "cd c-sharp && dotnet tool restore",
     "postinstall": "patch-package && ts-node .erb/scripts/check-native-dep.js && electron-builder install-app-deps && cd lib/papi-dts && npm install && cd ../../extensions && npm install && cd .. && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
-    "lint": "npm run build:types && cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx  --cache && cd lib/papi-dts && npm run lint && cd ../../extensions && npm run lint",
+    "lint": "npm run build:types && npm run lint:scripts && npm run lint:styles && cd lib/papi-dts && npm run lint && cd ../../extensions && npm run lint",
+    "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
+    "lint:styles": "stylelint **/*.{css,scss}",
+    "lint-fix": "npm run build:types && npm run lint-fix:scripts && npm run lint-fix:styles && cd lib/papi-dts && npm run lint-fix && cd ../../extensions && npm run lint-fix",
+    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,csj}\" && npm run lint:scripts",
+    "lint-fix:styles": "npm run lint:styles -- --fix",
     "lint:config": "cross-env NODE_ENV=development eslint --print-config .eslintrc.js > .eslintConfig.json",
     "lint:staged": "npm run build:types && lint-staged -q && cd lib/papi-dts && npm run lint:staged && cd ../../extensions && npm run lint:staged",
     "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && npm run build:extensions:production && electron-builder build --publish never",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "prepare": "husky install && npm run csharp:tool:restore",
-    "prettier": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,scss,html,md,yml}\"",
+    "prettier": "prettier --write \"**/*.{ts,tsx,js,jsx,csj,json,css,scss,html,md,yml}\"",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "start": "ts-node ./.erb/scripts/check-port-in-use.js && npm run start:renderer",
     "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only .",
@@ -77,18 +82,10 @@
     "storybook:build": "storybook build"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx}": [
-      "cross-env NODE_ENV=development eslint --cache"
-    ],
-    "*.json,.{eslintrc,prettierrc}": [
-      "prettier --ignore-path .eslintignore --parser json --write"
-    ],
-    "*.{css,scss}": [
-      "prettier --ignore-path .eslintignore --single-quote --write"
-    ],
-    "*.{html,md,yml}": [
-      "prettier --ignore-path .eslintignore --single-quote --write"
-    ]
+    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
+    "*.json": ["prettier --parser json --write"],
+    "*.{css,scss}": ["stylelint --fix"],
+    "*.{html,md,yml}": ["prettier --single-quote --write"]
   },
   "browserslist": [],
   "dependencies": {
@@ -192,6 +189,9 @@
     "sass-loader": "^13.3.2",
     "storybook": "^7.1.0",
     "style-loader": "^3.3.3",
+    "stylelint": "^15.10.3",
+    "stylelint-config-recommended": "^13.0.0",
+    "stylelint-config-sass-guidelines": "^10.0.0",
     "terser-webpack-plugin": "^5.3.9",
     "ts-jest": "^29.1.1",
     "ts-loader": "^9.4.4",
@@ -212,12 +212,7 @@
     "npm": ">=7.x"
   },
   "electronmon": {
-    "patterns": [
-      "!**/**",
-      "src/main/**",
-      "src/node/**",
-      "src/shared/**"
-    ],
+    "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**"],
     "logLevel": "quiet"
   }
 }

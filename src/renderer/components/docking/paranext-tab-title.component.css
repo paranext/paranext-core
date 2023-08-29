@@ -4,13 +4,13 @@
   margin-right: 5px;
 }
 
-.tabMenuButton {
+.tab-menu-button {
   margin: 0;
   margin-right: 5px;
   padding: 0;
   border: 0;
   background: transparent;
-  background-image: url(/assets/icon.png);
+  background-image: url('/assets/icon.png');
   background-size: 100%;
   width: 16px;
   height: 16px;

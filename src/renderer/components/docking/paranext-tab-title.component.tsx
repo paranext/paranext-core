@@ -14,7 +14,7 @@ export default function ParanextTabTitle({ text }: { text: string }) {
     <div className="title">
       <button
         type="button"
-        className="tabMenuButton"
+        className="tab-menu-button"
         aria-label="Tab Menu"
         onClick={toggleDropdown}
       />
