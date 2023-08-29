@@ -24,7 +24,7 @@ export function fetchExtensions(): Extension[] {
 
 export default function ExtensionManagerTab() {
   const installedExtensions = useMemo(() => fetchExtensions(), []);
-  // Set the initial value to the extensions pulled so all toggles are checked
+  // Set the initial value to the extensions fetched so all toggles are checked
   const [toggledExtensions, setToggledExtensions] = useState<string[]>(
     installedExtensions.map((ext) => ext.name),
   );

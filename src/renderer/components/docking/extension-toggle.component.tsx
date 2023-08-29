@@ -2,11 +2,6 @@ import { Card, CardContent, Typography } from '@mui/material';
 import { PropsWithChildren } from 'react';
 import './extension-toggle.component.scss';
 
-export type Extension = {
-  name: string;
-  description: string;
-};
-
 type ExtensionToggleProps = PropsWithChildren<{
   extensionName: string;
   extensionDescription?: string;
