@@ -53,7 +53,7 @@ import {
 import {
   TAB_TYPE_EXTENSION_MANAGER,
   loadExtensionManagerTab,
-} from './extension-manager-tab.component';
+} from '../extension-manager/extension-manager-tab.component';
 
 type TabType = string;
 

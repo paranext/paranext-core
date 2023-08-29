@@ -7,7 +7,7 @@ import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 import { TAB_TYPE_OPEN_PROJECT_DIALOG } from '@renderer/components/docking/open-project-tab.component';
 import { TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG } from '@renderer/components/docking/download-update-project-tab.component';
 import { TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG } from '@renderer/components/docking/open-multiple-projects-tab.component';
-import { TAB_TYPE_EXTENSION_MANAGER } from '@renderer/components/docking/extension-manager-tab.component';
+import { TAB_TYPE_EXTENSION_MANAGER } from '@renderer/components/extension-manager/extension-manager-tab.component';
 
 export const FIRST_TAB_ID = 'About';
 
