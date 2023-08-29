@@ -41,15 +41,22 @@ import {
   saveTabInfoBase,
 } from '@shared/services/web-view.service';
 import { getErrorMessage } from '@shared/utils/util';
-import { loadOpenProjectTab, TAB_TYPE_OPEN_PROJECT_DIALOG } from './open-project-tab.component';
+import {
+  loadOpenProjectTab,
+  TAB_TYPE_OPEN_PROJECT_DIALOG,
+} from '@renderer/components/project-dialogs/open-project-tab.component';
 import {
   loadDownloadUpdateProjectTab,
   TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
-} from './download-update-project-tab.component';
+} from '@renderer/components/project-dialogs/download-update-project-tab.component';
 import {
   loadOpenMultipleProjectsTab,
   TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG,
-} from './open-multiple-projects-tab.component';
+} from '@renderer/components/project-dialogs/open-multiple-projects-tab.component';
+import {
+  TAB_TYPE_EXTENSION_MANAGER,
+  loadExtensionManagerTab,
+} from '@renderer/components/extension-manager/extension-manager-tab.component';
 
 type TabType = string;
 
@@ -85,6 +92,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_OPEN_PROJECT_DIALOG, loadOpenProjectTab],
   [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
   [TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG, loadOpenMultipleProjectsTab],
+  [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
 ]);
 
 /** tab saver functions for each Paranext tab type that wants to override the default */

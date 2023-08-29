@@ -4,9 +4,10 @@ import { TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
 import { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_QUICK_VERSE_HERESY } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
-import { TAB_TYPE_OPEN_PROJECT_DIALOG } from '@renderer/components/docking/open-project-tab.component';
-import { TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG } from '@renderer/components/docking/download-update-project-tab.component';
-import { TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG } from '@renderer/components/docking/open-multiple-projects-tab.component';
+import { TAB_TYPE_OPEN_PROJECT_DIALOG } from '@renderer/components/project-dialogs/open-project-tab.component';
+import { TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG } from '@renderer/components/project-dialogs/download-update-project-tab.component';
+import { TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG } from '@renderer/components/project-dialogs/open-multiple-projects-tab.component';
+import { TAB_TYPE_EXTENSION_MANAGER } from '@renderer/components/extension-manager/extension-manager-tab.component';
 
 export const FIRST_TAB_ID = 'About';
 
@@ -73,6 +74,18 @@ const testLayout: LayoutBase = {
           },
         ] as SavedTabInfo[],
         x: 400,
+        y: 170,
+        w: 320,
+        h: 190,
+      },
+      {
+        tabs: [
+          {
+            id: 'Extension Toggle',
+            tabType: TAB_TYPE_EXTENSION_MANAGER,
+          },
+        ] as SavedTabInfo[],
+        x: 300,
         y: 170,
         w: 320,
         h: 190,
