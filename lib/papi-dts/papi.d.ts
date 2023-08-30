@@ -1,6 +1,7 @@
 /// <reference types="react" />
 /// <reference types="node" />
 /// <reference types="node" />
+   * Note: Command names must consist of two strings separated by at least one period. We recommend
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';

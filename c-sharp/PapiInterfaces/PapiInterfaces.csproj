@@ -1,0 +1,41 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Platforms>AnyCPU;x64</Platforms>
+    <RootNamespace>Platform.Bible.PapiInterfaces</RootNamespace>
+    <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+    <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+    <SignAssembly>False</SignAssembly>
+    <AssemblyOriginatorKeyFile></AssemblyOriginatorKeyFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Platform.Bible.PapiInterfaces</PackageId>
+    <Version>1.0.0-alpha</Version>
+    <Company>SIL, United Bible Societies</Company>
+    <Authors>Platform.Bible</Authors>
+    <Description>Interfaces needed to make Platform.Bible extensions that rely on functionality in a .Net DLL</Description>
+    <PackageProjectUrl>https://github.com/paranext/paranext/wiki</PackageProjectUrl>
+    <Product>Platform.Bible PapiInterfaces</Product>
+    <PackageTags>Platform.Bible extensions</PackageTags>
+    <Copyright>Copyright ©2023, United Bible Societies, SIL International. All Rights Reserved.</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <GenerateDocumentationFile>False</GenerateDocumentationFile>
+    <LangVersion>8</LangVersion>
+    <Nullable>enable</Nullable>
+    <DelaySign>False</DelaySign>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DocumentationFile></DocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <DocumentationFile>bin\PapiInterfaces.xml</DocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="7.0.3" />
+  </ItemGroup>
+
+</Project>
