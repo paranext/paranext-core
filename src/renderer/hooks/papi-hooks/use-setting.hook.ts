@@ -24,8 +24,8 @@ import { SettingNames, SettingTypes } from 'papi-shared-types';
  */
 const useSetting = <SettingName extends SettingNames>(
   key: SettingName,
-  defaultState: SettingTypes[SettingName] | null,
-): [SettingTypes[SettingName] | null, (newSetting: SettingTypes[SettingName] | null) => void] => {
+  defaultState: SettingTypes[SettingName],
+): [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void] => {
   const [setting, setSettingInternal] = useState(() => {
     const initialSetting = settingsService.get(key);
     return initialSetting !== null ? initialSetting : defaultState;
@@ -55,9 +55,9 @@ const useSetting = <SettingName extends SettingNames>(
   const setSetting = useCallback(
     (newSetting: SettingTypes[SettingName] | null) => {
       settingsService.set(key, newSetting);
-      setSettingInternal(newSetting);
+      setSettingInternal(newSetting !== null ? newSetting : defaultState);
     },
-    [key],
+    [key, defaultState],
   );
 
   return [setting, setSetting];

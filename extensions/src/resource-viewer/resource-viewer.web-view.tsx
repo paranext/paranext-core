@@ -1,7 +1,7 @@
-import { VerseRef } from '@sillsdev/scripture';
+﻿import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
 import { RefSelector, ScriptureReference } from 'papi-components';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 // eslint-disable-next-line import/no-unresolved
 import { UsfmProviderDataTypes } from 'usfm-data-provider';
 import UsxEditor from 'usxeditor';
@@ -118,6 +118,12 @@ interface ScriptureTextPanelUsxProps {
   usx: string;
 }
 
+const defaultScrRef: ScriptureReference = {
+  bookNum: 1,
+  chapterNum: 1,
+  verseNum: 1,
+};
+
 /**
  * Scripture text panel that displays a read only version of a usx editor that displays the current
  * chapter
@@ -140,21 +146,15 @@ function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
 
 const {
   react: {
-    hooks: { useData },
+    hooks: { useData, useSetting },
   },
   logger,
 } = papi;
 
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
-
 globalThis.webViewComponent = function ResourceViewer() {
   logger.info('Preparing to display the Resource Viewer');
 
-  const [scrRef, setScrRef] = useState(defaultScrRef);
+  const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
   const [usx, , isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
     'usfm',
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
