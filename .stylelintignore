@@ -44,3 +44,6 @@ storybook-static
 lib/papi-components
 lib/papi-dts
 extensions
+
+# generated files
+package-lock.json
