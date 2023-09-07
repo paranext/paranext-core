@@ -1,8 +1,24 @@
-.installed-extensions-list {
+// .installed-extensions-list {
+//   overflow-y: auto;
+//   display: flex;
+//   flex-direction: column;
+//   align-items: flex-end;
+//   padding: 5%;
+//   gap: 10px;
+// }
+
+.extension-manager-dialog {
   overflow-y: auto;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
   padding: 5%;
-  gap: 10px;
+  flex-direction: column;
+}
+
+.extension-manager-label {
+  padding-bottom: 5%;
+}
+
+.extension-manager-actions {
+  padding-top: 5%;
+  align-self: flex-end;
 }

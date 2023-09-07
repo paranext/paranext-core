@@ -1,6 +1,7 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { useMemo, useState } from 'react';
 import logger from '@shared/services/logger.service';
+import { Typography } from '@mui/material';
 import { Button } from 'papi-components';
 import ExtensionList, { Extension } from './extension-list.component';
 import './extension-manager-tab.component.scss';
@@ -39,20 +40,24 @@ export default function ExtensionManagerTab() {
   };
 
   return (
-    <span className="installed-extensions-list">
-      <ExtensionList
-        extensions={installedExtensions}
-        toggledExtensionNames={toggledExtensions}
-        handleExtensionToggle={handleExtensionToggle}
-        label="Installed Extensions"
-      />
-      <Button
-        className="close-extension-toggle"
-        onClick={() => logger.info(`Installed extensions: ${toggledExtensions}`)}
-      >
-        Close
-      </Button>
-    </span>
+    <div className="extension-manager-dialog">
+      <div className="extension-manager-label">
+        <Typography>Extension Toggle</Typography>
+      </div>
+      <div className="extension-manager-instance">
+        <ExtensionList
+          extensions={installedExtensions}
+          toggledExtensionNames={toggledExtensions}
+          handleExtensionToggle={handleExtensionToggle}
+          label="Installed Extensions"
+        />
+      </div>
+      <div className="extension-manager-actions">
+        <Button onClick={() => logger.info(`Installed extensions: ${toggledExtensions}`)}>
+          Close
+        </Button>
+      </div>
+    </div>
   );
 }
 
