@@ -3,6 +3,7 @@ import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 import type { SavedWebViewDefinition, WebViewDefinition } from 'shared/data/web-view.model';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import resourceViewerWebView from './resource-viewer.web-view?inline';
+import resourceViewerWebViewStyles from './resource-viewer.web-view.scss?inline';
 
 const { logger } = papi;
 logger.info('Resource Viewer is importing!');
@@ -22,6 +23,7 @@ const resourceWebViewProvider: IWebViewProvider = {
       ...savedWebView,
       title: 'Resource Viewer',
       content: resourceViewerWebView,
+      styles: resourceViewerWebViewStyles,
     };
   },
 };
