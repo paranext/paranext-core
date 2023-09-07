@@ -10,15 +10,47 @@ export const TAB_TYPE_EXTENSION_MANAGER = 'extension-manager-dialog';
 
 export function fetchExtensions(): Extension[] {
   return [
-    { name: 'Editor', description: 'Edit Scripture Text' } as Extension,
-    { name: 'Resource Viewer', description: 'View Scripture resources' } as Extension,
+    {
+      name: 'Editor',
+      description: 'Edit Scripture Text',
+      hasUpdateAvailable: false,
+      isInstalled: true,
+    } as Extension,
+    {
+      name: 'Resource Viewer',
+      description: 'View Scripture resources',
+      hasUpdateAvailable: false,
+      isInstalled: true,
+    } as Extension,
     {
       name: 'Parallel Passages',
       description: 'Compare parallel passages of Scripture',
+      hasUpdateAvailable: true,
+      isInstalled: true,
     } as Extension,
     {
       name: 'Psalms layer-by-layer',
       description: 'Provide resources on the Psalms from Cambridge Digital Bible Research',
+      hasUpdateAvailable: true,
+      isInstalled: true,
+    } as Extension,
+    {
+      name: 'Hello World',
+      description: 'Example Bundled Extension',
+      hasUpdateAvailable: false,
+      isInstalled: true,
+    } as Extension,
+    {
+      name: 'Hello Someone',
+      description: 'Example Bundled Extension',
+      hasUpdateAvailable: true,
+      isInstalled: false,
+    } as Extension,
+    {
+      name: 'Quick Verse',
+      description: 'Example Bundled Extension',
+      hasUpdateAvailable: false,
+      isInstalled: false,
     } as Extension,
   ];
 }
