@@ -1,0 +1,25 @@
+.run-basic-checks-dialog {
+  padding: 5%;
+  overflow-y: auto;
+  gap: 20px;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+// .project-dropdown {
+//   width: 100%;
+// }
+
+.run-basic-checks-check-names {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: column;
+  width: 100%;
+}
+
+.run-basic-checks-books {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: column;
+  width: 100%;
+}
