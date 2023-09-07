@@ -1,6 +1,6 @@
 ﻿import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
-import { RefSelector, ScriptureReference } from 'papi-components';
+import { ScriptureReference } from 'papi-components';
 import { useMemo } from 'react';
 // eslint-disable-next-line import/no-unresolved
 import { UsfmProviderDataTypes } from 'usfm-data-provider';
@@ -154,22 +154,12 @@ const {
 globalThis.webViewComponent = function ResourceViewer() {
   logger.info('Preparing to display the Resource Viewer');
 
-  const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
+  const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
   const [usx, , isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
     'usfm',
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
   );
 
-  return (
-    <div>
-      <RefSelector
-        scrRef={scrRef}
-        handleSubmit={(newScrRef): void => {
-          setScrRef(newScrRef);
-        }}
-      />
-      {isLoading ? 'Loading' : <ScriptureTextPanelUsxEditor usx={usx ?? '<usx/>'} />}
-    </div>
-  );
+  return <div>{isLoading ? 'Loading' : <ScriptureTextPanelUsxEditor usx={usx ?? '<usx/>'} />}</div>;
 };
