@@ -22,3 +22,5 @@ jobs:
         with:
           branch: github-pages
           folder: storybook-static
+          GITHUB_TOKEN: ${{ secrets.PAGES_PAT }}
+          
