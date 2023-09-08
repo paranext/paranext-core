@@ -1,7 +1,7 @@
 import { RadioGroup, FormControlLabel, Radio, Typography } from '@mui/material';
 import settingsService from '@shared/services/settings.service';
 import { Canon } from '@sillsdev/scripture';
-import { Button } from 'papi-components';
+import { Button, ComboBox } from 'papi-components';
 import { useMemo, useState } from 'react';
 
 export default function BookSelection() {
@@ -30,6 +30,18 @@ export default function BookSelection() {
           labelPlacement="end"
         />
         <Typography>{scrRef}</Typography>
+        <FormControlLabel
+          value="start chapter"
+          control={<ComboBox />}
+          label="Chapters"
+          labelPlacement="start"
+        />
+        <FormControlLabel
+          value="end chapter"
+          control={<ComboBox />}
+          label="to"
+          labelPlacement="start"
+        />
       </div>
       <div className="book-selection-choose-books">
         <FormControlLabel

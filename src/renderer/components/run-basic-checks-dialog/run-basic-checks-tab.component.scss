@@ -1,19 +1,22 @@
 .run-basic-checks-dialog {
   padding: 5%;
   overflow-y: auto;
+  overflow-x: hidden;
   gap: 20px;
   display: flex;
   flex-wrap: wrap;
+  height: 100%;
 }
 
-// .project-dropdown {
-//   width: 100%;
-// }
-
 .run-basic-checks-check-names {
-  display: flex;
-  flex-wrap: wrap;
-  flex-direction: column;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: repeat(auto-fit, minmax(50%, 1fr));
+  grid-template-rows: repeat(auto-fit, minmax(10px, 30px));
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 40%;
+  max-height: 60%;
   width: 100%;
 }
 

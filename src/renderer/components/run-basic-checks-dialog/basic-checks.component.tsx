@@ -35,10 +35,12 @@ export default function BasicChecks() {
   const checks = useMemo(() => fetchChecks(), []);
 
   return (
-    <div>
+    <>
       {checks.map((check) => (
-        <Checkbox labelText={check.name} />
+        <span className="check-option">
+          <Checkbox labelText={check.name} />
+        </span>
       ))}
-    </div>
+    </>
   );
 }
