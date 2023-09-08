@@ -1,4 +1,4 @@
-import { FormLabel, Checkbox as MuiCheckbox } from '@mui/material';
+import { FormControlLabel, Checkbox as MuiCheckbox } from '@mui/material';
 import { ChangeEvent } from 'react';
 import './checkbox.component.css';
 import LabelPosition from './label-position.model';
@@ -84,7 +84,7 @@ function Checkbox({
       indeterminate={isIndeterminate}
       defaultChecked={isDefaultChecked}
       disabled={isDisabled}
-      className={`papi-checkbox ${hasError ? 'error' : ''} ${className ?? ''}`}
+      className={`papi-checkbox ${hasError ? 'error' : ''}`}
       onChange={onChange}
     />
   );
@@ -92,32 +92,34 @@ function Checkbox({
   let result;
 
   if (labelText) {
-    const preceding =
-      labelPosition === LabelPosition.Before || labelPosition === LabelPosition.Above;
-
-    const labelSpan = (
-      <span className={`papi-checkbox-label ${hasError ? 'error' : ''} ${className ?? ''}`}>
-        {labelText}
-      </span>
+    const label = (
+      <span className={`papi-checkbox-label ${hasError ? 'error' : ''}`}>{labelText}</span>
     );
 
-    const labelIsInline =
-      labelPosition === LabelPosition.Before || labelPosition === LabelPosition.After;
-
-    const label = labelIsInline ? labelSpan : <div>{labelSpan}</div>;
-
-    const checkBoxElement = labelIsInline ? checkBox : <div>{checkBox}</div>;
+    let placement: 'end' | 'start' | 'top' | 'bottom';
+    switch (labelPosition) {
+      case LabelPosition.After:
+        placement = 'end';
+        break;
+      case LabelPosition.Above:
+        placement = 'top';
+        break;
+      case LabelPosition.Below:
+        placement = 'bottom';
+        break;
+      default:
+        placement = 'start';
+        break;
+    }
 
     result = (
-      <FormLabel
-        className={`papi-checkbox ${labelPosition.toString()}`}
+      <FormControlLabel
+        className={`papi-checkbox ${labelPosition.toString()} ${className ?? ''}`}
         disabled={isDisabled}
-        error={hasError}
-      >
-        {preceding && label}
-        {checkBoxElement}
-        {!preceding && label}
-      </FormLabel>
+        control={checkBox}
+        label={label}
+        labelPlacement={placement}
+      />
     );
   } else {
     result = checkBox;
