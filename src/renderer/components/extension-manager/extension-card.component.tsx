@@ -1,5 +1,6 @@
-import { Avatar, Card, CardActions, CardHeader } from '@mui/material';
+import { Avatar, Card, CardActions, CardContent, CardHeader, Typography } from '@mui/material';
 import { PropsWithChildren, ReactNode, useMemo } from 'react';
+import './extension-card.component.scss';
 
 export type ExtensionCardProps = PropsWithChildren<{
   /**
@@ -21,6 +22,11 @@ export type ExtensionCardProps = PropsWithChildren<{
    * Content to provide for a header action that appears in the top right of the Card
    */
   headerAction?: ReactNode;
+
+  /**
+   * Optional className to link to css
+   */
+  className?: string;
 }>;
 
 export default function ExtensionCard({
@@ -28,6 +34,7 @@ export default function ExtensionCard({
   extensionDescription,
   hasIcon,
   headerAction,
+  className,
   children,
 }: ExtensionCardProps) {
   const avatar = useMemo(
@@ -35,18 +42,30 @@ export default function ExtensionCard({
     [extensionName, hasIcon],
   );
 
+  const isGallery = useMemo(() => className && className === 'square', [className]);
+
   return (
-    <Card className="extension-card" variant="outlined">
+    <Card
+      className={isGallery ? 'extension-card-square' : 'extension-card-wide'}
+      variant="outlined"
+    >
       <CardHeader
         className="extension-card-content"
         avatar={avatar}
         title={extensionName}
         titleTypographyProps={{ variant: 'h6' }}
         action={headerAction}
-        subheader={extensionDescription}
+        subheader={!isGallery ? extensionDescription : null}
         subheaderTypographyProps={{ variant: 'body2' }}
       />
-      <CardActions className="card-action">{children}</CardActions>
+      {isGallery ? (
+        <CardContent className="extension-card-description">
+          <Typography variant="body2">{extensionDescription}</Typography>
+        </CardContent>
+      ) : null}
+      <CardActions className={isGallery ? 'card-action-square' : 'card-action-wide'}>
+        {children}
+      </CardActions>
     </Card>
   );
 }

@@ -83,6 +83,14 @@ export default function ExtensionManagerTab() {
           handleExtensionToggle={handleExtensionToggle}
           label="Installed Extensions"
         />
+        <ExtensionList
+          extensions={installedExtensions}
+          toggledExtensionNames={toggledExtensions}
+          handleExtensionToggle={handleExtensionToggle}
+          label="Installed Extensions Gallery Example"
+          isGallery
+          hasIcon
+        />
       </div>
       <div className="extension-manager-actions">
         <Button onClick={() => logger.info(`Installed extensions: ${toggledExtensions}`)}>

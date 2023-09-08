@@ -25,10 +25,12 @@ export default function ExtensionToggle({
   extensionName,
   extensionDescription,
   hasIcon,
+  className,
   children,
 }: ExtensionToggleProps) {
   return (
     <ExtensionCard
+      className={className}
       hasIcon={hasIcon}
       extensionName={extensionName}
       extensionDescription={extensionDescription}
