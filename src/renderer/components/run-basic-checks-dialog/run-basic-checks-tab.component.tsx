@@ -38,7 +38,7 @@ export default function RunBasicChecksTab() {
         <legend>Checks</legend>
         <BasicChecks />
       </fieldset>
-      <fieldset>
+      <fieldset className="run-basic-checks-books">
         <BookSelection />
       </fieldset>
     </div>
