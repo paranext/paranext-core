@@ -1,5 +1,6 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
-import { ComboBox, ComboBoxLabelOption } from 'papi-components';
+import { Button, ComboBox, ComboBoxLabelOption } from 'papi-components';
+import logger from '@shared/services/logger.service';
 import { useMemo } from 'react';
 import { fetchProjects } from '../project-dialogs/open-project-tab.component';
 import './run-basic-checks-tab.component.scss';
@@ -19,7 +20,7 @@ export default function RunBasicChecksTab() {
         .filter((project) => project.isDownloaded)
         .map((project) => ({
           projectId: project.id,
-          label: project.id,
+          label: project.name,
         })),
     [],
   );
@@ -41,6 +42,10 @@ export default function RunBasicChecksTab() {
       <fieldset className="run-basic-checks-books">
         <BookSelection />
       </fieldset>
+      <div className="basic-checks-dialog-actions">
+        <Button onClick={() => logger.info(`Submitted`)}>OK</Button>
+        <Button onClick={() => logger.info(`Canceled`)}>Cancel</Button>
+      </div>
     </div>
   );
 }

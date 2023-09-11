@@ -1,5 +1,17 @@
-.book-selection-current-book {
+.book-selection-option {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.book-selection-current-book-name {
+  border: 1px;
+}
+
+.book-selection-chapter {
+  padding-left: 5%;
+}
+
+.start {
+  padding-right: 5%;
 }
