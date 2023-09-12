@@ -2,7 +2,7 @@ import { RadioGroup, FormControlLabel, Radio, Typography, Grid } from '@mui/mate
 import settingsService from '@shared/services/settings.service';
 import { Canon } from '@sillsdev/scripture';
 import { Button, ComboBox, ComboBoxLabelOption } from 'papi-components';
-import { useMemo, useState } from 'react';
+import { SyntheticEvent, useMemo, useState } from 'react';
 import './book-selection.component.scss';
 
 export default function BookSelection() {
@@ -36,6 +36,17 @@ export default function BookSelection() {
     }
   };
 
+  const [startChapter, setStartChapter] = useState(1);
+  const [endChapter, setEndChapter] = useState(chapterCount);
+
+  const onSelectChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
+    setStartChapter((value as ChapterNumberOption).chapterNum);
+  };
+
+  const onSelectChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
+    setEndChapter((value as ChapterNumberOption).chapterNum);
+  };
+
   return (
     <RadioGroup defaultValue="current book">
       <Grid container alignItems="center">
@@ -48,15 +59,17 @@ export default function BookSelection() {
             labelPlacement="end"
           />
         </Grid>
-        <Grid item xs className="book-selection-option">
+        <Grid item xs="auto" className="book-selection-option">
           <Typography padding={0.5} marginRight={2} border={1}>
             {currentBook}
           </Typography>
           <FormControlLabel
-            value="1"
+            className="book-selection-chapter-form-label start"
+            value={startChapter}
             control={
               <ComboBox
-                className="book-selection-chapter start"
+                onChange={onSelectChangeStartChapter}
+                className="book-selection-chapter"
                 key="start chapter"
                 isClearable={false}
                 options={chapterNumbers}
@@ -66,10 +79,12 @@ export default function BookSelection() {
             labelPlacement="start"
           />
           <FormControlLabel
-            value={chapterCount.toString()}
+            className="book-selection-chapter-form-label end"
+            value={endChapter}
             control={
               <ComboBox
-                className="book-selection-chapter end"
+                onChange={onSelectChangeEndChapter}
+                className="book-selection-chapter"
                 key="end chapter"
                 isClearable={false}
                 options={chapterNumbers}
