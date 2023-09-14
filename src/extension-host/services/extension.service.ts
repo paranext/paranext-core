@@ -107,6 +107,8 @@ let availableExtensions: ExtensionInfo[];
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
   const extensionManifest = JSON.parse(extensionManifestJson) as ExtensionManifest;
+  if (extensionManifest.name.includes('..'))
+    throw new Error('Extension name must not include `..`!');
   // Replace ts with js so people can list their source code ts name but run the transpiled js
   if (extensionManifest.main && extensionManifest.main.toLowerCase().endsWith('.ts'))
     extensionManifest.main = `${extensionManifest.main.slice(0, -3)}.js`;
