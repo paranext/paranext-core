@@ -40,11 +40,15 @@ export default function BookSelection() {
   const [endChapter, setEndChapter] = useState(chapterCount);
 
   const onSelectChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
-    setStartChapter((value as ChapterNumberOption).chapterNum);
+    const newStartChapterNum = (value as ChapterNumberOption).chapterNum;
+    setStartChapter(newStartChapterNum);
+    if (newStartChapterNum > endChapter) setEndChapter(newStartChapterNum);
   };
 
   const onSelectChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
-    setEndChapter((value as ChapterNumberOption).chapterNum);
+    const newEndChapterNum = (value as ChapterNumberOption).chapterNum;
+    setEndChapter(newEndChapterNum);
+    if (newEndChapterNum < startChapter) setStartChapter(newEndChapterNum);
   };
 
   return (
