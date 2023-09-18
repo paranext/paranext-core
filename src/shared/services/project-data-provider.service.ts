@@ -108,7 +108,10 @@ export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
 
   // TODO: Get the appropriate PSI ID and pass it into pdpFactory.getProjectDataProviderId instead
   // of the storageType. https://github.com/paranext/paranext-core/issues/367
-  const pdpId = await pdpFactory.getProjectDataProviderId(projectId, storageType);
+  let pdpId = await pdpFactory.getProjectDataProviderId(projectId, storageType);
+  // '-data' automatically gets appended, so we need to take it off or we get `-data-data`
+  const suffix: string = '-data';
+  if (pdpId.endsWith(suffix)) pdpId = pdpId.substring(0, pdpId.length - suffix.length);
   const pdp = await dataProviderService.get<ProjectDataProvider[ProjectType]>(pdpId);
   if (!pdp) throw new Error(`Cannot create project data provider for project ID ${projectId}`);
   return pdp;

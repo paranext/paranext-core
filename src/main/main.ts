@@ -24,6 +24,8 @@ import extensionAssetProtocolService from '@main/services/extension-asset-protoc
 import { wait } from '@shared/utils/util';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/papi-util';
+import { getProjectDataProvider } from '@shared/services/project-data-provider.service';
+import { VerseRef } from '@sillsdev/scripture';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 
@@ -317,6 +319,17 @@ async function main() {
   }, 5000);
 
   // #endregion
+
+  // Test a .NET data provider
+  setTimeout(async () => {
+    const paratextPdp = await getProjectDataProvider(
+      '499234e1-9965-452b-8175-138330893b6a',
+      'ParatextStandard',
+      'paratextFolders',
+    );
+    const verse = await paratextPdp.getVerse(new VerseRef('JHN', '1', '1'));
+    logger.info(`Got PDP data: ${verse}`);
+  }, 10000);
 }
 
 async function restartExtensionHost() {
