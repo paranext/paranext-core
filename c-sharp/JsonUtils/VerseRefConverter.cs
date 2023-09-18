@@ -83,6 +83,7 @@ namespace Paranext.DataProvider.JsonUtils
                     versification
                 );
             }
+
             return true;
         }
     }
