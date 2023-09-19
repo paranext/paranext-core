@@ -7,6 +7,9 @@ using Paranext.DataProvider.MessageTransports;
 
 namespace Paranext.DataProvider.Projects;
 
+/// <summary>
+/// Bridge from persistent storage to a project’s actual data
+/// </summary>
 internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
 {
     protected ProjectStorageInterpreter(
@@ -75,6 +78,9 @@ internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
     /// </summary>
     public abstract ResponseToRequest GetAllProjects();
 
+    /// <summary>
+    /// Create a brand new, empty project with the given scope
+    /// </summary>
     public abstract ResponseToRequest CreateProject(ProjectDataScope scope);
 
     /// <summary>

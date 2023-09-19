@@ -18,12 +18,24 @@ public class ProjectMetadata
         ProjectType = projectType;
     }
 
+    /// <summary>
+    /// ID of the project (must be unique)
+    /// </summary>
     public Guid ID { get; }
 
+    /// <summary>
+    /// Short name of the project (not necessarily unique)
+    /// </summary>
     public string Name { get; }
 
+    /// <summary>
+    /// Indicates how the project is persisted to storage
+    /// </summary>
     public ProjectStorageType ProjectStorageType { get; }
 
+    /// <summary>
+    /// Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
+    /// </summary>
     public string ProjectType { get; }
 
     public override bool Equals(object? obj)

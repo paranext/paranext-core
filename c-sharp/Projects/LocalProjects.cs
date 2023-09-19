@@ -6,18 +6,25 @@ using Paratext.Data.Users;
 
 namespace Paranext.DataProvider.Projects;
 
+/// <summary>
+/// Direct access methods to the file system for project directories
+/// </summary>
 internal static partial class LocalProjects
 {
     private static readonly ConcurrentDictionary<Guid, ProjectDetails> s_projectDetailsMap = new();
     private static readonly ConcurrentDictionary<Guid, ScrText> s_paratextProjectMap = new();
+
+    // All project directories are subdirectories of this
     private static readonly string s_projectRootFolder;
+
+    // The directory name pattern for each project is "shortName_ID"
+    [GeneratedRegex("(?<name>\\w*)_(?<id>.*)")]
+    private static partial Regex ProjectDirectoryRegex();
+
+    // Inside of each project's "shortName_ID" directory, these are the subdirectories and files
     private const string PROJECT_PARATEXT_SUBDIRECTORY = "project";
     private const string PROJECT_EXTENSIONS_SUBDIRECTORY = "extensions";
     private const string PROJECT_METADATA_FILE = "meta.json";
-
-    // The directory name pattern for projects is is "shortName_ID"
-    [GeneratedRegex("(?<name>\\w*)_(?<id>.*)")]
-    private static partial Regex ProjectDirectoryRegex();
 
     static LocalProjects()
     {
@@ -112,6 +119,7 @@ internal static partial class LocalProjects
     {
         ProjectName projectName =
             new(Path.Join(projectDetails.Directory, PROJECT_PARATEXT_SUBDIRECTORY));
+        // TODO: Figure out a way to get a proper Paratext user
         ParatextUser paratextUser = new DummyParatextUser(Environment.UserName);
         var id = projectDetails.Metadata.ID;
         if (s_projectDetailsMap.ContainsKey(id) || s_paratextProjectMap.ContainsKey(id))

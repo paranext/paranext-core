@@ -1,5 +1,8 @@
 namespace Paranext.DataProvider.Projects;
 
+/// <summary>
+/// All information about a project we want to store and pass around internally
+/// </summary>
 internal class ProjectDetails
 {
     public ProjectDetails(ProjectMetadata metadata, string directory)
