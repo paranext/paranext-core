@@ -2,6 +2,9 @@ using System.Text;
 
 namespace Paranext.DataProvider.Projects;
 
+/// <summary>
+/// Converts between files in the file system and named streams
+/// </summary>
 internal class RawDirectoryProjectStreamManager : IProjectStreamManager
 {
     private readonly ProjectDetails _projectDetails;

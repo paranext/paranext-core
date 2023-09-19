@@ -82,25 +82,23 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
             return ResponseToRequest.Failed("Must provide a data qualifier");
 
         // Not making it mandatory that all calls provide a VerseRef since there might be some types that don't use it
-        VerseRef? verseRef = null;
-        if (VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var vref, out var error))
-            verseRef = vref;
+        VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
         var scrText = LocalProjects.GetParatextProject(scope.ProjectID.Value);
         return scope.DataType.ToUpperInvariant() switch
         {
             Book
-                => verseRef == null
+                => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Failed(error)
-                    : ResponseToRequest.Succeeded(scrText.GetText(verseRef.Value, false, false)),
+                    : ResponseToRequest.Succeeded(scrText.GetText(verseRef, false, false)),
             Chapter
-                => verseRef == null
+                => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Failed(error)
-                    : ResponseToRequest.Succeeded(scrText.GetText(verseRef.Value, true, false)),
+                    : ResponseToRequest.Succeeded(scrText.GetText(verseRef, true, false)),
             Verse
-                => verseRef == null
+                => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Failed(error)
-                    : ResponseToRequest.Succeeded(scrText.GetVerseText(verseRef.Value)),
+                    : ResponseToRequest.Succeeded(scrText.GetVerseText(verseRef)),
             _ => ResponseToRequest.Failed($"Unknown data type: {scope.DataType}")
         };
     }

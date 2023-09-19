@@ -1,5 +1,9 @@
 namespace Paranext.DataProvider.Projects;
 
+/// <summary>
+/// Used to work with data for a project in terms of streams
+/// Implementations could provide streams for storage locations like files in a directory, entries in a ZIP file, blobs in cloud storage, etc.
+/// </summary>
 internal interface IProjectStreamManager
 {
     /// <summary>

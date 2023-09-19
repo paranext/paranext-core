@@ -63,6 +63,9 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
         }
     }
 
+    /// <summary>
+    /// Return the name of the PDP network object that corresponds to the given project ID and PSI ID
+    /// </summary>
     protected abstract ResponseToRequest GetProjectDataProviderID(
         string projectID,
         string projectStorageInterpreterId
