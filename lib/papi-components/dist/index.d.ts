@@ -142,7 +142,7 @@ export type ComboBoxProps<T> = {
 	 */
 	className?: string;
 	/**
-	 * The selected value that the combo box currently holds
+	 * The selected value that the combo box currently holds. Must be shallow equal to one of the options entries.
 	 */
 	value?: T;
 	/**

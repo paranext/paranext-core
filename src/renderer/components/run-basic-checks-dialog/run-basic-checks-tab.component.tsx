@@ -1,7 +1,8 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { Button, ComboBox, ComboBoxLabelOption } from 'papi-components';
 import logger from '@shared/services/logger.service';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import settingsService from '@shared/services/settings.service';
 import { fetchProjects } from '../project-dialogs/open-project-tab.component';
 import './run-basic-checks-tab.component.scss';
 import BookSelection from './book-selection.component';
@@ -25,9 +26,24 @@ export default function RunBasicChecksTab() {
     [],
   );
 
+  const currentReference = useMemo(() => settingsService.get('platform.verseRef'), []);
+  const currentBookNumber = currentReference?.bookNum ?? 1;
+  const chapterCount = currentBookNumber === 1 ? 50 : 20;
+
+  const [selectedBooks, setSelectedBooks] = useState<number[]>([currentBookNumber]);
+  const [startChapter, setStartChapter] = useState(1);
+  const [endChapter, setEndChapter] = useState(chapterCount);
+
+  const handleSubmit = () => {
+    logger.info(
+      `Selected Books: ${selectedBooks} start chapter: ${startChapter} end chapter: ${endChapter}`,
+    );
+  };
+
   return (
     <div className="run-basic-checks-dialog">
-      {/* Ideally, pass in a project and make it the initial selection for the box */}
+      {/* Ideally, pass in a project and make it the initial selection for the box,
+      or eliminate ability to select project other than the current */}
       <ComboBox
         className="project-dropdown"
         isFullWidth
@@ -40,10 +56,19 @@ export default function RunBasicChecksTab() {
         <BasicChecks />
       </fieldset>
       <fieldset className="run-basic-checks-books">
-        <BookSelection />
+        <BookSelection
+          chapterCount={chapterCount}
+          currentBookNumber={currentBookNumber}
+          selectedBooks={selectedBooks}
+          setSelectedBooks={setSelectedBooks}
+          startChapter={startChapter}
+          setStartChapter={setStartChapter}
+          endChapter={endChapter}
+          setEndChapter={setEndChapter}
+        />
       </fieldset>
       <div className="basic-checks-dialog-actions">
-        <Button onClick={() => logger.info(`Submitted`)}>OK</Button>
+        <Button onClick={() => handleSubmit()}>OK</Button>
         <Button onClick={() => logger.info(`Canceled`)}>Cancel</Button>
       </div>
     </div>

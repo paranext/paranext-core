@@ -28,6 +28,21 @@ function fetchChecks() {
     {
       name: 'Capitalization',
     } as BasicCheck,
+    {
+      name: 'Repeated Words',
+    } as BasicCheck,
+    {
+      name: 'Unmatched Pairs of Punctuation',
+    } as BasicCheck,
+    {
+      name: 'Quotations',
+    } as BasicCheck,
+    {
+      name: 'Quotation types',
+    } as BasicCheck,
+    {
+      name: 'Numbers',
+    } as BasicCheck,
   ];
 }
 

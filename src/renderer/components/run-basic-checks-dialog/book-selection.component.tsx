@@ -1,54 +1,47 @@
 import { RadioGroup, FormControlLabel, Radio, Typography, Grid } from '@mui/material';
-import settingsService from '@shared/services/settings.service';
 import { Canon } from '@sillsdev/scripture';
-import { Button, ComboBox, ComboBoxLabelOption } from 'papi-components';
-import { SyntheticEvent, useMemo, useState } from 'react';
+import { Button } from 'papi-components';
+import { Dispatch, SetStateAction, useMemo, useState } from 'react';
 import './book-selection.component.scss';
+import ChapterRangeSelection from './chapter-range-selection.component';
 
-export default function BookSelection() {
-  // Gets the current book from scripture reference in settings
-  const currentBook = useMemo(
-    () => Canon.bookNumberToEnglishName(settingsService.get('platform.verseRef')?.bookNum ?? 1),
-    [],
+type BookSelectionProps = {
+  currentBookNumber: number;
+  setSelectedBooks: Dispatch<SetStateAction<number[]>>;
+  selectedBooks: number[];
+  setStartChapter: Dispatch<SetStateAction<number>>;
+  startChapter: number;
+  setEndChapter: Dispatch<SetStateAction<number>>;
+  endChapter: number;
+  chapterCount: number;
+};
+
+export default function BookSelection({
+  currentBookNumber,
+  setSelectedBooks,
+  selectedBooks,
+  setStartChapter,
+  startChapter,
+  setEndChapter,
+  endChapter,
+  chapterCount,
+}: BookSelectionProps) {
+  const [currentBookRadio, setCurrentBookRadio] = useState<boolean>(true);
+  const [chooseBookRadio, setChooseBookRadio] = useState<boolean>(false);
+
+  const currentBookName = useMemo(
+    () => Canon.bookNumberToEnglishName(currentBookNumber),
+    [currentBookNumber],
   );
-
-  interface ChapterNumberOption extends ComboBoxLabelOption {
-    chapterNum: number;
-  }
-
-  const chapterCount = currentBook === 'Genesis' ? 50 : 20;
-  const chapterNumbers: ChapterNumberOption[] = useMemo(
-    () =>
-      Array.from({ length: chapterCount }, (_, i) => i + 1).map((c) => ({
-        chapterNum: c,
-        label: c.toString(),
-      })),
-    [chapterCount],
-  );
-
-  const [selectedBooks, setSelectedBooks] = useState<number[]>([]);
 
   const handleSelectBooks = (bookNumber: number) => {
+    setCurrentBookRadio(false);
+    setChooseBookRadio(true);
     if (selectedBooks.includes(bookNumber)) {
       setSelectedBooks(selectedBooks.filter((number) => number !== bookNumber));
     } else {
       setSelectedBooks([...selectedBooks, bookNumber]);
     }
-  };
-
-  const [startChapter, setStartChapter] = useState(1);
-  const [endChapter, setEndChapter] = useState(chapterCount);
-
-  const onSelectChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
-    const newStartChapterNum = (value as ChapterNumberOption).chapterNum;
-    setStartChapter(newStartChapterNum);
-    if (newStartChapterNum > endChapter) setEndChapter(newStartChapterNum);
-  };
-
-  const onSelectChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
-    const newEndChapterNum = (value as ChapterNumberOption).chapterNum;
-    setEndChapter(newEndChapterNum);
-    if (newEndChapterNum < startChapter) setStartChapter(newEndChapterNum);
   };
 
   return (
@@ -58,44 +51,29 @@ export default function BookSelection() {
           <FormControlLabel
             key="current book"
             value="current book"
-            control={<Radio />}
+            control={
+              <Radio
+                checked={currentBookRadio}
+                onChange={() => {
+                  setChooseBookRadio(false);
+                  setCurrentBookRadio((prev) => !prev);
+                }}
+              />
+            }
             label="Current Book"
             labelPlacement="end"
           />
         </Grid>
         <Grid item xs="auto" className="book-selection-option">
           <Typography padding={0.5} marginRight={2} border={1}>
-            {currentBook}
+            {currentBookName}
           </Typography>
-          <FormControlLabel
-            className="book-selection-chapter-form-label start"
-            value={startChapter}
-            control={
-              <ComboBox
-                onChange={onSelectChangeStartChapter}
-                className="book-selection-chapter"
-                key="start chapter"
-                isClearable={false}
-                options={chapterNumbers}
-              />
-            }
-            label="Chapters"
-            labelPlacement="start"
-          />
-          <FormControlLabel
-            className="book-selection-chapter-form-label end"
-            value={endChapter}
-            control={
-              <ComboBox
-                onChange={onSelectChangeEndChapter}
-                className="book-selection-chapter"
-                key="end chapter"
-                isClearable={false}
-                options={chapterNumbers}
-              />
-            }
-            label="to"
-            labelPlacement="start"
+          <ChapterRangeSelection
+            setStartChapter={setStartChapter}
+            startChapter={startChapter}
+            setEndChapter={setEndChapter}
+            endChapter={endChapter}
+            chapterCount={chapterCount}
           />
         </Grid>
       </Grid>
@@ -104,7 +82,15 @@ export default function BookSelection() {
           <FormControlLabel
             key="selected books"
             value="selected books"
-            control={<Radio />}
+            control={
+              <Radio
+                checked={chooseBookRadio}
+                onChange={() => {
+                  setCurrentBookRadio(false);
+                  setChooseBookRadio((prev) => !prev);
+                }}
+              />
+            }
             label="Choose Books"
             labelPlacement="end"
           />
@@ -116,7 +102,8 @@ export default function BookSelection() {
               ? 'All Books'
               : Canon.bookNumberToEnglishName(selectedBooks[0])}
           </Typography>
-          {/* OnClick - opens a dialog where we send the list of selectedBooks and the handleSelectBooks */}
+          {/* OnClick - opens a dialog where we send the list of selectedBooks and the handleSelectBooks
+          so passing four here is irrelevant and for testing purposes */}
           <Button onClick={() => handleSelectBooks(4)}>Choose...</Button>
         </Grid>
       </Grid>
