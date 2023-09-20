@@ -41,8 +41,14 @@ const ON_DID_UPDATE = 'onDidUpdate';
  */
 const SUBSCRIBE_PLACEHOLDER = {};
 
-/** Gets the id for the data provider network object with the given name */
-const getDataProviderObjectId = (providerName: string) => `${providerName}-${DATA_PROVIDER_LABEL}`;
+/** Gets the id for the data provider network object with the given name
+ *  Don't add the suffix to the provider name if it's already there to avoid duplication
+ */
+const getDataProviderObjectId = (providerName: string) => {
+  return providerName.endsWith(`-${DATA_PROVIDER_LABEL}`)
+    ? providerName
+    : `${providerName}-${DATA_PROVIDER_LABEL}`;
+};
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
