@@ -14,9 +14,9 @@ export type ExtensionCardProps = PropsWithChildren<{
   extensionDescription: string;
 
   /**
-   * Optional flag to set if you want an icon (Avatar) to appear for the extension
+   * File path to the icon
    */
-  hasIcon?: boolean;
+  iconFilePath?: string;
 
   /**
    * Content to provide for a header action that appears in the top right of the Card
@@ -32,14 +32,17 @@ export type ExtensionCardProps = PropsWithChildren<{
 export default function ExtensionCard({
   extensionName,
   extensionDescription,
-  hasIcon,
+  iconFilePath,
   headerAction,
   className,
   children,
 }: ExtensionCardProps) {
   const avatar = useMemo(
-    () => (hasIcon ? <Avatar variant="square">{extensionName[0]}</Avatar> : null),
-    [extensionName, hasIcon],
+    () =>
+      iconFilePath ? (
+        <Avatar variant="square" src={iconFilePath} alt={extensionDescription} />
+      ) : null,
+    [extensionDescription, iconFilePath],
   );
 
   const isGallery = useMemo(() => className && className === 'square', [className]);

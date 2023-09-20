@@ -15,42 +15,49 @@ export function fetchExtensions(): Extension[] {
       description: 'Edit Scripture Text',
       hasUpdateAvailable: false,
       isInstalled: true,
+      filePath: undefined,
     } as Extension,
     {
       name: 'Resource Viewer',
       description: 'View Scripture resources',
       hasUpdateAvailable: false,
       isInstalled: true,
+      filePath: undefined,
     } as Extension,
     {
       name: 'Parallel Passages',
       description: 'Compare parallel passages of Scripture',
       hasUpdateAvailable: true,
       isInstalled: true,
+      filePath: undefined,
     } as Extension,
     {
       name: 'Psalms layer-by-layer',
       description: 'Provide resources on the Psalms from Cambridge Digital Bible Research',
       hasUpdateAvailable: true,
       isInstalled: true,
+      filePath: undefined,
     } as Extension,
     {
       name: 'Hello World',
       description: 'Example Bundled Extension',
       hasUpdateAvailable: false,
       isInstalled: true,
+      filePath: undefined,
     } as Extension,
     {
       name: 'Hello Someone',
       description: 'Example Bundled Extension',
       hasUpdateAvailable: true,
       isInstalled: false,
+      filePath: undefined,
     } as Extension,
     {
       name: 'Quick Verse',
       description: 'Example Bundled Extension',
       hasUpdateAvailable: false,
       isInstalled: false,
+      filePath: 'papi-extension://quick-verse/assets/letter-q.png',
     } as Extension,
   ];
 }
@@ -89,7 +96,8 @@ export default function ExtensionManagerTab() {
           handleExtensionToggle={handleExtensionToggle}
           label="Installed Extensions Gallery Example"
           isGallery
-          hasIcon
+          hasIcons
+          headerAction={<Button className="primary">Add</Button>}
         />
       </div>
       <div className="extension-manager-actions">

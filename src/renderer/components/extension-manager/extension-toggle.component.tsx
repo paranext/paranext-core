@@ -22,18 +22,20 @@ export type ExtensionToggleProps = ExtensionCardProps &
 export default function ExtensionToggle({
   toggledExtensionNames,
   handleExtensionToggle,
+  headerAction,
   extensionName,
   extensionDescription,
-  hasIcon,
+  iconFilePath,
   className,
   children,
 }: ExtensionToggleProps) {
   return (
     <ExtensionCard
       className={className}
-      hasIcon={hasIcon}
+      iconFilePath={iconFilePath}
       extensionName={extensionName}
       extensionDescription={extensionDescription}
+      headerAction={headerAction}
     >
       {children}
       <div className="switch-container">
