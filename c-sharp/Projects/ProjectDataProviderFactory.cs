@@ -6,6 +6,9 @@ using Paranext.DataProvider.NetworkObjects;
 
 namespace Paranext.DataProvider.Projects;
 
+/// <summary>
+/// Provides a ProjectDataProvider object for a specified project type
+/// </summary>
 internal abstract class ProjectDataProviderFactory : NetworkObject
 {
     private readonly string _projectType;

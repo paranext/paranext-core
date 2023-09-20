@@ -89,16 +89,16 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         {
             Book
                 => string.IsNullOrEmpty(error)
-                    ? ResponseToRequest.Failed(error)
-                    : ResponseToRequest.Succeeded(scrText.GetText(verseRef, false, false)),
+                    ? ResponseToRequest.Succeeded(scrText.GetText(verseRef, false, false))
+                    : ResponseToRequest.Failed(error),
             Chapter
                 => string.IsNullOrEmpty(error)
-                    ? ResponseToRequest.Failed(error)
-                    : ResponseToRequest.Succeeded(scrText.GetText(verseRef, true, false)),
+                    ? ResponseToRequest.Succeeded(scrText.GetText(verseRef, true, false))
+                    : ResponseToRequest.Failed(error),
             Verse
                 => string.IsNullOrEmpty(error)
-                    ? ResponseToRequest.Failed(error)
-                    : ResponseToRequest.Succeeded(scrText.GetVerseText(verseRef)),
+                    ? ResponseToRequest.Succeeded(scrText.GetVerseText(verseRef))
+                    : ResponseToRequest.Failed(error),
             _ => ResponseToRequest.Failed($"Unknown data type: {scope.DataType}")
         };
     }

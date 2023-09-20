@@ -5,6 +5,10 @@ namespace Paranext.DataProvider.JsonUtils
 {
     internal class VerseRefConverter
     {
+        /// <summary>
+        /// Attempts to convert a string containing JSON to a VerseRef object
+        /// </summary>
+        /// <returns>true if the conversion was successful, false otherwise</returns>
         public static bool TryCreateVerseRef(
             string jsonString,
             out VerseRef verseRef,
