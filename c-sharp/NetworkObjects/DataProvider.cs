@@ -29,6 +29,7 @@ internal abstract class DataProvider : NetworkObject
     protected DataProvider(string name, PapiClient papiClient)
         : base(papiClient)
     {
+        // "-data" is the suffix used by PAPI for data provider names
         DataProviderName = name + "-data";
 
         // "onDidUpdate" is the event name used by PAPI for data providers to notify consumers of updates

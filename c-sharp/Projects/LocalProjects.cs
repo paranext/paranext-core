@@ -79,7 +79,7 @@ internal static partial class LocalProjects
 
     public static void SaveProjectMetadata(ProjectMetadata metadata, bool overwrite = false)
     {
-        var projectDir = Path.Join(s_projectRootFolder, $"{metadata.Name}_${metadata.ID}");
+        var projectDir = GetProjectDir(metadata.Name, metadata.ID);
         var projectParatextDir = Path.Join(projectDir, PROJECT_PARATEXT_SUBDIRECTORY);
         var projectExtensionsDir = Path.Join(projectDir, PROJECT_EXTENSIONS_SUBDIRECTORY);
         var metadataFilePath = Path.Join(projectDir, PROJECT_METADATA_FILE);
@@ -109,10 +109,15 @@ internal static partial class LocalProjects
 
     public static void LoadProject(string projectName, Guid projectID)
     {
-        var dir = Path.Join(s_projectRootFolder, $"{projectName}_${projectID}");
+        var dir = GetProjectDir(projectName, projectID);
         var projectMetadata =
             LoadProjectMetadata(dir, out string errorMessage) ?? throw new Exception(errorMessage);
         AddProjectToMaps(new ProjectDetails(projectMetadata, dir));
+    }
+
+    private static string GetProjectDir(string projectName, Guid projectID)
+    {
+        return Path.Join(s_projectRootFolder, $"{projectName}_{projectID}");
     }
 
     private static void AddProjectToMaps(ProjectDetails projectDetails)

@@ -5,6 +5,12 @@ using Paranext.DataProvider.MessageTransports;
 
 namespace Paranext.DataProvider.Projects;
 
+/// <summary>
+/// Manages reading/writing to a project
+/// Subclasses are expected to define and add get/set/subscribe methods to the Getters/Setters/Subscribers
+/// Subclasses are also expected to use a ProjectStorageInterpreter for implementing all get/set/subscribe methods as appropriate
+/// ProjectDataProviders are meant to be created/owned by ProjectDataProviderFactory instances
+/// </summary>
 internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
 {
     protected ProjectDataProvider(string name, PapiClient papiClient, ProjectDetails projectDetails)
