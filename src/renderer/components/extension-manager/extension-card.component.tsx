@@ -38,11 +38,12 @@ export default function ExtensionCard({
   children,
 }: ExtensionCardProps) {
   const avatar = useMemo(
-    () =>
-      iconFilePath ? (
-        <Avatar variant="square" src={iconFilePath} alt={extensionDescription} />
-      ) : null,
-    [extensionDescription, iconFilePath],
+    () => (
+      <Avatar variant="square" src={iconFilePath ?? undefined} alt={extensionDescription}>
+        {!iconFilePath ? extensionName[0] : null}
+      </Avatar>
+    ),
+    [extensionDescription, extensionName, iconFilePath],
   );
 
   const isGallery = useMemo(() => className && className === 'square', [className]);

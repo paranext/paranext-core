@@ -28,7 +28,7 @@ export type Extension = {
   /**
    * File path to the extensions icon
    */
-  filePath?: string;
+  iconFilePath?: string;
 };
 
 type ExtensionListProps = Omit<ExtensionToggleProps, 'extensionName' | 'extensionDescription'> &
@@ -81,7 +81,7 @@ export default function ExtensionList({
           <ExtensionToggle
             className={extensionToggleClassName}
             key={ext.name}
-            iconFilePath={hasIcons ? ext.filePath : undefined}
+            iconFilePath={hasIcons ? ext.iconFilePath : undefined}
             extensionName={ext.name}
             extensionDescription={ext.description}
             toggledExtensionNames={toggledExtensionNames}
