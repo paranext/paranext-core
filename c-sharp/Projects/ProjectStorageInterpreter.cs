@@ -13,12 +13,12 @@ namespace Paranext.DataProvider.Projects;
 internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
 {
     protected ProjectStorageInterpreter(
-        ProjectStorageType storageType,
+        string storageType,
         IReadOnlyList<string> projectTypes,
         PapiClient papiClient
     )
         // TODO: Register one network object per (storage type, project type) pair or come up with a better approach
-        : base($"platform.{storageType.ToSerializedString()}-{projectTypes[0]}-psi", papiClient)
+        : base($"platform.{storageType}-{projectTypes[0]}-psi", papiClient)
     {
         StorageType = storageType;
         ProjectTypes = projectTypes;
@@ -64,13 +64,13 @@ internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
         return ResponseToRequest.Succeeded(
             new JObject
             {
-                ["storageType"] = StorageType.ToSerializedString(),
+                ["storageType"] = StorageType,
                 ["projectTypes"] = JsonConvert.SerializeObject(ProjectTypes)
             }.ToString()
         );
     }
 
-    public ProjectStorageType StorageType { get; }
+    public string StorageType { get; }
     public IEnumerable<string> ProjectTypes { get; }
 
     /// <summary>

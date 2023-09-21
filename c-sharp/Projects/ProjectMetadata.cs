@@ -5,12 +5,7 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 public class ProjectMetadata
 {
-    public ProjectMetadata(
-        Guid id,
-        string name,
-        ProjectStorageType projectStorageType,
-        string projectType
-    )
+    public ProjectMetadata(Guid id, string name, string projectStorageType, string projectType)
     {
         ID = id;
         Name = name;
@@ -31,7 +26,7 @@ public class ProjectMetadata
     /// <summary>
     /// Indicates how the project is persisted to storage
     /// </summary>
-    public ProjectStorageType ProjectStorageType { get; }
+    public string ProjectStorageType { get; }
 
     /// <summary>
     /// Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
@@ -54,11 +49,11 @@ public class ProjectMetadata
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(ID, Name, (int)ProjectStorageType, ProjectType);
+        return HashCode.Combine(ID, Name, ProjectStorageType, ProjectType);
     }
 
     public override string ToString()
     {
-        return $"[{Name} ({ID}): {ProjectStorageType.ToSerializedString()}, {ProjectType}]";
+        return $"[{Name} ({ID}): {ProjectStorageType}, {ProjectType}]";
     }
 }

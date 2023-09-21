@@ -24,7 +24,7 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         string projectStorageInterpreterId
     )
     {
-        if (_paratextPsi.StorageType.ToSerializedString() != projectStorageInterpreterId)
+        if (_paratextPsi.StorageType != projectStorageInterpreterId)
             return ResponseToRequest.Failed(
                 $"Unexpected project storage interpreter requested: {projectStorageInterpreterId}"
             );
