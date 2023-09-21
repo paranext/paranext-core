@@ -21,9 +21,9 @@ namespace Paranext.DataProvider.JsonUtils
                 JObject parsedArgs = JObject.Parse(jsonString);
                 Guid id = Guid.Parse(Get(parsedArgs, ID));
                 string name = Get(parsedArgs, NAME);
-                Get(parsedArgs, STORAGE_TYPE).FromSerializedString(out ProjectStorageType pst);
+                string projectStorageType = Get(parsedArgs, STORAGE_TYPE);
                 string projectType = Get(parsedArgs, PROJECT_TYPE);
-                projectMetadata = new ProjectMetadata(id, name, pst, projectType);
+                projectMetadata = new ProjectMetadata(id, name, projectStorageType, projectType);
             }
             catch (Exception ex)
             {
@@ -53,7 +53,7 @@ namespace Paranext.DataProvider.JsonUtils
             {
                 [ID] = projectMetadata.ID.ToString(),
                 [NAME] = projectMetadata.Name,
-                [STORAGE_TYPE] = projectMetadata.ProjectStorageType.ToSerializedString(),
+                [STORAGE_TYPE] = projectMetadata.ProjectStorageType,
                 [PROJECT_TYPE] = projectMetadata.ProjectType
             }.ToString();
         }
