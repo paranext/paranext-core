@@ -1,58 +1,60 @@
 import { FormControlLabel } from '@mui/material';
 import { ComboBox, ComboBoxLabelOption } from 'papi-components';
-import { Dispatch, SetStateAction, SyntheticEvent } from 'react';
+import { SyntheticEvent } from 'react';
+// import { getChaptersForBook } from 'scripture/scripture-util';
 
 export type ChapterRangeSelectionProps = {
   startChapter: number;
   endChapter: number;
-  setStartChapter: Dispatch<SetStateAction<number>>;
-  setEndChapter: Dispatch<SetStateAction<number>>;
-  chapterCount: number;
+  currentBookNumber: number;
+  onChangeStartChapter: (_event: SyntheticEvent<Element, Event>, value: unknown) => void;
+  onChangeEndChapter: (_event: SyntheticEvent<Element, Event>, value: unknown) => void;
+  isDisabled: boolean;
 };
 
-interface ChapterNumberOption extends ComboBoxLabelOption {
+export interface ChapterNumberOption extends ComboBoxLabelOption {
   chapterNum: number;
 }
 
 export default function ChapterRangeSelection({
   startChapter,
   endChapter,
-  setStartChapter,
-  setEndChapter,
-  chapterCount,
+  currentBookNumber,
+  onChangeStartChapter,
+  onChangeEndChapter,
+  isDisabled,
 }: ChapterRangeSelectionProps) {
-  const chapterNumbers: ChapterNumberOption[] = Array.from(
-    { length: chapterCount },
-    (_, index) => index + 1,
-  ).map((c) => ({
-    chapterNum: c,
-    label: c.toString(),
-  }));
+  let chapterNumberOptions: ChapterNumberOption[];
+  const chapterCount = currentBookNumber === 1 ? 50 : 20;
+  const numberArray = Array.from({ length: chapterCount }, (_, index) => index + 1);
 
-  const onSelectChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
-    const newStartChapterNum = (value as ChapterNumberOption).chapterNum;
-    setStartChapter(newStartChapterNum);
-    if (newStartChapterNum > endChapter) setEndChapter(newStartChapterNum);
+  const getChapterNumberOptions = () => {
+    if (!chapterNumberOptions) {
+      chapterNumberOptions = numberArray.map((chapterNum) => ({
+        chapterNum,
+        label: chapterNum.toString(),
+      }));
+    }
+    return chapterNumberOptions;
   };
 
-  const onSelectChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
-    const newEndChapterNum = (value as ChapterNumberOption).chapterNum;
-    setEndChapter(newEndChapterNum);
-    if (newEndChapterNum < startChapter) setStartChapter(newEndChapterNum);
-  };
+  const currentStartChapter = getChapterNumberOptions()[startChapter - 1];
+  const currentEndChapter = getChapterNumberOptions()[endChapter - 1];
 
   return (
     <>
       <FormControlLabel
         className="book-selection-chapter-form-label start"
-        value={startChapter}
+        disabled={isDisabled}
         control={
           <ComboBox
-            onChange={onSelectChangeStartChapter}
+            onChange={onChangeStartChapter}
             className="book-selection-chapter"
             key="start chapter"
             isClearable={false}
-            options={chapterNumbers}
+            options={getChapterNumberOptions()}
+            value={currentStartChapter}
+            isDisabled={isDisabled}
           />
         }
         label="Chapters"
@@ -60,14 +62,16 @@ export default function ChapterRangeSelection({
       />
       <FormControlLabel
         className="book-selection-chapter-form-label end"
-        value={endChapter}
+        disabled={isDisabled}
         control={
           <ComboBox
-            onChange={onSelectChangeEndChapter}
+            onChange={onChangeEndChapter}
             className="book-selection-chapter"
             key="end chapter"
             isClearable={false}
-            options={chapterNumbers}
+            options={getChapterNumberOptions()}
+            value={currentEndChapter}
+            isDisabled={isDisabled}
           />
         }
         label="to"

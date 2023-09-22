@@ -33,11 +33,43 @@ export default function RunBasicChecksTab() {
   const [selectedBooks, setSelectedBooks] = useState<number[]>([currentBookNumber]);
   const [startChapter, setStartChapter] = useState(1);
   const [endChapter, setEndChapter] = useState(chapterCount);
+  const [useCurrentBook, setUseCurrentBook] = useState<boolean>(true);
+
+  const handleSelectBooks = (bookNumber: number) => {
+    setUseCurrentBook(false);
+    if (selectedBooks.includes(bookNumber)) {
+      setSelectedBooks(selectedBooks.filter((number) => number !== bookNumber));
+    } else {
+      setSelectedBooks([...selectedBooks, bookNumber]);
+    }
+  };
+
+  const toggleCurrentBook = () => {
+    setUseCurrentBook((prev) => {
+      return !prev;
+    });
+  };
+
+  const handleSelectStartChapter = (newStart: number) => {
+    setStartChapter(newStart);
+    if (newStart > endChapter) setEndChapter(newStart);
+  };
+
+  const handleSelectEndChapter = (newEnd: number) => {
+    setEndChapter(newEnd);
+    if (newEnd < startChapter) setStartChapter(newEnd);
+  };
 
   const handleSubmit = () => {
-    logger.info(
-      `Selected Books: ${selectedBooks} start chapter: ${startChapter} end chapter: ${endChapter}`,
-    );
+    if (!useCurrentBook) {
+      logger.info(
+        `Selected Books: ${selectedBooks} start chapter: 'Choose books selected so irrelevant' end chapter: 'Choose books selected so irrelevant'`,
+      );
+    } else {
+      logger.info(
+        `Selected Books: ${selectedBooks} start chapter: ${startChapter} end chapter: ${endChapter}`,
+      );
+    }
   };
 
   return (
@@ -57,14 +89,15 @@ export default function RunBasicChecksTab() {
       </fieldset>
       <fieldset className="run-basic-checks-books">
         <BookSelection
-          chapterCount={chapterCount}
+          useCurrentBook={useCurrentBook}
+          toggleCurrentBook={toggleCurrentBook}
           currentBookNumber={currentBookNumber}
           selectedBooks={selectedBooks}
-          setSelectedBooks={setSelectedBooks}
+          handleSelectBooks={handleSelectBooks}
           startChapter={startChapter}
-          setStartChapter={setStartChapter}
+          handleSelectStartChapter={handleSelectStartChapter}
           endChapter={endChapter}
-          setEndChapter={setEndChapter}
+          handleSelectEndChapter={handleSelectEndChapter}
         />
       </fieldset>
       <div className="basic-checks-dialog-actions">

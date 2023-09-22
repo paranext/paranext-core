@@ -1,5 +1,6 @@
 import { Checkbox } from 'papi-components';
 import { useMemo } from 'react';
+import './basic-checks.component.scss';
 
 type BasicCheck = {
   name: string;
