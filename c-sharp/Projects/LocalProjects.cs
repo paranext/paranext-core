@@ -22,9 +22,11 @@ internal static partial class LocalProjects
     private static partial Regex ProjectDirectoryRegex();
 
     // Inside of each project's "shortName_ID" directory, these are the subdirectories and files
-    private const string PROJECT_PARATEXT_SUBDIRECTORY = "project";
-    private const string PROJECT_EXTENSIONS_SUBDIRECTORY = "extensions";
+    private const string PROJECT_SUBDIRECTORY = "project";
     private const string PROJECT_METADATA_FILE = "meta.json";
+
+    // Inside of the project subdirectory, these are the subdirectories for Paratext projects
+    private const string PARATEXT_DATA_SUBDIRECTORY = "paratext";
 
     static LocalProjects()
     {
@@ -50,6 +52,9 @@ internal static partial class LocalProjects
 
         foreach (var projectDetails in LoadAllProjectDetails())
         {
+            if (projectDetails.Metadata.ProjectStorageType != ProjectStorageType.ParatextFolders)
+                continue;
+
             try
             {
                 AddProjectToMaps(projectDetails);
@@ -79,32 +84,25 @@ internal static partial class LocalProjects
 
     public static void SaveProjectMetadata(ProjectMetadata metadata, bool overwrite = false)
     {
-        var projectDir = GetProjectDir(metadata.Name, metadata.ID);
-        var projectParatextDir = Path.Join(projectDir, PROJECT_PARATEXT_SUBDIRECTORY);
-        var projectExtensionsDir = Path.Join(projectDir, PROJECT_EXTENSIONS_SUBDIRECTORY);
-        var metadataFilePath = Path.Join(projectDir, PROJECT_METADATA_FILE);
+        var projectHomeDir = GetProjectDir(metadata.Name, metadata.ID);
+        var projectContentsDir = Path.Join(projectHomeDir, PROJECT_SUBDIRECTORY);
+        var metadataFilePath = Path.Join(projectHomeDir, PROJECT_METADATA_FILE);
 
         if (File.Exists(metadataFilePath) && !overwrite)
             throw new InvalidOperationException(
                 "Cannot overwrite metadata unless the overwrite flag is true"
             );
 
-        if (!Directory.Exists(projectParatextDir))
+        if (!Directory.Exists(projectContentsDir))
         {
             if (OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(projectParatextDir);
-                Directory.CreateDirectory(projectExtensionsDir);
-            }
+                Directory.CreateDirectory(projectContentsDir);
             else
-            {
-                Directory.CreateDirectory(projectParatextDir, UnixFileMode.UserWrite);
-                Directory.CreateDirectory(projectExtensionsDir, UnixFileMode.UserWrite);
-            }
+                Directory.CreateDirectory(projectContentsDir, UnixFileMode.UserWrite);
         }
 
-        File.WriteAllText(metadataFilePath, metadata.ToJsonString());
-        AddProjectToMaps(new ProjectDetails(metadata, projectDir));
+        File.WriteAllText(metadataFilePath, ProjectMetadataConverter.ToJsonString(metadata));
+        AddProjectToMaps(new ProjectDetails(metadata, projectHomeDir));
     }
 
     public static void LoadProject(string projectName, Guid projectID)
@@ -123,14 +121,18 @@ internal static partial class LocalProjects
     private static void AddProjectToMaps(ProjectDetails projectDetails)
     {
         ProjectName projectName =
-            new(Path.Join(projectDetails.Directory, PROJECT_PARATEXT_SUBDIRECTORY));
-        // TODO: Figure out a way to get a proper Paratext user
-        ParatextUser paratextUser = new DummyParatextUser(Environment.UserName);
+            new(
+                Path.Join(
+                    projectDetails.Directory,
+                    PROJECT_SUBDIRECTORY,
+                    PARATEXT_DATA_SUBDIRECTORY
+                )
+            );
         var id = projectDetails.Metadata.ID;
         if (s_projectDetailsMap.ContainsKey(id) || s_paratextProjectMap.ContainsKey(id))
             Console.WriteLine($"Replacing Paratext project in map: {id}");
         s_projectDetailsMap[id] = projectDetails;
-        s_paratextProjectMap[id] = new ScrText(projectName, paratextUser);
+        s_paratextProjectMap[id] = new ScrText(projectName, RegistrationInfo.DefaultUser);
     }
 
     /// <summary>
@@ -161,22 +163,20 @@ internal static partial class LocalProjects
     }
 
     private static ProjectMetadata? LoadProjectMetadata(
-        string projectDirectory,
+        string projectHomeDir,
         out string errorMessage
     )
     {
-        if (!Directory.Exists(Path.Combine(projectDirectory, PROJECT_PARATEXT_SUBDIRECTORY)))
+        if (!Directory.Exists(Path.Combine(projectHomeDir, PROJECT_SUBDIRECTORY)))
         {
-            errorMessage = $"Ignoring project without \"project\" subdir: {projectDirectory}";
+            errorMessage = $"Ignoring project without \"project\" subdir: {projectHomeDir}";
             return null;
         }
 
-        // Don't require the extensions subdirectory to exist
-
-        string metadataFilePath = Path.Combine(projectDirectory, PROJECT_METADATA_FILE);
+        string metadataFilePath = Path.Combine(projectHomeDir, PROJECT_METADATA_FILE);
         if (!File.Exists(metadataFilePath))
         {
-            errorMessage = $"Ignoring project without metadata file: {projectDirectory}";
+            errorMessage = $"Ignoring project without metadata file: {projectHomeDir}";
             return null;
         }
 
@@ -187,7 +187,7 @@ internal static partial class LocalProjects
             return null;
         }
 
-        string finalDirectory = projectDirectory.Split(Path.DirectorySeparatorChar).Last();
+        string finalDirectory = projectHomeDir.Split(Path.DirectorySeparatorChar).Last();
         var matches = ProjectDirectoryRegex().Matches(finalDirectory);
         if (
             (matches.Count != 1)
@@ -195,7 +195,7 @@ internal static partial class LocalProjects
             || matches[0].Groups["name"].Value != metadata.Name
         )
         {
-            errorMessage = $"Project directory does not match its metadata: {projectDirectory}";
+            errorMessage = $"Project directory does not match its metadata: {projectHomeDir}";
             return null;
         }
 
