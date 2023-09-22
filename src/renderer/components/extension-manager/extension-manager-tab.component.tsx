@@ -1,6 +1,7 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { useMemo, useState } from 'react';
 import logger from '@shared/services/logger.service';
+import { Typography } from '@mui/material';
 import { Button } from 'papi-components';
 import ExtensionList, { Extension } from './extension-list.component';
 import './extension-manager-tab.component.scss';
@@ -9,15 +10,54 @@ export const TAB_TYPE_EXTENSION_MANAGER = 'extension-manager-dialog';
 
 export function fetchExtensions(): Extension[] {
   return [
-    { name: 'Editor', description: 'Edit Scripture Text' } as Extension,
-    { name: 'Resource Viewer', description: 'View Scripture resources' } as Extension,
+    {
+      name: 'Editor',
+      description: 'Edit Scripture Text',
+      hasUpdateAvailable: false,
+      isInstalled: true,
+      iconFilePath: undefined,
+    } as Extension,
+    {
+      name: 'Resource Viewer',
+      description: 'View Scripture resources',
+      hasUpdateAvailable: false,
+      isInstalled: true,
+      iconFilePath: undefined,
+    } as Extension,
     {
       name: 'Parallel Passages',
       description: 'Compare parallel passages of Scripture',
+      hasUpdateAvailable: true,
+      isInstalled: true,
+      iconFilePath: undefined,
     } as Extension,
     {
       name: 'Psalms layer-by-layer',
       description: 'Provide resources on the Psalms from Cambridge Digital Bible Research',
+      hasUpdateAvailable: true,
+      isInstalled: true,
+      iconFilePath: undefined,
+    } as Extension,
+    {
+      name: 'Hello World',
+      description: 'Example Bundled Extension',
+      hasUpdateAvailable: true,
+      isInstalled: false,
+      iconFilePath: undefined,
+    } as Extension,
+    {
+      name: 'Hello Someone',
+      description: 'Example Bundled Extension',
+      hasUpdateAvailable: true,
+      isInstalled: false,
+      iconFilePath: undefined,
+    } as Extension,
+    {
+      name: 'Quick Verse',
+      description: 'Example Bundled Extension',
+      hasUpdateAvailable: false,
+      isInstalled: false,
+      iconFilePath: 'papi-extension://quick-verse/assets/letter-q.png',
     } as Extension,
   ];
 }
@@ -39,20 +79,33 @@ export default function ExtensionManagerTab() {
   };
 
   return (
-    <span className="installed-extensions-list">
-      <ExtensionList
-        extensions={installedExtensions}
-        toggledExtensionNames={toggledExtensions}
-        handleExtensionToggle={handleExtensionToggle}
-        label="Installed Extensions"
-      />
-      <Button
-        className="close-extension-toggle"
-        onClick={() => logger.info(`Installed extensions: ${toggledExtensions}`)}
-      >
-        Close
-      </Button>
-    </span>
+    <div className="extension-manager-dialog">
+      <div className="extension-manager-label">
+        <Typography>Extension Toggle</Typography>
+      </div>
+      <div className="extension-manager-instance">
+        <ExtensionList
+          extensions={installedExtensions}
+          toggledExtensionNames={toggledExtensions}
+          handleExtensionToggle={handleExtensionToggle}
+          label="Installed Extensions"
+        />
+        <ExtensionList
+          extensions={installedExtensions}
+          toggledExtensionNames={toggledExtensions}
+          handleExtensionToggle={handleExtensionToggle}
+          label="Installed Extensions Gallery Example"
+          isGallery
+          hasIcons
+          headerAction={<Button className="primary">Add</Button>}
+        />
+      </div>
+      <div className="extension-manager-actions">
+        <Button onClick={() => logger.info(`Installed extensions: ${toggledExtensions}`)}>
+          Close
+        </Button>
+      </div>
+    </div>
   );
 }
 
