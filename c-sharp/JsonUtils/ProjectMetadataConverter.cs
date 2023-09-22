@@ -47,7 +47,7 @@ namespace Paranext.DataProvider.JsonUtils
             return property.Value<string>()!;
         }
 
-        public static string ToJsonString(this ProjectMetadata projectMetadata)
+        public static string ToJsonString(ProjectMetadata projectMetadata)
         {
             return new JObject
             {

@@ -9,9 +9,13 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
 {
     private readonly ProjectDetails _projectDetails;
 
+    // This is the directory that a PSI is intended to be able read/write project data
+    private readonly string _writableRootDir;
+
     public RawDirectoryProjectStreamManager(ProjectDetails projectDetails)
     {
         _projectDetails = projectDetails;
+        _writableRootDir = Path.Join(projectDetails.Directory, "project");
     }
 
     public void Initialize()
@@ -25,7 +29,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
     public string[] GetExistingDataStreamNames()
     {
         var files = Directory.GetFiles(
-            _projectDetails.Directory,
+            _writableRootDir,
             "*",
             new EnumerationOptions
             {
@@ -35,7 +39,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             }
         );
 
-        DirectoryInfo projectDirectory = new(_projectDetails.Directory);
+        DirectoryInfo projectDirectory = new(_writableRootDir);
         List<string> retVal = new();
         foreach (var file in files)
         {
@@ -61,7 +65,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
 
         streamName = streamName.Replace('/', Path.DirectorySeparatorChar);
         streamName = streamName.Replace('\\', Path.DirectorySeparatorChar);
-        return Path.Join(_projectDetails.Directory, streamName);
+        return Path.Join(_writableRootDir, streamName);
     }
 
     public Stream? GetDataStream(string streamName, bool createIfNotExists = false)

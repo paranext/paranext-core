@@ -29,7 +29,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
             JsonConvert.SerializeObject(
                 LocalProjects
                     .GetAllProjectDetails()
-                    .Select(projectDetails => projectDetails.Metadata.ToJsonString())
+                    .Select(details => ProjectMetadataConverter.ToJsonString(details.Metadata))
                     .ToList()
             )
         );
@@ -97,7 +97,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                     : ResponseToRequest.Failed(error),
             Verse
                 => string.IsNullOrEmpty(error)
-                    ? ResponseToRequest.Succeeded(scrText.GetVerseText(verseRef))
+                    ? ResponseToRequest.Succeeded(scrText.Parser.GetVerseUsfmText(verseRef))
                     : ResponseToRequest.Failed(error),
             _ => ResponseToRequest.Failed($"Unknown data type: {scope.DataType}")
         };
