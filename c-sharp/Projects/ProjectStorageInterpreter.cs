@@ -48,15 +48,25 @@ internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
             return ResponseToRequest.Failed("No data scope provided");
 
         // Functions with 1 or more arguments go here
-        return functionName switch
+        switch (functionName)
         {
-            "getProjectSettings" => GetProjectSettings(dataScope),
-            "getProjectData" => GetProjectData(dataScope),
-            "setProjectData" => SetProjectData(dataScope, args[1]!.ToJsonString()),
-            "getExtensionData" => GetExtensionData(dataScope),
-            "setExtensionData" => SetExtensionData(dataScope, args[1]!.ToJsonString()),
-            _ => ResponseToRequest.Failed($"Unexpected function: {functionName}")
-        };
+            case "getProjectSettings":
+                return GetProjectSettings(dataScope);
+            case "getProjectData":
+                return GetProjectData(dataScope);
+            case "setProjectData":
+                var setProjectReturn = SetProjectData(dataScope, args[1]!.ToJsonString());
+                SendDataUpdateEvent(setProjectReturn.Contents);
+                return setProjectReturn;
+            case "getExtensionData":
+                return GetExtensionData(dataScope);
+            case "setExtensionData":
+                var setExtensionReturn = SetExtensionData(dataScope, args[1]!.ToJsonString());
+                SendDataUpdateEvent(setExtensionReturn.Contents);
+                return setExtensionReturn;
+            default:
+                return ResponseToRequest.Failed($"Unexpected function: {functionName}");
+        }
     }
 
     private ResponseToRequest GetSupportedTypes()

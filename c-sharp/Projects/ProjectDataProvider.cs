@@ -24,7 +24,15 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
 
     protected ProjectDetails ProjectDetails { get; }
 
+    /// <summary>
+    /// Upon success, getters should return a ResponseToRequest that contains the requested data.
+    /// </summary>
     protected Dictionary<string, Func<string, ResponseToRequest>> Getters { get; } = new();
+
+    /// <summary>
+    /// Upon success, setters should return a ResponseToRequest that contains data scope used to notify the network about data changes.
+    /// If there is only a single scope to the data (i.e., it is not partitioned), return a ResponseToRequest containing "*".
+    /// </summary>
     protected Dictionary<string, Func<string, string, ResponseToRequest>> Setters { get; } = new();
 
     protected ProjectDataScope ExtractDataScope(string jsonString)
@@ -54,7 +62,14 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
                 return Getters[functionName](args[0]!.ToJsonString());
 
             if (functionName.StartsWith("set"))
-                return Setters[functionName](args[0]!.ToJsonString(), args[1]!.ToJsonString());
+            {
+                var setReturn = Setters[functionName](
+                    args[0]!.ToJsonString(),
+                    args[1]!.ToJsonString()
+                );
+                SendDataUpdateEvent(setReturn.Contents);
+                return setReturn;
+            }
 
             return ResponseToRequest.Failed($"Unknown function: {functionName}");
         }
@@ -81,10 +96,11 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     {
         try
         {
-            return SetExtensionData(
+            var retVal = SetExtensionData(
                 ExtractDataScope(jsonScope),
                 JsonConvert.DeserializeObject<string>(jsonData)!
             );
+            return retVal;
         }
         catch (Exception ex)
         {
