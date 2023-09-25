@@ -11,8 +11,8 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 internal static partial class LocalProjects
 {
-    private static readonly ConcurrentDictionary<Guid, ProjectDetails> s_projectDetailsMap = new();
-    private static readonly ConcurrentDictionary<Guid, ScrText> s_paratextProjectMap = new();
+    private static readonly ConcurrentDictionary<string, ProjectDetails> s_projectDetailsMap =
+        new();
 
     // All project directories are subdirectories of this
     private static readonly string s_projectRootFolder;
@@ -39,7 +39,7 @@ internal static partial class LocalProjects
 
     public static void Initialize()
     {
-        if (!s_paratextProjectMap.IsEmpty || !s_projectDetailsMap.IsEmpty)
+        if (!s_projectDetailsMap.IsEmpty)
             return;
 
         if (!Directory.Exists(s_projectRootFolder))
@@ -72,14 +72,14 @@ internal static partial class LocalProjects
         return s_projectDetailsMap.Values.ToList();
     }
 
-    public static ProjectDetails GetProjectDetails(Guid projectId)
+    public static ProjectDetails GetProjectDetails(string projectId)
     {
-        return s_projectDetailsMap[projectId];
+        return s_projectDetailsMap[projectId.ToUpperInvariant()];
     }
 
-    public static ScrText GetParatextProject(Guid projectId)
+    public static ScrText GetParatextProject(string projectId)
     {
-        return s_paratextProjectMap[projectId];
+        return ScrTextCollection.GetById(HexId.FromStr(projectId));
     }
 
     public static void SaveProjectMetadata(ProjectMetadata metadata, bool overwrite = false)
@@ -105,7 +105,7 @@ internal static partial class LocalProjects
         AddProjectToMaps(new ProjectDetails(metadata, projectHomeDir));
     }
 
-    public static void LoadProject(string projectName, Guid projectID)
+    public static void LoadProject(string projectName, string projectID)
     {
         var dir = GetProjectDir(projectName, projectID);
         var projectMetadata =
@@ -113,26 +113,27 @@ internal static partial class LocalProjects
         AddProjectToMaps(new ProjectDetails(projectMetadata, dir));
     }
 
-    private static string GetProjectDir(string projectName, Guid projectID)
+    private static string GetProjectDir(string projectName, string projectID)
     {
         return Path.Join(s_projectRootFolder, $"{projectName}_{projectID}");
     }
 
     private static void AddProjectToMaps(ProjectDetails projectDetails)
     {
-        ProjectName projectName =
-            new(
-                Path.Join(
-                    projectDetails.Directory,
-                    PROJECT_SUBDIRECTORY,
-                    PARATEXT_DATA_SUBDIRECTORY
-                )
-            );
+        var projectPath = Path.Join(
+            projectDetails.HomeDirectory,
+            PROJECT_SUBDIRECTORY,
+            PARATEXT_DATA_SUBDIRECTORY
+        );
+        ProjectName projectName = new(projectPath);
         var id = projectDetails.Metadata.ID;
-        if (s_projectDetailsMap.ContainsKey(id) || s_paratextProjectMap.ContainsKey(id))
-            Console.WriteLine($"Replacing Paratext project in map: {id}");
+        Console.WriteLine(
+            s_projectDetailsMap.ContainsKey(id)
+                ? $"Replacing Paratext project in map: {id} = {projectPath}"
+                : $"Adding Paratext project in map: {id} = {projectPath}"
+        );
         s_projectDetailsMap[id] = projectDetails;
-        s_paratextProjectMap[id] = new ScrText(projectName, RegistrationInfo.DefaultUser);
+        ScrTextCollection.Add(new ScrText(projectName, RegistrationInfo.DefaultUser));
     }
 
     /// <summary>
@@ -191,8 +192,8 @@ internal static partial class LocalProjects
         var matches = ProjectDirectoryRegex().Matches(finalDirectory);
         if (
             (matches.Count != 1)
-            || Guid.Parse(matches[0].Groups["id"].Value) != metadata!.ID
-            || matches[0].Groups["name"].Value != metadata.Name
+            || (metadata == null)
+            || !metadata.Contains(matches[0].Groups["id"].Value, matches[0].Groups["name"].Value)
         )
         {
             errorMessage = $"Project directory does not match its metadata: {projectHomeDir}";

@@ -7,8 +7,8 @@ namespace Paranext.DataProvider.Projects;
 
 /// <summary>
 /// Manages reading/writing to a project
-/// Subclasses are expected to define and add get/set/subscribe methods to the Getters/Setters/Subscribers
-/// Subclasses are also expected to use a ProjectStorageInterpreter for implementing all get/set/subscribe methods as appropriate
+/// Subclasses are expected to define and add get/set methods to the Getters/Setters
+/// Subclasses are also expected to use a ProjectStorageInterpreter for implementing all get/set methods as appropriate
 /// ProjectDataProviders are meant to be created/owned by ProjectDataProviderFactory instances
 /// </summary>
 internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
@@ -19,14 +19,12 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
         ProjectDetails = projectDetails;
         Getters.Add("getExtensionData", GetExtensionData);
         Setters.Add("setExtensionData", SetExtensionData);
-        Subscribers.Add("subscribeExtensionData", SubscribeExtensionData);
     }
 
     protected ProjectDetails ProjectDetails { get; }
 
     protected Dictionary<string, Func<string, ResponseToRequest>> Getters { get; } = new();
     protected Dictionary<string, Func<string, string, ResponseToRequest>> Setters { get; } = new();
-    protected Dictionary<string, Func<string, ResponseToRequest>> Subscribers { get; } = new();
 
     protected ProjectDataScope ExtractDataScope(string jsonString)
     {
@@ -51,9 +49,6 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     {
         try
         {
-            if (functionName.StartsWith("subscribe"))
-                return Subscribers[functionName](args[0]!.ToJsonString());
-
             if (functionName.StartsWith("get"))
                 return Getters[functionName](args[0]!.ToJsonString());
 
@@ -102,9 +97,4 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     /// Set an extension's data in a project identified by <param name="scope"></param>.
     /// </summary>
     protected abstract ResponseToRequest SetExtensionData(ProjectDataScope scope, string jsonData);
-
-    /// <summary>
-    /// Subscribe to changes in an extension's data in a project
-    /// </summary>
-    protected abstract ResponseToRequest SubscribeExtensionData(string jsonString);
 }

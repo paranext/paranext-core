@@ -323,7 +323,7 @@ async function main() {
   // Test a .NET data provider
   setTimeout(async () => {
     const paratextPdp = await getProjectDataProvider(
-      '499234e1-9965-452b-8175-138330893b6a',
+      'b4c501ad2538989d6fb723518e92408406e232d3',
       'ParatextStandard',
       'paratextFolders',
     );

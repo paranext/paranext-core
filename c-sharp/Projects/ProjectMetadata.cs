@@ -5,18 +5,18 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 public class ProjectMetadata
 {
-    public ProjectMetadata(Guid id, string name, string projectStorageType, string projectType)
+    public ProjectMetadata(string id, string name, string projectStorageType, string projectType)
     {
-        ID = id;
+        ID = id.ToUpperInvariant();
         Name = name;
         ProjectStorageType = projectStorageType;
         ProjectType = projectType;
     }
 
     /// <summary>
-    /// ID of the project (must be unique)
+    /// ID of the project (must be unique and case insensitive)
     /// </summary>
-    public Guid ID { get; }
+    public string ID { get; }
 
     /// <summary>
     /// Short name of the project (not necessarily unique)
@@ -32,6 +32,13 @@ public class ProjectMetadata
     /// Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
     /// </summary>
     public string ProjectType { get; }
+
+    public bool Contains(string id, string name, bool nameIsCaseSensitive = false)
+    {
+        return ID.Equals(id, StringComparison.InvariantCultureIgnoreCase) && nameIsCaseSensitive
+            ? Name.Equals(name)
+            : Name.Equals(name, StringComparison.InvariantCultureIgnoreCase);
+    }
 
     public override bool Equals(object? obj)
     {

@@ -5,14 +5,18 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 internal class ProjectDetails
 {
-    public ProjectDetails(ProjectMetadata metadata, string directory)
+    public ProjectDetails(ProjectMetadata metadata, string homeDirectory)
     {
         Metadata = metadata;
-        Directory = directory;
+        HomeDirectory = homeDirectory;
     }
 
     public ProjectMetadata Metadata { get; }
-    public string Directory { get; }
+
+    /// <summary>
+    /// Directory where everything we know about a project is stored
+    /// </summary>
+    public string HomeDirectory { get; }
 
     public override bool Equals(object? obj)
     {
@@ -22,16 +26,16 @@ internal class ProjectDetails
 
     protected bool Equals(ProjectDetails other)
     {
-        return Metadata.Equals(other.Metadata) && Directory == other.Directory;
+        return Metadata.Equals(other.Metadata) && HomeDirectory == other.HomeDirectory;
     }
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Metadata, Directory);
+        return HashCode.Combine(Metadata, HomeDirectory);
     }
 
     public override string ToString()
     {
-        return $"[{Directory}] = {Metadata}";
+        return $"[{HomeDirectory}] = {Metadata}";
     }
 }

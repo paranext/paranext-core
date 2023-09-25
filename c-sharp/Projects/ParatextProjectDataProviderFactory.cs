@@ -36,7 +36,7 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         ProjectDetails details;
         try
         {
-            details = LocalProjects.GetProjectDetails(Guid.Parse(projectID));
+            details = LocalProjects.GetProjectDetails(projectID);
         }
         catch (Exception)
         {
