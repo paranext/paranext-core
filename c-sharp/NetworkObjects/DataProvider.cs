@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
@@ -78,10 +79,29 @@ internal abstract class DataProvider : NetworkObject
     /// Notify all processes on the network that this data provider has new data
     /// </summary>
     /// <param name="dataScope">Indicator of what data changed in the provider</param>
-    protected void SendDataUpdateEvent(string dataScope)
+    protected void SendDataUpdateEvent(dynamic? dataScope)
     {
+        string scopeString;
+
+        if ((dataScope is string s) && !string.IsNullOrWhiteSpace(s))
+            scopeString = s;
+        else if (dataScope != null)
+        {
+            try
+            {
+                scopeString = JsonConvert.SerializeObject(dataScope);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Unable to send data update event: {ex}");
+                return;
+            }
+        }
+        else
+            return;
+
         var dataUpdateEventMessage = _updateEventsByScope.GetOrAdd(
-            dataScope,
+            scopeString,
             (scope) => new MessageEventDataUpdated(_eventType, scope)
         );
         PapiClient.SendEvent(dataUpdateEventMessage);
