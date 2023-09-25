@@ -19,7 +19,7 @@ namespace Paranext.DataProvider.JsonUtils
             try
             {
                 JObject parsedArgs = JObject.Parse(jsonString);
-                Guid id = Guid.Parse(Get(parsedArgs, ID));
+                string id = Get(parsedArgs, ID);
                 string name = Get(parsedArgs, NAME);
                 string projectStorageType = Get(parsedArgs, STORAGE_TYPE);
                 string projectType = Get(parsedArgs, PROJECT_TYPE);
@@ -51,7 +51,7 @@ namespace Paranext.DataProvider.JsonUtils
         {
             return new JObject
             {
-                [ID] = projectMetadata.ID.ToString(),
+                [ID] = projectMetadata.ID,
                 [NAME] = projectMetadata.Name,
                 [STORAGE_TYPE] = projectMetadata.ProjectStorageType,
                 [PROJECT_TYPE] = projectMetadata.ProjectType

@@ -15,12 +15,12 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
     public RawDirectoryProjectStreamManager(ProjectDetails projectDetails)
     {
         _projectDetails = projectDetails;
-        _writableRootDir = Path.Join(projectDetails.Directory, "project");
+        _writableRootDir = Path.Join(projectDetails.HomeDirectory, "project");
     }
 
     public void Initialize()
     {
-        if (!Directory.Exists(_projectDetails.Directory))
+        if (!Directory.Exists(_projectDetails.HomeDirectory))
             throw new Exception(
                 $"Project contents missing for {_projectDetails.Metadata.Name} ({_projectDetails.Metadata.ID})"
             );

@@ -37,11 +37,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return _paratextPsi.SetExtensionData(dataScope, data);
     }
 
-    protected override ResponseToRequest SubscribeExtensionData(string jsonString)
-    {
-        return ResponseToRequest.Failed("Subscribing to extension data is not supported");
-    }
-
     private ResponseToRequest Get(string dataType, string dataQualifier)
     {
         ProjectDataScope scope =

@@ -22,7 +22,7 @@ internal static class ProjectDataScopeConverter
             JObject parsedArgs = JObject.Parse(jsonString);
             dataScope = new ProjectDataScope()
             {
-                ProjectID = Guid.Parse(Get(parsedArgs, PROJECT_ID)!),
+                ProjectID = Get(parsedArgs, PROJECT_ID),
                 ProjectName = Get(parsedArgs, PROJECT_NAME),
                 ExtensionName = Get(parsedArgs, EXTENSION_NAME),
                 DataType = Get(parsedArgs, DATA_TYPE),

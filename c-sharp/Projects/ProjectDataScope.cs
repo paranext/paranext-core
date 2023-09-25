@@ -8,7 +8,7 @@ internal class ProjectDataScope
     /// <summary>
     /// Project ID
     /// </summary>
-    public Guid? ProjectID { get; set; }
+    public string? ProjectID { get; set; }
 
     /// <summary>
     /// Project short name

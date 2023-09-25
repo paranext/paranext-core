@@ -44,7 +44,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
         ProjectMetadata metadata =
             new(
-                scope.ProjectID.Value,
+                scope.ProjectID,
                 scope.ProjectName,
                 ProjectStorageType.ParatextFolders,
                 ProjectType.Paratext
@@ -68,7 +68,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (scope.ProjectID == null)
             return ResponseToRequest.Failed("Must provide a project ID");
 
-        var scrText = LocalProjects.GetParatextProject(scope.ProjectID.Value);
+        var scrText = LocalProjects.GetParatextProject(scope.ProjectID);
         return ResponseToRequest.Succeeded(JsonConvert.SerializeObject(scrText.Settings));
     }
 
@@ -84,7 +84,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         // Not making it mandatory that all calls provide a VerseRef since there might be some types that don't use it
         VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
-        var scrText = LocalProjects.GetParatextProject(scope.ProjectID.Value);
+        var scrText = LocalProjects.GetParatextProject(scope.ProjectID);
         return scope.DataType.ToUpperInvariant() switch
         {
             Book
@@ -115,7 +115,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         // Not making it mandatory that all calls provide a VerseRef since there might be some types that don't use it
         VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
-        var scrText = LocalProjects.GetParatextProject(scope.ProjectID.Value);
+        var scrText = LocalProjects.GetParatextProject(scope.ProjectID);
         switch (scope.DataType.ToUpperInvariant())
         {
             case Chapter:
@@ -178,7 +178,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (scope.ProjectID == null)
             return null;
 
-        var projectDetails = LocalProjects.GetProjectDetails(scope.ProjectID.Value);
+        var projectDetails = LocalProjects.GetProjectDetails(scope.ProjectID);
         RawDirectoryProjectStreamManager extensionStreamManager = new(projectDetails);
         return extensionStreamManager.GetDataStream(
             $"extensions/{scope.ExtensionName}/{scope.DataQualifier}",
