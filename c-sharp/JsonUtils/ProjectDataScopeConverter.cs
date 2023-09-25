@@ -42,7 +42,7 @@ internal static class ProjectDataScopeConverter
         catch (Exception ex)
         {
             dataScope = null;
-            errorMessage = ex.ToString();
+            errorMessage = $"Failed to parse \"{jsonString}\" into ProjectDataScope: {ex}";
             return false;
         }
 

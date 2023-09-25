@@ -4,7 +4,6 @@ using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paratext.Data;
-using SIL.Scripture;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -122,9 +121,8 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                 if (!string.IsNullOrEmpty(error))
                     return ResponseToRequest.Failed(error);
                 RunWithinLock(
-                    scrText,
-                    verseRef,
-                    (WriteLock writeLock) =>
+                    WriteScope.ProjectText(scrText, verseRef.BookNum, verseRef.ChapterNum),
+                    writeLock =>
                     {
                         scrText.PutText(
                             verseRef.BookNum,
@@ -143,6 +141,8 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
     public override ResponseToRequest GetExtensionData(ProjectDataScope scope)
     {
+        if (scope.ProjectID == null)
+            return ResponseToRequest.Failed("Must provide a project ID");
         if (scope.ExtensionName == null)
             return ResponseToRequest.Failed("Must provide an extension name");
         if (scope.DataQualifier == null)
@@ -158,6 +158,8 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
     public override ResponseToRequest SetExtensionData(ProjectDataScope scope, string data)
     {
+        if (scope.ProjectID == null)
+            return ResponseToRequest.Failed("Must provide a project ID");
         if (scope.ExtensionName == null)
             return ResponseToRequest.Failed("Must provide an extension name");
         if (scope.DataQualifier == null)
@@ -167,18 +169,32 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (dataStream == null)
             return ResponseToRequest.Failed("Unable to create extension data");
 
-        using TextWriter textWriter = new StreamWriter(dataStream, Encoding.UTF8);
-        textWriter.Write(data);
-        textWriter.Flush();
-        return ResponseToRequest.Succeeded();
+        var scrText = LocalProjects.GetParatextProject(scope.ProjectID);
+        try
+        {
+            RunWithinLock(
+                WriteScope.ProjectData(scrText),
+                writeLock =>
+                {
+                    if (!writeLock.Active)
+                        throw new Exception("Write lock is not active");
+                    dataStream.SetLength(0);
+                    using TextWriter textWriter = new StreamWriter(dataStream, Encoding.UTF8);
+                    textWriter.Write(data);
+                    textWriter.Flush();
+                }
+            );
+            return ResponseToRequest.Succeeded();
+        }
+        catch (Exception e)
+        {
+            return ResponseToRequest.Failed(e.Message);
+        }
     }
 
     private static Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
     {
-        if (scope.ProjectID == null)
-            return null;
-
-        var projectDetails = LocalProjects.GetProjectDetails(scope.ProjectID);
+        var projectDetails = LocalProjects.GetProjectDetails(scope.ProjectID!);
         RawDirectoryProjectStreamManager extensionStreamManager = new(projectDetails);
         return extensionStreamManager.GetDataStream(
             $"extensions/{scope.ExtensionName}/{scope.DataQualifier}",
@@ -186,11 +202,11 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         );
     }
 
-    private static void RunWithinLock(ScrText scrText, VerseRef verseRef, Action<WriteLock> action)
+    private static void RunWithinLock(WriteScope writeScope, Action<WriteLock> action)
     {
-        var myLock = WriteLockManager.Default.ObtainLock(
-            WriteScope.ProjectText(scrText, verseRef.BookNum, verseRef.ChapterNum)
-        );
+        var myLock =
+            WriteLockManager.Default.ObtainLock(writeScope)
+            ?? throw new Exception("Unable to obtain write lock");
         try
         {
             action.Invoke(myLock);

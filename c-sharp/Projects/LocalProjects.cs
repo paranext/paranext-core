@@ -11,6 +11,9 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 internal static partial class LocalProjects
 {
+    private const UnixFileMode UNIX_FILE_MODE =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
     private static readonly ConcurrentDictionary<string, ProjectDetails> s_projectDetailsMap =
         new();
 
@@ -47,7 +50,7 @@ internal static partial class LocalProjects
             if (OperatingSystem.IsWindows())
                 Directory.CreateDirectory(s_projectRootFolder);
             else
-                Directory.CreateDirectory(s_projectRootFolder, UnixFileMode.UserWrite);
+                Directory.CreateDirectory(s_projectRootFolder, UNIX_FILE_MODE);
         }
 
         foreach (var projectDetails in LoadAllProjectDetails())
@@ -98,7 +101,7 @@ internal static partial class LocalProjects
             if (OperatingSystem.IsWindows())
                 Directory.CreateDirectory(projectContentsDir);
             else
-                Directory.CreateDirectory(projectContentsDir, UnixFileMode.UserWrite);
+                Directory.CreateDirectory(projectContentsDir, UNIX_FILE_MODE);
         }
 
         File.WriteAllText(metadataFilePath, ProjectMetadataConverter.ToJsonString(metadata));

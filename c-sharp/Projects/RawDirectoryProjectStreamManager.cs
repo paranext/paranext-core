@@ -7,6 +7,9 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 internal class RawDirectoryProjectStreamManager : IProjectStreamManager
 {
+    private const UnixFileMode UNIX_FILE_MODE =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
     private readonly ProjectDetails _projectDetails;
 
     // This is the directory that a PSI is intended to be able read/write project data
@@ -74,8 +77,23 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
         if (!File.Exists(fileName) && !createIfNotExists)
             return null;
 
+        var dirName = Path.GetDirectoryName(fileName);
+        if (!Directory.Exists(dirName))
+        {
+            if (createIfNotExists && dirName != null)
+            {
+                if (OperatingSystem.IsWindows())
+                    Directory.CreateDirectory(dirName);
+                else
+                    Directory.CreateDirectory(dirName, UNIX_FILE_MODE);
+            }
+            else
+                return null;
+        }
+
         var fileMode = createIfNotExists ? FileMode.OpenOrCreate : FileMode.Open;
-        return File.Open(fileName, fileMode, FileAccess.ReadWrite);
+        var retVal = File.Open(fileName, fileMode, FileAccess.ReadWrite);
+        return retVal;
     }
 
     public bool DeleteDataStream(string streamName)

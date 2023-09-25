@@ -1490,9 +1490,14 @@ declare module 'shared/models/data-provider.model' {
 }
 declare module 'shared/models/project-data-provider.model' {
   import type { DataProviderDataType } from 'shared/models/data-provider.model';
+  /** Indicates to a PDP what extension data is being referenced */
+  export type ExtensionDataScope = {
+    extensionName: string;
+    dataQualifier: string;
+  };
   /** All Project Data Provider data types must extend from this */
   export type MandatoryProjectDataType = {
-    ExtensionData: DataProviderDataType<string, string | undefined, string>;
+    ExtensionData: DataProviderDataType<ExtensionDataScope, string | undefined, string>;
   };
 }
 declare module 'papi-shared-types' {

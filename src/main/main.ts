@@ -329,6 +329,10 @@ async function main() {
     );
     const verse = await paratextPdp.getVerse(new VerseRef('JHN', '1', '1'));
     logger.info(`Got PDP data: ${verse}`);
+    paratextPdp.setExtensionData(
+      { extensionName: 'foo', dataQualifier: 'fooData' },
+      'This is the data from extension foo',
+    );
   }, 10000);
 }
 
