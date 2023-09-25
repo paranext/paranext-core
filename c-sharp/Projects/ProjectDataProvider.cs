@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Newtonsoft.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
@@ -80,7 +81,10 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     {
         try
         {
-            return SetExtensionData(ExtractDataScope(jsonScope), jsonData);
+            return SetExtensionData(
+                ExtractDataScope(jsonScope),
+                JsonConvert.DeserializeObject<string>(jsonData)!
+            );
         }
         catch (Exception ex)
         {
@@ -96,5 +100,5 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     /// <summary>
     /// Set an extension's data in a project identified by <param name="scope"></param>.
     /// </summary>
-    protected abstract ResponseToRequest SetExtensionData(ProjectDataScope scope, string jsonData);
+    protected abstract ResponseToRequest SetExtensionData(ProjectDataScope scope, string data);
 }
