@@ -133,7 +133,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                         );
                     }
                 );
-                return ResponseToRequest.Succeeded($"chapter:{verseRef}");
+                return ResponseToRequest.Succeeded($"{Chapter}:{verseRef}");
             default:
                 return ResponseToRequest.Failed($"Unknown data type: {scope.DataType}");
         }
@@ -184,7 +184,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                     textWriter.Flush();
                 }
             );
-            return ResponseToRequest.Succeeded($"extensions:{scope.ExtensionName}");
+            return ResponseToRequest.Succeeded($"ExtensionData:{scope.ExtensionName}");
         }
         catch (Exception e)
         {
