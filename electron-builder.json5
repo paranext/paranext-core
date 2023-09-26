@@ -2,8 +2,8 @@
  * @see https://www.electron.build/configuration/configuration
  */
 {
-  productName: 'ParanextCore',
-  appId: 'org.paranext.ParanextCore',
+  productName: 'Platform.Bible',
+  appId: 'org.paranext.PlatformBible',
   asar: true,
   asarUnpack: '**\\*.{node,dll}',
   files: ['dist', 'node_modules', 'package.json'],
