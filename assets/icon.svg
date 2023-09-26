@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 846.77 1017.3">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #231f20;
+      }
+
+      .cls-1, .cls-2, .cls-3 {
+        stroke-width: 0px;
+      }
+
+      .cls-2 {
+        fill: url(#radial-gradient);
+      }
+
+      .cls-3 {
+        fill: #a90f14;
+      }
+    </style>
+    <radialGradient id="radial-gradient" cx="211.69" cy="488.88" fx="556.41" fy="-60.57" r="648.64" gradientUnits="userSpaceOnUse">
+      <stop offset=".15" stop-color="#86888a"/>
+      <stop offset=".18" stop-color="#808284"/>
+      <stop offset=".4" stop-color="#585759"/>
+      <stop offset=".59" stop-color="#3b3839"/>
+      <stop offset=".76" stop-color="#292526"/>
+      <stop offset=".87" stop-color="#231f20"/>
+    </radialGradient>
+  </defs>
+  <path class="cls-3" d="m99.24,783.61c1.61,27.57,4.27,55.02,7.99,57.38l267.48,162.14c29.7,18.88,67.65,18.88,97.35,0l267.48-162.14c3.56-2.26,6.14-29.53,7.77-57.25l-323.92,187.01-324.15-187.15Z"/>
+  <g>
+    <polygon class="cls-2" points="423.38 0 0 244.44 0 733.32 423.38 977.76 423.38 0"/>
+    <polygon class="cls-1" points="423.38 0 846.77 244.44 846.77 733.32 423.38 977.76 423.38 0"/>
+  </g>
+</svg>
