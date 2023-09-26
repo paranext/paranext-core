@@ -13,7 +13,7 @@ on:
 
 jobs:
   publish:
-    name: Publish on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, and node ${{ matrix.node_version }}
+    name: Release on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, node ${{ matrix.node_version }}
 
     runs-on: ${{ matrix.os }}
 
