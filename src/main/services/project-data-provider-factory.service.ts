@@ -42,7 +42,7 @@ export async function initialize(): Promise<void> {
 
 export async function test() {
   const pdp = await getProjectDataProvider('FAKE', 'NotesOnly', 'WHATEVER');
-  const pdpExtensionData = await pdp.getExtensionData('');
+  const pdpExtensionData = await pdp.getExtensionData({ extensionName: 'a', dataQualifier: 'b' });
   if (pdpExtensionData !== 'extension data') logger.error("Project Data Provider didn't work");
   else logger.info('Project Data Provider worked!');
 }

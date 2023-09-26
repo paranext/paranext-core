@@ -317,6 +317,35 @@ async function main() {
   }, 5000);
 
   // #endregion
+
+  // #region Test a .NET data provider
+  // TODO: Uncomment this or similar sample code once https://github.com/paranext/paranext-core/issues/440 is resolved
+  // In the meantime, if you want to try this, copy an existing project into
+  //   <home_dir>/.platform.bible/<project_short_name>_<project_ID_from_settings.xml>/project/paratext
+  // For example: "~/.platform.bible/projects/TPKJ_b4c501ad2538989d6fb723518e92408406e232d3/project/paratext"
+  // Then create a file named "meta.json" in the "<short_name>_<project_ID>" directory with this JSON:
+  //  {
+  //    "id": "REPLACE_THIS_WITH_PROJECT_ID_FROM_SETTINGS_XML",
+  //    "name": "REPLACE_THIS_WITH_PROJECT_SHORT_NAME",
+  //    "storageType": "paratextFolders",
+  //    "projectType": "ParatextStandard"
+  //  }
+  /*
+  setTimeout(async () => {
+    const paratextPdp = await getProjectDataProvider(
+      'b4c501ad2538989d6fb723518e92408406e232d3',
+      'ParatextStandard',
+      'paratextFolders',
+    );
+    const verse = await paratextPdp.getVerse(new VerseRef('JHN', '1', '1'));
+    logger.info(`Got PDP data: ${verse}`);
+    paratextPdp.setExtensionData(
+      { extensionName: 'foo', dataQualifier: 'fooData' },
+      'This is the data from extension foo',
+    );
+  }, 10000);
+  */
+  // #endregion
 }
 
 async function restartExtensionHost() {
