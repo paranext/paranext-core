@@ -8,16 +8,14 @@
   height: 100%;
 }
 
+// Places checkboxes in their given order, but continues to add columns to the right
 .run-basic-checks-check-names {
-  display: grid;
-  grid-auto-flow: column;
-  grid-template-columns: repeat(auto-fit, minmax(50%, 1fr));
-  grid-template-rows: repeat(auto-fit, minmax(10px, 30px));
-  overflow-y: auto;
-  overflow-x: hidden;
-  min-height: 40%;
-  max-height: 60%;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  height: 50%;
   width: 100%;
+  overflow-y: auto;
 }
 
 .run-basic-checks-books {

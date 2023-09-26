@@ -1,12 +1,11 @@
 import { Checkbox } from 'papi-components';
-import { useMemo } from 'react';
 import './basic-checks.component.scss';
 
-type BasicCheck = {
+export type BasicCheck = {
   name: string;
 };
 
-function fetchChecks() {
+export function fetchChecks() {
   return [
     {
       name: 'Chapter/Verse Numbers',
@@ -47,15 +46,26 @@ function fetchChecks() {
   ];
 }
 
-export default function BasicChecks() {
-  const checks = useMemo(() => fetchChecks(), []);
+type BasicCheckProps = {
+  handleSelectChecks: (checkName: string) => void;
+  selectedChecks: { [key: string]: boolean };
+  checks: BasicCheck[];
+};
 
+export default function BasicChecks({
+  handleSelectChecks,
+  selectedChecks,
+  checks,
+}: BasicCheckProps) {
   return (
     <>
       {checks.map((check) => (
-        <span className="check-option">
-          <Checkbox labelText={check.name} />
-        </span>
+        <Checkbox
+          className="check-option"
+          isChecked={selectedChecks[check.name]}
+          labelText={check.name}
+          onChange={() => handleSelectChecks(check.name)}
+        />
       ))}
     </>
   );
