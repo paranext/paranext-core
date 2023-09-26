@@ -1,10 +1,10 @@
 {
-  "name": "Paranext",
+  "name": "platform.bible",
   "version": "0.0.2",
   "description": "Extensible Bible translation software",
   "license": "MIT",
   "author": {
-    "name": "Paranext",
+    "name": "Platform.Bible",
     "url": "https://github.com/paranext/"
   },
   "main": "./dist/main/main.js",
