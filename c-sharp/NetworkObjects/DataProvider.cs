@@ -84,7 +84,11 @@ internal abstract class DataProvider : NetworkObject
         string scopeString;
 
         if ((dataScope is string s) && !string.IsNullOrWhiteSpace(s))
-            scopeString = s;
+        {
+            // If we are returning "*", just pass it as a string.  Otherwise we have to provide a JSON list of strings.
+            // Presumably this will change as part of https://github.com/paranext/paranext-core/issues/443
+            scopeString = (s == "*") ? s : JsonConvert.SerializeObject(new List<string> { s });
+        }
         else if (dataScope != null)
         {
             try

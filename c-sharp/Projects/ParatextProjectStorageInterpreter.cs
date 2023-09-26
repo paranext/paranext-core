@@ -133,7 +133,8 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                         );
                     }
                 );
-                return ResponseToRequest.Succeeded($"{Chapter}:{verseRef}");
+                // The value of returned string is case sensitive and cannot change unless data provider subscriptions change
+                return ResponseToRequest.Succeeded("Chapter");
             default:
                 return ResponseToRequest.Failed($"Unknown data type: {scope.DataType}");
         }
@@ -184,7 +185,8 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                     textWriter.Flush();
                 }
             );
-            return ResponseToRequest.Succeeded($"ExtensionData:{scope.ExtensionName}");
+            // The value of returned string is case sensitive and cannot change unless data provider subscriptions change
+            return ResponseToRequest.Succeeded($"ExtensionData");
         }
         catch (Exception e)
         {
