@@ -43,6 +43,24 @@ export function fetchChecks() {
     {
       name: 'Numbers',
     } as BasicCheck,
+    {
+      name: 'Another Example 1',
+    } as BasicCheck,
+    {
+      name: 'Another Example 2',
+    } as BasicCheck,
+    {
+      name: 'Another Example 3',
+    } as BasicCheck,
+    {
+      name: 'Another Example 4',
+    } as BasicCheck,
+    {
+      name: 'Another Example 5',
+    } as BasicCheck,
+    {
+      name: 'Another Example 6',
+    } as BasicCheck,
   ];
 }
 

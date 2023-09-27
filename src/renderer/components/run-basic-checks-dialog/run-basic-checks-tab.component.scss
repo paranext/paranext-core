@@ -8,11 +8,10 @@
   height: 100%;
 }
 
-// Places checkboxes in their given order, but continues to add columns to the right
+// Places checkboxes in their given order, but does not shrink to one column when window is only wide enough for one
 .run-basic-checks-check-names {
-  display: flex;
-  flex-direction: column;
-  flex-wrap: wrap;
+  columns: 2;
+  column-fill: balance;
   height: 50%;
   width: 100%;
   overflow-y: auto;

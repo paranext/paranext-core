@@ -1,9 +1,8 @@
 import { RadioGroup, FormControlLabel, Radio, Typography, Grid } from '@mui/material';
 import { Canon } from '@sillsdev/scripture';
-import { Button } from 'papi-components';
+import { Button, ChapterRangeSelection, ChapterNumberOption } from 'papi-components';
 import { SyntheticEvent, useMemo } from 'react';
 import './book-selection.component.scss';
-import ChapterRangeSelection, { ChapterNumberOption } from './chapter-range-selection.component';
 
 type BookSelectionProps = {
   useCurrentBook: boolean;
@@ -15,6 +14,7 @@ type BookSelectionProps = {
   handleSelectStartChapter: (newValue: number) => void;
   endChapter: number;
   handleSelectEndChapter: (newValue: number) => void;
+  chapterCount: number;
 };
 
 export default function BookSelection({
@@ -27,6 +27,7 @@ export default function BookSelection({
   handleSelectStartChapter,
   endChapter,
   handleSelectEndChapter,
+  chapterCount,
 }: BookSelectionProps) {
   const currentBookName = useMemo(
     () => Canon.bookNumberToEnglishName(currentBookNumber),
@@ -63,9 +64,9 @@ export default function BookSelection({
             isDisabled={!useCurrentBook}
             startChapter={startChapter}
             endChapter={endChapter}
-            currentBookNumber={currentBookNumber}
             onChangeStartChapter={onChangeStartChapter}
             onChangeEndChapter={onChangeEndChapter}
+            chapterCount={chapterCount}
           />
         </Grid>
       </Grid>

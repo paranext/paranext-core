@@ -1,5 +1,11 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
-import { Button, ComboBox, ComboBoxLabelOption } from 'papi-components';
+import {
+  Button,
+  ComboBox,
+  ComboBoxLabelOption,
+  ScriptureReference,
+  getChaptersForBook,
+} from 'papi-components';
 import logger from '@shared/services/logger.service';
 import { useMemo, useState } from 'react';
 import settingsService from '@shared/services/settings.service';
@@ -14,7 +20,13 @@ interface ProjectNameOption extends ComboBoxLabelOption {
   projectId: string;
 }
 
-export default function RunBasicChecksTab() {
+// Changing global scripture reference won't effect the dialog because reference is passed in once at the start.
+type RunBasicChecksTabProps = {
+  currentScriptureReference: ScriptureReference | null;
+};
+
+export default function RunBasicChecksTab({ currentScriptureReference }: RunBasicChecksTabProps) {
+  // In future, should not be a dropdown with multiple options but only the current project
   const projectNameOptions: ProjectNameOption[] = useMemo(
     () =>
       fetchProjects()
@@ -26,18 +38,9 @@ export default function RunBasicChecksTab() {
     [],
   );
 
-  /**
-   * Current assumption is that the project's current book will be passed in. So changing the global
-   * scripture reference won't change the current book in the dialog. So here we only get the scripture
-   * reference once.
-   */
-  const currentReference = useMemo(() => settingsService.get('platform.verseRef'), []);
-  const currentBookNumber = currentReference?.bookNum ?? 1;
-  /*
-   * Currently stub the chapter count because we cannot use the Scripture util functions in PAPI here
-   * If book is Genesis - chapters are 1-50, else chapters are 1-20
-   */
-  const chapterCount = currentBookNumber === 1 ? 50 : 20;
+  const currentBookNumber = currentScriptureReference?.bookNum ?? 1;
+  // used within chapter-range-selection
+  const chapterCount = getChaptersForBook(currentBookNumber);
   const basicChecks = fetchChecks();
 
   const [selectedBooks, setSelectedBooks] = useState<number[]>([currentBookNumber]);
@@ -107,7 +110,7 @@ export default function RunBasicChecksTab() {
         title="Project"
         options={projectNameOptions}
       />
-      {/* Should always be two columns? Is it okay that we use fieldset- not MUI? */}
+      {/* Should always be two columns? */}
       <fieldset className="run-basic-checks-check-names">
         <legend>Checks</legend>
         <BasicChecks
@@ -127,6 +130,7 @@ export default function RunBasicChecksTab() {
           handleSelectStartChapter={handleSelectStartChapter}
           endChapter={endChapter}
           handleSelectEndChapter={handleSelectEndChapter}
+          chapterCount={chapterCount}
         />
       </fieldset>
       <div className="basic-checks-dialog-actions">
@@ -141,6 +145,8 @@ export const loadRunBasicChecksTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   return {
     ...savedTabInfo,
     tabTitle: 'Run Basic Checks',
-    content: <RunBasicChecksTab />,
+    content: (
+      <RunBasicChecksTab currentScriptureReference={settingsService.get('platform.verseRef')} />
+    ),
   };
 };

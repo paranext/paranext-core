@@ -1,15 +1,14 @@
-import { FormControlLabel } from '@mui/material';
-import { ComboBox, ComboBoxLabelOption } from 'papi-components';
 import { SyntheticEvent } from 'react';
-// import { getChaptersForBook } from 'scripture/scripture-util';
+import { FormControlLabel } from '@mui/material';
+import ComboBox, { ComboBoxLabelOption } from './combo-box.component';
 
 export type ChapterRangeSelectionProps = {
   startChapter: number;
   endChapter: number;
-  currentBookNumber: number;
   onChangeStartChapter: (_event: SyntheticEvent<Element, Event>, value: unknown) => void;
   onChangeEndChapter: (_event: SyntheticEvent<Element, Event>, value: unknown) => void;
   isDisabled: boolean;
+  chapterCount: number;
 };
 
 export interface ChapterNumberOption extends ComboBoxLabelOption {
@@ -19,13 +18,12 @@ export interface ChapterNumberOption extends ComboBoxLabelOption {
 export default function ChapterRangeSelection({
   startChapter,
   endChapter,
-  currentBookNumber,
   onChangeStartChapter,
   onChangeEndChapter,
   isDisabled,
+  chapterCount,
 }: ChapterRangeSelectionProps) {
   let chapterNumberOptions: ChapterNumberOption[];
-  const chapterCount = currentBookNumber === 1 ? 50 : 20;
   const numberArray = Array.from({ length: chapterCount }, (_, index) => index + 1);
 
   const getChapterNumberOptions = () => {

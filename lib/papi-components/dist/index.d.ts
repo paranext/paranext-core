@@ -34,65 +34,6 @@ export type ButtonProps = PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Button({ id, isDisabled, className, onClick, onContextMenu, children, }: ButtonProps): import("react/jsx-runtime").JSX.Element;
-export declare enum LabelPosition {
-	After = "after",
-	Before = "before",
-	Above = "above",
-	Below = "below"
-}
-export type CheckboxProps = {
-	/**
-	 *  Optional unique identifier
-	 */
-	id?: string;
-	/**
-	 * If `true`, the component is checked.
-	 */
-	isChecked?: boolean;
-	/**
-	 * If specified, the label that will appear associated with the checkbox.
-	 * @default '' (no label will be shown)
-	 */
-	labelText?: string;
-	/**
-	 * Indicates the position of the label relative to the checkbox.
-	 * @default 'after'
-	 */
-	labelPosition?: LabelPosition;
-	/**
-	 * If `true`, the component is in the indeterminate state.
-	 * @default false
-	 */
-	isIndeterminate?: boolean;
-	/**
-	 * If `true`, the component is checked by default.
-	 */
-	isDefaultChecked?: boolean;
-	/**
-	 * Enabled status of switch
-	 * @default false
-	 */
-	isDisabled?: boolean;
-	/**
-	 * True when (input related to) switch is erroneous
-	 * @default false
-	 */
-	hasError?: boolean;
-	/**
-	 * Additional css classes to help with unique styling of the switch
-	 */
-	className?: string;
-	/**
-	 * Callback fired when the state is changed.
-	 * @param event The event source of the callback. You can pull out the new value by accessing event.target.value (string).
-	 * You can pull out the new checked state by accessing event.target.checked (boolean).
-	 */
-	onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
-};
-/**
- * Primary UI component for user interaction
- */
-export declare function Checkbox({ id, isChecked, labelText, labelPosition, isIndeterminate, isDefaultChecked, isDisabled, hasError, className, onChange, }: CheckboxProps): import("react/jsx-runtime").JSX.Element;
 export type ComboBoxLabelOption = {
 	label: string;
 };
@@ -165,6 +106,77 @@ export type ComboBoxProps<T> = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, title, isDisabled, isClearable, hasError, isFullWidth, width, options, className, value, onChange, onFocus, onBlur, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export type ChapterRangeSelectionProps = {
+	startChapter: number;
+	endChapter: number;
+	onChangeStartChapter: (_event: SyntheticEvent<Element, Event>, value: unknown) => void;
+	onChangeEndChapter: (_event: SyntheticEvent<Element, Event>, value: unknown) => void;
+	isDisabled: boolean;
+	chapterCount: number;
+};
+export interface ChapterNumberOption extends ComboBoxLabelOption {
+	chapterNum: number;
+}
+export function ChapterRangeSelection({ startChapter, endChapter, onChangeStartChapter, onChangeEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectionProps): import("react/jsx-runtime").JSX.Element;
+export declare enum LabelPosition {
+	After = "after",
+	Before = "before",
+	Above = "above",
+	Below = "below"
+}
+export type CheckboxProps = {
+	/**
+	 *  Optional unique identifier
+	 */
+	id?: string;
+	/**
+	 * If `true`, the component is checked.
+	 */
+	isChecked?: boolean;
+	/**
+	 * If specified, the label that will appear associated with the checkbox.
+	 * @default '' (no label will be shown)
+	 */
+	labelText?: string;
+	/**
+	 * Indicates the position of the label relative to the checkbox.
+	 * @default 'after'
+	 */
+	labelPosition?: LabelPosition;
+	/**
+	 * If `true`, the component is in the indeterminate state.
+	 * @default false
+	 */
+	isIndeterminate?: boolean;
+	/**
+	 * If `true`, the component is checked by default.
+	 */
+	isDefaultChecked?: boolean;
+	/**
+	 * Enabled status of switch
+	 * @default false
+	 */
+	isDisabled?: boolean;
+	/**
+	 * True when (input related to) switch is erroneous
+	 * @default false
+	 */
+	hasError?: boolean;
+	/**
+	 * Additional css classes to help with unique styling of the switch
+	 */
+	className?: string;
+	/**
+	 * Callback fired when the state is changed.
+	 * @param event The event source of the callback. You can pull out the new value by accessing event.target.value (string).
+	 * You can pull out the new checked state by accessing event.target.checked (boolean).
+	 */
+	onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
+};
+/**
+ * Primary UI component for user interaction
+ */
+export declare function Checkbox({ id, isChecked, labelText, labelPosition, isIndeterminate, isDefaultChecked, isDisabled, hasError, className, onChange, }: CheckboxProps): import("react/jsx-runtime").JSX.Element;
 export type Command = {
 	/**
 	 * Text (displayable in the UI) as the name of the command
@@ -253,6 +265,7 @@ export interface ScrRefSelectorProps {
 	id?: string;
 }
 export declare function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare const getChaptersForBook: (bookNum: number) => number;
 export type SliderProps = {
 	/**
 	 *  Optional unique identifier
