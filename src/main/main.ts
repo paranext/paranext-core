@@ -18,7 +18,6 @@ import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
 import { resolveHtmlPath } from '@node/utils/util';
 import extensionHostService from '@main/services/extension-host.service';
-import * as pdpFactoryService from '@main/services/project-data-provider-factory.service';
 import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
 import { wait } from '@shared/utils/util';
@@ -265,16 +264,6 @@ async function main() {
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
     commandService.registerCommand(commandName as CommandNames, handler);
   });
-
-  // #endregion
-
-  // #region Setup and test project data providers
-
-  // This won't be needed long-term if we don't have built-in project data provider factories
-  // Maybe all of this will live in extensions, even for built-in project types. Who knows?
-  await pdpFactoryService.initialize();
-
-  await pdpFactoryService.test();
 
   // #endregion
 
