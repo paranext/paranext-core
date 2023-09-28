@@ -91,18 +91,21 @@ npm run package
 ## Publishing
 
 1. Create a branch of the form `release/*`, e.g. `release/v1.2.3`, or `release/v1.2.3-rc1`.
-2. Update the _version_ in your project's `release/app/package.json` file (e.g. _1.2.3_).
-3. Run `npm i` in that folder to update its `package-lock.json`.
-4. Create a new draft [GitHub **Release**](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository), ensure the following are included:
+2. Update the _version_ in your project's `release/app/package.json`, e.g.:
+   ```bash
+   cd ./release/app
+   npm version 1.2.3
+   ```
+3. Create a new draft [GitHub **Release**](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository), ensure the following are included:
    - a _Tag version_, e.g. `v1.2.3`, choose _Create new tag on publish_.
    - set the **Target** to the release branch.
    - a copy of the change log. Click **Generate release notes** as a starting point.
    - Click **Save draft**.
-5. Update `CHANGELOG.md` with changes in this release from the GitHub draft **Release**.
-6. Commit these changes to your release branch and push the commit to GitHub.
-7. Once the GitHub build **Action** has finished, it will add build artifact files to the draft release. Remove the `.blockmap` files and leave the `.yml` files and the installers and executable, e.g. `.exe` on Windows.
-8. Publish the release on GitHub.
-9. Merge the release branch back into **main** with a merge commit.
+4. Update `CHANGELOG.md` with changes in this release from the GitHub draft **Release**.
+5. Commit these changes to your release branch and push the commit to GitHub.
+6. Once the GitHub build **Action** has finished, it will add build artifact files to the draft release. Remove the `.blockmap` files and leave the `.yml` files and the installers and executable, e.g. `.exe` on Windows.
+7. Publish the release on GitHub.
+8. Merge the release branch back into **main** with a merge commit.
 
 ## Testing
 
