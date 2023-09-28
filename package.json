@@ -51,7 +51,7 @@
     "build:data-release": "run-script-os",
     "build:data-release:windows": "dotnet publish c-sharp/ParanextDataProvider.csproj -r win-x64 -o ./c-sharp/bin/Release/net7.0/publish/win-x64/",
     "build:data-release:linux": "dotnet publish c-sharp/ParanextDataProvider.csproj -r linux-x64 -o ./c-sharp/bin/Release/net7.0/publish/linux-x64/",
-    "build:data-release:macos": "dotnet publish c-sharp/ParanextDataProvider.csproj -r osx-x64 -o ./c-sharp/bin/Release/net7.0/publish/osx-x64/ && dotnet publish c-sharp/ParanextDataProvider.csproj -p:PublishProfile=FolderProfile -r osx-arm64 -o ./c-sharp/bin/Release/net7.0/publish/osx-arm64/",
+    "build:data-release:macos": "dotnet publish c-sharp/ParanextDataProvider.csproj -r osx-x64 -o ./c-sharp/bin/Release/net7.0/publish/osx-x64/ && dotnet publish c-sharp/ParanextDataProvider.csproj -r osx-arm64 -o ./c-sharp/bin/Release/net7.0/publish/osx-arm64/",
     "build:types": "cd lib/papi-dts && npm run build",
     "build:papi-components": "cd lib/papi-components && npm run build",
     "csharp:tool:restore": "cd c-sharp && dotnet tool restore",
