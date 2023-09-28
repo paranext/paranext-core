@@ -1,3 +1,6 @@
+/**
+ * Low-level information describing a project that Platform.Bible directly manages and uses to load project data
+ */
 export type ProjectMetadata = {
   /**
    * ID of the project (must be unique and case insensitive)
