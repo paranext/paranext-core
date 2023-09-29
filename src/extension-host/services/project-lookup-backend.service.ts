@@ -10,7 +10,7 @@ import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import * as nodeFS from '@node/services/node-file-system.service';
 
-/** This points to the directory where all of the projects "<name>_<id>" subdirectories live */
+/** This points to the directory where all of the projects "[name]_[id]" subdirectories live */
 const PROJECTS_ROOT_URI = joinUriPaths('file://', os.homedir(), '.platform.bible', 'projects');
 const METADATA_FILE = 'meta.json';
 
