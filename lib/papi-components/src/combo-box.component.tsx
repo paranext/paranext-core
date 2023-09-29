@@ -9,7 +9,7 @@ import { FocusEventHandler, SyntheticEvent } from 'react';
 import './combo-box.component.css';
 
 export type ComboBoxLabelOption = { label: string };
-export type ComboBoxOption = string | ComboBoxLabelOption;
+export type ComboBoxOption = string | number | ComboBoxLabelOption;
 export type ComboBoxValue<T, X, Y, Z> = AutocompleteValue<T, X, Y, Z>;
 export type ComboBoxChangeDetails<T> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;

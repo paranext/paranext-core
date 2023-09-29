@@ -65,13 +65,13 @@ export function fetchChecks() {
 }
 
 type BasicCheckProps = {
-  handleSelectChecks: (checkName: string) => void;
-  selectedChecks: { [key: string]: boolean };
+  handleSelectCheck: (checkName: string) => void;
+  selectedChecks: string[];
   checks: BasicCheck[];
 };
 
 export default function BasicChecks({
-  handleSelectChecks,
+  handleSelectCheck,
   selectedChecks,
   checks,
 }: BasicCheckProps) {
@@ -79,10 +79,11 @@ export default function BasicChecks({
     <>
       {checks.map((check) => (
         <Checkbox
+          key={check.name}
           className="check-option"
-          isChecked={selectedChecks[check.name]}
+          isChecked={selectedChecks.includes(check.name)}
           labelText={check.name}
-          onChange={() => handleSelectChecks(check.name)}
+          onChange={() => handleSelectCheck(check.name)}
         />
       ))}
     </>

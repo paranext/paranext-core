@@ -1,80 +1,58 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
-import {
-  Button,
-  ComboBox,
-  ComboBoxLabelOption,
-  ScriptureReference,
-  getChaptersForBook,
-} from 'papi-components';
+import { Button, ScriptureReference, getChaptersForBook } from 'papi-components';
 import logger from '@shared/services/logger.service';
-import { useMemo, useState } from 'react';
+import { Typography } from '@mui/material';
+import { useState } from 'react';
 import settingsService from '@shared/services/settings.service';
-import { fetchProjects } from '../project-dialogs/open-project-tab.component';
+import { fetchProjects } from '@renderer/components/project-dialogs/open-project-tab.component';
+import BookSelector from '@renderer/components/run-basic-checks-dialog/book-selector.component';
+import BasicChecks, {
+  fetchChecks,
+} from '@renderer/components/run-basic-checks-dialog/basic-checks.component';
+import { Project } from '@renderer/components/project-dialogs/project-list.component';
 import './run-basic-checks-tab.component.scss';
-import BookSelection from './book-selection.component';
-import BasicChecks, { fetchChecks } from './basic-checks.component';
 
 export const TAB_TYPE_RUN_BASIC_CHECKS = 'run-basic-checks';
-
-interface ProjectNameOption extends ComboBoxLabelOption {
-  projectId: string;
-}
 
 // Changing global scripture reference won't effect the dialog because reference is passed in once at the start.
 type RunBasicChecksTabProps = {
   currentScriptureReference: ScriptureReference | null;
+  currentProject: Project | undefined;
 };
 
-export default function RunBasicChecksTab({ currentScriptureReference }: RunBasicChecksTabProps) {
-  // In future, should not be a dropdown with multiple options but only the current project
-  const projectNameOptions: ProjectNameOption[] = useMemo(
-    () =>
-      fetchProjects()
-        .filter((project) => project.isDownloaded)
-        .map((project) => ({
-          projectId: project.id,
-          label: project.name,
-        })),
-    [],
-  );
-
+export default function RunBasicChecksTab({
+  currentScriptureReference,
+  currentProject,
+}: RunBasicChecksTabProps) {
   const currentBookNumber = currentScriptureReference?.bookNum ?? 1;
   // used within chapter-range-selection
   const chapterCount = getChaptersForBook(currentBookNumber);
   const basicChecks = fetchChecks();
 
   const [selectedBooks, setSelectedBooks] = useState<number[]>([currentBookNumber]);
-  const [selectedChecks, setSelectedChecks] = useState<{ [key: string]: boolean }>(() => {
-    const initialState: { [key: string]: boolean } = {};
-    basicChecks.forEach((check) => {
-      initialState[check.name] = false;
-    });
-    return initialState;
-  });
+  const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
   const [startChapter, setStartChapter] = useState(1);
   const [endChapter, setEndChapter] = useState(chapterCount);
   const [useCurrentBook, setUseCurrentBook] = useState<boolean>(true);
 
-  const handleSelectBooks = (bookNumber: number) => {
+  const handleSelectBooks = (bookNumbers: number[]) => {
     setUseCurrentBook(false);
-    if (selectedBooks.includes(bookNumber)) {
-      setSelectedBooks(selectedBooks.filter((number) => number !== bookNumber));
-    } else {
-      setSelectedBooks([...selectedBooks, bookNumber]);
-    }
-  };
-
-  const handleSelectChecks = (label: string) => {
-    setSelectedChecks((prevCheckboxes) => ({
-      ...prevCheckboxes,
-      [label]: !prevCheckboxes[label],
-    }));
-  };
-
-  const toggleCurrentBook = () => {
-    setUseCurrentBook((prev) => {
-      return !prev;
+    bookNumbers.forEach((book) => {
+      if (!selectedBooks.includes(book))
+        setSelectedBooks((prevSelectedBooks) => [...prevSelectedBooks, book]);
     });
+  };
+
+  const handleSelectCheck = (label: string) => {
+    if (selectedChecks.includes(label))
+      setSelectedChecks(selectedChecks.filter((check) => check !== label));
+    else setSelectedChecks((prevSelectedChecks) => [...prevSelectedChecks, label]);
+  };
+
+  const toggleShouldUseCurrentBook = (newValue: boolean) => {
+    setUseCurrentBook(newValue);
+    // if we set useCurrentBook to true, then reset the list of selected books
+    if (newValue) setSelectedBooks([currentBookNumber]);
   };
 
   const handleSelectStartChapter = (newStart: number) => {
@@ -88,11 +66,9 @@ export default function RunBasicChecksTab({ currentScriptureReference }: RunBasi
   };
 
   const handleSubmit = () => {
-    const checkKeys = Object.keys(selectedChecks)
-      .filter((checkTrue) => selectedChecks[checkTrue])
-      .join(', ');
+    const joinedSelectedCheckNames = selectedChecks.join(', ');
     logger.info(
-      `Selected checks: ${checkKeys || 'NONE SELECTED'}\n Selected Books: ${
+      `Selected checks: ${joinedSelectedCheckNames || 'NONE SELECTED'}\n Selected Books: ${
         selectedBooks.length === 1 && !useCurrentBook ? 'ALL BOOKS' : selectedBooks
       }\n start chapter: ${
         useCurrentBook ? startChapter : 'IRRELEVANT-Choose books selected'
@@ -102,27 +78,22 @@ export default function RunBasicChecksTab({ currentScriptureReference }: RunBasi
 
   return (
     <div className="run-basic-checks-dialog">
-      {/* Ideally, pass in a project and make it the initial selection for the box,
-      or eliminate ability to select project other than the current */}
-      <ComboBox
-        className="project-dropdown"
-        isFullWidth
-        title="Project"
-        options={projectNameOptions}
-      />
+      <Typography variant="h5">
+        {currentProject ? currentProject.name : 'No Current Project'}
+      </Typography>
       {/* Should always be two columns? */}
       <fieldset className="run-basic-checks-check-names">
         <legend>Checks</legend>
         <BasicChecks
           checks={basicChecks}
           selectedChecks={selectedChecks}
-          handleSelectChecks={handleSelectChecks}
+          handleSelectCheck={handleSelectCheck}
         />
       </fieldset>
       <fieldset className="run-basic-checks-books">
-        <BookSelection
-          useCurrentBook={useCurrentBook}
-          toggleCurrentBook={toggleCurrentBook}
+        <BookSelector
+          shouldUseCurrentBook={useCurrentBook}
+          toggleShouldUseCurrentBook={toggleShouldUseCurrentBook}
           currentBookNumber={currentBookNumber}
           selectedBooks={selectedBooks}
           handleSelectBooks={handleSelectBooks}
@@ -142,11 +113,16 @@ export default function RunBasicChecksTab({ currentScriptureReference }: RunBasi
 }
 
 export const loadRunBasicChecksTab = (savedTabInfo: SavedTabInfo): TabInfo => {
+  const project = fetchProjects().find((proj) => proj.id === 'project-1');
+
   return {
     ...savedTabInfo,
     tabTitle: 'Run Basic Checks',
     content: (
-      <RunBasicChecksTab currentScriptureReference={settingsService.get('platform.verseRef')} />
+      <RunBasicChecksTab
+        currentProject={project}
+        currentScriptureReference={settingsService.get('platform.verseRef')}
+      />
     ),
   };
 };

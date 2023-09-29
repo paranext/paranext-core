@@ -60,7 +60,7 @@ import {
 import {
   TAB_TYPE_RUN_BASIC_CHECKS,
   loadRunBasicChecksTab,
-} from '../run-basic-checks-dialog/run-basic-checks-tab.component';
+} from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
 
 type TabType = string;
 

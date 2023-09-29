@@ -2,7 +2,7 @@ import { SavedTabInfo } from '@shared/data/web-view.model';
 import { LayoutBase } from 'rc-dock';
 import { TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
 import { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
-// import { TAB_TYPE_QUICK_VERSE_HERESY } from '@renderer/testing/test-quick-verse-heresy-panel.component';
+import { TAB_TYPE_QUICK_VERSE_HERESY } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 // import { TAB_TYPE_OPEN_PROJECT_DIALOG } from '@renderer/components/project-dialogs/open-project-tab.component';
 // import { TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG } from '@renderer/components/project-dialogs/download-update-project-tab.component';
@@ -37,15 +37,15 @@ const testLayout: LayoutBase = {
   floatbox: {
     mode: 'float',
     children: [
-      // {
-      //   tabs: [
-      //     { id: 'Test Quick Verse Heresy', tabType: TAB_TYPE_QUICK_VERSE_HERESY },
-      //   ] as SavedTabInfo[],
-      //   x: 300,
-      //   y: 170,
-      //   w: 320,
-      //   h: 190,
-      // },
+      {
+        tabs: [
+          { id: 'Test Quick Verse Heresy', tabType: TAB_TYPE_QUICK_VERSE_HERESY },
+        ] as SavedTabInfo[],
+        x: 300,
+        y: 170,
+        w: 320,
+        h: 190,
+      },
       // {
       //   tabs: [
       //     { id: 'Open Project Dialog', tabType: TAB_TYPE_OPEN_PROJECT_DIALOG },

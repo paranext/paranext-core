@@ -1,6 +1,6 @@
 export { default as Button } from './button.component';
-export { default as ChapterRangeSelection } from './chapter-range-selection.component';
-export type { ChapterNumberOption } from './chapter-range-selection.component';
+export { default as ChapterRangeSelector } from './chapter-range-selector.component';
+export type { ChapterRangeSelectorProps } from './chapter-range-selector.component';
 export { default as Checkbox } from './checkbox.component';
 export { default as ComboBox } from './combo-box.component';
 export type { MenuColumnInfo as MenuColumn, GridMenuProps } from './grid-menu.component';

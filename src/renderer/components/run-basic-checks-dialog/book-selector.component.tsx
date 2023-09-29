@@ -1,25 +1,25 @@
 import { RadioGroup, FormControlLabel, Radio, Typography, Grid } from '@mui/material';
 import { Canon } from '@sillsdev/scripture';
-import { Button, ChapterRangeSelection, ChapterNumberOption } from 'papi-components';
+import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'papi-components';
 import { SyntheticEvent, useMemo } from 'react';
-import './book-selection.component.scss';
+import './book-selector.component.scss';
 
-type BookSelectionProps = {
-  useCurrentBook: boolean;
-  toggleCurrentBook: () => void;
+type BookSelectionProps = Omit<
+  ChapterRangeSelectorProps,
+  'onChangeStartChapter' | 'onChangeEndChapter'
+> & {
+  shouldUseCurrentBook: boolean;
+  toggleShouldUseCurrentBook: (newValue: boolean) => void;
   currentBookNumber: number;
   selectedBooks: number[];
-  handleSelectBooks: (bookNumber: number) => void;
-  startChapter: number;
+  handleSelectBooks: (bookNumbers: number[]) => void;
   handleSelectStartChapter: (newValue: number) => void;
-  endChapter: number;
   handleSelectEndChapter: (newValue: number) => void;
-  chapterCount: number;
 };
 
-export default function BookSelection({
-  useCurrentBook,
-  toggleCurrentBook,
+export default function BookSelector({
+  shouldUseCurrentBook,
+  toggleShouldUseCurrentBook,
   currentBookNumber,
   selectedBooks,
   handleSelectBooks,
@@ -34,15 +34,23 @@ export default function BookSelection({
     [currentBookNumber],
   );
 
-  const onChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
-    const newStartNum: number = (value as ChapterNumberOption).chapterNum;
-    handleSelectStartChapter(newStartNum);
+  const onChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
+    handleSelectStartChapter(value);
   };
 
-  const onChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
-    const newEndNum = (value as ChapterNumberOption).chapterNum;
-    handleSelectEndChapter(newEndNum);
+  const onChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
+    handleSelectEndChapter(value);
   };
+
+  const listChosenBooksTypography = useMemo(
+    () =>
+      (selectedBooks.length === 1 && selectedBooks[0] === currentBookNumber) || shouldUseCurrentBook
+        ? 'All Books'
+        : selectedBooks
+            .map((bookNumber: number) => Canon.bookNumberToEnglishName(bookNumber))
+            .join(', '),
+    [currentBookNumber, selectedBooks, shouldUseCurrentBook],
+  );
 
   return (
     <RadioGroup defaultValue="current book">
@@ -51,7 +59,12 @@ export default function BookSelection({
           <FormControlLabel
             key="current book"
             value="current book"
-            control={<Radio checked={useCurrentBook} onChange={toggleCurrentBook} />}
+            control={
+              <Radio
+                checked={shouldUseCurrentBook}
+                onChange={(e) => toggleShouldUseCurrentBook(e.target.checked)}
+              />
+            }
             label="Current Book"
             labelPlacement="end"
           />
@@ -60,8 +73,8 @@ export default function BookSelection({
           <Typography padding={0.5} marginRight={2} border={1}>
             {currentBookName}
           </Typography>
-          <ChapterRangeSelection
-            isDisabled={!useCurrentBook}
+          <ChapterRangeSelector
+            isDisabled={!shouldUseCurrentBook}
             startChapter={startChapter}
             endChapter={endChapter}
             onChangeStartChapter={onChangeStartChapter}
@@ -75,7 +88,12 @@ export default function BookSelection({
           <FormControlLabel
             key="selected books"
             value="selected books"
-            control={<Radio checked={!useCurrentBook} onChange={toggleCurrentBook} />}
+            control={
+              <Radio
+                checked={!shouldUseCurrentBook}
+                onChange={(e) => toggleShouldUseCurrentBook(!e.target.checked)}
+              />
+            }
             label="Choose Books"
             labelPlacement="end"
           />
@@ -83,15 +101,11 @@ export default function BookSelection({
         <Grid item xs className="book-selection-option">
           {/* Book 1 ... Book N, default is all books */}
           <Typography padding={0.5} border={1}>
-            {selectedBooks.length === 1 && selectedBooks[0] === currentBookNumber
-              ? 'All Books'
-              : selectedBooks
-                  .map((bookNumber) => Canon.bookNumberToEnglishName(bookNumber))
-                  .join(', ')}
+            {listChosenBooksTypography}
           </Typography>
           {/* OnClick - opens a dialog where we send the list of selectedBooks and the handleSelectBooks
-          so passing four here is irrelevant and for testing purposes */}
-          <Button onClick={() => handleSelectBooks(4)}>Choose...</Button>
+          so passing 4 and 10 here is irrelevant and for testing purposes */}
+          <Button onClick={() => handleSelectBooks([4, 10])}>Choose...</Button>
         </Grid>
       </Grid>
     </RadioGroup>
