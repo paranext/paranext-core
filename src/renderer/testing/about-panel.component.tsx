@@ -10,7 +10,7 @@ export default function AboutPanel() {
         <img width="200" alt="icon" src={icon} />
       </div>
       <div className="hello">
-        <h1>Paranext</h1>
+        <h1>Platform.Bible</h1>
       </div>
     </div>
   );
