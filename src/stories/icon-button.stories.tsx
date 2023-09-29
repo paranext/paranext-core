@@ -16,7 +16,7 @@ const meta: Meta<typeof IconButton> = {
     isTooltipSuppressed: { control: 'boolean' },
     label: { control: 'text' },
     tooltip: { control: 'text' },
-    isFocusRippleDisabled: { control: 'boolean' },
+    adjustMarginToAlignToEdge: { control: 'text' },
   },
 };
 export default meta;

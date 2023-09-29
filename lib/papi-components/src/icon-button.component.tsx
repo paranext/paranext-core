@@ -26,11 +26,6 @@ export type IconButtonProps = PropsWithChildren<{
    */
   isTooltipSuppressed?: boolean;
   /**
-   * If true, the keyboard focus ripple is disabled.
-   * @default false
-   */
-  isFocusRippleDisabled?: boolean;
-  /**
    * If given, uses a negative margin to counteract the padding on one side (this is often helpful
    * for aligning the left or right side of the icon with content above or below, without ruining
    * the border size and shape).
@@ -64,7 +59,6 @@ function IconButton({
   isDisabled = false,
   tooltip,
   isTooltipSuppressed = false,
-  isFocusRippleDisabled = false,
   adjustMarginToAlignToEdge = false,
   size = 'medium',
   className,
@@ -75,7 +69,6 @@ function IconButton({
     <MuiIconButton
       id={id}
       disabled={isDisabled}
-      disableFocusRipple={isFocusRippleDisabled}
       edge={adjustMarginToAlignToEdge}
       size={size}
       aria-label={label}
