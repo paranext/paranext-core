@@ -9,6 +9,7 @@ import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
 import { getErrorMessage } from '@shared/utils/util';
 import { CommandNames } from 'papi-shared-types';
+import { startProjectLookupService } from '@extension-host/services/project-lookup-backend.service';
 
 // #region Test logs
 
@@ -52,6 +53,9 @@ networkService
 
     // The extension host is the only one that can initialize the extensionAssetService
     await extensionAssetService.initialize();
+
+    // Make sure project lookups are available before extensions look for them on PAPI
+    await startProjectLookupService();
 
     // The extension service locks down importing other modules, so be careful what runs after it
     await extensionService.initialize();

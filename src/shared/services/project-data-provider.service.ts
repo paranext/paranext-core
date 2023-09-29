@@ -9,6 +9,7 @@ import dataProviderService from '@shared/services/data-provider.service';
 import { newNonce } from '@shared/utils/util';
 import { Dispose } from '@shared/models/disposal.model';
 import UnsubscriberAsyncList from '@shared/utils/unsubscriber-async-list';
+import ProjectLookupService from './project-lookup.service';
 
 class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
   private readonly pdpIds: Map<string, string> = new Map();
@@ -87,19 +88,18 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
 }
 
 /**
- * Get a Project Data Provider for the given project details.
+ * Get a Project Data Provider for the given project ID.
+ * For types to work properly, specify the project type as a generic parameter.
  * @param projectId ID for the project to load
- * @param projectType Type of the project referenced by the given ID
- * @param storageType Storage type of the project referenced by the given ID
  * @returns Data provider with types that are associated with the given project type
+ * @example const pdp = await getProjectDataProvider<'ParatextStandard'>('ProjectID12345');
+            pdp.getVerse(new VerseRef('JHN', '1', '1'));
  */
-// TODO: Look up projectType and storageType based on the projectId passed in.
-// https://github.com/paranext/paranext-core/issues/357
 export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
   projectId: string,
-  projectType: ProjectType,
-  storageType: string,
 ): Promise<ProjectDataProvider[ProjectType]> {
+  const metadata = await ProjectLookupService.getMetadataForProject(projectId);
+  const projectType = metadata.projectType as keyof ProjectDataTypes;
   const pdpFactoryId: string = getProjectDataProviderFactoryId(projectType);
   const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<ProjectType>>(
     pdpFactoryId,
@@ -108,6 +108,7 @@ export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
 
   // TODO: Get the appropriate PSI ID and pass it into pdpFactory.getProjectDataProviderId instead
   // of the storageType. https://github.com/paranext/paranext-core/issues/367
+  const { storageType } = metadata;
   const pdpId = await pdpFactory.getProjectDataProviderId(projectId, storageType);
   const pdp = await dataProviderService.get<ProjectDataProvider[ProjectType]>(pdpId);
   if (!pdp) throw new Error(`Cannot create project data provider for project ID ${projectId}`);

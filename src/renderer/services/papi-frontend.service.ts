@@ -12,6 +12,8 @@ import { papiNetworkService, PapiNetworkService } from '@shared/services/network
 import { papiWebViewService, PapiWebViewService } from '@shared/services/web-view.service';
 import internetService, { InternetService } from '@shared/services/internet.service';
 import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
+import { ProjectLookupServiceType } from '@shared/models/project-lookup.model';
+import projectLookupService from '@shared/services/project-lookup.service';
 import {
   papiFrontendProjectDataProviderService,
   PapiFrontendProjectDataProviderService,
@@ -53,6 +55,8 @@ const papi = {
   /** JSDOC DESTINATION papiFrontendProjectDataProviderService */
   projectDataProvider:
     papiFrontendProjectDataProviderService as PapiFrontendProjectDataProviderService,
+  /** JSDOC DESTINATION projectLookupService */
+  projectLookup: projectLookupService as ProjectLookupServiceType,
   react: {
     /** JSDOC DESTINATION papiContext */
     context: papiContext as PapiContext,

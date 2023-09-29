@@ -9,12 +9,6 @@ import type { PeopleDataProvider } from 'hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 import type PapiEventEmitter from 'shared/models/papi-event-emitter.model';
 import type { HelloWorldEvent } from 'hello-world';
-import type {
-  ProjectDataProviderEngineFactory,
-  ProjectDataProviderEngineTypes,
-} from 'shared/models/project-data-provider-engine.model';
-import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
-import type { MyProjectDataType } from 'papi-shared-types';
 import helloWorldReactWebView from './web-views/hello-world.web-view?inline';
 import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?inline';
 import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
@@ -160,30 +154,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     context.registrations.add(unsubGreetings);
   }
 
-  const projectDataProviderEngine: ProjectDataProviderEngineFactory<'MyExtensionProjectTypeName'> =
-    {
-      createProjectDataProviderEngine(
-        projectId: string,
-        projectStorageInterpreterId: string,
-      ): ProjectDataProviderEngineTypes['MyExtensionProjectTypeName'] {
-        logger.debug(`Creating PDP Engine for ${projectId}, ${projectStorageInterpreterId}`);
-        return {
-          getExtensionData: async (): Promise<string> => Promise.resolve('extension data'),
-          setExtensionData: async (): Promise<DataProviderUpdateInstructions<MyProjectDataType>> =>
-            Promise.resolve(false),
-          getMyProjectData: async (): Promise<string> => Promise.resolve('my project data'),
-          setMyProjectData: async (): Promise<DataProviderUpdateInstructions<MyProjectDataType>> =>
-            Promise.resolve(false),
-        };
-      },
-    };
-
-  const projectDataProviderEngineFactoryPromise =
-    papi.projectDataProvider.registerProjectDataProviderEngineFactory(
-      'MyExtensionProjectTypeName',
-      projectDataProviderEngine,
-    );
-
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await htmlWebViewProviderPromise,
@@ -192,7 +162,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     onHelloWorldEmitter,
     await helloWorldPromise,
     await helloExceptionPromise,
-    await projectDataProviderEngineFactoryPromise,
   );
 
   logger.info('Hello World is finished activating!');

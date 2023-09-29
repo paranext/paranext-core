@@ -23,6 +23,8 @@ import {
 import extensionStorageService, {
   ExtensionStorageService,
 } from '@extension-host/services/extension-storage.service';
+import { ProjectLookupServiceType } from '@shared/models/project-lookup.model';
+import projectLookupService from '@shared/services/project-lookup.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -59,6 +61,8 @@ const papi = {
   /** JSDOC DESTINATION papiBackendProjectDataProviderService */
   projectDataProvider:
     papiBackendProjectDataProviderService as PapiBackendProjectDataProviderService,
+  /** JSDOC DESTINATION projectLookupService */
+  projectLookup: projectLookupService as ProjectLookupServiceType,
   /** JSDOC DESTINATION extensionStorageService */
   storage: extensionStorageService as ExtensionStorageService,
 };

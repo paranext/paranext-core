@@ -308,20 +308,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     peopleWebViewId || '',
   );
 
-  // Check that the project data provider from hello-world is working
-  const customProjectDataProvider =
-    await papi.projectDataProvider.getProjectDataProvider<'MyExtensionProjectTypeName'>(
-      'abcd',
-      'MyExtensionProjectTypeName',
-      'abc',
-    );
-  if ((await customProjectDataProvider.getMyProjectData('something')) !== 'my project data')
-    logger.error('Getting MyProjectData did not return the expected data');
-  else logger.info('Getting MyProjectData worked as expected');
-  if (await customProjectDataProvider.setMyProjectData('something', 'something else'))
-    logger.error('Setting MyProjectData should have returned false');
-  else logger.info('Setting MyProjectData worked as expected');
-
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await peopleDataProviderPromise,
