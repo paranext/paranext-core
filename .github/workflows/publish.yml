@@ -13,7 +13,7 @@ on:
 
 jobs:
   publish:
-    name: Publish on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, and node ${{ matrix.node_version }}
+    name: Release on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, node ${{ matrix.node_version }}
 
     runs-on: ${{ matrix.os }}
 
@@ -43,21 +43,11 @@ jobs:
           npm install
           npm run build
 
-      - name: Install DMG license
+      - name: dotnet build - Windows on macOS
         if: ${{ matrix.os == 'macos-latest' }}
-        run: npm install dmg-license
+        run: npm run build:data-release:windows
 
-      - name: dotnet build - MacOS and Windows
-        if: ${{ matrix.os == 'macos-latest' }}
-        run: |
-          npm run build:data-release:windows
-          npm run build:data-release:macos
-
-      - name: dotnet build - Linux
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: npm run build:data-release:linux
-
-      - name: Publish releases - Windows and MacOS
+      - name: Publish releases - Windows and macOS
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
         if: ${{ matrix.os == 'macos-latest' && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
         env:

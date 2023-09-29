@@ -5,6 +5,7 @@ export { default as Checkbox } from './checkbox.component';
 export { default as ComboBox } from './combo-box.component';
 export type { MenuColumnInfo as MenuColumn, GridMenuProps } from './grid-menu.component';
 export { default as GridMenu } from './grid-menu.component';
+export { default as IconButton } from './icon-button.component';
 export { default as LabelPosition } from './label-position.model';
 export { default as MenuItem } from './menu-item.component';
 export { default as RefSelector } from './ref-selector.component';

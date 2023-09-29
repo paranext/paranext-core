@@ -1,0 +1,26 @@
+.papi-icon-button {
+  border: 0;
+  border-radius: 3em;
+  cursor: pointer;
+  display: inline-block;
+}
+
+.papi-icon-button.primary {
+  background-color: #1ea7fd;
+  color: white;
+}
+
+.papi-icon-button.secondary {
+  background-color: transparent;
+  color: #333;
+}
+
+.papi-icon-button.paratext {
+  background-color: darkgreen;
+  color: greenyellow;
+}
+
+.papi-icon-button.paratext.bright {
+  background-color: greenyellow;
+  color: darkgreen;
+}
