@@ -2,7 +2,7 @@ import os from 'os';
 import path from 'path';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import {
-  ProjectLookupServiceNetworkObjectName,
+  projectLookupServiceNetworkObjectName,
   ProjectLookupServiceType,
 } from '@shared/models/project-lookup.model';
 import { joinUriPaths } from '@node/utils/util';
@@ -113,7 +113,7 @@ async function getMetadataForProject(projectId: string): Promise<ProjectMetadata
   return newMetadata;
 }
 
-const ProjectLookupService: ProjectLookupServiceType = {
+const projectLookupService: ProjectLookupServiceType = {
   getMetadataForAllProjects,
   getMetadataForProject,
 };
@@ -126,8 +126,8 @@ let networkObject: ProjectLookupServiceType;
 export async function startProjectLookupService(): Promise<void> {
   await initialize();
   networkObject = await networkObjectService.set<ProjectLookupServiceType>(
-    ProjectLookupServiceNetworkObjectName,
-    ProjectLookupService,
+    projectLookupServiceNetworkObjectName,
+    projectLookupService,
   );
 }
 
