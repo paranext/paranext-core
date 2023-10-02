@@ -37,12 +37,12 @@ export declare function Button({ id, isDisabled, className, onClick, onContextMe
 export type ChapterRangeSelectorProps = {
 	startChapter: number;
 	endChapter: number;
-	onChangeStartChapter: (event: SyntheticEvent<Element, Event>, value: number) => void;
-	onChangeEndChapter: (event: SyntheticEvent<Element, Event>, value: number) => void;
+	handleSelectStartChapter: (chapter: number) => void;
+	handleSelectEndChapter: (chapter: number) => void;
 	isDisabled?: boolean;
 	chapterCount: number;
 };
-export function ChapterRangeSelector({ startChapter, endChapter, onChangeStartChapter, onChangeEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export declare enum LabelPosition {
 	After = "after",
 	Before = "before",
@@ -166,6 +166,10 @@ export type ComboBoxProps<T> = {
 	 * Triggers when textfield loses focus
 	 */
 	onBlur?: FocusEventHandler<HTMLDivElement>;
+	/**
+	 * Used to determine the string value for a given option.
+	 */
+	getOptionLabel?: (option: ComboBoxOption) => string;
 };
 /**
  * Dropdown selector displaying various options from which to choose
@@ -173,7 +177,7 @@ export type ComboBoxProps<T> = {
  * Thanks to MUI for heavy inspiration and documentation
  * https://mui.com/material-ui/getting-started/overview/
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, title, isDisabled, isClearable, hasError, isFullWidth, width, options, className, value, onChange, onFocus, onBlur, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, title, isDisabled, isClearable, hasError, isFullWidth, width, options, className, value, onChange, onFocus, onBlur, getOptionLabel, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type Command = {
 	/**
 	 * Text (displayable in the UI) as the name of the command

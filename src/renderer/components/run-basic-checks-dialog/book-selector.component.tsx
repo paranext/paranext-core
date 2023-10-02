@@ -1,20 +1,15 @@
 import { RadioGroup, FormControlLabel, Radio, Typography, Grid } from '@mui/material';
 import { Canon } from '@sillsdev/scripture';
 import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'papi-components';
-import { SyntheticEvent, useMemo } from 'react';
+import { useMemo } from 'react';
 import './book-selector.component.scss';
 
-type BookSelectionProps = Omit<
-  ChapterRangeSelectorProps,
-  'onChangeStartChapter' | 'onChangeEndChapter'
-> & {
+type BookSelectionProps = ChapterRangeSelectorProps & {
   shouldUseCurrentBook: boolean;
   toggleShouldUseCurrentBook: (newValue: boolean) => void;
   currentBookNumber: number;
   selectedBooks: number[];
   handleSelectBooks: (bookNumbers: number[]) => void;
-  handleSelectStartChapter: (newValue: number) => void;
-  handleSelectEndChapter: (newValue: number) => void;
 };
 
 export default function BookSelector({
@@ -24,23 +19,15 @@ export default function BookSelector({
   selectedBooks,
   handleSelectBooks,
   startChapter,
-  handleSelectStartChapter,
   endChapter,
-  handleSelectEndChapter,
   chapterCount,
+  handleSelectEndChapter,
+  handleSelectStartChapter,
 }: BookSelectionProps) {
   const currentBookName = useMemo(
     () => Canon.bookNumberToEnglishName(currentBookNumber),
     [currentBookNumber],
   );
-
-  const onChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
-    handleSelectStartChapter(value);
-  };
-
-  const onChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
-    handleSelectEndChapter(value);
-  };
 
   const listChosenBooksTypography = useMemo(
     () =>
@@ -77,8 +64,8 @@ export default function BookSelector({
             isDisabled={!shouldUseCurrentBook}
             startChapter={startChapter}
             endChapter={endChapter}
-            onChangeStartChapter={onChangeStartChapter}
-            onChangeEndChapter={onChangeEndChapter}
+            handleSelectStartChapter={handleSelectStartChapter}
+            handleSelectEndChapter={handleSelectEndChapter}
             chapterCount={chapterCount}
           />
         </Grid>

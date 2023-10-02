@@ -5,8 +5,8 @@ import ComboBox from './combo-box.component';
 export type ChapterRangeSelectorProps = {
   startChapter: number;
   endChapter: number;
-  onChangeStartChapter: (event: SyntheticEvent<Element, Event>, value: number) => void;
-  onChangeEndChapter: (event: SyntheticEvent<Element, Event>, value: number) => void;
+  handleSelectStartChapter: (chapter: number) => void;
+  handleSelectEndChapter: (chapter: number) => void;
   isDisabled?: boolean;
   chapterCount: number;
 };
@@ -14,8 +14,8 @@ export type ChapterRangeSelectorProps = {
 export default function ChapterRangeSelector({
   startChapter,
   endChapter,
-  onChangeStartChapter,
-  onChangeEndChapter,
+  handleSelectStartChapter,
+  handleSelectEndChapter,
   isDisabled,
   chapterCount,
 }: ChapterRangeSelectorProps) {
@@ -23,6 +23,20 @@ export default function ChapterRangeSelector({
     () => Array.from({ length: chapterCount }, (_, index) => index + 1),
     [chapterCount],
   );
+
+  const onChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
+    handleSelectStartChapter(value);
+    if (value > endChapter) {
+      handleSelectEndChapter(value);
+    }
+  };
+
+  const onChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
+    handleSelectEndChapter(value);
+    if (value < startChapter) {
+      handleSelectStartChapter(value);
+    }
+  };
 
   return (
     <>
@@ -36,6 +50,7 @@ export default function ChapterRangeSelector({
             key="start chapter"
             isClearable={false}
             options={numberArray}
+            getOptionLabel={(option) => option.toString()}
             value={startChapter}
             isDisabled={isDisabled}
           />
@@ -53,6 +68,7 @@ export default function ChapterRangeSelector({
             key="end chapter"
             isClearable={false}
             options={numberArray}
+            getOptionLabel={(option) => option.toString()}
             value={endChapter}
             isDisabled={isDisabled}
           />

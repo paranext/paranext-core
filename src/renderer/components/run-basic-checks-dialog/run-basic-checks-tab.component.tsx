@@ -25,21 +25,33 @@ export default function RunBasicChecksTab({
   currentProject,
 }: RunBasicChecksTabProps) {
   const currentBookNumber = currentScriptureReference?.bookNum ?? 1;
-  // used within chapter-range-selection
-  const chapterCount = getChaptersForBook(currentBookNumber);
   const basicChecks = fetchChecks();
+
+  // used within chapter-range-selector and won't change because current book doesn't change
+  const chapterCount = getChaptersForBook(currentBookNumber);
+  const [startChapter, setStartChapter] = useState(1);
+  const [endChapter, setEndChapter] = useState(chapterCount);
+
+  const handleSelectStart = (chapter: number) => {
+    setStartChapter(chapter);
+  };
+
+  const handleSelectEnd = (chapter: number) => {
+    setEndChapter(chapter);
+  };
 
   const [selectedBooks, setSelectedBooks] = useState<number[]>([currentBookNumber]);
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
-  const [startChapter, setStartChapter] = useState(1);
-  const [endChapter, setEndChapter] = useState(chapterCount);
   const [useCurrentBook, setUseCurrentBook] = useState<boolean>(true);
 
   const handleSelectBooks = (bookNumbers: number[]) => {
     setUseCurrentBook(false);
     bookNumbers.forEach((book) => {
-      if (!selectedBooks.includes(book))
-        setSelectedBooks((prevSelectedBooks) => [...prevSelectedBooks, book]);
+      if (selectedBooks.includes(book))
+        setSelectedBooks((prevSelectedBooks) =>
+          prevSelectedBooks.filter((prevBook) => prevBook !== book),
+        );
+      else setSelectedBooks((prevSelectedBooks) => [...prevSelectedBooks, book]);
     });
   };
 
@@ -53,16 +65,11 @@ export default function RunBasicChecksTab({
     setUseCurrentBook(newValue);
     // if we set useCurrentBook to true, then reset the list of selected books
     if (newValue) setSelectedBooks([currentBookNumber]);
-  };
-
-  const handleSelectStartChapter = (newStart: number) => {
-    setStartChapter(newStart);
-    if (newStart > endChapter) setEndChapter(newStart);
-  };
-
-  const handleSelectEndChapter = (newEnd: number) => {
-    setEndChapter(newEnd);
-    if (newEnd < startChapter) setStartChapter(newEnd);
+    // if we set useCurrentBook to false, reset start/end chapter numbers
+    else {
+      setStartChapter(1);
+      setEndChapter(chapterCount);
+    }
   };
 
   const handleSubmit = () => {
@@ -98,10 +105,10 @@ export default function RunBasicChecksTab({
           selectedBooks={selectedBooks}
           handleSelectBooks={handleSelectBooks}
           startChapter={startChapter}
-          handleSelectStartChapter={handleSelectStartChapter}
           endChapter={endChapter}
-          handleSelectEndChapter={handleSelectEndChapter}
           chapterCount={chapterCount}
+          handleSelectStartChapter={handleSelectStart}
+          handleSelectEndChapter={handleSelectEnd}
         />
       </fieldset>
       <div className="basic-checks-dialog-actions">

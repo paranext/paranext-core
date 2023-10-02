@@ -76,6 +76,10 @@ export type ComboBoxProps<T> = {
    * Triggers when textfield loses focus
    */
   onBlur?: FocusEventHandler<HTMLDivElement>;
+  /**
+   * Used to determine the string value for a given option.
+   */
+  getOptionLabel?: (option: ComboBoxOption) => string;
 };
 
 /**
@@ -98,6 +102,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   onChange,
   onFocus,
   onBlur,
+  getOptionLabel,
 }: ComboBoxProps<T>) {
   return (
     <MuiComboBox<T, boolean | undefined, boolean | undefined, boolean | undefined>
@@ -112,6 +117,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}
+      getOptionLabel={getOptionLabel}
       renderInput={(props) => (
         <MuiTextField
           {...props}
