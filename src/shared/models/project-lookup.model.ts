@@ -18,4 +18,4 @@ export interface ProjectLookupServiceType {
   getMetadataForProject: (projectId: string) => Promise<ProjectMetadata>;
 }
 
-export const ProjectLookupServiceNetworkObjectName = 'ProjectLookupService';
+export const projectLookupServiceNetworkObjectName = 'ProjectLookupService';

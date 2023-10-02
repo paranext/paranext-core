@@ -1,5 +1,5 @@
 import {
-  ProjectLookupServiceNetworkObjectName,
+  projectLookupServiceNetworkObjectName,
   ProjectLookupServiceType,
 } from '@shared/models/project-lookup.model';
 import networkObjectService from '@shared/services/network-object.service';
@@ -13,11 +13,11 @@ async function initialize(): Promise<void> {
         try {
           const localProjectLookupService =
             await networkObjectService.get<ProjectLookupServiceType>(
-              ProjectLookupServiceNetworkObjectName,
+              projectLookupServiceNetworkObjectName,
             );
           if (!localProjectLookupService)
             throw new Error(
-              `${ProjectLookupServiceNetworkObjectName} is not available as a network object`,
+              `${projectLookupServiceNetworkObjectName} is not available as a network object`,
             );
           networkObject = localProjectLookupService;
           resolve();
@@ -31,7 +31,7 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const ProjectLookupService: ProjectLookupServiceType = {
+const projectLookupService: ProjectLookupServiceType = {
   getMetadataForAllProjects: async () => {
     await initialize();
     return networkObject.getMetadataForAllProjects();
@@ -42,4 +42,4 @@ const ProjectLookupService: ProjectLookupServiceType = {
   },
 };
 
-export default ProjectLookupService;
+export default projectLookupService;

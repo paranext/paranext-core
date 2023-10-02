@@ -9,7 +9,7 @@ import dataProviderService from '@shared/services/data-provider.service';
 import { newNonce } from '@shared/utils/util';
 import { Dispose } from '@shared/models/disposal.model';
 import UnsubscriberAsyncList from '@shared/utils/unsubscriber-async-list';
-import ProjectLookupService from './project-lookup.service';
+import projectLookupService from './project-lookup.service';
 
 class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
   private readonly pdpIds: Map<string, string> = new Map();
@@ -98,7 +98,7 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
 export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
   projectId: string,
 ): Promise<ProjectDataProvider[ProjectType]> {
-  const metadata = await ProjectLookupService.getMetadataForProject(projectId);
+  const metadata = await projectLookupService.getMetadataForProject(projectId);
   const projectType = metadata.projectType as keyof ProjectDataTypes;
   const pdpFactoryId: string = getProjectDataProviderFactoryId(projectType);
   const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<ProjectType>>(

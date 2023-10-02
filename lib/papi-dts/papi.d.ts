@@ -2355,12 +2355,12 @@ declare module 'shared/models/project-lookup.model' {
      */
     getMetadataForProject: (projectId: string) => Promise<ProjectMetadata>;
   }
-  export const ProjectLookupServiceNetworkObjectName = 'ProjectLookupService';
+  export const projectLookupServiceNetworkObjectName = 'ProjectLookupService';
 }
 declare module 'shared/services/project-lookup.service' {
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.model';
-  const ProjectLookupService: ProjectLookupServiceType;
-  export default ProjectLookupService;
+  const projectLookupService: ProjectLookupServiceType;
+  export default projectLookupService;
 }
 declare module 'shared/models/project-data-provider-engine.model' {
   import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
