@@ -102,17 +102,24 @@ export async function readDir(
   const dirEntries = entryFilter
     ? unfilteredDirEntries.filter((dirent) => entryFilter(dirent.name))
     : unfilteredDirEntries;
-  return Object.fromEntries(
-    groupBy(
-      dirEntries,
-      (dirEntry): EntryType => {
-        if (dirEntry.isFile()) return EntryType.File;
-        if (dirEntry.isDirectory()) return EntryType.Directory;
-        return EntryType.Unknown;
-      },
-      (dirent) => joinUriPaths(uri, dirent.name),
-    ),
-  ) as DirectoryEntries;
+
+  // Group each entry by EntryType
+  const entryMap = groupBy(
+    dirEntries,
+    (dirEntry): EntryType => {
+      if (dirEntry.isFile()) return EntryType.File;
+      if (dirEntry.isDirectory()) return EntryType.Directory;
+      return EntryType.Unknown;
+    },
+    (dirent) => joinUriPaths(uri, dirent.name),
+  );
+
+  // Fill in each missing EntryType with an empty array
+  Object.values(EntryType).forEach((entryType) => {
+    if (!entryMap.has(entryType)) entryMap.set(entryType, []);
+  });
+
+  return Object.freeze(Object.fromEntries(entryMap)) as DirectoryEntries;
 }
 
 /**
