@@ -31,9 +31,8 @@ const usfmSchema = buildSchema(`
 
 // There are probably frameworks that can  be used to automatically convert between GraphQL and TS/JS types
 // We should figure out how we want to use GraphQL in more detail before deciding which ones (if any) to use
-function extractVerseRef(verseRef: Object): VerseRef {
-  // eslint-disable-next-line no-undef-init
-  let versification: ScrVers | undefined = undefined;
+function extractVerseRef(verseRef: object): VerseRef {
+  let versification: ScrVers | undefined;
   if ('versification' in verseRef) versification = new ScrVers(verseRef.versification as string);
   if ('book' in verseRef) {
     const book = verseRef.book as string;
@@ -44,7 +43,7 @@ function extractVerseRef(verseRef: Object): VerseRef {
   throw new Error(`Invalid verseRef: ${verseRef}`);
 }
 
-// Caching some objects do we don't have to keep making network calls for every GraphQL query
+// Caching some objects so we don't have to keep making network calls for every GraphQL query
 const projectMap = new Map<string, ProjectMetadata>();
 const paratextProjectMap = new Map<string, ProjectDataProvider['ParatextStandard']>();
 
