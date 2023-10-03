@@ -34,6 +34,15 @@ export type ButtonProps = PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Button({ id, isDisabled, className, onClick, onContextMenu, children, }: ButtonProps): import("react/jsx-runtime").JSX.Element;
+export type ChapterRangeSelectorProps = {
+	startChapter: number;
+	endChapter: number;
+	handleSelectStartChapter: (chapter: number) => void;
+	handleSelectEndChapter: (chapter: number) => void;
+	isDisabled?: boolean;
+	chapterCount: number;
+};
+export function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export declare enum LabelPosition {
 	After = "after",
 	Before = "before",
@@ -96,7 +105,7 @@ export declare function Checkbox({ id, isChecked, labelText, labelPosition, isIn
 export type ComboBoxLabelOption = {
 	label: string;
 };
-export type ComboBoxOption = string | ComboBoxLabelOption;
+export type ComboBoxOption = string | number | ComboBoxLabelOption;
 export type ComboBoxValue<T, X, Y, Z> = AutocompleteValue<T, X, Y, Z>;
 export type ComboBoxChangeDetails<T> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
@@ -142,7 +151,7 @@ export type ComboBoxProps<T> = {
 	 */
 	className?: string;
 	/**
-	 * The selected value that the combo box currently holds
+	 * The selected value that the combo box currently holds. Must be shallow equal to one of the options entries.
 	 */
 	value?: T;
 	/**
@@ -157,6 +166,10 @@ export type ComboBoxProps<T> = {
 	 * Triggers when textfield loses focus
 	 */
 	onBlur?: FocusEventHandler<HTMLDivElement>;
+	/**
+	 * Used to determine the string value for a given option.
+	 */
+	getOptionLabel?: (option: ComboBoxOption) => string;
 };
 /**
  * Dropdown selector displaying various options from which to choose
@@ -164,7 +177,7 @@ export type ComboBoxProps<T> = {
  * Thanks to MUI for heavy inspiration and documentation
  * https://mui.com/material-ui/getting-started/overview/
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, title, isDisabled, isClearable, hasError, isFullWidth, width, options, className, value, onChange, onFocus, onBlur, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, title, isDisabled, isClearable, hasError, isFullWidth, width, options, className, value, onChange, onFocus, onBlur, getOptionLabel, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type Command = {
 	/**
 	 * Text (displayable in the UI) as the name of the command
@@ -266,11 +279,6 @@ export type IconButtonProps = PropsWithChildren<{
 	 */
 	isTooltipSuppressed?: boolean;
 	/**
-	 * If true, the keyboard focus ripple is disabled.
-	 * @default false
-	 */
-	isFocusRippleDisabled?: boolean;
-	/**
 	 * If given, uses a negative margin to counteract the padding on one side (this is often helpful
 	 * for aligning the left or right side of the icon with content above or below, without ruining
 	 * the border size and shape).
@@ -297,7 +305,7 @@ export type IconButtonProps = PropsWithChildren<{
  * Thanks to MUI for heavy inspiration and documentation
  * https://mui.com/material-ui/getting-started/overview/
  */
-export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, isFocusRippleDisabled, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
 export interface ScriptureReference {
 	bookNum: number;
 	chapterNum: number;
@@ -309,6 +317,7 @@ export interface ScrRefSelectorProps {
 	id?: string;
 }
 export declare function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare const getChaptersForBook: (bookNum: number) => number;
 export type SliderProps = {
 	/**
 	 *  Optional unique identifier
