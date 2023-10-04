@@ -61,6 +61,10 @@ import {
   TAB_TYPE_RUN_BASIC_CHECKS,
   loadRunBasicChecksTab,
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
+import {
+  TAB_TYPE_BASIC_LIST,
+  loadBasicListTab,
+} from '@renderer/components/basic-list/basic-list.component';
 
 type TabType = string;
 
@@ -98,6 +102,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG, loadOpenMultipleProjectsTab],
   [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
   [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
+  [TAB_TYPE_BASIC_LIST, loadBasicListTab],
 ]);
 
 /** tab saver functions for each Paranext tab type that wants to override the default */
