@@ -178,7 +178,7 @@ const requestRawUnsafe = async <TParam, TReturn>(
   // If the request type doesn't have a registered handler yet, retry a few times to help with race conditions
   // This approach is hacky but works well enough for now
   const expectedErrorMsg: string = `No handler was found to process the request of type ${requestType}`;
-  const maxAttempts: number = globalThis.isPackaged ? 5 : 10;
+  const maxAttempts: number = 10;
   for (let attemptsRemaining = maxAttempts; attemptsRemaining > 0; attemptsRemaining--) {
     // eslint-disable-next-line no-await-in-loop
     const response = await connectionService.request<TParam, TReturn>(requestType, contents);
