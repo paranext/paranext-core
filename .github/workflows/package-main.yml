@@ -19,7 +19,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
         dotnet_version: [7.0.x]
         node_version: [18.x]
 
@@ -44,6 +44,7 @@ jobs:
           npm run build
 
       - name: Update release version
+        shell: bash
         run: |
           COMMIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
           cd ./release/app
@@ -52,11 +53,12 @@ jobs:
           echo "Updating version from ${CURRENT_VERSION} to ${NEW_VERSION}"
           npm version $NEW_VERSION
 
-      - name: dotnet build - Windows on macOS
-        if: ${{ matrix.os == 'macos-latest' }}
-        run: npm run build:data-release:windows
+      - name: Publish releases - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          npm exec electron-builder -- build --publish never --win
 
-      - name: Publish releases - Windows and macOS
+      - name: Publish releases - macOS
         if: ${{ matrix.os == 'macos-latest' }}
         # env:
         #   # These values are used for auto updates signing
@@ -65,7 +67,7 @@ jobs:
         #   CSC_LINK: ${{ secrets.CSC_LINK }}
         #   CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
-          npm exec electron-builder -- build --publish never --win --mac
+          npm exec electron-builder -- build --publish never --mac
 
       - name: Publish releases - Linux
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -75,6 +77,15 @@ jobs:
         run: |
           npm exec electron-builder -- build --publish never --linux
 
+      - name: Upload Windows artifacts
+        if: ${{ matrix.os == 'windows-latest' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-windows
+          path: |
+            ./release/build/*.exe
+            !./release/build/*Setup*.exe
+
       - name: Upload macOS artifacts
         if: ${{ matrix.os == 'macos-latest' }}
         uses: actions/upload-artifact@v3
@@ -82,15 +93,6 @@ jobs:
           name: app-macos
           path: |
             ./release/build/*.dmg
-
-      - name: Upload Windows artifacts
-        if: ${{ matrix.os == 'macos-latest' }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: app-windows
-          path: |
-            ./release/build/*.exe
-            !./release/build/*Setup*.exe
 
       - name: Upload Linux artifacts
         if: ${{ matrix.os == 'ubuntu-latest' }}
