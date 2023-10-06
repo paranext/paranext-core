@@ -2,7 +2,7 @@ import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { Button, ScriptureReference, getChaptersForBook } from 'papi-components';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import settingsService from '@shared/services/settings.service';
 import { fetchProjects } from '@renderer/components/project-dialogs/open-project-tab.component';
 import BookSelector from '@renderer/components/run-basic-checks-dialog/book-selector.component';
@@ -11,6 +11,9 @@ import BasicChecks, {
 } from '@renderer/components/run-basic-checks-dialog/basic-checks.component';
 import { Project } from '@renderer/components/project-dialogs/project-list.component';
 import './run-basic-checks-tab.component.scss';
+import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
+import { VerseRef } from '@sillsdev/scripture';
+import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 
 export const TAB_TYPE_RUN_BASIC_CHECKS = 'run-basic-checks';
 
@@ -83,11 +86,21 @@ export default function RunBasicChecksTab({
     );
   };
 
+  const project = useProjectDataProvider(currentProject?.id);
+
+  const [projectString] = usePromise(
+    useMemo(() => {
+      return async () =>
+        project === undefined
+          ? 'No current project'
+          : project?.ParatextStandard.getVerse(new VerseRef('MAT 4:1'));
+    }, [project]),
+    'Wait???',
+  );
+
   return (
     <div className="run-basic-checks-dialog">
-      <Typography variant="h5">
-        {currentProject ? currentProject.name : 'No Current Project'}
-      </Typography>
+      <Typography variant="h5">{`Run basic checks: ${currentProject?.id}, ${projectString}`}</Typography>
       {/* Should always be two columns? */}
       <fieldset className="run-basic-checks-check-names">
         <legend>Checks</legend>
@@ -120,7 +133,7 @@ export default function RunBasicChecksTab({
 }
 
 export const loadRunBasicChecksTab = (savedTabInfo: SavedTabInfo): TabInfo => {
-  const project = fetchProjects().find((proj) => proj.id === 'project-1');
+  const project = fetchProjects().find((proj) => proj.name === 'SPAN');
 
   return {
     ...savedTabInfo,

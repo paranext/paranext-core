@@ -1,5 +1,5 @@
 import projectDataProviderService from '@shared/services/data-provider.service';
-import IProjectDataProvider from '@shared/models/data-provider.interface';
+import { ProjectDataProvider } from '@shared/models/project-data-provider-engine.model';
 import { useCallback, useMemo, useState } from 'react';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
@@ -18,7 +18,7 @@ import { isString } from '@shared/utils/util';
  *  custom project data provider type
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useProjectDataProvider<T extends IProjectDataProvider<any>>(
+function useProjectDataProvider<T extends ProjectDataProvider>(
   dataProviderSource: string | T | undefined,
 ): T | undefined {
   // Check to see if they passed in the results of a useDataProvider hook or undefined
@@ -47,7 +47,13 @@ function useProjectDataProvider<T extends IProjectDataProvider<any>>(
   // (We must make sure to run the same number of hooks in all code paths.)
   const [isDisposed, setIsDisposed] = useState<boolean>(false);
   useEvent(
-    !didReceiveDataProvider && dataProvider && !isDisposed ? dataProvider.onDidDispose : undefined,
+    !didReceiveDataProvider && dataProvider && !isDisposed
+      ? // REVIEW: I'm pretty sure there must be a better way...
+        dataProvider.ParatextStandard?.onDidDispose ??
+          dataProvider.NotesOnly?.onDidDispose ??
+          dataProvider.MyExtensionProjectTypeName?.onDidDispose ??
+          undefined
+      : undefined,
     useCallback(() => setIsDisposed(true), []),
   );
 

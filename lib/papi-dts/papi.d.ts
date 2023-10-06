@@ -2529,8 +2529,8 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
   import IDataProvider from 'shared/models/data-provider.interface';
   /**
    * Gets a data provider with specified provider name
-   * @param dataProviderSource string name of the data provider to get OR dataProvider (result of useDataProvider if you
-   * want this hook to just return the data provider again)
+   * @param dataProviderSource string name of the data provider to get OR dataProvider (result of
+   *  useDataProvider, if you want this hook to just return the data provider again)
    * @returns undefined if the data provider has not been retrieved,
    *  data provider if it has been retrieved and is not disposed,
    *  and undefined again if the data provider is disposed
