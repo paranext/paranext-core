@@ -13,7 +13,15 @@ declare module 'project-notes-data-provider' {
     Notes: DataProviderDataType<ProjectNotesSelector, ProjectNote[], never>;
   };
 
-  /** Data provider for manipulating project notes */
+  /**
+   * Data provider for manipulating project notes
+   *
+   * Modeled from Paratext 9 Plugin API's [GetNotes](https://github.com/ubsicap/paratext_demo_plugins/wiki/IProject#getnotes)
+   * and [AddNote](https://github.com/ubsicap/paratext_demo_plugins/wiki/IProject#addnote)
+   *
+   * WARNING: This is currently designed to match closely with Paratext 9's Notes API. Any changes
+   * must maintain backwards compatibility for the time being.
+   */
   export type ProjectNotesDataProvider = IDataProvider<ProjectNotesProviderDataTypes> & {
     /**
      * Adds a project note
@@ -179,6 +187,12 @@ declare module 'project-notes-data-provider' {
 
   /**
    * Data provider for manipulating project notes
+   *
+   * Modeled from Paratext 9 Plugin API's [GetNotes](https://github.com/ubsicap/paratext_demo_plugins/wiki/IProject#getnotes)
+   * and [AddNote](https://github.com/ubsicap/paratext_demo_plugins/wiki/IProject#addnote)
+   *
+   * WARNING: This is currently designed to match closely with Paratext 9's Notes API. Any changes
+   * must maintain backwards compatibility for the time being.
    *
    * This is a hand-written baked-out version of `ProjectNotesDataProvider` for ease of reading
    */

@@ -23,7 +23,11 @@ declare module 'usfm-data-provider' {
 }
 
 declare module 'papi-shared-types' {
-  /** This is not yet a complete list of the data types available from Paratext projects. */
+  /**
+   * Provides project data for Paratext Scripture projects.
+   *
+   * This is not yet a complete list of the data types available from Paratext projects.
+   */
   export type ParatextStandardProjectDataTypes = MandatoryProjectDataType & {
     /** Gets the "raw" USFM data for the specified book */
     BookUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
