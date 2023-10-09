@@ -1514,7 +1514,6 @@ declare module 'papi-shared-types' {
   import { ScriptureReference } from 'papi-components';
   import type { DataProviderDataType } from 'shared/models/data-provider.model';
   import type { MandatoryProjectDataType } from 'shared/models/project-data-provider.model';
-  import { VerseRef } from '@sillsdev/scripture';
   /**
      * Function types for each command available on the papi. Each extension can extend this interface
      * to add commands that it registers on the papi.
@@ -1559,12 +1558,6 @@ declare module 'papi-shared-types' {
     placeholder: null;
   }
   type SettingNames = keyof SettingTypes;
-  /** This is not yet a complete list of the data types available from Paratext projects. */
-  type ParatextStandardProjectDataTypes = MandatoryProjectDataType & {
-    Book: DataProviderDataType<VerseRef, string | undefined, string>;
-    Chapter: DataProviderDataType<VerseRef, string | undefined, string>;
-    Verse: DataProviderDataType<VerseRef, string | undefined, string>;
-  };
   /** This is just a simple example so we have more than one. It's not intended to be real. */
   type NotesOnlyProjectDataTypes = MandatoryProjectDataType & {
     Notes: DataProviderDataType<string, string | undefined, string>;
@@ -1589,7 +1582,6 @@ declare module 'papi-shared-types' {
    * ```
    */
   interface ProjectDataTypes {
-    ParatextStandard: ParatextStandardProjectDataTypes;
     NotesOnly: NotesOnlyProjectDataTypes;
   }
   /**

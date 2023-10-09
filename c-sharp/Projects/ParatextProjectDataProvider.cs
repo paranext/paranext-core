@@ -16,10 +16,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         : base(name, papiClient, projectDetails)
     {
         _paratextPsi = paratextPsi;
-        Getters.Add("getBook", GetBook);
-        Getters.Add("getChapter", GetChapter);
-        Setters.Add("setChapter", SetChapter);
-        Getters.Add("getVerse", GetVerse);
+        Getters.Add("getBookUSFM", GetBookUSFM);
+        Getters.Add("getChapterUSFM", GetChapterUSFM);
+        Setters.Add("setChapterUSFM", SetChapterUSFM);
+        Getters.Add("getVerseUSFM", GetVerseUSFM);
     }
 
     protected override Task StartDataProvider()
@@ -61,23 +61,23 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return _paratextPsi.SetProjectData(scope, data);
     }
 
-    private ResponseToRequest GetBook(string jsonString)
+    private ResponseToRequest GetBookUSFM(string jsonString)
     {
-        return Get(ParatextProjectStorageInterpreter.Book, jsonString);
+        return Get(ParatextProjectStorageInterpreter.BookUSFM, jsonString);
     }
 
-    private ResponseToRequest GetChapter(string jsonString)
+    private ResponseToRequest GetChapterUSFM(string jsonString)
     {
-        return Get(ParatextProjectStorageInterpreter.Chapter, jsonString);
+        return Get(ParatextProjectStorageInterpreter.ChapterUSFM, jsonString);
     }
 
-    private ResponseToRequest GetVerse(string jsonString)
+    private ResponseToRequest GetVerseUSFM(string jsonString)
     {
-        return Get(ParatextProjectStorageInterpreter.Verse, jsonString);
+        return Get(ParatextProjectStorageInterpreter.VerseUSFM, jsonString);
     }
 
-    private ResponseToRequest SetChapter(string dataQualifier, string data)
+    private ResponseToRequest SetChapterUSFM(string dataQualifier, string data)
     {
-        return Set(ParatextProjectStorageInterpreter.Chapter, dataQualifier, data);
+        return Set(ParatextProjectStorageInterpreter.ChapterUSFM, dataQualifier, data);
     }
 }

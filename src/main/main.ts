@@ -321,12 +321,10 @@ async function main() {
   //  }
   /*
   setTimeout(async () => {
-    const paratextPdp = await getProjectDataProvider(
-      'b4c501ad2538989d6fb723518e92408406e232d3',
-      'ParatextStandard',
-      'paratextFolders',
+    const paratextPdp = await getProjectDataProvider<'ParatextStandard'>(
+      '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
     );
-    const verse = await paratextPdp.getVerse(new VerseRef('JHN', '1', '1'));
+    const verse = await paratextPdp.getVerseUSFM(new VerseRef('JHN', '1', '1'));
     logger.info(`Got PDP data: ${verse}`);
     paratextPdp.setExtensionData(
       { extensionName: 'foo', dataQualifier: 'fooData' },
