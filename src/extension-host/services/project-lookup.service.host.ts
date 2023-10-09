@@ -4,7 +4,7 @@ import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import {
   projectLookupServiceNetworkObjectName,
   ProjectLookupServiceType,
-} from '@shared/models/project-lookup.model';
+} from '@shared/services/project-lookup.service.model';
 import { joinUriPaths } from '@node/utils/util';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';

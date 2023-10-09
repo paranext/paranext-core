@@ -23,7 +23,7 @@ import {
 import extensionStorageService, {
   ExtensionStorageService,
 } from '@extension-host/services/extension-storage.service';
-import { ProjectLookupServiceType } from '@shared/models/project-lookup.model';
+import { ProjectLookupServiceType } from '@shared/services/project-lookup.service.model';
 import projectLookupService from '@shared/services/project-lookup.service';
 
 // IMPORTANT NOTES:

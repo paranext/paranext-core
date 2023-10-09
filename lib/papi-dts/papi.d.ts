@@ -2329,7 +2329,7 @@ declare module 'shared/models/project-metadata.model' {
     projectType: string;
   };
 }
-declare module 'shared/models/project-lookup.model' {
+declare module 'shared/services/project-lookup.service.model' {
   import { ProjectMetadata } from 'shared/models/project-metadata.model';
   /**
    * Provides metadata for projects known by the platform
@@ -2350,7 +2350,7 @@ declare module 'shared/models/project-lookup.model' {
   export const projectLookupServiceNetworkObjectName = 'ProjectLookupService';
 }
 declare module 'shared/services/project-lookup.service' {
-  import { ProjectLookupServiceType } from 'shared/models/project-lookup.model';
+  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service.model';
   const projectLookupService: ProjectLookupServiceType;
   export default projectLookupService;
 }
@@ -2738,7 +2738,7 @@ declare module 'papi-frontend' {
   import { PapiWebViewService } from 'shared/services/web-view.service';
   import { InternetService } from 'shared/services/internet.service';
   import { DataProviderService } from 'shared/services/data-provider.service';
-  import { ProjectLookupServiceType } from 'shared/models/project-lookup.model';
+  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service.model';
   import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { PapiContext } from 'renderer/context/papi-context/index';
   import { PapiHooks } from 'renderer/hooks/papi-hooks/index';
@@ -3068,7 +3068,7 @@ declare module 'papi-backend' {
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
-  import { ProjectLookupServiceType } from 'shared/models/project-lookup.model';
+  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service.model';
   const papi: {
     /**
      * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
