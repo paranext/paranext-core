@@ -18,8 +18,8 @@ import './download-update-project-tab.component.scss';
 
 export const TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG = 'download-update-project-dialog';
 
-function downloadProject(project: Project) {
-  logger.info(`Downloading Project ${project.name}`);
+function downloadProject(projectId: string) {
+  logger.info(`Downloading Project ${projectId}`);
 }
 
 function updateProject(project: Project) {
@@ -45,7 +45,7 @@ export default function DownloadUpdateProjectTab() {
         <ProjectList
           projects={downloadableProjects}
           subheader="Downloadable Projects"
-          projectClickHandler={downloadProject}
+          handleSelectProject={downloadProject}
         >
           <ListItemIcon>
             <DownloadIcon />

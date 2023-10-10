@@ -19,11 +19,12 @@ export default function OpenMultipleProjectsTab() {
 
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
 
-  const handleProjectToggle = (projectId: Project) => {
-    if (selectedProjects.includes(projectId)) {
-      setSelectedProjects(selectedProjects.filter((id) => id !== projectId));
+  const handleProjectToggle = (projectId: string) => {
+    if (selectedProjects.some((project) => project.id === projectId)) {
+      setSelectedProjects(selectedProjects.filter((project) => project.id !== projectId));
     } else {
-      setSelectedProjects([...selectedProjects, projectId]);
+      const selectedProject = downloadedProjects.find((project) => project.id === projectId);
+      if (selectedProject) setSelectedProjects([...selectedProjects, selectedProject]);
     }
   };
 
@@ -39,7 +40,7 @@ export default function OpenMultipleProjectsTab() {
     <div className="open-multiple-projects-dialog">
       <ProjectList
         projects={downloadedProjects}
-        projectClickHandler={handleProjectToggle}
+        handleSelectProject={handleProjectToggle}
         selectedProjects={selectedProjects}
         isMultiselect
       >

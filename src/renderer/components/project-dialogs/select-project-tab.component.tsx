@@ -3,7 +3,7 @@ import { ListItemIcon } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import './select-project-tab.component.scss';
 import { useMemo } from 'react';
-import { DialogOptions } from '@shared/models/dialog-options.model';
+import { DialogData } from '@shared/models/dialog-options.model';
 import ProjectList, { Project } from '@renderer/components/project-dialogs/project-list.component';
 import { resolveDialogRequest } from '@renderer/services/dialog.service.host';
 
@@ -69,7 +69,7 @@ export default function SelectProjectTab({ prompt, handleSelectProject }: Select
 }
 
 export const loadSelectProjectTab = (savedTabInfo: SavedTabInfo): TabInfo => {
-  const data = savedTabInfo.data as DialogOptions | undefined;
+  const data = savedTabInfo.data as DialogData | undefined;
   return {
     ...savedTabInfo,
     tabIconUrl: data?.iconUrl,
