@@ -30,6 +30,12 @@ export type SavedTabInfo = {
  */
 export type TabInfo = SavedTabInfo & {
   /**
+   * Url of image to show on the title bar of the tab
+   *
+   * Defaults to Platform.Bible logo
+   */
+  tabIconUrl?: string;
+  /**
    * Text to show on the title bar of the tab
    */
   tabTitle: string;
@@ -59,8 +65,12 @@ export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
  * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
  * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
  * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
+ *
+ * @param tabInfo the Paranext tab to save
+ *
+ * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
  */
-export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
+export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
 
 /** The type of code that defines a webview's content */
 export enum WebViewContentType {
@@ -87,6 +97,12 @@ type WebViewDefinitionBase = {
   id: WebViewId;
   /** The code for the WebView that papi puts into an iframe */
   content: string;
+  /**
+   * Url of image to show on the title bar of the tab
+   *
+   * Defaults to Platform.Bible logo
+   */
+  iconUrl?: string;
   /** Name of the tab for the WebView */
   title?: string;
   /** General object to store unique state for this webview */
@@ -130,10 +146,21 @@ interface TabLayout {
   type: 'tab';
 }
 
+/**
+ * Indicates where to display a floating window
+ *
+ * `cascade` - place the window a bit below and to the right of the previously created floating
+ *    window
+ * `center` - center the window in the dock layout
+ */
+type FloatPosition = 'cascade' | 'center';
+
 /** Information about a floating window */
 export interface FloatLayout {
   type: 'float';
   floatSize?: { width: number; height: number };
+  /** Where to display the floating window. Defaults to `cascade` */
+  position?: FloatPosition;
 }
 
 export type PanelDirection =

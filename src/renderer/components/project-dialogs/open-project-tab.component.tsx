@@ -1,12 +1,11 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { ListItemIcon } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import logger from '@shared/services/logger.service';
 import './open-project-tab.component.scss';
 import { useMemo } from 'react';
-import ProjectList, { Project } from './project-list.component';
-
-export const TAB_TYPE_OPEN_PROJECT_DIALOG = 'open-project-dialog';
+import { DialogOptions } from '@shared/models/dialog-options.model';
+import ProjectList, { Project } from '@renderer/components/project-dialogs/project-list.component';
+import { resolveDialogRequest } from '@renderer/services/dialog.service.host';
 
 export function fetchProjects(): Project[] {
   return [
@@ -48,16 +47,19 @@ export function fetchProjects(): Project[] {
   ];
 }
 
-function openProject(project: Project) {
-  logger.info(`Opening Project ${project.name}`);
-}
+type SelectProjectTabProps = {
+  /** The message to show the user in the dialog. */
+  prompt?: string;
+  handleSelectProject: (projectId: string) => void;
+};
 
-export default function OpenProjectTab() {
+export default function SelectProjectTab({ prompt, handleSelectProject }: SelectProjectTabProps) {
   const projects = useMemo(() => fetchProjects().filter((project) => project.isDownloaded), []);
 
   return (
-    <div className="open-project-dialog">
-      <ProjectList projects={projects} projectClickHandler={openProject}>
+    <div className="select-project-dialog">
+      <div>{prompt}</div>
+      <ProjectList projects={projects} handleSelectProject={handleSelectProject}>
         <ListItemIcon>
           <FolderOpenIcon />
         </ListItemIcon>
@@ -66,10 +68,25 @@ export default function OpenProjectTab() {
   );
 }
 
-export const loadOpenProjectTab = (savedTabInfo: SavedTabInfo): TabInfo => {
+export const loadSelectProjectTab = (savedTabInfo: SavedTabInfo): TabInfo => {
+  const data = savedTabInfo.data as DialogOptions | undefined;
   return {
     ...savedTabInfo,
-    tabTitle: 'Open Project',
-    content: <OpenProjectTab />,
+    tabIconUrl: data?.iconUrl,
+    tabTitle: data?.title || 'Select Project',
+    content: (
+      <SelectProjectTab
+        prompt={data?.prompt}
+        handleSelectProject={(projectId) =>
+          resolveDialogRequest<string>(savedTabInfo.id, projectId)
+        }
+      />
+    ),
   };
 };
+
+export function saveSelectProjectTab(): SavedTabInfo | undefined {
+  // TODO: preserve requests between refreshes - save the dialog info in such a way that it works
+  // when loading again after refresh
+  return undefined;
+}

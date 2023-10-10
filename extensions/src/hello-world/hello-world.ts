@@ -52,6 +52,7 @@ const reactWebViewProvider: IWebViewProviderWithType = {
       );
     return {
       ...savedWebView,
+      iconUrl: 'papi-extension://hello-world/assets/offline.svg',
       title: 'Hello World React',
       content: helloWorldReactWebView,
       styles: helloWorldReactWebViewStyles,
@@ -163,6 +164,17 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await helloWorldPromise,
     await helloExceptionPromise,
   );
+
+  try {
+    console.log(
+      `MAIN dialogs.getProject: ${await papi.dialogs.getProject({
+        prompt: 'Please select a project for Hello World main:',
+        title: 'Main Get Project',
+      })}`,
+    );
+  } catch (e) {
+    console.error(`Hello World error: ${e}`);
+  }
 
   logger.info('Hello World is finished activating!');
 }

@@ -9,10 +9,6 @@ export type Project = {
   isDownloaded: boolean;
 };
 
-export interface ProjectClickHandler {
-  (project: Project): void;
-}
-
 export type ProjectListProps = PropsWithChildren<{
   /**
    * Projects to display in the list
@@ -22,7 +18,7 @@ export type ProjectListProps = PropsWithChildren<{
   /**
    * Handler to perform an action when the project is clicked
    */
-  projectClickHandler: ProjectClickHandler;
+  handleSelectProject: (projectId: string) => void;
 
   /**
    * Optional flag to set the list to multiselect
@@ -47,7 +43,7 @@ export type ProjectListProps = PropsWithChildren<{
  */
 export default function ProjectList({
   projects,
-  projectClickHandler,
+  handleSelectProject,
   isMultiselect,
   selectedProjects,
   subheader,
@@ -71,7 +67,7 @@ export default function ProjectList({
           <ListItem key={project.id}>
             <ListItemButton
               selected={isSelected(project)}
-              onClick={() => projectClickHandler(project)}
+              onClick={() => handleSelectProject(project.id)}
             >
               {children}
               <ListItemText primary={project.name} />

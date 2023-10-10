@@ -14,7 +14,7 @@ import {
 import type { QuickVerseDataTypes } from 'quick-verse';
 import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
-import { Key, useCallback, useContext, useMemo, useState } from 'react';
+import { Key, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
 import Clock from './components/clock.component';
 
@@ -85,6 +85,38 @@ globalThis.webViewComponent = function HelloWorld() {
     'retrieving',
   );
 
+  const mounted = useRef<boolean>(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const [project, setProject] = useState<string | undefined>();
+  const [isSettingProject, setIsSettingProject] = useState<boolean>(false);
+
+  const selectProject = useCallback(async () => {
+    if (!isSettingProject) {
+      setIsSettingProject(true);
+      try {
+        const projectId = await papi.dialogs.getProject({
+          prompt: 'Please select a project for Hello World WebView:',
+          iconUrl: 'papi-extension://hello-world/assets/offline.svg',
+          title: 'Select Hello World Project',
+        });
+        logger.log(`RENDERER dialogs.getProject: ${projectId}`);
+        if (mounted.current) {
+          setProject(projectId);
+          setIsSettingProject(false);
+        }
+      } catch (e) {
+        logger.error(`Failed to select project! ${e}`);
+        if (mounted.current) setIsSettingProject(false);
+      }
+    } else logger.log(`Already choosing a project!`);
+  }, [isSettingProject]);
+
   const [latestVerseText] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
     'quickVerse.quickVerse',
     'latest',
@@ -152,6 +184,10 @@ globalThis.webViewComponent = function HelloWorld() {
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>
+      <div>Selected Project: {project}</div>
+      <div>
+        <Button onClick={selectProject}>Select Project</Button>
+      </div>
       <h3>John 1:1</h3>
       <div>{john11}</div>
       <h3>Psalm 1</h3>
