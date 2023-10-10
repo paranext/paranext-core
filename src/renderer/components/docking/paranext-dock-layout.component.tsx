@@ -42,8 +42,8 @@ import {
 } from '@shared/services/web-view.service';
 import { getErrorMessage } from '@shared/utils/util';
 import {
-  loadOpenProjectTab,
-  TAB_TYPE_OPEN_PROJECT_DIALOG,
+  loadSelectProjectTab,
+  saveSelectProjectTab,
 } from '@renderer/components/project-dialogs/open-project-tab.component';
 import {
   loadDownloadUpdateProjectTab,
@@ -61,6 +61,7 @@ import {
   TAB_TYPE_RUN_BASIC_CHECKS,
   loadRunBasicChecksTab,
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
+import { TAB_TYPE_SELECT_PROJECT_DIALOG } from '@renderer/services/dialog.service.host';
 
 type TabType = string;
 
@@ -93,7 +94,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
   [TAB_TYPE_TEST, loadTestTab],
   [TAB_TYPE_WEBVIEW, loadWebViewTab],
-  [TAB_TYPE_OPEN_PROJECT_DIALOG, loadOpenProjectTab],
+  [TAB_TYPE_SELECT_PROJECT_DIALOG, loadSelectProjectTab],
   [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
   [TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG, loadOpenMultipleProjectsTab],
   [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
@@ -101,7 +102,10 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
 ]);
 
 /** tab saver functions for each Paranext tab type that wants to override the default */
-const tabSaverMap = new Map<TabType, TabSaver>([[TAB_TYPE_WEBVIEW, saveWebViewTab]]);
+const tabSaverMap = new Map<TabType, TabSaver>([
+  [TAB_TYPE_WEBVIEW, saveWebViewTab],
+  [TAB_TYPE_SELECT_PROJECT_DIALOG, saveSelectProjectTab],
+]);
 
 let previousTabId: string | undefined;
 let previousFloatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
@@ -139,7 +143,7 @@ export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
   // Translate the data from the loaded tab to be in the form needed by rc-dock
   return {
     ...tabInfo,
-    title: <ParanextTabTitle text={tabInfo.tabTitle} />,
+    title: <ParanextTabTitle iconUrl={tabInfo.tabIconUrl} text={tabInfo.tabTitle} />,
     content: <ParanextPanel>{tabInfo.content}</ParanextPanel>,
     group: TAB_GROUP,
     closable: true,

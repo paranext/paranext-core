@@ -95,9 +95,10 @@ globalThis.webViewComponent = function HelloWorld() {
     if (!isSettingProject) {
       setIsSettingProject(true);
       try {
-        const projectId = await papi.dialogs.getProject('gimme yo project', {
-          icon: 'thing',
-          title: 'tab',
+        const projectId = await papi.dialogs.getProject({
+          prompt: 'Please select a project for Hello World WebView:',
+          iconUrl: 'papi-extension://hello-world/assets/offline.svg',
+          title: 'Select Hello World Project',
         });
         logger.log(`RENDERER dialogs.getProject: ${projectId}`);
         if (mounted.current) {

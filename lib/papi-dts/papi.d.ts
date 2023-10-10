@@ -1671,6 +1671,12 @@ declare module 'shared/data/web-view.model' {
    */
   export type TabInfo = SavedTabInfo & {
     /**
+     * Url of image to show on the title bar of the tab
+     *
+     * Defaults to Platform.Bible logo
+     */
+    tabIconUrl?: string;
+    /**
      * Text to show on the title bar of the tab
      */
     tabTitle: string;
@@ -1726,6 +1732,12 @@ declare module 'shared/data/web-view.model' {
     id: WebViewId;
     /** The code for the WebView that papi puts into an iframe */
     content: string;
+    /**
+     * Url of image to show on the title bar of the tab
+     *
+     * Defaults to Platform.Bible logo
+     */
+    iconUrl?: string;
     /** Name of the tab for the WebView */
     title?: string;
   };
@@ -2768,8 +2780,10 @@ declare module 'shared/models/dialog-options.model' {
   export type DialogOptions = {
     /** Dialog title to display in the header. Default depends on the dialog */
     title?: string;
-    /** Dialog icon to display in the header. Default is Platform.Bible icon */
-    icon?: string;
+    /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
+    iconUrl?: string;
+    /** The message to show the user in the dialog. Default depends on the dialog */
+    prompt?: string;
   };
 }
 declare module 'shared/services/dialog.service.model' {
@@ -2781,13 +2795,12 @@ declare module 'shared/services/dialog.service.model' {
     /**
      * Shows a select project dialog to the user and prompts the user to select a dialog
      *
-     * @param prompt the message to show the user in the dialog
      * @param options various options for configuring the dialog that shows
      *
      * @returns If the user selects a project, returns that project's project id. If the user cancels,
      *   returns `undefined`
      */
-    getProject(prompt: string, options?: DialogOptions): Promise<string | undefined>;
+    getProject(options?: DialogOptions): Promise<string | undefined>;
   }
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';

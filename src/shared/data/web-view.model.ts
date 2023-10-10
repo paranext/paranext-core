@@ -30,6 +30,12 @@ export type SavedTabInfo = {
  */
 export type TabInfo = SavedTabInfo & {
   /**
+   * Url of image to show on the title bar of the tab
+   *
+   * Defaults to Platform.Bible logo
+   */
+  tabIconUrl?: string;
+  /**
    * Text to show on the title bar of the tab
    */
   tabTitle: string;
@@ -91,6 +97,12 @@ type WebViewDefinitionBase = {
   id: WebViewId;
   /** The code for the WebView that papi puts into an iframe */
   content: string;
+  /**
+   * Url of image to show on the title bar of the tab
+   *
+   * Defaults to Platform.Bible logo
+   */
+  iconUrl?: string;
   /** Name of the tab for the WebView */
   title?: string;
 };
