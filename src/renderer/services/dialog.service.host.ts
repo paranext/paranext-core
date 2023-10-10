@@ -1,4 +1,4 @@
-import { DialogOptions } from '@shared/models/dialog-options.model';
+import { DialogData, DialogOptions } from '@shared/models/dialog-options.model';
 import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service.model';
 import * as networkService from '@shared/services/network.service';
 import { aggregateUnsubscriberAsyncs, serializeRequestType } from '@shared/utils/papi-util';
@@ -35,34 +35,92 @@ async function initialize(): Promise<void> {
 }
 
 /**
+ * List of dialogs that were resolved or rejected from outside the dock layout and have not yet been
+ * closed and rejected from inside the dock layout. The second reject should do nothing as it is an
+ * expected extra call.
+ */
+const dialogIdsExpectingSecondClose = new Set<string>();
+
+/**
  * Resolve a dialog request
  *
  * Internal function; not exposed on papi
  */
 export function resolveDialogRequest<TReturn>(id: string, data: TReturn) {
   const dialogRequest = dialogRequests.get(id);
-  if (!dialogRequest) throw new Error(`DialogService error: request ${id} not found to resolve`);
+  if (dialogRequest) {
+    dialogRequests.delete(id);
+    dialogRequest.resolve(data);
+  }
 
-  dialogRequests.delete(id);
+  // Clean up the dialog
+  // Mark that we will receive a reject when the dialog closes
+  dialogIdsExpectingSecondClose.add(id);
 
-  dialogRequest.resolve(data);
+  // Close the dialog
+  // We're not awaiting closing it. Doesn't really matter right now if we do or don't successfully close it
+  webViewService.removeTab(id);
+
+  // If we didn't find the request, throw
+  if (!dialogRequest)
+    throw new Error(
+      `DialogService error: request ${id} not found to resolve. data: ${JSON.stringify(data)}`,
+    );
 }
 
 /**
- * Reject a dialog request
+ * Reject a dialog request. Synchronously rejects, then asynchronously closes the dialog
+ *
+ * @param id the id of the dialog whose request to reject
+ * @param message the error message for the rejected request
+ * @param isFromDockLayout whether this function is being called from the dock layout. If someone
+ * calls this function from outside the dock layout, the dock layout will then call this again. If
+ * this is called from the dock layout initially, it will not be called again
  *
  * Internal function; not exposed on papi
  */
-export function rejectDialogRequest(id: string, message: string) {
+export function rejectDialogRequest(id: string, message: string, isFromDockLayout = false) {
+  if (isFromDockLayout && dialogIdsExpectingSecondClose.has(id)) {
+    // If this reject was called from the dock layout and is the second reject for this dialog,
+    // throw it out
+    dialogIdsExpectingSecondClose.delete(id);
+    return;
+  }
+
   const dialogRequest = dialogRequests.get(id);
-  if (!dialogRequest) throw new Error(`DialogService error: request ${id} not found to reject`);
+  if (dialogRequest) {
+    // We found the request. Reject it
+    dialogRequests.delete(id);
+    dialogRequest.reject(message);
+  }
 
-  dialogRequests.delete(id);
+  // Clean up the dialog
+  // Mark that we will receive another reject when the dialog closes
+  if (!isFromDockLayout) dialogIdsExpectingSecondClose.add(id);
 
-  dialogRequest.reject(message);
+  // Close the dialog
+  // We're not awaiting closing it. Doesn't really matter right now if we do or don't successfully close it
+  webViewService.removeTab(id);
+
+  // If we didn't find the request, throw
+  if (!dialogRequest)
+    throw new Error(`DialogService error: request ${id} not found to reject. Message: ${message}`);
 }
 
-async function getProject(options?: DialogOptions): Promise<string | undefined> {
+/**
+ * Shows a dialog to the user and prompts the user to respond
+ *
+ * @param options various options for configuring the dialog that shows
+ *
+ * @returns returns the user's response
+ * @throws if the user cancels
+ *
+ * @type `TReturn` - the type of data the dialog responds with
+ *
+ * Currently internal. Should this be exposed on the papi? Maybe one day if we have
+ * extension-provided dialogs
+ */
+async function getFromUser<TReturn>(dialogType: string, options?: DialogOptions): Promise<TReturn> {
   await initialize();
 
   // Set up a DialogRequest
@@ -70,24 +128,24 @@ async function getProject(options?: DialogOptions): Promise<string | undefined> 
   // Dumbest way to make sure the guid is unique
   while (dialogRequests.has(dialogId)) dialogId = newGuid();
 
-  let dialogRequest: DialogRequest<string> | undefined;
+  let dialogRequest: DialogRequest<TReturn>;
+
+  const dialogPromise = new Promise<TReturn>((resolve, reject) => {
+    dialogRequest = {
+      id: dialogId,
+      resolve,
+      reject,
+    };
+    dialogRequests.set(dialogId, dialogRequest);
+  });
 
   try {
-    const dialogPromise = new Promise<string>((resolve, reject) => {
-      dialogRequest = {
-        id: dialogId,
-        resolve,
-        reject,
-      };
-      dialogRequests.set(dialogId, dialogRequest);
-    });
-
     // Open Select Project dialog
     await webViewService.addTab(
       {
         id: dialogId,
-        tabType: TAB_TYPE_SELECT_PROJECT_DIALOG,
-        data: { ...options },
+        tabType: dialogType,
+        data: { ...options, isDialog: true } as DialogData,
       },
       {
         type: 'float',
@@ -98,17 +156,20 @@ async function getProject(options?: DialogOptions): Promise<string | undefined> 
     // TODO: preserve requests between refreshes - add keepalive messages to indicate to the
     // requestor if the dialog request is still alive
 
-    // Return the DialogRequest's promise
+    // Return the DialogRequest's promise so the request can be resolved or rejected appropriately
     return dialogPromise;
   } catch (e) {
     // Something went wrong while setting up the dialog. Delete the request and throw to let the
     // requestor know
-    dialogRequests.delete(dialogId);
     const message = `DialogService error: getProject did not initialize successfully! ${e}`;
     logger.error(message);
-    if (dialogRequest?.reject) dialogRequest.reject(message);
+    rejectDialogRequest(dialogId, message);
     throw new Error(message);
   }
+}
+
+async function getProject(options?: DialogOptions): Promise<string> {
+  return getFromUser<string>(TAB_TYPE_SELECT_PROJECT_DIALOG, options);
 }
 
 const dialogService: DialogService = {

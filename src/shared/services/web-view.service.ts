@@ -66,6 +66,11 @@ type PapiDockLayout = {
    */
   addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
   /**
+   * Remove a tab in the layout
+   * @param tabId id of the tab to remove
+   */
+  removeTabFromDock: (tabId: string) => boolean;
+  /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
    *
    * TODO: This should be removed and the `testLayout` imported directly in this file once this
@@ -346,6 +351,20 @@ function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOption
 
   return optionsDefaulted;
 }
+
+/**
+ * Remove a tab in the layout
+ * @param tabId id of the tab to remove
+ *
+ * @returns true if successfully found the tab to remove
+ *
+ * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
+ *
+ * Not exposed on the papi
+ */
+export const removeTab = async (tabId: string): Promise<boolean> => {
+  return (await papiDockLayoutVar.promise).removeTabFromDock(tabId);
+};
 
 /**
  * Add or update a tab in the layout

@@ -1,7 +1,8 @@
 import { List, ListItem, ListItemButton, ListItemText, ListSubheader } from '@mui/material';
+import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { PropsWithChildren, useCallback } from 'react';
 
-export type Project = {
+export type Project = ProjectMetadata & {
   id: string;
   name: string;
   description: string;
@@ -9,11 +10,61 @@ export type Project = {
   isDownloaded: boolean;
 };
 
+export function fetchProjects(): Project[] {
+  return [
+    {
+      id: 'project-1',
+      name: 'Project 1',
+      description: 'Description of project 1',
+      isDownloadable: true,
+      isDownloaded: false,
+      storageType: 'test',
+      projectType: 'test',
+    },
+    {
+      id: 'project-2',
+      name: 'Project 2',
+      description: 'Description of project 2',
+      isDownloadable: false,
+      isDownloaded: true,
+      storageType: 'test',
+      projectType: 'test',
+    },
+    {
+      id: 'project-3',
+      name: 'Project 3',
+      description: 'Description of project 3',
+      isDownloadable: true,
+      isDownloaded: false,
+      storageType: 'test',
+      projectType: 'test',
+    },
+    {
+      id: 'project-4',
+      name: 'Project 4',
+      description: 'Description of project 4',
+      isDownloadable: false,
+      isDownloaded: false,
+      storageType: 'test',
+      projectType: 'test',
+    },
+    {
+      id: 'project-5',
+      name: 'Project 5',
+      description: 'Description of project 5',
+      isDownloadable: false,
+      isDownloaded: true,
+      storageType: 'test',
+      projectType: 'test',
+    },
+  ];
+}
+
 export type ProjectListProps = PropsWithChildren<{
   /**
    * Projects to display in the list
    */
-  projects: Project[];
+  projects: ProjectMetadata[];
 
   /**
    * Handler to perform an action when the project is clicked
@@ -28,7 +79,7 @@ export type ProjectListProps = PropsWithChildren<{
   /**
    * If multiple is selected, then the array of selected projects is passed to control the selected flag on ListItemButton
    */
-  selectedProjects?: Project[] | undefined;
+  selectedProjects?: ProjectMetadata[] | undefined;
 
   /**
    * Optional subheader
@@ -50,7 +101,7 @@ export default function ProjectList({
   children,
 }: ProjectListProps) {
   const isSelected = useCallback(
-    (project: Project) => {
+    (project: ProjectMetadata) => {
       if (isMultiselect && selectedProjects) {
         return selectedProjects.includes(project);
       }

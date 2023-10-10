@@ -61,7 +61,11 @@ import {
   TAB_TYPE_RUN_BASIC_CHECKS,
   loadRunBasicChecksTab,
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
-import { TAB_TYPE_SELECT_PROJECT_DIALOG } from '@renderer/services/dialog.service.host';
+import {
+  TAB_TYPE_SELECT_PROJECT_DIALOG,
+  rejectDialogRequest,
+} from '@renderer/services/dialog.service.host';
+import { DialogData } from '@shared/models/dialog-options.model';
 
 type TabType = string;
 
@@ -173,7 +177,7 @@ function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
  * @param tab to check.
  * @returns `true` if its a tab or `false` otherwise.
  */
-function isTab(tab: PanelData | TabData | BoxData | undefined): boolean {
+function isTab(tab: PanelData | TabData | BoxData | undefined): tab is TabData {
   if (!tab || (tab as TabData).title == null) return false;
   return true;
 }
@@ -353,6 +357,12 @@ export default function ParanextDockLayout() {
         addTabToDock(savedTabInfo, layout, dockLayoutRef.current),
       addWebViewToDock: (webView: WebViewProps, layout: Layout) =>
         addWebViewToDock(webView, layout, dockLayoutRef.current),
+      removeTabFromDock: (tabId: string) => {
+        const tabToRemove = dockLayoutRef.current.find(tabId);
+        if (isTab(tabToRemove)) dockLayoutRef.current.dockMove(tabToRemove, null, 'remove');
+        // Return whether or not we found the tab to remove
+        return !!tabToRemove;
+      },
       testLayout,
     });
     return () => {
@@ -373,6 +383,14 @@ export default function ParanextDockLayout() {
       // https://github.com/ticlo/rc-dock/blob/8b6481dca4b4dd07f89107d6f48b1831bbdf0470/src/Serializer.ts#L68
       saveTab={saveTab as (dockTabInfo: RCDockTabInfo) => SavedTabInfo}
       onLayoutChange={(...args) => {
+        const [, currentTabId, direction] = args;
+        // If a dialog was closed, tell the dialog service
+        if (currentTabId && direction === 'remove') {
+          const removedTab = dockLayoutRef.current.find(currentTabId) as RCDockTabInfo;
+          if ((removedTab.data as DialogData).isDialog)
+            rejectDialogRequest(currentTabId, 'Dialog closed', true);
+        }
+
         if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);
       }}
     />

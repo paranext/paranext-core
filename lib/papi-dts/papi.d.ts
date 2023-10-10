@@ -2034,6 +2034,11 @@ declare module 'shared/services/web-view.service' {
      */
     addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
     /**
+     * Remove a tab in the layout
+     * @param tabId id of the tab to remove
+     */
+    removeTabFromDock: (tabId: string) => boolean;
+    /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
      * TODO: This should be removed and the `testLayout` imported directly in this file once this
@@ -2095,6 +2100,17 @@ declare module 'shared/services/web-view.service' {
    * Not exposed on the papi
    */
   export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber;
+  /**
+   * Remove a tab in the layout
+   * @param tabId id of the tab to remove
+   *
+   * @returns true if successfully found the tab to remove
+   *
+   * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
+   *
+   * Not exposed on the papi
+   */
+  export const removeTab: (tabId: string) => Promise<boolean>;
   /**
    * Add or update a tab in the layout
    * @param savedTabInfo info for tab to add or update
@@ -2879,6 +2895,10 @@ declare module 'shared/models/dialog-options.model' {
     /** The message to show the user in the dialog. Default depends on the dialog */
     prompt?: string;
   };
+  /** data in each tab that is a dialog. Added to DialogOptions in `dialog.service.host.ts` */
+  export type DialogData = DialogOptions & {
+    isDialog: true;
+  };
 }
 declare module 'shared/services/dialog.service.model' {
   import { DialogOptions } from 'shared/models/dialog-options.model';
@@ -2891,10 +2911,10 @@ declare module 'shared/services/dialog.service.model' {
      *
      * @param options various options for configuring the dialog that shows
      *
-     * @returns If the user selects a project, returns that project's project id. If the user cancels,
-     *   returns `undefined`
+     * @returns returns the user's selected project id
+     * @throws if the user cancels
      */
-    getProject(options?: DialogOptions): Promise<string | undefined>;
+    getProject(options?: DialogOptions): Promise<string>;
   }
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';

@@ -5,8 +5,10 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import DoneIcon from '@mui/icons-material/Done';
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { Button } from 'papi-components';
-import { fetchProjects } from './select-project-tab.component';
-import ProjectList, { Project } from './project-list.component';
+import ProjectList, {
+  fetchProjects,
+  Project,
+} from '@renderer/components/project-dialogs/project-list.component';
 import './open-multiple-projects-tab.component.scss';
 
 export const TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG = 'open-multiple-projects-dialog';
@@ -19,11 +21,12 @@ export default function OpenMultipleProjectsTab() {
 
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
 
-  const handleProjectToggle = (projectId: Project) => {
-    if (selectedProjects.includes(projectId)) {
-      setSelectedProjects(selectedProjects.filter((id) => id !== projectId));
+  const handleProjectToggle = (projectId: string) => {
+    if (selectedProjects.some((project) => project.id === projectId)) {
+      setSelectedProjects(selectedProjects.filter((project) => project.id !== projectId));
     } else {
-      setSelectedProjects([...selectedProjects, projectId]);
+      const selectedProject = downloadedProjects.find((project) => project.id === projectId);
+      if (selectedProject) setSelectedProjects([...selectedProjects, selectedProject]);
     }
   };
 
@@ -39,7 +42,7 @@ export default function OpenMultipleProjectsTab() {
     <div className="open-multiple-projects-dialog">
       <ProjectList
         projects={downloadedProjects}
-        projectClickHandler={handleProjectToggle}
+        handleSelectProject={handleProjectToggle}
         selectedProjects={selectedProjects}
         isMultiselect
       >
