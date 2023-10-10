@@ -118,19 +118,16 @@ const projectLookupService: ProjectLookupServiceType = {
   getMetadataForProject,
 };
 
-let networkObject: ProjectLookupServiceType;
-
 /**
  * Register the network object that backs the PAPI project lookup service
  */
+// This doesn't really represent this service module, so we're not making it default. To use this
+// service, you should use `project-lookup.service.ts`
+// eslint-disable-next-line import/prefer-default-export
 export async function startProjectLookupService(): Promise<void> {
   await initialize();
-  networkObject = await networkObjectService.set<ProjectLookupServiceType>(
+  await networkObjectService.set<ProjectLookupServiceType>(
     projectLookupServiceNetworkObjectName,
     projectLookupService,
   );
-}
-
-export function getNetworkObject(): ProjectLookupServiceType {
-  return networkObject;
 }

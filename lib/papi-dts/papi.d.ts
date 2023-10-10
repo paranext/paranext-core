@@ -1698,8 +1698,12 @@ declare module 'shared/data/web-view.model' {
    * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
    * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
    * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
+   *
+   * @param tabInfo the Paranext tab to save
+   *
+   * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
    */
-  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
+  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
   /** The type of code that defines a webview's content */
   export enum WebViewContentType {
     /**
@@ -1755,6 +1759,14 @@ declare module 'shared/data/web-view.model' {
   interface TabLayout {
     type: 'tab';
   }
+  /**
+   * Indicates where to display a floating window
+   *
+   * `cascade` - place the window a bit below and to the right of the previously created floating
+   *    window
+   * `center` - center the window in the dock layout
+   */
+  type FloatPosition = 'cascade' | 'center';
   /** Information about a floating window */
   export interface FloatLayout {
     type: 'float';
@@ -1762,6 +1774,8 @@ declare module 'shared/data/web-view.model' {
       width: number;
       height: number;
     };
+    /** Where to display the floating window. Defaults to `cascade` */
+    position?: FloatPosition;
   }
   export type PanelDirection =
     | 'left'
@@ -1937,7 +1951,17 @@ declare module 'shared/services/web-view.service' {
      * {@link onLayoutChange} function
      */
     onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
-    /** Function to call to add or update a webview in the layout */
+    /**
+     * Function to call to add or update a tab in the layout
+     * @param savedTabInfo info for tab to add or update
+     * @param layout information about where to put a new webview
+     */
+    addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => void;
+    /**
+     * Function to call to add or update a webview in the layout
+     * @param webView web view to add or update
+     * @param layout information about where to put a new webview
+     */
     addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
@@ -1995,8 +2019,22 @@ declare module 'shared/services/web-view.service' {
    * operations
    * @param dockLayout dock layout element to register along with other important properties
    * @returns function used to unregister this dock layout
+   *
+   * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
+   *
+   * Not exposed on the papi
    */
   export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber;
+  /**
+   * Add or update a tab in the layout
+   * @param savedTabInfo info for tab to add or update
+   * @param layout information about where to put a new tab
+   *
+   * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
+   *
+   * Not exposed on the papi
+   */
+  export const addTab: (savedTabInfo: SavedTabInfo, layout: Layout) => Promise<void>;
   /**
    * Creates a new web view or gets an existing one depending on if you request an existing one and
    * if the web view provider decides to give that existing one to you (it is up to the provider).
@@ -2725,6 +2763,40 @@ declare module 'renderer/hooks/papi-hooks/index' {
   const papiHooks: PapiHooks;
   export default papiHooks;
 }
+declare module 'shared/models/dialog-options.model' {
+  /** General options to adjust dialogs (created from `papi.dialogs`) */
+  export type DialogOptions = {
+    /** Dialog title to display in the header. Default depends on the dialog */
+    title?: string;
+    /** Dialog icon to display in the header. Default is Platform.Bible icon */
+    icon?: string;
+  };
+}
+declare module 'shared/services/dialog.service.model' {
+  import { DialogOptions } from 'shared/models/dialog-options.model';
+  /**
+   * Prompt the user for responses with dialogs
+   */
+  export interface DialogService {
+    /**
+     * Shows a select project dialog to the user and prompts the user to select a dialog
+     *
+     * @param prompt the message to show the user in the dialog
+     * @param options various options for configuring the dialog that shows
+     *
+     * @returns If the user selects a project, returns that project's project id. If the user cancels,
+     *   returns `undefined`
+     */
+    getProject(prompt: string, options?: DialogOptions): Promise<string | undefined>;
+  }
+  /** Prefix on requests that indicates that the request is related to dialog operations */
+  export const CATEGORY_DIALOG = 'dialog';
+}
+declare module 'shared/services/dialog.service' {
+  import { DialogService } from 'shared/services/dialog.service.model';
+  const dialogService: DialogService;
+  export default dialogService;
+}
 declare module 'papi-frontend' {
   /**
    * Unified module for accessing API features in the renderer.
@@ -2743,6 +2815,7 @@ declare module 'papi-frontend' {
   import { PapiContext } from 'renderer/context/papi-context/index';
   import { PapiHooks } from 'renderer/hooks/papi-hooks/index';
   import { SettingsService } from 'shared/services/settings.service';
+  import { DialogService } from 'shared/services/dialog.service.model';
   const papi: {
     /**
      * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
@@ -2769,6 +2842,10 @@ declare module 'papi-frontend' {
      * Service exposing various functions related to using webViews
      */
     webViews: PapiWebViewService;
+    /**
+     * Prompt the user for responses with dialogs
+     */
+    dialogs: DialogService;
     /**
      * Service that provides a way to send and receive network events
      */
@@ -3069,6 +3146,7 @@ declare module 'papi-backend' {
   import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
   import { ProjectLookupServiceType } from 'shared/services/project-lookup.service.model';
+  import { DialogService } from 'shared/services/dialog.service.model';
   const papi: {
     /**
      * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
@@ -3099,6 +3177,10 @@ declare module 'papi-backend' {
      * Interface for registering webView providers
      */
     webViewProviders: PapiWebViewProviderService;
+    /**
+     * Prompt the user for responses with dialogs
+     */
+    dialogs: DialogService;
     /**
      * Service that provides a way to send and receive network events
      */

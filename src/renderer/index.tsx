@@ -5,6 +5,7 @@ import * as commandService from '@shared/services/command.service';
 import * as webViewService from '@shared/services/web-view.service';
 import logger from '@shared/services/logger.service';
 import webViewProviderService from '@shared/services/web-view-provider.service';
+import { startDialogService } from '@renderer/services/dialog.service.host';
 import App from './app.component';
 
 logger.info('Starting renderer');
@@ -14,6 +15,7 @@ networkService.initialize();
 commandService.initialize();
 webViewProviderService.initialize();
 webViewService.initialize();
+startDialogService();
 
 const container = document.getElementById('root');
 const root = createRoot(container as HTMLElement);

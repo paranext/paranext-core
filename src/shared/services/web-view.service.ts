@@ -53,7 +53,17 @@ type PapiDockLayout = {
    * {@link onLayoutChange} function
    */
   onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
-  /** Function to call to add or update a webview in the layout */
+  /**
+   * Function to call to add or update a tab in the layout
+   * @param savedTabInfo info for tab to add or update
+   * @param layout information about where to put a new webview
+   */
+  addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => void;
+  /**
+   * Function to call to add or update a webview in the layout
+   * @param webView web view to add or update
+   * @param layout information about where to put a new webview
+   */
   addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
   /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
@@ -271,6 +281,8 @@ async function saveLayout(layout: LayoutBase): Promise<void> {
  * Loads layout information into the dock layout.
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
  * the persisted layout information and loads it into the dock layout.
+ *
+ * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
  */
 async function loadLayout(layout?: LayoutBase): Promise<void> {
   const dockLayoutVar = await papiDockLayoutVar.promise;
@@ -289,6 +301,10 @@ async function loadLayout(layout?: LayoutBase): Promise<void> {
  * operations
  * @param dockLayout dock layout element to register along with other important properties
  * @returns function used to unregister this dock layout
+ *
+ * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
+ *
+ * Not exposed on the papi
  */
 export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // Save the current async var so we know if it changed before we unsubscribed
@@ -330,6 +346,21 @@ function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOption
 
   return optionsDefaulted;
 }
+
+/**
+ * Add or update a tab in the layout
+ * @param savedTabInfo info for tab to add or update
+ * @param layout information about where to put a new tab
+ *
+ * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
+ *
+ * Not exposed on the papi
+ */
+export const addTab = async (savedTabInfo: SavedTabInfo, layout: Layout): Promise<void> => {
+  const updatedLayout = layoutDefaults(layout);
+
+  (await papiDockLayoutVar.promise).addTabToDock(savedTabInfo, updatedLayout);
+};
 
 /**
  * Creates a new web view or gets an existing one depending on if you request an existing one and

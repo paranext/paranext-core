@@ -17,7 +17,12 @@ jest.mock(
 import DockLayout, { FloatPosition } from 'rc-dock';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { FloatLayout, Layout, SavedTabInfo, WebViewProps } from '@shared/data/web-view.model';
-import { addWebViewToDock, getFloatPosition, loadTab } from './paranext-dock-layout.component';
+import {
+  addTabToDock,
+  addWebViewToDock,
+  getFloatPosition,
+  loadTab,
+} from './paranext-dock-layout.component';
 
 describe('Dock Layout Component', () => {
   const mockDockLayout = mock(DockLayout);
@@ -81,6 +86,18 @@ describe('Dock Layout Component', () => {
 
       expect(() => loadTab(savedTabInfoNoId)).toThrow();
     });
+  });
+
+  describe('addTabToDock()', () => {
+    it('should throw when tab is not an object', () => {
+      const dockLayout = instance(mockDockLayout);
+      const layout: Layout = { type: 'tab' };
+
+      expect(() =>
+        addTabToDock('this is wrong' as unknown as SavedTabInfo, layout, dockLayout),
+      ).toThrow();
+    });
+    // TODO: verify it adds an error tab if no/bad tab type provided
   });
 
   describe('addWebViewToDock()', () => {

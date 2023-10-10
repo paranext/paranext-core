@@ -59,8 +59,12 @@ export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
  * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
  * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
  * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
+ *
+ * @param tabInfo the Paranext tab to save
+ *
+ * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
  */
-export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo;
+export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
 
 /** The type of code that defines a webview's content */
 export enum WebViewContentType {
@@ -128,10 +132,21 @@ interface TabLayout {
   type: 'tab';
 }
 
+/**
+ * Indicates where to display a floating window
+ *
+ * `cascade` - place the window a bit below and to the right of the previously created floating
+ *    window
+ * `center` - center the window in the dock layout
+ */
+type FloatPosition = 'cascade' | 'center';
+
 /** Information about a floating window */
 export interface FloatLayout {
   type: 'float';
   floatSize?: { width: number; height: number };
+  /** Where to display the floating window. Defaults to `cascade` */
+  position?: FloatPosition;
 }
 
 export type PanelDirection =

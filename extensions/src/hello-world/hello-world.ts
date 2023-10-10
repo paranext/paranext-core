@@ -164,5 +164,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await helloExceptionPromise,
   );
 
+  console.log(
+    `MAIN dialogs.getProject: ${await papi.dialogs.getProject('i wantcho project', {
+      icon: 'thing',
+      title: 'tab',
+    })}`,
+  );
+
   logger.info('Hello World is finished activating!');
 }

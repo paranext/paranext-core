@@ -104,7 +104,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
 const tabSaverMap = new Map<TabType, TabSaver>([[TAB_TYPE_WEBVIEW, saveWebViewTab]]);
 
 let previousTabId: string | undefined;
-let floatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
+let previousFloatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
 
 /**
  * Loads tab data from the specified saved tab information by running the tab loader provided by the
@@ -152,7 +152,7 @@ export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
  * @param dockTabInfo the tab data to save
  * @returns saved tab info ready to be saved into the layout
  */
-function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo {
+function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
   // Remove the rc-dock properties that are not also in SavedTabInfo
   // We don't need to use the other properties, but we need to remove them
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -200,9 +200,20 @@ export function getFloatPosition(
   // Defaults are added in `web-view.service.ts`.
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const { width, height } = layout.floatSize!;
+
   let { left, top } = previousPosition;
-  left = offsetOrOverflowAxis(left, width, layoutSize.width);
-  top = offsetOrOverflowAxis(top, height, layoutSize.height);
+
+  switch (layout.position) {
+    case 'center':
+      left = layoutSize.width / 2 - width / 2;
+      top = layoutSize.height / 2 - height / 2;
+      break;
+    case 'cascade':
+    default:
+      left = offsetOrOverflowAxis(left, width, layoutSize.width);
+      top = offsetOrOverflowAxis(top, height, layoutSize.height);
+      break;
+  }
   return { left, top, width, height };
 }
 
@@ -220,21 +231,20 @@ function findPreviousTab(dockLayout: DockLayout) {
 }
 
 /**
- * Function to call to add or update a webview in the layout
- * @param webView web view to add or update
- * @param layout information about where to put a new webview
+ * Function to call to add or update a tab in the layout
+ * @param savedTabInfo info for tab to add or update
+ * @param layout information about where to put a new tab
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  * layout
  */
-export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayout: DockLayout) {
-  const tabId = webView.id;
-  const tab = loadTab({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView });
-  let targetTab = dockLayout.find(tabId);
+export function addTabToDock(savedTabInfo: SavedTabInfo, layout: Layout, dockLayout: DockLayout) {
+  const tab = loadTab(savedTabInfo);
+  let targetTab = dockLayout.find(tab.id);
 
   // Update existing WebView
   if (targetTab) {
-    dockLayout.updateTab(tabId, tab);
-    if (isTab(targetTab)) previousTabId = tabId;
+    dockLayout.updateTab(tab.id, tab);
+    if (isTab(targetTab)) previousTabId = tab.id;
     return;
   }
 
@@ -258,14 +268,19 @@ export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayo
           dockLayout.find(() => true) ?? null,
           'middle',
         );
-      previousTabId = tabId;
+      previousTabId = tab.id;
       break;
 
-    case 'float':
-      floatPosition = getFloatPosition(layout, floatPosition, dockLayout.getLayoutSize());
+    case 'float': {
+      const floatPosition = getFloatPosition(
+        layout,
+        previousFloatPosition,
+        dockLayout.getLayoutSize(),
+      );
+      if (!layout.position || layout.position === 'cascade') previousFloatPosition = floatPosition;
       dockLayout.dockMove(tab, null, 'float', floatPosition);
       break;
-
+    }
     case 'panel':
       if (layout.targetTabId !== undefined) {
         // Look for a specific tab
@@ -294,6 +309,22 @@ export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayo
   }
 }
 
+/**
+ * Function to call to add or update a webview in the layout
+ * @param webView web view to add or update
+ * @param layout information about where to put a new webview
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ * layout
+ */
+export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayout: DockLayout) {
+  const tabId = webView.id;
+  if (!tabId)
+    throw new Error(
+      `paranext-dock-layout error: WebView of type ${webView.webViewType} has no id!`,
+    );
+  addTabToDock({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView }, layout, dockLayout);
+}
+
 // #endregion
 
 export default function ParanextDockLayout() {
@@ -314,6 +345,8 @@ export default function ParanextDockLayout() {
     const unsub = registerDockLayout({
       dockLayout: dockLayoutRef.current,
       onLayoutChangeRef,
+      addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) =>
+        addTabToDock(savedTabInfo, layout, dockLayoutRef.current),
       addWebViewToDock: (webView: WebViewProps, layout: Layout) =>
         addWebViewToDock(webView, layout, dockLayoutRef.current),
       testLayout,
@@ -331,7 +364,10 @@ export default function ParanextDockLayout() {
       defaultLayout={{ dockbox: { mode: 'horizontal', children: [] } }}
       dropMode="edge"
       loadTab={loadTab}
-      saveTab={saveTab}
+      // Type assert `saveTab` as not returning `undefined` because rc-dock's types are wrong
+      // Here, if `saveTab` returns `undefined` the tab is not saved
+      // https://github.com/ticlo/rc-dock/blob/8b6481dca4b4dd07f89107d6f48b1831bbdf0470/src/Serializer.ts#L68
+      saveTab={saveTab as (dockTabInfo: RCDockTabInfo) => SavedTabInfo}
       onLayoutChange={(...args) => {
         if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);
       }}
