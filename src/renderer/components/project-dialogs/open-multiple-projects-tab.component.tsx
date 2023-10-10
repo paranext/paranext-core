@@ -5,7 +5,7 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import DoneIcon from '@mui/icons-material/Done';
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { Button } from 'papi-components';
-import { fetchProjects } from './open-project-tab.component';
+import { fetchProjects } from './select-project-tab.component';
 import ProjectList, { Project } from './project-list.component';
 import './open-multiple-projects-tab.component.scss';
 

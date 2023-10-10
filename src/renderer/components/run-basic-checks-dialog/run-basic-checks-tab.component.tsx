@@ -4,7 +4,7 @@ import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
 import { useState } from 'react';
 import settingsService from '@shared/services/settings.service';
-import { fetchProjects } from '@renderer/components/project-dialogs/open-project-tab.component';
+import { fetchProjects } from '@renderer/components/project-dialogs/select-project-tab.component';
 import BookSelector from '@renderer/components/run-basic-checks-dialog/book-selector.component';
 import BasicChecks, {
   fetchChecks,

@@ -44,7 +44,7 @@ import { getErrorMessage } from '@shared/utils/util';
 import {
   loadSelectProjectTab,
   saveSelectProjectTab,
-} from '@renderer/components/project-dialogs/open-project-tab.component';
+} from '@renderer/components/project-dialogs/select-project-tab.component';
 import {
   loadDownloadUpdateProjectTab,
   TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,

@@ -12,7 +12,7 @@ import UpdateIcon from '@mui/icons-material/Update';
 import DeleteIcon from '@mui/icons-material/Delete';
 import logger from '@shared/services/logger.service';
 import { useMemo } from 'react';
-import { fetchProjects } from './open-project-tab.component';
+import { fetchProjects } from './select-project-tab.component';
 import ProjectList, { Project } from './project-list.component';
 import './download-update-project-tab.component.scss';
 
