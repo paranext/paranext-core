@@ -1,7 +1,7 @@
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { ListItemIcon } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import './open-project-tab.component.scss';
+import './select-project-tab.component.scss';
 import { useMemo } from 'react';
 import { DialogOptions } from '@shared/models/dialog-options.model';
 import ProjectList, { Project } from '@renderer/components/project-dialogs/project-list.component';
