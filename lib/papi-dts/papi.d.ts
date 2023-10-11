@@ -2525,6 +2525,15 @@ declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
   ) => void;
   export default useEventAsync;
 }
+declare module 'renderer/hooks/create-use-network-object-hook.util' {
+  import { NetworkObject } from 'shared/models/network-object.model';
+  function createUseNetworkObjectHook(
+    getNetworkObject: (id: string) => Promise<NetworkObject<object> | undefined>,
+  ): (
+    networkObjectSource: string | NetworkObject<object> | undefined,
+  ) => NetworkObject<object> | undefined;
+  export default createUseNetworkObjectHook;
+}
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
   import IDataProvider from 'shared/models/data-provider.interface';
   /**
@@ -2538,9 +2547,9 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @type `T` - the type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
    *  specifying your own types, or provide a custom data provider type
    */
-  function useDataProvider<T extends IDataProvider<any>>(
+  const useDataProvider: <T extends IDataProvider<any>>(
     dataProviderSource: string | T | undefined,
-  ): T | undefined;
+  ) => T | undefined;
   export default useDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-data.hook' {

@@ -1,9 +1,6 @@
 import dataProviderService from '@shared/services/data-provider.service';
 import IDataProvider from '@shared/models/data-provider.interface';
-import { useCallback, useMemo, useState } from 'react';
-import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
-import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
-import { isString } from '@shared/utils/util';
+import createUseNetworkObjectHook from '@renderer/hooks/create-use-network-object-hook.util';
 
 /**
  * Gets a data provider with specified provider name
@@ -16,45 +13,13 @@ import { isString } from '@shared/utils/util';
  * @type `T` - the type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
  *  specifying your own types, or provide a custom data provider type
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProvider<T extends IDataProvider<any>>(
+
+const useDataProvider = createUseNetworkObjectHook(dataProviderService.get) as <
+  // We don't know what type the data provider serves
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  T extends IDataProvider<any>,
+>(
   dataProviderSource: string | T | undefined,
-): T | undefined {
-  // Check to see if they passed in the results of a useDataProvider hook or undefined
-  const didReceiveDataProvider = !isString(dataProviderSource);
-
-  // Get the data provider for this data provider name
-  // Note: do nothing if we already received a data provider, but still run this hook.
-  // (We must make sure to run the same number of hooks in all code paths.)
-  const [dataProvider] = usePromise(
-    useMemo(() => {
-      return didReceiveDataProvider
-        ? // We already have a data provider or undefined, so we don't need to run this promise
-          undefined
-        : async () =>
-            // We have the data provider's type, so we need to get the provider
-            dataProviderSource
-              ? // Type assert here - the user of this hook must make sure to provide the correct type
-                (dataProviderService.get(dataProviderSource) as Promise<T | undefined>)
-              : undefined;
-    }, [didReceiveDataProvider, dataProviderSource]),
-    undefined,
-  );
-
-  // Disable this hook when the data provider is disposed
-  // Note: do nothing if we already received a data provider, but still run this hook.
-  // (We must make sure to run the same number of hooks in all code paths.)
-  const [isDisposed, setIsDisposed] = useState<boolean>(false);
-  useEvent(
-    !didReceiveDataProvider && dataProvider && !isDisposed ? dataProvider.onDidDispose : undefined,
-    useCallback(() => setIsDisposed(true), []),
-  );
-
-  // If we received a data provider or undefined, return it
-  if (didReceiveDataProvider) return dataProviderSource;
-
-  // If we had to get a data provider, return it if it is not disposed
-  return dataProvider && !isDisposed ? dataProvider : undefined;
-}
+) => T | undefined;
 
 export default useDataProvider;
