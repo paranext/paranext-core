@@ -253,6 +253,22 @@ export interface ScrRefSelectorProps {
 	id?: string;
 }
 export declare function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps): import("react/jsx-runtime").JSX.Element;
+export type SearchBarProps = {
+	/**
+	 * Callback fired to handle the search query when button pressed
+	 * @param searchQuery
+	 */
+	onSearch: (searchQuery: string) => void;
+	/**
+	 * Optional string that appears in the search bar without a search string
+	 */
+	placeholder?: string;
+	/**
+	 * Optional boolean to set the input base to full width
+	 */
+	isFullWidth?: boolean;
+};
+export function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SliderProps = {
 	/**
 	 *  Optional unique identifier

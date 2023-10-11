@@ -7,6 +7,7 @@ export { default as LabelPosition } from './label-position.model';
 export { default as MenuItem } from './menu-item.component';
 export { default as RefSelector } from './ref-selector.component';
 export type { ScrRefSelectorProps } from './ref-selector.component';
+export { default as SearchBar } from './search-bar.component';
 export { default as Slider } from './slider.component';
 export { default as Snackbar } from './snackbar.component';
 export { default as Switch } from './switch.component';
