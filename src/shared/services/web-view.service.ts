@@ -36,6 +36,7 @@ import AsyncVariable from '@shared/utils/async-variable';
 import logger from '@shared/services/logger.service';
 import LogError from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
+import { getWebViewState, setWebViewState } from '@renderer/services/web-view-state.service';
 
 /** rc-dock's onLayoutChange prop made asynchronous - resolves */
 export type OnLayoutChangeRCDock = (
@@ -423,6 +424,8 @@ export const getWebView = async (
       existingSavedWebView = convertWebViewDefinitionToSaved(
         existingWebView.data as WebViewDefinition,
       );
+      // Load the web view state since the web view provider doesn't have access to the data store
+      existingSavedWebView.state = getWebViewState(existingWebView.id);
       didFindExistingWebView = true;
     }
   }
@@ -441,6 +444,9 @@ export const getWebView = async (
   // The web view provider didn't want to create this web view
   if (!webView) return undefined;
 
+  // The web view provider might have updated the web view state, so save it
+  if (webView.state) setWebViewState(webView.id, webView.state);
+
   /**
    * The web view we are getting is new. Either the webview provider gave us a new webview instead
    * of the existing one or there wasn't an existing one in the first place
@@ -457,7 +463,9 @@ export const getWebView = async (
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
   const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
 
-  // Note: `webViewRequire` below is defined in `src\renderer\global-this.model.ts`.
+  // `webViewRequire`, `getWebViewStateById`, and `setWebViewStateById` below are defined in `src\renderer\global-this.model.ts`
+  // `useWebViewState` below is defined in `src\shared\global-this.model.ts`
+  // We have to bind `useWebViewState` to the current `window` context because calls within PAPI don't have access to a webview's `window` context
   /** String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such */
   const imports = `
   var papi = window.parent.papi;
@@ -468,6 +476,11 @@ export const getWebView = async (
   var createRoot = window.parent.createRoot;
   var SillsdevScripture = window.parent.SillsdevScripture;
   var require = window.parent.webViewRequire;
+  var getWebViewStateById = window.parent.getWebViewStateById;
+  var setWebViewStateById = window.parent.setWebViewStateById;
+  window.getWebViewState = () => { return getWebViewStateById('${webView.id}') };
+  window.setWebViewState = (state) => { setWebViewStateById('${webView.id}', state) };
+  window.useWebViewState = window.parent.useWebViewState.bind(window);
   window.fetch = papi.fetch;
   delete window.parent;
   delete window.top;
