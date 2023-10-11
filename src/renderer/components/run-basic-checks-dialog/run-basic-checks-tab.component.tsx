@@ -4,12 +4,14 @@ import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
 import { useState } from 'react';
 import settingsService from '@shared/services/settings.service';
-import { fetchProjects } from '@renderer/components/project-dialogs/select-project-tab.component';
 import BookSelector from '@renderer/components/run-basic-checks-dialog/book-selector.component';
 import BasicChecks, {
   fetchChecks,
 } from '@renderer/components/run-basic-checks-dialog/basic-checks.component';
-import { Project } from '@renderer/components/project-dialogs/project-list.component';
+import {
+  fetchProjects,
+  Project,
+} from '@renderer/components/project-dialogs/project-list.component';
 import './run-basic-checks-tab.component.scss';
 
 export const TAB_TYPE_RUN_BASIC_CHECKS = 'run-basic-checks';

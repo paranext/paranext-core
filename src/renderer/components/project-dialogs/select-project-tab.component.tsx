@@ -4,48 +4,10 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import './select-project-tab.component.scss';
 import { useMemo } from 'react';
 import { DialogData } from '@shared/models/dialog-options.model';
-import ProjectList, { Project } from '@renderer/components/project-dialogs/project-list.component';
+import ProjectList from '@renderer/components/project-dialogs/project-list.component';
 import { resolveDialogRequest } from '@renderer/services/dialog.service.host';
-
-export function fetchProjects(): Project[] {
-  return [
-    {
-      id: 'project-1',
-      name: 'Project 1',
-      description: 'Description of project 1',
-      isDownloadable: true,
-      isDownloaded: false,
-    },
-    {
-      id: 'project-2',
-      name: 'Project 2',
-      description: 'Description of project 2',
-      isDownloadable: false,
-      isDownloaded: true,
-    },
-    {
-      id: 'project-3',
-      name: 'Project 3',
-      description: 'Description of project 3',
-      isDownloadable: true,
-      isDownloaded: false,
-    },
-    {
-      id: 'project-4',
-      name: 'Project 4',
-      description: 'Description of project 4',
-      isDownloadable: false,
-      isDownloaded: false,
-    },
-    {
-      id: 'project-5',
-      name: 'Project 5',
-      description: 'Description of project 5',
-      isDownloadable: false,
-      isDownloaded: true,
-    },
-  ];
-}
+import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
+import projectLookupService from '@shared/services/project-lookup.service';
 
 type SelectProjectTabProps = {
   /** The message to show the user in the dialog. */
@@ -54,16 +16,23 @@ type SelectProjectTabProps = {
 };
 
 export default function SelectProjectTab({ prompt, handleSelectProject }: SelectProjectTabProps) {
-  const projects = useMemo(() => fetchProjects().filter((project) => project.isDownloaded), []);
+  const [projects, isLoadingProjects] = usePromise(
+    projectLookupService.getMetadataForAllProjects,
+    useMemo(() => [], []),
+  );
 
   return (
     <div className="select-project-dialog">
       <div>{prompt}</div>
-      <ProjectList projects={projects} handleSelectProject={handleSelectProject}>
-        <ListItemIcon>
-          <FolderOpenIcon />
-        </ListItemIcon>
-      </ProjectList>
+      {isLoadingProjects ? (
+        <div>Loading Projects</div>
+      ) : (
+        <ProjectList projects={projects} handleSelectProject={handleSelectProject}>
+          <ListItemIcon>
+            <FolderOpenIcon />
+          </ListItemIcon>
+        </ProjectList>
+      )}
     </div>
   );
 }

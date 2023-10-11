@@ -5,8 +5,10 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import DoneIcon from '@mui/icons-material/Done';
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { Button } from 'papi-components';
-import { fetchProjects } from './select-project-tab.component';
-import ProjectList, { Project } from './project-list.component';
+import ProjectList, {
+  fetchProjects,
+  Project,
+} from '@renderer/components/project-dialogs/project-list.component';
 import './open-multiple-projects-tab.component.scss';
 
 export const TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG = 'open-multiple-projects-dialog';

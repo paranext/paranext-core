@@ -107,7 +107,20 @@ export function rejectDialogRequest(id: string, message: string, isFromDockLayou
     throw new Error(`DialogService error: request ${id} not found to reject. Message: ${message}`);
 }
 
-async function getProject(options?: DialogOptions): Promise<string> {
+/**
+ * Shows a dialog to the user and prompts the user to respond
+ *
+ * @param options various options for configuring the dialog that shows
+ *
+ * @returns returns the user's response
+ * @throws if the user cancels
+ *
+ * @type `TReturn` - the type of data the dialog responds with
+ *
+ * Currently internal. Should this be exposed on the papi? Maybe one day if we have
+ * extension-provided dialogs
+ */
+async function getFromUser<TReturn>(dialogType: string, options?: DialogOptions): Promise<TReturn> {
   await initialize();
 
   // Set up a DialogRequest
@@ -115,9 +128,9 @@ async function getProject(options?: DialogOptions): Promise<string> {
   // Dumbest way to make sure the guid is unique
   while (dialogRequests.has(dialogId)) dialogId = newGuid();
 
-  let dialogRequest: DialogRequest<string>;
+  let dialogRequest: DialogRequest<TReturn>;
 
-  const dialogPromise = new Promise<string>((resolve, reject) => {
+  const dialogPromise = new Promise<TReturn>((resolve, reject) => {
     dialogRequest = {
       id: dialogId,
       resolve,
@@ -131,7 +144,7 @@ async function getProject(options?: DialogOptions): Promise<string> {
     await webViewService.addTab(
       {
         id: dialogId,
-        tabType: TAB_TYPE_SELECT_PROJECT_DIALOG,
+        tabType: dialogType,
         data: { ...options, isDialog: true } as DialogData,
       },
       {
@@ -153,6 +166,10 @@ async function getProject(options?: DialogOptions): Promise<string> {
     rejectDialogRequest(dialogId, message);
     throw new Error(message);
   }
+}
+
+async function getProject(options?: DialogOptions): Promise<string> {
+  return getFromUser<string>(TAB_TYPE_SELECT_PROJECT_DIALOG, options);
 }
 
 const dialogService: DialogService = {
