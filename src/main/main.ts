@@ -18,7 +18,6 @@ import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
 import { resolveHtmlPath } from '@node/utils/util';
 import extensionHostService from '@main/services/extension-host.service';
-import * as pdpFactoryService from '@main/services/project-data-provider-factory.service';
 import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
 import { wait } from '@shared/utils/util';
@@ -268,16 +267,6 @@ async function main() {
 
   // #endregion
 
-  // #region Setup and test project data providers
-
-  // This won't be needed long-term if we don't have built-in project data provider factories
-  // Maybe all of this will live in extensions, even for built-in project types. Who knows?
-  await pdpFactoryService.initialize();
-
-  await pdpFactoryService.test();
-
-  // #endregion
-
   // #region Test network objects
 
   const testMain = {
@@ -316,6 +305,33 @@ async function main() {
     } else logger.error('Could not get testExtensionHost from main');
   }, 5000);
 
+  // #endregion
+
+  // #region Test a .NET data provider
+  // TODO: Uncomment this or similar sample code once https://github.com/paranext/paranext-core/issues/440 is resolved
+  // In the meantime, if you want to try this, copy an existing project into
+  //   <home_dir>/.platform.bible/<project_short_name>_<project_ID_from_settings.xml>/project/paratext
+  // For example: "~/.platform.bible/projects/TPKJ_b4c501ad2538989d6fb723518e92408406e232d3/project/paratext"
+  // Then create a file named "meta.json" in the "<short_name>_<project_ID>" directory with this JSON:
+  //  {
+  //    "id": "REPLACE_THIS_WITH_PROJECT_ID_FROM_SETTINGS_XML",
+  //    "name": "REPLACE_THIS_WITH_PROJECT_SHORT_NAME",
+  //    "storageType": "paratextFolders",
+  //    "projectType": "ParatextStandard"
+  //  }
+  /*
+  setTimeout(async () => {
+    const paratextPdp = await getProjectDataProvider<'ParatextStandard'>(
+      '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+    );
+    const verse = await paratextPdp.getVerseUSFM(new VerseRef('JHN', '1', '1'));
+    logger.info(`Got PDP data: ${verse}`);
+    paratextPdp.setExtensionData(
+      { extensionName: 'foo', dataQualifier: 'fooData' },
+      'This is the data from extension foo',
+    );
+  }, 10000);
+  */
   // #endregion
 }
 

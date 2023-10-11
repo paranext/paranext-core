@@ -1,0 +1,29 @@
+.run-basic-checks-dialog {
+  padding: 5%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  gap: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  height: 100%;
+}
+
+// Places checkboxes in their given order, but does not shrink to one column when window is only wide enough for one
+.run-basic-checks-check-names {
+  columns: 2;
+  column-fill: balance;
+  height: 50%;
+  width: 100%;
+  overflow-y: auto;
+}
+
+.run-basic-checks-books {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: column;
+  width: 100%;
+}
+
+.basic-checks-dialog-actions {
+  margin-left: auto;
+}

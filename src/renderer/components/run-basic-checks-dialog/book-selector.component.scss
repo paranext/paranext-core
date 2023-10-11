@@ -1,0 +1,27 @@
+.book-selection-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.book-selection-current-book-name {
+  border: 1px;
+}
+
+.book-selection-chapter {
+  padding: 5%;
+}
+
+// This class is built into the `MUI` library. Need to override the styling so that the label ("to")
+// doesn't jam up against the preceding combo box.
+/* stylelint-disable-next-line selector-class-pattern */
+ .book-selection-chapter-form-label.end .MuiFormControlLabel-label {
+  padding-left: 10px;
+}
+
+// This class is built into the `MUI` library. Need to override the styling so that the combo boxes
+// do not look way bigger than the other controls.
+/* stylelint-disable-next-line selector-class-pattern */
+.book-selection-chapter-form-label .MuiOutlinedInput-root { // eslint-disable no-console, selector-class-pattern
+  padding: 0 20px 0 1px !important;
+}

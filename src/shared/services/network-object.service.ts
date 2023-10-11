@@ -160,7 +160,8 @@ class MutexMap {
   }
 }
 
-const mutexMap: MutexMap = new MutexMap();
+const getterMutexMap: MutexMap = new MutexMap();
+const setterMutexMap: MutexMap = new MutexMap();
 
 /** This proxy enables calling functions on a network object that exists in a different process */
 const createRemoteProxy = (
@@ -287,8 +288,8 @@ const get = async <T extends object>(
 ): Promise<NetworkObject<T> | undefined> => {
   await initialize();
 
-  // Don't allow simultaneous gets and/or sets to run for the same network object
-  const lock: Mutex = mutexMap.get(id);
+  // Don't allow simultaneous gets to run for the same network object
+  const lock: Mutex = getterMutexMap.get(id);
   return lock.runExclusive(async () => {
     // If we already have this network object, return it
     const networkObjectRegistration = networkObjectRegistrations.get(id);
@@ -298,6 +299,13 @@ const get = async <T extends object>(
     // We don't already have this network object. See if it exists somewhere else.
     const networkObjectFunctions = await getRemoteNetworkObjectFunctions(id);
     if (!networkObjectFunctions) return undefined;
+
+    // Before we create a remote proxy, see if there was a race condition for a local proxy.
+    // It is possible we called `get`, then while awaiting the network response something else in
+    // this process called `set` on the object we were looking for.
+    const networkObjectRegistrationSecondChance = networkObjectRegistrations.get(id);
+    if (networkObjectRegistrationSecondChance)
+      return networkObjectRegistrationSecondChance.networkObject as NetworkObject<T>;
 
     // At this point, the object exists remotely but does not yet exist locally.
 
@@ -363,8 +371,8 @@ const set = async <T extends NetworkableObject>(
 ): Promise<DisposableNetworkObject<T>> => {
   await initialize();
 
-  // Don't allow simultaneous gets and/or sets to run for the same network object
-  const lock: Mutex = mutexMap.get(id);
+  // Don't allow simultaneous sets to run for the same network object
+  const lock: Mutex = setterMutexMap.get(id);
   return lock.runExclusive(async () => {
     // Check to see if we already know there is a network object with this id.
     if (hasKnown(id)) throw new Error(`Network object with id ${id} is already registered`);

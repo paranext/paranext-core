@@ -1490,16 +1490,30 @@ declare module 'shared/models/data-provider.model' {
 }
 declare module 'shared/models/project-data-provider.model' {
   import type { DataProviderDataType } from 'shared/models/data-provider.model';
+  /** Indicates to a PDP what extension data is being referenced */
+  export type ExtensionDataScope = {
+    /** Name of an extension as provided in its manifest */
+    extensionName: string;
+    /** Name of a unique partition or segment of data within the extension
+     * Some examples include (but are not limited to):
+     *  - name of an important data structure that is maintained in a project
+     *  - name of a downloaded data set that is being cached
+     *  - name of a resource created by a user that should be maintained in a project
+     *
+     * This is the smallest level of granularity provided by a PDP for accessing extension data.
+     * There is no way to get or set just a portion of data identified by a single dataQualifier value.
+     * */
+    dataQualifier: string;
+  };
   /** All Project Data Provider data types must extend from this */
   export type MandatoryProjectDataType = {
-    ExtensionData: DataProviderDataType<string, string | undefined, string>;
+    ExtensionData: DataProviderDataType<ExtensionDataScope, string | undefined, string>;
   };
 }
 declare module 'papi-shared-types' {
   import { ScriptureReference } from 'papi-components';
   import type { DataProviderDataType } from 'shared/models/data-provider.model';
   import type { MandatoryProjectDataType } from 'shared/models/project-data-provider.model';
-  import { VerseRef } from '@sillsdev/scripture';
   /**
      * Function types for each command available on the papi. Each extension can extend this interface
      * to add commands that it registers on the papi.
@@ -1544,12 +1558,6 @@ declare module 'papi-shared-types' {
     placeholder: null;
   }
   type SettingNames = keyof SettingTypes;
-  /** This is not yet a complete list of the data types available from Paratext projects. */
-  type ParatextStandardProjectDataTypes = MandatoryProjectDataType & {
-    Book: DataProviderDataType<VerseRef, string | undefined, string>;
-    Chapter: DataProviderDataType<VerseRef, string | undefined, string>;
-    Verse: DataProviderDataType<VerseRef, string | undefined, string>;
-  };
   /** This is just a simple example so we have more than one. It's not intended to be real. */
   type NotesOnlyProjectDataTypes = MandatoryProjectDataType & {
     Notes: DataProviderDataType<string, string | undefined, string>;
@@ -1574,7 +1582,6 @@ declare module 'papi-shared-types' {
    * ```
    */
   interface ProjectDataTypes {
-    ParatextStandard: ParatextStandardProjectDataTypes;
     NotesOnly: NotesOnlyProjectDataTypes;
   }
   /**
@@ -2299,6 +2306,54 @@ declare module 'shared/services/data-provider.service' {
   const dataProviderService: DataProviderService;
   export default dataProviderService;
 }
+declare module 'shared/models/project-metadata.model' {
+  /**
+   * Low-level information describing a project that Platform.Bible directly manages and uses to load project data
+   */
+  export type ProjectMetadata = {
+    /**
+     * ID of the project (must be unique and case insensitive)
+     */
+    id: string;
+    /**
+     * Short name of the project (not necessarily unique)
+     */
+    name: string;
+    /**
+     * Indicates how the project is persisted to storage
+     */
+    storageType: string;
+    /**
+     * Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
+     */
+    projectType: string;
+  };
+}
+declare module 'shared/models/project-lookup.model' {
+  import { ProjectMetadata } from 'shared/models/project-metadata.model';
+  /**
+   * Provides metadata for projects known by the platform
+   */
+  export interface ProjectLookupServiceType {
+    /**
+     * Provide metadata for all projects found on the local system
+     * @returns ProjectMetadata for all projects stored on the local system
+     */
+    getMetadataForAllProjects: () => Promise<ProjectMetadata[]>;
+    /**
+     * Look up metadata for a specific project ID
+     * @param projectId ID of the project to load
+     * @returns ProjectMetadata from the 'meta.json' file for the given project
+     */
+    getMetadataForProject: (projectId: string) => Promise<ProjectMetadata>;
+  }
+  export const projectLookupServiceNetworkObjectName = 'ProjectLookupService';
+}
+declare module 'shared/services/project-lookup.service' {
+  import { ProjectLookupServiceType } from 'shared/models/project-lookup.model';
+  const projectLookupService: ProjectLookupServiceType;
+  export default projectLookupService;
+}
 declare module 'shared/models/project-data-provider-engine.model' {
   import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
   import type IDataProvider from 'shared/models/data-provider.interface';
@@ -2361,16 +2416,15 @@ declare module 'shared/services/project-data-provider.service' {
     pdpEngineFactory: ProjectDataProviderEngineFactory<ProjectType>,
   ): Promise<Dispose>;
   /**
-   * Get a Project Data Provider for the given project details.
-   * @param projectId ID for the project to load
-   * @param projectType Type of the project referenced by the given ID
-   * @param storageType Storage type of the project referenced by the given ID
-   * @returns Data provider with types that are associated with the given project type
-   */
+     * Get a Project Data Provider for the given project ID.
+     * For types to work properly, specify the project type as a generic parameter.
+     * @param projectId ID for the project to load
+     * @returns Data provider with types that are associated with the given project type
+     * @example const pdp = await getProjectDataProvider<'ParatextStandard'>('ProjectID12345');
+                pdp.getVerse(new VerseRef('JHN', '1', '1'));
+     */
   export function getProjectDataProvider<ProjectType extends ProjectTypes>(
     projectId: string,
-    projectType: ProjectType,
-    storageType: string,
   ): Promise<ProjectDataProvider[ProjectType]>;
   export interface PapiBackendProjectDataProviderService {
     registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
@@ -2684,6 +2738,7 @@ declare module 'papi-frontend' {
   import { PapiWebViewService } from 'shared/services/web-view.service';
   import { InternetService } from 'shared/services/internet.service';
   import { DataProviderService } from 'shared/services/data-provider.service';
+  import { ProjectLookupServiceType } from 'shared/models/project-lookup.model';
   import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { PapiContext } from 'renderer/context/papi-context/index';
   import { PapiHooks } from 'renderer/hooks/papi-hooks/index';
@@ -2736,6 +2791,10 @@ declare module 'papi-frontend' {
      * Service that gets project data providers
      */
     projectDataProvider: PapiFrontendProjectDataProviderService;
+    /**
+     * Provides metadata for projects known by the platform
+     */
+    projectLookup: ProjectLookupServiceType;
     react: {
       /**
        * All React contexts to be exposed on the papi
@@ -3009,6 +3068,7 @@ declare module 'papi-backend' {
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
+  import { ProjectLookupServiceType } from 'shared/models/project-lookup.model';
   const papi: {
     /**
      * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
@@ -3061,6 +3121,10 @@ declare module 'papi-backend' {
      * Service that registers and gets project data providers
      */
     projectDataProvider: PapiBackendProjectDataProviderService;
+    /**
+     * Provides metadata for projects known by the platform
+     */
+    projectLookup: ProjectLookupServiceType;
     /**
      * This service provides extensions in the extension host the ability to read/write data
      * based on the extension identity and current user (as identified by the OS). This service will

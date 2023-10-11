@@ -3,6 +3,7 @@ using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.NetworkObjects;
+using Paranext.DataProvider.Projects;
 using PtxUtils;
 
 namespace Paranext.DataProvider;
@@ -23,6 +24,7 @@ public static class Program
                 return;
             }
 
+            //TODO: Delete this once we stop including test objects in the builds
             if (!await papi.RegisterRequestHandler(RequestType.AddOne, RequestAddOne))
             {
                 Console.WriteLine("Paranext data provider could not register request handler");
@@ -30,10 +32,14 @@ public static class Program
             }
 
             var tdp = new TimeDataProvider(papi);
-            await tdp.RegisterDataProvider();
-
             var sdp = new UsfmDataProvider(papi, "assets", "WEB");
+            var paratextPsi = new ParatextProjectStorageInterpreter(papi);
+            var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextPsi);
+
+            await tdp.RegisterDataProvider();
             await sdp.RegisterDataProvider();
+            await paratextPsi.RegisterDataProvider();
+            await paratextFactory.Initialize();
 
             Console.WriteLine("Paranext data provider ready!");
             await papi.MessageHandlingCompleteTask;
