@@ -1,9 +1,10 @@
-import projectDataProviderService from '@shared/services/data-provider.service';
 import { ProjectDataProvider } from '@shared/models/project-data-provider-engine.model';
 import { useCallback, useMemo, useState } from 'react';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 import { isString } from '@shared/utils/util';
+import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import { ProjectTypes } from 'papi-shared-types';
 
 /**
  * Gets a project data provider with specified provider name
@@ -18,9 +19,9 @@ import { isString } from '@shared/utils/util';
  *  custom project data provider type
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useProjectDataProvider<T extends ProjectDataProvider>(
-  dataProviderSource: string | T | undefined,
-): T | undefined {
+function useProjectDataProvider<ProjectType extends ProjectTypes>(
+  dataProviderSource: string | ProjectDataProvider[ProjectType] | undefined,
+): ProjectDataProvider[ProjectType] | undefined {
   // Check to see if they passed in the results of a useDataProvider hook or undefined
   const didReceiveDataProvider = !isString(dataProviderSource);
 
@@ -35,8 +36,9 @@ function useProjectDataProvider<T extends ProjectDataProvider>(
         : async () =>
             // We have the project data provider's type, so we need to get the provider
             dataProviderSource
-              ? // Type assert here - the user of this hook must make sure to provide the correct type
-                (projectDataProviderService.get(dataProviderSource) as Promise<T | undefined>)
+              ? papiFrontendProjectDataProviderService.getProjectDataProvider<ProjectType>(
+                  dataProviderSource,
+                )
               : undefined;
     }, [didReceiveDataProvider, dataProviderSource]),
     undefined,
@@ -47,13 +49,7 @@ function useProjectDataProvider<T extends ProjectDataProvider>(
   // (We must make sure to run the same number of hooks in all code paths.)
   const [isDisposed, setIsDisposed] = useState<boolean>(false);
   useEvent(
-    !didReceiveDataProvider && dataProvider && !isDisposed
-      ? // REVIEW: I'm pretty sure there must be a better way...
-        dataProvider.ParatextStandard?.onDidDispose ??
-          dataProvider.NotesOnly?.onDidDispose ??
-          dataProvider.MyExtensionProjectTypeName?.onDidDispose ??
-          undefined
-      : undefined,
+    !didReceiveDataProvider && dataProvider && !isDisposed ? dataProvider.onDidDispose : undefined,
     useCallback(() => setIsDisposed(true), []),
   );
 
