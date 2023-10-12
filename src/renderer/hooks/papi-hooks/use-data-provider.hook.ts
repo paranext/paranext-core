@@ -1,6 +1,6 @@
 import dataProviderService from '@shared/services/data-provider.service';
 import IDataProvider from '@shared/models/data-provider.interface';
-import createUseNetworkObjectHook from '@renderer/hooks/create-use-network-object-hook.util';
+import createUseNetworkObjectHook from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
 
 /**
  * Gets a data provider with specified provider name

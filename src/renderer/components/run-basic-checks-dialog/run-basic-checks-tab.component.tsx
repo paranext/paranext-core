@@ -85,14 +85,15 @@ export default function RunBasicChecksTab({
   };
 
   const project = useProjectDataProvider<'ParatextStandard'>(currentProjectId);
-  logger.info(``);
 
   const [projectString] = usePromise(
     useMemo(() => {
       return async () =>
-        project === undefined ? 'No current project' : project.getVerse(new VerseRef('MAT 4:1'));
+        project === undefined
+          ? 'No current project'
+          : project.getVerseUSFM(new VerseRef('MAT 4:1'));
     }, [project]),
-    'Wait???',
+    'Loading',
   );
 
   return (
