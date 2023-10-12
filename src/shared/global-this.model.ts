@@ -31,9 +31,10 @@ declare global {
    * @returns string holding the state value and a function to use to update the state value
    * @example const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen');
    */
-  var useWebViewState: (
+  var useWebViewState: <T>(
     stateKey: string,
-  ) => [webViewState: string, setWebViewState: Dispatch<SetStateAction<string>>];
+    defaultStateValue: NonNullable<T>,
+  ) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
 }
 
 /** Type of Paranext process */

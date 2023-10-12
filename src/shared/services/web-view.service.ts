@@ -36,7 +36,10 @@ import AsyncVariable from '@shared/utils/async-variable';
 import logger from '@shared/services/logger.service';
 import LogError from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
-import { getWebViewState, setWebViewState } from '@renderer/services/web-view-state.service';
+import {
+  getFullWebViewStateById,
+  setFullWebViewStateById,
+} from '@renderer/services/web-view-state.service';
 
 /** rc-dock's onLayoutChange prop made asynchronous - resolves */
 export type OnLayoutChangeRCDock = (
@@ -425,7 +428,7 @@ export const getWebView = async (
         existingWebView.data as WebViewDefinition,
       );
       // Load the web view state since the web view provider doesn't have access to the data store
-      existingSavedWebView.state = getWebViewState(existingWebView.id);
+      existingSavedWebView.state = getFullWebViewStateById(existingWebView.id);
       didFindExistingWebView = true;
     }
   }
@@ -445,7 +448,7 @@ export const getWebView = async (
   if (!webView) return undefined;
 
   // The web view provider might have updated the web view state, so save it
-  if (webView.state) setWebViewState(webView.id, webView.state);
+  if (webView.state) setFullWebViewStateById(webView.id, webView.state);
 
   /**
    * The web view we are getting is new. Either the webview provider gave us a new webview instead
@@ -478,8 +481,8 @@ export const getWebView = async (
   var require = window.parent.webViewRequire;
   var getWebViewStateById = window.parent.getWebViewStateById;
   var setWebViewStateById = window.parent.setWebViewStateById;
-  window.getWebViewState = () => { return getWebViewStateById('${webView.id}') };
-  window.setWebViewState = (state) => { setWebViewStateById('${webView.id}', state) };
+  window.getWebViewState = (stateKey) => { return getWebViewStateById('${webView.id}', stateKey) };
+  window.setWebViewState = (stateKey, stateValue) => { setWebViewStateById('${webView.id}', stateKey, stateValue) };
   window.useWebViewState = window.parent.useWebViewState.bind(window);
   window.fetch = papi.fetch;
   delete window.parent;

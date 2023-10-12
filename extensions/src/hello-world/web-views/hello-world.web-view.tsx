@@ -59,7 +59,7 @@ papi
 globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
-  const [clicks, setClicks] = globalThis.useWebViewState('clicks');
+  const [clicks, setClicks] = globalThis.useWebViewState<number>('clicks', 0);
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
@@ -69,8 +69,7 @@ globalThis.webViewComponent = function HelloWorld() {
     'helloWorld.onHelloWorld',
     useCallback(
       ({ times }: HelloWorldEvent) => {
-        const clickCount = Number(clicks);
-        if (Number.isNaN(clickCount) || times > clickCount) setClicks(times.toString());
+        if (times > clicks) setClicks(times);
       },
       [clicks, setClicks],
     ),
@@ -125,8 +124,7 @@ globalThis.webViewComponent = function HelloWorld() {
         <Button
           onClick={() => {
             papi.commands.sendCommand('helloWorld.helloWorld');
-            const clickCount = Number.isNaN(Number(clicks)) ? 0 : Number(clicks);
-            setClicks((clickCount + 1).toString());
+            setClicks(clicks + 1);
             papi
               .fetch('https://example.com', { mode: 'no-cors' })
               .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
