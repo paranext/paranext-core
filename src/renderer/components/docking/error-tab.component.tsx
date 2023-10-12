@@ -1,5 +1,9 @@
-import { TabInfo } from '@shared/data/web-view.model';
+import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { newGuid } from '@shared/utils/util';
+
+export type ErrorTabData = { errorMessage: string };
+
+export const TAB_TYPE_ERROR = 'error';
 
 export default function ErrorTab({ errorMessage }: { errorMessage: string }) {
   return (
@@ -23,5 +27,13 @@ export const createErrorTab = (errorMessage: string): TabInfo => {
     content: <ErrorTab errorMessage={errorMessage} />,
     minWidth: 150,
     minHeight: 150,
+    data: {
+      errorMessage,
+    } as ErrorTabData,
   };
 };
+
+export function saveErrorTab(): SavedTabInfo | undefined {
+  // No need to preserve error tabs between refreshes, I imagine
+  return undefined;
+}
