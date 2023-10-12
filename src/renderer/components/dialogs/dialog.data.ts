@@ -1,10 +1,6 @@
 import { DialogOptions } from '@shared/models/dialog-options.model';
-import DIALOG_BASE, {
-  DialogDefinitionBase,
-  DialogProps,
-} from '@renderer/components/dialogs/dialog-base.data';
+import { DialogDefinitionBase, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import { ReactElement } from 'react';
-import SelectProjectTab from '../project-dialogs/select-project-tab.component';
 
 /**
  * Mapped type for dialog functions to use in getting various types for dialogs
@@ -19,20 +15,7 @@ export interface DialogTypes {
 }
 
 /** Each type of dialog. These are the tab types used in the dock layout */
-type DialogTabTypes = keyof DialogTypes;
-
-/**
- * Map of all available dialog definitions used to create dialogs
- *
- * If you add a dialog here, you must also add it on {@link DialogTypes}
- */
-export const DIALOGS: { [DialogTabType in DialogTabTypes]: DialogDefinition<DialogTabType> } = {
-  'platform.selectProject': {
-    ...DIALOG_BASE,
-    tabType: 'platform.selectProject',
-    Component: SelectProjectTab,
-  },
-};
+export type DialogTabTypes = keyof DialogTypes;
 
 /** Types related to a specific dialog */
 export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {

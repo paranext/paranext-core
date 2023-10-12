@@ -9,7 +9,12 @@ import DockLayout, {
   TabData,
   TabGroup,
 } from 'rc-dock';
-import { createErrorTab } from '@renderer/components/docking/error-tab.component';
+import {
+  ErrorTabData,
+  TAB_TYPE_ERROR,
+  createErrorTab,
+  saveErrorTab,
+} from '@renderer/components/docking/error-tab.component';
 import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
 import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
 import {
@@ -42,10 +47,6 @@ import {
 } from '@shared/services/web-view.service';
 import { getErrorMessage } from '@shared/utils/util';
 import {
-  loadSelectProjectTab,
-  saveSelectProjectTab,
-} from '@renderer/components/project-dialogs/select-project-tab.component';
-import {
   loadDownloadUpdateProjectTab,
   TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
 } from '@renderer/components/project-dialogs/download-update-project-tab.component';
@@ -61,11 +62,9 @@ import {
   TAB_TYPE_RUN_BASIC_CHECKS,
   loadRunBasicChecksTab,
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
-import {
-  TAB_TYPE_SELECT_PROJECT_DIALOG,
-  rejectDialogRequest,
-} from '@renderer/services/dialog.service.host';
+import { rejectDialogRequest } from '@renderer/services/dialog.service.host';
 import { DialogData } from '@shared/models/dialog-options.model';
+import DIALOGS from '../dialogs';
 
 type TabType = string;
 
@@ -98,17 +97,24 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
   [TAB_TYPE_TEST, loadTestTab],
   [TAB_TYPE_WEBVIEW, loadWebViewTab],
-  [TAB_TYPE_SELECT_PROJECT_DIALOG, loadSelectProjectTab],
   [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
   [TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG, loadOpenMultipleProjectsTab],
   [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
   [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
+  ...Object.entries(DIALOGS).map(
+    ([dialogTabType, dialogDefinition]) =>
+      [dialogTabType, dialogDefinition.loadDialog.bind(dialogDefinition)] as const,
+  ),
 ]);
 
 /** tab saver functions for each Paranext tab type that wants to override the default */
 const tabSaverMap = new Map<TabType, TabSaver>([
   [TAB_TYPE_WEBVIEW, saveWebViewTab],
-  [TAB_TYPE_SELECT_PROJECT_DIALOG, saveSelectProjectTab],
+  [TAB_TYPE_ERROR, saveErrorTab],
+  ...Object.entries(DIALOGS).map(
+    ([dialogTabType, dialogDefinition]) =>
+      [dialogTabType, dialogDefinition.saveDialog.bind(dialogDefinition)] as const,
+  ),
 ]);
 
 let previousTabId: string | undefined;
@@ -249,14 +255,14 @@ export function addTabToDock(savedTabInfo: SavedTabInfo, layout: Layout, dockLay
   const tab = loadTab(savedTabInfo);
   let targetTab = dockLayout.find(tab.id);
 
-  // Update existing WebView
+  // Update existing tab
   if (targetTab) {
     dockLayout.updateTab(tab.id, tab);
     if (isTab(targetTab)) previousTabId = tab.id;
     return;
   }
 
-  // Add new WebView
+  // Add new tab
   const unknownLayoutType = layout.type;
   switch (layout.type) {
     case 'tab':
@@ -315,6 +321,15 @@ export function addTabToDock(savedTabInfo: SavedTabInfo, layout: Layout, dockLay
     default:
       throw new LogError(`Unknown layoutType: '${unknownLayoutType}'`);
   }
+
+  // If there was an error loading the tab, we create an error tab. But we also want to throw here
+  // so people know there was a problem.
+  // TODO: Do we really want to create an error tab in the first place? Or maybe that should only
+  // happen on startup
+  if (tab.tabType === TAB_TYPE_ERROR)
+    throw new LogError(
+      `Dock Layout created an error tab: ${(tab.data as ErrorTabData)?.errorMessage}`,
+    );
 }
 
 /**
@@ -387,7 +402,7 @@ export default function ParanextDockLayout() {
         // If a dialog was closed, tell the dialog service
         if (currentTabId && direction === 'remove') {
           const removedTab = dockLayoutRef.current.find(currentTabId) as RCDockTabInfo;
-          if ((removedTab.data as DialogData).isDialog)
+          if ((removedTab.data as DialogData)?.isDialog)
             rejectDialogRequest(currentTabId, 'Dialog closed', true);
         }
 

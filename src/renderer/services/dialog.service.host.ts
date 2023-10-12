@@ -1,19 +1,22 @@
-import { DialogData, DialogOptions } from '@shared/models/dialog-options.model';
+import { DialogData } from '@shared/models/dialog-options.model';
 import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service.model';
 import * as networkService from '@shared/services/network.service';
 import { aggregateUnsubscriberAsyncs, serializeRequestType } from '@shared/utils/papi-util';
 import * as webViewService from '@shared/services/web-view.service';
 import { newGuid } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
-
-/** Tab type for the Select Project dialog */
-export const TAB_TYPE_SELECT_PROJECT_DIALOG = 'select-project-dialog';
+import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
+import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog.data';
 
 /** A live dialog request. Includes its id and the functions to run on receiving results */
 // TODO: preserve requests between refreshes - save the request id or something?
-type DialogRequest<TReturn = unknown> = {
+type DialogRequest<DialogTabType extends DialogTabTypes> = {
   id: string;
-  resolve: (value: TReturn | PromiseLike<TReturn>) => void;
+  resolve: (
+    value:
+      | DialogTypes[DialogTabType]['responseType']
+      | PromiseLike<DialogTypes[DialogTabType]['responseType']>,
+  ) => void;
   reject: (reason?: unknown) => void;
 };
 
@@ -120,7 +123,10 @@ export function rejectDialogRequest(id: string, message: string, isFromDockLayou
  * Currently internal. Should this be exposed on the papi? Maybe one day if we have
  * extension-provided dialogs
  */
-async function getFromUser<TReturn>(dialogType: string, options?: DialogOptions): Promise<TReturn> {
+async function getFromUser<DialogTabType extends DialogTabTypes>(
+  dialogType: DialogTabType,
+  options?: DialogTypes[DialogTabType]['options'],
+): Promise<DialogTypes[DialogTabType]['responseType']> {
   await initialize();
 
   // Set up a DialogRequest
@@ -128,19 +134,21 @@ async function getFromUser<TReturn>(dialogType: string, options?: DialogOptions)
   // Dumbest way to make sure the guid is unique
   while (dialogRequests.has(dialogId)) dialogId = newGuid();
 
-  let dialogRequest: DialogRequest<TReturn>;
+  let dialogRequest: DialogRequest<DialogTabType>;
 
-  const dialogPromise = new Promise<TReturn>((resolve, reject) => {
-    dialogRequest = {
-      id: dialogId,
-      resolve,
-      reject,
-    };
-    dialogRequests.set(dialogId, dialogRequest);
-  });
+  const dialogPromise = new Promise<DialogTypes[DialogTabType]['responseType']>(
+    (resolve, reject) => {
+      dialogRequest = {
+        id: dialogId,
+        resolve,
+        reject,
+      };
+      dialogRequests.set(dialogId, dialogRequest);
+    },
+  );
 
   try {
-    // Open Select Project dialog
+    // Open dialog
     await webViewService.addTab(
       {
         id: dialogId,
@@ -155,21 +163,22 @@ async function getFromUser<TReturn>(dialogType: string, options?: DialogOptions)
 
     // TODO: preserve requests between refreshes - add keepalive messages to indicate to the
     // requestor if the dialog request is still alive
-
-    // Return the DialogRequest's promise so the request can be resolved or rejected appropriately
-    return dialogPromise;
   } catch (e) {
     // Something went wrong while setting up the dialog. Delete the request and throw to let the
     // requestor know
-    const message = `DialogService error: getProject did not initialize successfully! ${e}`;
+    const message = `DialogService error: getFromUser did not initialize successfully! ${e}`;
     logger.error(message);
     rejectDialogRequest(dialogId, message);
-    throw new Error(message);
   }
+
+  // Return the DialogRequest's promise so the request can be resolved or rejected appropriately
+  return dialogPromise;
 }
 
-async function getProject(options?: DialogOptions): Promise<string> {
-  return getFromUser<string>(TAB_TYPE_SELECT_PROJECT_DIALOG, options);
+async function getProject(
+  options?: DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['options'],
+): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType']> {
+  return getFromUser(SELECT_PROJECT_DIALOG.tabType, options);
 }
 
 const dialogService: DialogService = {
