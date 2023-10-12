@@ -11,6 +11,7 @@ import {
 import { Checkbox, ComboBox, SearchBar } from 'papi-components';
 import TabPanel from '@renderer/components/settings-dialog/tab-panel.component';
 import './settings-tab.component.scss';
+import logger from '@shared/services/logger.service';
 
 export const TAB_TYPE_SETTINGS_DIALOG = 'settings-dialog';
 
@@ -28,7 +29,7 @@ type SettingsGroup = {
 };
 
 type SettingsContribution = { [extensionId: string]: SettingsGroup[] };
-// type SettingsValues = { [settingId: string]: string | number | boolean | null };
+type SettingsValues = { [settingId: string]: string | number | boolean | null };
 type SettingsComponents = { [settingId: string]: FunctionComponent<{}> };
 
 function fetchSettingsContributions(): SettingsContribution {
@@ -145,24 +146,24 @@ function fetchSettingsContributions(): SettingsContribution {
   };
 }
 
-// function fetchSettingsValues(): SettingsValues {
-//   return {
-//     'platform.interfaceLanguage': 'English',
-//     'platform.highlightCurrentVerse': true,
-//     'platform.brightnessOfHighlight': 'Light',
-//     'platform.displayFloatingWindows': true,
-//     'platform.hardwareAcceleration': true,
-//     'platform.scrollScripture': true,
-//     'platform.useMarker': true,
-//     'platform.dragAndDrop': true,
-//     'platform.autoAssignProjectNotes': true,
-//     'platform.autosave': true,
-//     'platform.khmerOnly': true,
-//     'platform.internetUse': 'Allow unrestricted internet use',
-//     'platform.shareParatextData': true,
-//     'platform.proxySettings': null,
-//   };
-// }
+function fetchSettingsValues(): SettingsValues {
+  return {
+    'platform.interfaceLanguage': 'English',
+    'platform.highlightCurrentVerse': true,
+    'platform.brightnessOfHighlight': 'Light',
+    'platform.displayFloatingWindows': true,
+    'platform.hardwareAcceleration': true,
+    'platform.scrollScripture': true,
+    'platform.useMarker': true,
+    'platform.dragAndDrop': true,
+    'platform.autoAssignProjectNotes': true,
+    'platform.autosave': true,
+    'platform.khmerOnly': true,
+    'platform.internetUse': 'Allow unrestricted internet use',
+    'platform.shareParatextData': true,
+    'platform.proxySettings': null,
+  };
+}
 
 function InterfaceLanguageSetting() {
   const options = ['English', 'Spanish', 'French'];
@@ -206,6 +207,11 @@ function fetchSettingsComponents(): SettingsComponents {
   };
 }
 
+type SettingProps = {
+  setting: string | number | boolean | null;
+  setSetting: (value: unknown) => void;
+};
+
 type SettingsDialogProps = {
   /**
    * Settings "metadata"
@@ -215,7 +221,7 @@ type SettingsDialogProps = {
   /**
    * Object that stores the current value of the setting with specific settingId
    */
-  // settingValues: SettingsValues;
+  settingValues: SettingsValues;
 
   /**
    * Object that stores the components of the setting with specific settingId
@@ -225,7 +231,7 @@ type SettingsDialogProps = {
 
 export default function SettingsDialog({
   contributions,
-  // settingValues,
+  settingValues,
   components,
 }: SettingsDialogProps) {
   const fetchSettingsGroups = useCallback(() => {
@@ -240,7 +246,7 @@ export default function SettingsDialog({
     [fetchSettingsGroups],
   );
 
-  const [value, setValue] = useState(settingsGroups[0].label);
+  const [tabValue, setTabValue] = useState(settingsGroups[0].label);
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchSettings = useCallback(
@@ -258,25 +264,25 @@ export default function SettingsDialog({
   );
 
   const handleTabChange = (_event: SyntheticEvent, newValue: string) => {
-    setValue(newValue);
+    setTabValue(newValue);
   };
 
   const handleSearchInput = (newSearchTerm: string) => {
     setSearchQuery(newSearchTerm);
   };
 
+  const setSettingValue = useCallback((settingKey: string, value: unknown) => {
+    return logger.info(`Setting ${settingKey} to ${value}`);
+  }, []);
+
   return (
     <div className="settings-dialog">
       <div className="settings-search-bar">
-        <SearchBar // case sensitive
-          onSearch={handleSearchInput}
-          placeholder="Search Settings..."
-          isFullWidth
-        />
+        <SearchBar onSearch={handleSearchInput} placeholder="Search Settings..." isFullWidth />
       </div>
       <div className="settings-tab-group">
         <Tabs
-          value={value}
+          value={tabValue}
           onChange={handleTabChange}
           orientation="vertical"
           className="settings-tabs"
@@ -292,7 +298,7 @@ export default function SettingsDialog({
         </Tabs>
         <span className="settings-tab-panels">
           {settingsGroups.map((group) => (
-            <TabPanel key={group.label} value={value} index={group.label} name={group.label}>
+            <TabPanel key={group.label} value={tabValue} index={group.label} name={group.label}>
               <List>
                 {fetchSettings(group).map((settingKey) => (
                   <span key={group.properties[settingKey].label} className="settings-list-item">
@@ -302,7 +308,10 @@ export default function SettingsDialog({
                         secondary={group.properties[settingKey].description}
                       />
                       {components[settingKey] ? (
-                        createElement(components[settingKey])
+                        createElement<SettingProps>(components[settingKey], {
+                          setting: settingValues[settingKey],
+                          setSetting: (value: unknown) => setSettingValue(settingKey, value),
+                        })
                       ) : (
                         <Typography component="span" alignSelf="center" variant="caption">
                           Setting Action Missing
@@ -322,7 +331,7 @@ export default function SettingsDialog({
 
 export const loadSettingsDialog = (savedTabInfo: SavedTabInfo): TabInfo => {
   const settingsContributions = fetchSettingsContributions();
-  // const settingsKeysValues = fetchSettingsValues();
+  const settingsKeysValues = fetchSettingsValues();
   const settingsComponents = fetchSettingsComponents();
 
   return {
@@ -331,7 +340,7 @@ export const loadSettingsDialog = (savedTabInfo: SavedTabInfo): TabInfo => {
     content: (
       <SettingsDialog
         contributions={settingsContributions}
-        // settingValues={settingsKeysValues}
+        settingValues={settingsKeysValues}
         components={settingsComponents}
       />
     ),

@@ -9,7 +9,7 @@ type TabPanelProps = {
 
 export default function TabPanel({ children, value, index, name }: TabPanelProps) {
   return (
-    <div role="tabpanel" hidden={value !== index} id={`settings-tab-${index}`} className={name}>
+    <div role="tabpanel" hidden={value !== index} id={`${name}-${index}`} className={name}>
       {value === index && children}
     </div>
   );

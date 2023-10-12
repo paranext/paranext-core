@@ -3,11 +3,6 @@
   align-items: center;
 }
 
-.search-bar-input-base {
-  margin-left: 20px;
-  flex: 1;
-}
-
 .search-button {
   padding: 10px;
 }

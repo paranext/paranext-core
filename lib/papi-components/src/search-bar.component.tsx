@@ -1,5 +1,6 @@
-import { Paper, InputBase } from '@mui/material';
+import { Paper } from '@mui/material';
 import { useState } from 'react';
+import TextField from './text-field.component';
 import './search-bar.component.css';
 
 type SearchBarProps = {
@@ -30,9 +31,9 @@ export default function SearchBar({ onSearch, placeholder, isFullWidth }: Search
 
   return (
     <Paper component="form" className="search-bar-paper">
-      <InputBase
-        fullWidth={isFullWidth}
-        className="search-bar-input-base"
+      <TextField
+        isFullWidth={isFullWidth}
+        className="search-bar-input"
         placeholder={placeholder}
         value={searchQuery}
         onChange={(e) => handleInputChange(e.target.value)}
