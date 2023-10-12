@@ -2,7 +2,6 @@ declare module 'papi-shared-types' {
   import { ScriptureReference } from 'papi-components';
   import type { DataProviderDataType } from 'shared/models/data-provider.model';
   import type { MandatoryProjectDataType } from '@shared/models/project-data-provider.model';
-  import { VerseRef } from '@sillsdev/scripture';
 
   // TODO: Adding an index type removes type checking on the key :( How do we make sure extensions provide only functions?
   /**
@@ -61,13 +60,6 @@ declare module 'papi-shared-types' {
 
   export type SettingNames = keyof SettingTypes;
 
-  /** This is not yet a complete list of the data types available from Paratext projects. */
-  export type ParatextStandardProjectDataTypes = MandatoryProjectDataType & {
-    Book: DataProviderDataType<VerseRef, string | undefined, string>;
-    Chapter: DataProviderDataType<VerseRef, string | undefined, string>;
-    Verse: DataProviderDataType<VerseRef, string | undefined, string>;
-  };
-
   /** This is just a simple example so we have more than one. It's not intended to be real. */
   export type NotesOnlyProjectDataTypes = MandatoryProjectDataType & {
     Notes: DataProviderDataType<string, string | undefined, string>;
@@ -93,7 +85,6 @@ declare module 'papi-shared-types' {
    * ```
    */
   export interface ProjectDataTypes {
-    ParatextStandard: ParatextStandardProjectDataTypes;
     NotesOnly: NotesOnlyProjectDataTypes;
   }
 

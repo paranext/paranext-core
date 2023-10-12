@@ -9,9 +9,9 @@ namespace Paranext.DataProvider.Projects;
 
 internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 {
-    public const string Book = "BOOK";
-    public const string Chapter = "CHAPTER";
-    public const string Verse = "VERSE";
+    public const string BookUSFM = "BookUSFM";
+    public const string ChapterUSFM = "ChapterUSFM";
+    public const string VerseUSFM = "VerseUSFM";
 
     public ParatextProjectStorageInterpreter(PapiClient papiClient)
         : base(ProjectStorageType.ParatextFolders, new[] { ProjectType.Paratext }, papiClient) { }
@@ -84,17 +84,17 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
         var scrText = LocalProjects.GetParatextProject(scope.ProjectID);
-        return scope.DataType.ToUpperInvariant() switch
+        return scope.DataType switch
         {
-            Book
+            BookUSFM
                 => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Succeeded(scrText.GetText(verseRef, false, false))
                     : ResponseToRequest.Failed(error),
-            Chapter
+            ChapterUSFM
                 => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Succeeded(scrText.GetText(verseRef, true, false))
                     : ResponseToRequest.Failed(error),
-            Verse
+            VerseUSFM
                 => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Succeeded(scrText.Parser.GetVerseUsfmText(verseRef))
                     : ResponseToRequest.Failed(error),
@@ -115,9 +115,9 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
         var scrText = LocalProjects.GetParatextProject(scope.ProjectID);
-        switch (scope.DataType.ToUpperInvariant())
+        switch (scope.DataType)
         {
-            case Chapter:
+            case ChapterUSFM:
                 if (!string.IsNullOrEmpty(error))
                     return ResponseToRequest.Failed(error);
                 RunWithinLock(
@@ -134,7 +134,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                     }
                 );
                 // The value of returned string is case sensitive and cannot change unless data provider subscriptions change
-                return ResponseToRequest.Succeeded("Chapter");
+                return ResponseToRequest.Succeeded(ChapterUSFM);
             default:
                 return ResponseToRequest.Failed($"Unknown data type: {scope.DataType}");
         }
