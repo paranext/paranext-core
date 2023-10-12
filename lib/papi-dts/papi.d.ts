@@ -30,9 +30,10 @@ declare module 'shared/global-this.model' {
      * @returns string holding the state value and a function to use to update the state value
      * @example const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen');
      */
-    var useWebViewState: (
+    var useWebViewState: <T>(
       stateKey: string,
-    ) => [webViewState: string, setWebViewState: Dispatch<SetStateAction<string>>];
+      defaultStateValue: NonNullable<T>,
+    ) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
   }
   /** Type of Paranext process */
   export enum ProcessType {
@@ -1919,12 +1920,34 @@ declare module 'shared/log-error.model' {
   }
 }
 declare module 'renderer/services/web-view-state.service' {
-  /** Get the web view state object associated with the given ID */
-  export function getWebViewState(id: string): Record<string, string>;
-  /** Set the web view state object associated with the given ID
-   *  To avoid breaking references to existing state, call `getWebViewState` and modify the returned state object instead of setting a new state object
+  /**
+   * Get the web view state associated with the given ID
+   * This function is only intended to be used at startup. getWebViewState is intended for web views to call.
+   * @param id ID of the web view
+   * @returns state object of the given web view
    */
-  export function setWebViewState(id: string, state: Record<string, string>): void;
+  export function getFullWebViewStateById(id: string): Record<string, string>;
+  /**
+   * Set the web view state associated with the given ID
+   * This function is only intended to be used at startup. setWebViewState is intended for web views to call.
+   * @param id ID of the web view
+   * @param state State to set for the given web view
+   */
+  export function setFullWebViewStateById(id: string, state: Record<string, string>): void;
+  /**
+   * Get the web view state associated with the given ID
+   * @param id ID of the web view
+   * @param stateKey Key used to retrieve the state value
+   * @returns string (if it exists) containing the state for the given key of the given web view
+   */
+  export function getWebViewStateById<T>(id: string, stateKey: string): T | undefined;
+  /**
+   * Set the web view state object associated with the given ID
+   * @param id ID of the web view
+   * @param stateKey Key for the associated state
+   * @param stateValue Value of the state for the given key of the given web view - must work with JSON.stringify/parse
+   */
+  export function setWebViewStateById<T>(id: string, stateKey: string, stateValue: T): void;
   /** Purge any web view state that hasn't been touched since the process has been running.
    *  Only call this once all web views have been loaded.
    */
