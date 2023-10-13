@@ -1583,6 +1583,7 @@ declare module 'papi-shared-types' {
    */
   interface ProjectDataTypes {
     NotesOnly: NotesOnlyProjectDataTypes;
+    placeholder: MandatoryProjectDataType;
   }
   /**
    * Identifiers for all project types supported by PAPI. These are not intended to correspond 1:1
@@ -2517,12 +2518,27 @@ declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
   ) => void;
   export default useEventAsync;
 }
+declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
+  import { NetworkObject } from 'shared/models/network-object.model';
+  /**
+   * This function takes in a getNetworkObject function and creates a hook with that function in it
+   * which will return a network object
+   * @param getNetworkObject A function that takes in an id string and returns a network object
+   * @returns a function that takes in a networkObjectSource and returns a NetworkObject
+   */
+  function createUseNetworkObjectHook(
+    getNetworkObject: (id: string) => Promise<NetworkObject<object> | undefined>,
+  ): (
+    networkObjectSource: string | NetworkObject<object> | undefined,
+  ) => NetworkObject<object> | undefined;
+  export default createUseNetworkObjectHook;
+}
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
   import IDataProvider from 'shared/models/data-provider.interface';
   /**
    * Gets a data provider with specified provider name
-   * @param dataProviderSource string name of the data provider to get OR dataProvider (result of useDataProvider if you
-   * want this hook to just return the data provider again)
+   * @param dataProviderSource string name of the data provider to get OR dataProvider (result of
+   *  useDataProvider, if you want this hook to just return the data provider again)
    * @returns undefined if the data provider has not been retrieved,
    *  data provider if it has been retrieved and is not disposed,
    *  and undefined again if the data provider is disposed
@@ -2530,9 +2546,9 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @type `T` - the type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
    *  specifying your own types, or provide a custom data provider type
    */
-  function useDataProvider<T extends IDataProvider<any>>(
+  const useDataProvider: <T extends IDataProvider<any>>(
     dataProviderSource: string | T | undefined,
-  ): T | undefined;
+  ) => T | undefined;
   export default useDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-data.hook' {
@@ -2668,6 +2684,25 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   ) => [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void];
   export default useSetting;
 }
+declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
+  import { ProjectDataTypes } from 'papi-shared-types';
+  import IDataProvider from 'shared/models/data-provider.interface';
+  /**
+   * Gets a project data provider with specified provider name
+   * @param projectDataProviderSource string name of the id of the project to get OR projectDataProvider (result
+   * of useProjectDataProvider, if you want this hook to just return the data provider again)
+   * @returns undefined if the project data provider has not been retrieved, the requested project
+   *  data provider if it has been retrieved and is not disposed, and undefined again if the project
+   *  data provider is disposed
+   *
+   * @ProjectType `T` - the project type for the project to use. The returned project data provider
+   *  will have the project data provider type associated with this project type.
+   */
+  const useProjectDataProvider: <ProjectType extends keyof ProjectDataTypes>(
+    projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+  ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
+  export default useProjectDataProvider;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   import usePromise from 'renderer/hooks/papi-hooks/use-promise.hook';
   import useEvent from 'renderer/hooks/papi-hooks/use-event.hook';
@@ -2675,10 +2710,12 @@ declare module 'renderer/hooks/papi-hooks/index' {
   import useDataProvider from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   import useData from 'renderer/hooks/papi-hooks/use-data.hook';
   import useSetting from 'renderer/hooks/papi-hooks/use-setting.hook';
+  import useProjectDataProvider from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
   export interface PapiHooks {
     usePromise: typeof usePromise;
     useEvent: typeof useEvent;
     useEventAsync: typeof useEventAsync;
+    useProjectDataProvider: typeof useProjectDataProvider;
     useDataProvider: typeof useDataProvider;
     /**
      * Special React hook that subscribes to run a callback on a data provider's data with specified

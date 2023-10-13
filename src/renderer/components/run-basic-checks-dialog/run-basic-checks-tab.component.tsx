@@ -2,27 +2,28 @@ import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import { Button, ScriptureReference, getChaptersForBook } from 'papi-components';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import settingsService from '@shared/services/settings.service';
-import { fetchProjects } from '@renderer/components/project-dialogs/open-project-tab.component';
 import BookSelector from '@renderer/components/run-basic-checks-dialog/book-selector.component';
 import BasicChecks, {
   fetchChecks,
 } from '@renderer/components/run-basic-checks-dialog/basic-checks.component';
-import { Project } from '@renderer/components/project-dialogs/project-list.component';
 import './run-basic-checks-tab.component.scss';
+import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
+import { VerseRef } from '@sillsdev/scripture';
+import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 
 export const TAB_TYPE_RUN_BASIC_CHECKS = 'run-basic-checks';
 
 // Changing global scripture reference won't effect the dialog because reference is passed in once at the start.
 type RunBasicChecksTabProps = {
   currentScriptureReference: ScriptureReference | null;
-  currentProject: Project | undefined;
+  currentProjectId: string | undefined;
 };
 
 export default function RunBasicChecksTab({
   currentScriptureReference,
-  currentProject,
+  currentProjectId,
 }: RunBasicChecksTabProps) {
   const currentBookNumber = currentScriptureReference?.bookNum ?? 1;
   const basicChecks = fetchChecks();
@@ -83,11 +84,21 @@ export default function RunBasicChecksTab({
     );
   };
 
+  const project = useProjectDataProvider<'ParatextStandard'>(currentProjectId);
+
+  const [projectString] = usePromise(
+    useMemo(() => {
+      return async () =>
+        project === undefined
+          ? 'No current project'
+          : project.getVerseUSFM(new VerseRef('MAT 4:1'));
+    }, [project]),
+    'Loading',
+  );
+
   return (
     <div className="run-basic-checks-dialog">
-      <Typography variant="h5">
-        {currentProject ? currentProject.name : 'No Current Project'}
-      </Typography>
+      <Typography variant="h5">{`Run basic checks: ${currentProjectId}, ${projectString}`}</Typography>
       {/* Should always be two columns? */}
       <fieldset className="run-basic-checks-check-names">
         <legend>Checks</legend>
@@ -120,14 +131,18 @@ export default function RunBasicChecksTab({
 }
 
 export const loadRunBasicChecksTab = (savedTabInfo: SavedTabInfo): TabInfo => {
-  const project = fetchProjects().find((proj) => proj.id === 'project-1');
-
   return {
     ...savedTabInfo,
     tabTitle: 'Run Basic Checks',
     content: (
       <RunBasicChecksTab
-        currentProject={project}
+        // #region Test a .NET data provider
+        // TODO: Uncomment this or similar sample code once https://github.com/paranext/paranext-core/issues/440 is resolved
+        // In the meantime, if you want to try this, copy an existing project into
+        //   <home_dir>/.platform.bible/<project_short_name>_<project_ID_from_settings.xml>/project/paratext
+        // For example: "~/.platform.bible/projects/TPKJ_b4c501ad2538989d6fb723518e92408406e232d3/project/paratext"
+        // Then create a file named "meta.json" in the "<short_name>_<project_ID>" directory with this JSON:
+        currentProjectId="INSERT YOUR PROJECT ID HERE"
         currentScriptureReference={settingsService.get('platform.verseRef')}
       />
     ),
