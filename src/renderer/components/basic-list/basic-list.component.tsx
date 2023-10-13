@@ -8,11 +8,46 @@ import {
   ColumnDef,
   flexRender,
 } from '@tanstack/react-table';
+import { Canon } from '@sillsdev/scripture';
+import { faker } from '@faker-js/faker';
 
-import { makeCheckResults, checkResult } from './makeCheckResults';
 import './basic-list.component.scss';
 
 export const TAB_TYPE_BASIC_LIST = 'basic-list';
+
+type checkResult = {
+  book: string;
+  chapter?: number;
+  verse?: number;
+  issueDescription: string;
+  subRows?: checkResult[];
+};
+
+const newCheckResult = (bookId: string): checkResult => {
+  return {
+    book: Canon.bookIdToEnglishName(bookId),
+    chapter: faker.number.int(40),
+    verse: faker.number.int(40),
+    issueDescription: 'Basic check issue description',
+  };
+};
+
+export function makeMockCheckResults() {
+  const { allBookIds } = Canon;
+  return allBookIds.map((bookId) => {
+    const numberOfIssues: number = faker.number.int({ min: 1, max: 10 });
+    const bookResults: checkResult = {
+      book: Canon.bookIdToEnglishName(bookId),
+      issueDescription: `${numberOfIssues} issues`,
+    };
+    const subResults: checkResult[] = [];
+    for (let i = 0; i < numberOfIssues; i++) {
+      subResults.push(newCheckResult(bookId));
+    }
+    bookResults.subRows = subResults;
+    return bookResults;
+  });
+}
 
 const columns: ColumnDef<checkResult>[] = [
   {
@@ -51,13 +86,13 @@ const columns: ColumnDef<checkResult>[] = [
         accessorFn: (row) => row.chapter,
         id: 'chapter',
         cell: (info) => info.getValue(),
-        header: () => <span>Chapter</span>,
+        header: ({ table }) => <> {table.getIsSomeRowsExpanded() && <span>Chapter</span>} </>,
       },
       {
         accessorFn: (row) => row.verse,
         id: 'verse',
         cell: (info) => info.getValue(),
-        header: () => <span>Verse</span>,
+        header: ({ table }) => <> {table.getIsSomeRowsExpanded() && <span>Verse</span>} </>,
       },
     ],
   },
@@ -75,7 +110,7 @@ const columns: ColumnDef<checkResult>[] = [
 
 export default function BasicList() {
   const [expanded, setExpanded] = useState<ExpandedState>({});
-  const [data] = useState(() => makeCheckResults(20, 5));
+  const [data] = useState(() => makeMockCheckResults());
   const table = useReactTable({
     data,
     columns,
