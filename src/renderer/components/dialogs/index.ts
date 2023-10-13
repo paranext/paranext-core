@@ -1,4 +1,4 @@
-import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog.old';
+import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
 import { DialogDefinition, DialogTabTypes } from './dialog.data';
 
 /**
