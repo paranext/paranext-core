@@ -12,11 +12,6 @@ export default function useWebViewState<T>(
 ): [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>] {
   const [state, setState] = useState(() => this.getWebViewState(stateKey) ?? defaultStateValue);
 
-  // If the caller changes the inputs, update the state
-  useEffect(() => {
-    setState(this.getWebViewState(stateKey) ?? defaultStateValue);
-  }, [stateKey, defaultStateValue]);
-
   // Whenever the state changes, save the updated value
   useEffect(() => {
     this.setWebViewState(stateKey, state);
