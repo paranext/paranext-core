@@ -111,19 +111,7 @@ export function rejectDialogRequest(id: string, message: string, isFromDockLayou
     throw new Error(`DialogService error: request ${id} not found to reject. Message: ${message}`);
 }
 
-/**
- * Shows a dialog to the user and prompts the user to respond
- *
- * @param options various options for configuring the dialog that shows
- *
- * @returns returns the user's response
- * @throws if the user cancels
- *
- * @type `TReturn` - the type of data the dialog responds with
- *
- * Currently internal. Should this be exposed on the papi? Maybe one day if we have
- * extension-provided dialogs
- */
+// on the dialogService - see `dialog.service.model.ts` for JSDoc
 async function getFromUser<DialogTabType extends DialogTabTypes>(
   dialogType: DialogTabType,
   options?: DialogTypes[DialogTabType]['options'],
@@ -176,6 +164,7 @@ async function getFromUser<DialogTabType extends DialogTabTypes>(
   return dialogPromise;
 }
 
+// on the dialogService - see `dialog.service.model.ts` for JSDoc
 async function getProject(
   options?: DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['options'],
 ): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType']> {
@@ -183,6 +172,7 @@ async function getProject(
 }
 
 const dialogService: DialogService = {
+  getFromUser,
   getProject,
 };
 
