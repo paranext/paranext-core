@@ -28,6 +28,8 @@ declare global {
    * A React hook for working with a state object tied to a webview.
    * Only used in WebView iframes.
    * @param stateKey Key of the state value to use. The webview state holds a unique value per key.
+   * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
+   * @param defaultStateValue Value to use if the web view state didn't contain a value for the given 'stateKey'
    * @returns string holding the state value and a function to use to update the state value
    * @example const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen');
    */
@@ -35,6 +37,14 @@ declare global {
     stateKey: string,
     defaultStateValue: NonNullable<T>,
   ) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+  /**
+   * Retrieve the value from web view state with the given 'stateKey', if it exists.
+   */
+  var getWebViewState: <T>(stateKey: string) => T | undefined;
+  /**
+   * Set the value for a given key in the web view state.
+   */
+  var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
 }
 
 /** Type of Paranext process */
