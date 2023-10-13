@@ -1,8 +1,8 @@
 import { ListItemIcon } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import './select-project-tab.component.scss';
+import './select-project.dialog.scss';
 import { useMemo } from 'react';
-import ProjectList from '@renderer/components/project-dialogs/project-list.component';
+import ProjectList from '@renderer/components/project-components/project-list.component';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { DialogProps } from '@renderer/components/dialogs/dialog-base.data';
