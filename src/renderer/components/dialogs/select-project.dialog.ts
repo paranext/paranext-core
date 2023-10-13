@@ -8,8 +8,10 @@ const SELECT_PROJECT_DIALOG: DialogDefinition<typeof SELECT_PROJECT_DIALOG_TYPE>
   ...DIALOG_BASE,
   tabType: SELECT_PROJECT_DIALOG_TYPE,
   defaultTitle: 'Select Project',
-  initialHeight: 1000,
-  initialWidth: 1000,
+  initialSize: {
+    width: 500,
+    height: 350,
+  },
   Component: SelectProjectTab,
 };
 

@@ -1,5 +1,4 @@
-import { rejectDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service.host';
-import { TabLoader, TabSaver } from '@shared/data/web-view.model';
+import { FloatSize, TabLoader, TabSaver } from '@shared/data/web-view.model';
 import { DialogData } from '@shared/models/dialog-options.model';
 import logger from '@shared/services/logger.service';
 import { ReactElement, createElement } from 'react';
@@ -22,10 +21,8 @@ export type DialogDefinitionBase = {
    * Defaults to the DialogDefinition's `tabType`
    */
   defaultTitle?: string;
-  /** The width at which the dialog will be loaded */
-  initialWidth: number;
-  /** The height at which the dialog will be loaded */
-  initialHeight: number;
+  /** The width and height at which the dialog will be loaded */
+  initialSize: FloatSize;
   /** The minimum width to which the dialog can be set */
   minWidth?: number;
   /** The minimum height to which the dialog can be set */
@@ -61,6 +58,68 @@ export type DialogProps<TData = unknown> = DialogData & {
   cancelDialog(errorMessage: string): void;
 };
 
+/** The default initial size for dialogs. Can be overridden by a dialog's `initialSize` property */
+const DIALOG_DEFAULT_SIZE: FloatSize = { width: 300, height: 300 };
+
+/**
+ * Resolve a dialog request
+ *
+ * This function is a reference holder and should be replaced by `dialog.service.host.ts` with its
+ * `resolveDialogRequest` in `hookUpDialogService` as soon as possible. This is written this way to
+ * mitigate dependency cycles
+ */
+let resolveDialogRequestInternal = (id: string, data: unknown): void => {
+  throw new Error(
+    `Dialog ${id} tried to resolve before being hooked up to the dialog service! This may indicate that the dialog service started after a dialog was submitted. data: ${JSON.stringify(
+      data,
+    )}`,
+  );
+};
+
+/**
+ * Resolve a dialog request
+ *
+ * This function should just run `dialog.service.host.ts`'s `resolveDialogRequest`
+ */
+function resolveDialogRequest(id: string, data: unknown) {
+  return resolveDialogRequestInternal(id, data);
+}
+
+/**
+ * Reject a dialog request. Synchronously rejects, then asynchronously closes the dialog
+ *
+ * This function is a reference holder and should be replaced by `dialog.service.host.ts` with its
+ * `rejectDialogRequest` in `hookUpDialogService` as soon as possible. This is written this way to
+ * mitigate dependency cycles
+ */
+let rejectDialogRequestInternal = (id: string, message: string, isFromDockLayout = false): void => {
+  throw new Error(
+    `Dialog ${id} tried to reject before being hooked up to the dialog service! This may indicate that the dialog service started after a dialog was canceled. message: ${JSON.stringify(
+      message,
+    )}. isFromDockLayout: ${isFromDockLayout}`,
+  );
+};
+
+/**
+ * Reject a dialog request. Synchronously rejects, then asynchronously closes the dialog
+ *
+ * This function should just run `dialog.service.host.ts`'s `rejectDialogRequest`
+ */
+function rejectDialogRequest(id: string, message: string, isFromDockLayout = false) {
+  return rejectDialogRequestInternal(id, message, isFromDockLayout);
+}
+
+export function hookUpDialogService({
+  resolveDialogRequest: resolve,
+  rejectDialogRequest: reject,
+}: {
+  resolveDialogRequest: (id: string, data: unknown) => void;
+  rejectDialogRequest: (id: string, message: string, isFromDockLayout?: boolean) => void;
+}) {
+  resolveDialogRequestInternal = resolve;
+  rejectDialogRequestInternal = reject;
+}
+
 /**
  * Static definition of a dialog that can be shown in Platform.Bible
  *
@@ -73,8 +132,7 @@ export type DialogProps<TData = unknown> = DialogData & {
  * spread this `{ ...DIALOG_BASE }`
  */
 const DIALOG_BASE: DialogDefinitionBase = {
-  initialWidth: 300,
-  initialHeight: 300,
+  initialSize: DIALOG_DEFAULT_SIZE,
   loadDialog(savedTabInfo) {
     const maybeTabData = savedTabInfo.data as DialogData | undefined;
     if (!maybeTabData || !maybeTabData.isDialog)

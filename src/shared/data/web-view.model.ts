@@ -155,10 +155,13 @@ interface TabLayout {
  */
 type FloatPosition = 'cascade' | 'center';
 
+/** The dimensions for a floating tab */
+export type FloatSize = { width: number; height: number };
+
 /** Information about a floating window */
 export interface FloatLayout {
   type: 'float';
-  floatSize?: { width: number; height: number };
+  floatSize?: FloatSize;
   /** Where to display the floating window. Defaults to `cascade` */
   position?: FloatPosition;
 }

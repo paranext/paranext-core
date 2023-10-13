@@ -7,8 +7,9 @@ import { newGuid } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog.data';
+import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 
-/** A live dialog request. Includes its id and the functions to run on receiving results */
+/** A live dialog request. Includes the dialog's id and the functions to run on receiving results */
 // TODO: preserve requests between refreshes - save the request id or something?
 type DialogRequest<DialogTabType extends DialogTabTypes> = {
   id: string;
@@ -110,20 +111,8 @@ export function rejectDialogRequest(id: string, message: string, isFromDockLayou
     throw new Error(`DialogService error: request ${id} not found to reject. Message: ${message}`);
 }
 
-/**
- * Shows a dialog to the user and prompts the user to respond
- *
- * @param options various options for configuring the dialog that shows
- *
- * @returns returns the user's response
- * @throws if the user cancels
- *
- * @type `TReturn` - the type of data the dialog responds with
- *
- * Currently internal. Should this be exposed on the papi? Maybe one day if we have
- * extension-provided dialogs
- */
-async function getFromUser<DialogTabType extends DialogTabTypes>(
+// on the dialogService - see `dialog.service.model.ts` for JSDoc
+async function showDialog<DialogTabType extends DialogTabTypes>(
   dialogType: DialogTabType,
   options?: DialogTypes[DialogTabType]['options'],
 ): Promise<DialogTypes[DialogTabType]['responseType']> {
@@ -166,7 +155,7 @@ async function getFromUser<DialogTabType extends DialogTabTypes>(
   } catch (e) {
     // Something went wrong while setting up the dialog. Delete the request and throw to let the
     // requestor know
-    const message = `DialogService error: getFromUser did not initialize successfully! ${e}`;
+    const message = `DialogService error: showDialog did not initialize successfully! ${e}`;
     logger.error(message);
     rejectDialogRequest(dialogId, message);
   }
@@ -175,14 +164,16 @@ async function getFromUser<DialogTabType extends DialogTabTypes>(
   return dialogPromise;
 }
 
-async function getProject(
+// on the dialogService - see `dialog.service.model.ts` for JSDoc
+async function selectProject(
   options?: DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['options'],
 ): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType']> {
-  return getFromUser(SELECT_PROJECT_DIALOG.tabType, options);
+  return showDialog(SELECT_PROJECT_DIALOG.tabType, options);
 }
 
 const dialogService: DialogService = {
-  getProject,
+  showDialog,
+  selectProject,
 };
 
 /**
@@ -207,3 +198,7 @@ export async function startDialogService(): Promise<void> {
     await unsubscribeRequests();
   });
 }
+
+// Hook up the dialogs' resolve and reject functions immediately because this is only here
+// to mitigate a dependency cycle
+hookUpDialogService({ resolveDialogRequest, rejectDialogRequest });

@@ -32,12 +32,14 @@ import {
 } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import {
   FloatLayout,
+  FloatSize,
   SavedTabInfo,
   TabLoader,
   TabInfo,
   TabSaver,
   Layout,
   WebViewProps,
+  PanelDirection,
 } from '@shared/data/web-view.model';
 import LogError from '@shared/log-error.model';
 import {
@@ -64,11 +66,17 @@ import {
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
 import { rejectDialogRequest } from '@renderer/services/dialog.service.host';
 import { DialogData } from '@shared/models/dialog-options.model';
-import DIALOGS from '../dialogs';
+import DIALOGS from '@renderer/components/dialogs';
+import cloneDeep from 'lodash/cloneDeep';
 
 type TabType = string;
 
 type RCDockTabInfo = TabData & TabInfo;
+
+/** The default initial size for floating tabs. Can be overridden by tabTypes' initial sizes */
+const DEFAULT_FLOAT_SIZE: FloatSize = { width: 300, height: 150 };
+/** Default direction a tab will be placed from an existing tab if created as a panel */
+const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
 
 const DOCK_FLOAT_OFFSET = 28;
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
@@ -103,6 +111,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
   ...Object.entries(DIALOGS).map(
     ([dialogTabType, dialogDefinition]) =>
+      // The default implementation of `loadDialog` uses `this`, so bind it to the definition
       [dialogTabType, dialogDefinition.loadDialog.bind(dialogDefinition)] as const,
   ),
 ]);
@@ -113,9 +122,17 @@ const tabSaverMap = new Map<TabType, TabSaver>([
   [TAB_TYPE_ERROR, saveErrorTab],
   ...Object.entries(DIALOGS).map(
     ([dialogTabType, dialogDefinition]) =>
+      // The default implementation of `saveDialog` uses `this`, so bind it to the definition
       [dialogTabType, dialogDefinition.saveDialog.bind(dialogDefinition)] as const,
   ),
 ]);
+
+/** Initial sizes for each tab if created as floating tabs */
+const tabInitialFloatingSize: Record<TabType, FloatSize> = Object.fromEntries(
+  Object.entries(DIALOGS).map(
+    ([dialogTabType, dialogDefinition]) => [dialogTabType, dialogDefinition.initialSize] as const,
+  ),
+);
 
 let previousTabId: string | undefined;
 let previousFloatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
@@ -244,14 +261,51 @@ function findPreviousTab(dockLayout: DockLayout) {
   return dockLayout.find((tabData) => isTab(tabData)) as TabData;
 }
 
+/** Set up defaults for webview layout instructions */
+function layoutDefaults(layout: Layout, savedTabInfo: SavedTabInfo): Layout {
+  const layoutDefaulted = cloneDeep(layout);
+  switch (layoutDefaulted.type) {
+    case 'float': {
+      if (!layoutDefaulted.floatSize) {
+        layoutDefaulted.floatSize =
+          tabInitialFloatingSize[savedTabInfo.tabType] || DEFAULT_FLOAT_SIZE;
+      } else {
+        if (!layoutDefaulted.floatSize.width || layoutDefaulted.floatSize.width <= 0)
+          layoutDefaulted.floatSize.width =
+            tabInitialFloatingSize[savedTabInfo.tabType]?.width || DEFAULT_FLOAT_SIZE.width;
+
+        if (!layoutDefaulted.floatSize.height || layoutDefaulted.floatSize.height <= 0)
+          layoutDefaulted.floatSize.height =
+            tabInitialFloatingSize[savedTabInfo.tabType]?.height || DEFAULT_FLOAT_SIZE.height;
+      }
+
+      break;
+    }
+    case 'panel':
+      if (!layoutDefaulted.direction) layoutDefaulted.direction = DEFAULT_PANEL_DIRECTION;
+      break;
+    case 'tab':
+    default:
+    // do nothing
+  }
+  return layoutDefaulted;
+}
+
 /**
  * Function to call to add or update a tab in the layout
  * @param savedTabInfo info for tab to add or update
  * @param layout information about where to put a new tab
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  * layout
+ *
+ * @returns If tab added, final layout used to display the new tab. If existing tab updated,
+ *   `undefined`
  */
-export function addTabToDock(savedTabInfo: SavedTabInfo, layout: Layout, dockLayout: DockLayout) {
+export function addTabToDock(
+  savedTabInfo: SavedTabInfo,
+  layout: Layout,
+  dockLayout: DockLayout,
+): Layout | undefined {
   const tab = loadTab(savedTabInfo);
   let targetTab = dockLayout.find(tab.id);
 
@@ -259,12 +313,16 @@ export function addTabToDock(savedTabInfo: SavedTabInfo, layout: Layout, dockLay
   if (targetTab) {
     dockLayout.updateTab(tab.id, tab);
     if (isTab(targetTab)) previousTabId = tab.id;
-    return;
+
+    // We did not add a tab, so return undefined to indicate that
+    return undefined;
   }
 
+  // Figure out layout defaults for this tab
+  const updatedLayout = layoutDefaults(layout, savedTabInfo);
+
   // Add new tab
-  const unknownLayoutType = layout.type;
-  switch (layout.type) {
+  switch (updatedLayout.type) {
     case 'tab':
       targetTab = findPreviousTab(dockLayout);
       if (targetTab) {
@@ -287,20 +345,26 @@ export function addTabToDock(savedTabInfo: SavedTabInfo, layout: Layout, dockLay
 
     case 'float': {
       const floatPosition = getFloatPosition(
-        layout,
+        updatedLayout,
         previousFloatPosition,
         dockLayout.getLayoutSize(),
       );
-      if (!layout.position || layout.position === 'cascade') previousFloatPosition = floatPosition;
+
+      if (!updatedLayout.position || updatedLayout.position === 'cascade')
+        // Update the previous float position so the next cascading float layout will appear after it
+        previousFloatPosition = floatPosition;
+
       dockLayout.dockMove(tab, null, 'float', floatPosition);
       break;
     }
     case 'panel':
-      if (layout.targetTabId !== undefined) {
+      if (updatedLayout.targetTabId !== undefined) {
         // Look for a specific tab
-        targetTab = dockLayout.find(layout.targetTabId);
+        targetTab = dockLayout.find(updatedLayout.targetTabId);
         if (!isTab(targetTab))
-          throw new LogError(`When adding a panel, unknown target tab: '${layout.targetTabId}'`);
+          throw new LogError(
+            `When adding a panel, unknown target tab: '${updatedLayout.targetTabId}'`,
+          );
       }
       // Didn't ask for a specific tab, so just get the previous tab and go from there
       else targetTab = findPreviousTab(dockLayout);
@@ -314,12 +378,14 @@ export function addTabToDock(savedTabInfo: SavedTabInfo, layout: Layout, dockLay
           null,
         // Defaults are added in `web-view.service.ts`.
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        layout.direction!,
+        updatedLayout.direction!,
       );
       break;
 
     default:
-      throw new LogError(`Unknown layoutType: '${unknownLayoutType}'`);
+      // Type assert here because TypeScript thinks this layout is `never` because the switch has
+      // covered all its options (if JS were statically typed, this `default` would never hit)
+      throw new LogError(`Unknown layoutType: '${(updatedLayout as Layout).type}'`);
   }
 
   // If there was an error loading the tab, we create an error tab. But we also want to throw here
@@ -330,6 +396,8 @@ export function addTabToDock(savedTabInfo: SavedTabInfo, layout: Layout, dockLay
     throw new LogError(
       `Dock Layout created an error tab: ${(tab.data as ErrorTabData)?.errorMessage}`,
     );
+
+  return updatedLayout;
 }
 
 /**
@@ -338,14 +406,21 @@ export function addTabToDock(savedTabInfo: SavedTabInfo, layout: Layout, dockLay
  * @param layout information about where to put a new webview
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  * layout
+ *
+ * @returns If WebView added, final layout used to display the new webView. If existing webView
+ *   updated, `undefined`
  */
-export function addWebViewToDock(webView: WebViewProps, layout: Layout, dockLayout: DockLayout) {
+export function addWebViewToDock(
+  webView: WebViewProps,
+  layout: Layout,
+  dockLayout: DockLayout,
+): Layout | undefined {
   const tabId = webView.id;
   if (!tabId)
     throw new Error(
       `paranext-dock-layout error: WebView of type ${webView.webViewType} has no id!`,
     );
-  addTabToDock({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView }, layout, dockLayout);
+  return addTabToDock({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView }, layout, dockLayout);
 }
 
 // #endregion

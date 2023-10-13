@@ -1803,13 +1803,15 @@ declare module 'shared/data/web-view.model' {
    * `center` - center the window in the dock layout
    */
   type FloatPosition = 'cascade' | 'center';
+  /** The dimensions for a floating tab */
+  export type FloatSize = {
+    width: number;
+    height: number;
+  };
   /** Information about a floating window */
   export interface FloatLayout {
     type: 'float';
-    floatSize?: {
-      width: number;
-      height: number;
-    };
+    floatSize?: FloatSize;
     /** Where to display the floating window. Defaults to `cascade` */
     position?: FloatPosition;
   }
@@ -2024,15 +2026,21 @@ declare module 'shared/services/web-view.service' {
     /**
      * Function to call to add or update a tab in the layout
      * @param savedTabInfo info for tab to add or update
-     * @param layout information about where to put a new webview
+     * @param layout information about where to put a new tab
+     *
+     * @returns If tab added, final layout used to display the new tab. If existing tab updated,
+     *   `undefined`
      */
-    addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => void;
+    addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => Layout | undefined;
     /**
      * Function to call to add or update a webview in the layout
      * @param webView web view to add or update
      * @param layout information about where to put a new webview
+     *
+     * @returns If WebView added, final layout used to display the new webView. If existing webView
+     *   updated, `undefined`
      */
-    addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
+    addWebViewToDock: (webView: WebViewProps, layout: Layout) => Layout | undefined;
     /**
      * Remove a tab in the layout
      * @param tabId id of the tab to remove
@@ -2116,11 +2124,14 @@ declare module 'shared/services/web-view.service' {
    * @param savedTabInfo info for tab to add or update
    * @param layout information about where to put a new tab
    *
+   * @returns If tab added, final layout used to display the new tab. If existing tab updated,
+   *   `undefined`
+   *
    * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
    *
    * Not exposed on the papi
    */
-  export const addTab: (savedTabInfo: SavedTabInfo, layout: Layout) => Promise<void>;
+  export const addTab: (savedTabInfo: SavedTabInfo, layout: Layout) => Promise<Layout | undefined>;
   /**
    * Creates a new web view or gets an existing one depending on if you request an existing one and
    * if the web view provider decides to give that existing one to you (it is up to the provider).
@@ -2826,6 +2837,236 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
   ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
   export default useProjectDataProvider;
 }
+declare module 'shared/models/dialog-options.model' {
+  /** General options to adjust dialogs (created from `papi.dialogs`) */
+  export type DialogOptions = {
+    /** Dialog title to display in the header. Default depends on the dialog */
+    title?: string;
+    /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
+    iconUrl?: string;
+    /** The message to show the user in the dialog. Default depends on the dialog */
+    prompt?: string;
+  };
+  /** data in each tab that is a dialog. Added to DialogOptions in `dialog.service.host.ts` */
+  export type DialogData = DialogOptions & {
+    isDialog: true;
+  };
+}
+declare module 'renderer/components/dialogs/dialog-base.data' {
+  import { FloatSize, TabLoader, TabSaver } from 'shared/data/web-view.model';
+  import { DialogData } from 'shared/models/dialog-options.model';
+  import { ReactElement } from 'react';
+  /** Base type for DialogDefinition. Contains reasonable defaults for dialogs */
+  export type DialogDefinitionBase = {
+    /** Overwritten in {@link DialogDefinition}. Must be specified by all DialogDefinitions */
+    tabType?: string;
+    /** Overwritten in {@link DialogDefinition}. Must be specified by all DialogDefinitions */
+    Component?: (props: DialogProps) => ReactElement;
+    /**
+     * The default icon for this dialog. This may be overridden by the `DialogOptions.title`
+     *
+     * Defaults to the Platform.Bible logo
+     */
+    defaultIconUrl?: string;
+    /**
+     * The default title for this dialog. This may be overridden by the `DialogOptions.title`
+     *
+     * Defaults to the DialogDefinition's `tabType`
+     */
+    defaultTitle?: string;
+    /** The width and height at which the dialog will be loaded */
+    initialSize: FloatSize;
+    /** The minimum width to which the dialog can be set */
+    minWidth?: number;
+    /** The minimum height to which the dialog can be set */
+    minHeight?: number;
+    /**
+     * The function used to load the dialog into the dock layout. Default uses the `Component` field
+     * and passes in the `DialogProps`
+     */
+    loadDialog: TabLoader;
+    /**
+     * The function used to save the dialog into the dock layout
+     *
+     * Default does not save the dialog as they cannot properly be restored yet.
+     *
+     * TODO: preserve requests between refreshes - save the dialog info in such a way that it works
+     * when loading again after refresh
+     */
+    saveDialog: TabSaver;
+  };
+  export type DialogProps<TData = unknown> = DialogData & {
+    /**
+     * Sends the data as a resolved response to the dialog request and closes the dialog
+     *
+     * @param data data with which to resolve the request
+     */
+    submitDialog(data: TData): void;
+    /**
+     * Rejects the dialog request with hte specified message
+     *
+     * @param errorMessage message to explain why the dialog request was rejected
+     */
+    cancelDialog(errorMessage: string): void;
+  };
+  export function hookUpDialogService({
+    resolveDialogRequest: resolve,
+    rejectDialogRequest: reject,
+  }: {
+    resolveDialogRequest: (id: string, data: unknown) => void;
+    rejectDialogRequest: (id: string, message: string, isFromDockLayout?: boolean) => void;
+  }): void;
+  /**
+   * Static definition of a dialog that can be shown in Platform.Bible
+   *
+   * For good defaults, dialogs can include all the properties of this dialog. Dialogs must then
+   * specify `tabType` and `Component` in order to comply with `DialogDefinition`
+   *
+   * Note: this is not a class that can be inherited because all properties would be static but then
+   * we would not be able to use the default `loadDialog` because it would be using a static reference
+   * to a nonexistent `Component`. Instead of inheriting this as a class, any dialog definition can
+   * spread this `{ ...DIALOG_BASE }`
+   */
+  const DIALOG_BASE: DialogDefinitionBase;
+  export default DIALOG_BASE;
+}
+declare module 'renderer/components/dialogs/dialog.data' {
+  import { DialogOptions } from 'shared/models/dialog-options.model';
+  import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
+  import { ReactElement } from 'react';
+  /**
+   * Mapped type for dialog functions to use in getting various types for dialogs
+   *
+   * Keys should be dialog names, and values should be {@link DialogDataTypes}
+   *
+   * If you add a dialog here, you must also add it on {@link DIALOGS}
+   */
+  export interface DialogTypes {
+    'platform.selectProject': DialogDataTypes<DialogOptions, string>;
+  }
+  /** Each type of dialog. These are the tab types used in the dock layout */
+  export type DialogTabTypes = keyof DialogTypes;
+  /** Types related to a specific dialog */
+  export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
+    /**
+     * The dialog options to specify when calling the dialog.
+     * Passed into `loadDialog` as SavedTabInfo.data
+     *
+     * The default implementation of `loadDialog` passes all the options down to the dialog component
+     * as props
+     */
+    options: TOptions;
+    /** The type of the response to the dialog request */
+    responseType: TReturnType;
+  };
+  export type DialogDefinition<DialogTabType extends DialogTabTypes> = DialogDefinitionBase & {
+    /**
+     * Type of tab - indicates what kind of built-in dock layout tab this dialog definition represents
+     */
+    tabType: DialogTabType;
+    /**
+     * React component to render for this dialog
+     *
+     * This must be specified only if you do not overwrite the default `loadDialog`
+     * @param props props that will be passed through from the dialog tab's data
+     * @returns react element to render
+     */
+    Component: (
+      props: DialogProps<DialogTypes[DialogTabType]['responseType']> &
+        DialogTypes[DialogTabType]['options'],
+    ) => ReactElement;
+  };
+}
+declare module 'shared/services/dialog.service.model' {
+  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog.data';
+  import { DialogOptions } from 'shared/models/dialog-options.model';
+  /**
+   * Prompt the user for responses with dialogs
+   */
+  export interface DialogService {
+    /**
+     * Shows a dialog to the user and prompts the user to respond
+     *
+     * @param options various options for configuring the dialog that shows
+     *
+     * @returns returns the user's response
+     * @throws if the user cancels
+     *
+     * @type `TReturn` - the type of data the dialog responds with
+     */
+    showDialog<DialogTabType extends DialogTabTypes>(
+      dialogType: DialogTabType,
+      options?: DialogTypes[DialogTabType]['options'],
+    ): Promise<DialogTypes[DialogTabType]['responseType']>;
+    /**
+     * Shows a select project dialog to the user and prompts the user to select a dialog
+     *
+     * @param options various options for configuring the dialog that shows
+     *
+     * @returns returns the user's selected project id
+     * @throws if the user cancels
+     */
+    selectProject(options?: DialogOptions): Promise<string>;
+  }
+  /** Prefix on requests that indicates that the request is related to dialog operations */
+  export const CATEGORY_DIALOG = 'dialog';
+}
+declare module 'shared/services/dialog.service' {
+  import { DialogService } from 'shared/services/dialog.service.model';
+  const dialogService: DialogService;
+  export default dialogService;
+}
+declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
+  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog.data';
+  /**
+   * Enables using `papi.dialogs` in React more easily. Provides a callback to run to get a response
+   * from a dialog as well as states that indicate the dialog's response and whether the dialog is
+   * open.
+   *
+   * Calling the dialog callback returned from this hook does nothing if you already previously opened
+   * the dialog and have not received a response
+   *
+   * @param dialogType dialog type you want to show on the screen
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not
+   *    be updated every render
+   * @param options various options for configuring the dialog that shows
+   *
+   *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not
+   *    be updated every render
+   * @param defaultResponse the starting value for the response. Once a response is received, this is
+   * no longer used. Defaults to `undefined`
+   *
+   * @returns `[response, showDialogCallback, errorMessage, isShowingDialog]`
+   *  - `response` - the response from the dialog or `defaultResponse` if the dialog has not been
+   *      shown and a response received yet. DOES NOT reset every time the callback is run
+   *  - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response
+   *  - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
+   *      `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
+   *  - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not
+   *      responded)
+   *
+   * @type `DialogTabType` the dialog type you are using. Should be inferred by parameters
+   * @type `TResponse` the type that the response can be. If you do not specify a `defaultResponse`,
+   * this can be the dialog response type or undefined. If you specify a `defaultResponse`, this will
+   * be just the dialog response type. Should be inferred by parameters.
+   *  - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse`
+   *    then becomes that literal instead of being the dialog response type. You can type assert it
+   *    to the appropriate type. Let us know if you run into an issue with this!
+   *
+   */
+  function useDialogCallback<
+    DialogTabType extends DialogTabTypes,
+    TResponse extends DialogTypes[DialogTabType]['responseType'] | undefined =
+      | DialogTypes[DialogTabType]['responseType']
+      | undefined,
+  >(
+    dialogType: DialogTabType,
+    options?: DialogTypes[DialogTabType]['options'],
+    defaultResponse?: TResponse,
+  ): [TResponse, () => Promise<void>, string | undefined, boolean];
+  export default useDialogCallback;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   import usePromise from 'renderer/hooks/papi-hooks/use-promise.hook';
   import useEvent from 'renderer/hooks/papi-hooks/use-event.hook';
@@ -2834,7 +3075,9 @@ declare module 'renderer/hooks/papi-hooks/index' {
   import useData from 'renderer/hooks/papi-hooks/use-data.hook';
   import useSetting from 'renderer/hooks/papi-hooks/use-setting.hook';
   import useProjectDataProvider from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
+  import useDialogCallback from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export interface PapiHooks {
+    useDialogCallback: typeof useDialogCallback;
     usePromise: typeof usePromise;
     useEvent: typeof useEvent;
     useEventAsync: typeof useEventAsync;
@@ -2884,45 +3127,6 @@ declare module 'renderer/hooks/papi-hooks/index' {
    */
   const papiHooks: PapiHooks;
   export default papiHooks;
-}
-declare module 'shared/models/dialog-options.model' {
-  /** General options to adjust dialogs (created from `papi.dialogs`) */
-  export type DialogOptions = {
-    /** Dialog title to display in the header. Default depends on the dialog */
-    title?: string;
-    /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
-    iconUrl?: string;
-    /** The message to show the user in the dialog. Default depends on the dialog */
-    prompt?: string;
-  };
-  /** data in each tab that is a dialog. Added to DialogOptions in `dialog.service.host.ts` */
-  export type DialogData = DialogOptions & {
-    isDialog: true;
-  };
-}
-declare module 'shared/services/dialog.service.model' {
-  import { DialogOptions } from 'shared/models/dialog-options.model';
-  /**
-   * Prompt the user for responses with dialogs
-   */
-  export interface DialogService {
-    /**
-     * Shows a select project dialog to the user and prompts the user to select a dialog
-     *
-     * @param options various options for configuring the dialog that shows
-     *
-     * @returns returns the user's selected project id
-     * @throws if the user cancels
-     */
-    getProject(options?: DialogOptions): Promise<string>;
-  }
-  /** Prefix on requests that indicates that the request is related to dialog operations */
-  export const CATEGORY_DIALOG = 'dialog';
-}
-declare module 'shared/services/dialog.service' {
-  import { DialogService } from 'shared/services/dialog.service.model';
-  const dialogService: DialogService;
-  export default dialogService;
 }
 declare module 'papi-frontend' {
   /**

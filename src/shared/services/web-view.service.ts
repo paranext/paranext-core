@@ -17,7 +17,6 @@ import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   AddWebViewEvent,
   Layout,
-  PanelDirection,
   SavedTabInfo,
   TabInfo,
   WebViewDefinitionReact,
@@ -56,15 +55,21 @@ type PapiDockLayout = {
   /**
    * Function to call to add or update a tab in the layout
    * @param savedTabInfo info for tab to add or update
-   * @param layout information about where to put a new webview
+   * @param layout information about where to put a new tab
+   *
+   * @returns If tab added, final layout used to display the new tab. If existing tab updated,
+   *   `undefined`
    */
-  addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => void;
+  addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => Layout | undefined;
   /**
    * Function to call to add or update a webview in the layout
    * @param webView web view to add or update
    * @param layout information about where to put a new webview
+   *
+   * @returns If WebView added, final layout used to display the new webView. If existing webView
+   *   updated, `undefined`
    */
-  addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
+  addWebViewToDock: (webView: WebViewProps, layout: Layout) => Layout | undefined;
   /**
    * Remove a tab in the layout
    * @param tabId id of the tab to remove
@@ -158,8 +163,6 @@ const FORBIDDEN_HTML_TAGS = ['object', 'base', 'embed', 'frame', 'frameset'];
 
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
-const DEFAULT_FLOAT_SIZE = { width: 300, height: 150 };
-const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
 
 /** Name for request to get a web view */
 const GET_WEB_VIEW_REQUEST = 'getWebView';
@@ -191,23 +194,6 @@ export const onDidAddWebView = onDidAddWebViewEmitter.event;
 let papiDockLayoutVar = createDockLayoutAsyncVar();
 
 // #region functions related to the dock layout
-
-/** Set up defaults for webview layout instructions */
-function layoutDefaults(layout: Layout): Layout {
-  const layoutDefaulted = cloneDeep(layout);
-  switch (layoutDefaulted.type) {
-    case 'float':
-      if (!layoutDefaulted.floatSize) layoutDefaulted.floatSize = DEFAULT_FLOAT_SIZE;
-      break;
-    case 'panel':
-      if (!layoutDefaulted.direction) layoutDefaulted.direction = DEFAULT_PANEL_DIRECTION;
-      break;
-    case 'tab':
-    default:
-    // do nothing
-  }
-  return layoutDefaulted;
-}
 
 /**
  * Basic `saveTabInfo` that simply strips the properties added by {@link TabInfo} off of the object
@@ -371,14 +357,18 @@ export const removeTab = async (tabId: string): Promise<boolean> => {
  * @param savedTabInfo info for tab to add or update
  * @param layout information about where to put a new tab
  *
+ * @returns If tab added, final layout used to display the new tab. If existing tab updated,
+ *   `undefined`
+ *
  * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
  *
  * Not exposed on the papi
  */
-export const addTab = async (savedTabInfo: SavedTabInfo, layout: Layout): Promise<void> => {
-  const updatedLayout = layoutDefaults(layout);
-
-  (await papiDockLayoutVar.promise).addTabToDock(savedTabInfo, updatedLayout);
+export const addTab = async (
+  savedTabInfo: SavedTabInfo,
+  layout: Layout,
+): Promise<Layout | undefined> => {
+  return (await papiDockLayoutVar.promise).addTabToDock(savedTabInfo, layout);
 };
 
 /**
@@ -456,8 +446,6 @@ export const getWebView = async (
   // Find existing webView if one exists
   /** Either the existing webview with the specified id or a placeholder webview if one was not found */
   let existingSavedWebView: SavedWebViewDefinition | undefined;
-  /** Whether we found an existing web view to ask the provider for */
-  let didFindExistingWebView = false;
   // Look for existing webview
   if (optionsDefaulted.existingId) {
     const existingWebView = (await papiDockLayoutVar.promise).dockLayout.find(
@@ -480,7 +468,6 @@ export const getWebView = async (
       );
       // Load the web view state since the web view provider doesn't have access to the data store
       existingSavedWebView.state = getFullWebViewStateById(existingWebView.id);
-      didFindExistingWebView = true;
     }
   }
 
@@ -500,19 +487,6 @@ export const getWebView = async (
 
   // The web view provider might have updated the web view state, so save it
   if (webView.state) setFullWebViewStateById(webView.id, webView.state);
-
-  /**
-   * The web view we are getting is new. Either the webview provider gave us a new webview instead
-   * of the existing one or there wasn't an existing one in the first place
-   */
-  // See if the provider gave us a new web view
-  // Meaning we got a web view from the provider (which is already the case since we are here)
-  // And we didn't find an existing one so the one we got must be new
-  // or the web view id we asked the provider for is not the one it gave us and it already exists
-  const webViewIsNew =
-    !didFindExistingWebView ||
-    (existingSavedWebView.id !== webView.id &&
-      (await papiDockLayoutVar.promise).dockLayout.find(webView.id));
 
   // WebView.contentType is assumed to be React by default. Extensions can specify otherwise
   const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
@@ -666,12 +640,12 @@ export const getWebView = async (
     contentType,
     content: webViewContent,
   };
-  const updatedLayout = layoutDefaults(layout);
 
-  (await papiDockLayoutVar.promise).addWebViewToDock(updatedWebView, updatedLayout);
+  const updatedLayout = (await papiDockLayoutVar.promise).addWebViewToDock(updatedWebView, layout);
 
-  // Inform web view consumers we added a new web view
-  if (webViewIsNew)
+  // If we received a layout (meaning it created a new webview instead of updating an existing one),
+  // inform web view consumers that we added a new web view
+  if (updatedLayout)
     onDidAddWebViewEmitter.emit({
       webView: convertWebViewDefinitionToSaved(updatedWebView),
       layout: updatedLayout,
