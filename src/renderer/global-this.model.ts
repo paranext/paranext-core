@@ -65,8 +65,6 @@ declare global {
   // Web view state functions are used in the default imports for each webview in web-view.service.ts
   var getWebViewStateById: <T>(id: string, stateKey: string) => T | undefined;
   var setWebViewStateById: <T>(id: string, stateKey: string, stateValue: NonNullable<T>) => void;
-  var getWebViewState: <T>(stateKey: string) => T | undefined;
-  var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
 }
 /* eslint-enable */
 
