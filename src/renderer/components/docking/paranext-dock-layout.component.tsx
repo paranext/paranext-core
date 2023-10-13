@@ -51,11 +51,11 @@ import { getErrorMessage } from '@shared/utils/util';
 import {
   loadDownloadUpdateProjectTab,
   TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
-} from '@renderer/components/project-dialogs/download-update-project-tab.component';
+} from '@renderer/components/project-components/download-update-project-tab.component';
 import {
   loadOpenMultipleProjectsTab,
   TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG,
-} from '@renderer/components/project-dialogs/open-multiple-projects-tab.component';
+} from '@renderer/components/project-components/open-multiple-projects-tab.component';
 import {
   TAB_TYPE_EXTENSION_MANAGER,
   loadExtensionManagerTab,

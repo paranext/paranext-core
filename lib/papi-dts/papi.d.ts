@@ -2927,9 +2927,9 @@ declare module 'shared/services/dialog.service' {
 declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog.data';
   /**
-   * Enables using `papi.dialogs` in React more easily. Provides a callback to run to get a response
-   * from a dialog as well as states that indicate the dialog's response and whether the dialog is
-   * open.
+   * Enables using `papi.dialogs.showDialog` in React more easily. Provides a callback to run to get a
+   * response from a dialog as well as states that indicate the dialog's response and whether the
+   * dialog is open.
    *
    * Calling the dialog callback returned from this hook does nothing if you already previously opened
    * the dialog and have not received a response

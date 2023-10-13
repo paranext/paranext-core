@@ -11,7 +11,7 @@ import BasicChecks, {
 import {
   fetchProjects,
   Project,
-} from '@renderer/components/project-dialogs/project-list.component';
+} from '@renderer/components/project-components/project-list.component';
 import './run-basic-checks-tab.component.scss';
 
 export const TAB_TYPE_RUN_BASIC_CHECKS = 'run-basic-checks';
