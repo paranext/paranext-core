@@ -1,6 +1,6 @@
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
 import { DialogDefinition } from '@renderer/components/dialogs/dialog.data';
-import SelectProjectTab from '@renderer/components/project-dialogs/select-project-tab.component';
+import SelectProjectTab from '@renderer/components/dialogs/select-project.dialog';
 
 const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 
