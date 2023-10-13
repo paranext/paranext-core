@@ -36,6 +36,11 @@ type SettingsGroup = {
   properties: { [settingId: string]: SettingsProperties };
 };
 
+type SettingProps = {
+  setting: string | number | boolean;
+  setSetting: (value: unknown) => void;
+};
+
 type SettingsContribution = { [extensionId: string]: SettingsGroup[] };
 type SettingsValues = { [settingId: string]: string | number | boolean };
 type SettingsComponents = {
@@ -45,7 +50,7 @@ type SettingsComponents = {
 };
 
 // Returns mock data
-//
+// Issue #502 makes collection of this data possible
 function fetchSettingsContributions(): SettingsContribution {
   return {
     'platform.coreSettings': [
@@ -161,6 +166,7 @@ function fetchSettingsContributions(): SettingsContribution {
 }
 
 // Returns mock data
+// Issue #502 makes collection of this data possible
 function fetchSettingsValues(): SettingsValues {
   return {
     'platform.interfaceLanguage': 'English',
@@ -176,11 +182,10 @@ function fetchSettingsValues(): SettingsValues {
     'platform.khmerOnly': true,
     'platform.internetUse': 'Allow unrestricted internet use',
     'platform.shareParatextData': true,
-    // 'platform.proxySettings': [{ host: '' }, { port: 0 }, { username: '' }, { password: '' }],
   };
 }
 
-// Example component of a platform setting
+// Example component of a platform setting - shows how SettingProps would be used
 function InterfaceLanguageSetting({ setting, setSetting }: SettingProps) {
   const options = ['English', 'Spanish', 'French'];
   const [value, setValue] = useState(
@@ -201,6 +206,7 @@ function InterfaceLanguageSetting({ setting, setSetting }: SettingProps) {
   );
 }
 
+// Example component of a platform setting - does not use SettingProps
 function ProxySettings() {
   return (
     <Box
@@ -220,6 +226,7 @@ function ProxySettings() {
 }
 
 // Returns mock data
+// Issue #503 makes collection of this data possible
 function fetchSettingsComponents(): SettingsComponents {
   return {
     'platform.interfaceLanguage': InterfaceLanguageSetting,
@@ -238,11 +245,6 @@ function fetchSettingsComponents(): SettingsComponents {
     'platform.proxySettings': ProxySettings,
   };
 }
-
-type SettingProps = {
-  setting: string | number | boolean | undefined | unknown[];
-  setSetting: (value: unknown) => void;
-};
 
 type SettingsDialogProps = {
   /**
@@ -288,7 +290,7 @@ export default function SettingsDialog({
         group.properties[settingKey].label.includes(searchQuery) ||
         group.properties[settingKey].description?.includes(searchQuery)
           ? settingKeys.push(settingKey)
-          : null,
+          : undefined,
       );
       return settingKeys;
     },
