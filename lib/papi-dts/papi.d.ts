@@ -3,7 +3,7 @@
 /// <reference types="node" />
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
-  import { FunctionComponent } from 'react';
+  import { FunctionComponent, Dispatch, SetStateAction } from 'react';
   /**
    * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts (renderer), and extension-host.ts (extension host)
    */
@@ -20,9 +20,30 @@ declare module 'shared/global-this.model' {
     var logLevel: LogLevel;
     /**
      * A function that each React WebView extension must provide for Paranext to display it.
-     * Only used in WebView iframes
+     * Only used in WebView iframes.
      */
     var webViewComponent: FunctionComponent;
+    /**
+     * A React hook for working with a state object tied to a webview.
+     * Only used in WebView iframes.
+     * @param stateKey Key of the state value to use. The webview state holds a unique value per key.
+     * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
+     * @param defaultStateValue Value to use if the web view state didn't contain a value for the given 'stateKey'
+     * @returns string holding the state value and a function to use to update the state value
+     * @example const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen');
+     */
+    var useWebViewState: <T>(
+      stateKey: string,
+      defaultStateValue: NonNullable<T>,
+    ) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+    /**
+     * Retrieve the value from web view state with the given 'stateKey', if it exists.
+     */
+    var getWebViewState: <T>(stateKey: string) => T | undefined;
+    /**
+     * Set the value for a given key in the web view state.
+     */
+    var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
   }
   /** Type of Paranext process */
   export enum ProcessType {
@@ -1725,6 +1746,8 @@ declare module 'shared/data/web-view.model' {
     content: string;
     /** Name of the tab for the WebView */
     title?: string;
+    /** General object to store unique state for this webview */
+    state?: Record<string, string>;
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
@@ -1906,6 +1929,40 @@ declare module 'shared/log-error.model' {
   export default class LogError extends Error {
     constructor(message?: string);
   }
+}
+declare module 'renderer/services/web-view-state.service' {
+  /**
+   * Get the web view state associated with the given ID
+   * This function is only intended to be used at startup. getWebViewState is intended for web views to call.
+   * @param id ID of the web view
+   * @returns state object of the given web view
+   */
+  export function getFullWebViewStateById(id: string): Record<string, string>;
+  /**
+   * Set the web view state associated with the given ID
+   * This function is only intended to be used at startup. setWebViewState is intended for web views to call.
+   * @param id ID of the web view
+   * @param state State to set for the given web view
+   */
+  export function setFullWebViewStateById(id: string, state: Record<string, string>): void;
+  /**
+   * Get the web view state associated with the given ID
+   * @param id ID of the web view
+   * @param stateKey Key used to retrieve the state value
+   * @returns string (if it exists) containing the state for the given key of the given web view
+   */
+  export function getWebViewStateById<T>(id: string, stateKey: string): T | undefined;
+  /**
+   * Set the web view state object associated with the given ID
+   * @param id ID of the web view
+   * @param stateKey Key for the associated state
+   * @param stateValue Value of the state for the given key of the given web view - must work with JSON.stringify/parse
+   */
+  export function setWebViewStateById<T>(id: string, stateKey: string, stateValue: T): void;
+  /** Purge any web view state that hasn't been touched since the process has been running.
+   *  Only call this once all web views have been loaded.
+   */
+  export function cleanupOldWebViewState(): void;
 }
 declare module 'shared/services/web-view.service' {
   import { Unsubscriber } from 'shared/utils/papi-util';
