@@ -5,11 +5,14 @@ import { useMemo } from 'react';
 import ProjectList from '@renderer/components/project-components/project-list.component';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 import projectLookupService from '@shared/services/project-lookup.service';
-import { DialogProps } from '@renderer/components/dialogs/dialog-base.data';
+import DIALOG_BASE, { DialogProps } from '@renderer/components/dialogs/dialog-base.data';
+import { DialogDefinition } from '@renderer/components/dialogs/dialog.data';
 
-type SelectProjectTabProps = DialogProps<string>;
+type SelectProjectDialogProps = DialogProps<string>;
 
-export default function SelectProjectTab({ prompt, submitDialog }: SelectProjectTabProps) {
+const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
+
+function SelectProjectDialog({ prompt, submitDialog }: SelectProjectDialogProps) {
   const [projects, isLoadingProjects] = usePromise(
     projectLookupService.getMetadataForAllProjects,
     useMemo(() => [], []),
@@ -30,3 +33,16 @@ export default function SelectProjectTab({ prompt, submitDialog }: SelectProject
     </div>
   );
 }
+
+const SELECT_PROJECT_DIALOG: DialogDefinition<typeof SELECT_PROJECT_DIALOG_TYPE> = {
+  ...DIALOG_BASE,
+  tabType: SELECT_PROJECT_DIALOG_TYPE,
+  defaultTitle: 'Select Project',
+  initialSize: {
+    width: 500,
+    height: 350,
+  },
+  Component: SelectProjectDialog,
+};
+
+export default SELECT_PROJECT_DIALOG;
