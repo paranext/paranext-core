@@ -1,4 +1,4 @@
-import { List, ListItem, ListItemText, Tab, Tabs, Typography, TextField, Box } from '@mui/material';
+import { Box, List, ListItem, ListItemText, Tab, Tabs, Typography } from '@mui/material';
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import {
   SyntheticEvent,
@@ -8,8 +8,16 @@ import {
   useCallback,
   useMemo,
 } from 'react';
-import { Checkbox, ComboBox, SearchBar } from 'papi-components';
-import TabPanel from '@renderer/components/settings-dialog/tab-panel.component';
+import {
+  Checkbox,
+  CheckboxProps,
+  ComboBox,
+  ComboBoxLabelOption,
+  ComboBoxProps,
+  SearchBar,
+  TextField,
+} from 'papi-components';
+import TabPanel from '@renderer/components/tab-panel.component';
 import './settings-tab.component.scss';
 import logger from '@shared/services/logger.service';
 
@@ -18,7 +26,7 @@ export const TAB_TYPE_SETTINGS_DIALOG = 'settings-dialog';
 type SettingsProperties = {
   label: string;
   description?: string;
-  default: string | number | boolean | null;
+  default: string | number | boolean | undefined;
 };
 
 // Each settings group maps to a tab
@@ -29,9 +37,15 @@ type SettingsGroup = {
 };
 
 type SettingsContribution = { [extensionId: string]: SettingsGroup[] };
-type SettingsValues = { [settingId: string]: string | number | boolean | null };
-type SettingsComponents = { [settingId: string]: FunctionComponent<{}> };
+type SettingsValues = { [settingId: string]: string | number | boolean };
+type SettingsComponents = {
+  [settingId: string]: FunctionComponent<
+    SettingProps & CheckboxProps & ComboBoxProps<ComboBoxLabelOption>
+  >; // Had to add the other prop types here because the mock data uses PAPI checkbox and comboboxes
+};
 
+// Returns mock data
+//
 function fetchSettingsContributions(): SettingsContribution {
   return {
     'platform.coreSettings': [
@@ -118,7 +132,7 @@ function fetchSettingsContributions(): SettingsContribution {
             label: 'Proxy Settings',
             description:
               'Normally leave empty; network administrator can fill this out if you need a proxy server',
-            default: null,
+            default: undefined,
           },
           'platform.shareParatextData': {
             label: 'Share Paratext Data',
@@ -146,6 +160,7 @@ function fetchSettingsContributions(): SettingsContribution {
   };
 }
 
+// Returns mock data
 function fetchSettingsValues(): SettingsValues {
   return {
     'platform.interfaceLanguage': 'English',
@@ -161,13 +176,29 @@ function fetchSettingsValues(): SettingsValues {
     'platform.khmerOnly': true,
     'platform.internetUse': 'Allow unrestricted internet use',
     'platform.shareParatextData': true,
-    'platform.proxySettings': null,
+    // 'platform.proxySettings': [{ host: '' }, { port: 0 }, { username: '' }, { password: '' }],
   };
 }
 
-function InterfaceLanguageSetting() {
+// Example component of a platform setting
+function InterfaceLanguageSetting({ setting, setSetting }: SettingProps) {
   const options = ['English', 'Spanish', 'French'];
-  return <ComboBox options={options} width={200} />;
+  const [value, setValue] = useState(
+    typeof setting === 'string' || typeof setting === 'number' ? setting : undefined,
+  );
+  return (
+    <ComboBox
+      options={options}
+      value={value}
+      onChange={(_, newValue) => {
+        setSetting(newValue);
+        setValue(
+          typeof newValue === 'string' || typeof newValue === 'number' ? newValue : undefined,
+        );
+      }}
+      width={200}
+    />
+  );
 }
 
 function ProxySettings() {
@@ -179,15 +210,16 @@ function ProxySettings() {
       }}
     >
       <div>
-        <TextField label="Host" defaultValue="Example Here" />
-        <TextField label="Port" type="number" defaultValue={0} />
-        <TextField label="Username" defaultValue="Placeholder" />
-        <TextField label="Password" defaultValue="Placeholder" />
+        <TextField label="Host" placeholder="Example Here" />
+        <TextField label="Port" placeholder="0" />
+        <TextField label="Username" placeholder="Placeholder" />
+        <TextField label="Password" placeholder="Placeholder" />
       </div>
     </Box>
   );
 }
 
+// Returns mock data
 function fetchSettingsComponents(): SettingsComponents {
   return {
     'platform.interfaceLanguage': InterfaceLanguageSetting,
@@ -208,7 +240,7 @@ function fetchSettingsComponents(): SettingsComponents {
 }
 
 type SettingProps = {
-  setting: string | number | boolean | null;
+  setting: string | number | boolean | undefined | unknown[];
   setSetting: (value: unknown) => void;
 };
 
@@ -272,7 +304,7 @@ export default function SettingsDialog({
   };
 
   const setSettingValue = useCallback((settingKey: string, value: unknown) => {
-    return logger.info(`Setting ${settingKey} to ${value}`);
+    return logger.info(`Set setting ${settingKey} to ${value}`);
   }, []);
 
   return (
@@ -308,7 +340,7 @@ export default function SettingsDialog({
                         secondary={group.properties[settingKey].description}
                       />
                       {components[settingKey] ? (
-                        createElement<SettingProps>(components[settingKey], {
+                        createElement(components[settingKey], {
                           setting: settingValues[settingKey],
                           setSetting: (value: unknown) => setSettingValue(settingKey, value),
                         })

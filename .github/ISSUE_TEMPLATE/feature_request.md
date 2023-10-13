@@ -7,7 +7,7 @@ assignees: ''
 ---
 
 **User Story**
-As a \_**\_, I want \_\_** so that \_\_\_\_.
+As a (insert role here), I want (insert feature name/summary here) so that (insert reason here for the feature).
 
 **Description**
 Describe the new feature in detail.
