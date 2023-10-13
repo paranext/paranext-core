@@ -4,9 +4,9 @@ import { getErrorMessage } from '@shared/utils/util';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * Enables using `papi.dialogs` in React more easily. Provides a callback to run to get a response
- * from a dialog as well as states that indicate the dialog's response and whether the dialog is
- * open.
+ * Enables using `papi.dialogs.showDialog` in React more easily. Provides a callback to run to get a
+ * response from a dialog as well as states that indicate the dialog's response and whether the
+ * dialog is open.
  *
  * Calling the dialog callback returned from this hook does nothing if you already previously opened
  * the dialog and have not received a response
@@ -72,7 +72,7 @@ function useDialogCallback<
       try {
         // Looks like we need to assert here because it can't tell this is a TResponse. It can just
         // tell that it is the dialog response type, which does not include undefined
-        const dialogResponse = (await dialogService.getFromUser(dialogType, options)) as TResponse;
+        const dialogResponse = (await dialogService.showDialog(dialogType, options)) as TResponse;
         if (mounted.current) {
           setResponse(dialogResponse);
           setIsShowingDialog(false);

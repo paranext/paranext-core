@@ -11,13 +11,13 @@ async function initialize(): Promise<void> {
 }
 
 const dialogService: DialogService = {
-  getFromUser: async (...args) => {
+  showDialog: async (...args) => {
     await initialize();
-    return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'getFromUser'), ...args);
+    return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'showDialog'), ...args);
   },
-  getProject: async (...args) => {
+  selectProject: async (...args) => {
     await initialize();
-    return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'getProject'), ...args);
+    return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'selectProject'), ...args);
   },
 };
 

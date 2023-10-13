@@ -112,7 +112,7 @@ export function rejectDialogRequest(id: string, message: string, isFromDockLayou
 }
 
 // on the dialogService - see `dialog.service.model.ts` for JSDoc
-async function getFromUser<DialogTabType extends DialogTabTypes>(
+async function showDialog<DialogTabType extends DialogTabTypes>(
   dialogType: DialogTabType,
   options?: DialogTypes[DialogTabType]['options'],
 ): Promise<DialogTypes[DialogTabType]['responseType']> {
@@ -155,7 +155,7 @@ async function getFromUser<DialogTabType extends DialogTabTypes>(
   } catch (e) {
     // Something went wrong while setting up the dialog. Delete the request and throw to let the
     // requestor know
-    const message = `DialogService error: getFromUser did not initialize successfully! ${e}`;
+    const message = `DialogService error: showDialog did not initialize successfully! ${e}`;
     logger.error(message);
     rejectDialogRequest(dialogId, message);
   }
@@ -165,15 +165,15 @@ async function getFromUser<DialogTabType extends DialogTabTypes>(
 }
 
 // on the dialogService - see `dialog.service.model.ts` for JSDoc
-async function getProject(
+async function selectProject(
   options?: DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['options'],
 ): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType']> {
-  return getFromUser(SELECT_PROJECT_DIALOG.tabType, options);
+  return showDialog(SELECT_PROJECT_DIALOG.tabType, options);
 }
 
 const dialogService: DialogService = {
-  getFromUser,
-  getProject,
+  showDialog,
+  selectProject,
 };
 
 /**

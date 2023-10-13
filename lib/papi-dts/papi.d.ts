@@ -2902,7 +2902,7 @@ declare module 'shared/services/dialog.service.model' {
      *
      * @type `TReturn` - the type of data the dialog responds with
      */
-    getFromUser<DialogTabType extends DialogTabTypes>(
+    showDialog<DialogTabType extends DialogTabTypes>(
       dialogType: DialogTabType,
       options?: DialogTypes[DialogTabType]['options'],
     ): Promise<DialogTypes[DialogTabType]['responseType']>;
@@ -2914,7 +2914,7 @@ declare module 'shared/services/dialog.service.model' {
      * @returns returns the user's selected project id
      * @throws if the user cancels
      */
-    getProject(options?: DialogOptions): Promise<string>;
+    selectProject(options?: DialogOptions): Promise<string>;
   }
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';
