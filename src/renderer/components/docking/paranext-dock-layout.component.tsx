@@ -103,6 +103,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
   ...Object.entries(DIALOGS).map(
     ([dialogTabType, dialogDefinition]) =>
+      // The default implementation of `loadDialog` uses `this`, so bind it to the definition
       [dialogTabType, dialogDefinition.loadDialog.bind(dialogDefinition)] as const,
   ),
 ]);
@@ -113,6 +114,7 @@ const tabSaverMap = new Map<TabType, TabSaver>([
   [TAB_TYPE_ERROR, saveErrorTab],
   ...Object.entries(DIALOGS).map(
     ([dialogTabType, dialogDefinition]) =>
+      // The default implementation of `saveDialog` uses `this`, so bind it to the definition
       [dialogTabType, dialogDefinition.saveDialog.bind(dialogDefinition)] as const,
   ),
 ]);

@@ -1,4 +1,3 @@
-import { rejectDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service.host';
 import { TabLoader, TabSaver } from '@shared/data/web-view.model';
 import { DialogData } from '@shared/models/dialog-options.model';
 import logger from '@shared/services/logger.service';
@@ -60,6 +59,65 @@ export type DialogProps<TData = unknown> = DialogData & {
    */
   cancelDialog(errorMessage: string): void;
 };
+
+/**
+ * Resolve a dialog request
+ *
+ * This function is a reference holder and should be replaced by `dialog.service.host.ts` with its
+ * `resolveDialogRequest` in `hookUpDialogService` as soon as possible. This is written this way to
+ * mitigate dependency cycles
+ */
+let resolveDialogRequestInternal = (id: string, data: unknown): void => {
+  throw new Error(
+    `Dialog ${id} tried to resolve before being hooked up to the dialog service! This may indicate that the dialog service started after a dialog was submitted. data: ${JSON.stringify(
+      data,
+    )}`,
+  );
+};
+
+/**
+ * Resolve a dialog request
+ *
+ * This function should just run `dialog.service.host.ts`'s `resolveDialogRequest`
+ */
+function resolveDialogRequest(id: string, data: unknown) {
+  return resolveDialogRequestInternal(id, data);
+}
+
+/**
+ * Reject a dialog request. Synchronously rejects, then asynchronously closes the dialog
+ *
+ * This function is a reference holder and should be replaced by `dialog.service.host.ts` with its
+ * `rejectDialogRequest` in `hookUpDialogService` as soon as possible. This is written this way to
+ * mitigate dependency cycles
+ */
+let rejectDialogRequestInternal = (id: string, message: string, isFromDockLayout = false): void => {
+  throw new Error(
+    `Dialog ${id} tried to reject before being hooked up to the dialog service! This may indicate that the dialog service started after a dialog was canceled. message: ${JSON.stringify(
+      message,
+    )}. isFromDockLayout: ${isFromDockLayout}`,
+  );
+};
+
+/**
+ * Reject a dialog request. Synchronously rejects, then asynchronously closes the dialog
+ *
+ * This function should just run `dialog.service.host.ts`'s `rejectDialogRequest`
+ */
+function rejectDialogRequest(id: string, message: string, isFromDockLayout = false) {
+  return rejectDialogRequestInternal(id, message, isFromDockLayout);
+}
+
+export function hookUpDialogService({
+  resolveDialogRequest: resolve,
+  rejectDialogRequest: reject,
+}: {
+  resolveDialogRequest: (id: string, data: unknown) => void;
+  rejectDialogRequest: (id: string, message: string, isFromDockLayout?: boolean) => void;
+}) {
+  resolveDialogRequestInternal = resolve;
+  rejectDialogRequestInternal = reject;
+}
 
 /**
  * Static definition of a dialog that can be shown in Platform.Bible

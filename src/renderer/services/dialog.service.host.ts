@@ -7,8 +7,9 @@ import { newGuid } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog.data';
+import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 
-/** A live dialog request. Includes its id and the functions to run on receiving results */
+/** A live dialog request. Includes the dialog's id and the functions to run on receiving results */
 // TODO: preserve requests between refreshes - save the request id or something?
 type DialogRequest<DialogTabType extends DialogTabTypes> = {
   id: string;
@@ -207,3 +208,7 @@ export async function startDialogService(): Promise<void> {
     await unsubscribeRequests();
   });
 }
+
+// Hook up the dialogs' resolve and reject functions immediately because this is only here
+// to mitigate a dependency cycle
+hookUpDialogService({ resolveDialogRequest, rejectDialogRequest });
