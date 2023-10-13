@@ -1779,13 +1779,15 @@ declare module 'shared/data/web-view.model' {
    * `center` - center the window in the dock layout
    */
   type FloatPosition = 'cascade' | 'center';
+  /** The dimensions for a floating tab */
+  export type FloatSize = {
+    width: number;
+    height: number;
+  };
   /** Information about a floating window */
   export interface FloatLayout {
     type: 'float';
-    floatSize?: {
-      width: number;
-      height: number;
-    };
+    floatSize?: FloatSize;
     /** Where to display the floating window. Defaults to `cascade` */
     position?: FloatPosition;
   }
@@ -1966,15 +1968,21 @@ declare module 'shared/services/web-view.service' {
     /**
      * Function to call to add or update a tab in the layout
      * @param savedTabInfo info for tab to add or update
-     * @param layout information about where to put a new webview
+     * @param layout information about where to put a new tab
+     *
+     * @returns If tab added, final layout used to display the new tab. If existing tab updated,
+     *   `undefined`
      */
-    addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => void;
+    addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => Layout | undefined;
     /**
      * Function to call to add or update a webview in the layout
      * @param webView web view to add or update
      * @param layout information about where to put a new webview
+     *
+     * @returns If WebView added, final layout used to display the new webView. If existing webView
+     *   updated, `undefined`
      */
-    addWebViewToDock: (webView: WebViewProps, layout: Layout) => void;
+    addWebViewToDock: (webView: WebViewProps, layout: Layout) => Layout | undefined;
     /**
      * Remove a tab in the layout
      * @param tabId id of the tab to remove
@@ -2058,11 +2066,14 @@ declare module 'shared/services/web-view.service' {
    * @param savedTabInfo info for tab to add or update
    * @param layout information about where to put a new tab
    *
+   * @returns If tab added, final layout used to display the new tab. If existing tab updated,
+   *   `undefined`
+   *
    * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
    *
    * Not exposed on the papi
    */
-  export const addTab: (savedTabInfo: SavedTabInfo, layout: Layout) => Promise<void>;
+  export const addTab: (savedTabInfo: SavedTabInfo, layout: Layout) => Promise<Layout | undefined>;
   /**
    * Creates a new web view or gets an existing one depending on if you request an existing one and
    * if the web view provider decides to give that existing one to you (it is up to the provider).

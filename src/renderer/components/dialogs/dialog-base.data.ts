@@ -1,4 +1,4 @@
-import { TabLoader, TabSaver } from '@shared/data/web-view.model';
+import { FloatSize, TabLoader, TabSaver } from '@shared/data/web-view.model';
 import { DialogData } from '@shared/models/dialog-options.model';
 import logger from '@shared/services/logger.service';
 import { ReactElement, createElement } from 'react';
@@ -21,10 +21,8 @@ export type DialogDefinitionBase = {
    * Defaults to the DialogDefinition's `tabType`
    */
   defaultTitle?: string;
-  /** The width at which the dialog will be loaded */
-  initialWidth: number;
-  /** The height at which the dialog will be loaded */
-  initialHeight: number;
+  /** The width and height at which the dialog will be loaded */
+  initialSize: FloatSize;
   /** The minimum width to which the dialog can be set */
   minWidth?: number;
   /** The minimum height to which the dialog can be set */
@@ -59,6 +57,9 @@ export type DialogProps<TData = unknown> = DialogData & {
    */
   cancelDialog(errorMessage: string): void;
 };
+
+/** The default initial size for dialogs. Can be overridden by a dialog's `initialSize` property */
+const DIALOG_DEFAULT_SIZE: FloatSize = { width: 300, height: 300 };
 
 /**
  * Resolve a dialog request
@@ -131,8 +132,7 @@ export function hookUpDialogService({
  * spread this `{ ...DIALOG_BASE }`
  */
 const DIALOG_BASE: DialogDefinitionBase = {
-  initialWidth: 300,
-  initialHeight: 300,
+  initialSize: DIALOG_DEFAULT_SIZE,
   loadDialog(savedTabInfo) {
     const maybeTabData = savedTabInfo.data as DialogData | undefined;
     if (!maybeTabData || !maybeTabData.isDialog)
