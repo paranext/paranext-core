@@ -30,7 +30,7 @@ const newCheckResult = (bookId: string): CheckResult => ({
   issueDescription: 'Basic check issue description',
 });
 
-function makeMockCheckResults() {
+const makeMockCheckResults = () => {
   return Canon.allBookIds.map((bookId) => {
     const numberOfIssues: number = faker.number.int({ min: 1, max: 10 });
     const bookResults: CheckResult = {
@@ -44,7 +44,7 @@ function makeMockCheckResults() {
     bookResults.subRows = subResults;
     return bookResults;
   });
-}
+};
 
 const columns: ColumnDef<CheckResult>[] = [
   {
