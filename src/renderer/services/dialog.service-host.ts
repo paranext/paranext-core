@@ -1,12 +1,12 @@
 import { DialogData } from '@shared/models/dialog-options.model';
-import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service.model';
+import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service-model';
 import * as networkService from '@shared/services/network.service';
 import { aggregateUnsubscriberAsyncs, serializeRequestType } from '@shared/utils/papi-util';
 import * as webViewService from '@shared/services/web-view.service';
 import { newGuid } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
-import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog.data';
+import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 
 /** A live dialog request. Includes the dialog's id and the functions to run on receiving results */

@@ -1,5 +1,5 @@
 import 'rc-dock/dist/rc-dock.css';
-import './paranext-dock-layout.component.css';
+import './platform-dock-layout.component.css';
 import { useRef, useEffect } from 'react';
 import DockLayout, {
   BoxData,
@@ -15,8 +15,8 @@ import {
   createErrorTab,
   saveErrorTab,
 } from '@renderer/components/docking/error-tab.component';
-import ParanextPanel from '@renderer/components/docking/paranext-panel.component';
-import ParanextTabTitle from '@renderer/components/docking/paranext-tab-title.component';
+import PlatformPanel from '@renderer/components/docking/platform-panel.component';
+import PlatformTabTitle from '@renderer/components/docking/platform-tab-title.component';
 import {
   loadWebViewTab,
   TAB_TYPE_WEBVIEW,
@@ -51,11 +51,11 @@ import { getErrorMessage } from '@shared/utils/util';
 import {
   loadDownloadUpdateProjectTab,
   TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
-} from '@renderer/components/project-components/download-update-project-tab.component';
+} from '@renderer/components/projects/download-update-project-tab.component';
 import {
   loadOpenMultipleProjectsTab,
   TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG,
-} from '@renderer/components/project-components/open-multiple-projects-tab.component';
+} from '@renderer/components/projects/open-multiple-projects-tab.component';
 import {
   TAB_TYPE_EXTENSION_MANAGER,
   loadExtensionManagerTab,
@@ -64,7 +64,7 @@ import {
   TAB_TYPE_RUN_BASIC_CHECKS,
   loadRunBasicChecksTab,
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
-import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service.host';
+import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
 import { DialogData } from '@shared/models/dialog-options.model';
 import DIALOGS from '@renderer/components/dialogs';
 import cloneDeep from 'lodash/cloneDeep';
@@ -80,8 +80,8 @@ const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
 
 const DOCK_FLOAT_OFFSET = 28;
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
-// Paranext.
-const TAB_GROUP = 'card paranext';
+// Platform.
+const TAB_GROUP = 'card platform-bible';
 
 const groups: { [key: string]: TabGroup } = {
   [TAB_GROUP]: {
@@ -98,7 +98,7 @@ const groups: { [key: string]: TabGroup } = {
 // a shared file.
 // TODO: please move these utility functions with #203
 
-/** tab loader functions for each Paranext tab type */
+/** tab loader functions for each Platform tab type */
 const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_ABOUT, loadAboutTab],
   [TAB_TYPE_BUTTONS, loadButtonsTab],
@@ -116,7 +116,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   ),
 ]);
 
-/** tab saver functions for each Paranext tab type that wants to override the default */
+/** tab saver functions for each Platform tab type that wants to override the default */
 const tabSaverMap = new Map<TabType, TabSaver>([
   [TAB_TYPE_WEBVIEW, saveWebViewTab],
   [TAB_TYPE_ERROR, saveErrorTab],
@@ -170,8 +170,8 @@ export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
   // Translate the data from the loaded tab to be in the form needed by rc-dock
   return {
     ...tabInfo,
-    title: <ParanextTabTitle iconUrl={tabInfo.tabIconUrl} text={tabInfo.tabTitle} />,
-    content: <ParanextPanel>{tabInfo.content}</ParanextPanel>,
+    title: <PlatformTabTitle iconUrl={tabInfo.tabIconUrl} text={tabInfo.tabTitle} />,
+    content: <PlatformPanel>{tabInfo.content}</PlatformPanel>,
     group: TAB_GROUP,
     closable: true,
   };
@@ -418,14 +418,14 @@ export function addWebViewToDock(
   const tabId = webView.id;
   if (!tabId)
     throw new Error(
-      `paranext-dock-layout error: WebView of type ${webView.webViewType} has no id!`,
+      `platform-dock-layout error: WebView of type ${webView.webViewType} has no id!`,
     );
   return addTabToDock({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView }, layout, dockLayout);
 }
 
 // #endregion
 
-export default function ParanextDockLayout() {
+export default function PlatformDockLayout() {
   // This ref will always be defined
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const dockLayoutRef = useRef<DockLayout>(null!);

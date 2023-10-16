@@ -2014,7 +2014,7 @@ declare module 'shared/services/web-view.service' {
     currentTabId?: string,
     direction?: DropDirection,
   ) => Promise<void>;
-  /** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
+  /** Properties related to the dock layout provided by `platform-dock-layout.component.tsx` */
   type PapiDockLayout = {
     /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
     dockLayout: DockLayout;
@@ -2051,7 +2051,7 @@ declare module 'shared/services/web-view.service' {
      *
      * TODO: This should be removed and the `testLayout` imported directly in this file once this
      * service is refactored to split the code between processes. The only reason this is passed from
-     * `paranext-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
+     * `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
      * service is currently all shared code. Refactor should happen in #203
      */
     testLayout: LayoutBase;
@@ -2464,7 +2464,7 @@ declare module 'shared/models/project-metadata.model' {
     projectType: string;
   };
 }
-declare module 'shared/services/project-lookup.service.model' {
+declare module 'shared/services/project-lookup.service-model' {
   import { ProjectMetadata } from 'shared/models/project-metadata.model';
   /**
    * Provides metadata for projects known by the platform
@@ -2485,7 +2485,7 @@ declare module 'shared/services/project-lookup.service.model' {
   export const projectLookupServiceNetworkObjectName = 'ProjectLookupService';
 }
 declare module 'shared/services/project-lookup.service' {
-  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service.model';
+  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
   const projectLookupService: ProjectLookupServiceType;
   export default projectLookupService;
 }
@@ -2940,7 +2940,7 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
   const DIALOG_BASE: DialogDefinitionBase;
   export default DIALOG_BASE;
 }
-declare module 'renderer/components/dialogs/dialog.data' {
+declare module 'renderer/components/dialogs/dialog-definition.model' {
   import { DialogOptions } from 'shared/models/dialog-options.model';
   import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
   import { ReactElement } from 'react';
@@ -2989,8 +2989,8 @@ declare module 'renderer/components/dialogs/dialog.data' {
     }
   >;
 }
-declare module 'shared/services/dialog.service.model' {
-  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog.data';
+declare module 'shared/services/dialog.service-model' {
+  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   import { DialogOptions } from 'shared/models/dialog-options.model';
   /**
    * Prompt the user for responses with dialogs
@@ -3025,12 +3025,12 @@ declare module 'shared/services/dialog.service.model' {
   export const CATEGORY_DIALOG = 'dialog';
 }
 declare module 'shared/services/dialog.service' {
-  import { DialogService } from 'shared/services/dialog.service.model';
+  import { DialogService } from 'shared/services/dialog.service-model';
   const dialogService: DialogService;
   export default dialogService;
 }
 declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
-  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog.data';
+  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   /**
    * Enables using `papi.dialogs.showDialog` in React more easily. Provides a callback to run to get a
    * response from a dialog as well as states that indicate the dialog's response and whether the
@@ -3155,12 +3155,12 @@ declare module 'papi-frontend' {
   import { PapiWebViewService } from 'shared/services/web-view.service';
   import { InternetService } from 'shared/services/internet.service';
   import { DataProviderService } from 'shared/services/data-provider.service';
-  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service.model';
+  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
   import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { PapiContext } from 'renderer/context/papi-context/index';
   import { PapiHooks } from 'renderer/hooks/papi-hooks/index';
   import { SettingsService } from 'shared/services/settings.service';
-  import { DialogService } from 'shared/services/dialog.service.model';
+  import { DialogService } from 'shared/services/dialog.service-model';
   const papi: {
     /**
      * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
@@ -3490,8 +3490,8 @@ declare module 'papi-backend' {
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
-  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service.model';
-  import { DialogService } from 'shared/services/dialog.service.model';
+  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
+  import { DialogService } from 'shared/services/dialog.service-model';
   const papi: {
     /**
      * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted

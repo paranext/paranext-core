@@ -1,5 +1,5 @@
 import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
-import { DialogDefinition, DialogTabTypes } from './dialog.data';
+import { DialogDefinition, DialogTabTypes } from './dialog-definition.model';
 
 /**
  * Map of all available dialog definitions used to create dialogs

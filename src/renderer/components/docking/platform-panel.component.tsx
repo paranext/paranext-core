@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import './paranext-panel.component.css';
+import './platform-panel.component.css';
 
 /**
  * Used for possible styling on every panel in Paranext

@@ -8,7 +8,7 @@ import { Button } from 'papi-components';
 import ProjectList, {
   fetchProjects,
   Project,
-} from '@renderer/components/project-components/project-list.component';
+} from '@renderer/components/projects/project-list.component';
 import './open-multiple-projects-tab.component.scss';
 
 export const TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG = 'open-multiple-projects-dialog';

@@ -43,7 +43,7 @@ export type OnLayoutChangeRCDock = (
   direction?: DropDirection,
 ) => Promise<void>;
 
-/** Properties related to the dock layout provided by `paranext-dock-layout.component.tsx` */
+/** Properties related to the dock layout provided by `platform-dock-layout.component.tsx` */
 type PapiDockLayout = {
   /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
   dockLayout: DockLayout;
@@ -80,7 +80,7 @@ type PapiDockLayout = {
    *
    * TODO: This should be removed and the `testLayout` imported directly in this file once this
    * service is refactored to split the code between processes. The only reason this is passed from
-   * `paranext-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
+   * `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
    * service is currently all shared code. Refactor should happen in #203
    */
   testLayout: LayoutBase;
@@ -185,7 +185,7 @@ export const onDidAddWebView = onDidAddWebViewEmitter.event;
 
 /**
  * Variable that will hold the rc-dock dock layout along with a couple other props. This is
- * populated by `paranext-dock-layout.component.tsx` registering its dock layout with this service,
+ * populated by `platform-dock-layout.component.tsx` registering its dock layout with this service,
  * allowing this service to manage layouts and such.
  *
  * WARNING: YOU CAN ONLY USE THIS VARIABLE IN THE RENDERER. Also please do not save this
@@ -229,7 +229,7 @@ export function convertWebViewDefinitionToSaved(
 /** Create a new dock layout promise variable */
 function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
   return new AsyncVariable<PapiDockLayout>(
-    'web-view.service.paranextDockLayout',
+    'web-view.service.platformDockLayout',
     // Use default timeout on renderer, but never timeout anywhere else because we will not be
     // resolving this. One of the serious pains of not having #203
     isRenderer() ? undefined : -1,

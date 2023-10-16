@@ -5,7 +5,7 @@ import * as commandService from '@shared/services/command.service';
 import * as webViewService from '@shared/services/web-view.service';
 import logger from '@shared/services/logger.service';
 import webViewProviderService from '@shared/services/web-view-provider.service';
-import { startDialogService } from '@renderer/services/dialog.service.host';
+import { startDialogService } from '@renderer/services/dialog.service-host';
 import App from './app.component';
 import { cleanupOldWebViewState } from './services/web-view-state.service';
 

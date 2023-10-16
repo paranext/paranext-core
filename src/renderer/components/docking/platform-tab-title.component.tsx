@@ -1,7 +1,7 @@
-import './paranext-tab-title.component.css';
+import './platform-tab-title.component.css';
 import logger from '@shared/services/logger.service';
 
-type ParanextTabTitleProps = {
+type PlatformTabTitleProps = {
   /** Url to image to show on the tab. Defaults to Platform.Bible logo */
   iconUrl?: string;
   /** Text to show on the tab */
@@ -9,10 +9,10 @@ type ParanextTabTitleProps = {
 };
 
 /**
- * Custom tab title for all tabs in Paranext
+ * Custom tab title for all tabs in Platform
  * @param text The text to show on the tab title
  */
-export default function ParanextTabTitle({ iconUrl, text }: ParanextTabTitleProps) {
+export default function PlatformTabTitle({ iconUrl, text }: PlatformTabTitleProps) {
   const toggleDropdown = () => {
     logger.info('Pretend a menu was shown!');
   };

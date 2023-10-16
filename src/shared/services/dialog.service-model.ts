@@ -1,4 +1,4 @@
-import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog.data';
+import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 import { DialogOptions } from '@shared/models/dialog-options.model';
 
 /** JSDOC SOURCE dialogService

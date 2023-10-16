@@ -22,7 +22,7 @@ import {
   addWebViewToDock,
   getFloatPosition,
   loadTab,
-} from './paranext-dock-layout.component';
+} from './platform-dock-layout.component';
 
 describe('Dock Layout Component', () => {
   const mockDockLayout = mock(DockLayout);

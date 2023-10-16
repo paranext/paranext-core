@@ -1,5 +1,5 @@
 import * as networkService from '@shared/services/network.service';
-import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service.model';
+import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service-model';
 import { serializeRequestType } from '@shared/utils/papi-util';
 
 let initializationPromise: Promise<void>;

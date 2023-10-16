@@ -15,7 +15,7 @@ import { useMemo } from 'react';
 import ProjectList, {
   fetchProjects,
   Project,
-} from '@renderer/components/project-components/project-list.component';
+} from '@renderer/components/projects/project-list.component';
 import './download-update-project-tab.component.scss';
 
 export const TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG = 'download-update-project-dialog';

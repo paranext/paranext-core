@@ -35,7 +35,7 @@ jest.mock('@renderer/hooks/papi-hooks/use-event.hook', () => ({
   __esModule: true,
   default: /** useEvent Mock */ () => {},
 }));
-jest.mock('@renderer/components/docking/paranext-dock-layout.component', () => ({
+jest.mock('@renderer/components/docking/platform-dock-layout.component', () => ({
   __esModule: true,
   default: /** ParanextDockLayout Mock */ () => undefined,
 }));

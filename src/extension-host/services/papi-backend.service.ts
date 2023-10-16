@@ -23,10 +23,10 @@ import {
 import extensionStorageService, {
   ExtensionStorageService,
 } from '@extension-host/services/extension-storage.service';
-import { ProjectLookupServiceType } from '@shared/services/project-lookup.service.model';
+import { ProjectLookupServiceType } from '@shared/services/project-lookup.service-model';
 import projectLookupService from '@shared/services/project-lookup.service';
 import dialogService from '@shared/services/dialog.service';
-import { DialogService } from '@shared/services/dialog.service.model';
+import { DialogService } from '@shared/services/dialog.service-model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.

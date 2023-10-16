@@ -2,11 +2,11 @@ import { ListItemIcon } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import './select-project.dialog.scss';
 import { useMemo } from 'react';
-import ProjectList from '@renderer/components/project-components/project-list.component';
+import ProjectList from '@renderer/components/projects/project-list.component';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 import projectLookupService from '@shared/services/project-lookup.service';
 import DIALOG_BASE, { DialogProps } from '@renderer/components/dialogs/dialog-base.data';
-import { DialogDefinition } from '@renderer/components/dialogs/dialog.data';
+import { DialogDefinition } from '@renderer/components/dialogs/dialog-definition.model';
 
 type SelectProjectDialogProps = DialogProps<string>;
 
