@@ -1,4 +1,4 @@
-import { ProjectMetadata } from '../models/project-metadata.model';
+import { ProjectMetadata } from '@shared/models/project-metadata.model';
 
 /** JSDOC SOURCE projectLookupService
  * Provides metadata for projects known by the platform

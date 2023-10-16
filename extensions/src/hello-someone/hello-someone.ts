@@ -316,7 +316,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await echoSomeoneRendererPromise,
     papi.webViews.onDidAddWebView((addWebViewEvent) => {
       if (addWebViewEvent.webView.webViewType === peopleWebViewType)
-        logger.log(
+        logger.info(
           `We noticed a ${peopleWebViewType} webView was added with id ${addWebViewEvent.webView.id}`,
         );
     }),

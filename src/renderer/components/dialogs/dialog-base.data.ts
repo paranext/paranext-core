@@ -4,13 +4,13 @@ import logger from '@shared/services/logger.service';
 import { ReactElement, createElement } from 'react';
 
 /** Base type for DialogDefinition. Contains reasonable defaults for dialogs */
-export type DialogDefinitionBase = {
+export type DialogDefinitionBase = Readonly<{
   /** Overwritten in {@link DialogDefinition}. Must be specified by all DialogDefinitions */
   tabType?: string;
   /** Overwritten in {@link DialogDefinition}. Must be specified by all DialogDefinitions */
   Component?: (props: DialogProps) => ReactElement;
   /**
-   * The default icon for this dialog. This may be overridden by the `DialogOptions.title`
+   * The default icon for this dialog. This may be overridden by the `DialogOptions.iconUrl`
    *
    * Defaults to the Platform.Bible logo
    */
@@ -21,11 +21,11 @@ export type DialogDefinitionBase = {
    * Defaults to the DialogDefinition's `tabType`
    */
   defaultTitle?: string;
-  /** The width and height at which the dialog will be loaded */
+  /** The width and height at which the dialog will be loaded in CSS `px` units */
   initialSize: FloatSize;
-  /** The minimum width to which the dialog can be set */
+  /** The minimum width to which the dialog can be set in CSS `px` units */
   minWidth?: number;
-  /** The minimum height to which the dialog can be set */
+  /** The minimum height to which the dialog can be set in CSS `px` units */
   minHeight?: number;
   /**
    * The function used to load the dialog into the dock layout. Default uses the `Component` field
@@ -41,7 +41,7 @@ export type DialogDefinitionBase = {
    * when loading again after refresh
    */
   saveDialog: TabSaver;
-};
+}>;
 
 export type DialogProps<TData = unknown> = DialogData & {
   /**
@@ -50,15 +50,20 @@ export type DialogProps<TData = unknown> = DialogData & {
    * @param data data with which to resolve the request
    */
   submitDialog(data: TData): void;
+  /** Cancels the dialog request (resolves the response with `null`) and closes the dialog */
+  cancelDialog(): void;
   /**
-   * Rejects the dialog request with hte specified message
+   * Rejects the dialog request with the specified message and closes the dialog
    *
    * @param errorMessage message to explain why the dialog request was rejected
    */
-  cancelDialog(errorMessage: string): void;
+  rejectDialog(errorMessage: string): void;
 };
 
-/** The default initial size for dialogs. Can be overridden by a dialog's `initialSize` property */
+/**
+ * The default initial size for dialogs in CSS `px` units. Can be overridden by a dialog's
+ * `initialSize` property
+ */
 const DIALOG_DEFAULT_SIZE: FloatSize = { width: 300, height: 300 };
 
 /**
@@ -68,7 +73,7 @@ const DIALOG_DEFAULT_SIZE: FloatSize = { width: 300, height: 300 };
  * `resolveDialogRequest` in `hookUpDialogService` as soon as possible. This is written this way to
  * mitigate dependency cycles
  */
-let resolveDialogRequestInternal = (id: string, data: unknown): void => {
+let resolveDialogRequestInternal = (id: string, data: unknown | null): void => {
   throw new Error(
     `Dialog ${id} tried to resolve before being hooked up to the dialog service! This may indicate that the dialog service started after a dialog was submitted. data: ${JSON.stringify(
       data,
@@ -81,7 +86,7 @@ let resolveDialogRequestInternal = (id: string, data: unknown): void => {
  *
  * This function should just run `dialog.service.host.ts`'s `resolveDialogRequest`
  */
-function resolveDialogRequest(id: string, data: unknown) {
+function resolveDialogRequest(id: string, data: unknown | null) {
   return resolveDialogRequestInternal(id, data);
 }
 
@@ -92,11 +97,11 @@ function resolveDialogRequest(id: string, data: unknown) {
  * `rejectDialogRequest` in `hookUpDialogService` as soon as possible. This is written this way to
  * mitigate dependency cycles
  */
-let rejectDialogRequestInternal = (id: string, message: string, isFromDockLayout = false): void => {
+let rejectDialogRequestInternal = (id: string, message: string): void => {
   throw new Error(
     `Dialog ${id} tried to reject before being hooked up to the dialog service! This may indicate that the dialog service started after a dialog was canceled. message: ${JSON.stringify(
       message,
-    )}. isFromDockLayout: ${isFromDockLayout}`,
+    )}`,
   );
 };
 
@@ -105,16 +110,24 @@ let rejectDialogRequestInternal = (id: string, message: string, isFromDockLayout
  *
  * This function should just run `dialog.service.host.ts`'s `rejectDialogRequest`
  */
-function rejectDialogRequest(id: string, message: string, isFromDockLayout = false) {
-  return rejectDialogRequestInternal(id, message, isFromDockLayout);
+function rejectDialogRequest(id: string, message: string) {
+  return rejectDialogRequestInternal(id, message);
 }
 
+/**
+ * Set the functionality of submitting and canceling dialogs. This should be called specifically by
+ * `dialog.service.host.ts` immediately on startup and by nothing else. This is only here to
+ * mitigate a dependency cycle
+ *
+ * @param dialogServiceFunctions functions from the dialog service host for resolving and rejecting
+ * dialogs
+ */
 export function hookUpDialogService({
   resolveDialogRequest: resolve,
   rejectDialogRequest: reject,
 }: {
-  resolveDialogRequest: (id: string, data: unknown) => void;
-  rejectDialogRequest: (id: string, message: string, isFromDockLayout?: boolean) => void;
+  resolveDialogRequest: (id: string, data: unknown | null) => void;
+  rejectDialogRequest: (id: string, message: string) => void;
 }) {
   resolveDialogRequestInternal = resolve;
   rejectDialogRequestInternal = reject;
@@ -157,7 +170,8 @@ const DIALOG_BASE: DialogDefinitionBase = {
       content: createElement(this.Component!, {
         ...tabData,
         submitDialog: (data) => resolveDialogRequest(savedTabInfo.id, data),
-        cancelDialog: (errorMessage) => rejectDialogRequest(savedTabInfo.id, errorMessage),
+        cancelDialog: () => resolveDialogRequest(savedTabInfo.id, null),
+        rejectDialog: (errorMessage) => rejectDialogRequest(savedTabInfo.id, errorMessage),
       }),
     };
   },

@@ -5,7 +5,9 @@ import { serializeRequestType } from '@shared/utils/papi-util';
 let initializationPromise: Promise<void>;
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
-    initializationPromise = (async () => {})();
+    initializationPromise = (async () => {
+      await networkService.initialize();
+    })();
   }
   return initializationPromise;
 }

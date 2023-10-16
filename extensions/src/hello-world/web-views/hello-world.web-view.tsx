@@ -16,6 +16,7 @@ import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
 import { Key, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
+import type { DialogTypes } from 'renderer/components/dialogs/dialog.data';
 import Clock from './components/clock.component';
 
 type Row = {
@@ -92,7 +93,7 @@ globalThis.webViewComponent = function HelloWorld() {
       iconUrl: 'papi-extension://hello-world/assets/offline.svg',
       title: 'Select Hello World Project',
     }).current,
-    'None' as string,
+    'None' as DialogTypes['platform.selectProject']['responseType'],
   );
 
   const [latestVerseText] = useData.Verse<QuickVerseDataTypes, 'Verse'>(

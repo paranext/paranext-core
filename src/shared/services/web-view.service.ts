@@ -53,7 +53,7 @@ type PapiDockLayout = {
    */
   onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
   /**
-   * Function to call to add or update a tab in the layout
+   * Add or update a tab in the layout
    * @param savedTabInfo info for tab to add or update
    * @param layout information about where to put a new tab
    *
@@ -62,7 +62,7 @@ type PapiDockLayout = {
    */
   addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => Layout | undefined;
   /**
-   * Function to call to add or update a webview in the layout
+   * Add or update a webview in the layout
    * @param webView web view to add or update
    * @param layout information about where to put a new webview
    *
@@ -188,7 +188,7 @@ export const onDidAddWebView = onDidAddWebViewEmitter.event;
  * populated by `paranext-dock-layout.component.tsx` registering its dock layout with this service,
  * allowing this service to manage layouts and such.
  *
- * WARNING: YOU CANNOT USE THIS VARIABLE IN ANYTHING BUT THE RENDERER. Also please do not save this
+ * WARNING: YOU CAN ONLY USE THIS VARIABLE IN THE RENDERER. Also please do not save this
  * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
  */
 let papiDockLayoutVar = createDockLayoutAsyncVar();
@@ -273,7 +273,7 @@ async function saveLayout(layout: LayoutBase): Promise<void> {
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
  * the persisted layout information and loads it into the dock layout.
  *
- * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
+ * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
  */
 async function loadLayout(layout?: LayoutBase): Promise<void> {
   const dockLayoutVar = await papiDockLayoutVar.promise;
@@ -293,7 +293,7 @@ async function loadLayout(layout?: LayoutBase): Promise<void> {
  * @param dockLayout dock layout element to register along with other important properties
  * @returns function used to unregister this dock layout
  *
- * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
+ * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
  *
  * Not exposed on the papi
  */
@@ -344,7 +344,7 @@ function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOption
  *
  * @returns true if successfully found the tab to remove
  *
- * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
+ * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
  *
  * Not exposed on the papi
  */
@@ -360,7 +360,7 @@ export const removeTab = async (tabId: string): Promise<boolean> => {
  * @returns If tab added, final layout used to display the new tab. If existing tab updated,
  *   `undefined`
  *
- * WARNING: YOU CANNOT USE THIS FUNCTION IN ANYTHING BUT THE RENDERER
+ * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
  *
  * Not exposed on the papi
  */

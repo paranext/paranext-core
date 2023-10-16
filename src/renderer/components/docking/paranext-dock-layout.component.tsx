@@ -64,7 +64,7 @@ import {
   TAB_TYPE_RUN_BASIC_CHECKS,
   loadRunBasicChecksTab,
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
-import { rejectDialogRequest } from '@renderer/services/dialog.service.host';
+import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service.host';
 import { DialogData } from '@shared/models/dialog-options.model';
 import DIALOGS from '@renderer/components/dialogs';
 import cloneDeep from 'lodash/cloneDeep';
@@ -73,7 +73,7 @@ type TabType = string;
 
 type RCDockTabInfo = TabData & TabInfo;
 
-/** The default initial size for floating tabs. Can be overridden by tabTypes' initial sizes */
+/** The default initial size for floating tabs in CSS `px` units. Can be overridden by tabTypes' initial sizes */
 const DEFAULT_FLOAT_SIZE: FloatSize = { width: 300, height: 150 };
 /** Default direction a tab will be placed from an existing tab if created as a panel */
 const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
@@ -127,7 +127,7 @@ const tabSaverMap = new Map<TabType, TabSaver>([
   ),
 ]);
 
-/** Initial sizes for each tab if created as floating tabs */
+/** Initial sizes for each tab in CSS `px` units if created as floating tabs */
 const tabInitialFloatingSize: Record<TabType, FloatSize> = Object.fromEntries(
   Object.entries(DIALOGS).map(
     ([dialogTabType, dialogDefinition]) => [dialogTabType, dialogDefinition.initialSize] as const,
@@ -292,7 +292,7 @@ function layoutDefaults(layout: Layout, savedTabInfo: SavedTabInfo): Layout {
 }
 
 /**
- * Function to call to add or update a tab in the layout
+ * Add or update a tab in the layout
  * @param savedTabInfo info for tab to add or update
  * @param layout information about where to put a new tab
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
@@ -401,7 +401,7 @@ export function addTabToDock(
 }
 
 /**
- * Function to call to add or update a webview in the layout
+ * Add or update a webview in the layout
  * @param webView web view to add or update
  * @param layout information about where to put a new webview
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
@@ -477,8 +477,8 @@ export default function ParanextDockLayout() {
         // If a dialog was closed, tell the dialog service
         if (currentTabId && direction === 'remove') {
           const removedTab = dockLayoutRef.current.find(currentTabId) as RCDockTabInfo;
-          if ((removedTab.data as DialogData)?.isDialog)
-            rejectDialogRequest(currentTabId, 'Dialog closed', true);
+          if ((removedTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
+            resolveDialogRequest(currentTabId, null);
         }
 
         if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);

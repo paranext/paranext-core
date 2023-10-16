@@ -44,11 +44,11 @@ export type TabInfo = SavedTabInfo & {
    */
   content: ReactNode;
   /**
-   * (optional) Minimum width that the tab can become
+   * (optional) Minimum width that the tab can become in CSS `px` units
    */
   minWidth?: number;
   /**
-   * (optional) Minimum height that the tab can become
+   * (optional) Minimum height that the tab can become in CSS `px` units
    */
   minHeight?: number;
 };
@@ -155,7 +155,7 @@ interface TabLayout {
  */
 type FloatPosition = 'cascade' | 'center';
 
-/** The dimensions for a floating tab */
+/** The dimensions for a floating tab in CSS `px` units */
 export type FloatSize = { width: number; height: number };
 
 /** Information about a floating window */

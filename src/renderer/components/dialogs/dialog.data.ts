@@ -31,20 +31,22 @@ export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
   responseType: TReturnType;
 };
 
-export type DialogDefinition<DialogTabType extends DialogTabTypes> = DialogDefinitionBase & {
-  /**
-   * Type of tab - indicates what kind of built-in dock layout tab this dialog definition represents
-   */
-  tabType: DialogTabType;
-  /**
-   * React component to render for this dialog
-   *
-   * This must be specified only if you do not overwrite the default `loadDialog`
-   * @param props props that will be passed through from the dialog tab's data
-   * @returns react element to render
-   */
-  Component: (
-    props: DialogProps<DialogTypes[DialogTabType]['responseType']> &
-      DialogTypes[DialogTabType]['options'],
-  ) => ReactElement;
-};
+export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<
+  DialogDefinitionBase & {
+    /**
+     * Type of tab - indicates what kind of built-in dock layout tab this dialog definition represents
+     */
+    tabType: DialogTabType;
+    /**
+     * React component to render for this dialog
+     *
+     * This must be specified only if you do not overwrite the default `loadDialog`
+     * @param props props that will be passed through from the dialog tab's data
+     * @returns react element to render
+     */
+    Component: (
+      props: DialogProps<DialogTypes[DialogTabType]['responseType']> &
+        DialogTypes[DialogTabType]['options'],
+    ) => ReactElement;
+  }
+>;

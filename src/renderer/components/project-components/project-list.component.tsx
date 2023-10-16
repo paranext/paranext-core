@@ -10,6 +10,17 @@ export type Project = ProjectMetadata & {
   isDownloaded: boolean;
 };
 
+/**
+ * Get sample project data.
+ *
+ * This is mock data and will be replaced at some point. Probably by the following issues:
+ *
+ * [Projects: get list of project settings · Issue #368 · paranext/paranext-core](https://github.com/paranext/paranext-core/issues/368)
+ *
+ * [Projects: Support registering Downloadable Project Provider · Issue #372 · paranext/paranext-core](https://github.com/paranext/paranext-core/issues/372)
+ *
+ * @returns downloadable (and downloaded) project information
+ */
 export function fetchProjects(): Project[] {
   return [
     {

@@ -15,8 +15,8 @@ type DialogRequest<DialogTabType extends DialogTabTypes> = {
   id: string;
   resolve: (
     value:
-      | DialogTypes[DialogTabType]['responseType']
-      | PromiseLike<DialogTypes[DialogTabType]['responseType']>,
+      | (DialogTypes[DialogTabType]['responseType'] | null)
+      | PromiseLike<DialogTypes[DialogTabType]['responseType'] | null>,
   ) => void;
   reject: (reason?: unknown) => void;
 };
@@ -39,18 +39,27 @@ async function initialize(): Promise<void> {
 }
 
 /**
- * List of dialogs that were resolved or rejected from outside the dock layout and have not yet been
- * closed and rejected from inside the dock layout. The second reject should do nothing as it is an
- * expected extra call.
- */
-const dialogIdsExpectingSecondClose = new Set<string>();
-
-/**
- * Resolve a dialog request
+ * Determine whether there is an unresolved dialog request for a specified dialog id
+ *
+ * @param id the dialog id to check for an existing unresolved request
+ * @returns true if there is an unresolved dialog request for the specified dialog; false otherwise
  *
  * Internal function; not exposed on papi
  */
-export function resolveDialogRequest<TReturn>(id: string, data: TReturn) {
+export function hasDialogRequest(id: string) {
+  return dialogRequests.has(id);
+}
+
+/**
+ * Resolve a dialog request. Synchronously resolves, then asynchronously closes the dialog
+ *
+ * @param id the id of the dialog whose request to reject
+ * @param data the data to resolve the request with. Either the user's response to the dialog or
+ * `null` if the user canceled
+ *
+ * Internal function; not exposed on papi
+ */
+export function resolveDialogRequest<TReturn>(id: string, data: TReturn | null) {
   const dialogRequest = dialogRequests.get(id);
   if (dialogRequest) {
     dialogRequests.delete(id);
@@ -58,12 +67,25 @@ export function resolveDialogRequest<TReturn>(id: string, data: TReturn) {
   }
 
   // Clean up the dialog
-  // Mark that we will receive a reject when the dialog closes
-  dialogIdsExpectingSecondClose.add(id);
-
   // Close the dialog
   // We're not awaiting closing it. Doesn't really matter right now if we do or don't successfully close it
-  webViewService.removeTab(id);
+  (async () => {
+    try {
+      const didClose = await webViewService.removeTab(id);
+      if (!didClose)
+        logger.error(
+          `DialogService error: dialog ${id} that was resolved with data ${JSON.stringify(
+            data,
+          )} was not found in the dock layout in order to close. Please investigate`,
+        );
+    } catch (e) {
+      logger.error(
+        `DialogService error: dialog ${id} that was resolved with data ${JSON.stringify(
+          data,
+        )} did not successfully close! Please investigate. Error: ${e}`,
+      );
+    }
+  })();
 
   // If we didn't find the request, throw
   if (!dialogRequest)
@@ -77,20 +99,10 @@ export function resolveDialogRequest<TReturn>(id: string, data: TReturn) {
  *
  * @param id the id of the dialog whose request to reject
  * @param message the error message for the rejected request
- * @param isFromDockLayout whether this function is being called from the dock layout. If someone
- * calls this function from outside the dock layout, the dock layout will then call this again. If
- * this is called from the dock layout initially, it will not be called again
  *
  * Internal function; not exposed on papi
  */
-export function rejectDialogRequest(id: string, message: string, isFromDockLayout = false) {
-  if (isFromDockLayout && dialogIdsExpectingSecondClose.has(id)) {
-    // If this reject was called from the dock layout and is the second reject for this dialog,
-    // throw it out
-    dialogIdsExpectingSecondClose.delete(id);
-    return;
-  }
-
+export function rejectDialogRequest(id: string, message: string) {
   const dialogRequest = dialogRequests.get(id);
   if (dialogRequest) {
     // We found the request. Reject it
@@ -99,12 +111,21 @@ export function rejectDialogRequest(id: string, message: string, isFromDockLayou
   }
 
   // Clean up the dialog
-  // Mark that we will receive another reject when the dialog closes
-  if (!isFromDockLayout) dialogIdsExpectingSecondClose.add(id);
-
   // Close the dialog
   // We're not awaiting closing it. Doesn't really matter right now if we do or don't successfully close it
-  webViewService.removeTab(id);
+  (async () => {
+    try {
+      const didClose = await webViewService.removeTab(id);
+      if (!didClose)
+        logger.error(
+          `DialogService error: dialog ${id} that was rejected with error message ${message} was not found in the dock layout in order to close. Please investigate`,
+        );
+    } catch (e) {
+      logger.error(
+        `DialogService error: dialog ${id} that was rejected with error message ${message} did not successfully close! Please investigate. Error: ${e}`,
+      );
+    }
+  })();
 
   // If we didn't find the request, throw
   if (!dialogRequest)
@@ -115,7 +136,7 @@ export function rejectDialogRequest(id: string, message: string, isFromDockLayou
 async function showDialog<DialogTabType extends DialogTabTypes>(
   dialogType: DialogTabType,
   options?: DialogTypes[DialogTabType]['options'],
-): Promise<DialogTypes[DialogTabType]['responseType']> {
+): Promise<DialogTypes[DialogTabType]['responseType'] | null> {
   await initialize();
 
   // Set up a DialogRequest
@@ -125,7 +146,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 
   let dialogRequest: DialogRequest<DialogTabType>;
 
-  const dialogPromise = new Promise<DialogTypes[DialogTabType]['responseType']>(
+  const dialogPromise = new Promise<DialogTypes[DialogTabType]['responseType'] | null>(
     (resolve, reject) => {
       dialogRequest = {
         id: dialogId,
@@ -167,7 +188,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 // on the dialogService - see `dialog.service.model.ts` for JSDoc
 async function selectProject(
   options?: DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['options'],
-): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType']> {
+): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType'] | null> {
   return showDialog(SELECT_PROJECT_DIALOG.tabType, options);
 }
 
