@@ -1,7 +1,7 @@
-﻿import { VerseRef } from '@sillsdev/scripture';
+import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
 import { ScriptureReference } from 'papi-components';
-import { useMemo } from 'react';
+import { JSX, useMemo } from 'react';
 // eslint-disable-next-line import/no-unresolved
 import { UsfmProviderDataTypes } from 'usfm-data-provider';
 import UsxEditor from 'usxeditor';
@@ -24,8 +24,15 @@ interface ElementInfo {
   validStyles?: StyleInfo[];
 }
 
+const {
+  react: {
+    hooks: { useData, useSetting },
+  },
+  logger,
+} = papi;
+
 /** All available elements for use in slate editor */
-const EditorElements: { [type: string]: ElementInfo } = {
+const editorElements: { [type: string]: ElementInfo } = {
   verse: {
     inline: true,
     validStyles: [{ style: 'v', oneWord: true }],
@@ -109,9 +116,9 @@ const EditorElements: { [type: string]: ElementInfo } = {
   },
 };
 
-const UsxEditorParaMap = EditorElements.para.validStyles?.map((style) => style.style) || [];
-const UsxEditorCharMap = Object.fromEntries(
-  EditorElements.char.validStyles?.map((style) => [style.style, {}]) || [],
+const usxEditorParaMap = editorElements.para.validStyles?.map((style) => style.style) || [];
+const usxEditorCharMap = Object.fromEntries(
+  editorElements.char.validStyles?.map((style) => [style.style, {}]) || [],
 );
 
 interface ScriptureTextPanelUsxProps {
@@ -134,8 +141,8 @@ function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
     <div className="text-panel">
       <UsxEditor
         usx={usx}
-        paraMap={UsxEditorParaMap}
-        charMap={UsxEditorCharMap}
+        paraMap={usxEditorParaMap}
+        charMap={usxEditorCharMap}
         onUsxChanged={() => {
           /* Read only */
         }}
@@ -144,14 +151,7 @@ function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
   );
 }
 
-const {
-  react: {
-    hooks: { useData, useSetting },
-  },
-  logger,
-} = papi;
-
-globalThis.webViewComponent = function ResourceViewer() {
+globalThis.webViewComponent = function ResourceViewer(): JSX.Element {
   logger.info('Preparing to display the Resource Viewer');
 
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
