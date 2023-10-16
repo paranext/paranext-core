@@ -59,7 +59,7 @@ papi
 globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
-  const [clicks, setClicks] = useState(0);
+  const [clicks, setClicks] = globalThis.useWebViewState<number>('clicks', 0);
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
@@ -67,7 +67,12 @@ globalThis.webViewComponent = function HelloWorld() {
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
     'helloWorld.onHelloWorld',
-    useCallback(({ times }: HelloWorldEvent) => setClicks(times), []),
+    useCallback(
+      ({ times }: HelloWorldEvent) => {
+        if (times > clicks) setClicks(times);
+      },
+      [clicks, setClicks],
+    ),
   );
 
   const [echoResult] = usePromise(

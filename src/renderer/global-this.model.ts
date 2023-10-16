@@ -10,6 +10,11 @@ import * as SillsdevScripture from '@sillsdev/scripture';
 import { ProcessType } from '@shared/global-this.model';
 import papi, { Papi } from '@renderer/services/papi-frontend.service';
 import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
+import {
+  getWebViewStateById,
+  setWebViewStateById,
+} from '@renderer/services/web-view-state.service';
+import useWebViewState from '@renderer/hooks/use-webview-state';
 
 // #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
 
@@ -57,6 +62,9 @@ declare global {
   var createRoot: typeof ReactDOMClient.createRoot;
   var SillsdevScripture: SillsdevScriptureType;
   var webViewRequire: WebViewRequire;
+  // Web view state functions are used in the default imports for each webview in web-view.service.ts
+  var getWebViewStateById: <T>(id: string, stateKey: string) => T | undefined;
+  var setWebViewStateById: <T>(id: string, stateKey: string, stateValue: NonNullable<T>) => void;
 }
 /* eslint-enable */
 
@@ -81,5 +89,10 @@ globalThis.ReactDOMClient = ReactDOMClient;
 globalThis.createRoot = ReactDOMClient.createRoot;
 globalThis.SillsdevScripture = SillsdevScripture;
 globalThis.webViewRequire = webViewRequire;
+// We don't expose get/setWebViewStateById in PAPI because web views don't have access to IDs
+globalThis.getWebViewStateById = getWebViewStateById;
+globalThis.setWebViewStateById = setWebViewStateById;
+// We store the hook reference because we need it to bind it to the webview's iframe 'window' context
+globalThis.useWebViewState = useWebViewState;
 
 // #endregion

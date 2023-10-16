@@ -3,7 +3,7 @@
 /// <reference types="node" />
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
-  import { FunctionComponent } from 'react';
+  import { FunctionComponent, Dispatch, SetStateAction } from 'react';
   /**
    * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts (renderer), and extension-host.ts (extension host)
    */
@@ -20,9 +20,30 @@ declare module 'shared/global-this.model' {
     var logLevel: LogLevel;
     /**
      * A function that each React WebView extension must provide for Paranext to display it.
-     * Only used in WebView iframes
+     * Only used in WebView iframes.
      */
     var webViewComponent: FunctionComponent;
+    /**
+     * A React hook for working with a state object tied to a webview.
+     * Only used in WebView iframes.
+     * @param stateKey Key of the state value to use. The webview state holds a unique value per key.
+     * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
+     * @param defaultStateValue Value to use if the web view state didn't contain a value for the given 'stateKey'
+     * @returns string holding the state value and a function to use to update the state value
+     * @example const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen');
+     */
+    var useWebViewState: <T>(
+      stateKey: string,
+      defaultStateValue: NonNullable<T>,
+    ) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+    /**
+     * Retrieve the value from web view state with the given 'stateKey', if it exists.
+     */
+    var getWebViewState: <T>(stateKey: string) => T | undefined;
+    /**
+     * Set the value for a given key in the web view state.
+     */
+    var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
   }
   /** Type of Paranext process */
   export enum ProcessType {
@@ -1583,6 +1604,7 @@ declare module 'papi-shared-types' {
    */
   interface ProjectDataTypes {
     NotesOnly: NotesOnlyProjectDataTypes;
+    placeholder: MandatoryProjectDataType;
   }
   /**
    * Identifiers for all project types supported by PAPI. These are not intended to correspond 1:1
@@ -1724,6 +1746,8 @@ declare module 'shared/data/web-view.model' {
     content: string;
     /** Name of the tab for the WebView */
     title?: string;
+    /** General object to store unique state for this webview */
+    state?: Record<string, string>;
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
@@ -1905,6 +1929,40 @@ declare module 'shared/log-error.model' {
   export default class LogError extends Error {
     constructor(message?: string);
   }
+}
+declare module 'renderer/services/web-view-state.service' {
+  /**
+   * Get the web view state associated with the given ID
+   * This function is only intended to be used at startup. getWebViewState is intended for web views to call.
+   * @param id ID of the web view
+   * @returns state object of the given web view
+   */
+  export function getFullWebViewStateById(id: string): Record<string, string>;
+  /**
+   * Set the web view state associated with the given ID
+   * This function is only intended to be used at startup. setWebViewState is intended for web views to call.
+   * @param id ID of the web view
+   * @param state State to set for the given web view
+   */
+  export function setFullWebViewStateById(id: string, state: Record<string, string>): void;
+  /**
+   * Get the web view state associated with the given ID
+   * @param id ID of the web view
+   * @param stateKey Key used to retrieve the state value
+   * @returns string (if it exists) containing the state for the given key of the given web view
+   */
+  export function getWebViewStateById<T>(id: string, stateKey: string): T | undefined;
+  /**
+   * Set the web view state object associated with the given ID
+   * @param id ID of the web view
+   * @param stateKey Key for the associated state
+   * @param stateValue Value of the state for the given key of the given web view - must work with JSON.stringify/parse
+   */
+  export function setWebViewStateById<T>(id: string, stateKey: string, stateValue: T): void;
+  /** Purge any web view state that hasn't been touched since the process has been running.
+   *  Only call this once all web views have been loaded.
+   */
+  export function cleanupOldWebViewState(): void;
 }
 declare module 'shared/services/web-view.service' {
   import { Unsubscriber } from 'shared/utils/papi-util';
@@ -2517,12 +2575,27 @@ declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
   ) => void;
   export default useEventAsync;
 }
+declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
+  import { NetworkObject } from 'shared/models/network-object.model';
+  /**
+   * This function takes in a getNetworkObject function and creates a hook with that function in it
+   * which will return a network object
+   * @param getNetworkObject A function that takes in an id string and returns a network object
+   * @returns a function that takes in a networkObjectSource and returns a NetworkObject
+   */
+  function createUseNetworkObjectHook(
+    getNetworkObject: (id: string) => Promise<NetworkObject<object> | undefined>,
+  ): (
+    networkObjectSource: string | NetworkObject<object> | undefined,
+  ) => NetworkObject<object> | undefined;
+  export default createUseNetworkObjectHook;
+}
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
   import IDataProvider from 'shared/models/data-provider.interface';
   /**
    * Gets a data provider with specified provider name
-   * @param dataProviderSource string name of the data provider to get OR dataProvider (result of useDataProvider if you
-   * want this hook to just return the data provider again)
+   * @param dataProviderSource string name of the data provider to get OR dataProvider (result of
+   *  useDataProvider, if you want this hook to just return the data provider again)
    * @returns undefined if the data provider has not been retrieved,
    *  data provider if it has been retrieved and is not disposed,
    *  and undefined again if the data provider is disposed
@@ -2530,9 +2603,9 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @type `T` - the type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
    *  specifying your own types, or provide a custom data provider type
    */
-  function useDataProvider<T extends IDataProvider<any>>(
+  const useDataProvider: <T extends IDataProvider<any>>(
     dataProviderSource: string | T | undefined,
-  ): T | undefined;
+  ) => T | undefined;
   export default useDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-data.hook' {
@@ -2668,6 +2741,25 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   ) => [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void];
   export default useSetting;
 }
+declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
+  import { ProjectDataTypes } from 'papi-shared-types';
+  import IDataProvider from 'shared/models/data-provider.interface';
+  /**
+   * Gets a project data provider with specified provider name
+   * @param projectDataProviderSource string name of the id of the project to get OR projectDataProvider (result
+   * of useProjectDataProvider, if you want this hook to just return the data provider again)
+   * @returns undefined if the project data provider has not been retrieved, the requested project
+   *  data provider if it has been retrieved and is not disposed, and undefined again if the project
+   *  data provider is disposed
+   *
+   * @ProjectType `T` - the project type for the project to use. The returned project data provider
+   *  will have the project data provider type associated with this project type.
+   */
+  const useProjectDataProvider: <ProjectType extends keyof ProjectDataTypes>(
+    projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+  ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
+  export default useProjectDataProvider;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   import usePromise from 'renderer/hooks/papi-hooks/use-promise.hook';
   import useEvent from 'renderer/hooks/papi-hooks/use-event.hook';
@@ -2675,10 +2767,12 @@ declare module 'renderer/hooks/papi-hooks/index' {
   import useDataProvider from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   import useData from 'renderer/hooks/papi-hooks/use-data.hook';
   import useSetting from 'renderer/hooks/papi-hooks/use-setting.hook';
+  import useProjectDataProvider from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
   export interface PapiHooks {
     usePromise: typeof usePromise;
     useEvent: typeof useEvent;
     useEventAsync: typeof useEventAsync;
+    useProjectDataProvider: typeof useProjectDataProvider;
     useDataProvider: typeof useDataProvider;
     /**
      * Special React hook that subscribes to run a callback on a data provider's data with specified
