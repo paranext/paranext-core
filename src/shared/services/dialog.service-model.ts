@@ -8,6 +8,7 @@ export interface DialogService {
   /**
    * Shows a dialog to the user and prompts the user to respond
    *
+   * @param dialogType the type of dialog to show the user
    * @param options various options for configuring the dialog that shows
    *
    * @returns returns the user's response or `null` if the user cancels
