@@ -36,10 +36,6 @@ import AsyncVariable from '@shared/utils/async-variable';
 import logger from '@shared/services/logger.service';
 import LogError from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
-import {
-  getFullWebViewStateById,
-  setFullWebViewStateById,
-} from '@renderer/services/web-view-state.service';
 
 /** rc-dock's onLayoutChange prop made asynchronous - resolves */
 export type OnLayoutChangeRCDock = (
@@ -393,6 +389,11 @@ export const getWebView = async (
     }
     throw new Error(`getWebView failed, but you should have seen a different error than this!`);
   }
+
+  // Conditional import when inside the renderer
+  const { getFullWebViewStateById, setFullWebViewStateById } = await import(
+    '@renderer/services/web-view-state.service'
+  );
 
   // Get the webview definition from the webview provider
   const webViewProvider = await webViewProviderService.get(webViewType);
