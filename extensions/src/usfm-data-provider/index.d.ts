@@ -15,7 +15,7 @@ declare module 'usfm-data-provider' {
   export type UsfmProviderDataTypes = {
     BookNames: DataProviderDataType<boolean, string[], never>;
     Chapter: DataProviderDataType<VerseRef, string | undefined, never>;
-    ChapterUsx: DataProviderDataType<VerseRef, string | undefined, never>;
+    ChapterUsx: DataProviderDataType<VerseRef, string | undefined, string>;
     Verse: DataProviderDataType<VerseRef, string | undefined, never>;
   };
 

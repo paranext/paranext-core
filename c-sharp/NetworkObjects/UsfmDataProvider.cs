@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml;
+using System.Xml.XPath;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
@@ -43,6 +44,7 @@ internal class UsfmDataProvider : DataProvider
                 "getBookNames" => GetBookNames(),
                 "getChapter" => GetChapter(args[0]!.ToJsonString()),
                 "getChapterUsx" => GetChapterUsx(args[0]!.ToJsonString()),
+                "setChapterUsx" => SetChapterUsx(args[0]!.ToJsonString(), args[1]!.ToString()),
                 "getVerse" => GetVerse(args[0]!.ToJsonString()),
                 _ => ResponseToRequest.Failed($"Unexpected function: {functionName}")
             };
@@ -73,6 +75,13 @@ internal class UsfmDataProvider : DataProvider
             : ResponseToRequest.Failed(errorMsg);
     }
 
+    private ResponseToRequest SetChapterUsx(string argVref, string argNewUsx)
+    {
+        return VerseRefConverter.TryCreateVerseRef(argVref, out var verseRef, out string errorMsg)
+            ? SetUsx(verseRef, argNewUsx)
+            : ResponseToRequest.Failed(errorMsg);
+    }
+
     private ResponseToRequest GetVerse(string args)
     {
         return VerseRefConverter.TryCreateVerseRef(args, out var verseRef, out string errorMsg)
@@ -85,6 +94,34 @@ internal class UsfmDataProvider : DataProvider
         XmlDocument usx = GetUsxForChapter(vref.BookNum, vref.ChapterNum);
         string contents = usx.OuterXml ?? string.Empty;
         return contents;
+    }
+
+    public ResponseToRequest SetUsx(VerseRef vref, string newUsx)
+    {
+        try
+        {
+            XmlDocument doc = new() { PreserveWhitespace = true };
+            doc.LoadXml(newUsx);
+            if (doc.FirstChild?.Name != "usx")
+                return ResponseToRequest.Failed("Invalid USX");
+
+            UsxFragmenter.FindFragments(
+                _scrText!.ScrStylesheet(vref.BookNum),
+                doc.CreateNavigator(),
+                XPathExpression.Compile("*[false()]"),
+                out string usfm
+            );
+
+            usfm = UsfmToken.NormalizeUsfm(_scrText, vref.BookNum, usfm);
+            _scrText.PutText(vref.BookNum, vref.ChapterNum, false, usfm, null);
+            SendDataUpdateEvent("*");
+        }
+        catch (Exception e)
+        {
+            return ResponseToRequest.Failed(e.Message);
+        }
+
+        return ResponseToRequest.Succeeded();
     }
 
     private XmlDocument GetUsxForChapter(int bookNum, int chapterNum)
