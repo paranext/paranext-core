@@ -69,7 +69,7 @@ const DIALOG_DEFAULT_SIZE: FloatSize = { width: 300, height: 300 };
 /**
  * Resolve a dialog request
  *
- * This function is a reference holder and should be replaced by `dialog.service.host.ts` with its
+ * This function is a reference holder and should be replaced by `dialog.service-host.ts` with its
  * `resolveDialogRequest` in `hookUpDialogService` as soon as possible. This is written this way to
  * mitigate dependency cycles
  */
@@ -84,7 +84,7 @@ let resolveDialogRequestInternal = (id: string, data: unknown | null): void => {
 /**
  * Resolve a dialog request
  *
- * This function should just run `dialog.service.host.ts`'s `resolveDialogRequest`
+ * This function should just run `dialog.service-host.ts`'s `resolveDialogRequest`
  */
 function resolveDialogRequest(id: string, data: unknown | null) {
   return resolveDialogRequestInternal(id, data);
@@ -93,7 +93,7 @@ function resolveDialogRequest(id: string, data: unknown | null) {
 /**
  * Reject a dialog request. Synchronously rejects, then asynchronously closes the dialog
  *
- * This function is a reference holder and should be replaced by `dialog.service.host.ts` with its
+ * This function is a reference holder and should be replaced by `dialog.service-host.ts` with its
  * `rejectDialogRequest` in `hookUpDialogService` as soon as possible. This is written this way to
  * mitigate dependency cycles
  */
@@ -108,7 +108,7 @@ let rejectDialogRequestInternal = (id: string, message: string): void => {
 /**
  * Reject a dialog request. Synchronously rejects, then asynchronously closes the dialog
  *
- * This function should just run `dialog.service.host.ts`'s `rejectDialogRequest`
+ * This function should just run `dialog.service-host.ts`'s `rejectDialogRequest`
  */
 function rejectDialogRequest(id: string, message: string) {
   return rejectDialogRequestInternal(id, message);
@@ -116,7 +116,7 @@ function rejectDialogRequest(id: string, message: string) {
 
 /**
  * Set the functionality of submitting and canceling dialogs. This should be called specifically by
- * `dialog.service.host.ts` immediately on startup and by nothing else. This is only here to
+ * `dialog.service-host.ts` immediately on startup and by nothing else. This is only here to
  * mitigate a dependency cycle
  *
  * @param dialogServiceFunctions functions from the dialog service host for resolving and rejecting

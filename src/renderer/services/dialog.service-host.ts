@@ -132,7 +132,7 @@ export function rejectDialogRequest(id: string, message: string) {
     throw new Error(`DialogService error: request ${id} not found to reject. Message: ${message}`);
 }
 
-// on the dialogService - see `dialog.service.model.ts` for JSDoc
+// on the dialogService - see `dialog.service-model.ts` for JSDoc
 async function showDialog<DialogTabType extends DialogTabTypes>(
   dialogType: DialogTabType,
   options?: DialogTypes[DialogTabType]['options'],
@@ -185,7 +185,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
   return dialogPromise;
 }
 
-// on the dialogService - see `dialog.service.model.ts` for JSDoc
+// on the dialogService - see `dialog.service-model.ts` for JSDoc
 async function selectProject(
   options?: DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['options'],
 ): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType'] | null> {

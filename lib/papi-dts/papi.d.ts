@@ -2847,7 +2847,7 @@ declare module 'shared/models/dialog-options.model' {
     /** The message to show the user in the dialog. Default depends on the dialog */
     prompt?: string;
   };
-  /** data in each tab that is a dialog. Added to DialogOptions in `dialog.service.host.ts` */
+  /** data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
   export type DialogData = DialogOptions & {
     isDialog: true;
   };
@@ -2913,7 +2913,7 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
   };
   /**
    * Set the functionality of submitting and canceling dialogs. This should be called specifically by
-   * `dialog.service.host.ts` immediately on startup and by nothing else. This is only here to
+   * `dialog.service-host.ts` immediately on startup and by nothing else. This is only here to
    * mitigate a dependency cycle
    *
    * @param dialogServiceFunctions functions from the dialog service host for resolving and rejecting

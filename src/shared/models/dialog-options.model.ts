@@ -8,7 +8,7 @@ export type DialogOptions = {
   prompt?: string;
 };
 
-/** data in each tab that is a dialog. Added to DialogOptions in `dialog.service.host.ts` */
+/** data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
 export type DialogData = DialogOptions & {
   isDialog: true;
 };
