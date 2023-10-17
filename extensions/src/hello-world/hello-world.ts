@@ -52,6 +52,7 @@ const reactWebViewProvider: IWebViewProviderWithType = {
       );
     return {
       ...savedWebView,
+      iconUrl: 'papi-extension://hello-world/assets/offline.svg',
       title: 'Hello World React',
       content: helloWorldReactWebView,
       styles: helloWorldReactWebViewStyles,
