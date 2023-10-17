@@ -4,6 +4,7 @@ import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
+import useProjectData from '@renderer/hooks/papi-hooks/use-project-data.hook';
 import useProjectDataProvider from './use-project-data-provider.hook';
 
 // Declare an interface for the object we're exporting so that JSDoc comments propagate
@@ -15,6 +16,7 @@ export interface PapiHooks {
   useDataProvider: typeof useDataProvider;
   /** JSDOC DESTINATION UseDataHook */
   useData: typeof useData;
+  useProjectData: typeof useProjectData;
   useSetting: typeof useSetting;
 }
 
@@ -28,6 +30,7 @@ const papiHooks: PapiHooks = {
   useProjectDataProvider,
   useDataProvider,
   useData,
+  useProjectData,
   useSetting,
 };
 

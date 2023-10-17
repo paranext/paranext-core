@@ -2551,14 +2551,14 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
   ) => T | undefined;
   export default useDataProvider;
 }
-declare module 'renderer/hooks/papi-hooks/use-data.hook' {
+declare module 'renderer/hooks/hook-generators/create-use-data-hook.utils' {
   import {
     DataProviderDataTypes,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import IDataProvider from 'shared/models/data-provider.interface';
-  type UseDataHook = {
+  export type UseDataHook = {
     [DataType in string]: <TDataTypes extends DataProviderDataTypes, TDataType extends DataType>(
       dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
       selector: TDataTypes[TDataType]['selector'],
@@ -2575,6 +2575,15 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
       boolean,
     ];
   };
+  function createUseDataHook(
+    useDataProviderHook: (
+      dataProviderSource: string | IDataProvider | undefined,
+    ) => IDataProvider | undefined,
+  ): UseDataHook;
+  export default createUseDataHook;
+}
+declare module 'renderer/hooks/papi-hooks/use-data.hook' {
+  import { UseDataHook } from 'renderer/hooks/hook-generators/create-use-data-hook.utils';
   /**
    * Special React hook that subscribes to run a callback on a data provider's data with specified
    * selector on any data type that data provider serves.
@@ -2703,6 +2712,10 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
   ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
   export default useProjectDataProvider;
 }
+declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
+  const useProjectData: import('renderer/hooks/hook-generators/create-use-data-hook.utils').UseDataHook;
+  export default useProjectData;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   import usePromise from 'renderer/hooks/papi-hooks/use-promise.hook';
   import useEvent from 'renderer/hooks/papi-hooks/use-event.hook';
@@ -2710,6 +2723,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   import useDataProvider from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   import useData from 'renderer/hooks/papi-hooks/use-data.hook';
   import useSetting from 'renderer/hooks/papi-hooks/use-setting.hook';
+  import useProjectData from 'renderer/hooks/papi-hooks/use-project-data.hook';
   import useProjectDataProvider from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
   export interface PapiHooks {
     usePromise: typeof usePromise;
@@ -2754,6 +2768,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
      *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data provider
      */
     useData: typeof useData;
+    useProjectData: typeof useProjectData;
     useSetting: typeof useSetting;
   }
   /**
