@@ -6,11 +6,12 @@ import ProjectList from '@renderer/components/projects/project-list.component';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 import projectLookupService from '@shared/services/project-lookup.service';
 import DIALOG_BASE, { DialogProps } from '@renderer/components/dialogs/dialog-base.data';
-import { DialogDefinition } from '@renderer/components/dialogs/dialog-definition.model';
+import {
+  DialogDefinition,
+  SELECT_PROJECT_DIALOG_TYPE,
+} from '@renderer/components/dialogs/dialog-definition.model';
 
 type SelectProjectDialogProps = DialogProps<string>;
-
-const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 
 function SelectProjectDialog({ prompt, submitDialog }: SelectProjectDialogProps) {
   const [projects, isLoadingProjects] = usePromise(
