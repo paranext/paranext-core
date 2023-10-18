@@ -1,0 +1,30 @@
+.settings-dialog {
+  padding: 3%;
+  height: 100%;
+}
+
+.settings-search-bar {
+  display: block;
+  width: 100%;
+  padding-bottom: 2%;
+}
+
+.settings-tab-group {
+  flex-grow: 1;
+  display: flex;
+}
+
+.settings-tabs {
+  border-color: divider;
+  flex-basis: 20%;
+}
+
+.settings-tab-panels {
+  flex-basis: 80%;
+}
+
+.settings-list-item {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+}

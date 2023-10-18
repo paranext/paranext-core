@@ -61,6 +61,10 @@ import {
   loadExtensionManagerTab,
 } from '@renderer/components/extension-manager/extension-manager-tab.component';
 import {
+  TAB_TYPE_SETTINGS_DIALOG,
+  loadSettingsDialog,
+} from '@renderer/components/settings-dialog/settings-tab.component';
+import {
   TAB_TYPE_RUN_BASIC_CHECKS,
   loadRunBasicChecksTab,
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
@@ -112,6 +116,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
   [TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG, loadOpenMultipleProjectsTab],
   [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
+  [TAB_TYPE_SETTINGS_DIALOG, loadSettingsDialog],
   [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
   [TAB_TYPE_BASIC_LIST, loadBasicListTab],
   ...Object.entries(DIALOGS).map(
