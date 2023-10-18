@@ -64,6 +64,10 @@ import {
   TAB_TYPE_RUN_BASIC_CHECKS,
   loadRunBasicChecksTab,
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
+import {
+  TAB_TYPE_BASIC_LIST,
+  loadBasicListTab,
+} from '@renderer/components/basic-list/basic-list.component';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
 import { DialogData } from '@shared/models/dialog-options.model';
 import DIALOGS from '@renderer/components/dialogs';
@@ -109,6 +113,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG, loadOpenMultipleProjectsTab],
   [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
   [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
+  [TAB_TYPE_BASIC_LIST, loadBasicListTab],
   ...Object.entries(DIALOGS).map(
     ([dialogTabType, dialogDefinition]) =>
       // The default implementation of `loadDialog` uses `this`, so bind it to the definition
