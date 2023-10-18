@@ -63,6 +63,10 @@ globalThis.webViewComponent = function HelloWorld() {
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
+  /* const verseRef = useMemo(
+    () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
+    [scrRef],
+  ); */
 
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
@@ -110,6 +114,13 @@ globalThis.webViewComponent = function HelloWorld() {
     'Loading John 1:1...',
   );
 
+  // TODO: Uncomment this or similar sample code once https://github.com/paranext/paranext-core/issues/440 is resolved
+  /* const [webVerse] = useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'], 'VerseUSFM'>(
+    '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+    verseRef,
+    'Loading WEB Verse',
+  ); */
+
   return (
     <div>
       <div className="title">
@@ -151,6 +162,8 @@ globalThis.webViewComponent = function HelloWorld() {
       <div>{john11}</div>
       <h3>Psalm 1</h3>
       <div>{psalm1}</div>
+      {/* <h3>{verseRef.toString()} WEB</h3>
+      <div>{webVerse}</div> */}
       <br />
       <div>
         <TextField label="Test Me" />

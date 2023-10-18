@@ -16,6 +16,7 @@ export interface PapiHooks {
   useDataProvider: typeof useDataProvider;
   /** JSDOC DESTINATION UseDataHook */
   useData: typeof useData;
+  /** JSDOC DESTINATION UseProjectDataHook */
   useProjectData: typeof useProjectData;
   useSetting: typeof useSetting;
 }
