@@ -488,7 +488,7 @@ export default function PlatformDockLayout() {
         if (currentTabId && direction === 'remove') {
           const removedTab = dockLayoutRef.current.find(currentTabId) as RCDockTabInfo;
           if ((removedTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
-            resolveDialogRequest(currentTabId, null);
+            resolveDialogRequest(currentTabId, null, false);
         }
 
         if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);
