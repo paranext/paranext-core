@@ -16,7 +16,7 @@ on:
 
 jobs:
   test:
-    name: Test on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, and node ${{ matrix.node_version }}
+    name: Build on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, node ${{ matrix.node_version }}
 
     runs-on: ${{ matrix.os }}
 

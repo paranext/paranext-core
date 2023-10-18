@@ -187,6 +187,10 @@
         newWebViewButton.addEventListener('click', async () => {
           const webViewId = await papi.webViews.getWebView('helloSomeone.peopleViewer', {
             type: 'float',
+            floatSize: {
+              width: 450,
+              height: 350,
+            },
           });
           print(`New People webview id: ${webViewId}`);
         });

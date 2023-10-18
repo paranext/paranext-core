@@ -12,6 +12,8 @@ import { papiNetworkService, PapiNetworkService } from '@shared/services/network
 import { papiWebViewService, PapiWebViewService } from '@shared/services/web-view.service';
 import internetService, { InternetService } from '@shared/services/internet.service';
 import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
+import { ProjectLookupServiceType } from '@shared/services/project-lookup.service-model';
+import projectLookupService from '@shared/services/project-lookup.service';
 import {
   papiFrontendProjectDataProviderService,
   PapiFrontendProjectDataProviderService,
@@ -19,6 +21,8 @@ import {
 import papiContext, { PapiContext } from '@renderer/context/papi-context';
 import papiHooks, { PapiHooks } from '@renderer/hooks/papi-hooks';
 import settingsService, { SettingsService } from '@shared/services/settings.service';
+import dialogService from '@shared/services/dialog.service';
+import { DialogService } from '@shared/services/dialog.service-model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-backend.service.ts.
@@ -42,6 +46,8 @@ const papi = {
   util: papiUtil,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: papiWebViewService as PapiWebViewService,
+  /** JSDOC DESTINATION dialogService */
+  dialogs: dialogService as DialogService,
   /** JSDOC DESTINATION papiNetworkService */
   network: papiNetworkService as PapiNetworkService,
   /** JSDOC DESTINATION logger */
@@ -53,6 +59,8 @@ const papi = {
   /** JSDOC DESTINATION papiFrontendProjectDataProviderService */
   projectDataProvider:
     papiFrontendProjectDataProviderService as PapiFrontendProjectDataProviderService,
+  /** JSDOC DESTINATION projectLookupService */
+  projectLookup: projectLookupService as ProjectLookupServiceType,
   react: {
     /** JSDOC DESTINATION papiContext */
     context: papiContext as PapiContext,

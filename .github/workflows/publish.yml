@@ -13,13 +13,13 @@ on:
 
 jobs:
   publish:
-    name: Publish on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, and node ${{ matrix.node_version }}
+    name: Release on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, node ${{ matrix.node_version }}
 
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
         dotnet_version: [7.0.x]
         node_version: [18.x]
 
@@ -43,21 +43,15 @@ jobs:
           npm install
           npm run build
 
-      - name: Install DMG license
-        if: ${{ matrix.os == 'macos-latest' }}
-        run: npm install dmg-license
+      - name: Publish releases - Windows
+        # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
+        if: ${{ matrix.os == 'windows-latest' && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        env:
+          # This is used for uploading release assets to github
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm exec electron-builder -- --publish always --win
 
-      - name: dotnet build - MacOS and Windows
-        if: ${{ matrix.os == 'macos-latest' }}
-        run: |
-          npm run build:data-release:windows
-          npm run build:data-release:macos
-
-      - name: dotnet build - Linux
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: npm run build:data-release:linux
-
-      - name: Publish releases - Windows and MacOS
+      - name: Publish releases - macOS
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
         if: ${{ matrix.os == 'macos-latest' && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
         env:
@@ -68,8 +62,7 @@ jobs:
           # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           # This is used for uploading release assets to github
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm exec electron-builder -- --publish always --win --mac
+        run: npm exec electron-builder -- --publish always --mac
 
       - name: Publish releases - Linux
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
@@ -79,8 +72,7 @@ jobs:
           USE_HARD_LINKS: false
           # This is used for uploading release assets to github
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm exec electron-builder -- --publish always --linux
+        run: npm exec electron-builder -- --publish always --linux
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session

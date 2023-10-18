@@ -9,7 +9,7 @@ import { FocusEventHandler, SyntheticEvent } from 'react';
 import './combo-box.component.css';
 
 export type ComboBoxLabelOption = { label: string };
-export type ComboBoxOption = string | ComboBoxLabelOption;
+export type ComboBoxOption = string | number | ComboBoxLabelOption;
 export type ComboBoxValue<T, X, Y, Z> = AutocompleteValue<T, X, Y, Z>;
 export type ComboBoxChangeDetails<T> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
@@ -56,7 +56,7 @@ export type ComboBoxProps<T> = {
    */
   className?: string;
   /**
-   * The selected value that the combo box currently holds
+   * The selected value that the combo box currently holds. Must be shallow equal to one of the options entries.
    */
   value?: T;
   /**
@@ -76,6 +76,10 @@ export type ComboBoxProps<T> = {
    * Triggers when textfield loses focus
    */
   onBlur?: FocusEventHandler<HTMLDivElement>;
+  /**
+   * Used to determine the string value for a given option.
+   */
+  getOptionLabel?: (option: ComboBoxOption) => string;
 };
 
 /**
@@ -98,6 +102,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   onChange,
   onFocus,
   onBlur,
+  getOptionLabel,
 }: ComboBoxProps<T>) {
   return (
     <MuiComboBox<T, boolean | undefined, boolean | undefined, boolean | undefined>
@@ -112,6 +117,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
       onChange={onChange}
       onFocus={onFocus}
       onBlur={onBlur}
+      getOptionLabel={getOptionLabel}
       renderInput={(props) => (
         <MuiTextField
           {...props}
