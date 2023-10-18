@@ -8,15 +8,7 @@ import {
   useCallback,
   useMemo,
 } from 'react';
-import {
-  Checkbox,
-  CheckboxProps,
-  ComboBox,
-  ComboBoxLabelOption,
-  ComboBoxProps,
-  SearchBar,
-  TextField,
-} from 'papi-components';
+import { Checkbox, ComboBox, SearchBar, TextField } from 'papi-components';
 import TabPanel from '@renderer/components/tab-panel.component';
 import './settings-tab.component.scss';
 import logger from '@shared/services/logger.service';
@@ -26,7 +18,7 @@ export const TAB_TYPE_SETTINGS_DIALOG = 'settings-dialog';
 type SettingsProperties = {
   label: string;
   description?: string;
-  default: string | number | boolean | undefined;
+  default: unknown;
 };
 
 // Each settings group maps to a tab
@@ -36,17 +28,17 @@ type SettingsGroup = {
   properties: { [settingId: string]: SettingsProperties };
 };
 
-type SettingProps = {
-  setting: string | number | boolean;
-  setSetting: (value: unknown) => void;
+type SettingProps<T> = {
+  setting: T;
+  setSetting: (value: T) => void;
 };
 
 type SettingsContribution = { [extensionId: string]: SettingsGroup[] };
-type SettingsValues = { [settingId: string]: string | number | boolean };
+type SettingsValues = { [settingId: string]: unknown };
 type SettingsComponents = {
-  [settingId: string]: FunctionComponent<
-    SettingProps & CheckboxProps & ComboBoxProps<ComboBoxLabelOption>
-  >; // Had to add the other prop types here because the mock data uses PAPI checkbox and comboboxes
+  // When adding unknown here the components in fetchSettingsComponents all error because unknown doesn't match well in generics
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [settingId: string]: FunctionComponent<SettingProps<any>>;
 };
 
 // Returns mock data
@@ -182,32 +174,36 @@ function fetchSettingsValues(): SettingsValues {
     'platform.khmerOnly': true,
     'platform.internetUse': 'Allow unrestricted internet use',
     'platform.shareParatextData': true,
+    'platform.proxySettings': { Host: '', Port: 0, Username: '', Password: '' },
   };
 }
 
+const options = ['English', 'Spanish', 'French'];
+
 // Example component of a platform setting - shows how SettingProps would be used
-function InterfaceLanguageSetting({ setting, setSetting }: SettingProps) {
-  const options = ['English', 'Spanish', 'French'];
-  const [value, setValue] = useState(
-    typeof setting === 'string' || typeof setting === 'number' ? setting : undefined,
-  );
+function InterfaceLanguageSetting({ setting, setSetting }: SettingProps<string>) {
   return (
-    <ComboBox
+    <ComboBox<string>
       options={options}
-      value={value}
-      onChange={(_, newValue) => {
-        setSetting(newValue);
-        setValue(
-          typeof newValue === 'string' || typeof newValue === 'number' ? newValue : undefined,
-        );
-      }}
+      value={setting}
+      // Type asserting because combobox props aren't precise enough yet
+      // Issue https://github.com/paranext/paranext-core/issues/560
+      onChange={(_e, v) => setSetting(v as string)}
       width={200}
     />
   );
 }
 
-// Example component of a platform setting - does not use SettingProps
-function ProxySettings() {
+// Example component of a platform setting
+function ProxySettings({
+  setting,
+  setSetting,
+}: SettingProps<{
+  Host: string;
+  Port: number;
+  Username: string;
+  Password: string;
+}>) {
   return (
     <Box
       component="form"
@@ -216,13 +212,44 @@ function ProxySettings() {
       }}
     >
       <div>
-        <TextField label="Host" placeholder="Example Here" />
-        <TextField label="Port" placeholder="0" />
-        <TextField label="Username" placeholder="Placeholder" />
-        <TextField label="Password" placeholder="Placeholder" />
+        <TextField
+          label="Host"
+          placeholder="Example Here"
+          value={setting.Host}
+          onChange={(e) => setSetting({ ...setting, Host: e.target.value })}
+        />
+        <TextField
+          label="Port"
+          placeholder="0"
+          value={setting.Port}
+          // This is a mock component- But BUG here because this TextField can take strings but we are forcing it as a number
+          onChange={(e) => setSetting({ ...setting, Port: e.target.value as unknown as number })}
+        />
+        <TextField
+          label="Username"
+          placeholder="Placeholder"
+          value={setting.Username}
+          onChange={(e) => setSetting({ ...setting, Username: e.target.value })}
+        />
+        <TextField
+          label="Password"
+          placeholder="Placeholder"
+          value={setting.Password}
+          onChange={(e) => setSetting({ ...setting, Password: e.target.value })}
+        />
       </div>
     </Box>
   );
+}
+
+// Example component of a platform setting
+function CheckboxSetting({ setting, setSetting }: SettingProps<boolean>) {
+  return <Checkbox isChecked={setting} onChange={(e) => setSetting(e.target.checked)} />;
+}
+
+// Example component of a platform setting
+function ComboboxSetting({ setting, setSetting }: SettingProps<string>) {
+  return <ComboBox value={setting} onChange={(_e, v) => setSetting(v as string)} width={200} />;
 }
 
 // Returns mock data
@@ -230,18 +257,18 @@ function ProxySettings() {
 function fetchSettingsComponents(): SettingsComponents {
   return {
     'platform.interfaceLanguage': InterfaceLanguageSetting,
-    'platform.highlightCurrentVerse': Checkbox,
-    'platform.brightnessOfHighlight': ComboBox,
-    'platform.displayFloatingWindows': Checkbox,
-    'platform.hardwareAcceleration': Checkbox,
-    'platform.scrollScripture': Checkbox,
-    'platform.useMarker': Checkbox,
-    'platform.dragAndDrop': Checkbox,
-    'platform.autoAssignProjectNotes': Checkbox,
-    'platform.autosave': Checkbox,
-    'platform.khmerOnly': Checkbox,
-    'platform.internetUse': ComboBox,
-    'platform.shareParatextData': Checkbox,
+    'platform.highlightCurrentVerse': CheckboxSetting,
+    'platform.brightnessOfHighlight': ComboboxSetting,
+    'platform.displayFloatingWindows': CheckboxSetting,
+    'platform.hardwareAcceleration': CheckboxSetting,
+    'platform.scrollScripture': CheckboxSetting,
+    'platform.useMarker': CheckboxSetting,
+    'platform.dragAndDrop': CheckboxSetting,
+    'platform.autoAssignProjectNotes': CheckboxSetting,
+    'platform.autosave': CheckboxSetting,
+    'platform.khmerOnly': CheckboxSetting,
+    'platform.internetUse': ComboboxSetting,
+    'platform.shareParatextData': CheckboxSetting,
     'platform.proxySettings': ProxySettings,
   };
 }
