@@ -56,10 +56,17 @@ export function hasDialogRequest(id: string) {
  * @param id the id of the dialog whose request to reject
  * @param data the data to resolve the request with. Either the user's response to the dialog or
  * `null` if the user canceled
+ * @param shouldCloseDialog whether we should close the dialog in this function. Should probably
+ * only be `false` if the dialog is already being closed another way such as in
+ * `platform-dock-layout.component.tsx`. Defaults to true
  *
  * Internal function; not exposed on papi
  */
-export function resolveDialogRequest<TReturn>(id: string, data: TReturn | null) {
+export function resolveDialogRequest<TReturn>(
+  id: string,
+  data: TReturn | null,
+  shouldCloseDialog = true,
+) {
   const dialogRequest = dialogRequests.get(id);
   if (dialogRequest) {
     dialogRequests.delete(id);
@@ -67,25 +74,28 @@ export function resolveDialogRequest<TReturn>(id: string, data: TReturn | null) 
   }
 
   // Clean up the dialog
-  // Close the dialog
-  // We're not awaiting closing it. Doesn't really matter right now if we do or don't successfully close it
-  (async () => {
-    try {
-      const didClose = await webViewService.removeTab(id);
-      if (!didClose)
+
+  if (shouldCloseDialog) {
+    // Close the dialog
+    // We're not awaiting closing it. Doesn't really matter right now if we do or don't successfully close it
+    (async () => {
+      try {
+        const didClose = await webViewService.removeTab(id);
+        if (!didClose)
+          logger.error(
+            `DialogService error: dialog ${id} that was resolved with data ${JSON.stringify(
+              data,
+            )} was not found in the dock layout in order to close. Please investigate`,
+          );
+      } catch (e) {
         logger.error(
           `DialogService error: dialog ${id} that was resolved with data ${JSON.stringify(
             data,
-          )} was not found in the dock layout in order to close. Please investigate`,
+          )} did not successfully close! Please investigate. Error: ${e}`,
         );
-    } catch (e) {
-      logger.error(
-        `DialogService error: dialog ${id} that was resolved with data ${JSON.stringify(
-          data,
-        )} did not successfully close! Please investigate. Error: ${e}`,
-      );
-    }
-  })();
+      }
+    })();
+  }
 
   // If we didn't find the request, throw
   if (!dialogRequest)
