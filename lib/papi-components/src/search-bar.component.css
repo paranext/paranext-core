@@ -1,0 +1,8 @@
+.search-bar-paper {
+  display: flex;
+  align-items: center;
+}
+
+.search-button {
+  padding: 10px;
+}

@@ -23,8 +23,10 @@ import {
 import extensionStorageService, {
   ExtensionStorageService,
 } from '@extension-host/services/extension-storage.service';
-import { ProjectLookupServiceType } from '@shared/models/project-lookup.model';
+import { ProjectLookupServiceType } from '@shared/services/project-lookup.service-model';
 import projectLookupService from '@shared/services/project-lookup.service';
+import dialogService from '@shared/services/dialog.service';
+import { DialogService } from '@shared/services/dialog.service-model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -50,6 +52,8 @@ const papi = {
   webViews: papiWebViewService as PapiWebViewService,
   /** JSDOC DESTINATION papiWebViewProviderService */
   webViewProviders: papiWebViewProviderService as PapiWebViewProviderService,
+  /** JSDOC DESTINATION dialogService */
+  dialogs: dialogService as DialogService,
   /** JSDOC DESTINATION papiNetworkService */
   network: papiNetworkService as PapiNetworkService,
   /** JSDOC DESTINATION logger */

@@ -314,6 +314,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await peopleWebViewProviderPromise,
     await helloSomeoneCommandPromise,
     await echoSomeoneRendererPromise,
+    papi.webViews.onDidAddWebView((addWebViewEvent) => {
+      if (addWebViewEvent.webView.webViewType === peopleWebViewType)
+        logger.info(
+          `We noticed a ${peopleWebViewType} webView was added with id ${addWebViewEvent.webView.id}`,
+        );
+    }),
   );
 
   logger.info('Hello Someone is finished activating!');
