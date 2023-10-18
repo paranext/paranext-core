@@ -3084,6 +3084,34 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   ): [TResponse, () => Promise<void>, string | undefined, boolean];
   export default useDialogCallback;
 }
+declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
+  import IDataProvider from 'shared/models/data-provider.interface';
+  /**
+   * Gets an array of data providers based on an array of input sources
+   *
+   * @param dataProviderSources array containing string names of the data providers to get OR data providers
+   *  themselves (i.e., the results of useDataProvider/useDataProviderMulti) if you want this hook to
+   *  return the data providers again. It is fine to have a mix of strings and data providers in the array.
+   *
+   *  WARNING: THE ARRAY MUST BE STABLE - const or wrapped in useState, useMemo, etc. It must not be updated every render.
+   *
+   * @returns An array of data providers that correspond by index to the values in `dataProviderSources`.
+   *  Each item in the array will be (a) undefined if the data provider has not been retrieved or has been
+   *  disposed, or (b) a data provider if it has been retrieved and is not disposed.
+   *
+   * @type `T` - the types of data providers to return. Use `IDataProvider<TDataProviderDataTypes>`,
+   *  specifying your own types, or provide a custom data provider type for each item in the array. Note
+   *  that if you provide more than one data type, each item in the returned array will be considered to
+   *  be any of those types.  For example, if you call `useDataProviderMulti<Type1, Type2>`, all items
+   *  in the returned array will be considered to be of type `Type1 | Type2 | undefined`. Although you
+   *  can determine the actual type based on the array index, TypeScript will not know, so you will need
+   *  to type assert the array items for later type checking to work.
+   */
+  function useDataProviderMulti<T extends IDataProvider<any>[]>(
+    dataProviderSources: (string | T[number] | undefined)[],
+  ): (T[number] | undefined)[];
+  export default useDataProviderMulti;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   import usePromise from 'renderer/hooks/papi-hooks/use-promise.hook';
   import useEvent from 'renderer/hooks/papi-hooks/use-event.hook';
@@ -3093,6 +3121,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   import useSetting from 'renderer/hooks/papi-hooks/use-setting.hook';
   import useProjectDataProvider from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
   import useDialogCallback from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  import useDataProviderMulti from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
   export interface PapiHooks {
     useDialogCallback: typeof useDialogCallback;
     usePromise: typeof usePromise;
@@ -3100,6 +3129,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
     useEventAsync: typeof useEventAsync;
     useProjectDataProvider: typeof useProjectDataProvider;
     useDataProvider: typeof useDataProvider;
+    useDataProviderMulti: typeof useDataProviderMulti;
     /**
      * Special React hook that subscribes to run a callback on a data provider's data with specified
      * selector on any data type that data provider serves.
