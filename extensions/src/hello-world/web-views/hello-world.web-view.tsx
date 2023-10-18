@@ -16,7 +16,7 @@ import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
 import { Key, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
-import type { DialogTypes } from 'renderer/components/dialogs/dialog.data';
+import type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
 import Clock from './components/clock.component';
 
 type Row = {
