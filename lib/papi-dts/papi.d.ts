@@ -3084,6 +3084,13 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   ): [TResponse, () => Promise<void>, string | undefined, boolean];
   export default useDialogCallback;
 }
+declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
+  import IDataProvider from 'shared/models/data-provider.interface';
+  function useDataProviderMulti<T extends IDataProvider<any>[]>(
+    dataProviderSources: (string | T[number] | undefined)[],
+  ): (T[number] | undefined)[];
+  export default useDataProviderMulti;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   import usePromise from 'renderer/hooks/papi-hooks/use-promise.hook';
   import useEvent from 'renderer/hooks/papi-hooks/use-event.hook';
@@ -3093,6 +3100,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   import useSetting from 'renderer/hooks/papi-hooks/use-setting.hook';
   import useProjectDataProvider from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
   import useDialogCallback from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  import useDataProviderMulti from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
   export interface PapiHooks {
     useDialogCallback: typeof useDialogCallback;
     usePromise: typeof usePromise;
@@ -3100,6 +3108,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
     useEventAsync: typeof useEventAsync;
     useProjectDataProvider: typeof useProjectDataProvider;
     useDataProvider: typeof useDataProvider;
+    useDataProviderMulti: typeof useDataProviderMulti;
     /**
      * Special React hook that subscribes to run a callback on a data provider's data with specified
      * selector on any data type that data provider serves.
