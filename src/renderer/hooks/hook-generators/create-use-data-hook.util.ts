@@ -154,7 +154,7 @@ function createUseDataHook(
       const newHook = createUseDataHookForDataTypeInternal(prop);
 
       // Save the hook in the cache to be used later
-      useDataCachedHooks[prop as keyof typeof useDataCachedHooks] = newHook;
+      useDataCachedHooks[prop] = newHook;
 
       return newHook;
     },

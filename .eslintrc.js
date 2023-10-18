@@ -55,6 +55,7 @@ module.exports = {
       'error',
       { functions: false, allowNamedExports: true, typedefs: false, ignoreTypeReferences: true },
     ],
+    '@typescript-eslint/no-unnecessary-type-assertion': 'error',
     'no-unused-vars': 'off',
     '@typescript-eslint/no-unused-vars': 'error',
     'no-useless-constructor': 'off',

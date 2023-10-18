@@ -52,6 +52,8 @@ const sendCommandUnsafe = async <CommandName extends CommandNames>(
   commandName: CommandName,
   ...args: Parameters<CommandHandlers[CommandName]>
 ): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> => {
+  // This type assertion is needed when the return type is unknown or when it's not Awaited<...>.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   return networkService.request(
     serializeRequestType(CATEGORY_COMMAND, commandName),
     ...args,

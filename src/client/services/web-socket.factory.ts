@@ -13,7 +13,7 @@ import { IWebSocket } from './web-socket.interface';
 export const createWebSocket = async (url: string): Promise<IWebSocket> => {
   if (isRenderer()) {
     const Ws = (await import('@renderer/services/renderer-web-socket.model')).default;
-    return new Ws(url) as IWebSocket;
+    return new Ws(url);
   }
   const Ws = (await import('@extension-host/services/extension-host-web-socket.model')).default;
   return new Ws(url) as unknown as IWebSocket;

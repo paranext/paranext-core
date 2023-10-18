@@ -334,7 +334,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
   private onMessage = (event: MessageEvent<string>, fromSelf = false) => {
     const data = fromSelf
       ? (event.data as unknown as Message)
-      : (JSON.parse(event.data as string) as Message);
+      : (JSON.parse(event.data) as Message);
 
     const emitter = this.messageEmitters.get(data.type);
     emitter?.emit(data);

@@ -306,7 +306,7 @@ function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataT
   if (updateInstructions === '*') return updateInstructions;
   // If the update instructions are a string other than '*' (hopefully one of the data types), send
   // an update specifically for that data type
-  if (isString(updateInstructions)) return [updateInstructions as DataTypeNames<TDataTypes>];
+  if (isString(updateInstructions)) return [updateInstructions];
   if (Array.isArray(updateInstructions)) {
     // If the update instructions are a non-empty array, send it
     if (updateInstructions.length > 0) return updateInstructions;
