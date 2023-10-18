@@ -1,7 +1,7 @@
 import {
   projectLookupServiceNetworkObjectName,
   ProjectLookupServiceType,
-} from '@shared/models/project-lookup.model';
+} from '@shared/services/project-lookup.service-model';
 import networkObjectService from '@shared/services/network-object.service';
 
 let networkObject: ProjectLookupServiceType;
