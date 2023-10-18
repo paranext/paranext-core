@@ -90,6 +90,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
 
   return {
     ...savedTabInfo,
+    tabIconUrl: data.iconUrl,
     tabTitle: data.title ?? 'Unknown',
     content: <WebView {...data} />,
   };

@@ -14,8 +14,9 @@ import {
 import type { QuickVerseDataTypes } from 'quick-verse';
 import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
-import { Key, useCallback, useContext, useMemo, useState } from 'react';
+import { Key, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
+import type { DialogTypes } from 'renderer/components/dialogs/dialog.data';
 import Clock from './components/clock.component';
 
 type Row = {
@@ -27,7 +28,7 @@ type Row = {
 const {
   react: {
     context: { TestContext },
-    hooks: { useData, useDataProvider, usePromise, useEvent, useSetting },
+    hooks: { useData, useDataProvider, usePromise, useEvent, useSetting, useDialogCallback },
   },
   logger,
 } = papi;
@@ -59,7 +60,7 @@ papi
 globalThis.webViewComponent = function HelloWorld() {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
-  const [clicks, setClicks] = useState(0);
+  const [clicks, setClicks] = globalThis.useWebViewState<number>('clicks', 0);
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
@@ -67,7 +68,12 @@ globalThis.webViewComponent = function HelloWorld() {
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
     'helloWorld.onHelloWorld',
-    useCallback(({ times }: HelloWorldEvent) => setClicks(times), []),
+    useCallback(
+      ({ times }: HelloWorldEvent) => {
+        if (times > clicks) setClicks(times);
+      },
+      [clicks, setClicks],
+    ),
   );
 
   const [echoResult] = usePromise(
@@ -78,6 +84,16 @@ globalThis.webViewComponent = function HelloWorld() {
       return papi.commands.sendCommand('test.echoRenderer', `From ${NAME}`);
     }, []),
     'retrieving',
+  );
+
+  const [project, selectProject] = useDialogCallback(
+    'platform.selectProject',
+    useRef({
+      prompt: 'Please select a project for Hello World WebView:',
+      iconUrl: 'papi-extension://hello-world/assets/offline.svg',
+      title: 'Select Hello World Project',
+    }).current,
+    'None' as DialogTypes['platform.selectProject']['responseType'],
   );
 
   const [latestVerseText] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
@@ -147,6 +163,10 @@ globalThis.webViewComponent = function HelloWorld() {
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>
+      <div>Selected Project: {project}</div>
+      <div>
+        <Button onClick={selectProject}>Select Project</Button>
+      </div>
       <h3>John 1:1</h3>
       <div>{john11}</div>
       <h3>Psalm 1</h3>
