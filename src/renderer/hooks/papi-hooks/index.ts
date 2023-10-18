@@ -4,6 +4,7 @@ import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
+import useProjectData from '@renderer/hooks/papi-hooks/use-project-data.hook';
 import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
 import useDialogCallback from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 import useDataProviderMulti from '@renderer/hooks/papi-hooks/use-data-provider-multi.hook';
@@ -19,6 +20,8 @@ export interface PapiHooks {
   useDataProviderMulti: typeof useDataProviderMulti;
   /** JSDOC DESTINATION UseDataHook */
   useData: typeof useData;
+  /** JSDOC DESTINATION UseProjectDataHook */
+  useProjectData: typeof useProjectData;
   useSetting: typeof useSetting;
 }
 
@@ -34,6 +37,7 @@ const papiHooks: PapiHooks = {
   useDataProvider,
   useDataProviderMulti,
   useData,
+  useProjectData,
   useSetting,
 };
 

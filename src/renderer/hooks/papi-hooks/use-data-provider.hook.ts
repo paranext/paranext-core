@@ -13,7 +13,6 @@ import createUseNetworkObjectHook from '@renderer/hooks/hook-generators/create-u
  * @type `T` - the type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
  *  specifying your own types, or provide a custom data provider type
  */
-
 const useDataProvider = createUseNetworkObjectHook(dataProviderService.get) as <
   // We don't know what type the data provider serves
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
