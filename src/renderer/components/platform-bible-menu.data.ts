@@ -21,6 +21,11 @@ const standardMenuLayout: GridMenuInfo = {
           hasDivider: true,
         },
         {
+          name: 'Open Resource Viewer...',
+          command: 'resourceViewer.open',
+          hasDivider: true,
+        },
+        {
           name: 'Open Text Collection...',
           command: 'platform.openTextCollection',
           hasDivider: true,
@@ -81,6 +86,11 @@ export const supportAndDevelopmentMenuLayout: GridMenuInfo = {
         {
           name: 'Download/Install Resources...',
           command: 'platform.downloadAndInstallResources',
+          hasDivider: true,
+        },
+        {
+          name: 'Open Resource Viewer...',
+          command: 'resourceViewer.open',
           hasDivider: true,
         },
         {
