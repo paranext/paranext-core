@@ -82,6 +82,7 @@ describe('Dock Layout Component', () => {
 
   describe('loadTab()', () => {
     it('should throw when no id', () => {
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const savedTabInfoNoId = {} as SavedTabInfo;
 
       expect(() => loadTab(savedTabInfoNoId)).toThrow();
@@ -94,6 +95,7 @@ describe('Dock Layout Component', () => {
       const layout: Layout = { type: 'tab' };
 
       expect(() =>
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         addTabToDock('this is wrong' as unknown as SavedTabInfo, layout, dockLayout),
       ).toThrow();
     });
@@ -103,6 +105,7 @@ describe('Dock Layout Component', () => {
   describe('addWebViewToDock()', () => {
     it('should throw when no id', () => {
       const dockLayout = instance(mockDockLayout);
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const webView = {} as WebViewProps;
       const layout: Layout = { type: 'tab' };
 
@@ -114,6 +117,7 @@ describe('Dock Layout Component', () => {
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
       const webView: WebViewProps = { id: 'myId', webViewType: 'test', content: '' };
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const layout = { type: 'wacked' } as unknown as FloatLayout;
 
       expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();

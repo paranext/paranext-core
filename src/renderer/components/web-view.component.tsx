@@ -23,7 +23,7 @@ export function getTitle({ webViewType, title, contentType }: Partial<WebViewPro
 
 export default function WebView({ webViewType, content, title, contentType }: WebViewProps) {
   // This ref will always be defined
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const iframeRef = useRef<HTMLIFrameElement>(null!);
 
   // TODO: We may be catching iframe exceptions moving forward by posting messages from the child
@@ -69,6 +69,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
   let data: WebViewProps;
   if (savedTabInfo.data) {
     // We need to make sure that the data is of the correct type
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     data = savedTabInfo.data as WebViewProps;
 
     if (savedTabInfo.id !== data.id) throw new Error('"id" does not match webView id.');
@@ -99,6 +100,8 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
 export function saveWebViewTab(tabInfo: TabInfo): SavedTabInfo {
   return {
     ...saveTabInfoBase(tabInfo),
+    // Assert what the unknown `data` type is.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     data: convertWebViewDefinitionToSaved(tabInfo.data as WebViewDefinition),
   };
 }

@@ -125,13 +125,14 @@ export const disconnect = () => {
 const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
   requestType: string,
   incomingRequest: InternalRequest<TParam>,
-) => {
+): Promise<InternalResponse<TReturn>> => {
   if (!requestHandler) throw new Error('Handling request without a requestHandler!');
 
   // Not sure if it's really responsible to put the whole incomingRequest in. Might want to destructure and just pass ComplexRequest members
   const response = await requestHandler<TParam, TReturn>(
     // We don't require requestType to be SerializedRequestType in this service, but they should all
     // be SerializedRequestType if they are all registered as such. Doesn't matter much to us here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     requestType as SerializedRequestType,
     incomingRequest,
   );
@@ -140,7 +141,7 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
     senderId: clientId,
     requesterId: incomingRequest.senderId,
     requestId: incomingRequest.requestId,
-  } as InternalResponse<TReturn>;
+  };
 };
 
 /**

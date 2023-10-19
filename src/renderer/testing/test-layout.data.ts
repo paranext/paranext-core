@@ -13,6 +13,8 @@ import { TAB_TYPE_BASIC_LIST } from '@renderer/components/basic-list/basic-list.
 
 export const FIRST_TAB_ID = 'About';
 
+// Using `as` here simplifies type changes.
+/* eslint-disable no-type-assertion/no-type-assertion */
 const testLayout: LayoutBase = {
   dockbox: {
     mode: 'horizontal',
@@ -108,4 +110,5 @@ const testLayout: LayoutBase = {
     ],
   },
 };
+/* eslint-enable */
 export default testLayout;

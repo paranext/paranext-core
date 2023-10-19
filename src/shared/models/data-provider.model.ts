@@ -215,6 +215,8 @@ export function getDataProviderDataTypeFromFunctionName<
   const fnPrefix = dataProviderFunctionPrefixes.find((prefix) => fnName.startsWith(prefix));
   if (!fnPrefix) throw new Error(`${fnName} is not a data provider data type function`);
 
+  // Assert the expected return type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return fnName.substring(fnPrefix.length) as DataTypeNames<TDataTypes>;
 }
 

@@ -1,5 +1,6 @@
 import { List, ListItem, ListItemButton, ListItemText, ListSubheader } from '@mui/material';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
+import { ProjectTypes } from 'papi-shared-types';
 import { PropsWithChildren, useCallback } from 'react';
 
 export type Project = ProjectMetadata & {
@@ -22,6 +23,7 @@ export type Project = ProjectMetadata & {
  * @returns downloadable (and downloaded) project information
  */
 export function fetchProjects(): Project[] {
+  /* eslint-disable no-type-assertion/no-type-assertion */
   return [
     {
       id: 'project-1',
@@ -30,7 +32,7 @@ export function fetchProjects(): Project[] {
       isDownloadable: true,
       isDownloaded: false,
       storageType: 'test',
-      projectType: 'test',
+      projectType: 'test' as ProjectTypes,
     },
     {
       id: 'project-2',
@@ -39,7 +41,7 @@ export function fetchProjects(): Project[] {
       isDownloadable: false,
       isDownloaded: true,
       storageType: 'test',
-      projectType: 'test',
+      projectType: 'test' as ProjectTypes,
     },
     {
       id: 'project-3',
@@ -48,7 +50,7 @@ export function fetchProjects(): Project[] {
       isDownloadable: true,
       isDownloaded: false,
       storageType: 'test',
-      projectType: 'test',
+      projectType: 'test' as ProjectTypes,
     },
     {
       id: 'project-4',
@@ -57,7 +59,7 @@ export function fetchProjects(): Project[] {
       isDownloadable: false,
       isDownloaded: false,
       storageType: 'test',
-      projectType: 'test',
+      projectType: 'test' as ProjectTypes,
     },
     {
       id: 'project-5',
@@ -66,9 +68,10 @@ export function fetchProjects(): Project[] {
       isDownloadable: false,
       isDownloaded: true,
       storageType: 'test',
-      projectType: 'test',
+      projectType: 'test' as ProjectTypes,
     },
   ];
+  /* eslint-enable */
 }
 
 export type ProjectListProps = PropsWithChildren<{

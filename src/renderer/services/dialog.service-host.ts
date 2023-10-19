@@ -169,11 +169,11 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 
   try {
     // Open dialog
-    await webViewService.addTab(
+    await webViewService.addTab<DialogData>(
       {
         id: dialogId,
         tabType: dialogType,
-        data: { ...options, isDialog: true } as DialogData,
+        data: { ...options, isDialog: true },
       },
       {
         type: 'float',

@@ -147,6 +147,8 @@ export function hookUpDialogService({
 const DIALOG_BASE: DialogDefinitionBase = {
   initialSize: DIALOG_DEFAULT_SIZE,
   loadDialog(savedTabInfo) {
+    // Assert the more specific type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const maybeTabData = savedTabInfo.data as DialogData | undefined;
     if (!maybeTabData || !maybeTabData.isDialog)
       logger.error(
@@ -156,6 +158,8 @@ const DIALOG_BASE: DialogDefinitionBase = {
           savedTabInfo,
         )}`,
       );
+    // Assert the more specific type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const tabData = maybeTabData as DialogData;
     return {
       ...savedTabInfo,
@@ -166,7 +170,7 @@ const DIALOG_BASE: DialogDefinitionBase = {
       minHeight: this.minHeight,
       // dialogs must define their own Component. It will then be used in this default
       // implementation of `loadDialog`
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       content: createElement(this.Component!, {
         ...tabData,
         submitDialog: (data) => resolveDialogRequest(savedTabInfo.id, data),

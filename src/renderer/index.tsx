@@ -54,7 +54,11 @@ logger.info('Starting renderer');
 })();
 
 const container = document.getElementById('root');
-const root = createRoot(container as HTMLElement);
+if (!container) {
+  throw new Error('Document root element not found!');
+}
+
+const root = createRoot(container);
 root.render(<App />);
 
 // This doesn't run if the renderer has an uncaught exception (which is a good thing)

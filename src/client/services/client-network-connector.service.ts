@@ -175,11 +175,10 @@ export default class ClientNetworkConnector implements INetworkConnector {
         this.webSocket.addEventListener('close', this.disconnect);
 
         // Remove event listeners and try connecting again
-        const retry = (e: Event) => {
-          const err = (e as Event & { error?: Error }).error;
+        const retry = (e: Event & { error?: Error }) => {
           logger.warn(
             `ClientNetworkConnector WebSocket did not connect on attempt ${attempts}. Trying again. Error: ${getErrorMessage(
-              err,
+              e.error,
             )}`,
           );
           if (this.webSocket) {
@@ -315,6 +314,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
     ) {
       // This message is from us and for us. Handle the message as if we just received it
       this.onMessage(
+        // Fake enough of the message event to handle it.
+        /* eslint-disable no-type-assertion/no-type-assertion */
         {
           data: message as unknown as string,
         } as MessageEvent,
@@ -332,9 +333,9 @@ export default class ClientNetworkConnector implements INetworkConnector {
    * @param fromSelf whether this message is from this connector instead of from someone else
    */
   private onMessage = (event: MessageEvent<string>, fromSelf = false) => {
-    const data = fromSelf
-      ? (event.data as unknown as Message)
-      : (JSON.parse(event.data as string) as Message);
+    // Assert our specific message type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const data: Message = fromSelf ? (event.data as unknown as Message) : JSON.parse(event.data);
 
     const emitter = this.messageEmitters.get(data.type);
     emitter?.emit(data);

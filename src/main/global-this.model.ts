@@ -20,6 +20,8 @@ globalThis.processType = ProcessType.Main;
 globalThis.isPackaged = app.isPackaged;
 globalThis.resourcesPath = app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../');
 globalThis.logLevel =
+  // Assert the extracted type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   (getCommandLineArgument(ARG_LOG_LEVEL) as LogLevel) ?? (globalThis.isPackaged ? 'error' : 'info');
 
 // #endregion

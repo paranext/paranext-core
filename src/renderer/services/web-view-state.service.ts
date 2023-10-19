@@ -9,7 +9,7 @@ function loadIfNeeded(): void {
   const serializedState = localStorage.getItem(WEBVIEW_STATE_KEY);
   if (!serializedState) return;
 
-  const entries = JSON.parse(serializedState) as [[string, Record<string, string>]];
+  const entries: [[string, Record<string, string>]] = JSON.parse(serializedState);
   entries.forEach(([key, value]) => {
     if (key && value) stateMap.set(key, value);
   });
@@ -70,7 +70,7 @@ export function getWebViewStateById<T>(id: string, stateKey: string): T | undefi
   if (!id || !stateKey) throw new Error('id and stateKey must be provided to get webview state');
   const state: Record<string, string> = getRecord(id);
   const stateValue: string | undefined = state[stateKey];
-  return stateValue ? (JSON.parse(stateValue) as T) : undefined;
+  return stateValue ? JSON.parse(stateValue) : undefined;
 }
 
 /**

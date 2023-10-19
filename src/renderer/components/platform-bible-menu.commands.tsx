@@ -31,6 +31,8 @@ export function handleMenuCommand(command: Command) {
       logger.info(`TODO: display about'`);
       break;
     default:
+      // Assert the more specific type.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       commandService.sendCommand(command.command as CommandNames);
   }
 }

@@ -18,6 +18,8 @@ import { ProcessType } from '@shared/global-this.model';
 const isPackaged = getCommandLineSwitch(ARG_PACKAGED);
 const resourcesPath = getCommandLineArgument(ARG_RESOURCES_PATH) ?? 'resources://';
 const logLevel =
+  // Assert the extracted type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   (getCommandLineArgument(ARG_LOG_LEVEL) as LogLevel) ?? (isPackaged ? 'error' : 'info');
 
 // #endregion

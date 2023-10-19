@@ -497,6 +497,8 @@ export const MiscellaneousFunctions: Story = {
 
     onCopy: ({ sourceRow, sourceColumnKey }: TableCopyEvent<Row>) => {
       if (window.isSecureContext) {
+        // CopyEvent in `react-data-grid` should declare its property as `sourceColumnKey: keyof TRow`
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         navigator.clipboard.writeText(sourceRow[sourceColumnKey as keyof Row]);
       }
     },
@@ -513,6 +515,8 @@ export const MiscellaneousFunctions: Story = {
         return targetRow;
       }
 
+      // CopyEvent in `react-data-grid` should declare its property as `sourceColumnKey: keyof TRow`
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       return { ...targetRow, [targetColumnKey]: sourceRow[sourceColumnKey as keyof Row] };
     },
   },
