@@ -97,7 +97,7 @@ globalThis.webViewComponent = function HelloWorld() {
       iconUrl: 'papi-extension://hello-world/assets/offline.svg',
       title: 'Select Hello World Project',
     }).current,
-    // Assert as string literal type rather than string type.
+    // Assert as string type rather than string literal type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     'None' as DialogTypes['platform.selectProject']['responseType'],
   );

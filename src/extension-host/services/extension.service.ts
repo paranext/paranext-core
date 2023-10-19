@@ -277,7 +277,7 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
         // If main is null, having no JavaScript is intentional. Do not load this extension
         return settled.value.main !== null;
       })
-      // Assert the more specific type.
+      // Assert the fulfilled type since the unfulfilled ones have been filtered out.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value)
   );

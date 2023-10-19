@@ -96,7 +96,7 @@ export async function readDir(
 ): Promise<DirectoryEntries> {
   const stats = await getStats(uri);
   // Assert return type.
-  // TODO: this is covering up a potential bug. Make DirectoryEntries properties optional, remove this assert, and fix everything affected.
+  // TODO: this is covering up a potential bug. EITHER make DirectoryEntries properties optional, remove this assert, and fix everything affected. OR it might be better return empty arrays for each property like it does in L120.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   if (!stats || !stats.isDirectory()) return {} as DirectoryEntries;
   const unfilteredDirEntries = await fs.promises.readdir(getPathFromUri(uri), {

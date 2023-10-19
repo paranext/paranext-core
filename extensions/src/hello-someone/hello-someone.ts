@@ -72,7 +72,7 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    */
   getPerson<T extends boolean = true>(
     name: string,
-    // TODO: I don't actually know why this of type T rather than just a boolean?
+    // Assert the conditional type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     createIfDoesNotExist: T = true as T,
   ): T extends true ? Person : Person | undefined {
