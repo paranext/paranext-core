@@ -170,7 +170,7 @@ const DIALOG_BASE: DialogDefinitionBase = {
       minHeight: this.minHeight,
       // dialogs must define their own Component. It will then be used in this default
       // implementation of `loadDialog`
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion, no-type-assertion/no-type-assertion
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       content: createElement(this.Component!, {
         ...tabData,
         submitDialog: (data) => resolveDialogRequest(savedTabInfo.id, data),

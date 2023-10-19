@@ -23,7 +23,7 @@ export function getTitle({ webViewType, title, contentType }: Partial<WebViewPro
 
 export default function WebView({ webViewType, content, title, contentType }: WebViewProps) {
   // This ref will always be defined
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion, no-type-assertion/no-type-assertion
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const iframeRef = useRef<HTMLIFrameElement>(null!);
 
   // TODO: We may be catching iframe exceptions moving forward by posting messages from the child

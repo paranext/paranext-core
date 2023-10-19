@@ -241,7 +241,7 @@ export function getFloatPosition(
   layoutSize: LayoutSize,
 ): FloatPosition {
   // Defaults are added in `web-view.service.ts`.
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion, no-type-assertion/no-type-assertion
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const { width, height } = layout.floatSize!;
 
   let { left, top } = previousPosition;
@@ -393,7 +393,7 @@ export function addTabToDock(
           dockLayout.find(() => true) ??
           null,
         // Defaults are added in `web-view.service.ts`.
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion, no-type-assertion/no-type-assertion
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         updatedLayout.direction!,
       );
       break;
@@ -446,7 +446,7 @@ export function addWebViewToDock(
 
 export default function PlatformDockLayout() {
   // This ref will always be defined
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion, no-type-assertion/no-type-assertion
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dockLayoutRef = useRef<DockLayout>(null!);
 
   /**

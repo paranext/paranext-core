@@ -45,7 +45,6 @@ module.exports = {
       },
     ],
     '@typescript-eslint/no-explicit-any': 'error',
-    '@typescript-eslint/no-non-null-assertion': 'error',
     'no-redeclare': 'off',
     '@typescript-eslint/no-redeclare': 'error',
     'no-shadow': 'off',
