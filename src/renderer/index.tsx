@@ -54,12 +54,14 @@ logger.info('Starting renderer');
 })();
 
 const container = document.getElementById('root');
-if (container) {
-  const root = createRoot(container);
-  root.render(<App />);
-
-  // This doesn't run if the renderer has an uncaught exception (which is a good thing)
-  window.addEventListener('beforeunload', () => {
-    cleanupOldWebViewState();
-  });
+if (!container) {
+  throw new Error('Document root element not found!');
 }
+
+const root = createRoot(container);
+root.render(<App />);
+
+// This doesn't run if the renderer has an uncaught exception (which is a good thing)
+window.addEventListener('beforeunload', () => {
+  cleanupOldWebViewState();
+});
