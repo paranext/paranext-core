@@ -16,5 +16,7 @@ export const createWebSocket = async (url: string): Promise<IWebSocket> => {
     return new Ws(url);
   }
   const Ws = (await import('@extension-host/services/extension-host-web-socket.model')).default;
+  // Assert the return type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return new Ws(url) as unknown as IWebSocket;
 };

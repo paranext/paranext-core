@@ -364,8 +364,8 @@ export const removeTab = async (tabId: string): Promise<boolean> => {
  *
  * Not exposed on the papi
  */
-export const addTab = async (
-  savedTabInfo: SavedTabInfo,
+export const addTab = async <TData = unknown>(
+  savedTabInfo: SavedTabInfo & { data?: TData },
   layout: Layout,
 ): Promise<Layout | undefined> => {
   return (await papiDockLayoutVar.promise).addTabToDock(savedTabInfo, layout);
@@ -448,6 +448,8 @@ export const getWebView = async (
   let existingSavedWebView: SavedWebViewDefinition | undefined;
   // Look for existing webview
   if (optionsDefaulted.existingId) {
+    // Expect this to be a tab.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const existingWebView = (await papiDockLayoutVar.promise).dockLayout.find(
       optionsDefaulted.existingId === '?'
         ? // If they provided '?', that means look for any webview with a matching webViewType
@@ -455,7 +457,8 @@ export const getWebView = async (
             // This is not a webview
             if (!('data' in item)) return false;
 
-            // Find any webview with the specified webViewType
+            // Find any webview with the specified webViewType. Type assert the unknown `data`.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
             return (item.data as WebViewDefinition).webViewType === webViewType;
           }
         : // If they provided any other string, look for a webview with that id
@@ -464,6 +467,8 @@ export const getWebView = async (
     if (existingWebView) {
       // We found the webview! Save it to send to the web view provider
       existingSavedWebView = convertWebViewDefinitionToSaved(
+        // Type assert the unknown `data`.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         existingWebView.data as WebViewDefinition,
       );
       // Load the web view state since the web view provider doesn't have access to the data store
@@ -534,6 +539,8 @@ export const getWebView = async (
       specificSrcPolicy = "'unsafe-inline'";
       break;
     default: {
+      // Defaults to React webview definition.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const reactWebView = webView as WebViewDefinitionReact;
 
       // Add the component as a script
@@ -674,6 +681,8 @@ function removeForbiddenElements(mutationList: MutationRecord[]) {
     m.addedNodes.forEach((node) => {
       if (node.nodeType !== Node.ELEMENT_NODE) return;
 
+      // This is an element node.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const element = node as Element;
       const tag = element.tagName.toLowerCase();
 
@@ -762,6 +771,8 @@ export const initialize = () => {
       // Register built-in requests
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
       const unsubPromises = Object.entries(rendererRequestHandlers).map(([requestType, handler]) =>
+        // Fix type after passing through the `map` function.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         networkService.registerRequestHandler(requestType as SerializedRequestType, handler),
       );
 

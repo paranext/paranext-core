@@ -121,10 +121,13 @@ type UseProjectDataHook = {
  * @type `TDataType` - the specific data type on this project you want to use. Must match the data
  * type specified in `useProjectData.<data_type>`
  */
+// Assert the more general and more specific types.
+/* eslint-disable no-type-assertion/no-type-assertion */
 const useProjectData: UseProjectDataHook = createUseDataHook(
   useProjectDataProvider as (
     dataProviderSource: string | IDataProvider | undefined,
   ) => IDataProvider | undefined,
 ) as UseProjectDataHook;
+/* eslint-enable */
 
 export default useProjectData;

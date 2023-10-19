@@ -97,6 +97,8 @@ globalThis.webViewComponent = function HelloWorld() {
       iconUrl: 'papi-extension://hello-world/assets/offline.svg',
       title: 'Select Hello World Project',
     }).current,
+    // Assert as string literal type rather than string type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     'None' as DialogTypes['platform.selectProject']['responseType'],
   );
 
@@ -191,10 +193,7 @@ globalThis.webViewComponent = function HelloWorld() {
         <Switch /> {/* no label available */}
         <ComboBox title="Test Me" options={['option 1', 'option 2']} />
         <Slider /> {/* no label available */}
-        <RefSelector
-          scrRef={scrRef as ScriptureReference}
-          handleSubmit={(newScrRef) => setScrRef(newScrRef)}
-        />
+        <RefSelector scrRef={scrRef} handleSubmit={(newScrRef) => setScrRef(newScrRef)} />
         <Table<Row>
           columns={[
             {

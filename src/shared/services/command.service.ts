@@ -53,7 +53,7 @@ const sendCommandUnsafe = async <CommandName extends CommandNames>(
   ...args: Parameters<CommandHandlers[CommandName]>
 ): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> => {
   // This type assertion is needed when the return type is unknown or when it's not Awaited<...>.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
   return networkService.request(
     serializeRequestType(CATEGORY_COMMAND, commandName),
     ...args,
@@ -96,6 +96,8 @@ export const initialize = () => {
     if (isRenderer()) {
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
       const unsubPromises = Object.entries(rendererCommandFunctions).map(([commandName, handler]) =>
+        // Re-assert type of `commandName` even though the type is actually a string ultimately.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         registerCommandUnsafe(commandName as CommandNames, handler),
       );
 

@@ -95,7 +95,10 @@ export async function readDir(
   entryFilter?: (entryName: string) => boolean,
 ): Promise<DirectoryEntries> {
   const stats = await getStats(uri);
-  if (!stats || !stats.isDirectory()) return <DirectoryEntries>{};
+  // Assert return type.
+  // TODO: this is covering up a potential bug. Make DirectoryEntries properties optional, remove this assert, and fix everything affected.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  if (!stats || !stats.isDirectory()) return {} as DirectoryEntries;
   const unfilteredDirEntries = await fs.promises.readdir(getPathFromUri(uri), {
     withFileTypes: true,
   });
@@ -119,6 +122,8 @@ export async function readDir(
     if (!entryMap.has(entryType)) entryMap.set(entryType, []);
   });
 
+  // Assert return type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return Object.freeze(Object.fromEntries(entryMap)) as DirectoryEntries;
 }
 

@@ -142,11 +142,13 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
       // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
       // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
       // to specify the specific types
+      /* eslint-disable no-type-assertion/no-type-assertion */
       const data = await (
         (dataProvider as unknown as DataProviderInternal<TDataTypes>)[
           `get${dataType}`
         ] as DataProviderGetter<TDataTypes[typeof dataType]>
       )(selector);
+      /* eslint-enable */
       // Take note that we have received an update so we don't run the callback with the old data below in the `retrieveDataImmediately` code
       receivedUpdate = true;
 
@@ -169,11 +171,13 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
       // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
       // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
       // to specify the specific types
+      /* eslint-disable no-type-assertion/no-type-assertion */
       const data = await (
         (dataProvider as unknown as DataProviderInternal<TDataTypes>)[
           `get${dataType}`
         ] as DataProviderGetter<TDataTypes[typeof dataType]>
       )(selector);
+      /* eslint-enable */
       // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
       if (!receivedUpdate) {
         receivedUpdate = true;
@@ -205,12 +209,17 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
   // TODO: update network objects so remote objects know when methods do not exist, then make IDataProvider.set optional
   const dataProviderInternal: Partial<DataProviderInternal<TDataTypes>> = {};
 
-  // Create a proxy that runs the data provider method if it exists or runs the engine method otherwise
+  // Create a proxy that runs the data provider method if it exists or runs the engine method
+  // otherwise.
+  // Type assert the data provider engine proxy because it is a DataProviderInternal.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dataProvider = new Proxy(
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     dataProviderEngine ?? (dataProviderInternal as IDataProviderEngine<TDataTypes>),
     {
       get(obj, prop) {
-        // Pass promises through
+        // Pass promises through. Assert type of `prop` to index `obj`.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         if (prop === 'then') return obj[prop as keyof typeof obj];
 
         // Do not let anyone but the data provider engine send updates
@@ -219,6 +228,8 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
 
         // If the data provider already has the method, run it
         if (prop in dataProviderInternal)
+          // Assert type of `prop` to index `dataProviderInternal`.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
           return dataProviderInternal[prop as keyof typeof dataProviderInternal];
 
         /** Figure out the method that will go on the data provider to run */
@@ -243,7 +254,7 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
           // There isn't indexing on IDataProviderEngine so normal objects could be used,
           // but now members can't be accessed by indexing in DataProviderService
           // TODO: fix it so it is indexable but can have specific members
-          newDataProviderMethod = // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          newDataProviderMethod = // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
             (obj[prop as keyof typeof obj] as IDataProviderEngine<TDataTypes>[any])?.bind(
               dataProviderEngine,
             );
@@ -254,7 +265,7 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
           // There isn't indexing on IDataProviderEngine so normal objects could be used,
           // but now members can't be accessed by indexing in DataProviderService
           // TODO: fix it so it is indexable but can have specific members
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
           (dataProviderInternal as any)[prop] = newDataProviderMethod;
         }
         return newDataProviderMethod;
@@ -270,7 +281,7 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
           return false;
 
         // If we cached a property previously, purge the cache for that property since it is changing.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
         if ((dataProviderInternal as any)[prop]) delete (dataProviderInternal as any)[prop];
 
         // Actually set the provided property
@@ -284,7 +295,6 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
         return prop in obj;
       },
     },
-    // Type assert the data provider engine proxy because it is a DataProviderInternal
   ) as DataProviderInternal<TDataTypes>;
 
   return dataProvider;
@@ -366,7 +376,7 @@ function ignore<T extends object>(
   if (typeof target === 'function') target.isIgnored = true;
   else {
     // We don't care what type the decorated object is. Just want to set some function metadata
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
     (target[member as keyof T] as any).isIgnored = true;
   }
 }
@@ -411,7 +421,7 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
     (fnName) => {
       // If the function was decorated with @ignore, do not consider it a special function
       // We don't care about types. We just want to check the decorator
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
       if ((dataProviderEngine as any)[fnName].isIgnored) return 'other';
 
       if (fnName.startsWith('get')) return 'get';
@@ -420,6 +430,7 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
     },
     (fnName, fnType) => {
       // If it's not a get or a set, just return an empty string. We aren't planning to use this
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       if (fnType === 'other') return '' as DataTypeNames<TDataTypes>;
 
       // Grab the data type out of the function names
@@ -456,12 +467,14 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
   // if they return true
   dataTypes.get('set')?.forEach((dataType) => {
     if (dataProviderEngine[`set${dataType}`]) {
+      /* eslint-disable no-type-assertion/no-type-assertion */
       /** Saved bound version of the data provider engine's set so we can call it from here */
       const dpeSet = (
         dataProviderEngine[`set${dataType}`] as DataProviderSetter<TDataTypes, typeof dataType>
       ).bind(dataProviderEngine);
       /** Layered set that emits an update event after running the engine's set */
       (dataProviderEngine[`set${dataType}`] as DataProviderSetter<TDataTypes, typeof dataType>) =
+        /* eslint-enable */
         async (...args) => {
           const dpeSetResult = await dpeSet(...args);
           const updateEventResult = mapUpdateInstructionsToUpdateEvent<TDataTypes>(
@@ -532,8 +545,9 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
   const disposableDataProvider: IDisposableDataProvider<TDataTypes> =
     await networkObjectService.set(dataProviderObjectId, dataProviderInternal);
 
-  // Get the local network object proxy for the data provider so the provider can't be disposed outside
-  // the service that registered the provider engine
+  // Get the local network object proxy for the data provider so the provider can't be disposed
+  // outside the service that registered the provider engine. Assert type without NetworkObject.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dataProvider = (await networkObjectService.get<IDataProvider<TDataTypes>>(
     dataProviderObjectId,
   )) as IDataProvider<TDataTypes>;
@@ -562,6 +576,8 @@ function createLocalDataProviderToProxy<T extends DataProviderInternal>(
   const onDidUpdate = networkService.getNetworkEvent<boolean>(
     serializeRequestType(dataProviderObjectId, ON_DID_UPDATE),
   );
+  // Assert to specified generic type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return createDataProviderProxy(undefined, dataProviderPromise, onDidUpdate) as Partial<T>;
 }
 
@@ -578,11 +594,13 @@ async function get<T extends IDataProvider<any>>(providerName: string): Promise<
   // Get the object id for this data provider name
   const dataProviderObjectId = getDataProviderObjectId(providerName);
 
-  // Get the network object for this data provider
+  // Get the network object for this data provider. Assert to specified generic type.
+  /* eslint-disable no-type-assertion/no-type-assertion */
   const dataProvider = (await networkObjectService.get<CannotHaveOnDidDispose & T>(
     dataProviderObjectId,
     createLocalDataProviderToProxy as LocalObjectToProxyCreator<CannotHaveOnDidDispose & T>,
   )) as T | undefined;
+  /* eslint-enable */
 
   if (!dataProvider) {
     logger.info(`No data provider found with name = ${providerName}`);

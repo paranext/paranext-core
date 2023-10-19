@@ -1057,8 +1057,10 @@ declare module 'shared/services/network.service' {
    * Register a local request handler to run on requests.
    * @param requestType the type of request on which to register the handler
    * @param handler function to register to run on requests
-   * @param handlerType type of handler function - indicates what type of parameters and what return type the handler has
-   * @returns promise that resolves if the request successfully registered and unsubscriber function to run to stop the passed-in function from handling requests
+   * @param handlerType type of handler function - indicates what type of parameters and what return
+   * type the handler has
+   * @returns promise that resolves if the request successfully registered and unsubscriber function
+   * to run to stop the passed-in function from handling requests
    */
   export function registerRequestHandler(
     requestType: SerializedRequestType,
@@ -1096,7 +1098,8 @@ declare module 'shared/services/network.service' {
    * Creates a function that is a request function with a baked requestType.
    * This is also nice because you get TypeScript type support using this function.
    * @param requestType requestType for request function
-   * @returns function to call with arguments of request that performs the request and resolves with the response contents
+   * @returns function to call with arguments of request that performs the request and resolves with
+   * the response contents
    */
   export const createRequestFunction: <TParam extends unknown[], TReturn>(
     requestType: SerializedRequestType,
@@ -2131,7 +2134,12 @@ declare module 'shared/services/web-view.service' {
    *
    * Not exposed on the papi
    */
-  export const addTab: (savedTabInfo: SavedTabInfo, layout: Layout) => Promise<Layout | undefined>;
+  export const addTab: <TData = unknown>(
+    savedTabInfo: SavedTabInfo & {
+      data?: TData | undefined;
+    },
+    layout: Layout,
+  ) => Promise<Layout | undefined>;
   /**
    * Creates a new web view or gets an existing one depending on if you request an existing one and
    * if the web view provider decides to give that existing one to you (it is up to the provider).
@@ -2442,6 +2450,7 @@ declare module 'shared/services/data-provider.service' {
   export default dataProviderService;
 }
 declare module 'shared/models/project-metadata.model' {
+  import { ProjectTypes } from 'papi-shared-types';
   /**
    * Low-level information describing a project that Platform.Bible directly manages and uses to load project data
    */
@@ -2461,7 +2470,7 @@ declare module 'shared/models/project-metadata.model' {
     /**
      * Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
      */
-    projectType: string;
+    projectType: ProjectTypes;
   };
 }
 declare module 'shared/services/project-lookup.service-model' {
@@ -2801,7 +2810,8 @@ declare module 'shared/services/settings.service' {
   /**
    * Retrieves the value of the specified setting
    * @param key The string id of the setting for which the value is being retrieved
-   * @returns The value of the specified setting, parsed to an object. Returns `null` if setting is not present or no value is available
+   * @returns The value of the specified setting, parsed to an object. Returns `null` if setting is
+   * not present or no value is available
    */
   const getSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
@@ -2809,14 +2819,16 @@ declare module 'shared/services/settings.service' {
   /**
    * Sets the value of the specified setting
    * @param key The string id of the setting for which the value is being retrieved
-   * @param newSetting The value that is to be stored. Setting the new value to `null` is the equivalent of deleting the setting
+   * @param newSetting The value that is to be stored. Setting the new value to `null` is the
+   * equivalent of deleting the setting
    */
   const setSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
     newSetting: Nullable<SettingTypes[SettingName]>,
   ) => void;
   /**
-   * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the callback function is executed.
+   * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
+   * callback function is executed.
    * @param key The string id of the setting for which the value is being subscribed to
    * @param callback The function that will be called whenever the specified setting is updated
    * @returns Unsubscriber that should be called whenever the subscription should be deleted

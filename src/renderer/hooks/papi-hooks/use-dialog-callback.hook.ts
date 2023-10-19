@@ -52,6 +52,7 @@ function useDialogCallback<
   // Since `defaultResponse` could be unspecified which is equivalent to `null`, we need to
   // type assert to tell TS that `null` will be part of `TResponse` if `defaultResponse` is not
   // specified but is not otherwise
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   defaultResponse: TResponse = null as TResponse,
 ): [TResponse, () => Promise<void>, string | undefined, boolean] {
   // Keep track of whether we're mounted so we don't run stuff after unmount
@@ -73,6 +74,7 @@ function useDialogCallback<
       try {
         // Looks like we need to type assert here because it can't tell this is a TResponse. It can
         // just tell that it is the dialog response type, which does not include undefined
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         const dialogResponse = (await dialogService.showDialog(
           dialogType,
           options,

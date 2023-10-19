@@ -211,6 +211,8 @@ function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
  * @returns `true` if its a tab or `false` otherwise.
  */
 function isTab(tab: PanelData | TabData | BoxData | undefined): tab is TabData {
+  // Assert the more specific type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   if (!tab || (tab as TabData).title == null) return false;
   return true;
 }
@@ -239,7 +241,7 @@ export function getFloatPosition(
   layoutSize: LayoutSize,
 ): FloatPosition {
   // Defaults are added in `web-view.service.ts`.
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion, no-type-assertion/no-type-assertion
   const { width, height } = layout.floatSize!;
 
   let { left, top } = previousPosition;
@@ -267,7 +269,8 @@ function findPreviousTab(dockLayout: DockLayout) {
     if (previousTab) return previousTab;
   }
   // We don't have a previous tab or we didn't find the one we thought we had. Just find the first
-  // available tab
+  // available tab. Assert the more specific type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return dockLayout.find((tabData) => isTab(tabData)) as TabData;
 }
 
@@ -337,7 +340,9 @@ export function addTabToDock(
       targetTab = findPreviousTab(dockLayout);
       if (targetTab) {
         if (previousTabId === undefined)
-          // The target tab is the first found tab, so just add this as a new panel on top
+          // The target tab is the first found tab, so just add this as a new panel on top.
+          // Assert the more specific type.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
           dockLayout.dockMove(tab, targetTab.parent as PanelData, 'top');
         // The target tab is a previously added tab, so add this as a tab next to it
         else dockLayout.dockMove(tab, targetTab, 'after-tab');
@@ -381,13 +386,14 @@ export function addTabToDock(
 
       dockLayout.dockMove(
         tab,
-        // Add to the parent of the found tab if we found a tab
+        // Add to the parent of the found tab if we found a tab. Assert the more specific type.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         (targetTab?.parent as PanelData) ??
           // Otherwise find the first thing (the dock box) and add the tab to it
           dockLayout.find(() => true) ??
           null,
         // Defaults are added in `web-view.service.ts`.
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion, no-type-assertion/no-type-assertion
         updatedLayout.direction!,
       );
       break;
@@ -395,6 +401,7 @@ export function addTabToDock(
     default:
       // Type assert here because TypeScript thinks this layout is `never` because the switch has
       // covered all its options (if JS were statically typed, this `default` would never hit)
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       throw new LogError(`Unknown layoutType: '${(updatedLayout as Layout).type}'`);
   }
 
@@ -404,6 +411,8 @@ export function addTabToDock(
   // happen on startup
   if (tab.tabType === TAB_TYPE_ERROR)
     throw new LogError(
+      // Assert the more specific type.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       `Dock Layout created an error tab: ${(tab.data as ErrorTabData)?.errorMessage}`,
     );
 
@@ -437,7 +446,7 @@ export function addWebViewToDock(
 
 export default function PlatformDockLayout() {
   // This ref will always be defined
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion, no-type-assertion/no-type-assertion
   const dockLayoutRef = useRef<DockLayout>(null!);
 
   /**
@@ -481,13 +490,17 @@ export default function PlatformDockLayout() {
       // Type assert `saveTab` as not returning `undefined` because rc-dock's types are wrong
       // Here, if `saveTab` returns `undefined` the tab is not saved
       // https://github.com/ticlo/rc-dock/blob/8b6481dca4b4dd07f89107d6f48b1831bbdf0470/src/Serializer.ts#L68
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       saveTab={saveTab as (dockTabInfo: RCDockTabInfo) => SavedTabInfo}
       onLayoutChange={(...args) => {
         const [, currentTabId, direction] = args;
         // If a dialog was closed, tell the dialog service
         if (currentTabId && direction === 'remove') {
+          // Assert the more specific type.
+          /* eslint-disable no-type-assertion/no-type-assertion */
           const removedTab = dockLayoutRef.current.find(currentTabId) as RCDockTabInfo;
           if ((removedTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
+            /* eslint-enable */
             resolveDialogRequest(currentTabId, null, false);
         }
 

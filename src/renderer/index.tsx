@@ -54,10 +54,12 @@ logger.info('Starting renderer');
 })();
 
 const container = document.getElementById('root');
-const root = createRoot(container as HTMLElement);
-root.render(<App />);
+if (container) {
+  const root = createRoot(container);
+  root.render(<App />);
 
-// This doesn't run if the renderer has an uncaught exception (which is a good thing)
-window.addEventListener('beforeunload', () => {
-  cleanupOldWebViewState();
-});
+  // This doesn't run if the renderer has an uncaught exception (which is a good thing)
+  window.addEventListener('beforeunload', () => {
+    cleanupOldWebViewState();
+  });
+}

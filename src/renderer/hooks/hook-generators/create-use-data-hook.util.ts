@@ -70,6 +70,7 @@ function createUseDataHook(
       const dataProvider = useDataProviderHook(
         // Type assertion needed because useDataProviderHook will have different generic types
         // based on which hook we are generating, but they will all be returning an IDataProvider
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         dataProviderSource as string | IDataProvider | undefined,
       );
 
@@ -83,14 +84,15 @@ function createUseDataHook(
             dataProvider
               ? async (eventCallback: PapiEventHandler<TDataTypes[TDataType]['getData']>) => {
                   const unsub =
-                    await // We need any here because for some reason IDataProvider loses its ability to index subscribe
-                    (
-                      (
-                        dataProvider as /* eslint-disable @typescript-eslint/no-explicit-any */ any
-                      ) /* eslint-enable */[
+                    // We need any here because for some reason IDataProvider loses its ability to
+                    // index subscribe. Assert to specified generic type.
+                    /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
+                    await (
+                      (dataProvider as any)[
                         `subscribe${dataType as DataTypeNames<TDataTypes>}`
                       ] as DataProviderSubscriber<TDataTypes[TDataType]>
                     )(
+                      /* eslint-enable */
                       selector,
                       (subscriptionData: TDataTypes[TDataType]['getData']) => {
                         eventCallback(subscriptionData);
@@ -119,12 +121,18 @@ function createUseDataHook(
         () =>
           dataProvider
             ? async (newData: TDataTypes[TDataType]['setData']) =>
-                // We need any here because for some reason IDataProvider loses its ability to index subscribe
+                // We need any here because for some reason IDataProvider loses its ability to index
+                // subscribe. Assert to specified generic type.
+                /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
                 (
-                  (dataProvider as /* eslint-disable @typescript-eslint/no-explicit-any */ any)[
-                    /* eslint-enable */ `set${dataType as DataTypeNames<TDataTypes>}`
+                  (dataProvider as any)[
+                    `set${dataType as DataTypeNames<TDataTypes>}`
                   ] as DataProviderSetter<TDataTypes, typeof dataType>
-                )(selector, newData)
+                )(
+                  /* eslint-enable */
+                  selector,
+                  newData,
+                )
             : undefined,
         [dataProvider, selector],
       );
@@ -138,7 +146,8 @@ function createUseDataHook(
 
   const useData: UseDataHook = new Proxy(useDataCachedHooks, {
     get(obj, prop) {
-      // Pass promises through
+      // Pass promises through. Assert type of `prop` to index `obj`.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       if (prop === 'then') return obj[prop as keyof typeof obj];
 
       // Special react prop to tell if it's a component
@@ -146,6 +155,8 @@ function createUseDataHook(
 
       // If we have already generated the hook, return the cached version
       if (prop in useDataCachedHooks)
+        // Assert type of `prop` to index `useDataCachedHooks`.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         return useDataCachedHooks[prop as keyof typeof useDataCachedHooks];
 
       // Build a new useData hook
