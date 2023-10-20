@@ -3623,7 +3623,8 @@ declare module 'node/services/node-file-system.service' {
    * Get stats about the file or directory. Note that BigInts are used instead of ints to avoid.
    * https://en.wikipedia.org/wiki/Year_2038_problem
    * @param uri URI of file or directory
-   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if file or directory exists, undefined if it doesn't
+   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if
+   *  file or directory exists, undefined if it doesn't
    */
   export function getStats(uri: Uri): Promise<BigIntStats | undefined>;
   /**
@@ -3643,10 +3644,10 @@ declare module 'node/services/node-file-system.service' {
     [entryType in EntryType]: Uri[];
   }>;
   /**
-   * Reads a directory and returns lists of entries in the directory by entry type
-   * @param uri URI of directory
-   * @param entryFilter function to filter out entries in the directory based on their names
-   * @returns map of entry type to list of uris for each entry in the directory with that type
+   * Reads a directory and returns lists of entries in the directory by entry type.
+   * @param uri - URI of directory.
+   * @param entryFilter - function to filter out entries in the directory based on their names.
+   * @returns map of entry type to list of uris for each entry in the directory with that type.
    */
   export function readDir(
     uri: Uri,
