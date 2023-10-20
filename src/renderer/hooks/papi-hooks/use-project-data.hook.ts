@@ -79,7 +79,7 @@ type UseProjectDataHook = {
  * lets you subscribe to verse USFM from a project data provider for the `ParatextStandard`
  * `projectType`.
  *
- * ＠example When subscribing to JHN 11:35 Verse USFM info on a `ParatextStandard` project with
+ * *＠example* When subscribing to JHN 11:35 Verse USFM info on a `ParatextStandard` project with
  * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`, we need to tell the
  * `useProjectData.VerseUSFM` hook what types we are using, so we specify the project data types as
  * `ProjectDataTypes['ParatextStandard']` and specify that we are using the `'VerseUSFM'` data type
@@ -92,20 +92,21 @@ type UseProjectDataHook = {
  * );
  * ```
  *
- * ＠param `projectDataProviderSource` string name of the id of the project to get OR
+ * *＠param* `projectDataProviderSource` string name of the id of the project to get OR
  * projectDataProvider (result of useProjectDataProvider if you
  * want to consolidate and only get the project data provider once)
  *
- * ＠param `selector` tells the provider what data this listener is listening for
+ * *＠param* `selector` tells the provider what data this listener is listening for
  *
- * ＠param `defaultValue` the initial value to return while first awaiting the data
+ * *＠param* `defaultValue` the initial value to return while first awaiting the data
  *
  *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
  *
- * ＠param `subscriberOptions` various options to adjust how the subscriber emits updates
+ * *＠param* `subscriberOptions` various options to adjust how the subscriber emits updates
  *
  *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
- * ＠returns `[data, setData, isLoading]`
+ *
+ * *＠returns* `[data, setData, isLoading]`
  *  - `data`: the current value for the data from the project data provider for the specified
  *    project id with the specified data type and selector, either the defaultValue or the resolved
  *    data
@@ -116,9 +117,10 @@ type UseProjectDataHook = {
  *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
  *    project data provider for this project id
  *
- * @type `TProjectDataTypes` - the project data types associated with the `projectType` used. You
+ * *＠type* `TProjectDataTypes` - the project data types associated with the `projectType` used. You
  * can specify this type with `ProjectDataTypes['<project_type>']`
- * @type `TDataType` - the specific data type on this project you want to use. Must match the data
+ *
+ * *＠type* `TDataType` - the specific data type on this project you want to use. Must match the data
  * type specified in `useProjectData.<data_type>`
  */
 // Assert the more general and more specific types.
