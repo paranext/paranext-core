@@ -4138,7 +4138,7 @@ declare module 'shared/services/command.service' {
    * can register a command that other services and extensions can send you. You can send commands to
    * other services and extensions that have registered commands.
    */
-  export type moduleSummaryComments = {};
+  export type ModuleSummaryComments = {};
 }
 declare module 'shared/services/internet.service' {
   /** Our shim over fetch. Allows us to control internet access. */
@@ -6047,9 +6047,17 @@ declare module 'shared/models/create-process-privilege.model' {
 declare module 'shared/models/elevated-privilege-names.model' {
   /** String constants that are listed in an extension's manifest.json to state needed privileges */
   export enum ElevatedPrivilegeNames {
-    createProcess = 'createProcess',
-    manageExtensions = 'manageExtensions',
-    handleUri = 'handleUri',
+    CreateProcess = 'createProcess',
+    ManageExtensions = 'manageExtensions',
+    HandleUri = 'handleUri',
+  }
+  export namespace ElevatedPrivilegeNames {
+    /** @deprecated Use ElevatedPrivilegeNames.CreateProcess instead. */
+    const createProcess: ElevatedPrivilegeNames;
+    /** @deprecated Use ElevatedPrivilegeNames.ManageExtensions instead. */
+    const manageExtensions: ElevatedPrivilegeNames;
+    /** @deprecated Use ElevatedPrivilegeNames.HandleUri instead. */
+    const handleUri: ElevatedPrivilegeNames;
   }
 }
 declare module 'extension-host/extension-types/extension-manifest.model' {

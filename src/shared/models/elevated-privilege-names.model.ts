@@ -4,7 +4,16 @@
 
 /** String constants that are listed in an extension's manifest.json to state needed privileges */
 export enum ElevatedPrivilegeNames {
-  createProcess = 'createProcess',
-  manageExtensions = 'manageExtensions',
-  handleUri = 'handleUri',
+  CreateProcess = 'createProcess',
+  ManageExtensions = 'manageExtensions',
+  HandleUri = 'handleUri',
+}
+
+export namespace ElevatedPrivilegeNames {
+  /** @deprecated Use ElevatedPrivilegeNames.CreateProcess instead. */
+  export const createProcess: ElevatedPrivilegeNames = ElevatedPrivilegeNames.CreateProcess;
+  /** @deprecated Use ElevatedPrivilegeNames.ManageExtensions instead. */
+  export const manageExtensions: ElevatedPrivilegeNames = ElevatedPrivilegeNames.ManageExtensions;
+  /** @deprecated Use ElevatedPrivilegeNames.HandleUri instead. */
+  export const handleUri: ElevatedPrivilegeNames = ElevatedPrivilegeNames.HandleUri;
 }
