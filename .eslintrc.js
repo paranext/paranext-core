@@ -50,6 +50,35 @@ module.exports = {
       { exceptAfterSingleLine: true, exceptAfterOverload: true },
     ],
     '@typescript-eslint/member-ordering': 'error',
+    '@typescript-eslint/naming-convention': [
+      'error',
+      {
+        selector: 'variableLike',
+        format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
+        leadingUnderscore: 'allow',
+      },
+      {
+        selector: 'enumMember',
+        format: ['PascalCase'],
+      },
+      {
+        selector: 'function',
+        format: ['camelCase', 'PascalCase'],
+      },
+      {
+        selector: 'typeLike',
+        format: ['PascalCase'],
+      },
+      /* Allow META (Storybook) variables to break the rule */
+      {
+        selector: 'variable',
+        format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
+        filter: {
+          regex: '^meta$',
+          match: false,
+        },
+      },
+    ],
     'no-empty-function': 'off',
     '@typescript-eslint/no-empty-function': [
       'error',
@@ -102,19 +131,6 @@ module.exports = {
     'react/jsx-props-no-spreading': ['error', { custom: 'ignore' }],
     'react/require-default-props': 'off',
 
-    '@typescript-eslint/naming-convention': [
-      'error',
-
-      /* Allow META (Storybook) variables to break the rule */
-      {
-        selector: 'variable',
-        format: ['PascalCase', 'camelCase', 'UPPER_CASE'],
-        filter: {
-          regex: '^meta$',
-          match: false,
-        },
-      },
-    ],
     // #endregion
 
     // #endregion
