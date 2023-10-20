@@ -21,7 +21,7 @@ internal static partial class LocalProjects
     private static readonly string s_projectRootFolder;
 
     // The directory name pattern for each project is "shortName_ID"
-    [GeneratedRegex("(?<name>\\w*)_(?<id>.*)")]
+    [GeneratedRegex(@"^(?<name>\w(\w|-)*)_(?<id>.*)$")]
     private static partial Regex ProjectDirectoryRegex();
 
     // Inside of each project's "shortName_ID" directory, these are the subdirectories and files
