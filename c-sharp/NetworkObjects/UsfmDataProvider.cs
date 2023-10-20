@@ -97,7 +97,7 @@ internal class UsfmDataProvider : DataProvider
 
     private string GetUsxForBook(VerseRef vref)
     {
-        XmlDocument usx = ConvertUsfmToUsx(GetUsfm(vref.BookNum, -1), vref.BookNum);
+        XmlDocument usx = ConvertUsfmToUsx(GetUsfm(vref.BookNum), vref.BookNum);
         string contents = usx.OuterXml ?? string.Empty;
         return contents;
     }
@@ -127,11 +127,10 @@ internal class UsfmDataProvider : DataProvider
     /// <param name="bookNum">The book for which to get USFM</param>
     /// <param name="chapterNum">The chapter for which to get USFM or -1 for the whole book</param>
     /// <returns>USFM</returns>
-    private string GetUsfm(int bookNum, int chapterNum = -1)
+    private string GetUsfm(int bookNum, int? chapterNum = null)
     {
-        VerseRef vref =
-            new(bookNum, chapterNum == -1 ? 0 : chapterNum, 0, _scrText!.Settings.Versification);
+        VerseRef vref = new(bookNum, chapterNum ?? 0, 0, _scrText!.Settings.Versification);
         ScrText projectToUse = _scrText!.GetJoinedText(bookNum);
-        return projectToUse.GetText(vref, chapterNum >= 0, true);
+        return projectToUse.GetText(vref, chapterNum.HasValue, true);
     }
 }
