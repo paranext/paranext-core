@@ -4,7 +4,7 @@
 
 /** String constants that are listed in an extension's manifest.json to state needed privileges */
 export enum ElevatedPrivilegeNames {
-  createProcess = 'createProcess',
-  manageExtensions = 'manageExtensions',
-  handleUri = 'handleUri',
+  CreateProcess = 'createProcess',
+  ManageExtensions = 'manageExtensions',
+  HandleUri = 'handleUri',
 }
