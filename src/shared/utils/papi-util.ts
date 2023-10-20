@@ -112,6 +112,23 @@ export function deepEqual(a: unknown, b: unknown) {
   return equal(a, b);
 }
 
+/**
+ * Check to see if the value is JSON.stringify serializable without losing information
+ * @param value value to test
+ * @returns true if serializable; false otherwise
+ *
+ * WARNING: This is inefficient right now as it stringifies, parses, and deepEquals the value.
+ * Please only use this if you need to
+ */
+export function isSerializable(value: unknown): boolean {
+  try {
+    const valueJson = JSON.stringify(value);
+    return deepEqual(value, JSON.parse(valueJson));
+  } catch (e) {
+    return false;
+  }
+}
+
 /** Separator between parts of a serialized request */
 const REQUEST_TYPE_SEPARATOR = ':';
 
