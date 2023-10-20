@@ -37,6 +37,26 @@ module.exports = {
       { exceptAfterSingleLine: true, exceptAfterOverload: true },
     ],
     '@typescript-eslint/member-ordering': 'error',
+    '@typescript-eslint/naming-convention': [
+      'error',
+      {
+        selector: 'variableLike',
+        format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
+        leadingUnderscore: 'allow',
+      },
+      {
+        selector: 'enumMember',
+        format: ['PascalCase'],
+      },
+      {
+        selector: 'function',
+        format: ['camelCase', 'PascalCase'],
+      },
+      {
+        selector: 'typeLike',
+        format: ['PascalCase'],
+      },
+    ],
     'no-empty-function': 'off',
     '@typescript-eslint/no-empty-function': [
       'error',

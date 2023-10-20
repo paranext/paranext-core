@@ -250,7 +250,7 @@ declare module 'shared/utils/papi-util' {
    * papiUtil is a collection of functions, objects, and types that are used as helpers in other services.
    * Extensions should not use or rely on anything in papiUtil unless some other service requires it.
    */
-  export type moduleSummaryComments = {};
+  export type ModuleSummaryComments = {};
 }
 declare module 'shared/models/papi-event.model' {
   import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
@@ -1663,7 +1663,7 @@ declare module 'shared/services/command.service' {
    * You can register a command that other services and extensions can send you.
    * You can send commands to other services and extensions that have registered commands.
    */
-  export type moduleSummaryComments = {};
+  export type ModuleSummaryComments = {};
 }
 declare module 'shared/data/web-view.model' {
   import { ReactNode } from 'react';
