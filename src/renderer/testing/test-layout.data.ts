@@ -10,6 +10,7 @@ import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 import { TAB_TYPE_SETTINGS_DIALOG } from '@renderer/components/settings-dialog/settings-tab.component';
 import { TAB_TYPE_RUN_BASIC_CHECKS } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
 import { TAB_TYPE_BASIC_LIST } from '@renderer/components/basic-list/basic-list.component';
+import { TAB_TYPE_WORD_LIST } from '@renderer/components/word-list/word-list.component';
 
 export const FIRST_TAB_ID = 'About';
 
@@ -104,6 +105,18 @@ const testLayout: LayoutBase = {
         y: 170,
         w: 320,
         h: 190,
+      },
+      {
+        tabs: [
+          {
+            id: 'Word List',
+            tabType: TAB_TYPE_WORD_LIST,
+          },
+        ] as SavedTabInfo[],
+        x: 300,
+        y: 170,
+        w: 760,
+        h: 600,
       },
     ],
   },

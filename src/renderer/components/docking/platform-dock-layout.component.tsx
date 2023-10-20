@@ -72,6 +72,10 @@ import {
   TAB_TYPE_BASIC_LIST,
   loadBasicListTab,
 } from '@renderer/components/basic-list/basic-list.component';
+import {
+  TAB_TYPE_WORD_LIST,
+  loadWordListTab,
+} from '@renderer/components/word-list/word-list.component';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
 import { DialogData } from '@shared/models/dialog-options.model';
 import DIALOGS from '@renderer/components/dialogs';
@@ -119,6 +123,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_SETTINGS_DIALOG, loadSettingsDialog],
   [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
   [TAB_TYPE_BASIC_LIST, loadBasicListTab],
+  [TAB_TYPE_WORD_LIST, loadWordListTab],
   ...Object.entries(DIALOGS).map(
     ([dialogTabType, dialogDefinition]) =>
       // The default implementation of `loadDialog` uses `this`, so bind it to the definition
