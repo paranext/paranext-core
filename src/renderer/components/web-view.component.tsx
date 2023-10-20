@@ -5,7 +5,7 @@ import {
   WebViewContentType,
   WebViewDefinition,
   SavedWebViewDefinition,
-  WebViewProps,
+  WebViewTabProps,
 } from '@shared/data/web-view.model';
 import {
   getWebView,
@@ -17,11 +17,11 @@ import logger from '@shared/services/logger.service';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
-export function getTitle({ webViewType, title, contentType }: Partial<WebViewProps>): string {
+export function getTitle({ webViewType, title, contentType }: Partial<WebViewTabProps>): string {
   return title || `${webViewType || contentType} Web View`;
 }
 
-export default function WebView({ webViewType, content, title, contentType }: WebViewProps) {
+export default function WebView({ webViewType, content, title, contentType }: WebViewTabProps) {
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const iframeRef = useRef<HTMLIFrameElement>(null!);
@@ -63,21 +63,43 @@ async function retrieveWebViewContent(data: SavedWebViewDefinition): Promise<voi
     );
 }
 
+export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefinition): TabInfo {
+  return {
+    ...savedTabInfo,
+    data,
+    tabIconUrl: data.iconUrl,
+    tabTitle: data.title ?? 'Unknown',
+    content: <WebView {...data} />,
+  };
+}
+
 export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
   if (!savedTabInfo.id) throw new Error('"id" is missing.');
 
-  let data: WebViewProps;
+  let data: WebViewTabProps;
   if (savedTabInfo.data) {
     // We need to make sure that the data is of the correct type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    data = savedTabInfo.data as WebViewProps;
+    data = savedTabInfo.data as WebViewTabProps;
 
     if (savedTabInfo.id !== data.id) throw new Error('"id" does not match webView id.');
     if (!data.webViewType) throw new Error('WebView does not have a webViewType. Cannot restore');
 
     // If the webview is saved aka doesn't have content, tell the web view service to load the web
     // view. It will asynchronously go get the content and re-run this function
-    if (!data.content && data.content !== '') retrieveWebViewContent(data);
+    if (!data.content && data.content !== '') {
+      (async () => {
+        try {
+          await retrieveWebViewContent(data);
+        } catch (e) {
+          logger.error(
+            `web-view.component failed to retrieve web view content for ${JSON.stringify(
+              savedTabInfo,
+            )}`,
+          );
+        }
+      })();
+    }
   } else {
     // placeholder data
     data = {
@@ -89,12 +111,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
     };
   }
 
-  return {
-    ...savedTabInfo,
-    tabIconUrl: data.iconUrl,
-    tabTitle: data.title ?? 'Unknown',
-    content: <WebView {...data} />,
-  };
+  return updateWebViewTab(savedTabInfo, data);
 }
 
 export function saveWebViewTab(tabInfo: TabInfo): SavedTabInfo {
