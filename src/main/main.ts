@@ -28,7 +28,7 @@ import { startNetworkObjectStatusService } from '@main/services/network-object-s
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
-  COMMAND_LINE_ARGS,
+  CommandLineArgs,
   getCommandLineArgument,
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
@@ -338,15 +338,15 @@ async function main() {
 
     // If --window-size (or --windowSize) is specified, use those dimensions instead of the saved
     // window state. Useful for automation/headless runs on Windows where xvfb is unavailable.
-    const windowSizeArg = getCommandLineArgument(COMMAND_LINE_ARGS.WindowSize);
+    const windowSizeArg = getCommandLineArgument(CommandLineArgs.WindowSize);
     let windowWidth = mainWindowState.width;
     let windowHeight = mainWindowState.height;
     let sizeMatch: RegExpExecArray | undefined;
     if (windowSizeArg) {
       sizeMatch = /^([1-9]\d*)[x,]([1-9]\d*)$/i.exec(windowSizeArg) ?? undefined;
       if (sizeMatch) {
-        windowWidth = parseInt(sizeMatch[1], 10);
-        windowHeight = parseInt(sizeMatch[2], 10);
+        windowWidth = Number.parseInt(sizeMatch[1], 10);
+        windowHeight = Number.parseInt(sizeMatch[2], 10);
       } else {
         logger.warn(
           `Invalid --window-size value "${windowSizeArg}". Expected format: WIDTHxHEIGHT (e.g. 1920x1080)`,
@@ -462,7 +462,7 @@ async function main() {
         mainWindow.minimize();
       } else {
         mainWindow.show();
-        if (getCommandLineSwitch(COMMAND_LINE_ARGS.Maximize)) {
+        if (getCommandLineSwitch(CommandLineArgs.Maximize)) {
           logger.info('mainWindow is starting maximized due to --maximize command-line switch');
           mainWindow.maximize();
         }
