@@ -104,11 +104,12 @@ async function getMetadataForAllProjects(): Promise<ProjectMetadata[]> {
 
 async function getMetadataForProject(projectId: string): Promise<ProjectMetadata> {
   await initialize();
-  const existingValue = localProjects.get(projectId);
+  const idUpper = projectId.toUpperCase();
+  const existingValue = localProjects.get(idUpper);
   if (existingValue) return existingValue;
 
   // Try to load the project directly in case the files were copied after initialization
-  const newMetadata = await getProjectMetadata(projectId);
+  const newMetadata = await getProjectMetadata(idUpper);
   localProjects.set(newMetadata.id, newMetadata);
   return newMetadata;
 }
