@@ -17,15 +17,13 @@ import VerseContentViewer from './verse-content-viewer.component';
 
 export const TAB_TYPE_WORD_LIST = 'word-list';
 
-const loadingPlaceholder: string = 'Loading verse';
-
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
   chapterNum: 1,
   verseNum: 1,
 };
 
-type WordListEntry = {
+export type WordListEntry = {
   word: string;
   count: number;
   scrRef: ScriptureReference[];
@@ -48,18 +46,19 @@ export default function WordList() {
       () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, verseNum, ScrVers.English),
       [scrRef, verseNum],
     ),
-    loadingPlaceholder,
+    'Loading verse',
   );
   const [rows, setRows] = useState<Row[]>([]);
   const [sortColumns, setSortColumns] = useState<TableSortColumn[]>(defaultSortColumns);
   const onSortColumnsChange = useCallback((changedSortColumns: TableSortColumn[]) => {
     setSortColumns(changedSortColumns.slice(-1));
   }, []);
-  const [selectedWordScrRefs, setSelectedWordScrRefs] = useState<ScriptureReference[]>();
+  const [selectedWord, setSelectedWord] = useState<WordListEntry>();
 
   useEffect(() => {
     setWordArray([]);
     setVerseNum(1);
+    setSelectedWord(undefined);
   }, [scrRef.bookNum, scrRef.chapterNum]);
 
   const processVerse = () => {
@@ -144,8 +143,8 @@ export default function WordList() {
   }, [sortColumns]);
 
   const onCellClick = (args: TableCellClickArgs<Row>) => {
-    const highlight = wordArray.find((entry) => entry.word === args.row.word);
-    if (highlight) setSelectedWordScrRefs(highlight.scrRef);
+    const clickedWord = wordArray.find((entry) => entry.word === args.row.word);
+    if (clickedWord) setSelectedWord(clickedWord);
   };
 
   return (
@@ -170,7 +169,7 @@ export default function WordList() {
         rows={sortedRows}
         rowKeyGetter={(row: Row) => {
           return row.word;
-        }}
+        }} // kan weg?
         onRowsChange={(changedRows: Row[]) => setRows(changedRows)}
         sortColumns={sortColumns}
         onSortColumnsChange={onSortColumnsChange}
@@ -178,7 +177,9 @@ export default function WordList() {
         headerRowHeight={50}
         onCellClick={onCellClick}
       />
-      <VerseContentViewer scrRefs={selectedWordScrRefs} />
+      {selectedWord && (
+        <VerseContentViewer word={selectedWord.word} scrRefs={selectedWord.scrRef} />
+      )}
     </div>
   );
 }
