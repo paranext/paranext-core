@@ -18,7 +18,7 @@ const METADATA_FILE = 'meta.json';
 async function getProjectUris(): Promise<string[]> {
   // Get all the directories in the projects root that match "<name>_<id>"
   const entries = await nodeFS.readDir(PROJECTS_ROOT_URI, (entry) => {
-    return /^\w(\w|-)*_[^\W_]+$/.test(path.parse(entry).name);
+    return /^\w(\w|-)*_[a-fA-F0-9]{40}$/.test(path.parse(entry).name);
   });
 
   return entries.directory;
