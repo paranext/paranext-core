@@ -29,18 +29,26 @@ const usfmSchema = buildSchema(`
   }
 `);
 
-// There are probably frameworks that can  be used to automatically convert between GraphQL and TS/JS types
-// We should figure out how we want to use GraphQL in more detail before deciding which ones (if any) to use
-function extractVerseRef(verseRef: object): VerseRef {
+type MaybeVerseRef = {
+  book?: string;
+  chapter?: string;
+  verse?: string;
+  versification?: string;
+};
+
+// There are probably frameworks that can be used to automatically convert between GraphQL and TS/JS
+// types. We should figure out how we want to use GraphQL in more detail before deciding which ones
+// (if any) to use.
+function extractVerseRef(maybeVerseRef: MaybeVerseRef): VerseRef {
   let versification: ScrVers | undefined;
-  if ('versification' in verseRef) versification = new ScrVers(verseRef.versification as string);
-  if ('book' in verseRef) {
-    const book = verseRef.book as string;
-    const chapter = 'chapter' in verseRef ? (verseRef.chapter as string) : '1';
-    const verse = 'verse' in verseRef ? (verseRef.verse as string) : '1';
+  if (maybeVerseRef.versification) versification = new ScrVers(maybeVerseRef.versification);
+  if (maybeVerseRef.book) {
+    const { book } = maybeVerseRef;
+    const chapter = maybeVerseRef.chapter ?? '1';
+    const verse = maybeVerseRef.verse ?? '1';
     return new VerseRef(book, chapter, verse, versification);
   }
-  throw new Error(`Invalid verseRef: ${verseRef}`);
+  throw new Error(`Invalid verseRef: ${maybeVerseRef}`);
 }
 
 // Caching some objects so we don't have to keep making network calls for every GraphQL query
@@ -107,7 +115,11 @@ async function runQuery<ReturnType = unknown>(query: string): Promise<ReturnType
   if (results.errors) throw new Error(JSON.stringify(results.errors));
   // If there is only 1 result, just give it to the caller instead of making the use a map to get it
   if (results.data && Object.keys(results.data).length === 1)
+    // Assert to specified generic type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     return Object.values(results.data).at(0) as ReturnType;
+  // Assert to specified generic type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return results.data as ReturnType;
 }
 

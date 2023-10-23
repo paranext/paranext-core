@@ -119,6 +119,7 @@ if (isClient()) {
             caller ? `${logLine} ${caller}` : `${logLine}`,
             getProcessType(),
             // Renderer sends back with log level of log. Not sure why it's not in the type
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
             (message.level as LogLevel | 'log') === 'log' ? undefined : message.level,
           ),
         ),

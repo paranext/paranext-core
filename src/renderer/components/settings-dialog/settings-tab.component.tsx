@@ -188,6 +188,7 @@ function InterfaceLanguageSetting({ setting, setSetting }: SettingProps<string>)
       value={setting}
       // Type asserting because combobox props aren't precise enough yet
       // Issue https://github.com/paranext/paranext-core/issues/560
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       onChange={(_e, v) => setSetting(v as string)}
       width={200}
     />
@@ -223,6 +224,7 @@ function ProxySettings({
           placeholder="0"
           value={setting.Port}
           // This is a mock component- But BUG here because this TextField can take strings but we are forcing it as a number
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
           onChange={(e) => setSetting({ ...setting, Port: e.target.value as unknown as number })}
         />
         <TextField
@@ -249,6 +251,9 @@ function CheckboxSetting({ setting, setSetting }: SettingProps<boolean>) {
 
 // Example component of a platform setting
 function ComboboxSetting({ setting, setSetting }: SettingProps<string>) {
+  // Type asserting because combobox props aren't precise enough yet
+  // Issue https://github.com/paranext/paranext-core/issues/560
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return <ComboBox value={setting} onChange={(_e, v) => setSetting(v as string)} width={200} />;
 }
 

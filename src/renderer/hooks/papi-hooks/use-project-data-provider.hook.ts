@@ -14,6 +14,9 @@ import IDataProvider from '@shared/models/data-provider.interface';
  * @ProjectType `ProjectType` - the project type for the project to use. The returned project data
  * provider will have the project data provider type associated with this project type.
  */
+
+// Assert to specific data type for this hook.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 const useProjectDataProvider = createUseNetworkObjectHook(
   papiFrontendProjectDataProviderService.getProjectDataProvider,
 ) as <ProjectType extends ProjectTypes>(

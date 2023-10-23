@@ -1,5 +1,7 @@
+import { isSerializable } from '@shared/utils/papi-util';
+
 const WEBVIEW_STATE_KEY = 'web-view-state';
-const stateMap = new Map<string, Record<string, string>>();
+const stateMap = new Map<string, Record<string, unknown>>();
 const idsLookedUp = new Set<string>();
 
 function loadIfNeeded(): void {
@@ -9,7 +11,7 @@ function loadIfNeeded(): void {
   const serializedState = localStorage.getItem(WEBVIEW_STATE_KEY);
   if (!serializedState) return;
 
-  const entries = JSON.parse(serializedState) as [[string, Record<string, string>]];
+  const entries: [[string, Record<string, unknown>]] = JSON.parse(serializedState);
   entries.forEach(([key, value]) => {
     if (key && value) stateMap.set(key, value);
   });
@@ -23,7 +25,7 @@ function save(): void {
   localStorage.setItem(WEBVIEW_STATE_KEY, stateToSave);
 }
 
-function getRecord(id: string): Record<string, string> {
+function getRecord(id: string): Record<string, unknown> {
   loadIfNeeded();
   idsLookedUp.add(id);
 
@@ -41,7 +43,7 @@ function getRecord(id: string): Record<string, string> {
  * @param id ID of the web view
  * @returns state object of the given web view
  */
-export function getFullWebViewStateById(id: string): Record<string, string> {
+export function getFullWebViewStateById(id: string): Record<string, unknown> {
   if (!id) throw new Error('id must be provided to get webview state');
   return getRecord(id);
 }
@@ -52,7 +54,7 @@ export function getFullWebViewStateById(id: string): Record<string, string> {
  * @param id ID of the web view
  * @param state State to set for the given web view
  */
-export function setFullWebViewStateById(id: string, state: Record<string, string>): void {
+export function setFullWebViewStateById(id: string, state: Record<string, unknown>): void {
   if (!id || !state) throw new Error('id and state must be provided to set webview state');
   loadIfNeeded();
   idsLookedUp.add(id);
@@ -68,9 +70,10 @@ export function setFullWebViewStateById(id: string, state: Record<string, string
  */
 export function getWebViewStateById<T>(id: string, stateKey: string): T | undefined {
   if (!id || !stateKey) throw new Error('id and stateKey must be provided to get webview state');
-  const state: Record<string, string> = getRecord(id);
-  const stateValue: string | undefined = state[stateKey];
-  return stateValue ? (JSON.parse(stateValue) as T) : undefined;
+  const state = getRecord(id);
+  // We don't have any way to know what type this is, so just type assert for convenience
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return state[stateKey] as T | undefined;
 }
 
 /**
@@ -81,19 +84,11 @@ export function getWebViewStateById<T>(id: string, stateKey: string): T | undefi
  */
 export function setWebViewStateById<T>(id: string, stateKey: string, stateValue: T): void {
   if (!id || !stateKey) throw new Error('id and stateKey must be provided to set webview state');
-  const stringifiedValue = JSON.stringify(stateValue);
-  try {
-    const roundTripped = JSON.parse(stringifiedValue);
-    const roundTrippedStringified = JSON.stringify(roundTripped);
-    if (stringifiedValue !== roundTrippedStringified) {
-      throw new Error(`roundtrip failure`);
-    }
-  } catch (err) {
+  if (!isSerializable(stateValue))
     throw new Error(`"${stateKey}" value cannot round trip with JSON.stringify and JSON.parse.`);
-  }
 
-  const state: Record<string, string> = getRecord(id);
-  state[stateKey] = stringifiedValue;
+  const state = getRecord(id);
+  state[stateKey] = stateValue;
   save();
 }
 

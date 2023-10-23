@@ -220,7 +220,7 @@ async function main() {
 
   /** Map from ipc channel to handler function. Use with ipcRenderer.invoke */
   const ipcHandlers: {
-    [ipcChannel: string]: (
+    [ipcChannel: SerializedRequestType]: (
       event: IpcMainInvokeEvent,
       // We don't know the exact parameter types since ipc handlers can be anything
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -252,7 +252,11 @@ async function main() {
 
   Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
     networkService.registerRequestHandler(
+      // Re-assert type after passing through `forEach`.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       ipcHandle as SerializedRequestType,
+      // Handle with an empty event.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       async (...args: unknown[]) => handler({} as IpcMainInvokeEvent, ...args),
     );
   });
@@ -262,6 +266,8 @@ async function main() {
   // #region Register test command handlers
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
+    // Re-assert type after passing through `forEach`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     commandService.registerCommand(commandName as CommandNames, handler);
   });
 

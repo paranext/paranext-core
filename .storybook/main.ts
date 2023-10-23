@@ -52,8 +52,8 @@ const config: StorybookConfig = {
           return mergeWithCustomize({
             customizeArray(wpModule: object[], rModule: object[], moduleKey: string) {
               if (moduleKey === 'rules') {
-                const wpRules = wpModule as RuleSetRule[];
-                const rRules = rModule as RuleSetRule[];
+                const wpRules: RuleSetRule[] = wpModule;
+                const rRules: RuleSetRule[] = rModule;
                 return [
                   ...wpRules.filter(
                     (rule) =>

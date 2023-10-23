@@ -21,12 +21,14 @@ import {
   TabInfo,
   WebViewDefinitionReact,
   WebViewContentType,
-  WebViewProps,
+  WebViewTabProps,
   WebViewType,
   WebViewId,
   GetWebViewOptions,
   WebViewDefinition,
   SavedWebViewDefinition,
+  WebViewDefinitionUpdateInfo,
+  WebViewDefinitionUpdatableProperties,
 } from '@shared/data/web-view.model';
 import * as networkService from '@shared/services/network.service';
 import webViewProviderService from '@shared/services/web-view-provider.service';
@@ -69,12 +71,30 @@ type PapiDockLayout = {
    * @returns If WebView added, final layout used to display the new webView. If existing webView
    *   updated, `undefined`
    */
-  addWebViewToDock: (webView: WebViewProps, layout: Layout) => Layout | undefined;
+  addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => Layout | undefined;
   /**
    * Remove a tab in the layout
    * @param tabId id of the tab to remove
    */
   removeTabFromDock: (tabId: string) => boolean;
+  /**
+   * Gets the WebView definition for the web view with the specified id
+   *
+   * @param webViewId the id of the WebView whose web view definition to get
+   *
+   * @returns WebView definition with the specified id or undefined if not found
+   */
+  getWebViewDefinition: (webViewId: string) => WebViewDefinition | undefined;
+  /**
+   * Updates the WebView with the specified id with the specified properties
+   *
+   * @param webViewId the id of the WebView to update
+   * @param updateInfo properties to update on the WebView. Any unspecified
+   * properties will stay the same
+   *
+   * @returns true if successfully found the WebView to update; false otherwise
+   */
+  updateWebViewDefinition: (webViewId: string, updateInfo: WebViewDefinitionUpdateInfo) => boolean;
   /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
    *
@@ -184,14 +204,84 @@ const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
 export const onDidAddWebView = onDidAddWebViewEmitter.event;
 
 /**
- * Variable that will hold the rc-dock dock layout along with a couple other props. This is
- * populated by `platform-dock-layout.component.tsx` registering its dock layout with this service,
- * allowing this service to manage layouts and such.
+ * WARNING: DO NOT USE THIS VARIABLE DIRECTLY. USE `getDockLayout()`
+ *
+ * Asynchronously accessed variable that will hold the rc-dock dock layout along with a couple other
+ * props. This is populated by `platform-dock-layout.component.tsx` registering its dock layout with
+ * this service, allowing this service to manage layouts and such.
  *
  * WARNING: YOU CAN ONLY USE THIS VARIABLE IN THE RENDERER. Also please do not save this
  * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
  */
 let papiDockLayoutVar = createDockLayoutAsyncVar();
+/**
+ * WARNING: DO NOT USE THIS VARIABLE DIRECTLY. USE `getDockLayoutSync()`
+ *
+ * Synchronously accessed variable that will hold the rc-dock dock layout along with a couple other
+ * props. This is populated by `platform-dock-layout.component.tsx` registering its dock layout with
+ * this service, allowing this service to manage layouts and such.
+ *
+ * WARNING: YOU CAN ONLY USE THIS VARIABLE IN THE RENDERER. Also please do not save this
+ * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
+ */
+let papiDockLayoutVarSync: PapiDockLayout | undefined;
+/**
+ * Set the papi dock layout (async and sync). Resolves `getDockLayout()` calls.
+ *
+ * This should very likely only be used in `registerDockLayout`.
+ *
+ * @param dockLayout the papi dock layout to set or undefined to reset the dock layout
+ *
+ * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER.
+ */
+function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
+  if (dockLayout === undefined) {
+    // Create a new async var to empty out the dock layout only if the dock layout was previously
+    // set. That way, async callers to the dock layout who are awaiting a resolved value don't get
+    // lost or rejected needlessly
+    // TODO: Would creating a new async var create any problems...? I guess only if someone saves
+    // dockLayoutVar somewhere else
+    if (papiDockLayoutVar.hasSettled) papiDockLayoutVar = createDockLayoutAsyncVar();
+    papiDockLayoutVarSync = undefined;
+  } else {
+    // Set the dock layout as the promise var. Throws if already resolved
+    papiDockLayoutVar.resolveToValue(dockLayout, true);
+    if (papiDockLayoutVarSync)
+      throw new Error(
+        'WebView Service error: papiDockLayoutVarSync is already set when trying to set it!',
+      );
+    papiDockLayoutVarSync = dockLayout;
+  }
+}
+/**
+ * Get the papi dock layout promise. It will resolve to the papi dock layout when it is registered.
+ *
+ * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER. Also please do not save the returned
+ * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
+ *
+ * @returns promise that resolves to the papi dock layout
+ */
+function getDockLayout(): Promise<PapiDockLayout> {
+  return papiDockLayoutVar.promise;
+}
+/**
+ * Get the papi dock layout synchronously *assuming* it has been registered. This should be safe to
+ * assume if you are accessing this from inside a tab's code
+ *
+ * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER. Also please do not save the returned
+ * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
+ *
+ * @returns the papi dock layout
+ *
+ * @throws if the papi dock layout has not been registered
+ */
+function getDockLayoutSync(): PapiDockLayout {
+  if (!papiDockLayoutVarSync)
+    throw new Error(
+      'WebView Service error: Dock layout was requested synchronously, but the dock layout has not been registered!',
+    );
+  return papiDockLayoutVarSync;
+}
 
 // #region functions related to the dock layout
 
@@ -203,7 +293,7 @@ let papiDockLayoutVar = createDockLayoutAsyncVar();
 export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
   // We don't need to use the other properties, but we need to remove them
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { tabTitle, content, minWidth, minHeight, ...savedTabInfo } = tabInfo;
+  const { tabTitle, tabIconUrl, content, minWidth, minHeight, ...savedTabInfo } = tabInfo;
   return savedTabInfo;
 }
 
@@ -276,7 +366,7 @@ async function saveLayout(layout: LayoutBase): Promise<void> {
  * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
  */
 async function loadLayout(layout?: LayoutBase): Promise<void> {
-  const dockLayoutVar = await papiDockLayoutVar.promise;
+  const dockLayoutVar = await getDockLayout();
   const layoutToLoad = layout || getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
 
   dockLayoutVar.dockLayout.loadLayout(layoutToLoad);
@@ -301,8 +391,7 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // Save the current async var so we know if it changed before we unsubscribed
   const currentPapiDockLayoutVar = papiDockLayoutVar;
 
-  // Set the dock layout as the promise var. Throws if already resolved
-  papiDockLayoutVar.resolveToValue(dockLayout, true);
+  setDockLayout(dockLayout);
 
   // TODO: Strange pattern that we are setting a ref to a service function. Investigate changing
   // this pattern in some way. Maybe just export `onLayoutChange`?
@@ -319,9 +408,7 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
     if (papiDockLayoutVar !== currentPapiDockLayoutVar)
       throw new Error('Tried to unregister an old dock layout');
 
-    // Create a new async var to empty out the dock layout
-    // TODO: Would this create any problems...? I guess only if we save dockLayoutVar somewhere else
-    papiDockLayoutVar = createDockLayoutAsyncVar();
+    setDockLayout(undefined);
 
     return true;
   };
@@ -349,7 +436,7 @@ function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOption
  * Not exposed on the papi
  */
 export const removeTab = async (tabId: string): Promise<boolean> => {
-  return (await papiDockLayoutVar.promise).removeTabFromDock(tabId);
+  return (await getDockLayout()).removeTabFromDock(tabId);
 };
 
 /**
@@ -364,12 +451,113 @@ export const removeTab = async (tabId: string): Promise<boolean> => {
  *
  * Not exposed on the papi
  */
-export const addTab = async (
-  savedTabInfo: SavedTabInfo,
+export const addTab = async <TData = unknown>(
+  savedTabInfo: SavedTabInfo & { data?: TData },
   layout: Layout,
 ): Promise<Layout | undefined> => {
-  return (await papiDockLayoutVar.promise).addTabToDock(savedTabInfo, layout);
+  return (await getDockLayout()).addTabToDock(savedTabInfo, layout);
 };
+
+/**
+ * Get just the updatable properties of a web view definition
+ * @param webViewDefinition web view definition or update info to get updatable properties from
+ * @returns updatable properties of the web view definition
+ *
+ * Not exposed on the papi
+ */
+export function getUpdatablePropertiesFromWebViewDefinition(
+  webViewDefinition:
+    | SavedWebViewDefinition
+    | WebViewDefinition
+    | WebViewDefinitionUpdatableProperties
+    | WebViewDefinitionUpdateInfo,
+): WebViewDefinitionUpdatableProperties {
+  // Make sure we're only including the specific properties we allow updates on
+  const { iconUrl, title } = webViewDefinition;
+  return { iconUrl, title };
+}
+
+/**
+ * Merges web view definition updates into a web view definition. Does not modify the original
+ * web view definition but returns a new object.
+ * @param webViewDefinition web view definition to merge into
+ * @param updateInfo updates to merge into the web view definition
+ * @returns new copy of web view definition with updates applied
+ *
+ * Not exposed on the papi
+ */
+export function mergeUpdatablePropertiesIntoWebViewDefinition<T extends SavedWebViewDefinition>(
+  webViewDefinition: T,
+  updateInfo: WebViewDefinitionUpdateInfo,
+): T {
+  const webViewUpdate = getUpdatablePropertiesFromWebViewDefinition(updateInfo);
+  // If update properties aren't specified, keep the original values
+  const mergedProperties = Object.fromEntries(
+    Object.entries(webViewUpdate).map(([key, value]) => [
+      key,
+      // Reminding TypeScript that key is from entries of updatable properties
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      value || webViewDefinition[key as keyof WebViewDefinitionUpdatableProperties],
+    ]),
+  );
+  return {
+    ...webViewDefinition,
+    ...mergedProperties,
+  };
+}
+
+/**
+ * Gets the updatable properties on the WebView definition with the specified id
+ *
+ * @param webViewId the id of the WebView whose updatable properties to get
+ *
+ * @returns updatable properties of the WebView definition with the specified id or undefined if
+ * not found
+ *
+ * @throws if the papi dock layout has not been registered
+ *
+ * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
+ *
+ * Not exposed on the papi
+ */
+export function getWebViewDefinitionUpdatablePropertiesSync(
+  webViewId: string,
+): WebViewDefinitionUpdatableProperties | undefined {
+  const webViewDefinition = getDockLayoutSync().getWebViewDefinition(webViewId);
+  if (webViewDefinition === undefined) return undefined;
+
+  return getUpdatablePropertiesFromWebViewDefinition(webViewDefinition);
+}
+
+/**
+ * Updates the WebView with the specified id with the specified properties
+ *
+ * @param webViewId the id of the WebView to update
+ * @param webViewDefinitionUpdateInfo properties to update on the WebView. Any unspecified
+ * properties will stay the same
+ *
+ * @returns true if successfully found the WebView to update; false otherwise
+ *
+ * @throws if the papi dock layout has not been registered
+ *
+ * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
+ *
+ * Not exposed on the papi
+ */
+export function updateWebViewDefinitionSync(
+  webViewId: string,
+  webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
+): boolean {
+  return getDockLayoutSync().updateWebViewDefinition(webViewId, webViewDefinitionUpdateInfo);
+}
+
+// #region Set up global variables to use in `getWebView`'s `imports` below
+
+globalThis.getWebViewDefinitionUpdatablePropertiesById =
+  getWebViewDefinitionUpdatablePropertiesSync;
+globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
+
+// #endregion
 
 /**
  * Creates a new web view or gets an existing one depending on if you request an existing one and
@@ -448,14 +636,17 @@ export const getWebView = async (
   let existingSavedWebView: SavedWebViewDefinition | undefined;
   // Look for existing webview
   if (optionsDefaulted.existingId) {
-    const existingWebView = (await papiDockLayoutVar.promise).dockLayout.find(
+    // Expect this to be a tab.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const existingWebView = (await getDockLayout()).dockLayout.find(
       optionsDefaulted.existingId === '?'
         ? // If they provided '?', that means look for any webview with a matching webViewType
           (item) => {
             // This is not a webview
             if (!('data' in item)) return false;
 
-            // Find any webview with the specified webViewType
+            // Find any webview with the specified webViewType. Type assert the unknown `data`.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
             return (item.data as WebViewDefinition).webViewType === webViewType;
           }
         : // If they provided any other string, look for a webview with that id
@@ -464,6 +655,8 @@ export const getWebView = async (
     if (existingWebView) {
       // We found the webview! Save it to send to the web view provider
       existingSavedWebView = convertWebViewDefinitionToSaved(
+        // Type assert the unknown `data`.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         existingWebView.data as WebViewDefinition,
       );
       // Load the web view state since the web view provider doesn't have access to the data store
@@ -494,7 +687,14 @@ export const getWebView = async (
   // `webViewRequire`, `getWebViewStateById`, and `setWebViewStateById` below are defined in `src\renderer\global-this.model.ts`
   // `useWebViewState` below is defined in `src\shared\global-this.model.ts`
   // We have to bind `useWebViewState` to the current `window` context because calls within PAPI don't have access to a webview's `window` context
-  /** String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such */
+  /**
+   * String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such
+   *
+   * WARNING: `window.top` is not deletable as a security feature (websites need to know if they are
+   * running embedded in an iframe), so the child iframes are NOT isolated from their parents. We
+   * perform a number of tasks to mitigate this issue, but it would be very nice to find a way to
+   * properly delete `window.top`
+   */
   const imports = `
   var papi = window.parent.papi;
   var React = window.parent.React;
@@ -509,6 +709,10 @@ export const getWebView = async (
   window.getWebViewState = (stateKey) => { return getWebViewStateById('${webView.id}', stateKey) };
   window.setWebViewState = (stateKey, stateValue) => { setWebViewStateById('${webView.id}', stateKey, stateValue) };
   window.useWebViewState = window.parent.useWebViewState.bind(window);
+  var getWebViewDefinitionUpdatablePropertiesById = window.parent.getWebViewDefinitionUpdatablePropertiesById;
+  window.getWebViewDefinitionUpdatableProperties = () => { return getWebViewDefinitionUpdatablePropertiesById('${webView.id}')}
+  var updateWebViewDefinitionById = window.parent.updateWebViewDefinitionById;
+  window.updateWebViewDefinition = (webViewDefinitionUpdateInfo) => { return updateWebViewDefinitionById('${webView.id}', webViewDefinitionUpdateInfo)}
   window.fetch = papi.fetch;
   delete window.parent;
   delete window.top;
@@ -518,6 +722,10 @@ export const getWebView = async (
   `;
 
   /** Nonce used to allow scripts and styles to run */
+  // TODO: Generating nonces every time causes webviews to rerender every time `getWebView` is used
+  // on an existing webview such as when the extension host is restarted. Should we save webview
+  // nonces so the `content` can be the same and not have to rerender?
+  // Or this could solve the problem as well https://github.com/paranext/paranext-core/issues/282
   const srcNonce = newNonce();
 
   // Build the contents of the iframe
@@ -534,6 +742,8 @@ export const getWebView = async (
       specificSrcPolicy = "'unsafe-inline'";
       break;
     default: {
+      // Defaults to React webview definition.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const reactWebView = webView as WebViewDefinitionReact;
 
       // Add the component as a script
@@ -558,7 +768,15 @@ export const getWebView = async (
               function initializeReact() {
                 const container = document.getElementById('root');
                 const root = createRoot(container);
-                root.render(React.createElement(globalThis.webViewComponent, null));
+
+                // Set up WebViewProps to pass into the WebView component
+                const webViewProps = {
+                  useWebViewState: window.useWebViewState,
+                  getWebViewDefinitionUpdatableProperties: window.getWebViewDefinitionUpdatableProperties,
+                  updateWebViewDefinition: window.updateWebViewDefinition,
+                };
+
+                root.render(React.createElement(globalThis.webViewComponent, webViewProps));
               }
 
               if (document.readyState === 'loading')
@@ -635,13 +853,13 @@ export const getWebView = async (
     ${imports}
     </script>${webViewContent.substring(headEnd + 1)}`;
 
-  const updatedWebView: WebViewProps = {
+  const updatedWebView: WebViewTabProps = {
     ...webView,
     contentType,
     content: webViewContent,
   };
 
-  const updatedLayout = (await papiDockLayoutVar.promise).addWebViewToDock(updatedWebView, layout);
+  const updatedLayout = (await getDockLayout()).addWebViewToDock(updatedWebView, layout);
 
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
   // inform web view consumers that we added a new web view
@@ -674,6 +892,8 @@ function removeForbiddenElements(mutationList: MutationRecord[]) {
     m.addedNodes.forEach((node) => {
       if (node.nodeType !== Node.ELEMENT_NODE) return;
 
+      // This is an element node.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const element = node as Element;
       const tag = element.tagName.toLowerCase();
 
@@ -762,6 +982,8 @@ export const initialize = () => {
       // Register built-in requests
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
       const unsubPromises = Object.entries(rendererRequestHandlers).map(([requestType, handler]) =>
+        // Fix type after passing through the `map` function.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         networkService.registerRequestHandler(requestType as SerializedRequestType, handler),
       );
 

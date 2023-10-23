@@ -11,6 +11,8 @@ const DIALOGS: { [DialogTabType in DialogTabTypes]: DialogDefinition<DialogTabTy
 };
 
 /** All tab types for available dialogs */
+// Re-assert the type of keys.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 export const DIALOG_TAB_TYPES = Object.keys(DIALOGS) as DialogTabTypes[];
 
 export default DIALOGS;

@@ -99,7 +99,7 @@ export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
   projectId: string,
 ): Promise<ProjectDataProvider[ProjectType]> {
   const metadata = await projectLookupService.getMetadataForProject(projectId);
-  const projectType = metadata.projectType as keyof ProjectDataTypes;
+  const { projectType } = metadata;
   const pdpFactoryId: string = getProjectDataProviderFactoryId(projectType);
   const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<ProjectType>>(
     pdpFactoryId,

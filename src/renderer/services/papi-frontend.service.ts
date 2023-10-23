@@ -28,6 +28,7 @@ import { DialogService } from '@shared/services/dialog.service-model';
 // 1) When adding new services here, consider whether they also belong in papi-backend.service.ts.
 // 2) We need to provide type assertions for all members so they carry the JSDoc comments on the
 // papi.d.ts file so extension developers see the comments. Please add to all properties you add.
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion */
 // 3) The "JSDOC DESTINATION" comments are there to provide anchors for JSDocs to be copied in.
 // Please add to all properties you add.
 const papi = {
