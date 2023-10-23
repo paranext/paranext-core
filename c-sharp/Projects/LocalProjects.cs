@@ -21,7 +21,7 @@ internal static partial class LocalProjects
     private static readonly string s_projectRootFolder;
 
     // The directory name pattern for each project is "shortName_ID"
-    [GeneratedRegex("(?<name>\\w*)_(?<id>.*)")]
+    [GeneratedRegex(@"^(?<name>\w(\w|-)*)_(?<id>[^\W_]+)$")]
     private static partial Regex ProjectDirectoryRegex();
 
     // Inside of each project's "shortName_ID" directory, these are the subdirectories and files
@@ -166,6 +166,13 @@ internal static partial class LocalProjects
         }
     }
 
+    public static bool DoesFolderMatchMetadata(string folder, ProjectMetadata metadata)
+    {
+        var matches = ProjectDirectoryRegex().Matches(folder);
+        return matches.Count == 1
+            && metadata.Contains(matches[0].Groups["id"].Value, matches[0].Groups["name"].Value);
+    }
+
     private static ProjectMetadata? LoadProjectMetadata(
         string projectHomeDir,
         out string errorMessage
@@ -192,12 +199,7 @@ internal static partial class LocalProjects
         }
 
         string finalDirectory = projectHomeDir.Split(Path.DirectorySeparatorChar).Last();
-        var matches = ProjectDirectoryRegex().Matches(finalDirectory);
-        if (
-            (matches.Count != 1)
-            || (metadata == null)
-            || !metadata.Contains(matches[0].Groups["id"].Value, matches[0].Groups["name"].Value)
-        )
+        if (metadata == null || !DoesFolderMatchMetadata(finalDirectory, metadata))
         {
             errorMessage = $"Project directory does not match its metadata: {projectHomeDir}";
             return null;
