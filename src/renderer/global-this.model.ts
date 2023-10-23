@@ -14,7 +14,7 @@ import {
   getWebViewStateById,
   setWebViewStateById,
 } from '@renderer/services/web-view-state.service';
-import useWebViewState from '@renderer/hooks/use-webview-state';
+import useWebViewState from '@renderer/hooks/use-webview-state.hook';
 
 // #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
 
@@ -79,7 +79,7 @@ globalThis.resourcesPath = 'resources://';
 // TODO: support command-line logLevel in renderer
 globalThis.logLevel = globalThis.isPackaged ? 'error' : 'info';
 
-// Note: these items are used in `src\shared\services\web-view.service.ts`. Putting them here breaks
+// Note: these items are used in `@shared\services\web-view.service.ts`. Putting them here breaks
 // the circular dependency since `papi` uses the webview service.
 globalThis.papi = papi;
 globalThis.React = React;

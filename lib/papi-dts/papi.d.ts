@@ -1,9 +1,330 @@
 /// <reference types="react" />
 /// <reference types="node" />
 /// <reference types="node" />
+declare module 'shared/data/web-view.model' {
+  import { Dispatch, ReactNode, SetStateAction } from 'react';
+  /**
+   * Saved information used to recreate a tab.
+   *
+   * {@link TabLoader} loads this into {@link TabInfo}
+   * {@link TabSaver} saves {@link TabInfo} into this
+   */
+  export type SavedTabInfo = {
+    /**
+     * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this id will
+     * match the WebViewDefinition.id
+     */
+    id: string;
+    /**
+     * Type of tab - indicates what kind of built-in tab this info represents
+     */
+    tabType: string;
+    /**
+     * Data needed to load the tab
+     */
+    data?: unknown;
+  };
+  /**
+   * Information that Paranext uses to create a tab in the dock layout.
+   *
+   * {@link TabLoader} loads {@link SavedTabInfo} into this
+   * {@link TabSaver} saves this into {@link SavedTabInfo}
+   */
+  export type TabInfo = SavedTabInfo & {
+    /**
+     * Url of image to show on the title bar of the tab
+     *
+     * Defaults to Platform.Bible logo
+     */
+    tabIconUrl?: string;
+    /**
+     * Text to show on the title bar of the tab
+     */
+    tabTitle: string;
+    /**
+     * Content to show inside the tab.
+     */
+    content: ReactNode;
+    /**
+     * (optional) Minimum width that the tab can become in CSS `px` units
+     */
+    minWidth?: number;
+    /**
+     * (optional) Minimum height that the tab can become in CSS `px` units
+     */
+    minHeight?: number;
+  };
+  /**
+   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
+   * must provide a {@link TabLoader}.
+   *
+   * For now all tab creators must do their own data type verification
+   */
+  export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
+  /**
+   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+   * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
+   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
+   *
+   * @param tabInfo the Paranext tab to save
+   *
+   * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
+   */
+  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
+  /** The type of code that defines a webview's content */
+  export enum WebViewContentType {
+    /**
+     * This webview is a React webview. It must specify its component by setting it to
+     * `globalThis.webViewComponent`
+     */
+    React = 'react',
+    /** This webview is a raw HTML/JS/CSS webview. */
+    HTML = 'html',
+  }
+  /** What type a WebView is. Each WebView definition must have a unique type. */
+  export type WebViewType = string;
+  /** Id for a specific WebView. Each WebView has a unique id */
+  export type WebViewId = string;
+  /** Base WebView properties that all WebViews share */
+  type WebViewDefinitionBase = {
+    /** What type of WebView this is. Unique to all other WebView definitions */
+    webViewType: WebViewType;
+    /** Unique id among webviews specific to this webview instance. */
+    id: WebViewId;
+    /** The code for the WebView that papi puts into an iframe */
+    content: string;
+    /**
+     * Url of image to show on the title bar of the tab
+     *
+     * Defaults to Platform.Bible logo
+     */
+    iconUrl?: string;
+    /** Name of the tab for the WebView */
+    title?: string;
+    /** General object to store unique state for this webview */
+    state?: Record<string, unknown>;
+  };
+  /** WebView representation using React */
+  export type WebViewDefinitionReact = WebViewDefinitionBase & {
+    /** Indicates this WebView uses React */
+    contentType?: WebViewContentType.React;
+    /** String of styles to be loaded into the iframe for this WebView */
+    styles?: string;
+  };
+  /** WebView representation using HTML */
+  export type WebViewDefinitionHtml = WebViewDefinitionBase & {
+    /** Indicates this WebView uses HTML */
+    contentType: WebViewContentType.HTML;
+  };
+  /** Properties defining a type of WebView created by extensions to show web content */
+  export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
+  /**
+   * Saved WebView information that does not contain the actual content of the WebView. Saved into
+   * layouts. Could have as little as the type and id. WebView providers load these into actual
+   * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
+   */
+  export type SavedWebViewDefinition = (
+    | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
+    | Partial<Omit<WebViewDefinitionHtml, 'content'>>
+  ) &
+    Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+  /** Props that are passed to the web view tab component */
+  export type WebViewTabProps = WebViewDefinition;
+  /**
+   * The properties on a WebViewDefinition that may be updated when that webview is already displayed
+   */
+  export type WebViewDefinitionUpdatableProperties = Pick<
+    WebViewDefinitionBase,
+    'iconUrl' | 'title'
+  >;
+  /**
+   * WebViewDefinition properties for updating a WebView that is already displayed. Any unspecified
+   * properties will stay the same
+   */
+  export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
+  /**
+   * A React hook for working with a state object tied to a webview.
+   *
+   * Only used in WebView iframes.
+   *
+   * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+   *
+   * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
+   *
+   * *＠param* `defaultStateValue` Value to use if the web view state didn't contain a value for the
+   * given 'stateKey'
+   *
+   * *＠returns* `[stateValue, setStateValue]`
+   *  - `stateValue`: the current value for the web view state at the key specified or
+   *    `defaultStateValue` if a state was not found
+   *  - `setStateValue`: function to use to update the web view state value at the key specified
+   *
+   * *＠example*
+   * ```typescript
+   * const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen', 'No one');
+   * ```
+   */
+  export type UseWebViewStateHook = <T>(
+    stateKey: string,
+    defaultStateValue: NonNullable<T>,
+  ) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+  /**
+   * Gets the updatable properties on this WebView's WebView definition
+   *
+   * *＠returns* updatable properties this WebView's WebView definition or undefined if not found for
+   * some reason
+   */
+  export type GetWebViewDefinitionUpdatableProperties = () =>
+    | WebViewDefinitionUpdatableProperties
+    | undefined;
+  /**
+   * Updates this WebView with the specified properties
+   *
+   * *＠param* `updateInfo` properties to update on the WebView. Any unspecified
+   * properties will stay the same
+   *
+   * *＠returns* true if successfully found the WebView to update; false otherwise
+   *
+   * *＠example*
+   * ```typescript
+   * updateWebViewDefinition({ title: `Hello ${name}`});
+   * ```
+   */
+  export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) => boolean;
+  /**
+   * Props that are passed into the web view itself inside the iframe in the web view tab component
+   */
+  export type WebViewProps = {
+    /**
+     * A React hook for working with a state object tied to a webview.
+     *
+     * Only used in WebView iframes.
+     *
+     * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+     *
+     * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
+     *
+     * *＠param* `defaultStateValue` Value to use if the web view state didn't contain a value for the
+     * given 'stateKey'
+     *
+     * *＠returns* `[stateValue, setStateValue]`
+     *  - `stateValue`: the current value for the web view state at the key specified or
+     *    `defaultStateValue` if a state was not found
+     *  - `setStateValue`: function to use to update the web view state value at the key specified
+     *
+     * *＠example*
+     * ```typescript
+     * const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen', 'No one');
+     * ```
+     */
+    useWebViewState: UseWebViewStateHook;
+    /**
+     * Gets the updatable properties on this WebView's WebView definition
+     *
+     * *＠returns* updatable properties this WebView's WebView definition or undefined if not found for
+     * some reason
+     */
+    getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
+    /**
+     * Updates this WebView with the specified properties
+     *
+     * *＠param* `updateInfo` properties to update on the WebView. Any unspecified
+     * properties will stay the same
+     *
+     * *＠returns* true if successfully found the WebView to update; false otherwise
+     *
+     * *＠example*
+     * ```typescript
+     * updateWebViewDefinition({ title: `Hello ${name}`});
+     * ```
+     */
+    updateWebViewDefinition: UpdateWebViewDefinition;
+  };
+  /** Information about a tab in a panel */
+  interface TabLayout {
+    type: 'tab';
+  }
+  /**
+   * Indicates where to display a floating window
+   *
+   * `cascade` - place the window a bit below and to the right of the previously created floating
+   *    window
+   * `center` - center the window in the dock layout
+   */
+  type FloatPosition = 'cascade' | 'center';
+  /** The dimensions for a floating tab in CSS `px` units */
+  export type FloatSize = {
+    width: number;
+    height: number;
+  };
+  /** Information about a floating window */
+  export interface FloatLayout {
+    type: 'float';
+    floatSize?: FloatSize;
+    /** Where to display the floating window. Defaults to `cascade` */
+    position?: FloatPosition;
+  }
+  export type PanelDirection =
+    | 'left'
+    | 'right'
+    | 'bottom'
+    | 'top'
+    | 'before-tab'
+    | 'after-tab'
+    | 'maximize'
+    | 'move'
+    | 'active'
+    | 'update';
+  /** Information about a panel */
+  interface PanelLayout {
+    type: 'panel';
+    direction?: PanelDirection;
+    /** If undefined, it will add in the `direction` relative to the previously added tab. */
+    targetTabId?: string;
+  }
+  /** Information about how a Paranext tab fits into the dock layout */
+  export type Layout = TabLayout | FloatLayout | PanelLayout;
+  /** Event emitted when webViews are created */
+  export type AddWebViewEvent = {
+    webView: SavedWebViewDefinition;
+    layout: Layout;
+  };
+  /** Options that affect what `webViews.getWebView` does */
+  export type GetWebViewOptions = {
+    /**
+     * If provided and if a web view with this id exists, requests from the web view provider an
+     * existing WebView with this id if one exists. The web view provider can deny the request if it
+     * chooses to do so.
+     *
+     * Alternatively, set this to '?' to attempt to find any existing web view with the specified
+     * webViewType.
+     *
+     * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
+     * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
+     * `existingId` at all is the only way to specify we are not looking for an existing webView
+     */
+    existingId?: string | '?' | undefined;
+    /**
+     * Whether to create a webview with a new id and a webview with id `existingId` was not found.
+     * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
+     * ignored.
+     *
+     * Defaults to true
+     */
+    createNewIfNotFound?: boolean;
+  };
+}
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
-  import { FunctionComponent, Dispatch, SetStateAction } from 'react';
+  import { FunctionComponent } from 'react';
+  import {
+    GetWebViewDefinitionUpdatableProperties,
+    UpdateWebViewDefinition,
+    UseWebViewStateHook,
+    WebViewDefinitionUpdatableProperties,
+    WebViewDefinitionUpdateInfo,
+    WebViewProps,
+  } from 'shared/data/web-view.model';
   /**
    * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts (renderer), and extension-host.ts (extension host)
    */
@@ -22,20 +343,30 @@ declare module 'shared/global-this.model' {
      * A function that each React WebView extension must provide for Paranext to display it.
      * Only used in WebView iframes.
      */
-    var webViewComponent: FunctionComponent;
+    var webViewComponent: FunctionComponent<WebViewProps>;
     /**
      * A React hook for working with a state object tied to a webview.
+     *
      * Only used in WebView iframes.
-     * @param stateKey Key of the state value to use. The webview state holds a unique value per key.
+     *
+     * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+     *
      * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
-     * @param defaultStateValue Value to use if the web view state didn't contain a value for the given 'stateKey'
-     * @returns string holding the state value and a function to use to update the state value
-     * @example const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen');
+     *
+     * *＠param* `defaultStateValue` Value to use if the web view state didn't contain a value for the
+     * given 'stateKey'
+     *
+     * *＠returns* `[stateValue, setStateValue]`
+     *  - `stateValue`: the current value for the web view state at the key specified or
+     *    `defaultStateValue` if a state was not found
+     *  - `setStateValue`: function to use to update the web view state value at the key specified
+     *
+     * *＠example*
+     * ```typescript
+     * const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen', 'No one');
+     * ```
      */
-    var useWebViewState: <T>(
-      stateKey: string,
-      defaultStateValue: NonNullable<T>,
-    ) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+    var useWebViewState: UseWebViewStateHook;
     /**
      * Retrieve the value from web view state with the given 'stateKey', if it exists.
      */
@@ -44,6 +375,34 @@ declare module 'shared/global-this.model' {
      * Set the value for a given key in the web view state.
      */
     var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
+    var getWebViewDefinitionUpdatablePropertiesById: (
+      webViewId: string,
+    ) => WebViewDefinitionUpdatableProperties | undefined;
+    var updateWebViewDefinitionById: (
+      webViewId: string,
+      webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
+    ) => boolean;
+    /**
+     * Gets the updatable properties on this WebView's WebView definition
+     *
+     * *＠returns* updatable properties this WebView's WebView definition or undefined if not found for
+     * some reason
+     */
+    var getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
+    /**
+     * Updates this WebView with the specified properties
+     *
+     * *＠param* `updateInfo` properties to update on the WebView. Any unspecified
+     * properties will stay the same
+     *
+     * *＠returns* true if successfully found the WebView to update; false otherwise
+     *
+     * *＠example*
+     * ```typescript
+     * updateWebViewDefinition({ title: `Hello ${name}`});
+     * ```
+     */
+    var updateWebViewDefinition: UpdateWebViewDefinition;
   }
   /** Type of Paranext process */
   export enum ProcessType {
@@ -1674,209 +2033,6 @@ declare module 'shared/services/command.service' {
    */
   export type moduleSummaryComments = {};
 }
-declare module 'shared/data/web-view.model' {
-  import { ReactNode } from 'react';
-  /**
-   * Saved information used to recreate a tab.
-   *
-   * {@link TabLoader} loads this into {@link TabInfo}
-   * {@link TabSaver} saves {@link TabInfo} into this
-   */
-  export type SavedTabInfo = {
-    /**
-     * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this id will
-     * match the WebViewDefinition.id
-     */
-    id: string;
-    /**
-     * Type of tab - indicates what kind of built-in tab this info represents
-     */
-    tabType: string;
-    /**
-     * Data needed to load the tab
-     */
-    data?: unknown;
-  };
-  /**
-   * Information that Paranext uses to create a tab in the dock layout.
-   *
-   * {@link TabLoader} loads {@link SavedTabInfo} into this
-   * {@link TabSaver} saves this into {@link SavedTabInfo}
-   */
-  export type TabInfo = SavedTabInfo & {
-    /**
-     * Url of image to show on the title bar of the tab
-     *
-     * Defaults to Platform.Bible logo
-     */
-    tabIconUrl?: string;
-    /**
-     * Text to show on the title bar of the tab
-     */
-    tabTitle: string;
-    /**
-     * Content to show inside the tab.
-     */
-    content: ReactNode;
-    /**
-     * (optional) Minimum width that the tab can become in CSS `px` units
-     */
-    minWidth?: number;
-    /**
-     * (optional) Minimum height that the tab can become in CSS `px` units
-     */
-    minHeight?: number;
-  };
-  /**
-   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
-   * must provide a {@link TabLoader}.
-   *
-   * For now all tab creators must do their own data type verification
-   */
-  export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
-  /**
-   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
-   * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
-   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
-   *
-   * @param tabInfo the Paranext tab to save
-   *
-   * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
-   */
-  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
-  /** The type of code that defines a webview's content */
-  export enum WebViewContentType {
-    /**
-     * This webview is a React webview. It must specify its component by setting it to
-     * `globalThis.webViewComponent`
-     */
-    React = 'react',
-    /** This webview is a raw HTML/JS/CSS webview. */
-    HTML = 'html',
-  }
-  /** What type a WebView is. Each WebView definition must have a unique type. */
-  export type WebViewType = string;
-  /** Id for a specific WebView. Each WebView has a unique id */
-  export type WebViewId = string;
-  /** Base WebView properties that all WebViews share */
-  type WebViewDefinitionBase = {
-    /** What type of WebView this is. Unique to all other WebView definitions */
-    webViewType: WebViewType;
-    /** Unique id among webviews specific to this webview instance. */
-    id: WebViewId;
-    /** The code for the WebView that papi puts into an iframe */
-    content: string;
-    /**
-     * Url of image to show on the title bar of the tab
-     *
-     * Defaults to Platform.Bible logo
-     */
-    iconUrl?: string;
-    /** Name of the tab for the WebView */
-    title?: string;
-    /** General object to store unique state for this webview */
-    state?: Record<string, unknown>;
-  };
-  /** WebView representation using React */
-  export type WebViewDefinitionReact = WebViewDefinitionBase & {
-    /** Indicates this WebView uses React */
-    contentType?: WebViewContentType.React;
-    /** String of styles to be loaded into the iframe for this WebView */
-    styles?: string;
-  };
-  /** WebView representation using HTML */
-  export type WebViewDefinitionHtml = WebViewDefinitionBase & {
-    /** Indicates this WebView uses HTML */
-    contentType: WebViewContentType.HTML;
-  };
-  /** Properties defining a type of WebView created by extensions to show web content */
-  export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
-  /**
-   * Saved WebView information that does not contain the actual content of the WebView. Saved into
-   * layouts. Could have as little as the type and id. WebView providers load these into actual
-   * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
-   */
-  export type SavedWebViewDefinition = (
-    | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
-    | Partial<Omit<WebViewDefinitionHtml, 'content'>>
-  ) &
-    Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
-  /** Props that are passed to the web view component */
-  export type WebViewProps = WebViewDefinition;
-  /** Information about a tab in a panel */
-  interface TabLayout {
-    type: 'tab';
-  }
-  /**
-   * Indicates where to display a floating window
-   *
-   * `cascade` - place the window a bit below and to the right of the previously created floating
-   *    window
-   * `center` - center the window in the dock layout
-   */
-  type FloatPosition = 'cascade' | 'center';
-  /** The dimensions for a floating tab in CSS `px` units */
-  export type FloatSize = {
-    width: number;
-    height: number;
-  };
-  /** Information about a floating window */
-  export interface FloatLayout {
-    type: 'float';
-    floatSize?: FloatSize;
-    /** Where to display the floating window. Defaults to `cascade` */
-    position?: FloatPosition;
-  }
-  export type PanelDirection =
-    | 'left'
-    | 'right'
-    | 'bottom'
-    | 'top'
-    | 'before-tab'
-    | 'after-tab'
-    | 'maximize'
-    | 'move'
-    | 'active'
-    | 'update';
-  /** Information about a panel */
-  interface PanelLayout {
-    type: 'panel';
-    direction?: PanelDirection;
-    /** If undefined, it will add in the `direction` relative to the previously added tab. */
-    targetTabId?: string;
-  }
-  /** Information about how a Paranext tab fits into the dock layout */
-  export type Layout = TabLayout | FloatLayout | PanelLayout;
-  /** Event emitted when webViews are created */
-  export type AddWebViewEvent = {
-    webView: SavedWebViewDefinition;
-    layout: Layout;
-  };
-  /** Options that affect what `webViews.getWebView` does */
-  export type GetWebViewOptions = {
-    /**
-     * If provided and if a web view with this id exists, requests from the web view provider an
-     * existing WebView with this id if one exists. The web view provider can deny the request if it
-     * chooses to do so.
-     *
-     * Alternatively, set this to '?' to attempt to find any existing web view with the specified
-     * webViewType.
-     *
-     * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
-     * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
-     * `existingId` at all is the only way to specify we are not looking for an existing webView
-     */
-    existingId?: string | '?' | undefined;
-    /**
-     * Whether to create a webview with a new id and a webview with id `existingId` was not found.
-     * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
-     * ignored.
-     *
-     * Defaults to true
-     */
-    createNewIfNotFound?: boolean;
-  };
-}
 declare module 'shared/models/web-view-provider.model' {
   import {
     GetWebViewOptions,
@@ -2012,12 +2168,14 @@ declare module 'shared/services/web-view.service' {
     Layout,
     SavedTabInfo,
     TabInfo,
-    WebViewProps,
+    WebViewTabProps,
     WebViewType,
     WebViewId,
     GetWebViewOptions,
     WebViewDefinition,
     SavedWebViewDefinition,
+    WebViewDefinitionUpdateInfo,
+    WebViewDefinitionUpdatableProperties,
   } from 'shared/data/web-view.model';
   import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
   /** rc-dock's onLayoutChange prop made asynchronous - resolves */
@@ -2052,12 +2210,33 @@ declare module 'shared/services/web-view.service' {
      * @returns If WebView added, final layout used to display the new webView. If existing webView
      *   updated, `undefined`
      */
-    addWebViewToDock: (webView: WebViewProps, layout: Layout) => Layout | undefined;
+    addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => Layout | undefined;
     /**
      * Remove a tab in the layout
      * @param tabId id of the tab to remove
      */
     removeTabFromDock: (tabId: string) => boolean;
+    /**
+     * Gets the WebView definition for the web view with the specified id
+     *
+     * @param webViewId the id of the WebView whose web view definition to get
+     *
+     * @returns WebView definition with the specified id or undefined if not found
+     */
+    getWebViewDefinition: (webViewId: string) => WebViewDefinition | undefined;
+    /**
+     * Updates the WebView with the specified id with the specified properties
+     *
+     * @param webViewId the id of the WebView to update
+     * @param updateInfo properties to update on the WebView. Any unspecified
+     * properties will stay the same
+     *
+     * @returns true if successfully found the WebView to update; false otherwise
+     */
+    updateWebViewDefinition: (
+      webViewId: string,
+      updateInfo: WebViewDefinitionUpdateInfo,
+    ) => boolean;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
@@ -2149,6 +2328,69 @@ declare module 'shared/services/web-view.service' {
     },
     layout: Layout,
   ) => Promise<Layout | undefined>;
+  /**
+   * Get just the updatable properties of a web view definition
+   * @param webViewDefinition web view definition or update info to get updatable properties from
+   * @returns updatable properties of the web view definition
+   *
+   * Not exposed on the papi
+   */
+  export function getUpdatablePropertiesFromWebViewDefinition(
+    webViewDefinition:
+      | SavedWebViewDefinition
+      | WebViewDefinition
+      | WebViewDefinitionUpdatableProperties
+      | WebViewDefinitionUpdateInfo,
+  ): WebViewDefinitionUpdatableProperties;
+  /**
+   * Merges web view definition updates into a web view definition. Does not modify the original
+   * web view definition but returns a new object.
+   * @param webViewDefinition web view definition to merge into
+   * @param updateInfo updates to merge into the web view definition
+   * @returns new copy of web view definition with updates applied
+   *
+   * Not exposed on the papi
+   */
+  export function mergeUpdatablePropertiesIntoWebViewDefinition<T extends SavedWebViewDefinition>(
+    webViewDefinition: T,
+    updateInfo: WebViewDefinitionUpdateInfo,
+  ): T;
+  /**
+   * Gets the updatable properties on the WebView definition with the specified id
+   *
+   * @param webViewId the id of the WebView whose updatable properties to get
+   *
+   * @returns updatable properties of the WebView definition with the specified id or undefined if
+   * not found
+   *
+   * @throws if the papi dock layout has not been registered
+   *
+   * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
+   *
+   * Not exposed on the papi
+   */
+  export function getWebViewDefinitionUpdatablePropertiesSync(
+    webViewId: string,
+  ): WebViewDefinitionUpdatableProperties | undefined;
+  /**
+   * Updates the WebView with the specified id with the specified properties
+   *
+   * @param webViewId the id of the WebView to update
+   * @param webViewDefinitionUpdateInfo properties to update on the WebView. Any unspecified
+   * properties will stay the same
+   *
+   * @returns true if successfully found the WebView to update; false otherwise
+   *
+   * @throws if the papi dock layout has not been registered
+   *
+   * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
+   *
+   * Not exposed on the papi
+   */
+  export function updateWebViewDefinitionSync(
+    webViewId: string,
+    webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
+  ): boolean;
   /**
    * Creates a new web view or gets an existing one depending on if you request an existing one and
    * if the web view provider decides to give that existing one to you (it is up to the provider).
@@ -2775,7 +3017,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * example, `useData.Verse<QuickVerseDataTypes, 'Verse'>` lets you subscribe to verses from a data
    * provider that serves `QuickVerseDataTypes`.
    *
-   * ＠example When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we need
+   * *＠example* When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we need
    * to tell the useData.Verse hook what types we are using, so we use the `QuickVerseDataTypes` data
    * types and specify that we are using the `'Verse'` data type as follows:
    * ```typescript
@@ -2786,27 +3028,28 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * );
    * ```
    *
-   * ＠param `dataProviderSource` string name of data provider to get OR dataProvider (result of useDataProvider if you
+   * *＠param* `dataProviderSource` string name of data provider to get OR dataProvider (result of useDataProvider if you
    * want to consolidate and only get the data provider once)
    *
-   * ＠param `selector` tells the provider what data this listener is listening for
+   * *＠param* `selector` tells the provider what data this listener is listening for
    *
-   * ＠param `defaultValue` the initial value to return while first awaiting the data
+   * *＠param* `defaultValue` the initial value to return while first awaiting the data
    *
    *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
    *
-   * ＠param `subscriberOptions` various options to adjust how the subscriber emits updates
+   * *＠param* `subscriberOptions` various options to adjust how the subscriber emits updates
    *
    *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-   * ＠returns `[data, setData, isLoading]`
+   *
+   * *＠returns* `[data, setData, isLoading]`
    *  - `data`: the current value for the data from the data provider with the specified data type and selector, either the defaultValue or the resolved data
    *  - `setData`: asynchronous function to request that the data provider update the data at this data type and selector. Returns true if successful.
    *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
    *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data provider
    *
-   * ＠type `TDataTypes` - the data provider data types served by the data provider whose data to use.
+   * *＠type* `TDataTypes` - the data provider data types served by the data provider whose data to use.
    *
-   * ＠type `TDataType` - the specific data type on this data provider that you want to use. Must match
+   * *＠type* `TDataType` - the specific data type on this data provider that you want to use. Must match
    * the data type specified in `useData.<data_type>`
    */
   const useData: UseDataHook;
@@ -2979,7 +3222,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * lets you subscribe to verse USFM from a project data provider for the `ParatextStandard`
    * `projectType`.
    *
-   * ＠example When subscribing to JHN 11:35 Verse USFM info on a `ParatextStandard` project with
+   * *＠example* When subscribing to JHN 11:35 Verse USFM info on a `ParatextStandard` project with
    * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`, we need to tell the
    * `useProjectData.VerseUSFM` hook what types we are using, so we specify the project data types as
    * `ProjectDataTypes['ParatextStandard']` and specify that we are using the `'VerseUSFM'` data type
@@ -2992,20 +3235,21 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * );
    * ```
    *
-   * ＠param `projectDataProviderSource` string name of the id of the project to get OR
+   * *＠param* `projectDataProviderSource` string name of the id of the project to get OR
    * projectDataProvider (result of useProjectDataProvider if you
    * want to consolidate and only get the project data provider once)
    *
-   * ＠param `selector` tells the provider what data this listener is listening for
+   * *＠param* `selector` tells the provider what data this listener is listening for
    *
-   * ＠param `defaultValue` the initial value to return while first awaiting the data
+   * *＠param* `defaultValue` the initial value to return while first awaiting the data
    *
    *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
    *
-   * ＠param `subscriberOptions` various options to adjust how the subscriber emits updates
+   * *＠param* `subscriberOptions` various options to adjust how the subscriber emits updates
    *
    *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-   * ＠returns `[data, setData, isLoading]`
+   *
+   * *＠returns* `[data, setData, isLoading]`
    *  - `data`: the current value for the data from the project data provider for the specified
    *    project id with the specified data type and selector, either the defaultValue or the resolved
    *    data
@@ -3016,9 +3260,10 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
    *    project data provider for this project id
    *
-   * @type `TProjectDataTypes` - the project data types associated with the `projectType` used. You
+   * *＠type* `TProjectDataTypes` - the project data types associated with the `projectType` used. You
    * can specify this type with `ProjectDataTypes['<project_type>']`
-   * @type `TDataType` - the specific data type on this project you want to use. Must match the data
+   *
+   * *＠type* `TDataType` - the specific data type on this project you want to use. Must match the data
    * type specified in `useProjectData.<data_type>`
    */
   const useProjectData: UseProjectDataHook;
@@ -3345,7 +3590,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
      * example, `useData.Verse<QuickVerseDataTypes, 'Verse'>` lets you subscribe to verses from a data
      * provider that serves `QuickVerseDataTypes`.
      *
-     * ＠example When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we need
+     * *＠example* When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we need
      * to tell the useData.Verse hook what types we are using, so we use the `QuickVerseDataTypes` data
      * types and specify that we are using the `'Verse'` data type as follows:
      * ```typescript
@@ -3356,27 +3601,28 @@ declare module 'renderer/hooks/papi-hooks/index' {
      * );
      * ```
      *
-     * ＠param `dataProviderSource` string name of data provider to get OR dataProvider (result of useDataProvider if you
+     * *＠param* `dataProviderSource` string name of data provider to get OR dataProvider (result of useDataProvider if you
      * want to consolidate and only get the data provider once)
      *
-     * ＠param `selector` tells the provider what data this listener is listening for
+     * *＠param* `selector` tells the provider what data this listener is listening for
      *
-     * ＠param `defaultValue` the initial value to return while first awaiting the data
+     * *＠param* `defaultValue` the initial value to return while first awaiting the data
      *
      *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
      *
-     * ＠param `subscriberOptions` various options to adjust how the subscriber emits updates
+     * *＠param* `subscriberOptions` various options to adjust how the subscriber emits updates
      *
      *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-     * ＠returns `[data, setData, isLoading]`
+     *
+     * *＠returns* `[data, setData, isLoading]`
      *  - `data`: the current value for the data from the data provider with the specified data type and selector, either the defaultValue or the resolved data
      *  - `setData`: asynchronous function to request that the data provider update the data at this data type and selector. Returns true if successful.
      *    Note that this function does not update the data. The data provider sends out an update to this subscription if it successfully updates data.
      *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data provider
      *
-     * ＠type `TDataTypes` - the data provider data types served by the data provider whose data to use.
+     * *＠type* `TDataTypes` - the data provider data types served by the data provider whose data to use.
      *
-     * ＠type `TDataType` - the specific data type on this data provider that you want to use. Must match
+     * *＠type* `TDataType` - the specific data type on this data provider that you want to use. Must match
      * the data type specified in `useData.<data_type>`
      */
     useData: typeof useData;
@@ -3409,7 +3655,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
      * lets you subscribe to verse USFM from a project data provider for the `ParatextStandard`
      * `projectType`.
      *
-     * ＠example When subscribing to JHN 11:35 Verse USFM info on a `ParatextStandard` project with
+     * *＠example* When subscribing to JHN 11:35 Verse USFM info on a `ParatextStandard` project with
      * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`, we need to tell the
      * `useProjectData.VerseUSFM` hook what types we are using, so we specify the project data types as
      * `ProjectDataTypes['ParatextStandard']` and specify that we are using the `'VerseUSFM'` data type
@@ -3422,20 +3668,21 @@ declare module 'renderer/hooks/papi-hooks/index' {
      * );
      * ```
      *
-     * ＠param `projectDataProviderSource` string name of the id of the project to get OR
+     * *＠param* `projectDataProviderSource` string name of the id of the project to get OR
      * projectDataProvider (result of useProjectDataProvider if you
      * want to consolidate and only get the project data provider once)
      *
-     * ＠param `selector` tells the provider what data this listener is listening for
+     * *＠param* `selector` tells the provider what data this listener is listening for
      *
-     * ＠param `defaultValue` the initial value to return while first awaiting the data
+     * *＠param* `defaultValue` the initial value to return while first awaiting the data
      *
      *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
      *
-     * ＠param `subscriberOptions` various options to adjust how the subscriber emits updates
+     * *＠param* `subscriberOptions` various options to adjust how the subscriber emits updates
      *
      *    WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
-     * ＠returns `[data, setData, isLoading]`
+     *
+     * *＠returns* `[data, setData, isLoading]`
      *  - `data`: the current value for the data from the project data provider for the specified
      *    project id with the specified data type and selector, either the defaultValue or the resolved
      *    data
@@ -3446,9 +3693,10 @@ declare module 'renderer/hooks/papi-hooks/index' {
      *  - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
      *    project data provider for this project id
      *
-     * @type `TProjectDataTypes` - the project data types associated with the `projectType` used. You
+     * *＠type* `TProjectDataTypes` - the project data types associated with the `projectType` used. You
      * can specify this type with `ProjectDataTypes['<project_type>']`
-     * @type `TDataType` - the specific data type on this project you want to use. Must match the data
+     *
+     * *＠type* `TDataType` - the specific data type on this project you want to use. Must match the data
      * type specified in `useProjectData.<data_type>`
      */
     useProjectData: typeof useProjectData;

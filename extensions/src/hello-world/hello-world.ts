@@ -53,9 +53,9 @@ const reactWebViewProvider: IWebViewProviderWithType = {
         `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     return {
-      ...savedWebView,
       iconUrl: 'papi-extension://hello-world/assets/offline.svg',
       title: 'Hello World React',
+      ...savedWebView,
       content: helloWorldReactWebView,
       styles: helloWorldReactWebViewStyles,
       state: {
