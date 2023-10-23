@@ -125,7 +125,7 @@ internal class UsfmDataProvider : DataProvider
     /// Gets USFM for a book or chapter.
     /// </summary>
     /// <param name="bookNum">The book for which to get USFM</param>
-    /// <param name="chapterNum">The chapter for which to get USFM or -1 for the whole book</param>
+    /// <param name="chapterNum">The chapter for which to get USFM. Do not specify or specify `null` for the whole book</param>
     /// <returns>USFM</returns>
     private string GetUsfm(int bookNum, int? chapterNum = null)
     {
