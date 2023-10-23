@@ -197,6 +197,15 @@ declare module 'shared/utils/papi-util' {
   }
   /** Check that two objects are deeply equal, comparing members of each object and such */
   export function deepEqual(a: unknown, b: unknown): boolean;
+  /**
+   * Check to see if the value is JSON.stringify serializable without losing information
+   * @param value value to test
+   * @returns true if serializable; false otherwise
+   *
+   * WARNING: This is inefficient right now as it stringifies, parses, and deepEquals the value.
+   * Please only use this if you need to
+   */
+  export function isSerializable(value: unknown): boolean;
   /** Separator between parts of a serialized request */
   const REQUEST_TYPE_SEPARATOR = ':';
   /** Information about a request that tells us what to do with it */
@@ -1766,7 +1775,7 @@ declare module 'shared/data/web-view.model' {
     /** Name of the tab for the WebView */
     title?: string;
     /** General object to store unique state for this webview */
-    state?: Record<string, string>;
+    state?: Record<string, unknown>;
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
@@ -1968,14 +1977,14 @@ declare module 'renderer/services/web-view-state.service' {
    * @param id ID of the web view
    * @returns state object of the given web view
    */
-  export function getFullWebViewStateById(id: string): Record<string, string>;
+  export function getFullWebViewStateById(id: string): Record<string, unknown>;
   /**
    * Set the web view state associated with the given ID
    * This function is only intended to be used at startup. setWebViewState is intended for web views to call.
    * @param id ID of the web view
    * @param state State to set for the given web view
    */
-  export function setFullWebViewStateById(id: string, state: Record<string, string>): void;
+  export function setFullWebViewStateById(id: string, state: Record<string, unknown>): void;
   /**
    * Get the web view state associated with the given ID
    * @param id ID of the web view

@@ -58,6 +58,10 @@ const reactWebViewProvider: IWebViewProviderWithType = {
       title: 'Hello World React',
       content: helloWorldReactWebView,
       styles: helloWorldReactWebViewStyles,
+      state: {
+        ...savedWebView.state,
+        clicks: Math.floor(Math.random() * 100),
+      },
     };
   },
 };

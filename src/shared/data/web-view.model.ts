@@ -106,7 +106,7 @@ type WebViewDefinitionBase = {
   /** Name of the tab for the WebView */
   title?: string;
   /** General object to store unique state for this webview */
-  state?: Record<string, string>;
+  state?: Record<string, unknown>;
 };
 
 /** WebView representation using React */
