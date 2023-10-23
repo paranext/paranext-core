@@ -39,6 +39,7 @@ public class LocalProjectsTests
     }
 
     [TestCase("ABC_441F1E41FFB8D319650847DF35F4FFB78F12914E", "ABC")]
+    [TestCase("ABC_441F1E41FFB8D319650847DF35F4FFB78F12914E", "abc")]
     [TestCase("AB-C_441f1e41ffb8d319650847df35f4ffb78f12914e", "AB-C")]
     [TestCase("A-B-C_441f1e41ffb8d319650847df35f4ffb78f12914e", "A-B-C")]
     public void DoesFolderMatchMetadata_IdAndNameMatch_ReturnsTrue(string folder, string name)
