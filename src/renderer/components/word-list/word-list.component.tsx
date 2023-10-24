@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
-import { UsfmProviderDataTypes } from 'usfm-data-provider';
+import type { UsfmProviderDataTypes } from 'usfm-data-provider';
 
 import './word-list.component.scss';
 import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
@@ -14,6 +14,7 @@ import {
 } from 'papi-components';
 import { ScrVers, VerseRef } from '@sillsdev/scripture';
 import VerseContentViewer from './verse-content-viewer.component';
+import { WordListEntry } from './word-list-types';
 
 export const TAB_TYPE_WORD_LIST = 'word-list';
 
@@ -21,12 +22,6 @@ const defaultScrRef: ScriptureReference = {
   bookNum: 1,
   chapterNum: 1,
   verseNum: 1,
-};
-
-export type WordListEntry = {
-  word: string;
-  count: number;
-  scrRef: ScriptureReference[];
 };
 
 type Row = {
@@ -61,35 +56,24 @@ export default function WordList() {
     setSelectedWord(undefined);
   }, [scrRef.bookNum, scrRef.chapterNum]);
 
-  const processVerse = () => {
-    const currentWordArray = [...wordArray];
+  function processVerse() {
+    const updatedWordArray: WordListEntry[] = [...wordArray];
     const wordMatches: RegExpMatchArray | null | undefined = verseText?.match(/\b[a-zA-Z’]+\b/g);
     if (wordMatches) {
       wordMatches.forEach((word) => {
-        const existingEntry = currentWordArray.find(
+        const existingEntry = updatedWordArray.find(
           (entry) => entry.word === word.toLocaleLowerCase(),
         );
         if (existingEntry) {
-          existingEntry.count += 1;
-          const includesCurrentRef =
-            existingEntry.scrRef.find(
-              (ref) =>
-                ref.bookNum === scrRef.bookNum &&
-                ref.chapterNum === scrRef.chapterNum &&
-                ref.verseNum === verseNum,
-            ) !== undefined;
-          if (!includesCurrentRef) {
-            existingEntry.scrRef.push({
-              bookNum: scrRef.bookNum,
-              chapterNum: scrRef.chapterNum,
-              verseNum,
-            });
-          }
+          existingEntry.scrRefs.push({
+            bookNum: scrRef.bookNum,
+            chapterNum: scrRef.chapterNum,
+            verseNum,
+          });
         } else {
           const newEntry: WordListEntry = {
             word: word.toLocaleLowerCase(),
-            count: 1,
-            scrRef: [
+            scrRefs: [
               {
                 bookNum: scrRef.bookNum,
                 chapterNum: scrRef.chapterNum,
@@ -97,26 +81,28 @@ export default function WordList() {
               },
             ],
           };
-          currentWordArray.push(newEntry);
+          updatedWordArray.push(newEntry);
         }
       });
+      setWordArray(updatedWordArray);
     }
-    setWordArray(currentWordArray);
-  };
+  }
 
   useEffect(() => {
     if (isVerseTextLoading || !verseText) return;
     processVerse();
     setVerseNum(verseNum + 1);
+    // Will fix later!
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVerseTextLoading, verseText]);
 
   useEffect(() => {
     const newRows: Row[] = [];
     wordArray.forEach((word) => {
-      newRows.push({ word: word.word, count: word.count });
+      newRows.push({ word: word.word, count: word.scrRefs.length });
     });
     setRows(newRows);
-  }, [wordArray, isVerseTextLoading]);
+  }, [wordArray, isVerseTextLoading]); // Can we remove isVerseTextLoading?
 
   const sortedRows = useMemo((): readonly Row[] => {
     if (sortColumns.length === 0) return rows;
@@ -169,7 +155,7 @@ export default function WordList() {
         rows={sortedRows}
         rowKeyGetter={(row: Row) => {
           return row.word;
-        }} // kan weg?
+        }}
         onRowsChange={(changedRows: Row[]) => setRows(changedRows)}
         sortColumns={sortColumns}
         onSortColumnsChange={onSortColumnsChange}
@@ -178,7 +164,7 @@ export default function WordList() {
         onCellClick={onCellClick}
       />
       {selectedWord && (
-        <VerseContentViewer word={selectedWord.word} scrRefs={selectedWord.scrRef} />
+        <VerseContentViewer selectedWord={selectedWord} key={JSON.stringify(selectedWord)} />
       )}
     </div>
   );
