@@ -2,7 +2,7 @@ import { List, ListItem, ListItemButton, ListItemText, ListSubheader } from '@mu
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { Checkbox } from 'papi-components';
 import { ProjectTypes } from 'papi-shared-types';
-import { PropsWithChildren, useCallback, useState, JSX } from 'react';
+import { PropsWithChildren, useCallback, JSX } from 'react';
 
 export type Project = ProjectMetadata & {
   id: string;
@@ -133,39 +133,15 @@ export default function ProjectList({
     [isMultiselect, selectedProjects],
   );
 
-  const [checked, setChecked] = useState([-1]);
-
-  /* This function is based off of an example on https://mui.com/material-ui/react-list/ */
-  const handleToggle = (value: number, projectId: string) => () => {
-    const currentIndex = checked.indexOf(value);
-    const newChecked = [...checked];
-
-    if (currentIndex === -1) {
-      newChecked.push(value);
-    } else {
-      newChecked.splice(currentIndex, 1);
-    }
-    setChecked(newChecked);
-    handleSelectProject(projectId);
-  };
-
-  const createListItemContents = (project: ProjectMetadata, index: number): JSX.Element => {
-    if (!isCheckable) {
-      return (
-        <ListItemButton
-          selected={isSelected(project)}
-          onClick={() => handleSelectProject(project.id)}
-        >
-          {children}
-          <ListItemText primary={project.name} />
-        </ListItemButton>
-      );
-    }
+  const createListItemContents = (project: ProjectMetadata): JSX.Element => {
     return (
-      <ListItemButton role={undefined} onClick={handleToggle(index, project.id)}>
+      <ListItemButton
+        selected={isSelected(project)}
+        onClick={() => handleSelectProject(project.id)}
+      >
         {children}
-        <ListItemText id={project.name} primary={project.name} />
-        <Checkbox isChecked={checked.indexOf(index) !== -1} />
+        <ListItemText primary={project.name} />
+        {isCheckable && <Checkbox isChecked={isSelected(project)} />}
       </ListItemButton>
     );
   };
@@ -174,8 +150,8 @@ export default function ProjectList({
     <div className="project-list">
       <List>
         <ListSubheader>{subheader}</ListSubheader>
-        {projects.map((project, index) => (
-          <ListItem key={project.id}>{createListItemContents(project, index)}</ListItem>
+        {projects.map((project) => (
+          <ListItem key={project.id}>{createListItemContents(project)}</ListItem>
         ))}
       </List>
     </div>
