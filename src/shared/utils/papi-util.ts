@@ -1,8 +1,9 @@
-// There is a React version 'fast-deep-equal/react' that I think allows comparing refs
-// (which have circular references in particular places that this library would ignore).
-// Maybe we can change to that version sometime if needed.
 import { ProcessType } from '@shared/global-this.model';
-import equal from 'fast-deep-equal';
+// There is a circular version https://www.npmjs.com/package/fast-equals#circulardeepequal that I
+// think allows comparing React refs (which have circular references in particular places that this
+// library would ignore). Maybe we can change to that version sometime if needed.
+import { deepEqual as isEqualDeep } from 'fast-equals';
+import nanoEqual from 'nano-equal';
 import { isString } from '@shared/utils/util';
 
 // #region Unsubscriber stuff
@@ -107,9 +108,25 @@ export enum RequestHandlerType {
   Complex = 'complex',
 }
 
-/** Check that two objects are deeply equal, comparing members of each object and such */
-export function deepEqual(a: unknown, b: unknown) {
-  return equal(a, b);
+/**
+ * Check that two objects are deeply equal, comparing members of each object and such
+ *
+ * @param a the first object to compare
+ * @param b the second object to compare
+ * @param shouldCompareAcrossIframes whether to adjust the comparison to consider objects from
+ * different iframes to be able to be deeply equal. Set to true for a slightly
+ * less stringent equality comparison that is a bit slower. Defaults to false.
+ *
+ * - Objects like arrays from different iframes have different constructor function references even
+ * if they do the same thing. The faster, more strict deep equality comparison fails objects that
+ * look the same but have different constructors because different constructors could produce false
+ * positives in [a few specific situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
+ *
+ * @returns true if a and b are deeply equal; false otherwise
+ *
+ */
+export function deepEqual(a: unknown, b: unknown, shouldCompareAcrossIframes = false) {
+  return shouldCompareAcrossIframes ? nanoEqual(a, b) : isEqualDeep(a, b);
 }
 
 /**
@@ -119,11 +136,19 @@ export function deepEqual(a: unknown, b: unknown) {
  *
  * WARNING: This is inefficient right now as it stringifies, parses, and deepEquals the value.
  * Please only use this if you need to
+ *
+ * Note: an object with a key whose value is undefined is not considered deeply equal to an object
+ * without that key, so round-tripping to and from JSON causes objects with undefined values to fail
+ * this check. See https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs
+ * for more information. For example, `{ stuff: 3, things: undefined }` will not round-trip because
+ * JSON does not have `undefined` and therefore removes `things`. However, replacing `undefined`
+ * with `null` round-trips perfectly: `{stuff: 3, things: null }`. This may be undesired behavior
+ * since these kinds of objects are still rather serializable, but we can adjust if we encounter
+ * an issue with this current method.
  */
 export function isSerializable(value: unknown): boolean {
   try {
-    const valueJson = JSON.stringify(value);
-    return deepEqual(value, JSON.parse(valueJson));
+    return deepEqual(value, JSON.parse(JSON.stringify(value)), true);
   } catch (e) {
     return false;
   }
