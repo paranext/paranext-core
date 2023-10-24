@@ -3124,6 +3124,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   import { ReactElement } from 'react';
   /** The tabType for the select project dialog in `select-project.dialog.tsx` */
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
+  /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
+  export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs
    *
@@ -3133,6 +3135,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    */
   export interface DialogTypes {
     [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, string>;
+    [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<DialogOptions, string[]>;
   }
   /** Each type of dialog. These are the tab types used in the dock layout */
   export type DialogTabTypes = keyof DialogTypes;

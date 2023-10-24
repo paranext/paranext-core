@@ -75,7 +75,7 @@ async function reloadMetadata(): Promise<void> {
   const allMetadata = await loadAllProjectsMetadata();
   localProjects.clear();
   allMetadata.forEach((metadata) => {
-    localProjects.set(metadata.id.toUpperCase(), metadata);
+    localProjects.set(metadata.id, metadata);
   });
 }
 

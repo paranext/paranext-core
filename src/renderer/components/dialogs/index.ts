@@ -1,5 +1,6 @@
 import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
 import { DialogDefinition, DialogTabTypes } from './dialog-definition.model';
+import SELECT_MULTIPLE_PROJECTS_DIALOG from './select-multiple-projects-dialog.component';
 
 /**
  * Map of all available dialog definitions used to create dialogs
@@ -8,6 +9,7 @@ import { DialogDefinition, DialogTabTypes } from './dialog-definition.model';
  */
 const DIALOGS: { [DialogTabType in DialogTabTypes]: DialogDefinition<DialogTabType> } = {
   [SELECT_PROJECT_DIALOG.tabType]: SELECT_PROJECT_DIALOG,
+  [SELECT_MULTIPLE_PROJECTS_DIALOG.tabType]: SELECT_MULTIPLE_PROJECTS_DIALOG,
 };
 
 /** All tab types for available dialogs */
