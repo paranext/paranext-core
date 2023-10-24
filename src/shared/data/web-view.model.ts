@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { Dispatch, ReactNode, SetStateAction } from 'react';
 
 /**
  * Saved information used to recreate a tab.
@@ -106,7 +106,7 @@ type WebViewDefinitionBase = {
   /** Name of the tab for the WebView */
   title?: string;
   /** General object to store unique state for this webview */
-  state?: Record<string, string>;
+  state?: Record<string, unknown>;
 };
 
 /** WebView representation using React */
@@ -138,8 +138,99 @@ export type SavedWebViewDefinition =
     ) &
       Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
 
-/** Props that are passed to the web view component */
-export type WebViewProps = WebViewDefinition;
+/** Props that are passed to the web view tab component */
+export type WebViewTabProps = WebViewDefinition;
+
+/**
+ * The properties on a WebViewDefinition that may be updated when that webview is already displayed
+ */
+// To allow more properties to be updated, add them in
+// `web-view.service.ts` -> `getUpdatablePropertiesFromWebViewDefinition`
+export type WebViewDefinitionUpdatableProperties = Pick<WebViewDefinitionBase, 'iconUrl' | 'title'>;
+
+/**
+ * WebViewDefinition properties for updating a WebView that is already displayed. Any unspecified
+ * properties will stay the same
+ */
+// To allow more properties to be updated, add them in
+// `web-view.service.ts` -> `getUpdatablePropertiesFromWebViewDefinition`
+export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
+
+// This hook is found in `use-webview-state.hook.ts`
+// Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
+// such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
+// destructured members of object types, so using WebViewProps as
+// `{ useWebViewState }: WebViewProps` was not carrying the annotations out to the new
+// `useWebViewState` variable. One day, this may work, so we can fix this JSDoc back to using real @
+/** JSDOC SOURCE UseWebViewStateHook
+ * A React hook for working with a state object tied to a webview.
+ *
+ * Only used in WebView iframes.
+ *
+ * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+ *
+ * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
+ *
+ * *＠param* `defaultStateValue` Value to use if the web view state didn't contain a value for the
+ * given 'stateKey'
+ *
+ * *＠returns* `[stateValue, setStateValue]`
+ *  - `stateValue`: the current value for the web view state at the key specified or
+ *    `defaultStateValue` if a state was not found
+ *  - `setStateValue`: function to use to update the web view state value at the key specified
+ *
+ * *＠example*
+ * ```typescript
+ * const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen', 'No one');
+ * ```
+ */
+export type UseWebViewStateHook = <T>(
+  stateKey: string,
+  defaultStateValue: NonNullable<T>,
+) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+
+// Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
+// such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
+// destructured members of object types. See comment above UseWebViewStateHook for more info.
+/** JSDOC SOURCE GetWebViewDefinitionUpdatableProperties
+ * Gets the updatable properties on this WebView's WebView definition
+ *
+ * *＠returns* updatable properties this WebView's WebView definition or undefined if not found for
+ * some reason
+ */
+export type GetWebViewDefinitionUpdatableProperties = () =>
+  | WebViewDefinitionUpdatableProperties
+  | undefined;
+
+// Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
+// such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
+// destructured members of object types. See comment above UseWebViewStateHook for more info.
+/** JSDOC SOURCE UpdateWebViewDefinition
+ * Updates this WebView with the specified properties
+ *
+ * *＠param* `updateInfo` properties to update on the WebView. Any unspecified
+ * properties will stay the same
+ *
+ * *＠returns* true if successfully found the WebView to update; false otherwise
+ *
+ * *＠example*
+ * ```typescript
+ * updateWebViewDefinition({ title: `Hello ${name}`});
+ * ```
+ */
+export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) => boolean;
+
+/**
+ * Props that are passed into the web view itself inside the iframe in the web view tab component
+ */
+export type WebViewProps = {
+  /** JSDOC DESTINATION UseWebViewStateHook */
+  useWebViewState: UseWebViewStateHook;
+  /** JSDOC DESTINATION GetWebViewDefinitionUpdatableProperties */
+  getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
+  /** JSDOC DESTINATION UpdateWebViewDefinition */
+  updateWebViewDefinition: UpdateWebViewDefinition;
+};
 
 /** Information about a tab in a panel */
 interface TabLayout {

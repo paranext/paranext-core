@@ -27,6 +27,8 @@ export const createErrorTab = (errorMessage: string): TabInfo => {
     content: <ErrorTab errorMessage={errorMessage} />,
     minWidth: 150,
     minHeight: 150,
+    // Assert the more specific type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     data: {
       errorMessage,
     } as ErrorTabData,

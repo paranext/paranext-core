@@ -47,6 +47,8 @@ networkService
     // Set up network commands
     await Promise.all(
       Object.entries(commandHandlers).map(async ([commandName, handler]) => {
+        // Re-assert type after passing through `map`.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         await papi.commands.registerCommand(commandName as CommandNames, handler);
       }),
     );

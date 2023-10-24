@@ -32,6 +32,8 @@ function getMimeTypeForFileName(fileName: string): string {
   const dotIndex = fileName.lastIndexOf('.');
   if (dotIndex > 0) {
     const fileType: string = fileName.substring(dotIndex);
+    // Assert key type confirmed in check.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     if (fileType in knownMimeTypes) return knownMimeTypes[fileType as keyof typeof knownMimeTypes];
   }
 

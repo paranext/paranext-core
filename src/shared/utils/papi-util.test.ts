@@ -32,13 +32,16 @@ describe('PAPI Utils', () => {
   it('will throw on deserialize with no separator', () => {
     const CATEGORY = 'myCategory';
 
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     expect(() => deserializeRequestType(CATEGORY as SerializedRequestType)).toThrow();
   });
 
   it('will throw on serialize if either input is undefined or empty', () => {
     const CATEGORY = 'myCategory';
     const DIRECTIVE = 'myDirective';
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const undefStr = undefined as unknown as string;
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const nullStr = null as unknown as string;
 
     expect(() => serializeRequestType('', DIRECTIVE)).toThrow();

@@ -48,6 +48,7 @@ export default class PapiNetworkEventEmitter<T> extends PapiEventEmitter<T> {
   override dispose = () => {
     const retVal = super.disposeFn();
     // TODO: Do we need to set networkSubscriber to undefined? Had to remove readonly from it to do this
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     this.networkSubscriber = undefined as unknown as PapiEventHandler<T>;
     this.networkDisposer();
     return retVal;

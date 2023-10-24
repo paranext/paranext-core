@@ -21,6 +21,7 @@ import {
   loadWebViewTab,
   TAB_TYPE_WEBVIEW,
   saveWebViewTab,
+  updateWebViewTab,
 } from '@renderer/components/web-view.component';
 import { loadAboutTab, TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
 import { loadButtonsTab, TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
@@ -38,12 +39,15 @@ import {
   TabInfo,
   TabSaver,
   Layout,
-  WebViewProps,
+  WebViewTabProps,
   PanelDirection,
+  WebViewDefinitionUpdateInfo,
+  WebViewDefinition,
 } from '@shared/data/web-view.model';
 import LogError from '@shared/log-error.model';
 import {
   OnLayoutChangeRCDock,
+  mergeUpdatablePropertiesIntoWebViewDefinition,
   registerDockLayout,
   saveTabInfoBase,
 } from '@shared/services/web-view.service';
@@ -172,6 +176,23 @@ function loadSavedTabInfo(savedTabInfo: SavedTabInfo): TabInfo {
 }
 
 /**
+ * Creates a tab ready to go into rc-dock from platform tab info
+ * @param tabInfo data used to create the rc-dock tab
+ *
+ * @returns rc-dock tab created from `tabInfo`
+ */
+function createRCDockTabFromTabInfo(tabInfo: TabInfo) {
+  // Translate the data from the loaded tab to be in the form needed by rc-dock
+  return {
+    ...tabInfo,
+    title: <PlatformTabTitle iconUrl={tabInfo.tabIconUrl} text={tabInfo.tabTitle} />,
+    content: <PlatformPanel>{tabInfo.content}</PlatformPanel>,
+    group: TAB_GROUP,
+    closable: true,
+  };
+}
+
+/**
  * Loads tab data from the specified saved tab information into an actual dock layout tab
  * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
  * @returns live dock layout tab ready to used
@@ -182,14 +203,7 @@ export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
   // Load the tab from the saved tab info
   const tabInfo = loadSavedTabInfo(savedTabInfo);
 
-  // Translate the data from the loaded tab to be in the form needed by rc-dock
-  return {
-    ...tabInfo,
-    title: <PlatformTabTitle iconUrl={tabInfo.tabIconUrl} text={tabInfo.tabTitle} />,
-    content: <PlatformPanel>{tabInfo.content}</PlatformPanel>,
-    group: TAB_GROUP,
-    closable: true,
-  };
+  return createRCDockTabFromTabInfo(tabInfo);
 }
 
 /**
@@ -216,6 +230,8 @@ function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
  * @returns `true` if its a tab or `false` otherwise.
  */
 function isTab(tab: PanelData | TabData | BoxData | undefined): tab is TabData {
+  // Assert the more specific type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   if (!tab || (tab as TabData).title == null) return false;
   return true;
 }
@@ -233,7 +249,8 @@ function offsetOrOverflowAxis(
 /**
  * Get left & top so float windows cascade their position. Float window should not overflow the
  * layout but start cascading again.
- * @param layout specified by the WebView.
+ * @param layout specified by the WebView. Must have all values - this function assumes this layout
+ *   has had default values set already
  * @param previousPosition used with the previous float window.
  * @param layoutSize of the whole dock layout.
  * @returns cascaded position.
@@ -243,8 +260,8 @@ export function getFloatPosition(
   previousPosition: FloatPosition,
   layoutSize: LayoutSize,
 ): FloatPosition {
-  // Defaults are added in `web-view.service.ts`.
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  // Defaults are added in `layoutDefaults`.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const { width, height } = layout.floatSize!;
 
   let { left, top } = previousPosition;
@@ -272,7 +289,8 @@ function findPreviousTab(dockLayout: DockLayout) {
     if (previousTab) return previousTab;
   }
   // We don't have a previous tab or we didn't find the one we thought we had. Just find the first
-  // available tab
+  // available tab. Assert the more specific type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return dockLayout.find((tabData) => isTab(tabData)) as TabData;
 }
 
@@ -326,7 +344,7 @@ export function addTabToDock(
 
   // Update existing tab
   if (targetTab) {
-    dockLayout.updateTab(tab.id, tab);
+    dockLayout.updateTab(tab.id, tab, false);
     if (isTab(targetTab)) previousTabId = tab.id;
 
     // We did not add a tab, so return undefined to indicate that
@@ -342,7 +360,9 @@ export function addTabToDock(
       targetTab = findPreviousTab(dockLayout);
       if (targetTab) {
         if (previousTabId === undefined)
-          // The target tab is the first found tab, so just add this as a new panel on top
+          // The target tab is the first found tab, so just add this as a new panel on top.
+          // Assert the more specific type.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
           dockLayout.dockMove(tab, targetTab.parent as PanelData, 'top');
         // The target tab is a previously added tab, so add this as a tab next to it
         else dockLayout.dockMove(tab, targetTab, 'after-tab');
@@ -386,13 +406,14 @@ export function addTabToDock(
 
       dockLayout.dockMove(
         tab,
-        // Add to the parent of the found tab if we found a tab
+        // Add to the parent of the found tab if we found a tab. Assert the more specific type.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         (targetTab?.parent as PanelData) ??
           // Otherwise find the first thing (the dock box) and add the tab to it
           dockLayout.find(() => true) ??
           null,
-        // Defaults are added in `web-view.service.ts`.
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        // Defaults are added in `layoutDefaults`.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         updatedLayout.direction!,
       );
       break;
@@ -400,6 +421,7 @@ export function addTabToDock(
     default:
       // Type assert here because TypeScript thinks this layout is `never` because the switch has
       // covered all its options (if JS were statically typed, this `default` would never hit)
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       throw new LogError(`Unknown layoutType: '${(updatedLayout as Layout).type}'`);
   }
 
@@ -409,6 +431,8 @@ export function addTabToDock(
   // happen on startup
   if (tab.tabType === TAB_TYPE_ERROR)
     throw new LogError(
+      // Assert the more specific type.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       `Dock Layout created an error tab: ${(tab.data as ErrorTabData)?.errorMessage}`,
     );
 
@@ -426,7 +450,7 @@ export function addTabToDock(
  *   updated, `undefined`
  */
 export function addWebViewToDock(
-  webView: WebViewProps,
+  webView: WebViewTabProps,
   layout: Layout,
   dockLayout: DockLayout,
 ): Layout | undefined {
@@ -438,11 +462,117 @@ export function addWebViewToDock(
   return addTabToDock({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView }, layout, dockLayout);
 }
 
+/**
+ * Gets the web view definition (data on the TabInfo) for the web view with the specified id
+ *
+ * @param webViewId the id of the WebView whose web view definition to get
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ * layout
+ * @param methodName name of the method that is calling this - prints in thrown exceptions
+ *
+ * @returns `[targetTabInfo, targetTabWebViewData]`
+ * - `targetTabInfo` - tab info for the tab containing the web view specified or `undefined` if not
+ *   found
+ * - `targetTabWebViewData` - web view definition for the specified web view or `undefined` if not
+ *   found
+ *
+ * @throws if the tab found with the specified webViewId is not a tab or is not a webview
+ */
+function getWebViewTabInfoById(
+  webViewId: string,
+  dockLayout: DockLayout,
+  methodName: string,
+): [RCDockTabInfo | undefined, WebViewDefinition | undefined] {
+  const targetTab = dockLayout.find(webViewId);
+
+  // If we didn't find the webview, return false
+  if (!targetTab) return [undefined, undefined];
+
+  if (!isTab(targetTab))
+    throw new Error(
+      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTab.id}' is not a tab`,
+    );
+
+  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const targetTabInfo = targetTab as RCDockTabInfo;
+
+  if (targetTabInfo.tabType !== TAB_TYPE_WEBVIEW)
+    throw new Error(
+      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTab.id}' is not a WebView tab`,
+    );
+
+  // Type assert the webview data in the web view tab
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const targetTabWebViewData = targetTabInfo.data as WebViewDefinition;
+
+  return [targetTabInfo, targetTabWebViewData];
+}
+
+/**
+ * Gets the WebView definition for the web view with the specified id
+ *
+ * @param webViewId the id of the WebView whose web view definition to get
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ * layout
+ *
+ * @returns WebView definition with the specified id or undefined if not found
+ */
+export function getWebViewDefinition(
+  webViewId: string,
+  dockLayout: DockLayout,
+): WebViewDefinition | undefined {
+  const [, targetTabWebViewData] = getWebViewTabInfoById(
+    webViewId,
+    dockLayout,
+    'getWebViewDefinitionUpdatableProperties',
+  );
+
+  return targetTabWebViewData;
+}
+
+/**
+ * Updates the WebView with the specified id with the specified properties
+ *
+ * @param webViewId the id of the WebView to update
+ * @param updateInfo properties to update on the WebView. Any unspecified
+ * properties will stay the same
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ * layout
+ *
+ * @returns true if successfully found the WebView to update; false otherwise
+ */
+function updateWebViewDefinition(
+  webViewId: string,
+  updateInfo: WebViewDefinitionUpdateInfo,
+  dockLayout: DockLayout,
+): boolean {
+  const [targetTabInfo, targetTabWebViewData] = getWebViewTabInfoById(
+    webViewId,
+    dockLayout,
+    'updateWebViewDefinition',
+  );
+
+  if (!targetTabInfo || !targetTabWebViewData) return false;
+
+  // Add the updatable properties according to `WebViewDefinitionUpdateInfo` to the tab's data
+  const updatedWebViewData = mergeUpdatablePropertiesIntoWebViewDefinition(
+    targetTabWebViewData,
+    updateInfo,
+  );
+  const updatedTabData = createRCDockTabFromTabInfo(
+    updateWebViewTab(targetTabInfo, updatedWebViewData),
+  );
+  // Update existing tab
+  dockLayout.updateTab(webViewId, updatedTabData, false);
+  return true;
+}
+
 // #endregion
 
 export default function PlatformDockLayout() {
   // This ref will always be defined
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dockLayoutRef = useRef<DockLayout>(null!);
 
   /**
@@ -460,7 +590,7 @@ export default function PlatformDockLayout() {
       onLayoutChangeRef,
       addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) =>
         addTabToDock(savedTabInfo, layout, dockLayoutRef.current),
-      addWebViewToDock: (webView: WebViewProps, layout: Layout) =>
+      addWebViewToDock: (webView: WebViewTabProps, layout: Layout) =>
         addWebViewToDock(webView, layout, dockLayoutRef.current),
       removeTabFromDock: (tabId: string) => {
         const tabToRemove = dockLayoutRef.current.find(tabId);
@@ -468,6 +598,9 @@ export default function PlatformDockLayout() {
         // Return whether or not we found the tab to remove
         return !!tabToRemove;
       },
+      getWebViewDefinition: (webViewId) => getWebViewDefinition(webViewId, dockLayoutRef.current),
+      updateWebViewDefinition: (webViewId, updateInfo) =>
+        updateWebViewDefinition(webViewId, updateInfo, dockLayoutRef.current),
       testLayout,
     });
     return () => {
@@ -486,17 +619,31 @@ export default function PlatformDockLayout() {
       // Type assert `saveTab` as not returning `undefined` because rc-dock's types are wrong
       // Here, if `saveTab` returns `undefined` the tab is not saved
       // https://github.com/ticlo/rc-dock/blob/8b6481dca4b4dd07f89107d6f48b1831bbdf0470/src/Serializer.ts#L68
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       saveTab={saveTab as (dockTabInfo: RCDockTabInfo) => SavedTabInfo}
       onLayoutChange={(...args) => {
         const [, currentTabId, direction] = args;
         // If a dialog was closed, tell the dialog service
         if (currentTabId && direction === 'remove') {
+          // Assert the more specific type.
+          /* eslint-disable no-type-assertion/no-type-assertion */
           const removedTab = dockLayoutRef.current.find(currentTabId) as RCDockTabInfo;
           if ((removedTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
+            /* eslint-enable */
             resolveDialogRequest(currentTabId, null, false);
         }
 
-        if (onLayoutChangeRef.current) onLayoutChangeRef.current(...args);
+        (async () => {
+          if (onLayoutChangeRef.current) {
+            try {
+              await onLayoutChangeRef.current(...args);
+            } catch (e) {
+              throw new Error(
+                `platform-dock-layout.component error: Failed to run onLayoutChangeRef.current! currentTabId: ${currentTabId}, direction: ${direction}`,
+              );
+            }
+          }
+        })();
       }}
     />
   );

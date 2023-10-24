@@ -35,9 +35,12 @@ public class ProjectMetadata
 
     public bool Contains(string id, string name, bool nameIsCaseSensitive = false)
     {
-        return ID.Equals(id, StringComparison.InvariantCultureIgnoreCase) && nameIsCaseSensitive
-            ? Name.Equals(name)
-            : Name.Equals(name, StringComparison.InvariantCultureIgnoreCase);
+        return ID.Equals(id, StringComparison.InvariantCultureIgnoreCase)
+            && (
+                nameIsCaseSensitive
+                    ? Name.Equals(name)
+                    : Name.Equals(name, StringComparison.InvariantCultureIgnoreCase)
+            );
     }
 
     public override bool Equals(object? obj)

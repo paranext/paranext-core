@@ -14,6 +14,8 @@ import { TAB_TYPE_WORD_LIST } from '@renderer/components/word-list/word-list.com
 
 export const FIRST_TAB_ID = 'About';
 
+// Using `as` here simplifies type changes.
+/* eslint-disable no-type-assertion/no-type-assertion */
 const testLayout: LayoutBase = {
   dockbox: {
     mode: 'horizontal',
@@ -121,4 +123,5 @@ const testLayout: LayoutBase = {
     ],
   },
 };
+/* eslint-enable */
 export default testLayout;

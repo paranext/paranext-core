@@ -1,3 +1,5 @@
+import { ProjectTypes } from 'papi-shared-types';
+
 /**
  * Low-level information describing a project that Platform.Bible directly manages and uses to load project data
  */
@@ -17,5 +19,5 @@ export type ProjectMetadata = {
   /**
    * Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
    */
-  projectType: string;
+  projectType: ProjectTypes;
 };

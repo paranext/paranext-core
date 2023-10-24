@@ -45,6 +45,8 @@ export function isString(o: unknown): o is string {
 export function debounce<T extends (...args: any[]) => void>(fn: T, delay = 300): T {
   if (isString(fn)) throw new Error('Tried to debounce a string! Could be XSS');
   let timeout: ReturnType<typeof setTimeout>;
+  // Ensure the right return type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return ((...args) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => fn(...args), delay);
@@ -90,6 +92,8 @@ function isErrorWithMessage(error: unknown): error is ErrorWithMessage {
     typeof error === 'object' &&
     error !== null &&
     'message' in error &&
+    // Type assert `error` to check it's `message`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     typeof (error as Record<string, unknown>).message === 'string'
   );
 }
