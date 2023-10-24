@@ -45,10 +45,6 @@ const configBase: webpack.Configuration = {
     'react-dom/client',
     'papi-frontend',
     'papi-backend',
-    '@emotion/react',
-    '@emotion/styled',
-    '@mui/icons-material',
-    '@mui/material',
     '@sillsdev/scripture',
   ],
   module: {

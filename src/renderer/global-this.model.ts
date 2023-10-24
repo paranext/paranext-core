@@ -7,10 +7,6 @@ import * as ReactJsxRuntime from 'react/jsx-runtime';
 import * as ReactDOM from 'react-dom';
 import * as ReactDOMClient from 'react-dom/client';
 import * as SillsdevScripture from '@sillsdev/scripture';
-import * as EmotionReact from '@emotion/react';
-import * as EmotionStyled from '@emotion/styled';
-import * as MuiIconsMaterial from '@mui/icons-material';
-import * as MuiMaterial from '@mui/material';
 import { ProcessType } from '@shared/global-this.model';
 import papi, { Papi } from '@renderer/services/papi-frontend.service';
 import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
@@ -38,10 +34,6 @@ moduleMap.set('react', React);
 moduleMap.set('react/jsx-runtime', ReactJsxRuntime);
 moduleMap.set('react-dom', ReactDOM);
 moduleMap.set('react-dom/client', ReactDOMClient);
-moduleMap.set('@emotion/react', EmotionReact);
-moduleMap.set('@emotion/styled', EmotionStyled);
-moduleMap.set('@mui/icons-material', MuiIconsMaterial);
-moduleMap.set('@mui/material', MuiMaterial);
 moduleMap.set('@sillsdev/scripture', SillsdevScripture);
 
 const registeredModuleList = [...moduleMap]
@@ -65,10 +57,6 @@ function webViewRequire(moduleName: string) {
 
 type ReactJsxRuntimeType = typeof ReactJsxRuntime;
 type ReactDOMClientType = typeof ReactDOMClient;
-type EmotionReactType = typeof EmotionReact;
-type EmotionStyledType = typeof EmotionStyled;
-type MuiIconsMaterialType = typeof MuiIconsMaterial;
-type MuiMaterialType = typeof MuiMaterial;
 type SillsdevScriptureType = typeof SillsdevScripture;
 type WebViewRequire = typeof webViewRequire;
 
@@ -83,10 +71,6 @@ declare global {
   var ReactDom: typeof ReactDOM;
   var ReactDOMClient: ReactDOMClientType;
   var createRoot: typeof ReactDOMClient.createRoot;
-  var EmotionReact: EmotionReactType;
-  var EmotionStyled: EmotionStyledType;
-  var MuiIconsMaterial: MuiIconsMaterialType;
-  var MuiMaterial: MuiMaterialType;
   var SillsdevScripture: SillsdevScriptureType;
   var webViewRequire: WebViewRequire;
   // Web view state functions are used in the default imports for each webview in web-view.service.ts
@@ -114,10 +98,6 @@ globalThis.ReactJsxRuntime = ReactJsxRuntime;
 globalThis.ReactDom = ReactDOM;
 globalThis.ReactDOMClient = ReactDOMClient;
 globalThis.createRoot = ReactDOMClient.createRoot;
-globalThis.EmotionReact = EmotionReact;
-globalThis.EmotionStyled = EmotionStyled;
-globalThis.MuiIconsMaterial = MuiIconsMaterial;
-globalThis.MuiMaterial = MuiMaterial;
 globalThis.SillsdevScripture = SillsdevScripture;
 globalThis.webViewRequire = webViewRequire;
 // We don't expose get/setWebViewStateById in PAPI because web views don't have access to IDs
