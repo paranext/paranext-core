@@ -12,7 +12,7 @@ import { papiNetworkService, PapiNetworkService } from '@shared/services/network
 import { papiWebViewService, PapiWebViewService } from '@shared/services/web-view.service';
 import internetService, { InternetService } from '@shared/services/internet.service';
 import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
-import { ProjectLookupServiceType } from '@shared/models/project-lookup.model';
+import { ProjectLookupServiceType } from '@shared/services/project-lookup.service-model';
 import projectLookupService from '@shared/services/project-lookup.service';
 import {
   papiFrontendProjectDataProviderService,
@@ -21,11 +21,14 @@ import {
 import papiContext, { PapiContext } from '@renderer/context/papi-context';
 import papiHooks, { PapiHooks } from '@renderer/hooks/papi-hooks';
 import settingsService, { SettingsService } from '@shared/services/settings.service';
+import dialogService from '@shared/services/dialog.service';
+import { DialogService } from '@shared/services/dialog.service-model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-backend.service.ts.
 // 2) We need to provide type assertions for all members so they carry the JSDoc comments on the
 // papi.d.ts file so extension developers see the comments. Please add to all properties you add.
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion */
 // 3) The "JSDOC DESTINATION" comments are there to provide anchors for JSDocs to be copied in.
 // Please add to all properties you add.
 const papi = {
@@ -44,6 +47,8 @@ const papi = {
   util: papiUtil,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: papiWebViewService as PapiWebViewService,
+  /** JSDOC DESTINATION dialogService */
+  dialogs: dialogService as DialogService,
   /** JSDOC DESTINATION papiNetworkService */
   network: papiNetworkService as PapiNetworkService,
   /** JSDOC DESTINATION logger */

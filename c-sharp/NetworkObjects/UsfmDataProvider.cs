@@ -43,8 +43,9 @@ internal class UsfmDataProvider : DataProvider
             {
                 "getBookNames" => GetBookNames(),
                 "getChapter" => GetChapter(args[0]!.ToJsonString()),
-                "getChapterUsx" => GetChapterUsx(args[0]!.ToJsonString()),
-                "setChapterUsx" => SetChapterUsx(args[0]!.ToJsonString(), args[1]!.ToString()),
+                "getChapterUsx" => GetUsx(args[0]!.ToJsonString()),
+                "setChapterUsx" => SetUsx(args[0]!.ToJsonString(), args[1]!.ToString()),
+                "getBookUsx" => GetUsx(args[0]!.ToJsonString()),
                 "getVerse" => GetVerse(args[0]!.ToJsonString()),
                 _ => ResponseToRequest.Failed($"Unexpected function: {functionName}")
             };
@@ -68,14 +69,14 @@ internal class UsfmDataProvider : DataProvider
             : ResponseToRequest.Failed(errorMsg);
     }
 
-    private ResponseToRequest GetChapterUsx(string args)
+    private ResponseToRequest GetUsx(string args)
     {
         return VerseRefConverter.TryCreateVerseRef(args, out var verseRef, out string errorMsg)
             ? ResponseToRequest.Succeeded(GetUsx(verseRef))
             : ResponseToRequest.Failed(errorMsg);
     }
 
-    private ResponseToRequest SetChapterUsx(string argVref, string argNewUsx)
+    private ResponseToRequest SetUsx(string argVref, string argNewUsx)
     {
         return VerseRefConverter.TryCreateVerseRef(argVref, out var verseRef, out string errorMsg)
             ? SetUsx(verseRef, argNewUsx)
@@ -89,9 +90,9 @@ internal class UsfmDataProvider : DataProvider
             : ResponseToRequest.Failed(errorMsg);
     }
 
-    public string GetUsx(VerseRef vref)
+    private string GetUsx(VerseRef vref)
     {
-        XmlDocument usx = GetUsxForChapter(vref.BookNum, vref.ChapterNum);
+        XmlDocument usx = ConvertUsfmToUsx(GetUsfm(vref.BookNum, vref.ChapterNum), vref.BookNum);
         string contents = usx.OuterXml ?? string.Empty;
         return contents;
     }
@@ -124,11 +125,6 @@ internal class UsfmDataProvider : DataProvider
         return ResponseToRequest.Succeeded();
     }
 
-    private XmlDocument GetUsxForChapter(int bookNum, int chapterNum)
-    {
-        return ConvertUsfmToUsx(GetUsfmForChapter(bookNum, chapterNum), bookNum);
-    }
-
     /// <summary>
     /// Converts usfm to usx, but does not annotate
     /// </summary>
@@ -148,10 +144,16 @@ internal class UsfmDataProvider : DataProvider
         return doc;
     }
 
-    private string GetUsfmForChapter(int bookNum, int chapterNum)
+    /// <summary>
+    /// Gets USFM for a book or chapter.
+    /// </summary>
+    /// <param name="bookNum">The book for which to get USFM</param>
+    /// <param name="chapterNum">The chapter for which to get USFM. Do not specify or specify `null` for the whole book</param>
+    /// <returns>USFM</returns>
+    private string GetUsfm(int bookNum, int? chapterNum = null)
     {
-        VerseRef vref = new(bookNum, chapterNum, 0, _scrText!.Settings.Versification);
+        VerseRef vref = new(bookNum, chapterNum ?? 0, 0, _scrText!.Settings.Versification);
         ScrText projectToUse = _scrText!.GetJoinedText(bookNum);
-        return projectToUse.GetText(vref, true, true);
+        return projectToUse.GetText(vref, chapterNum.HasValue, true);
     }
 }

@@ -22,7 +22,7 @@ function createUseNetworkObjectHook(
     const didReceiveNetworkObject = !isString(networkObjectSource);
 
     // Get the network object for this network object name
-    // Note: do nothing if we already  a network object, but still run this hook.
+    // Note: do nothing if we already have a network object, but still run this hook.
     // (We must make sure to run the same number of hooks in all code paths.)
     const [networkObject] = usePromise(
       useMemo(() => {

@@ -34,6 +34,8 @@ const htmlWebViewProvider: IWebViewProviderWithType = {
     return {
       ...savedWebView,
       title: 'Hello World HTML',
+      // Can't use the enum value from a definition file so assert the type from the string literal.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       contentType: 'html' as WebViewContentType.HTML,
       content: helloWorldHtmlWebView,
     };
@@ -51,10 +53,15 @@ const reactWebViewProvider: IWebViewProviderWithType = {
         `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     return {
-      ...savedWebView,
+      iconUrl: 'papi-extension://hello-world/assets/offline.svg',
       title: 'Hello World React',
+      ...savedWebView,
       content: helloWorldReactWebView,
       styles: helloWorldReactWebViewStyles,
+      state: {
+        ...savedWebView.state,
+        clicks: Math.floor(Math.random() * 100),
+      },
     };
   },
 };

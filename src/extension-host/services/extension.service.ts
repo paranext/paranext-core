@@ -106,7 +106,7 @@ let availableExtensions: ExtensionInfo[];
 
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
-  const extensionManifest = JSON.parse(extensionManifestJson) as ExtensionManifest;
+  const extensionManifest: ExtensionManifest = JSON.parse(extensionManifestJson);
   if (extensionManifest.name.includes('..'))
     throw new Error('Extension name must not include `..`!');
   // Replace ts with js so people can list their source code ts name but run the transpiled js
@@ -242,37 +242,45 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
 async function getExtensions(): Promise<ExtensionInfo[]> {
   const extensionUris = await extensionUrisToLoad;
   return (
-    await Promise.allSettled(
-      extensionUris.map(async (extensionUri) => {
-        try {
-          const extensionManifestJson = await nodeFS.readFileText(
-            joinUriPaths(extensionUri, MANIFEST_FILE_NAME),
-          );
-          return Object.freeze({
-            ...parseManifest(extensionManifestJson),
-            dirUri: extensionUri,
-          }) as ExtensionInfo;
-        } catch (e) {
-          const error = new Error(`Extension folder ${extensionUri} failed to load. Reason: ${e}`);
-          logger.warn(error);
-          throw error;
-        }
-      }),
+    (
+      await Promise.allSettled(
+        extensionUris.map(async (extensionUri) => {
+          try {
+            const extensionManifestJson = await nodeFS.readFileText(
+              joinUriPaths(extensionUri, MANIFEST_FILE_NAME),
+            );
+            // Assert the return type after freeze.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            return Object.freeze({
+              ...parseManifest(extensionManifestJson),
+              dirUri: extensionUri,
+            }) as ExtensionInfo;
+          } catch (e) {
+            const error = new Error(
+              `Extension folder ${extensionUri} failed to load. Reason: ${e}`,
+            );
+            logger.warn(error);
+            throw error;
+          }
+        }),
+      )
     )
-  )
-    .filter((settled) => {
-      // Ignore failed to load manifest issues - already logged those issues
-      if (settled.status !== 'fulfilled') return false;
-      if ((settled.value.main as Partial<ExtensionManifest>) === undefined) {
-        logger.warn(
-          `Extension ${settled.value.name} failed to load. Must provide property \`main\` in \`manifest.json\`. If you do not have JavaScript code to run, provide \`"main": null\``,
-        );
-        return false;
-      }
-      // If main is null, having no JavaScript is intentional. Do not load this extension
-      return settled.value.main !== null;
-    })
-    .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value);
+      .filter((settled) => {
+        // Ignore failed to load manifest issues - already logged those issues
+        if (settled.status !== 'fulfilled') return false;
+        if (settled.value.main === undefined) {
+          logger.warn(
+            `Extension ${settled.value.name} failed to load. Must provide property \`main\` in \`manifest.json\`. If you do not have JavaScript code to run, provide \`"main": null\``,
+          );
+          return false;
+        }
+        // If main is null, having no JavaScript is intentional. Do not load this extension
+        return settled.value.main !== null;
+      })
+      // Assert the fulfilled type since the unfulfilled ones have been filtered out.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value)
+  );
 }
 
 /**
@@ -306,8 +314,9 @@ function watchForExtensionChanges(extensions: ExtensionInfo[]): void {
  */
 async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtension> {
   // Import the extension file. Tell webpack to ignore it because extension files are not in the
-  // bundle and should not be looked up in the bundle
+  // bundle and should not be looked up in the bundle. Assert a more ambiguous type.
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const extensionModuleAmbiguous = systemRequire(
     /* webpackIgnore: true */ getPathFromUri(extension.dirUri),
   ) as AmbiguousExtensionModule;
@@ -364,6 +373,8 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   }));
 
   // Shim out require so extensions can use it only as prescribed.
+  // Assert the specific type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   Module.prototype.require = ((moduleName: string) => {
     // Allow the extension to import papi and some other things
     if (moduleName === 'papi-backend') return papi;
@@ -410,6 +421,8 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   };
 
   // Import the extensions and run their activate() functions
+  // Assert the type has been filtered for null.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const extensionsActive = (
     await Promise.all(
       extensionsWithCheck.map((extensionWithCheck) =>

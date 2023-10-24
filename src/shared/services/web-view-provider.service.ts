@@ -11,6 +11,7 @@ import {
 import networkObjectService from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import logger from '@shared/services/logger.service';
+import { isSerializable } from '@shared/utils/papi-util';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const WEB_VIEW_PROVIDER_LABEL = 'webViewProvider';
@@ -73,6 +74,22 @@ async function register(
   // Validate that the WebView provider has what it needs
   if (!webViewProvider.getWebView || typeof webViewProvider.getWebView !== 'function')
     throw new Error(`WebView provider does not have a getWebView function`);
+
+  // Layer over the web view provider's getWebView method to make sure web view state is
+  // serializable
+  /** Saved bound version of the web view provider's getWebView so we can call it from here */
+  const wvpGetWebView = webViewProvider.getWebView.bind(webViewProvider);
+  webViewProvider.getWebView = async (...args) => {
+    const webViewDefinition = await wvpGetWebView(...args);
+
+    // If the web view provider provided a state, make sure it is serializable
+    if (webViewDefinition?.state && !isSerializable(webViewDefinition.state))
+      throw new Error(
+        `web-view-provider.service error: WebView Provider with type ${webViewType} responded to getWebView with a state that is not serializable`,
+      );
+
+    return webViewDefinition;
+  };
 
   // We are good to go! Create the WebView provider
 

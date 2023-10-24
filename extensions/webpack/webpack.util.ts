@@ -70,13 +70,13 @@ export function getWebViewTempPath(
  */
 export async function getWebViewEntries(): Promise<webpack.EntryObject> {
   const tsxWebViews = await getWebViewTsxPaths();
-  const webViewEntries = Object.fromEntries(
+  const webViewEntries: webpack.EntryObject = Object.fromEntries(
     tsxWebViews.map((webViewPath) => [
       webViewPath,
       {
         import: webViewPath,
         filename: getWebViewTempPath(webViewPath),
-      } as webpack.EntryObject[string],
+      },
     ]),
   );
   return webViewEntries;
@@ -191,7 +191,7 @@ export function getMainEntries(extensions: ExtensionInfo[]): webpack.EntryObject
           library: {
             type: LIBRARY_TYPE,
           },
-        } as webpack.EntryObject[string],
+        },
       ]),
   );
   return mainEntries;
@@ -257,9 +257,9 @@ export async function getExtensions(): Promise<ExtensionInfo[]> {
         path.join(sourceFolder, extensionFolderName, 'manifest.json'),
         'utf8',
       );
-      const extensionManifest = Object.freeze({
+      const extensionManifest: Readonly<ExtensionManifest> = Object.freeze({
         // Note that this does not transform the main file .ts into .js unlike extension.service
-        ...(JSON.parse(extensionManifestJson) as ExtensionManifest),
+        ...JSON.parse(extensionManifestJson),
       });
 
       // Get main file path from the manifest and return extension info

@@ -2,7 +2,15 @@
 /* eslint-disable no-var */
 
 import { LogLevel } from 'electron-log';
-import { FunctionComponent, Dispatch, SetStateAction } from 'react';
+import { FunctionComponent } from 'react';
+import {
+  GetWebViewDefinitionUpdatableProperties,
+  UpdateWebViewDefinition,
+  UseWebViewStateHook,
+  WebViewDefinitionUpdatableProperties,
+  WebViewDefinitionUpdateInfo,
+  WebViewProps,
+} from '@shared/data/web-view.model';
 
 /**
  * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts (renderer), and extension-host.ts (extension host)
@@ -23,20 +31,9 @@ declare global {
    * A function that each React WebView extension must provide for Paranext to display it.
    * Only used in WebView iframes.
    */
-  var webViewComponent: FunctionComponent;
-  /**
-   * A React hook for working with a state object tied to a webview.
-   * Only used in WebView iframes.
-   * @param stateKey Key of the state value to use. The webview state holds a unique value per key.
-   * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
-   * @param defaultStateValue Value to use if the web view state didn't contain a value for the given 'stateKey'
-   * @returns string holding the state value and a function to use to update the state value
-   * @example const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen');
-   */
-  var useWebViewState: <T>(
-    stateKey: string,
-    defaultStateValue: NonNullable<T>,
-  ) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+  var webViewComponent: FunctionComponent<WebViewProps>;
+  /** JSDOC DESTINATION UseWebViewStateHook */
+  var useWebViewState: UseWebViewStateHook;
   /**
    * Retrieve the value from web view state with the given 'stateKey', if it exists.
    */
@@ -45,6 +42,21 @@ declare global {
    * Set the value for a given key in the web view state.
    */
   var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
+  // Web view "by id" functions are used in the default imports for each webview in web-view.service.ts
+  // but probably wouldn't be used in a webview
+  // TODO: Find a way to move this to `@renderer/global-this.model.ts` without causing an error on
+  // building papi.d.ts
+  var getWebViewDefinitionUpdatablePropertiesById: (
+    webViewId: string,
+  ) => WebViewDefinitionUpdatableProperties | undefined;
+  var updateWebViewDefinitionById: (
+    webViewId: string,
+    webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
+  ) => boolean;
+  /** JSDOC DESTINATION GetWebViewDefinitionUpdatableProperties */
+  var getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
+  /** JSDOC DESTINATION UpdateWebViewDefinition */
+  var updateWebViewDefinition: UpdateWebViewDefinition;
 }
 
 /** Type of Paranext process */

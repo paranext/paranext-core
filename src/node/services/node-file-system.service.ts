@@ -53,7 +53,8 @@ export async function deleteFile(uri: Uri): Promise<void> {
  * Get stats about the file or directory. Note that BigInts are used instead of ints to avoid.
  * https://en.wikipedia.org/wiki/Year_2038_problem
  * @param uri URI of file or directory
- * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if file or directory exists, undefined if it doesn't
+ * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if
+ *  file or directory exists, undefined if it doesn't
  */
 export async function getStats(uri: Uri): Promise<BigIntStats | undefined> {
   try {
@@ -85,17 +86,35 @@ export type DirectoryEntries = Readonly<{
 }>;
 
 /**
- * Reads a directory and returns lists of entries in the directory by entry type
- * @param uri URI of directory
- * @param entryFilter function to filter out entries in the directory based on their names
- * @returns map of entry type to list of uris for each entry in the directory with that type
+ * Fill in each missing EntryType with an empty array.
+ * @param entryMap - map of Uris to entry type. Defaults to empty map.
+ * @returns updated entryMap with missing properties filled with empty arrays.
+ */
+function fillMissingEntryTypeProperties(
+  entryMap: Map<EntryType, Uri[]> = new Map(),
+): Map<EntryType, Uri[]> {
+  Object.values(EntryType).forEach((entryType) => {
+    if (!entryMap.has(entryType)) entryMap.set(entryType, []);
+  });
+  return entryMap;
+}
+
+/**
+ * Reads a directory and returns lists of entries in the directory by entry type.
+ * @param uri - URI of directory.
+ * @param entryFilter - function to filter out entries in the directory based on their names.
+ * @returns map of entry type to list of uris for each entry in the directory with that type.
  */
 export async function readDir(
   uri: Uri,
   entryFilter?: (entryName: string) => boolean,
 ): Promise<DirectoryEntries> {
   const stats = await getStats(uri);
-  if (!stats || !stats.isDirectory()) return <DirectoryEntries>{};
+  if (!stats || !stats.isDirectory())
+    // Assert return type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return Object.freeze(Object.fromEntries(fillMissingEntryTypeProperties())) as DirectoryEntries;
+
   const unfilteredDirEntries = await fs.promises.readdir(getPathFromUri(uri), {
     withFileTypes: true,
   });
@@ -104,7 +123,7 @@ export async function readDir(
     : unfilteredDirEntries;
 
   // Group each entry by EntryType
-  const entryMap = groupBy(
+  const entryMap: Map<EntryType, Uri[]> = groupBy(
     dirEntries,
     (dirEntry): EntryType => {
       if (dirEntry.isFile()) return EntryType.File;
@@ -114,11 +133,10 @@ export async function readDir(
     (dirent) => joinUriPaths(uri, dirent.name),
   );
 
-  // Fill in each missing EntryType with an empty array
-  Object.values(EntryType).forEach((entryType) => {
-    if (!entryMap.has(entryType)) entryMap.set(entryType, []);
-  });
+  fillMissingEntryTypeProperties(entryMap);
 
+  // Assert return type.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return Object.freeze(Object.fromEntries(entryMap)) as DirectoryEntries;
 }
 

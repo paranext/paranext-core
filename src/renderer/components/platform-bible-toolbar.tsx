@@ -18,7 +18,7 @@ export default function PlatformBibleToolbar() {
 
   return (
     <Toolbar className="toolbar" dataHandler={handleMenuData} commandHandler={handleMenuCommand}>
-      <RefSelector handleSubmit={handleReferenceChanged} scrRef={scrRef as ScriptureReference} />
+      <RefSelector handleSubmit={handleReferenceChanged} scrRef={scrRef} />
     </Toolbar>
   );
 }

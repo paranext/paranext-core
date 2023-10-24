@@ -16,8 +16,13 @@ jest.mock(
 
 import DockLayout, { FloatPosition } from 'rc-dock';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
-import { FloatLayout, Layout, SavedTabInfo, WebViewProps } from '@shared/data/web-view.model';
-import { addWebViewToDock, getFloatPosition, loadTab } from './paranext-dock-layout.component';
+import { FloatLayout, Layout, SavedTabInfo, WebViewTabProps } from '@shared/data/web-view.model';
+import {
+  addTabToDock,
+  addWebViewToDock,
+  getFloatPosition,
+  loadTab,
+} from './platform-dock-layout.component';
 
 describe('Dock Layout Component', () => {
   const mockDockLayout = mock(DockLayout);
@@ -77,16 +82,31 @@ describe('Dock Layout Component', () => {
 
   describe('loadTab()', () => {
     it('should throw when no id', () => {
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const savedTabInfoNoId = {} as SavedTabInfo;
 
       expect(() => loadTab(savedTabInfoNoId)).toThrow();
     });
   });
 
+  describe('addTabToDock()', () => {
+    it('should throw when tab is not an object', () => {
+      const dockLayout = instance(mockDockLayout);
+      const layout: Layout = { type: 'tab' };
+
+      expect(() =>
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        addTabToDock('this is wrong' as unknown as SavedTabInfo, layout, dockLayout),
+      ).toThrow();
+    });
+    // TODO: verify it adds an error tab if no/bad tab type provided
+  });
+
   describe('addWebViewToDock()', () => {
     it('should throw when no id', () => {
       const dockLayout = instance(mockDockLayout);
-      const webView = {} as WebViewProps;
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const webView = {} as WebViewTabProps;
       const layout: Layout = { type: 'tab' };
 
       expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();
@@ -96,7 +116,8 @@ describe('Dock Layout Component', () => {
       // Ensure this is an add (rather than an update).
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
-      const webView: WebViewProps = { id: 'myId', webViewType: 'test', content: '' };
+      const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const layout = { type: 'wacked' } as unknown as FloatLayout;
 
       expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();
@@ -110,7 +131,7 @@ describe('Dock Layout Component', () => {
       // Ensure this is an add (rather than an update).
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
-      const webView: WebViewProps = { id: 'myId', webViewType: 'test', content: '' };
+      const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
       const layout: Layout = { type: 'panel', direction: 'top', targetTabId: 'unknownTabId' };
 
       expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();

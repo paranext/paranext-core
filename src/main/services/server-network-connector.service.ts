@@ -298,9 +298,12 @@ export default class ServerNetworkConnector implements INetworkConnector {
     if (this.connectorInfo.clientId === recipientId) {
       // This message is from us and for us. Handle the message as if we just received it
       this.onMessage(
+        // Fake enough of the message event to handle it.
+        /* eslint-disable no-type-assertion/no-type-assertion */
         {
           data: message as unknown as string,
         } as MessageEvent,
+        /* eslint-enable */
         true,
       );
     } else {
@@ -315,9 +318,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * @param fromSelf whether this message is from this connector instead of from someone else
    */
   private onMessage = (event: MessageEvent, fromSelf = false) => {
-    const data = fromSelf
-      ? (event.data as unknown as Message)
-      : (JSON.parse(event.data as string) as Message);
+    const data: Message = fromSelf
+      ? // Assert our specific message type.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        (event.data as unknown as Message)
+      : JSON.parse(event.data.toString());
 
     // Make sure the client isn't impersonating another client
     // TODO: consider speeding up validation by passing in webSocket client id?

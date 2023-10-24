@@ -4,7 +4,7 @@ import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import {
   projectLookupServiceNetworkObjectName,
   ProjectLookupServiceType,
-} from '@shared/models/project-lookup.model';
+} from '@shared/services/project-lookup.service-model';
 import { joinUriPaths } from '@node/utils/util';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
@@ -18,7 +18,7 @@ const METADATA_FILE = 'meta.json';
 async function getProjectUris(): Promise<string[]> {
   // Get all the directories in the projects root that match "<name>_<id>"
   const entries = await nodeFS.readDir(PROJECTS_ROOT_URI, (entry) => {
-    return /^\w+_[^\W_]+$/.test(path.parse(entry).name);
+    return /^\w(\w|-)*_[^\W_]+$/.test(path.parse(entry).name);
   });
 
   return entries.directory;
@@ -104,11 +104,12 @@ async function getMetadataForAllProjects(): Promise<ProjectMetadata[]> {
 
 async function getMetadataForProject(projectId: string): Promise<ProjectMetadata> {
   await initialize();
-  const existingValue = localProjects.get(projectId);
+  const idUpper = projectId.toUpperCase();
+  const existingValue = localProjects.get(idUpper);
   if (existingValue) return existingValue;
 
   // Try to load the project directly in case the files were copied after initialization
-  const newMetadata = await getProjectMetadata(projectId);
+  const newMetadata = await getProjectMetadata(idUpper);
   localProjects.set(newMetadata.id, newMetadata);
   return newMetadata;
 }
@@ -118,19 +119,16 @@ const projectLookupService: ProjectLookupServiceType = {
   getMetadataForProject,
 };
 
-let networkObject: ProjectLookupServiceType;
-
 /**
  * Register the network object that backs the PAPI project lookup service
  */
+// This doesn't really represent this service module, so we're not making it default. To use this
+// service, you should use `project-lookup.service.ts`
+// eslint-disable-next-line import/prefer-default-export
 export async function startProjectLookupService(): Promise<void> {
   await initialize();
-  networkObject = await networkObjectService.set<ProjectLookupServiceType>(
+  await networkObjectService.set<ProjectLookupServiceType>(
     projectLookupServiceNetworkObjectName,
     projectLookupService,
   );
-}
-
-export function getNetworkObject(): ProjectLookupServiceType {
-  return networkObject;
 }

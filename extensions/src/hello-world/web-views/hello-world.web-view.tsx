@@ -14,8 +14,10 @@ import {
 import type { QuickVerseDataTypes } from 'quick-verse';
 import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
-import { Key, useCallback, useContext, useMemo, useState } from 'react';
+import { Key, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
+import type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+import type { WebViewProps } from 'shared/data/web-view.model';
 import Clock from './components/clock.component';
 
 type Row = {
@@ -27,7 +29,7 @@ type Row = {
 const {
   react: {
     context: { TestContext },
-    hooks: { useData, useDataProvider, usePromise, useEvent, useSetting },
+    hooks: { useData, useDataProvider, usePromise, useEvent, useSetting, useDialogCallback },
   },
   logger,
 } = papi;
@@ -56,13 +58,21 @@ papi
   .fetch('https://www.example.com', { mode: 'no-cors' })
   .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
-globalThis.webViewComponent = function HelloWorld() {
+globalThis.webViewComponent = function HelloWorld({
+  useWebViewState,
+  getWebViewDefinitionUpdatableProperties,
+  updateWebViewDefinition,
+}: WebViewProps) {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
-  const [clicks, setClicks] = globalThis.useWebViewState<number>('clicks', 0);
+  const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
+  /* const verseRef = useMemo(
+    () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
+    [scrRef],
+  ); */
 
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
@@ -75,6 +85,13 @@ globalThis.webViewComponent = function HelloWorld() {
     ),
   );
 
+  useEffect(() => {
+    logger.log(
+      `Hello World WebView previous title: ${getWebViewDefinitionUpdatableProperties()?.title}`,
+    );
+    updateWebViewDefinition({ title: `Hello World ${clicks}` });
+  }, [getWebViewDefinitionUpdatableProperties, updateWebViewDefinition, clicks]);
+
   const [echoResult] = usePromise(
     useCallback(async () => {
       // Not using the promise's resolved value
@@ -83,6 +100,18 @@ globalThis.webViewComponent = function HelloWorld() {
       return papi.commands.sendCommand('test.echoRenderer', `From ${NAME}`);
     }, []),
     'retrieving',
+  );
+
+  const [project, selectProject] = useDialogCallback(
+    'platform.selectProject',
+    useRef({
+      prompt: 'Please select a project for Hello World WebView:',
+      iconUrl: 'papi-extension://hello-world/assets/offline.svg',
+      title: 'Select Hello World Project',
+    }).current,
+    // Assert as string type rather than string literal type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    'None' as DialogTypes['platform.selectProject']['responseType'],
   );
 
   const [latestVerseText] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
@@ -114,6 +143,13 @@ globalThis.webViewComponent = function HelloWorld() {
     useMemo(() => new VerseRef('JHN 1:1'), []),
     'Loading John 1:1...',
   );
+
+  // TODO: Uncomment this or similar sample code once https://github.com/paranext/paranext-core/issues/440 is resolved
+  /* const [webVerse] = useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'], 'VerseUSFM'>(
+    '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+    verseRef,
+    'Loading WEB Verse',
+  ); */
 
   return (
     <div>
@@ -152,10 +188,16 @@ globalThis.webViewComponent = function HelloWorld() {
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>
+      <div>Selected Project: {project}</div>
+      <div>
+        <Button onClick={selectProject}>Select Project</Button>
+      </div>
       <h3>John 1:1</h3>
       <div>{john11}</div>
       <h3>Psalm 1</h3>
       <div>{psalm1}</div>
+      {/* <h3>{verseRef.toString()} WEB</h3>
+      <div>{webVerse}</div> */}
       <br />
       <div>
         <TextField label="Test Me" />
@@ -163,10 +205,7 @@ globalThis.webViewComponent = function HelloWorld() {
         <Switch /> {/* no label available */}
         <ComboBox title="Test Me" options={['option 1', 'option 2']} />
         <Slider /> {/* no label available */}
-        <RefSelector
-          scrRef={scrRef as ScriptureReference}
-          handleSubmit={(newScrRef) => setScrRef(newScrRef)}
-        />
+        <RefSelector scrRef={scrRef} handleSubmit={(newScrRef) => setScrRef(newScrRef)} />
         <Table<Row>
           columns={[
             {

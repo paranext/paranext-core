@@ -12,14 +12,16 @@ import UpdateIcon from '@mui/icons-material/Update';
 import DeleteIcon from '@mui/icons-material/Delete';
 import logger from '@shared/services/logger.service';
 import { useMemo } from 'react';
-import { fetchProjects } from './open-project-tab.component';
-import ProjectList, { Project } from './project-list.component';
+import ProjectList, {
+  fetchProjects,
+  Project,
+} from '@renderer/components/projects/project-list.component';
 import './download-update-project-tab.component.scss';
 
 export const TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG = 'download-update-project-dialog';
 
-function downloadProject(project: Project) {
-  logger.info(`Downloading Project ${project.name}`);
+function downloadProject(projectId: string) {
+  logger.info(`Downloading Project ${projectId}`);
 }
 
 function updateProject(project: Project) {
@@ -45,7 +47,7 @@ export default function DownloadUpdateProjectTab() {
         <ProjectList
           projects={downloadableProjects}
           subheader="Downloadable Projects"
-          projectClickHandler={downloadProject}
+          handleSelectProject={downloadProject}
         >
           <ListItemIcon>
             <DownloadIcon />

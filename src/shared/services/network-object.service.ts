@@ -176,6 +176,8 @@ const createRemoteProxy = (
   Proxy.revocable(base ?? {}, {
     get: (target, key) => {
       if (key === 'dispose') return undefined;
+      // Assert type of `key` to index `target`.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       if (key === 'then' || key in target) return target[key as keyof typeof target];
       // If onDidDispose wasn't found in the target already, don't create a remote proxy for it
       if (key === 'onDidDispose') return undefined;
@@ -198,13 +200,13 @@ const createRemoteProxy = (
       // Took the indexing off of NetworkableObject so normal objects could be used,
       // but now members can't be accessed by indexing in NetworkObjectService
       // TODO: fix it so it is indexable but can have specific members
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
       (target as any)[key] = requestFunction;
       return requestFunction;
     },
     set(obj, prop, value) {
       // If we cached a property previously, purge the cache for that property since it is changing.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
       if ((obj as any)[prop]) delete (obj as any)[prop];
 
       // Actually set the provided property
@@ -294,6 +296,8 @@ const get = async <T extends object>(
     // If we already have this network object, return it
     const networkObjectRegistration = networkObjectRegistrations.get(id);
     if (networkObjectRegistration)
+      // Assert to specified generic type.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       return networkObjectRegistration.networkObject as NetworkObject<T>;
 
     // We don't already have this network object. See if it exists somewhere else.
@@ -305,6 +309,8 @@ const get = async <T extends object>(
     // this process called `set` on the object we were looking for.
     const networkObjectRegistrationSecondChance = networkObjectRegistrations.get(id);
     if (networkObjectRegistrationSecondChance)
+      // Assert to specified generic type.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       return networkObjectRegistrationSecondChance.networkObject as NetworkObject<T>;
 
     // At this point, the object exists remotely but does not yet exist locally.
@@ -320,7 +326,9 @@ const get = async <T extends object>(
     // If a property exists on the base object, we use it and won't look for it on the remote object.
     // If a property does not exist on the base object, it is assumed to exist on the remote object.
     const baseObject: Partial<T> = createLocalObjectToProxy
-      ? (createLocalObjectToProxy(id, networkObjectVariable.promise) as Partial<T>)
+      ? // Assert to specified generic type.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        (createLocalObjectToProxy(id, networkObjectVariable.promise) as Partial<T>)
       : {};
 
     // Create a proxy with functions that will send requests to the remote object
@@ -330,7 +338,9 @@ const get = async <T extends object>(
     const eventEmitter = new PapiEventEmitter<void>();
     overrideOnDidDispose(id, remoteProxy.proxy, eventEmitter.event);
 
-    // The network object is finished! Rename it so we know it is finished
+    // The network object is finished! Rename it so we know it is finished.
+    // Assert to specified generic type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const networkObject = remoteProxy.proxy as NetworkObject<T>;
 
     // Save the network object for future lookups
@@ -390,7 +400,7 @@ const set = async <T extends NetworkableObject>(
       networkService.registerRequestHandler(
         getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
         (functionName: string, ...args: unknown[]) =>
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
           Promise.resolve((objectToShare as any)[functionName](...args)),
       ),
     ];
@@ -450,12 +460,16 @@ const set = async <T extends NetworkableObject>(
     networkObjectRegistrations.set(id, {
       registrationType: NetworkObjectRegistrationType.Local,
       onDidDisposeEmitter: onDidDisposeLocalEmitter,
+      // Assert to specified generic type.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       networkObject: localProxy.proxy as NetworkObject<T>,
       revokeProxy: localProxy.revoke,
     });
 
     // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's
     // onDidDispose type because it had an onDidDispose added in overrideOnDidDispose.
+    // Assert to specified generic type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     return objectToShare as Omit<CanHaveOnDidDispose<T>, 'dispose'> as DisposableNetworkObject<T>;
   });
 };

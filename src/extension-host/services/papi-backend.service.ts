@@ -23,13 +23,16 @@ import {
 import extensionStorageService, {
   ExtensionStorageService,
 } from '@extension-host/services/extension-storage.service';
-import { ProjectLookupServiceType } from '@shared/models/project-lookup.model';
+import { ProjectLookupServiceType } from '@shared/services/project-lookup.service-model';
 import projectLookupService from '@shared/services/project-lookup.service';
+import dialogService from '@shared/services/dialog.service';
+import { DialogService } from '@shared/services/dialog.service-model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
 // 2) We need to provide type assertions for all members so they carry the JSDoc comments on the
 // papi.d.ts file so extension developers see the comments. Please add to all properties you add.
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion */
 // 3) The "JSDOC DESTINATION" comments are there to provide anchors for JSDocs to be copied in.
 // Please add to all properties you add.
 const papi = {
@@ -50,6 +53,8 @@ const papi = {
   webViews: papiWebViewService as PapiWebViewService,
   /** JSDOC DESTINATION papiWebViewProviderService */
   webViewProviders: papiWebViewProviderService as PapiWebViewProviderService,
+  /** JSDOC DESTINATION dialogService */
+  dialogs: dialogService as DialogService,
   /** JSDOC DESTINATION papiNetworkService */
   network: papiNetworkService as PapiNetworkService,
   /** JSDOC DESTINATION logger */

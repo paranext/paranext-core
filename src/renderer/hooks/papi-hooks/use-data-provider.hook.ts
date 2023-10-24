@@ -14,8 +14,9 @@ import createUseNetworkObjectHook from '@renderer/hooks/hook-generators/create-u
  *  specifying your own types, or provide a custom data provider type
  */
 
+// We don't know what type the data provider serves
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 const useDataProvider = createUseNetworkObjectHook(dataProviderService.get) as <
-  // We don't know what type the data provider serves
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   T extends IDataProvider<any>,
 >(

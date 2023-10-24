@@ -9,7 +9,7 @@ import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
 import { getErrorMessage } from '@shared/utils/util';
 import { CommandNames } from 'papi-shared-types';
-import { startProjectLookupService } from '@extension-host/services/project-lookup-backend.service';
+import { startProjectLookupService } from '@extension-host/services/project-lookup.service-host';
 
 // #region Test logs
 
@@ -47,6 +47,8 @@ networkService
     // Set up network commands
     await Promise.all(
       Object.entries(commandHandlers).map(async ([commandName, handler]) => {
+        // Re-assert type after passing through `map`.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         await papi.commands.registerCommand(commandName as CommandNames, handler);
       }),
     );

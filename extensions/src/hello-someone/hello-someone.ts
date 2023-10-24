@@ -72,11 +72,14 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    */
   getPerson<T extends boolean = true>(
     name: string,
+    // Assert the conditional type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     createIfDoesNotExist: T = true as T,
   ): T extends true ? Person : Person | undefined {
     const nameLower = name.toLowerCase();
     if (createIfDoesNotExist && !this.people[nameLower]) this.people[nameLower] = {};
     // Type assert because we know this person exists
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     return this.people[nameLower] as T extends true ? Person : Person | undefined;
   },
 
@@ -238,6 +241,8 @@ const peopleWebViewProvider: IWebViewProvider = {
     return {
       ...savedWebView,
       title: 'People',
+      // Can't use the enum value from a definition file so assert the type from the string literal.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       contentType: 'html' as WebViewContentType.HTML,
       content: helloSomeoneHtmlWebView,
     };
@@ -314,6 +319,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await peopleWebViewProviderPromise,
     await helloSomeoneCommandPromise,
     await echoSomeoneRendererPromise,
+    papi.webViews.onDidAddWebView((addWebViewEvent) => {
+      if (addWebViewEvent.webView.webViewType === peopleWebViewType)
+        logger.info(
+          `We noticed a ${peopleWebViewType} webView was added with id ${addWebViewEvent.webView.id}`,
+        );
+    }),
   );
 
   logger.info('Hello Someone is finished activating!');
