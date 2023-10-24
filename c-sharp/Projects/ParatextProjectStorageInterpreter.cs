@@ -272,9 +272,6 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         return ResponseToRequest.Succeeded(ChapterUSX);
     }
 
-    /// <summary>
-    /// Converts usfm to usx, but does not annotate
-    /// </summary>
     private XmlDocument ConvertUsfmToUsx(ScrText scrText, string usfm, int bookNum)
     {
         ScrStylesheet scrStylesheet = scrText.ScrStylesheet(bookNum);

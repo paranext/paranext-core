@@ -206,7 +206,7 @@ declare module 'papi-shared-types' {
      *
      * @returns unsubscriber function (run to unsubscribe from listening for updates)
      */
-    subscribeVerseUSX(
+    subscribeChapterUSX(
       verseRef: VerseRef,
       callback: (usx: string | undefined) => void,
       options?: DataProviderSubscriberOptions,
