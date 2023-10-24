@@ -29,12 +29,14 @@ declare module 'papi-shared-types' {
    * This is not yet a complete list of the data types available from Paratext projects.
    */
   export type ParatextStandardProjectDataTypes = MandatoryProjectDataType & {
-    /** Gets the "raw" USFM data for the specified book */
+    /** Gets/sets the "raw" USFM data for the specified book */
     BookUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
-    /** Gets the "raw" USFM data for the specified chapter */
+    /** Gets/sets the "raw" USFM data for the specified chapter */
     ChapterUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
-    /** Gets the "raw" USFM data for the specified verse */
+    /** Gets/sets the "raw" USFM data for the specified verse */
     VerseUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
+    /** Gets/sets the data in USX form for the specified chapter */
+    ChapterUSX: DataProviderDataType<VerseRef, string | undefined, string>;
     /**
      * Gets the tokenized USJ data for the specified book
      *
@@ -185,6 +187,28 @@ declare module 'papi-shared-types' {
     subscribeVerseUSFM(
       verseRef: VerseRef,
       callback: (usfm: string | undefined) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Unsubscriber;
+
+    /** Gets the Scripture text in USX format for the specified chapter */
+    getChapterUSX(verseRef: VerseRef): Promise<string | undefined>;
+    /** Sets the Scripture text in USX format for the specified chapter */
+    setChapterUSX(
+      verseRef: VerseRef,
+      usx: string,
+    ): Promise<DataProviderUpdateInstructions<ParatextStandardProjectDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the USX data is changed
+     *
+     * @param verseRef tells the provider what changes to listen for
+     * @param callback function to run with the updated USX for this selector
+     * @param options various options to adjust how the subscriber emits updates
+     *
+     * @returns unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeVerseUSX(
+      verseRef: VerseRef,
+      callback: (usx: string | undefined) => void,
       options?: DataProviderSubscriberOptions,
     ): Unsubscriber;
 

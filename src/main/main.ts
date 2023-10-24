@@ -23,6 +23,9 @@ import extensionAssetProtocolService from '@main/services/extension-asset-protoc
 import { wait } from '@shared/utils/util';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/papi-util';
+// Used with the commented out code at the bottom of this file to test the ParatextProjectDataProvider
+// import { getProjectDataProvider } from '@shared/services/project-data-provider.service';
+// import { VerseRef } from '@sillsdev/scripture';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 
@@ -324,8 +327,11 @@ async function main() {
     const paratextPdp = await getProjectDataProvider<'ParatextStandard'>(
       '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
     );
-    const verse = await paratextPdp.getVerseUSFM(new VerseRef('JHN', '1', '1'));
+    const verse = await paratextPdp.getChapterUSX(new VerseRef('JHN', '1', '1'));
     logger.info(`Got PDP data: ${verse}`);
+
+    if (verse !== undefined) await paratextPdp.setChapterUSX(new VerseRef('JHN', '1', '1'), verse);
+
     paratextPdp.setExtensionData(
       { extensionName: 'foo', dataQualifier: 'fooData' },
       'This is the data from extension foo',

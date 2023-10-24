@@ -55,13 +55,13 @@ internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
             case "getProjectData":
                 return GetProjectData(dataScope);
             case "setProjectData":
-                var setProjectReturn = SetProjectData(dataScope, args[1]!.ToJsonString());
+                var setProjectReturn = SetProjectData(dataScope, args[1]!);
                 SendDataUpdateEvent(setProjectReturn.Contents);
                 return setProjectReturn;
             case "getExtensionData":
                 return GetExtensionData(dataScope);
             case "setExtensionData":
-                var setExtensionReturn = SetExtensionData(dataScope, args[1]!.ToJsonString());
+                var setExtensionReturn = SetExtensionData(dataScope, args[1]!);
                 SendDataUpdateEvent(setExtensionReturn.Contents);
                 return setExtensionReturn;
             default:
@@ -106,7 +106,7 @@ internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
     /// <summary>
     /// Set data in a project identified by <param name="scope"></param>.
     /// </summary>
-    public abstract ResponseToRequest SetProjectData(ProjectDataScope scope, string jsonData);
+    public abstract ResponseToRequest SetProjectData(ProjectDataScope scope, JsonNode data);
 
     /// <summary>
     /// Get an extension's data in a project identified by <param name="scope"></param>.
@@ -116,5 +116,5 @@ internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
     /// <summary>
     /// Set an extension's data in a project identified by <param name="scope"></param>.
     /// </summary>
-    public abstract ResponseToRequest SetExtensionData(ProjectDataScope scope, string jsonData);
+    public abstract ResponseToRequest SetExtensionData(ProjectDataScope scope, JsonNode data);
 }
