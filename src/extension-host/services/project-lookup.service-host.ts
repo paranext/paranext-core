@@ -18,7 +18,7 @@ const METADATA_FILE = 'meta.json';
 async function getProjectUris(): Promise<string[]> {
   // Get all the directories in the projects root that match "<name>_<id>"
   const entries = await nodeFS.readDir(PROJECTS_ROOT_URI, (entry) => {
-    return /^\w+_[^\W_]+$/.test(path.parse(entry).name);
+    return /^\w(\w|-)*_[^\W_]+$/.test(path.parse(entry).name);
   });
 
   return entries.directory;
@@ -104,11 +104,12 @@ async function getMetadataForAllProjects(): Promise<ProjectMetadata[]> {
 
 async function getMetadataForProject(projectId: string): Promise<ProjectMetadata> {
   await initialize();
-  const existingValue = localProjects.get(projectId);
+  const idUpper = projectId.toUpperCase();
+  const existingValue = localProjects.get(idUpper);
   if (existingValue) return existingValue;
 
   // Try to load the project directly in case the files were copied after initialization
-  const newMetadata = await getProjectMetadata(projectId);
+  const newMetadata = await getProjectMetadata(idUpper);
   localProjects.set(newMetadata.id, newMetadata);
   return newMetadata;
 }

@@ -16,7 +16,7 @@ jest.mock(
 
 import DockLayout, { FloatPosition } from 'rc-dock';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
-import { FloatLayout, Layout, SavedTabInfo, WebViewProps } from '@shared/data/web-view.model';
+import { FloatLayout, Layout, SavedTabInfo, WebViewTabProps } from '@shared/data/web-view.model';
 import {
   addTabToDock,
   addWebViewToDock,
@@ -106,7 +106,7 @@ describe('Dock Layout Component', () => {
     it('should throw when no id', () => {
       const dockLayout = instance(mockDockLayout);
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const webView = {} as WebViewProps;
+      const webView = {} as WebViewTabProps;
       const layout: Layout = { type: 'tab' };
 
       expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();
@@ -116,7 +116,7 @@ describe('Dock Layout Component', () => {
       // Ensure this is an add (rather than an update).
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
-      const webView: WebViewProps = { id: 'myId', webViewType: 'test', content: '' };
+      const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const layout = { type: 'wacked' } as unknown as FloatLayout;
 
@@ -131,7 +131,7 @@ describe('Dock Layout Component', () => {
       // Ensure this is an add (rather than an update).
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
-      const webView: WebViewProps = { id: 'myId', webViewType: 'test', content: '' };
+      const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
       const layout: Layout = { type: 'panel', direction: 'top', targetTabId: 'unknownTabId' };
 
       expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();

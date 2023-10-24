@@ -1,4 +1,4 @@
-import { ScrVers, VerseRef } from '@sillsdev/scripture';
+﻿import { ScrVers, VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
 import {
   Button,
@@ -14,9 +14,10 @@ import {
 import type { QuickVerseDataTypes } from 'quick-verse';
 import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
-import { Key, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { Key, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
 import type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+import type { WebViewProps } from 'shared/data/web-view.model';
 import { ProjectDataTypes } from 'papi-shared-types';
 import Clock from './components/clock.component';
 
@@ -66,10 +67,14 @@ papi
   .fetch('https://www.example.com', { mode: 'no-cors' })
   .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
-globalThis.webViewComponent = function HelloWorld() {
+globalThis.webViewComponent = function HelloWorld({
+  useWebViewState,
+  getWebViewDefinitionUpdatableProperties,
+  updateWebViewDefinition,
+}: WebViewProps) {
   const test = useContext(TestContext) || "Context didn't work!! :(";
 
-  const [clicks, setClicks] = globalThis.useWebViewState<number>('clicks', 0);
+  const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
@@ -88,6 +93,13 @@ globalThis.webViewComponent = function HelloWorld() {
       [clicks, setClicks],
     ),
   );
+
+  useEffect(() => {
+    logger.log(
+      `Hello World WebView previous title: ${getWebViewDefinitionUpdatableProperties()?.title}`,
+    );
+    updateWebViewDefinition({ title: `Hello World ${clicks}` });
+  }, [getWebViewDefinitionUpdatableProperties, updateWebViewDefinition, clicks]);
 
   const [echoResult] = usePromise(
     useCallback(async () => {
