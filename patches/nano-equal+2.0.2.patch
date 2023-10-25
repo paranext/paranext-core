@@ -1,0 +1,75 @@
+diff --git a/node_modules/nano-equal/src/index.js b/node_modules/nano-equal/src/index.js
+index 606cda1..17012e5 100644
+--- a/node_modules/nano-equal/src/index.js
++++ b/node_modules/nano-equal/src/index.js
+@@ -56,9 +56,11 @@ function getType(a) {
+  *
+  * @param {*} a
+  * @param {*} b
++ * @param {boolean} noKeyEqualsUndefined set to true to allow an object that doesn't have a key to be
++ *   equal to an object that has a key but that key is undefined. Defaults to false
+  * @returns {boolean}
+  */
+-function nanoEqual(a, b) {
++function nanoEqual(a, b, noKeyEqualsUndefined = false) {
+     if (a === b) {
+         return true;
+     }
+@@ -75,13 +77,39 @@ function nanoEqual(a, b) {
+         return false;
+     }
+ 
+-    if (typeA === 'pure-object') {
++    if (typeA === 'pure-object' || typeA === 'object') {
+         if (a === b) {
+             return true;
+         }
+ 
+-        var keysA = Object.keys(a);
+-        var keysBLength = Object.keys(b).length;
++        // Moved "object" comparisons in here because we want to use the objects' built-in value
++        // functions if they exist but we still want to compare keys if not
++        if (typeA === "object") {
++            // Removed parentheses on Object.prototype.valueOf() becuase that is incorrectly running the function
++            // thanks to https://github.com/smelukov/nano-equal/issues/5
++            if (
++                a.valueOf !== Object.prototype.valueOf &&
++                b.valueOf !== Object.prototype.valueOf
++            ) {
++                return a.valueOf() === b.valueOf();
++            }
++
++            if (
++                a.toString !== Object.prototype.toString &&
++                b.toString !== Object.prototype.toString
++            ) {
++                return a.toString() === b.toString();
++            }
++        }
++
++        // treat undefined the same as not defining the key if specified
++        var keysA = noKeyEqualsUndefined
++            ? Object.keys(a).filter((key) => a[key] !== undefined)
++            : Object.keys(a);
++        var keysBLength = (noKeyEqualsUndefined
++            ? Object.keys(b).filter((key) => b[key] !== undefined)
++            : Object.keys(b)
++        ).length;
+ 
+         if (keysA.length !== keysBLength) {
+             return false;
+@@ -128,14 +156,6 @@ function nanoEqual(a, b) {
+         }
+ 
+         return true;
+-    } else if (typeA === 'object') {
+-        if (a.valueOf !== Object.prototype.valueOf() && b.valueOf !== Object.prototype.valueOf()) {
+-            return a.valueOf() === b.valueOf();
+-        }
+-
+-        if (a.toString !== Object.prototype.toString() && b.toString !== Object.prototype.toString()) {
+-            return a.toString() === b.toString();
+-        }
+     }
+ 
+     return false;

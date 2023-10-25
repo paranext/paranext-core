@@ -163,11 +163,13 @@ export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProp
 // `{ useWebViewState }: WebViewProps` was not carrying the annotations out to the new
 // `useWebViewState` variable. One day, this may work, so we can fix this JSDoc back to using real @
 /** JSDOC SOURCE UseWebViewStateHook
- * A React hook for working with a state object tied to a webview.
+ * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+ * a function to set it. Use similarly to `useState`.
  *
  * Only used in WebView iframes.
  *
- * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+ * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per
+ * key.
  *
  * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
  *

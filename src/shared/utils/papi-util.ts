@@ -114,19 +114,25 @@ export enum RequestHandlerType {
  * @param a the first object to compare
  * @param b the second object to compare
  * @param shouldCompareAcrossIframes whether to adjust the comparison to consider objects from
- * different iframes to be able to be deeply equal. Set to true for a slightly
+ * different iframes to be able to be deeply equal and to consider `undefined` values to equal not
+ * specifying the key (see below for more information). Set to true for a slightly
  * less stringent equality comparison that is a bit slower. Defaults to false.
  *
  * - Objects like arrays from different iframes have different constructor function references even
  * if they do the same thing. The faster, more strict deep equality comparison fails objects that
  * look the same but have different constructors because different constructors could produce false
  * positives in [a few specific situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
+ * - Additionally, setting this to `true` will adjust the comparison to consider `undefined` values
+ * on keys of objects to be equal to not specifying the key at all. For example,
+ * `{ stuff: 3, things: undefined }` and `{ stuff: 3 }` will be considered to be equal in this case,
+ * whereas they would not be considered to be equal if `shouldCompareAcrossIframes` is `false`.
+ * - For more information and examples, see [this CodeSandbox](https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs).
  *
  * @returns true if a and b are deeply equal; false otherwise
  *
  */
 export function deepEqual(a: unknown, b: unknown, shouldCompareAcrossIframes = false) {
-  return shouldCompareAcrossIframes ? nanoEqual(a, b) : isEqualDeep(a, b);
+  return shouldCompareAcrossIframes ? nanoEqual(a, b, true) : isEqualDeep(a, b);
 }
 
 /**
@@ -136,15 +142,6 @@ export function deepEqual(a: unknown, b: unknown, shouldCompareAcrossIframes = f
  *
  * WARNING: This is inefficient right now as it stringifies, parses, and deepEquals the value.
  * Please only use this if you need to
- *
- * Note: an object with a key whose value is undefined is not considered deeply equal to an object
- * without that key, so round-tripping to and from JSON causes objects with undefined values to fail
- * this check. See https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs
- * for more information. For example, `{ stuff: 3, things: undefined }` will not round-trip because
- * JSON does not have `undefined` and therefore removes `things`. However, replacing `undefined`
- * with `null` round-trips perfectly: `{stuff: 3, things: null }`. This may be undesired behavior
- * since these kinds of objects are still rather serializable, but we can adjust if we encounter
- * an issue with this current method.
  */
 export function isSerializable(value: unknown): boolean {
   try {

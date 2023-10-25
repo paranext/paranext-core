@@ -143,11 +143,13 @@ declare module 'shared/data/web-view.model' {
    */
   export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
   /**
-   * A React hook for working with a state object tied to a webview.
+   * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+   * a function to set it. Use similarly to `useState`.
    *
    * Only used in WebView iframes.
    *
-   * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+   * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per
+   * key.
    *
    * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
    *
@@ -196,11 +198,13 @@ declare module 'shared/data/web-view.model' {
    */
   export type WebViewProps = {
     /**
-     * A React hook for working with a state object tied to a webview.
+     * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+     * a function to set it. Use similarly to `useState`.
      *
      * Only used in WebView iframes.
      *
-     * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+     * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per
+     * key.
      *
      * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
      *
@@ -345,11 +349,13 @@ declare module 'shared/global-this.model' {
      */
     var webViewComponent: FunctionComponent<WebViewProps>;
     /**
-     * A React hook for working with a state object tied to a webview.
+     * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+     * a function to set it. Use similarly to `useState`.
      *
      * Only used in WebView iframes.
      *
-     * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+     * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per
+     * key.
      *
      * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
      *
@@ -560,13 +566,19 @@ declare module 'shared/utils/papi-util' {
    * @param a the first object to compare
    * @param b the second object to compare
    * @param shouldCompareAcrossIframes whether to adjust the comparison to consider objects from
-   * different iframes to be able to be deeply equal. Set to true for a slightly
+   * different iframes to be able to be deeply equal and to consider `undefined` values to equal not
+   * specifying the key (see below for more information). Set to true for a slightly
    * less stringent equality comparison that is a bit slower. Defaults to false.
    *
    * - Objects like arrays from different iframes have different constructor function references even
    * if they do the same thing. The faster, more strict deep equality comparison fails objects that
    * look the same but have different constructors because different constructors could produce false
    * positives in [a few specific situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
+   * - Additionally, setting this to `true` will adjust the comparison to consider `undefined` values
+   * on keys of objects to be equal to not specifying the key at all. For example,
+   * `{ stuff: 3, things: undefined }` and `{ stuff: 3 }` will be considered to be equal in this case,
+   * whereas they would not be considered to be equal if `shouldCompareAcrossIframes` is `false`.
+   * - For more information and examples, see [this CodeSandbox](https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs).
    *
    * @returns true if a and b are deeply equal; false otherwise
    *
@@ -579,15 +591,6 @@ declare module 'shared/utils/papi-util' {
    *
    * WARNING: This is inefficient right now as it stringifies, parses, and deepEquals the value.
    * Please only use this if you need to
-   *
-   * Note: an object with a key whose value is undefined is not considered deeply equal to an object
-   * without that key, so round-tripping to and from JSON causes objects with undefined values to fail
-   * this check. See https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs
-   * for more information. For example, `{ stuff: 3, things: undefined }` will not round-trip because
-   * JSON does not have `undefined` and therefore removes `things`. However, replacing `undefined`
-   * with `null` round-trips perfectly: `{stuff: 3, things: null }`. This may be undesired behavior
-   * since these kinds of objects are still rather serializable, but we can adjust if we encounter
-   * an issue with this current method.
    */
   export function isSerializable(value: unknown): boolean;
   /** Separator between parts of a serialized request */
@@ -3352,6 +3355,7 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
      */
     saveDialog: TabSaver;
   }>;
+  /** Props provided to the dialog component */
   export type DialogProps<TData = unknown> = DialogData & {
     /**
      * Sends the data as a resolved response to the dialog request and closes the dialog
@@ -3405,6 +3409,18 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
   /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
+  /** Options to provide when showing the Select Project dialog */
+  export type SelectProjectDialogOptions = DialogOptions & {
+    /** Project IDs to exclude from showing in the dialog */
+    excludeProjectIds?: string[];
+  };
+  /** Options to provide when showing the Select Multiple Project dialog */
+  export type SelectMultipleProjectsDialogOptions = DialogOptions & {
+    /** Project IDs to exclude from showing in the dialog */
+    excludeProjectIds?: string[];
+    /** Project IDs that should start selected in the dialog */
+    selectedProjectIds?: string[];
+  };
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs
    *
@@ -3413,8 +3429,11 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    * If you add a dialog here, you must also add it on {@link DIALOGS}
    */
   export interface DialogTypes {
-    [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, string>;
-    [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<DialogOptions, string[]>;
+    [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<SelectProjectDialogOptions, string>;
+    [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<
+      SelectMultipleProjectsDialogOptions,
+      string[]
+    >;
   }
   /** Each type of dialog. These are the tab types used in the dock layout */
   export type DialogTabTypes = keyof DialogTypes;
@@ -3430,6 +3449,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     options: TOptions;
     /** The type of the response to the dialog request */
     responseType: TReturnType;
+    /** Props provided to the dialog component */
+    props: DialogProps<TReturnType> & TOptions;
   };
   export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<
     DialogDefinitionBase & {
@@ -3517,7 +3538,8 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
    *  - `response` - the response from the dialog or `defaultResponse` if a response has not been
    *      received (does not reset to `defaultResponse` if the user cancels the dialog).
    *      DOES NOT reset every time the callback is run
-   *  - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response
+   *  - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response.
+   *      If this callback is run while the dialog is open, nothing happens
    *  - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
    *      `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
    *  - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not

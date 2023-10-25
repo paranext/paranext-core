@@ -92,10 +92,10 @@ export type ProjectListProps = PropsWithChildren<{
   isMultiselect?: boolean;
 
   /**
-   * If multiselect is selected, then the array of selected projects is passed to control
+   * If multiselect is selected, then the array of selected project IDs is passed to control
    *  the selected flag on ListItemButton
    */
-  selectedProjects?: ProjectMetadata[] | undefined;
+  selectedProjectIds?: string[] | undefined;
 
   /**
    * Optional subheader
@@ -118,19 +118,19 @@ export default function ProjectList({
   projects,
   handleSelectProject,
   isMultiselect,
-  selectedProjects,
+  selectedProjectIds,
   subheader,
   isCheckable,
   children,
 }: ProjectListProps) {
   const isSelected = useCallback(
     (project: ProjectMetadata) => {
-      if (isMultiselect && selectedProjects) {
-        return selectedProjects.includes(project);
+      if (isMultiselect && selectedProjectIds) {
+        return selectedProjectIds.includes(project.id);
       }
       return undefined;
     },
-    [isMultiselect, selectedProjects],
+    [isMultiselect, selectedProjectIds],
   );
 
   const createListItemContents = (project: ProjectMetadata): JSX.Element => {
