@@ -7,6 +7,20 @@ export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
 export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
 
+/** Options to provide when showing the Select Project dialog */
+export type SelectProjectDialogOptions = DialogOptions & {
+  /** Project IDs to exclude from showing in the dialog */
+  excludeProjectIds?: string[];
+};
+
+/** Options to provide when showing the Select Multiple Project dialog */
+export type SelectMultipleProjectsDialogOptions = DialogOptions & {
+  /** Project IDs to exclude from showing in the dialog */
+  excludeProjectIds?: string[];
+  /** Project IDs that should start selected in the dialog */
+  selectedProjectIds?: string[];
+};
+
 /**
  * Mapped type for dialog functions to use in getting various types for dialogs
  *
@@ -15,8 +29,11 @@ export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProj
  * If you add a dialog here, you must also add it on {@link DIALOGS}
  */
 export interface DialogTypes {
-  [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, string>;
-  [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<DialogOptions, string[]>;
+  [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<SelectProjectDialogOptions, string>;
+  [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<
+    SelectMultipleProjectsDialogOptions,
+    string[]
+  >;
 }
 
 /** Each type of dialog. These are the tab types used in the dock layout */
@@ -34,6 +51,8 @@ export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
   options: TOptions;
   /** The type of the response to the dialog request */
   responseType: TReturnType;
+  /** Props provided to the dialog component */
+  props: DialogProps<TReturnType> & TOptions;
 };
 
 export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<

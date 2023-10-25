@@ -1,0 +1,21 @@
+diff --git a/node_modules/@types/nano-equal/index.d.ts b/node_modules/@types/nano-equal/index.d.ts
+index fe9d357..6cf48d6 100644
+--- a/node_modules/@types/nano-equal/index.d.ts
++++ b/node_modules/@types/nano-equal/index.d.ts
+@@ -1,6 +1,16 @@
++/**
++ * Deep equal of the values
++ *
++ * @param a
++ * @param b
++ * @param noKeyEqualsUndefined set to true to allow an object that doesn't have a key to be
++ *   equal to an object that has a key but that key is undefined. Defaults to false
++ * @returns true if the two values are deeply equal; false otherwise
++ */
+ declare function nanoEqual(
+     a: any,
+     b: any,
++    noKeyEqualsUndefined?: boolean,
+ ): boolean;
+ 
+ export = nanoEqual;
