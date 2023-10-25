@@ -13,10 +13,15 @@ import {
   TableSortColumn,
 } from 'papi-components';
 import { ScrVers, VerseRef } from '@sillsdev/scripture';
-import VerseContentViewer from './verse-content-viewer.component';
+import WordContentViewer from './word-content-viewer.component';
 import { WordListEntry } from './word-list-types';
 
 export const TAB_TYPE_WORD_LIST = 'word-list';
+
+type Row = {
+  word: string;
+  count: number;
+};
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -24,22 +29,98 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-type Row = {
-  word: string;
-  count: number;
-};
-
 const defaultSortColumns: TableSortColumn[] = [{ columnKey: 'word', direction: 'ASC' }];
+
+// function getScriptureSnippet(verseText: string, word: string, count?: number): string {
+function getScriptureSnippet(verseText: string, word: string): string {
+  if (!verseText) throw new Error(`No verse text available.`);
+
+  // Use count to find the desired occurrence of the word in the verse
+
+  const regex = new RegExp(`\\b${word.toLowerCase()}\\b`, 'i');
+  const match = verseText.toLowerCase().match(regex);
+
+  const index = match ? match.index || -1 : -1;
+
+  let surroundingText = '';
+
+  if (index !== -1) {
+    let startIndex = Math.max(0, index - 50);
+    let endIndex = Math.min(verseText.length, index + word.length + 50);
+
+    // Ensure startIndex starts at the beginning of a word
+    while (startIndex > 0 && !/\s/.test(verseText[startIndex - 1])) {
+      startIndex -= 1;
+    }
+
+    // Ensure endIndex ends at the end of a word
+    while (endIndex < verseText.length - 1 && !/\s/.test(verseText[endIndex])) {
+      endIndex += 1;
+    }
+
+    surroundingText = verseText.substring(startIndex, endIndex);
+
+    // Find and convert selectedWord.word to uppercase
+    const wordStartIndex = index - startIndex;
+    const wordEndIndex = wordStartIndex + word.length;
+    const beforeWord = surroundingText.slice(0, wordStartIndex);
+    const afterWord = surroundingText.slice(wordEndIndex);
+    const upperCaseWord = surroundingText.slice(wordStartIndex, wordEndIndex).toUpperCase();
+
+    surroundingText = beforeWord + upperCaseWord + afterWord;
+  }
+  return surroundingText;
+}
+
+function processChapter(chapterText: string, scrRef: ScriptureReference) {
+  const verseTexts: string[] = chapterText.split(/\\v\s\d+\s/);
+  // Delete the first array element, which contains all markers/content before the chapter starts
+  verseTexts.shift();
+
+  const wordList: WordListEntry[] = [];
+  verseTexts.forEach((verseText, id) => {
+    const wordMatches: RegExpMatchArray | null | undefined =
+      verseText?.match(/(?<!\\)\b[a-zA-Z’]+\b/g);
+
+    if (wordMatches) {
+      wordMatches.forEach((word) => {
+        const existingEntry = wordList.find((entry) => entry.word === word.toLocaleLowerCase());
+        if (existingEntry) {
+          // Find number of occurences of this scrRef in this entry. Pass that count to getScriptureSnipper
+          existingEntry.scrRefs.push({
+            bookNum: scrRef.bookNum,
+            chapterNum: scrRef.chapterNum,
+            verseNum: id + 1,
+          });
+          existingEntry.scriptureSnippets.push(getScriptureSnippet(verseText, word));
+        } else {
+          const newEntry: WordListEntry = {
+            word: word.toLocaleLowerCase(),
+            scrRefs: [
+              {
+                bookNum: scrRef.bookNum,
+                chapterNum: scrRef.chapterNum,
+                verseNum: id + 1,
+              },
+            ],
+            scriptureSnippets: [getScriptureSnippet(verseText, word)],
+          };
+          wordList.push(newEntry);
+        }
+      });
+    }
+  });
+  return wordList;
+}
 
 export default function WordList() {
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
-  const [wordArray, setWordArray] = useState<WordListEntry[]>([]);
-  const [verseNum, setVerseNum] = useState<number>(1);
-  const [verseText, , isVerseTextLoading] = useData.Verse<UsfmProviderDataTypes, 'Verse'>(
+  const [wordList, setWordList] = useState<WordListEntry[]>([]);
+  const [chapterText, , isChapterTextLoading] = useData.Chapter<UsfmProviderDataTypes, 'Chapter'>(
     'usfm',
     useMemo(
-      () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, verseNum, ScrVers.English),
-      [scrRef, verseNum],
+      () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum, ScrVers.English),
+      [scrRef],
     ),
     'Loading verse',
   );
@@ -51,58 +132,22 @@ export default function WordList() {
   const [selectedWord, setSelectedWord] = useState<WordListEntry>();
 
   useEffect(() => {
-    setWordArray([]);
-    setVerseNum(1);
+    setWordList([]);
     setSelectedWord(undefined);
   }, [scrRef.bookNum, scrRef.chapterNum]);
 
-  function processVerse() {
-    const updatedWordArray: WordListEntry[] = [...wordArray];
-    const wordMatches: RegExpMatchArray | null | undefined = verseText?.match(/\b[a-zA-Z’]+\b/g);
-    if (wordMatches) {
-      wordMatches.forEach((word) => {
-        const existingEntry = updatedWordArray.find(
-          (entry) => entry.word === word.toLocaleLowerCase(),
-        );
-        if (existingEntry) {
-          existingEntry.scrRefs.push({
-            bookNum: scrRef.bookNum,
-            chapterNum: scrRef.chapterNum,
-            verseNum,
-          });
-        } else {
-          const newEntry: WordListEntry = {
-            word: word.toLocaleLowerCase(),
-            scrRefs: [
-              {
-                bookNum: scrRef.bookNum,
-                chapterNum: scrRef.chapterNum,
-                verseNum,
-              },
-            ],
-          };
-          updatedWordArray.push(newEntry);
-        }
-      });
-      setWordArray(updatedWordArray);
-    }
-  }
-
   useEffect(() => {
-    if (isVerseTextLoading || !verseText) return;
-    processVerse();
-    setVerseNum(verseNum + 1);
-    // Will fix later!
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVerseTextLoading, verseText]);
+    if (isChapterTextLoading || !chapterText) return;
+    setWordList(processChapter(chapterText, scrRef));
+  }, [isChapterTextLoading, chapterText, scrRef]);
 
   useEffect(() => {
     const newRows: Row[] = [];
-    wordArray.forEach((word) => {
+    wordList.forEach((word) => {
       newRows.push({ word: word.word, count: word.scrRefs.length });
     });
     setRows(newRows);
-  }, [wordArray, isVerseTextLoading]); // Can we remove isVerseTextLoading?
+  }, [wordList]);
 
   const sortedRows = useMemo((): readonly Row[] => {
     if (sortColumns.length === 0) return rows;
@@ -129,7 +174,7 @@ export default function WordList() {
   }, [sortColumns]);
 
   const onCellClick = (args: TableCellClickArgs<Row>) => {
-    const clickedWord = wordArray.find((entry) => entry.word === args.row.word);
+    const clickedWord = wordList.find((entry) => entry.word === args.row.word);
     if (clickedWord) setSelectedWord(clickedWord);
   };
 
@@ -163,9 +208,7 @@ export default function WordList() {
         headerRowHeight={50}
         onCellClick={onCellClick}
       />
-      {selectedWord && (
-        <VerseContentViewer selectedWord={selectedWord} key={JSON.stringify(selectedWord)} />
-      )}
+      {selectedWord && <WordContentViewer selectedWord={selectedWord} />}
     </div>
   );
 }
