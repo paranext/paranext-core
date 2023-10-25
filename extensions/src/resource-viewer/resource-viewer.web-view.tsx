@@ -2,9 +2,9 @@ import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
 import { ScriptureReference } from 'papi-components';
 import { JSX, useMemo } from 'react';
-// eslint-disable-next-line import/no-unresolved
-import { UsfmProviderDataTypes } from 'usfm-data-provider';
 import UsxEditor from 'usxeditor';
+import type { WebViewProps } from 'shared/data/web-view.model';
+import { ProjectDataTypes } from 'papi-shared-types';
 
 /** Characteristics of a marker style */
 interface StyleInfo {
@@ -26,7 +26,7 @@ interface ElementInfo {
 
 const {
   react: {
-    hooks: { useData, useSetting },
+    hooks: { useProjectData, useSetting },
   },
   logger,
 } = papi;
@@ -132,7 +132,7 @@ const defaultScrRef: ScriptureReference = {
 };
 
 /**
- * Scripture text panel that displays a read only version of a usx editor that displays the current
+ * Scripture text panel that displays a read-only version of a usx editor that displays the current
  * chapter
  */
 function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
@@ -151,15 +151,36 @@ function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
   );
 }
 
-globalThis.webViewComponent = function ResourceViewer(): JSX.Element {
+globalThis.webViewComponent = function ResourceViewer({
+  useWebViewState,
+}: WebViewProps): JSX.Element {
   logger.info('Preparing to display the Resource Viewer');
 
+  const [projectId] = useWebViewState<string>('projectId', '');
+
+  logger.info(`Resource Viewer project ID: ${projectId}`);
+
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
-  const [usx, , isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
-    'usfm',
+
+  // When ChapterUSX exists, remove this Boolean (whose only purpose is to make the linter think
+  // that ScriptureTextPanelUsxEditor is used), replace the useProjectData.ChapterUSFM line with the
+  // commented out useProjectData.ChapterUSX line, and simplify/inline the JSX (remove use of
+  // haveUsx).
+
+  const haveUsx = false;
+
+  // const [data, , isLoading] = useProjectData.ChapterUSX<ProjectDataTypes['ParatextStandard'], 'ChapterUSX'>(
+
+  const [data, , isLoading] = useProjectData.ChapterUSFM<
+    ProjectDataTypes['ParatextStandard'],
+    'ChapterUSFM'
+  >(
+    projectId,
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
   );
 
-  return <div>{isLoading ? 'Loading' : <ScriptureTextPanelUsxEditor usx={usx ?? '<usx/>'} />}</div>;
+  const jsx = haveUsx ? <ScriptureTextPanelUsxEditor usx={data ?? '<usx/>'} /> : data;
+
+  return <div>{isLoading ? 'Loading' : jsx}</div>;
 };

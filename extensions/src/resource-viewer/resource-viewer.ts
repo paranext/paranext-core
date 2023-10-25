@@ -1,5 +1,6 @@
 ﻿import papi from 'papi-backend';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+import type { DialogOptions } from 'shared/models/dialog-options.model';
 import type {
   GetWebViewOptions,
   SavedWebViewDefinition,
@@ -22,13 +23,24 @@ interface ResourceViewerOptions extends GetWebViewOptions {
 /**
  * Function to prompt for a project and open it in the resource viewer. Registered as a command handler.
  */
-async function openResourceViewer() {
-  const project = await papi.dialogs.selectProject();
-  if (project) {
-    const options: ResourceViewerOptions = { projectId: project };
-    // REVIEW: If a resource viewer is already open for the selected project, do we want to open another?
-    papi.webViews.getWebView(resourceWebViewType, undefined, options);
+async function openResourceViewer(
+  projectId: string | undefined,
+): Promise<string | null | undefined> {
+  let projectIdForWebView = projectId;
+  if (!projectIdForWebView) {
+    const options: DialogOptions = {
+      title: 'Select Resource',
+      prompt: 'Choose the resource project to view:',
+    };
+    projectIdForWebView = (await papi.dialogs.selectProject(options)) ?? undefined;
   }
+  if (projectIdForWebView) {
+    const options: ResourceViewerOptions = { projectId: projectIdForWebView };
+    // REVIEW: If a resource viewer is already open for the selected project, we open another.
+    // This matches the current behavior in P9, though it might not be what we want long-term.
+    return papi.webViews.getWebView(resourceWebViewType, undefined, options);
+  }
+  return null;
 }
 
 /**
@@ -43,16 +55,26 @@ const resourceWebViewProvider: IWebViewProvider = {
       throw new Error(
         `${resourceWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
+
+    // We know that the projectId (if present in the state) will be a string.
+    const projectId =
+      getWebViewOptions.projectId ||
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (savedWebView.state?.projectId as string) ||
+      null;
     return {
-      ...savedWebView,
-      title: getWebViewOptions.projectId
+      title: projectId
         ? `Resource Viewer : ${
-            (await papi.projectLookup.getMetadataForProject(getWebViewOptions.projectId)).name ??
-            getWebViewOptions.projectId
+            (await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId
           }`
         : 'Resource Viewer',
+      ...savedWebView,
       content: resourceViewerWebView,
       styles: resourceViewerWebViewStyles,
+      state: {
+        ...savedWebView.state,
+        projectId,
+      },
     };
   },
 };
