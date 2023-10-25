@@ -554,8 +554,24 @@ declare module 'shared/utils/papi-util' {
     Contents = 'contents',
     Complex = 'complex',
   }
-  /** Check that two objects are deeply equal, comparing members of each object and such */
-  export function deepEqual(a: unknown, b: unknown): boolean;
+  /**
+   * Check that two objects are deeply equal, comparing members of each object and such
+   *
+   * @param a the first object to compare
+   * @param b the second object to compare
+   * @param shouldCompareAcrossIframes whether to adjust the comparison to consider objects from
+   * different iframes to be able to be deeply equal. Set to true for a slightly
+   * less stringent equality comparison that is a bit slower. Defaults to false.
+   *
+   * - Objects like arrays from different iframes have different constructor function references even
+   * if they do the same thing. The faster, more strict deep equality comparison fails objects that
+   * look the same but have different constructors because different constructors could produce false
+   * positives in [a few specific situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
+   *
+   * @returns true if a and b are deeply equal; false otherwise
+   *
+   */
+  export function deepEqual(a: unknown, b: unknown, shouldCompareAcrossIframes?: boolean): boolean;
   /**
    * Check to see if the value is JSON.stringify serializable without losing information
    * @param value value to test
@@ -563,6 +579,15 @@ declare module 'shared/utils/papi-util' {
    *
    * WARNING: This is inefficient right now as it stringifies, parses, and deepEquals the value.
    * Please only use this if you need to
+   *
+   * Note: an object with a key whose value is undefined is not considered deeply equal to an object
+   * without that key, so round-tripping to and from JSON causes objects with undefined values to fail
+   * this check. See https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs
+   * for more information. For example, `{ stuff: 3, things: undefined }` will not round-trip because
+   * JSON does not have `undefined` and therefore removes `things`. However, replacing `undefined`
+   * with `null` round-trips perfectly: `{stuff: 3, things: null }`. This may be undesired behavior
+   * since these kinds of objects are still rather serializable, but we can adjust if we encounter
+   * an issue with this current method.
    */
   export function isSerializable(value: unknown): boolean;
   /** Separator between parts of a serialized request */
@@ -3378,6 +3403,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   import { ReactElement } from 'react';
   /** The tabType for the select project dialog in `select-project.dialog.tsx` */
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
+  /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
+  export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs
    *
@@ -3387,6 +3414,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    */
   export interface DialogTypes {
     [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, string>;
+    [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<DialogOptions, string[]>;
   }
   /** Each type of dialog. These are the tab types used in the dock layout */
   export type DialogTabTypes = keyof DialogTypes;
