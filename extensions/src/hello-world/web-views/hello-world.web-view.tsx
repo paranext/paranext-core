@@ -1,4 +1,4 @@
-import { ScrVers, VerseRef } from '@sillsdev/scripture';
+﻿import { ScrVers, VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
 import {
   Button,
@@ -18,6 +18,7 @@ import { Key, useCallback, useContext, useEffect, useMemo, useRef, useState } fr
 import type { HelloWorldEvent } from 'hello-world';
 import type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
 import type { WebViewProps } from 'shared/data/web-view.model';
+import { ProjectDataTypes } from 'papi-shared-types';
 import Clock from './components/clock.component';
 
 type Row = {
@@ -29,7 +30,15 @@ type Row = {
 const {
   react: {
     context: { TestContext },
-    hooks: { useData, useDataProvider, usePromise, useEvent, useSetting, useDialogCallback },
+    hooks: {
+      useData,
+      useDataProvider,
+      useProjectData,
+      usePromise,
+      useEvent,
+      useSetting,
+      useDialogCallback,
+    },
   },
   logger,
 } = papi;
@@ -69,10 +78,10 @@ globalThis.webViewComponent = function HelloWorld({
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
-  /* const verseRef = useMemo(
+  const verseRef = useMemo(
     () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
     [scrRef],
-  ); */
+  );
 
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
@@ -120,6 +129,18 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading latest Scripture text...',
   );
 
+  const [projects, selectProjects] = useDialogCallback(
+    'platform.selectMultipleProjects',
+    useRef({
+      prompt: 'Please select one or more projects for Hello World WebView:',
+      iconUrl: 'papi-extension://hello-world/assets/offline.svg',
+      title: 'Select List of Hello World Projects',
+    }).current,
+    // Assert as string type rather than string literal type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    ['None'] as DialogTypes['platform.selectMultipleProjects']['responseType'],
+  );
+
   const [name, setName] = useState('Bill');
 
   const peopleDataProvider = useDataProvider<PeopleDataProvider>('helloSomeone.people');
@@ -144,12 +165,11 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading John 1:1...',
   );
 
-  // TODO: Uncomment this or similar sample code once https://github.com/paranext/paranext-core/issues/440 is resolved
-  /* const [webVerse] = useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'], 'VerseUSFM'>(
-    '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+  const [webVerse] = useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'], 'VerseUSFM'>(
+    project,
     verseRef,
     'Loading WEB Verse',
-  ); */
+  );
 
   return (
     <div>
@@ -196,8 +216,13 @@ globalThis.webViewComponent = function HelloWorld({
       <div>{john11}</div>
       <h3>Psalm 1</h3>
       <div>{psalm1}</div>
-      {/* <h3>{verseRef.toString()} WEB</h3>
-      <div>{webVerse}</div> */}
+      <h3>{verseRef.toString()} WEB</h3>
+      <div>{webVerse}</div>
+      <h3>List of Selected Project Id(s):</h3>
+      <div>{projects.join(', ')}</div>
+      <div>
+        <Button onClick={selectProjects}>Select Projects</Button>
+      </div>
       <br />
       <div>
         <TextField label="Test Me" />

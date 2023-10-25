@@ -1,7 +1,8 @@
 import { List, ListItem, ListItemButton, ListItemText, ListSubheader } from '@mui/material';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
+import { Checkbox } from 'papi-components';
 import { ProjectTypes } from 'papi-shared-types';
-import { PropsWithChildren, useCallback } from 'react';
+import { PropsWithChildren, useCallback, JSX } from 'react';
 
 export type Project = ProjectMetadata & {
   id: string;
@@ -91,7 +92,8 @@ export type ProjectListProps = PropsWithChildren<{
   isMultiselect?: boolean;
 
   /**
-   * If multiple is selected, then the array of selected projects is passed to control the selected flag on ListItemButton
+   * If multiselect is selected, then the array of selected projects is passed to control
+   *  the selected flag on ListItemButton
    */
   selectedProjects?: ProjectMetadata[] | undefined;
 
@@ -99,6 +101,12 @@ export type ProjectListProps = PropsWithChildren<{
    * Optional subheader
    */
   subheader?: string;
+
+  /**
+   * Adds a checkbox to the end of each list item that reflects the selected state of
+   * each project
+   */
+  isCheckable?: boolean;
 }>;
 
 /**
@@ -112,6 +120,7 @@ export default function ProjectList({
   isMultiselect,
   selectedProjects,
   subheader,
+  isCheckable,
   children,
 }: ProjectListProps) {
   const isSelected = useCallback(
@@ -124,20 +133,25 @@ export default function ProjectList({
     [isMultiselect, selectedProjects],
   );
 
+  const createListItemContents = (project: ProjectMetadata): JSX.Element => {
+    return (
+      <ListItemButton
+        selected={isSelected(project)}
+        onClick={() => handleSelectProject(project.id)}
+      >
+        {children}
+        <ListItemText primary={project.name} />
+        {isCheckable && <Checkbox isChecked={isSelected(project)} />}
+      </ListItemButton>
+    );
+  };
+
   return (
     <div className="project-list">
       <List>
         <ListSubheader>{subheader}</ListSubheader>
         {projects.map((project) => (
-          <ListItem key={project.id}>
-            <ListItemButton
-              selected={isSelected(project)}
-              onClick={() => handleSelectProject(project.id)}
-            >
-              {children}
-              <ListItemText primary={project.name} />
-            </ListItemButton>
-          </ListItem>
+          <ListItem key={project.id}>{createListItemContents(project)}</ListItem>
         ))}
       </List>
     </div>
