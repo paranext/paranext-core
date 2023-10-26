@@ -95,7 +95,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
           logger.error(
             `web-view.component failed to retrieve web view content for ${JSON.stringify(
               savedTabInfo,
-            )}`,
+            )}: ${e}`,
           );
         }
       })();

@@ -26,7 +26,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *  - `response` - the response from the dialog or `defaultResponse` if a response has not been
  *      received (does not reset to `defaultResponse` if the user cancels the dialog).
  *      DOES NOT reset every time the callback is run
- *  - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response
+ *  - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response.
+ *      If this callback is run while the dialog is open, nothing happens
  *  - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
  *      `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
  *  - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not

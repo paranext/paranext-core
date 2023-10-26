@@ -1,5 +1,5 @@
 import { ListItemIcon } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import DoneIcon from '@mui/icons-material/Done';
 import { Button } from 'papi-components';
@@ -7,27 +7,41 @@ import ProjectList from '@renderer/components/projects/project-list.component';
 import './select-multiple-projects-dialog.component.scss';
 import projectLookupService from '@shared/services/project-lookup.service';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
-import { ProjectMetadata } from '@shared/models/project-metadata.model';
-import DIALOG_BASE, { DialogProps } from './dialog-base.data';
-import { DialogDefinition, SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE } from './dialog-definition.model';
+import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
+import {
+  DialogDefinition,
+  DialogTypes,
+  SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE,
+} from '@renderer/components/dialogs/dialog-definition.model';
 
-type SelectMultipleProjectDialogProps = DialogProps<string[]>;
-
-function SelectMultipleProjectsDialog({ prompt, submitDialog }: SelectMultipleProjectDialogProps) {
-  const [downloadedProjects, isLoadingProjects] = usePromise(
-    projectLookupService.getMetadataForAllProjects,
+function SelectMultipleProjectsDialog({
+  prompt,
+  submitDialog,
+  excludeProjectIds,
+  selectedProjectIds: initialSelectedProjectIds,
+}: DialogTypes[typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]['props']) {
+  const [projects, isLoadingProjects] = usePromise(
+    useCallback(async () => {
+      const allProjectsMetadata = await projectLookupService.getMetadataForAllProjects();
+      return !excludeProjectIds
+        ? allProjectsMetadata
+        : allProjectsMetadata.filter(
+            (projectMetadata) => !excludeProjectIds.some((id) => projectMetadata.id === id),
+          );
+    }, [excludeProjectIds]),
     useMemo(() => [], []),
   );
 
-  const [selectedProjects, setSelectedProjects] = useState<ProjectMetadata[]>([]);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>(
+    initialSelectedProjectIds || [],
+  );
 
-  const handleProjectToggle = (projectId: string) => {
-    if (selectedProjects.some((project) => project.id === projectId)) {
-      setSelectedProjects(selectedProjects.filter((project) => project.id !== projectId));
-    } else {
-      const selectedProject = downloadedProjects.find((project) => project.id === projectId);
-      if (selectedProject) setSelectedProjects([...selectedProjects, selectedProject]);
-    }
+  const handleProjectToggle = (toggledProjectId: string) => {
+    if (selectedProjectIds.includes(toggledProjectId)) {
+      setSelectedProjectIds(
+        selectedProjectIds.filter((projectId) => projectId !== toggledProjectId),
+      );
+    } else setSelectedProjectIds([...selectedProjectIds, toggledProjectId]);
   };
 
   return (
@@ -37,9 +51,9 @@ function SelectMultipleProjectsDialog({ prompt, submitDialog }: SelectMultiplePr
         <div>Loading Projects</div>
       ) : (
         <ProjectList
-          projects={downloadedProjects}
+          projects={projects}
           handleSelectProject={handleProjectToggle}
-          selectedProjects={selectedProjects}
+          selectedProjectIds={selectedProjectIds}
           isMultiselect
           isCheckable
         >
@@ -49,7 +63,7 @@ function SelectMultipleProjectsDialog({ prompt, submitDialog }: SelectMultiplePr
         </ProjectList>
       )}
       <div className="select-multiple-projects-submit-button">
-        <Button onClick={() => submitDialog(selectedProjects.map((p) => p.id))}>
+        <Button onClick={() => submitDialog(selectedProjectIds)}>
           <DoneIcon />
         </Button>
       </div>
