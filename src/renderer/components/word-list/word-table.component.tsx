@@ -1,5 +1,5 @@
-import { Table, TableCellClickArgs, TableSortColumn } from 'papi-components';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Table, TableCellClickArgs, TableSortColumn } from 'papi-components';
 import { WordListEntry } from './word-list-types';
 
 type Row = {
