@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
-import useData from '@renderer/hooks/papi-hooks/use-data.hook';
+import { ScrVers, VerseRef } from '@sillsdev/scripture';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
-
-import './word-list.component.scss';
+import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
 import {
   RefSelector,
@@ -12,9 +10,10 @@ import {
   TableCellClickArgs,
   TableSortColumn,
 } from 'papi-components';
-import { ScrVers, VerseRef } from '@sillsdev/scripture';
-import WordContentViewer from './word-content-viewer.component';
+import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
+import './word-list.component.scss';
 import { WordListEntry } from './word-list-types';
+import WordContentViewer from './word-content-viewer.component';
 
 export const TAB_TYPE_WORD_LIST = 'word-list';
 
@@ -31,54 +30,66 @@ const defaultScrRef: ScriptureReference = {
 
 const defaultSortColumns: TableSortColumn[] = [{ columnKey: 'word', direction: 'ASC' }];
 
-// function getScriptureSnippet(verseText: string, word: string, count?: number): string {
-function getScriptureSnippet(verseText: string, word: string): string {
+function compareRefs(a: ScriptureReference, b: ScriptureReference): boolean {
+  return a.bookNum === b.bookNum && a.chapterNum === b.chapterNum && a.verseNum === b.verseNum;
+}
+
+function getDesiredOccurrence(verseText: string, word: string, occurrence: number): number {
+  const regex = new RegExp(`\\b${word.toLowerCase()}\\b`, 'ig');
+
+  let match = regex.exec(verseText.toLowerCase());
+  let occurrenceIndex = 1;
+
+  while (match !== null) {
+    if (occurrenceIndex === occurrence) {
+      return match.index;
+    }
+    occurrenceIndex += 1;
+    match = regex.exec(verseText.toLowerCase());
+  }
+  return -1;
+}
+
+function getScriptureSnippet(verseText: string, word: string, occurrence: number = 1): string {
   if (!verseText) throw new Error(`No verse text available.`);
 
-  // Use count to find the desired occurrence of the word in the verse
+  const index = getDesiredOccurrence(verseText, word, occurrence);
 
-  const regex = new RegExp(`\\b${word.toLowerCase()}\\b`, 'i');
-  const match = verseText.toLowerCase().match(regex);
-
-  const index = match ? match.index || -1 : -1;
-
-  let surroundingText = '';
+  let snippet = '';
+  const surroundingCharacters = 40;
 
   if (index !== -1) {
-    let startIndex = Math.max(0, index - 50);
-    let endIndex = Math.min(verseText.length, index + word.length + 50);
+    let startIndex = Math.max(0, index - surroundingCharacters);
+    let endIndex = Math.min(verseText.length, index + word.length + surroundingCharacters);
 
-    // Ensure startIndex starts at the beginning of a word
     while (startIndex > 0 && !/\s/.test(verseText[startIndex - 1])) {
       startIndex -= 1;
     }
 
-    // Ensure endIndex ends at the end of a word
     while (endIndex < verseText.length - 1 && !/\s/.test(verseText[endIndex])) {
       endIndex += 1;
     }
 
-    surroundingText = verseText.substring(startIndex, endIndex);
+    snippet = verseText.substring(startIndex, endIndex);
 
-    // Find and convert selectedWord.word to uppercase
     const wordStartIndex = index - startIndex;
     const wordEndIndex = wordStartIndex + word.length;
-    const beforeWord = surroundingText.slice(0, wordStartIndex);
-    const afterWord = surroundingText.slice(wordEndIndex);
-    const upperCaseWord = surroundingText.slice(wordStartIndex, wordEndIndex).toUpperCase();
+    const beforeWord = snippet.slice(0, wordStartIndex);
+    const afterWord = snippet.slice(wordEndIndex);
+    const upperCaseWord = snippet.slice(wordStartIndex, wordEndIndex).toUpperCase();
 
-    surroundingText = beforeWord + upperCaseWord + afterWord;
+    snippet = beforeWord + upperCaseWord + afterWord;
   }
-  return surroundingText;
+  return snippet;
 }
 
 function processChapter(chapterText: string, scrRef: ScriptureReference) {
   const verseTexts: string[] = chapterText.split(/\\v\s\d+\s/);
-  // Delete the first array element, which contains all markers/content before the chapter starts
+  // Delete the first array element, which contains non-verse-related content
   verseTexts.shift();
 
   const wordList: WordListEntry[] = [];
-  verseTexts.forEach((verseText, id) => {
+  verseTexts.forEach((verseText, verseId) => {
     const wordMatches: RegExpMatchArray | null | undefined =
       verseText?.match(/(?<!\\)\b[a-zA-Z’]+\b/g);
 
@@ -86,13 +97,17 @@ function processChapter(chapterText: string, scrRef: ScriptureReference) {
       wordMatches.forEach((word) => {
         const existingEntry = wordList.find((entry) => entry.word === word.toLocaleLowerCase());
         if (existingEntry) {
-          // Find number of occurences of this scrRef in this entry. Pass that count to getScriptureSnipper
-          existingEntry.scrRefs.push({
+          const newRef: ScriptureReference = {
             bookNum: scrRef.bookNum,
             chapterNum: scrRef.chapterNum,
-            verseNum: id + 1,
-          });
-          existingEntry.scriptureSnippets.push(getScriptureSnippet(verseText, word));
+            verseNum: verseId + 1,
+          };
+          existingEntry.scrRefs.push(newRef);
+          const occurrence = existingEntry.scrRefs.reduce(
+            (matches, ref) => (compareRefs(ref, newRef) ? matches + 1 : matches),
+            0,
+          );
+          existingEntry.scriptureSnippets.push(getScriptureSnippet(verseText, word, occurrence));
         } else {
           const newEntry: WordListEntry = {
             word: word.toLocaleLowerCase(),
@@ -100,7 +115,7 @@ function processChapter(chapterText: string, scrRef: ScriptureReference) {
               {
                 bookNum: scrRef.bookNum,
                 chapterNum: scrRef.chapterNum,
-                verseNum: id + 1,
+                verseNum: verseId + 1,
               },
             ],
             scriptureSnippets: [getScriptureSnippet(verseText, word)],
@@ -115,7 +130,6 @@ function processChapter(chapterText: string, scrRef: ScriptureReference) {
 
 export default function WordList() {
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
-  const [wordList, setWordList] = useState<WordListEntry[]>([]);
   const [chapterText, , isChapterTextLoading] = useData.Chapter<UsfmProviderDataTypes, 'Chapter'>(
     'usfm',
     useMemo(
@@ -124,6 +138,7 @@ export default function WordList() {
     ),
     'Loading verse',
   );
+  const [wordList, setWordList] = useState<WordListEntry[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [sortColumns, setSortColumns] = useState<TableSortColumn[]>(defaultSortColumns);
   const onSortColumnsChange = useCallback((changedSortColumns: TableSortColumn[]) => {
