@@ -1,8 +1,4 @@
-using System.Net.Http.Json;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
@@ -11,7 +7,6 @@ using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paratext.Data;
-using PtxUtils;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Projects;
@@ -116,7 +111,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         };
     }
 
-    public override ResponseToRequest SetProjectData(ProjectDataScope scope, JsonNode data)
+    public override ResponseToRequest SetProjectData(ProjectDataScope scope, string data)
     {
         if (scope.ProjectID == null)
             return ResponseToRequest.Failed("Must provide a project ID");
@@ -155,8 +150,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                 ResponseToRequest? response = null;
                 RunWithinLock(
                     WriteScope.ProjectText(scrText, verseRef.BookNum, verseRef.ChapterNum),
-                    writeLock =>
-                        response = SetChapterUsx(scrText, verseRef, data.ToString(), writeLock)
+                    writeLock => response = SetChapterUsx(scrText, verseRef, data, writeLock)
                 );
                 return response ?? ResponseToRequest.Failed("Unknown error occurred");
             default:
@@ -181,7 +175,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         return ResponseToRequest.Succeeded(textReader.ReadToEnd());
     }
 
-    public override ResponseToRequest SetExtensionData(ProjectDataScope scope, JsonNode data)
+    public override ResponseToRequest SetExtensionData(ProjectDataScope scope, string data)
     {
         if (scope.ProjectID == null)
             return ResponseToRequest.Failed("Must provide a project ID");
@@ -205,7 +199,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                         throw new Exception("Write lock is not active");
                     dataStream.SetLength(0);
                     using TextWriter textWriter = new StreamWriter(dataStream, Encoding.UTF8);
-                    textWriter.Write(data.ToString());
+                    textWriter.Write(data);
                     textWriter.Flush();
                 }
             );

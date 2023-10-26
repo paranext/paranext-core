@@ -72,14 +72,14 @@ internal class UsfmDataProvider : DataProvider
     private ResponseToRequest GetUsx(string args)
     {
         return VerseRefConverter.TryCreateVerseRef(args, out var verseRef, out string errorMsg)
-            ? ResponseToRequest.Succeeded(GetUsx(verseRef))
+            ? ResponseToRequest.Succeeded(GetChapterOrBookUsx(verseRef))
             : ResponseToRequest.Failed(errorMsg);
     }
 
     private ResponseToRequest SetUsx(string argVref, string argNewUsx)
     {
         return VerseRefConverter.TryCreateVerseRef(argVref, out var verseRef, out string errorMsg)
-            ? SetUsx(verseRef, argNewUsx)
+            ? SetChapterOrBookUsx(verseRef, argNewUsx)
             : ResponseToRequest.Failed(errorMsg);
     }
 
@@ -90,14 +90,14 @@ internal class UsfmDataProvider : DataProvider
             : ResponseToRequest.Failed(errorMsg);
     }
 
-    private string GetUsx(VerseRef vref)
+    private string GetChapterOrBookUsx(VerseRef vref)
     {
         XmlDocument usx = ConvertUsfmToUsx(GetUsfm(vref.BookNum, vref.ChapterNum), vref.BookNum);
         string contents = usx.OuterXml ?? string.Empty;
         return contents;
     }
 
-    public ResponseToRequest SetUsx(VerseRef vref, string newUsx)
+    public ResponseToRequest SetChapterOrBookUsx(VerseRef vref, string newUsx)
     {
         try
         {
