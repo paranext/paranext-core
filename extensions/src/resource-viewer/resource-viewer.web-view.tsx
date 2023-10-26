@@ -157,7 +157,7 @@ globalThis.webViewComponent = function ResourceViewer(): JSX.Element {
   logger.info('Preparing to display the Resource Viewer');
 
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
-  const [usx, setUsx, isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
+  const [usx, setUsx] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
     'usfm',
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
@@ -165,11 +165,7 @@ globalThis.webViewComponent = function ResourceViewer(): JSX.Element {
 
   return (
     <div>
-      {isLoading ? (
-        'Loading'
-      ) : (
-        <ScriptureTextPanelUsxEditor usx={usx ?? '<usx/>'} onChanged={setUsx} />
-      )}
+      <ScriptureTextPanelUsxEditor usx={usx ?? '<usx/>'} onChanged={setUsx} />
     </div>
   );
 };
