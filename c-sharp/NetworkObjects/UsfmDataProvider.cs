@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml;
+using System.Xml.XPath;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
@@ -42,8 +43,9 @@ internal class UsfmDataProvider : DataProvider
             {
                 "getBookNames" => GetBookNames(),
                 "getChapter" => GetChapter(args[0]!.ToJsonString()),
-                "getChapterUsx" => GetChapterUsx(args[0]!.ToJsonString()),
-                "getBookUsx" => GetBookUsx(args[0]!.ToJsonString()),
+                "getChapterUsx" => GetUsx(args[0]!.ToJsonString()),
+                "setChapterUsx" => SetUsx(args[0]!.ToJsonString(), args[1]!.ToString()),
+                "getBookUsx" => GetUsx(args[0]!.ToJsonString()),
                 "getVerse" => GetVerse(args[0]!.ToJsonString()),
                 _ => ResponseToRequest.Failed($"Unexpected function: {functionName}")
             };
@@ -67,17 +69,17 @@ internal class UsfmDataProvider : DataProvider
             : ResponseToRequest.Failed(errorMsg);
     }
 
-    private ResponseToRequest GetChapterUsx(string args)
+    private ResponseToRequest GetUsx(string args)
     {
         return VerseRefConverter.TryCreateVerseRef(args, out var verseRef, out string errorMsg)
-            ? ResponseToRequest.Succeeded(GetUsxForChapter(verseRef))
+            ? ResponseToRequest.Succeeded(GetChapterOrBookUsx(verseRef))
             : ResponseToRequest.Failed(errorMsg);
     }
 
-    private ResponseToRequest GetBookUsx(string args)
+    private ResponseToRequest SetUsx(string argVref, string argNewUsx)
     {
-        return VerseRefConverter.TryCreateVerseRef(args, out var verseRef, out string errorMsg)
-            ? ResponseToRequest.Succeeded(GetUsxForBook(verseRef))
+        return VerseRefConverter.TryCreateVerseRef(argVref, out var verseRef, out string errorMsg)
+            ? SetChapterOrBookUsx(verseRef, argNewUsx)
             : ResponseToRequest.Failed(errorMsg);
     }
 
@@ -88,18 +90,39 @@ internal class UsfmDataProvider : DataProvider
             : ResponseToRequest.Failed(errorMsg);
     }
 
-    private string GetUsxForChapter(VerseRef vref)
+    private string GetChapterOrBookUsx(VerseRef vref)
     {
         XmlDocument usx = ConvertUsfmToUsx(GetUsfm(vref.BookNum, vref.ChapterNum), vref.BookNum);
         string contents = usx.OuterXml ?? string.Empty;
         return contents;
     }
 
-    private string GetUsxForBook(VerseRef vref)
+    public ResponseToRequest SetChapterOrBookUsx(VerseRef vref, string newUsx)
     {
-        XmlDocument usx = ConvertUsfmToUsx(GetUsfm(vref.BookNum), vref.BookNum);
-        string contents = usx.OuterXml ?? string.Empty;
-        return contents;
+        try
+        {
+            XmlDocument doc = new() { PreserveWhitespace = true };
+            doc.LoadXml(newUsx);
+            if (doc.FirstChild?.Name != "usx")
+                return ResponseToRequest.Failed("Invalid USX");
+
+            UsxFragmenter.FindFragments(
+                _scrText!.ScrStylesheet(vref.BookNum),
+                doc.CreateNavigator(),
+                XPathExpression.Compile("*[false()]"),
+                out string usfm
+            );
+
+            usfm = UsfmToken.NormalizeUsfm(_scrText, vref.BookNum, usfm);
+            _scrText.PutText(vref.BookNum, vref.ChapterNum, false, usfm, null);
+            SendDataUpdateEvent("*");
+        }
+        catch (Exception e)
+        {
+            return ResponseToRequest.Failed(e.Message);
+        }
+
+        return ResponseToRequest.Succeeded();
     }
 
     /// <summary>

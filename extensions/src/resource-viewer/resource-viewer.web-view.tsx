@@ -123,6 +123,7 @@ const usxEditorCharMap = Object.fromEntries(
 
 interface ScriptureTextPanelUsxProps {
   usx: string;
+  onChanged?: (newUsx: string) => void;
 }
 
 const defaultScrRef: ScriptureReference = {
@@ -135,7 +136,7 @@ const defaultScrRef: ScriptureReference = {
  * Scripture text panel that displays a read only version of a usx editor that displays the current
  * chapter
  */
-function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
+function ScriptureTextPanelUsxEditor({ usx, onChanged }: ScriptureTextPanelUsxProps) {
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div className="text-panel">
@@ -143,8 +144,9 @@ function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
         usx={usx}
         paraMap={usxEditorParaMap}
         charMap={usxEditorCharMap}
-        onUsxChanged={() => {
-          /* Read only */
+        onUsxChanged={(newUsx) => {
+          // TODO: Check if the project is editable
+          if (onChanged) onChanged(newUsx);
         }}
       />
     </div>
@@ -155,11 +157,19 @@ globalThis.webViewComponent = function ResourceViewer(): JSX.Element {
   logger.info('Preparing to display the Resource Viewer');
 
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
-  const [usx, , isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
+  const [usx, setUsx, isLoading] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
     'usfm',
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
   );
 
-  return <div>{isLoading ? 'Loading' : <ScriptureTextPanelUsxEditor usx={usx ?? '<usx/>'} />}</div>;
+  return (
+    <div>
+      {isLoading ? (
+        'Loading'
+      ) : (
+        <ScriptureTextPanelUsxEditor usx={usx ?? '<usx/>'} onChanged={setUsx} />
+      )}
+    </div>
+  );
 };

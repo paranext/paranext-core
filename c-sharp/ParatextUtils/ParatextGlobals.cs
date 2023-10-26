@@ -34,6 +34,7 @@ namespace Paranext.DataProvider.ParatextUtils
                 ICUDllLocator.Initialize(false, false);
 
                 // Now tell Paratext.Data to use the specified folder
+                dataFolderPath = Path.GetFullPath(dataFolderPath); // Make sure path is rooted
                 ParatextData.Initialize(dataFolderPath, false);
                 s_initialized = true;
             }

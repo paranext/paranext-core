@@ -1,9 +1,13 @@
 using System.Text;
+using System.Xml;
+using System.Xml.Linq;
+using System.Xml.XPath;
 using Newtonsoft.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -12,6 +16,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     public const string BookUSFM = "BookUSFM";
     public const string ChapterUSFM = "ChapterUSFM";
     public const string VerseUSFM = "VerseUSFM";
+    public const string ChapterUSX = "ChapterUSX";
 
     public ParatextProjectStorageInterpreter(PapiClient papiClient)
         : base(ProjectStorageType.ParatextFolders, new[] { ProjectType.Paratext }, papiClient) { }
@@ -88,15 +93,19 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         {
             BookUSFM
                 => string.IsNullOrEmpty(error)
-                    ? ResponseToRequest.Succeeded(scrText.GetText(verseRef, false, false))
+                    ? ResponseToRequest.Succeeded(scrText.GetText(verseRef, false, true))
                     : ResponseToRequest.Failed(error),
             ChapterUSFM
                 => string.IsNullOrEmpty(error)
-                    ? ResponseToRequest.Succeeded(scrText.GetText(verseRef, true, false))
+                    ? ResponseToRequest.Succeeded(scrText.GetText(verseRef, true, true))
                     : ResponseToRequest.Failed(error),
             VerseUSFM
                 => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Succeeded(scrText.Parser.GetVerseUsfmText(verseRef))
+                    : ResponseToRequest.Failed(error),
+            ChapterUSX
+                => string.IsNullOrEmpty(error)
+                    ? ResponseToRequest.Succeeded(GetChapterUsx(scrText, verseRef))
                     : ResponseToRequest.Failed(error),
             _ => ResponseToRequest.Failed($"Unknown data type: {scope.DataType}")
         };
@@ -128,13 +137,22 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                             verseRef.BookNum,
                             verseRef.ChapterNum,
                             false,
-                            data,
+                            data.ToString(),
                             writeLock
                         );
                     }
                 );
                 // The value of returned string is case sensitive and cannot change unless data provider subscriptions change
                 return ResponseToRequest.Succeeded(ChapterUSFM);
+            case ChapterUSX:
+                if (!string.IsNullOrEmpty(error))
+                    return ResponseToRequest.Failed(error);
+                ResponseToRequest? response = null;
+                RunWithinLock(
+                    WriteScope.ProjectText(scrText, verseRef.BookNum, verseRef.ChapterNum),
+                    writeLock => response = SetChapterUsx(scrText, verseRef, data, writeLock)
+                );
+                return response ?? ResponseToRequest.Failed("Unknown error occurred");
             default:
                 return ResponseToRequest.Failed($"Unknown data type: {scope.DataType}");
         }
@@ -202,6 +220,66 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
             $"extensions/{scope.ExtensionName}/{scope.DataQualifier}",
             createIfNotExists
         );
+    }
+
+    private string GetChapterUsx(ScrText scrText, VerseRef vref)
+    {
+        XmlDocument usx = ConvertUsfmToUsx(
+            scrText,
+            scrText.GetText(vref, true, true),
+            vref.BookNum
+        );
+        return usx.OuterXml ?? string.Empty;
+    }
+
+    private ResponseToRequest SetChapterUsx(
+        ScrText scrText,
+        VerseRef vref,
+        string newUsx,
+        WriteLock writeLock
+    )
+    {
+        try
+        {
+            XDocument doc;
+            using (TextReader reader = new StringReader(newUsx))
+                doc = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+
+            if (doc.Root?.Name != "usx")
+                return ResponseToRequest.Failed("Invalid USX");
+
+            UsxFragmenter.FindFragments(
+                scrText.ScrStylesheet(vref.BookNum),
+                doc.CreateNavigator(),
+                XPathExpression.Compile("*[false()]"),
+                out string usfm
+            );
+
+            usfm = UsfmToken.NormalizeUsfm(scrText, vref.BookNum, usfm);
+            scrText.PutText(vref.BookNum, vref.ChapterNum, true, usfm, writeLock);
+        }
+        catch (Exception e)
+        {
+            return ResponseToRequest.Failed(e.ToString());
+        }
+
+        return ResponseToRequest.Succeeded(ChapterUSX);
+    }
+
+    private XmlDocument ConvertUsfmToUsx(ScrText scrText, string usfm, int bookNum)
+    {
+        ScrStylesheet scrStylesheet = scrText.ScrStylesheet(bookNum);
+        // Tokenize usfm
+        List<UsfmToken> tokens = UsfmToken.Tokenize(scrStylesheet, usfm ?? string.Empty, true);
+
+        XmlDocument doc = new XmlDocument();
+        using (XmlWriter xmlw = doc.CreateNavigator()!.AppendChild())
+        {
+            // Convert to XML
+            UsfmToUsx.ConvertToXmlWriter(scrStylesheet, tokens, xmlw, false);
+            xmlw.Flush();
+        }
+        return doc;
     }
 
     private static void RunWithinLock(WriteScope writeScope, Action<WriteLock> action)
