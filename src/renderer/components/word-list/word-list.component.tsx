@@ -71,7 +71,7 @@ function getScriptureSnippet(verseText: string, word: string, occurrence: number
   return snippet;
 }
 
-function processChapter(chapterText: string, scrRef: ScriptureReference) {
+function processChapter(chapterText: string, bookNum: number, chapterNum: number) {
   const verseTexts: string[] = chapterText.split(/\\v\s\d+\s/);
   // Delete the first array element, which contains non-verse-related content
   verseTexts.shift();
@@ -83,13 +83,13 @@ function processChapter(chapterText: string, scrRef: ScriptureReference) {
 
     if (wordMatches) {
       wordMatches.forEach((word) => {
+        const newRef: ScriptureReference = {
+          bookNum,
+          chapterNum,
+          verseNum: verseId + 1,
+        };
         const existingEntry = wordList.find((entry) => entry.word === word.toLocaleLowerCase());
         if (existingEntry) {
-          const newRef: ScriptureReference = {
-            bookNum: scrRef.bookNum,
-            chapterNum: scrRef.chapterNum,
-            verseNum: verseId + 1,
-          };
           existingEntry.scrRefs.push(newRef);
           const occurrence = existingEntry.scrRefs.reduce(
             (matches, ref) => (compareRefs(ref, newRef) ? matches + 1 : matches),
@@ -99,13 +99,7 @@ function processChapter(chapterText: string, scrRef: ScriptureReference) {
         } else {
           const newEntry: WordListEntry = {
             word: word.toLocaleLowerCase(),
-            scrRefs: [
-              {
-                bookNum: scrRef.bookNum,
-                chapterNum: scrRef.chapterNum,
-                verseNum: verseId + 1,
-              },
-            ],
+            scrRefs: [newRef],
             scriptureSnippets: [getScriptureSnippet(verseText, word)],
           };
           wordList.push(newEntry);
@@ -121,8 +115,8 @@ export default function WordList() {
   const [chapterText, , isChapterTextLoading] = useData.Chapter<UsfmProviderDataTypes, 'Chapter'>(
     'usfm',
     useMemo(
-      () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum, ScrVers.English),
-      [scrRef],
+      () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1, ScrVers.English),
+      [scrRef.bookNum, scrRef.chapterNum],
     ),
     'Loading verse',
   );
@@ -136,8 +130,8 @@ export default function WordList() {
 
   useEffect(() => {
     if (isChapterTextLoading || !chapterText) return;
-    setWordList(processChapter(chapterText, scrRef));
-  }, [isChapterTextLoading, chapterText, scrRef]);
+    setWordList(processChapter(chapterText, scrRef.bookNum, scrRef.chapterNum));
+  }, [isChapterTextLoading, chapterText, scrRef.bookNum, scrRef.chapterNum]);
 
   function findSelectedWordEntry(word: string) {
     const clickedEntry = wordList.find((entry) => entry.word === word);
