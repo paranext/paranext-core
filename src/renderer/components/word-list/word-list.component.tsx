@@ -1,34 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrVers, VerseRef } from '@sillsdev/scripture';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
-import {
-  RefSelector,
-  ScriptureReference,
-  Table,
-  TableCellClickArgs,
-  TableSortColumn,
-} from 'papi-components';
+import { RefSelector, ScriptureReference } from 'papi-components';
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import './word-list.component.scss';
 import { WordListEntry } from './word-list-types';
 import WordContentViewer from './word-content-viewer.component';
+import WordTable from './word-table.component';
 
 export const TAB_TYPE_WORD_LIST = 'word-list';
-
-type Row = {
-  word: string;
-  count: number;
-};
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
   chapterNum: 1,
   verseNum: 1,
 };
-
-const defaultSortColumns: TableSortColumn[] = [{ columnKey: 'word', direction: 'ASC' }];
 
 function compareRefs(a: ScriptureReference, b: ScriptureReference): boolean {
   return a.bookNum === b.bookNum && a.chapterNum === b.chapterNum && a.verseNum === b.verseNum;
@@ -139,11 +127,6 @@ export default function WordList() {
     'Loading verse',
   );
   const [wordList, setWordList] = useState<WordListEntry[]>([]);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [sortColumns, setSortColumns] = useState<TableSortColumn[]>(defaultSortColumns);
-  const onSortColumnsChange = useCallback((changedSortColumns: TableSortColumn[]) => {
-    setSortColumns(changedSortColumns.slice(-1));
-  }, []);
   const [selectedWord, setSelectedWord] = useState<WordListEntry>();
 
   useEffect(() => {
@@ -156,42 +139,10 @@ export default function WordList() {
     setWordList(processChapter(chapterText, scrRef));
   }, [isChapterTextLoading, chapterText, scrRef]);
 
-  useEffect(() => {
-    const newRows: Row[] = [];
-    wordList.forEach((word) => {
-      newRows.push({ word: word.word, count: word.scrRefs.length });
-    });
-    setRows(newRows);
-  }, [wordList]);
-
-  const sortedRows = useMemo((): readonly Row[] => {
-    if (sortColumns.length === 0) return rows;
-    const { columnKey, direction } = sortColumns[0];
-
-    let sortedRowsLocal: Row[] = [...rows];
-
-    switch (columnKey) {
-      case 'word':
-        sortedRowsLocal = sortedRowsLocal.sort((a, b) => a[columnKey].localeCompare(b[columnKey]));
-        break;
-      case 'count':
-        sortedRowsLocal = sortedRowsLocal.sort((a, b) => a[columnKey] - b[columnKey]);
-        break;
-      default:
-    }
-    return direction === 'DESC' ? sortedRowsLocal.reverse() : sortedRowsLocal;
-  }, [rows, sortColumns]);
-
-  useEffect(() => {
-    if (sortColumns.length === 0) {
-      setSortColumns(defaultSortColumns);
-    }
-  }, [sortColumns]);
-
-  const onCellClick = (args: TableCellClickArgs<Row>) => {
-    const clickedWord = wordList.find((entry) => entry.word === args.row.word);
-    if (clickedWord) setSelectedWord(clickedWord);
-  };
+  function findSelectedWordEntry(word: string) {
+    const clickedEntry = wordList.find((entry) => entry.word === word);
+    if (clickedEntry) setSelectedWord(clickedEntry);
+  }
 
   return (
     <div className="word-list">
@@ -201,28 +152,7 @@ export default function WordList() {
           setScrRef(newScrRef);
         }}
       />
-      <Table<Row>
-        columns={[
-          {
-            key: 'word',
-            name: 'Word',
-          },
-          {
-            key: 'count',
-            name: 'Count',
-          },
-        ]}
-        rows={sortedRows}
-        rowKeyGetter={(row: Row) => {
-          return row.word;
-        }}
-        onRowsChange={(changedRows: Row[]) => setRows(changedRows)}
-        sortColumns={sortColumns}
-        onSortColumnsChange={onSortColumnsChange}
-        rowHeight={60}
-        headerRowHeight={50}
-        onCellClick={onCellClick}
-      />
+      <WordTable wordList={wordList} onWordClick={(word: string) => findSelectedWordEntry(word)} />
       {selectedWord && <WordContentViewer selectedWord={selectedWord} />}
     </div>
   );
