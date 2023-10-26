@@ -118,9 +118,6 @@ globalThis.webViewComponent = function HelloWorld({
       iconUrl: 'papi-extension://hello-world/assets/offline.svg',
       title: 'Select Hello World Project',
     }).current,
-    // Assert as string type rather than string literal type.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    'None' as DialogTypes['platform.selectProject']['responseType'],
   );
 
   const [latestVerseText] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
@@ -165,11 +162,10 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading John 1:1...',
   );
 
-  const [webVerse] = useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'], 'VerseUSFM'>(
-    project,
-    verseRef,
-    'Loading WEB Verse',
-  );
+  const [currentProjectVerse] = useProjectData.VerseUSFM<
+    ProjectDataTypes['ParatextStandard'],
+    'VerseUSFM'
+  >(project ?? undefined, verseRef, 'Loading Verse');
 
   return (
     <div>
@@ -208,16 +204,17 @@ globalThis.webViewComponent = function HelloWorld({
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>
-      <div>Selected Project: {project}</div>
-      <div>
-        <Button onClick={selectProject}>Select Project</Button>
-      </div>
       <h3>John 1:1</h3>
       <div>{john11}</div>
       <h3>Psalm 1</h3>
       <div>{psalm1}</div>
-      <h3>{verseRef.toString()} WEB</h3>
-      <div>{webVerse}</div>
+      <br />
+      <div>Selected Project: {project ?? 'None'}</div>
+      <div>
+        <Button onClick={selectProject}>Select Project</Button>
+      </div>
+      <h3>{verseRef.toString()}</h3>
+      <div>{currentProjectVerse}</div>
       <h3>List of Selected Project Id(s):</h3>
       <div>{projects.join(', ')}</div>
       <div>

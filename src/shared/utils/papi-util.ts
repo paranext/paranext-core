@@ -3,7 +3,6 @@ import { ProcessType } from '@shared/global-this.model';
 // think allows comparing React refs (which have circular references in particular places that this
 // library would ignore). Maybe we can change to that version sometime if needed.
 import { deepEqual as isEqualDeep } from 'fast-equals';
-import nanoEqual from 'nano-equal';
 import { isString } from '@shared/utils/util';
 
 // #region Unsubscriber stuff
@@ -113,39 +112,48 @@ export enum RequestHandlerType {
  *
  * @param a the first object to compare
  * @param b the second object to compare
- * @param shouldCompareAcrossIframes whether to adjust the comparison to consider objects from
- * different iframes to be able to be deeply equal and to consider `undefined` values to equal not
- * specifying the key (see below for more information). Set to true for a slightly
- * less stringent equality comparison that is a bit slower. Defaults to false.
  *
- * - Objects like arrays from different iframes have different constructor function references even
- * if they do the same thing. The faster, more strict deep equality comparison fails objects that
+ * WARNING: Objects like arrays from different iframes have different constructor function
+ * references even if they do the same thing, so this deep equality comparison fails objects that
  * look the same but have different constructors because different constructors could produce false
  * positives in [a few specific situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
- * - Additionally, setting this to `true` will adjust the comparison to consider `undefined` values
- * on keys of objects to be equal to not specifying the key at all. For example,
- * `{ stuff: 3, things: undefined }` and `{ stuff: 3 }` will be considered to be equal in this case,
- * whereas they would not be considered to be equal if `shouldCompareAcrossIframes` is `false`.
+ * This means that two objects like arrays from different iframes that look the same will fail this
+ * check. Please use some other means to check deep equality in those situations.
+ *
+ * Note: This deep equality check considers `undefined` values on keys of objects NOT to be equal to
+ * not specifying the key at all. For example, `{ stuff: 3, things: undefined }` and `{ stuff: 3 }`
+ * are not considered equal in this case
  * - For more information and examples, see [this CodeSandbox](https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs).
  *
  * @returns true if a and b are deeply equal; false otherwise
  *
  */
-export function deepEqual(a: unknown, b: unknown, shouldCompareAcrossIframes = false) {
-  return shouldCompareAcrossIframes ? nanoEqual(a, b, true) : isEqualDeep(a, b);
+export function deepEqual(a: unknown, b: unknown) {
+  return isEqualDeep(a, b);
 }
 
 /**
- * Check to see if the value is JSON.stringify serializable without losing information
+ * Check to see if the value is `JSON.stringify` serializable without losing information
  * @param value value to test
  * @returns true if serializable; false otherwise
  *
- * WARNING: This is inefficient right now as it stringifies, parses, and deepEquals the value.
+ * Note: the value `undefined` is not serializable as `JSON.parse` throws on it. `null` is
+ * serializable. However, `undefined` or `null` on properties of objects is serializable.
+ *
+ * WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
  * Please only use this if you need to
+ *
+ * DISCLAIMER: this does not successfully detect that values are not serializable in some cases:
+ * - Losses of removed properties like functions and `Map`s
+ * - Class instances (not deserializable into class instances without special code)
+ *
+ * We intend to improve this in the future if it becomes important to do so. See
+ * [`JSON.stringify` documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#description)
+ * for more information.
  */
 export function isSerializable(value: unknown): boolean {
   try {
-    return deepEqual(value, JSON.parse(JSON.stringify(value)), true);
+    return JSON.stringify(value) === JSON.stringify(JSON.parse(JSON.stringify(value)));
   } catch (e) {
     return false;
   }
