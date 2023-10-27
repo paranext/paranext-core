@@ -27,7 +27,7 @@ const standardMenuLayout: GridMenuInfo = {
         },
         {
           name: 'Open Text Collection...',
-          command: 'platform.openTextCollection',
+          command: 'paratextTextCollection.open',
           hasDivider: true,
         },
         {

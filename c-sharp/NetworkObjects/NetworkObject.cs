@@ -38,6 +38,10 @@ internal abstract class NetworkObject
 
     private static ResponseToRequest HandleGet(dynamic getRequest)
     {
-        return ResponseToRequest.Succeeded();
+        // Respond that this network object exists. Currently, the response contents for
+        // `networkObject.get` is an array of the functions that exist on the network object, but
+        // it is unused and will probably change at some point. However, for now, we need to send
+        // back an empty array
+        return ResponseToRequest.Succeeded(new List<object>());
     }
 }

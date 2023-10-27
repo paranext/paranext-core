@@ -143,11 +143,13 @@ declare module 'shared/data/web-view.model' {
    */
   export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
   /**
-   * A React hook for working with a state object tied to a webview.
+   * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+   * a function to set it. Use similarly to `useState`.
    *
    * Only used in WebView iframes.
    *
-   * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+   * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per
+   * key.
    *
    * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
    *
@@ -196,11 +198,13 @@ declare module 'shared/data/web-view.model' {
    */
   export type WebViewProps = {
     /**
-     * A React hook for working with a state object tied to a webview.
+     * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+     * a function to set it. Use similarly to `useState`.
      *
      * Only used in WebView iframes.
      *
-     * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+     * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per
+     * key.
      *
      * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
      *
@@ -345,11 +349,13 @@ declare module 'shared/global-this.model' {
      */
     var webViewComponent: FunctionComponent<WebViewProps>;
     /**
-     * A React hook for working with a state object tied to a webview.
+     * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+     * a function to set it. Use similarly to `useState`.
      *
      * Only used in WebView iframes.
      *
-     * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per key.
+     * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per
+     * key.
      *
      * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
      *
@@ -554,15 +560,46 @@ declare module 'shared/utils/papi-util' {
     Contents = 'contents',
     Complex = 'complex',
   }
-  /** Check that two objects are deeply equal, comparing members of each object and such */
+  /**
+   * Check that two objects are deeply equal, comparing members of each object and such
+   *
+   * @param a the first object to compare
+   * @param b the second object to compare
+   *
+   * WARNING: Objects like arrays from different iframes have different constructor function
+   * references even if they do the same thing, so this deep equality comparison fails objects that
+   * look the same but have different constructors because different constructors could produce false
+   * positives in [a few specific situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
+   * This means that two objects like arrays from different iframes that look the same will fail this
+   * check. Please use some other means to check deep equality in those situations.
+   *
+   * Note: This deep equality check considers `undefined` values on keys of objects NOT to be equal to
+   * not specifying the key at all. For example, `{ stuff: 3, things: undefined }` and `{ stuff: 3 }`
+   * are not considered equal in this case
+   * - For more information and examples, see [this CodeSandbox](https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs).
+   *
+   * @returns true if a and b are deeply equal; false otherwise
+   *
+   */
   export function deepEqual(a: unknown, b: unknown): boolean;
   /**
-   * Check to see if the value is JSON.stringify serializable without losing information
+   * Check to see if the value is `JSON.stringify` serializable without losing information
    * @param value value to test
    * @returns true if serializable; false otherwise
    *
-   * WARNING: This is inefficient right now as it stringifies, parses, and deepEquals the value.
+   * Note: the value `undefined` is not serializable as `JSON.parse` throws on it. `null` is
+   * serializable. However, `undefined` or `null` on properties of objects is serializable.
+   *
+   * WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
    * Please only use this if you need to
+   *
+   * DISCLAIMER: this does not successfully detect that values are not serializable in some cases:
+   * - Losses of removed properties like functions and `Map`s
+   * - Class instances (not deserializable into class instances without special code)
+   *
+   * We intend to improve this in the future if it becomes important to do so. See
+   * [`JSON.stringify` documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#description)
+   * for more information.
    */
   export function isSerializable(value: unknown): boolean;
   /** Separator between parts of a serialized request */
@@ -2416,6 +2453,9 @@ declare module 'shared/services/web-view.service' {
   }
   /**
    * Service exposing various functions related to using webViews
+   *
+   * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+   * HTML or React components.
    */
   export const papiWebViewService: PapiWebViewService;
 }
@@ -3327,6 +3367,7 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
      */
     saveDialog: TabSaver;
   }>;
+  /** Props provided to the dialog component */
   export type DialogProps<TData = unknown> = DialogData & {
     /**
      * Sends the data as a resolved response to the dialog request and closes the dialog
@@ -3378,6 +3419,20 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   import { ReactElement } from 'react';
   /** The tabType for the select project dialog in `select-project.dialog.tsx` */
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
+  /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
+  export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
+  /** Options to provide when showing the Select Project dialog */
+  export type SelectProjectDialogOptions = DialogOptions & {
+    /** Project IDs to exclude from showing in the dialog */
+    excludeProjectIds?: string[];
+  };
+  /** Options to provide when showing the Select Multiple Project dialog */
+  export type SelectMultipleProjectsDialogOptions = DialogOptions & {
+    /** Project IDs to exclude from showing in the dialog */
+    excludeProjectIds?: string[];
+    /** Project IDs that should start selected in the dialog */
+    selectedProjectIds?: string[];
+  };
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs
    *
@@ -3386,7 +3441,11 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    * If you add a dialog here, you must also add it on {@link DIALOGS}
    */
   export interface DialogTypes {
-    [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, string>;
+    [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<SelectProjectDialogOptions, string>;
+    [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<
+      SelectMultipleProjectsDialogOptions,
+      string[]
+    >;
   }
   /** Each type of dialog. These are the tab types used in the dock layout */
   export type DialogTabTypes = keyof DialogTypes;
@@ -3402,6 +3461,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     options: TOptions;
     /** The type of the response to the dialog request */
     responseType: TReturnType;
+    /** Props provided to the dialog component */
+    props: DialogProps<TReturnType> & TOptions;
   };
   export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<
     DialogDefinitionBase & {
@@ -3489,7 +3550,8 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
    *  - `response` - the response from the dialog or `defaultResponse` if a response has not been
    *      received (does not reset to `defaultResponse` if the user cancels the dialog).
    *      DOES NOT reset every time the callback is run
-   *  - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response
+   *  - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response.
+   *      If this callback is run while the dialog is open, nothing happens
    *  - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
    *      `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
    *  - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not
@@ -3751,6 +3813,9 @@ declare module 'papi-frontend' {
     util: typeof papiUtil;
     /**
      * Service exposing various functions related to using webViews
+     *
+     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+     * HTML or React components.
      */
     webViews: PapiWebViewService;
     /**
@@ -4083,6 +4148,9 @@ declare module 'papi-backend' {
     util: typeof papiUtil;
     /**
      * Service exposing various functions related to using webViews
+     *
+     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+     * HTML or React components.
      */
     webViews: PapiWebViewService;
     /**

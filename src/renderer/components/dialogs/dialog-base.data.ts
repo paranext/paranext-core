@@ -43,6 +43,7 @@ export type DialogDefinitionBase = Readonly<{
   saveDialog: TabSaver;
 }>;
 
+/** Props provided to the dialog component */
 export type DialogProps<TData = unknown> = DialogData & {
   /**
    * Sends the data as a resolved response to the dialog request and closes the dialog

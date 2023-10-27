@@ -123,6 +123,7 @@ const usxEditorCharMap = Object.fromEntries(
 
 interface ScriptureTextPanelUsxProps {
   usx: string;
+  onChanged?: (newUsx: string) => void;
 }
 
 const defaultScrRef: ScriptureReference = {
@@ -135,7 +136,7 @@ const defaultScrRef: ScriptureReference = {
  * Scripture text panel that displays a read-only version of a usx editor that displays the current
  * chapter
  */
-function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
+function ScriptureTextPanelUsxEditor({ usx, onChanged }: ScriptureTextPanelUsxProps) {
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div className="text-panel">
@@ -143,8 +144,9 @@ function ScriptureTextPanelUsxEditor({ usx }: ScriptureTextPanelUsxProps) {
         usx={usx}
         paraMap={usxEditorParaMap}
         charMap={usxEditorCharMap}
-        onUsxChanged={() => {
-          /* Read only */
+        onUsxChanged={(newUsx) => {
+          // TODO: Check if the project is editable
+          if (onChanged) onChanged(newUsx);
         }}
       />
     </div>
@@ -162,25 +164,18 @@ globalThis.webViewComponent = function ResourceViewer({
 
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  // When ChapterUSX exists, remove this Boolean (whose only purpose is to make the linter think
-  // that ScriptureTextPanelUsxEditor is used), replace the useProjectData.ChapterUSFM line with the
-  // commented out useProjectData.ChapterUSX line, and simplify/inline the JSX (remove use of
-  // haveUsx).
-
-  const haveUsx = false;
-
-  // const [data, , isLoading] = useProjectData.ChapterUSX<ProjectDataTypes['ParatextStandard'], 'ChapterUSX'>(
-
-  const [data, , isLoading] = useProjectData.ChapterUSFM<
+  const [usx, setUsx] = useProjectData.ChapterUSX<
     ProjectDataTypes['ParatextStandard'],
-    'ChapterUSFM'
+    'ChapterUSX'
   >(
     projectId,
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
   );
 
-  const jsx = haveUsx ? <ScriptureTextPanelUsxEditor usx={data ?? '<usx/>'} /> : data;
-
-  return <div>{isLoading ? 'Loading' : jsx}</div>;
+  return (
+    <div>
+      <ScriptureTextPanelUsxEditor usx={usx ?? '<usx/>'} onChanged={setUsx} />
+    </div>
+  );
 };

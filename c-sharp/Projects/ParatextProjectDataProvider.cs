@@ -20,6 +20,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         Getters.Add("getChapterUSFM", GetChapterUSFM);
         Setters.Add("setChapterUSFM", SetChapterUSFM);
         Getters.Add("getVerseUSFM", GetVerseUSFM);
+
+        Getters.Add("getChapterUSX", GetChapterUSX);
+        Setters.Add("setChapterUSX", SetChapterUSX);
     }
 
     protected override Task StartDataProvider()
@@ -61,6 +64,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return _paratextPsi.SetProjectData(scope, data);
     }
 
+    #region USFM handling methods
     private ResponseToRequest GetBookUSFM(string jsonString)
     {
         return Get(ParatextProjectStorageInterpreter.BookUSFM, jsonString);
@@ -80,4 +84,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         return Set(ParatextProjectStorageInterpreter.ChapterUSFM, dataQualifier, data);
     }
+    #endregion
+
+    #region USX handling methods
+    private ResponseToRequest GetChapterUSX(string jsonString)
+    {
+        return Get(ParatextProjectStorageInterpreter.ChapterUSX, jsonString);
+    }
+
+    private ResponseToRequest SetChapterUSX(string dataQualifier, string data)
+    {
+        return Set(ParatextProjectStorageInterpreter.ChapterUSX, dataQualifier, data);
+    }
+    #endregion
 }

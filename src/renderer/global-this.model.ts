@@ -26,22 +26,33 @@ declare const webpackRenderer: {
 
 // #region declare items used in `web-view.service.ts`
 
+// Module types aren't compatible with each other
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const moduleMap = new Map<string, any>();
+moduleMap.set('papi-frontend', papi);
+moduleMap.set('react', React);
+moduleMap.set('react/jsx-runtime', ReactJsxRuntime);
+moduleMap.set('react-dom', ReactDOM);
+moduleMap.set('react-dom/client', ReactDOMClient);
+moduleMap.set('@sillsdev/scripture', SillsdevScripture);
+
+const registeredModuleList = [...moduleMap]
+  .map(([key]) => `${key}`)
+  .sort()
+  .join(', ');
+
 /**
  * Provide a require implementation so we can provide some needed packages for extensions or
  * for packages that extensions import
  */
-function webViewRequire(module: string) {
-  if (module === 'papi-frontend') return papi;
-  if (module === 'react') return React;
-  if (module === 'react/jsx-runtime') return ReactJsxRuntime;
-  if (module === 'react-dom') return ReactDOM;
-  if (module === 'react-dom/client') return ReactDOMClient;
-  if (module === '@sillsdev/scripture') return SillsdevScripture;
-  // Tell the extension dev if there is an api similar to what they want to import
-  const message = `Requiring other than papi-frontend, react, react-dom, react-dom/client, and @sillsdev/scripture is not allowed in WebViews! ${getModuleSimilarApiMessage(
-    module,
-  )}`;
-  throw new Error(message);
+function webViewRequire(moduleName: string) {
+  const module = moduleMap.get(moduleName);
+  if (module) return module;
+  throw new Error(
+    `Only these modules can be required in WebViews: ${registeredModuleList}. ${getModuleSimilarApiMessage(
+      module,
+    )}`,
+  );
 }
 
 type ReactJsxRuntimeType = typeof ReactJsxRuntime;

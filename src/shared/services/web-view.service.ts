@@ -1012,6 +1012,9 @@ export interface PapiWebViewService {
 
 /** JSDOC SOURCE papiWebViewService
  * Service exposing various functions related to using webViews
+ *
+ * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+ * HTML or React components.
  */
 export const papiWebViewService: PapiWebViewService = {
   onDidAddWebView,
