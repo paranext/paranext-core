@@ -305,8 +305,8 @@ function watchForExtensionChanges(): UnsubscriberAsync {
   const watcher = chokidar
     .watch(
       extensionRootDirectories
-        .map((uri) => getPathFromUri(uri))
-        .concat(commandLineExtensionDirectories),
+        .concat(commandLineExtensionDirectories)
+        .map((uri) => getPathFromUri(uri)),
       { ignoreInitial: true, awaitWriteFinish: true },
     )
     .on('all', async () => {
