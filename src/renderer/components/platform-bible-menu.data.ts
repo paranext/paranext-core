@@ -26,6 +26,11 @@ const standardMenuLayout: GridMenuInfo = {
           hasDivider: true,
         },
         {
+          name: 'Open Word List...',
+          command: 'paratextWordList.open',
+          hasDivider: true,
+        },
+        {
           name: 'Settings...',
           command: 'platform.settings',
           hasDivider: true,
