@@ -9,7 +9,7 @@ import { IExtension } from '@extension-host/extension-types/extension.interface'
 import * as nodeFS from '@node/services/node-file-system.service';
 import { FILE_PROTOCOL, getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
-import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
+import { UnsubscriberAsync, getModuleSimilarApiMessage } from '@shared/utils/papi-util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import logger from '@shared/services/logger.service';
@@ -23,6 +23,8 @@ import papi from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
 import UnsubscriberAsyncList from '@shared/utils/unsubscriber-async-list';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
+import { debounce } from '@shared/utils/util';
+import LogError from '@shared/log-error.model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -116,48 +118,52 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
   return extensionManifest;
 }
 
+const extensionRootDirectories: Uri[] = [
+  `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
+  ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
+    (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
+  ),
+];
+
+const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(ARG_EXTENSIONS).map(
+  (extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`,
+);
+
 /** Contents of `nodeFS.readDir()` for all parent folders of extensions
  *  This is expected to be a mixture of directories and ZIP files.
  */
-const extensionRootDirectoryContents = (async () => {
-  return Promise.all(
-    [
-      `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
-      ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
-        (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
-      ),
-    ].map((extensionUri) => nodeFS.readDir(extensionUri)),
-  );
-})();
+async function getExtensionRootDirectoryContents() {
+  return Promise.all(extensionRootDirectories.map((extensionUri) => nodeFS.readDir(extensionUri)));
+}
 
 /** All of the URIs of ZIP files for extensions we want to load */
-const extensionZipUris: Promise<Uri[]> = (async () => {
-  return (await extensionRootDirectoryContents)
+async function getExtensionZipUris(): Promise<Uri[]> {
+  return (await getExtensionRootDirectoryContents())
     .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.File])
     .filter((extensionFileUri) => extensionFileUri)
     .filter((extensionFileUri) => extensionFileUri.toLowerCase().endsWith('.zip'))
     .concat(
-      getCommandLineArgumentsGroup(ARG_EXTENSIONS)
-        .filter((extensionUri) => extensionUri.toLowerCase().endsWith('.zip'))
-        .map((extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`),
+      commandLineExtensionDirectories.filter((extensionUri) =>
+        extensionUri.toLowerCase().endsWith('.zip'),
+      ),
     );
-})();
+}
 
 /** All of the URIs of extensions to load */
-const extensionUrisToLoad: Promise<Uri[]> = (async () => {
+async function getExtensionUrisToLoad(): Promise<Uri[]> {
   // Get all subdirectories for bundled extensions and command line ARG_EXTENSION_DIRS values
-  let extensionFolders: Uri[] = (await extensionRootDirectoryContents)
+  let extensionFolders: Uri[] = (await getExtensionRootDirectoryContents())
     .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.Directory])
     .filter((extensionDirUri) => extensionDirUri);
 
   // Add in all directories explicitly provided by the ARG_EXTENSIONS command line arguments
   const extensionFolderPromises = extensionFolders
     .concat(
-      getCommandLineArgumentsGroup(ARG_EXTENSIONS).map((extensionDirPath) => {
+      commandLineExtensionDirectories.map((extensionDirPath) => {
         const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
           ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
           : extensionDirPath;
-        return `${FILE_PROTOCOL}${path.resolve(extensionFolder)}`;
+        return extensionFolder;
       }),
     )
     .map(async (extensionFolder) => {
@@ -171,17 +177,17 @@ const extensionUrisToLoad: Promise<Uri[]> = (async () => {
 
   // Now add in the cache directories for all ZIP files
   return extensionFolders.concat(
-    (await extensionZipUris).map((zipUri) =>
+    (await getExtensionZipUris()).map((zipUri) =>
       joinUriPaths(userUnzippedExtensionsCacheUri, path.parse(zipUri).name),
     ),
   );
-})();
+}
 
 /** Process all ZIP file extensions we can find. It might be nice to store unzipped extensions
  *  in memory, but the ESM loader doesn't make that easy. Store them in the file system.
  */
 async function unzipCompressedExtensionFiles(): Promise<void> {
-  const zipUris = await extensionZipUris;
+  const zipUris = await getExtensionZipUris();
   await Promise.all(
     zipUris.map(async (zipUri) => {
       try {
@@ -240,7 +246,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
  */
 // TODO: figure out if we can share this code with webpack.util.ts
 async function getExtensions(): Promise<ExtensionInfo[]> {
-  const extensionUris = await extensionUrisToLoad;
+  const extensionUris = await getExtensionUrisToLoad();
   return (
     (
       await Promise.allSettled(
@@ -284,24 +290,33 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
 }
 
 /**
- * Watch for changes to any extension and reload if they have changed.
- * @param extensions - array of available extensions
+ * Watch for changes in the extension directories
  */
-function watchForExtensionChanges(extensions: ExtensionInfo[]): void {
-  /** Extension paths to watch for changes. */
-  const extensionPaths = extensions.map((extension) => getPathFromUri(extension.dirUri));
+function watchForExtensionChanges(): UnsubscriberAsync {
+  const reloadExtensionsDebounced = debounce(async () => {
+    try {
+      logger.debug('Reload extensions from watching');
+      await reloadExtensions();
+    } catch (e) {
+      throw new LogError(`Reload extensions from watching failed. Investigate: ${e}`);
+    }
+  });
 
-  chokidar
-    .watch(extensionPaths, { ignoreInitial: true, awaitWriteFinish: true })
-    .on('all', async (eventName: 'add' | 'addDir' | 'change' | 'unlink' | 'unlinkDir') => {
-      // Ignore non-file changes.
-      if (eventName !== 'add' && eventName !== 'change' && eventName !== 'unlink') return;
-
-      logger.info('Deactivate all extensions');
-      await deactivateExtensions(extensions);
-      logger.info('Reactivate all extensions');
-      await activateExtensions(extensions);
+  const watcher = chokidar
+    .watch(
+      extensionRootDirectories
+        .map((uri) => getPathFromUri(uri))
+        .concat(commandLineExtensionDirectories),
+      { ignoreInitial: true, awaitWriteFinish: true },
+    )
+    .on('all', async () => {
+      reloadExtensionsDebounced();
     });
+
+  return async () => {
+    watcher.close();
+    return true;
+  };
 }
 
 /**
@@ -491,6 +506,26 @@ function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | u
   );
 }
 
+async function reloadExtensions(): Promise<void> {
+  if (availableExtensions) await deactivateExtensions(availableExtensions);
+
+  await unzipCompressedExtensionFiles();
+
+  // Get a list of extensions
+  availableExtensions = await getExtensions();
+
+  // Store their base URIs in the extension storage service
+  const uriMap: Map<string, string> = new Map();
+  availableExtensions.forEach((extensionInfo) => {
+    uriMap.set(extensionInfo.name, extensionInfo.dirUri);
+    logger.info(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
+  });
+  setExtensionUris(uriMap);
+
+  // And finally activate them
+  await activateExtensions(availableExtensions);
+}
+
 /**
  * Sets up the ExtensionService. Runs only once
  *
@@ -502,24 +537,9 @@ export const initialize = () => {
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
 
-    // Unzip any extension ZIPs
-    await unzipCompressedExtensionFiles();
+    await reloadExtensions();
 
-    // Get a list of extensions
-    availableExtensions = await getExtensions();
-
-    // Store their base URIs in the extension storage service
-    const uriMap: Map<string, string> = new Map();
-    availableExtensions.forEach((extensionInfo) => {
-      uriMap.set(extensionInfo.name, extensionInfo.dirUri);
-      logger.info(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
-    });
-    setExtensionUris(uriMap);
-
-    // And finally activate them
-    await activateExtensions(availableExtensions);
-
-    watchForExtensionChanges(availableExtensions);
+    watchForExtensionChanges();
 
     isInitialized = true;
   })();
