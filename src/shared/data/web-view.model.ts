@@ -81,6 +81,12 @@ export enum WebViewContentType {
   React = 'react',
   /** This webview is a raw HTML/JS/CSS webview. */
   HTML = 'html',
+  /**
+   * This webview's content is fetched from the url specified (iframe `src` attribute). Note that
+   * webViews of this type cannot access the `papi` because they cannot be on the same origin as the
+   * parent window.
+   */
+  URL = 'url',
 }
 
 /** What type a WebView is. Each WebView definition must have a unique type. */
@@ -107,6 +113,83 @@ type WebViewDefinitionBase = {
   title?: string;
   /** General object to store unique state for this webview */
   state?: Record<string, unknown>;
+  /**
+   * Whether to allow the WebView iframe to interact with its parent as a same-origin website.
+   * Setting this to true adds `allow-same-origin` to the WebView iframe's [sandbox attribute]
+   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to `true`.
+   *
+   * Setting this to false on an HTML or React WebView prevents the iframe from importing the `papi`
+   * and such and also prevents others from accessing its document. This could be useful when you
+   * need secure input from the user because other WebViews may be able to attach event listeners to
+   * your inputs if you are on the same origin. Setting this to `false` on HTML or React WebViews
+   * is a big security win, but it makes interacting with the platform more challenging in some
+   * ways.
+   *
+   * Setting this to false on a URL WebView prevents the iframe from accessing same-origin features
+   * on its host website like storage APIs (localstorage, cookies, etc) and such. This will likely
+   * break many websites.
+   *
+   * It is best practice to set this to `false` where possible.
+   *
+   * Note: Until we have a message-passing APi for WebViews, there is currently no way to
+   * interact with the platform via a WebView with `allowSameOrigin: false`.
+   *
+   * WARNING: If your WebView accepts secure user input like passwords, you MUST set this to `false`
+   * or you will risk exposing that secure input to other extensions who could be phishing for it.
+   */
+  allowSameOrigin?: boolean;
+  /**
+   * Whether to allow scripts to run in this iframe. Setting this to true adds `allow-scripts` to
+   * the WebView iframe's [sandbox attribute]
+   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to `true`
+   * for HTML and React WebViews and `false` for URL WebViews
+   *
+   * WARNING: Setting this to `true` increases the possibility of a security threat occurring. If it
+   * is not necessary to run scripts in your WebView, you should set this to `false` to reduce risk.
+   */
+  // This does not follow our normal pattern of naming booleans because it mirrors the
+  // `allow-scripts` iframe sandbox attribute value
+  allowScripts?: boolean;
+  /**
+   * **For HTML and React WebViews:** List of [Host or scheme values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy#hosts_values)
+   * to include in the [`frame-src` directive](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-src)
+   * for this WebView's iframe content-security-policy. This allows iframes with `src` attributes
+   * matching these host values to be loaded in your WebView. You can only specify values starting
+   * with `papi-extension:` and `https:`; any others are ignored. Specifying urls in this array
+   * whitelists those urls so you can embed iframes with those urls as the `src` attribute. By
+   * default, no urls are available to be iframes. If you want to embed iframes with the `src`
+   * attribute in your webview, you must include them in this property.
+   *
+   * For example, if you specify `allowFrameSources: ['https://example.com/']`, you will be able to
+   * embed iframes with urls starting with `papi-extension:` and on the same host as `https://example.com/`
+   *
+   * If you plan on embedding any iframes in your WebView, it is best practice to list only the host
+   * values you need to function. The more you list, the higher the theoretical security risks.
+   *
+   * ----
+   *
+   * **For URL WebViews:** List of strings representing RegExp patterns (passed into
+   * [the RegExp constructor](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/RegExp))
+   * to match against the `content` url specified (using the
+   * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+   * function) to determine whether this iframe will be allowed to load. Specifying urls in this
+   * array is essentially a security check to make sure the url you pass is one of the urls you
+   * intend it to be. By default, the url you specify in `content` will be accepted (you do not have
+   * to specify this unless you want to, but it is recommended in some scenarios).
+   *
+   * Note: URL WebViews must have `papi-extension:` or `https:` urls. This property does not
+   * override that requirement.
+   *
+   * For example, if you specify
+   * `allowFrameSources: ['^papi-extension:', '^https://example\\.com.*']`, only `papi-extension:` and
+   * `https://example.com` urls will be accepted.
+   *
+   * If your WebView url is a `const` string and cannot change for any reason, you do not need to
+   * specify this property. However, if your WebView url is dynamic and can change in any way, it is
+   * best practice to specify this property and to list only the urls you need for your URL WebView
+   * to function. The more you list, the higher the theoretical security risks.
+   */
+  allowedFrameSources?: string[];
 };
 
 /** WebView representation using React */
@@ -123,8 +206,21 @@ export type WebViewDefinitionHtml = WebViewDefinitionBase & {
   contentType: WebViewContentType.HTML;
 };
 
+/**
+ * WebView representation using a URL.
+ *
+ * Note: you can only use `papi-extension:` and `https:` urls
+ */
+export type WebViewDefinitionURL = WebViewDefinitionBase & {
+  /** Indicates this WebView uses a URL */
+  contentType: WebViewContentType.URL;
+};
+
 /** Properties defining a type of WebView created by extensions to show web content */
-export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
+export type WebViewDefinition =
+  | WebViewDefinitionReact
+  | WebViewDefinitionHtml
+  | WebViewDefinitionURL;
 
 /**
  * Saved WebView information that does not contain the actual content of the WebView. Saved into
@@ -133,8 +229,9 @@ export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
  */
 export type SavedWebViewDefinition =
   | (
-      | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
-      | Partial<Omit<WebViewDefinitionHtml, 'content'>>
+      | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles' | 'allowScripts'>>
+      | Partial<Omit<WebViewDefinitionHtml, 'content' | 'allowScripts'>>
+      | Partial<Omit<WebViewDefinitionURL, 'content' | 'allowScripts'>>
     ) &
       Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
 

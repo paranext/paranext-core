@@ -80,6 +80,12 @@ declare module 'shared/data/web-view.model' {
     React = 'react',
     /** This webview is a raw HTML/JS/CSS webview. */
     HTML = 'html',
+    /**
+     * This webview's content is fetched from the url specified (iframe `src` attribute). Note that
+     * webViews of this type cannot access the `papi` because they cannot be on the same origin as the
+     * parent window.
+     */
+    URL = 'url',
   }
   /** What type a WebView is. Each WebView definition must have a unique type. */
   export type WebViewType = string;
@@ -103,6 +109,81 @@ declare module 'shared/data/web-view.model' {
     title?: string;
     /** General object to store unique state for this webview */
     state?: Record<string, unknown>;
+    /**
+     * Whether to allow the WebView iframe to interact with its parent as a same-origin website.
+     * Setting this to true adds `allow-same-origin` to the WebView iframe's [sandbox attribute]
+     * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to `true`.
+     *
+     * Setting this to false on an HTML or React WebView prevents the iframe from importing the `papi`
+     * and such and also prevents others from accessing its document. This could be useful when you
+     * need secure input from the user because other WebViews may be able to attach event listeners to
+     * your inputs if you are on the same origin. Setting this to `false` on HTML or React WebViews
+     * is a big security win, but it makes interacting with the platform more challenging in some
+     * ways.
+     *
+     * Setting this to false on a URL WebView prevents the iframe from accessing same-origin features
+     * on its host website like storage APIs (localstorage, cookies, etc) and such. This will likely
+     * break many websites.
+     *
+     * It is best practice to set this to `false` where possible.
+     *
+     * Note: Until we have a message-passing APi for WebViews, there is currently no way to
+     * interact with the platform via a WebView with `allowSameOrigin: false`.
+     *
+     * WARNING: If your WebView accepts secure user input like passwords, you MUST set this to `false`
+     * or you will risk exposing that secure input to other extensions who could be phishing for it.
+     */
+    allowSameOrigin?: boolean;
+    /**
+     * Whether to allow scripts to run in this iframe. Setting this to true adds `allow-scripts` to
+     * the WebView iframe's [sandbox attribute]
+     * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to `true`
+     * for HTML and React WebViews and `false` for URL WebViews
+     *
+     * WARNING: Setting this to `true` increases the possibility of a security threat occurring. If it
+     * is not necessary to run scripts in your WebView, you should set this to `false` to reduce risk.
+     */
+    allowScripts?: boolean;
+    /**
+     * **For HTML and React WebViews:** List of [Host or scheme values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy#hosts_values)
+     * to include in the [`frame-src` directive](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-src)
+     * for this WebView's iframe content-security-policy. This allows iframes with `src` attributes
+     * matching these host values to be loaded in your WebView. You can only specify values starting
+     * with `papi-extension:` and `https:`; any others are ignored. Specifying urls in this array
+     * whitelists those urls so you can embed iframes with those urls as the `src` attribute. By
+     * default, no urls are available to be iframes. If you want to embed iframes with the `src`
+     * attribute in your webview, you must include them in this property.
+     *
+     * For example, if you specify `allowFrameSources: ['https://example.com/']`, you will be able to
+     * embed iframes with urls starting with `papi-extension:` and on the same host as `https://example.com/`
+     *
+     * If you plan on embedding any iframes in your WebView, it is best practice to list only the host
+     * values you need to function. The more you list, the higher the theoretical security risks.
+     *
+     * ----
+     *
+     * **For URL WebViews:** List of strings representing RegExp patterns (passed into
+     * [the RegExp constructor](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/RegExp))
+     * to match against the `content` url specified (using the
+     * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+     * function) to determine whether this iframe will be allowed to load. Specifying urls in this
+     * array is essentially a security check to make sure the url you pass is one of the urls you
+     * intend it to be. By default, the url you specify in `content` will be accepted (you do not have
+     * to specify this unless you want to, but it is recommended in some scenarios).
+     *
+     * Note: URL WebViews must have `papi-extension:` or `https:` urls. This property does not
+     * override that requirement.
+     *
+     * For example, if you specify
+     * `allowFrameSources: ['^papi-extension:', '^https://example\\.com.*']`, only `papi-extension:` and
+     * `https://example.com` urls will be accepted.
+     *
+     * If your WebView url is a `const` string and cannot change for any reason, you do not need to
+     * specify this property. However, if your WebView url is dynamic and can change in any way, it is
+     * best practice to specify this property and to list only the urls you need for your URL WebView
+     * to function. The more you list, the higher the theoretical security risks.
+     */
+    allowedFrameSources?: string[];
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
@@ -116,16 +197,29 @@ declare module 'shared/data/web-view.model' {
     /** Indicates this WebView uses HTML */
     contentType: WebViewContentType.HTML;
   };
+  /**
+   * WebView representation using a URL.
+   *
+   * Note: you can only use `papi-extension:` and `https:` urls
+   */
+  export type WebViewDefinitionURL = WebViewDefinitionBase & {
+    /** Indicates this WebView uses a URL */
+    contentType: WebViewContentType.URL;
+  };
   /** Properties defining a type of WebView created by extensions to show web content */
-  export type WebViewDefinition = WebViewDefinitionReact | WebViewDefinitionHtml;
+  export type WebViewDefinition =
+    | WebViewDefinitionReact
+    | WebViewDefinitionHtml
+    | WebViewDefinitionURL;
   /**
    * Saved WebView information that does not contain the actual content of the WebView. Saved into
    * layouts. Could have as little as the type and id. WebView providers load these into actual
    * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
    */
   export type SavedWebViewDefinition = (
-    | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles'>>
-    | Partial<Omit<WebViewDefinitionHtml, 'content'>>
+    | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles' | 'allowScripts'>>
+    | Partial<Omit<WebViewDefinitionHtml, 'content' | 'allowScripts'>>
+    | Partial<Omit<WebViewDefinitionURL, 'content' | 'allowScripts'>>
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
   /** Props that are passed to the web view tab component */
@@ -2285,29 +2379,107 @@ declare module 'shared/services/web-view.service' {
     testLayout: LayoutBase;
   };
   /**
-   * The only `sandbox` attribute values we allow iframes to have including WebView iframes and any
-   * others. The `sandbox` attribute controls what privileges iframe scripts and other things have.
+   * The iframe [sandbox attribute]
+   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox) that determines if
+   * scripts are allowed to run on an iframe
+   */
+  export const IFRAME_SANDBOX_ALLOW_SCRIPTS = 'allow-scripts';
+  /**
+   * The iframe [sandbox attribute]
+   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox) that determines if
+   * an iframe is allowed to interact with its parent as a same-origin website. The iframe must still
+   * be on the same origin as its parent in order to interact same-origin.
+   */
+  export const IFRAME_SANDBOX_ALLOW_SAME_ORIGIN = 'allow-same-origin';
+  /**
+   * The only `sandbox` attribute values we allow iframes with `src` to have including URL WebView
+   * iframes. These are separate than iframes with `srcdoc` for a few reasons:
+   * - These iframes cannot be on the same origin as the parent window even if `allow-same-origin` is
+   * present (unless they are literally on the same origin) because we do not allow `frame-src blob:`
+   * - `src` iframes do not inherit the CSP of their parent window.
+   * - We are not able to modify the `srcdoc` before inserting it to ensure it has a CSP that we
+   * control to attempt to prevent arbitrary code execution on same origin. We are trusting the
+   * browser's ability to create a strong and safe boundary between parent and child iframe in
+   * different origin.
    *
-   * `allow-same-origin` so the iframe can get papi and communicate and such
+   *   TODO: consider using `csp` attribute on iframe to mitigate this issue
+   * - Extension developers do not know what code they are executing if they use some random URL in
+   * `src` WebViews.
    *
-   * `allow-scripts` so the iframe can actually do things
+   * The `sandbox` attribute controls what privileges iframe scripts and other things have:
+   * - `allow-same-origin` so the iframe can access the storage APIs (localstorage, cookies, etc) and
+   * other same-origin connections for its own origin. `blob:` iframes are considered part of the
+   * parent origin, but we block them with the CSP in `index.ejs`. For more information, see https://web.dev/articles/sandboxed-iframes
+   * - `allow-scripts` so the iframe can actually do things. Defaults to not present since src iframes
+   * can get scripts from anywhere. Extension developers should only enable this if needed as this
+   * increases the possibility of a security threat occurring. Defaults to false
    *
    * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
    *
    * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
-   * allows the child scripts to remove this sandbox attribute from the iframe. We use a
-   * `MutationObserver` in `web-view.service.ts` to remove any iframes that do not comply with these
-   * sandbox requirements. This successfully prevents iframes with too many privileges from executing
-   * as of July 2023. However, this means the sandboxing could do nothing for a determined hacker if
-   * they ever find a way around all this. We must distrust the whole renderer due to this issue. We
-   * will probably want to stay vigilant on security in this area.
+   * allows the child scripts to remove this sandbox attribute from the iframe. This should only be
+   * possible on iframes that are on the same origin as the parent including those that use `srcdoc`
+   * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes from
+   * creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove any
+   * iframes that do not comply with these sandbox requirements. This successfully prevents iframes
+   * with too many privileges from executing as of July 2023. However, this means the sandboxing could
+   * do nothing for a determined hacker if they ever find a way around all this. We must distrust the
+   * whole renderer due to this issue. We will probably want to stay vigilant on security in this
+   * area.
    */
-  export const ALLOWED_IFRAME_SANDBOX_VALUES: string[];
+  export const ALLOWED_IFRAME_SRC_SANDBOX_VALUES: string[];
   /**
-   * The most lenient iframe sandboxing we allow. See {@link ALLOWED_IFRAME_SANDBOX_VALUES} for more
-   * information on our sandboxing methods and why we chose these values.
+   * The minimal `src` WebView iframe sandboxing. This is applied to WebView iframes that use `src` in
+   * `web-view.component.tsx`. See {@link ALLOWED_IFRAME_SRC_SANDBOX_VALUES} for more information on
+   * our sandboxing methods and why we chose these values.
+   *
+   * Note: 'allow-same-origin' and 'allow-scripts' are not included here because they are added
+   * conditionally depending on the WebViewDefinition in `web-view.component.tsx`
    */
-  export const DEFAULT_IFRAME_SANDBOX: string;
+  export const WEBVIEW_IFRAME_SRC_SANDBOX: string;
+  /**
+   * The only `sandbox` attribute values we allow iframes with `srcdoc` to have including HTML and
+   * React WebView iframes. These are separate than iframes with `src` for a few reasons:
+   * - These iframes will be on the same origin as the parent window if `allow-same-origin` is
+   * present. This is very serious and demands significant security risk consideration.
+   * - `srcdoc` iframes inherit the CSP of their parent window (in our case, `index.ejs`)
+   * - We are modifying the `srcdoc` before inserting it to ensure it has a CSP that we control to
+   * attempt to prevent unintended code execution on same origin
+   * - Extension developers should know exactly what code they're running in `srcdoc` WebViews,
+   * whereas they could include some random URL in `src` WebViews
+   *
+   *   TODO: consider requiring `srcdoc` WebView content to come directly from `papi-extension://`
+   * instead of assuming extension developers will bundle their WebView code? This would mean the only
+   * code that runs on same origin is code that extension developers definitely included in their
+   * extension bundle https://github.com/paranext/paranext-core/issues/604
+   *
+   * The `sandbox` attribute controls what privileges iframe scripts and other things have:
+   * - `allow-same-origin` so the iframe can get papi and communicate and such
+   * - `allow-scripts` so the iframe can actually do things
+   *
+   * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+   *
+   * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
+   * allows the child scripts to remove this sandbox attribute from the iframe. This should only be
+   * possible on iframes that are on the same origin as the parent including those that use `srcdoc`
+   * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes from
+   * creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove any
+   * iframes that do not comply with these sandbox requirements. This successfully prevents iframes
+   * with too many privileges from executing as of July 2023. However, this means the sandboxing could
+   * do nothing for a determined hacker if they ever find a way around all this. We must distrust the
+   * whole renderer due to this issue. We will probably want to stay vigilant on security in this
+   * area.
+   */
+  export const ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES: string[];
+  /**
+   * The minimal `srcdoc` WebView iframe sandboxing. This is applied to WebView iframes that use
+   * `srcDoc` in `web-view.component.tsx`. See {@link ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES} for more
+   * information on our sandboxing methods and why we chose these values.
+   *
+   * Note: 'allow-same-origin' and 'allow-scripts' are not included here because they are added
+   * conditionally depending on the WebViewDefinition in `web-view.component.tsx`
+   */
+  export const WEBVIEW_IFRAME_SRCDOC_SANDBOX: string;
   /** Event that emits with webView info when a webView is added */
   export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
   /**
@@ -2437,7 +2609,10 @@ declare module 'shared/services/web-view.service' {
    * @param options options that affect what this function does. For example, you can provide an
    * existing web view id to request an existing web view with that id.
    *
-   * @returns promise that resolves to the id of the webview we got.
+   * @returns promise that resolves to the id of the webview we got or undefined if the provider did
+   * not create a WebView for this request.
+   *
+   * @throws if something went wrong like the provider for the webViewType was not found
    */
   export const getWebView: (
     webViewType: WebViewType,
