@@ -2,9 +2,9 @@ import { VerseRef } from '@sillsdev/scripture';
 import papi from 'papi-frontend';
 import { ScriptureReference } from 'papi-components';
 import { JSX, useMemo } from 'react';
-// eslint-disable-next-line import/no-unresolved
-import { UsfmProviderDataTypes } from 'usfm-data-provider';
 import UsxEditor from 'usxeditor';
+import type { WebViewProps } from 'shared/data/web-view.model';
+import { ProjectDataTypes } from 'papi-shared-types';
 
 /** Characteristics of a marker style */
 interface StyleInfo {
@@ -26,7 +26,7 @@ interface ElementInfo {
 
 const {
   react: {
-    hooks: { useData, useSetting },
+    hooks: { useProjectData, useSetting },
   },
   logger,
 } = papi;
@@ -133,7 +133,7 @@ const defaultScrRef: ScriptureReference = {
 };
 
 /**
- * Scripture text panel that displays a read only version of a usx editor that displays the current
+ * Scripture text panel that displays a read-only version of a usx editor that displays the current
  * chapter
  */
 function ScriptureTextPanelUsxEditor({ usx, onChanged }: ScriptureTextPanelUsxProps) {
@@ -153,12 +153,20 @@ function ScriptureTextPanelUsxEditor({ usx, onChanged }: ScriptureTextPanelUsxPr
   );
 }
 
-globalThis.webViewComponent = function ResourceViewer(): JSX.Element {
-  logger.info('Preparing to display the Resource Viewer');
+globalThis.webViewComponent = function ResourceViewer({
+  useWebViewState,
+}: WebViewProps): JSX.Element {
+  const [projectId] = useWebViewState<string>('projectId', '');
+
+  logger.info(`Resource Viewer project ID: ${projectId}`);
 
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
-  const [usx, setUsx] = useData.ChapterUsx<UsfmProviderDataTypes, 'ChapterUsx'>(
-    'usfm',
+
+  const [usx, setUsx] = useProjectData.ChapterUSX<
+    ProjectDataTypes['ParatextStandard'],
+    'ChapterUSX'
+  >(
+    projectId,
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
   );

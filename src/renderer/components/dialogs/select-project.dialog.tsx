@@ -31,7 +31,7 @@ function SelectProjectDialog({
 
   return (
     <div className="select-project-dialog">
-      <div>{prompt}</div>
+      <div className="prompt">{prompt}</div>
       {isLoadingProjects ? (
         <div>Loading Projects</div>
       ) : (
