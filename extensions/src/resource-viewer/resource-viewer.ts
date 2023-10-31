@@ -92,12 +92,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     resourceWebViewProvider,
   );
 
-  // Create a webview or get an existing webview if one already exists for this type
-  // Note: here, we are using `existingId: '?'` to indicate we do not want to create a new webview
-  // if one already exists. The webview that already exists could have been created by anyone
-  // anywhere; it just has to match `webViewType`.
-  papi.webViews.getWebView(resourceWebViewType, undefined, { existingId: '?' });
-
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(await resourceWebViewProviderPromise, await openResourceViewerPromise);
 

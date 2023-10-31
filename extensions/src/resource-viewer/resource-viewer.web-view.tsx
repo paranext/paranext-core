@@ -156,8 +156,6 @@ function ScriptureTextPanelUsxEditor({ usx, onChanged }: ScriptureTextPanelUsxPr
 globalThis.webViewComponent = function ResourceViewer({
   useWebViewState,
 }: WebViewProps): JSX.Element {
-  logger.info('Preparing to display the Resource Viewer');
-
   const [projectId] = useWebViewState<string>('projectId', '');
 
   logger.info(`Resource Viewer project ID: ${projectId}`);
