@@ -38,7 +38,7 @@ Add the system libraries needed for Electron, [Build Instructions (Linux)](https
 
 ### All Platforms Development Pre-requisites
 
-Install [`Node.js` version >=18.0.0](https://nodejs.org/) (18.0.0 or greater is required for using `fetch`).
+Install [`Node.js` version >=18.0.0](https://nodejs.org/) (18.0.0 or greater is required for using `fetch`). We recommend using [Volta](#javascript-tool-manager).
 
 Install `dotnet` [.NET 7 SDK from here](https://learn.microsoft.com/en-us/dotnet/core/install/).
 
@@ -79,6 +79,12 @@ After you run `npm start` (or, in VSCode, launch `Debug Paranext Core`), you can
 
 Paranext Core extensions are found in the `extensions` folder. Please follow the instructions in
 `extensions/README.md` to develop extensions.
+
+## JavaScript Tool Manager
+
+You can use [Volta](https://volta.sh/) with this repo to use the right version of tools such as **node** and **npm**.
+
+If you don't use Volta just look at the `volta` property in [package.json](https://github.com/paranext/paranext-core/blob/main/package.json) to see the right tool versions to install in your preferred way.
 
 ## Packaging for Production
 
