@@ -219,5 +219,8 @@
   "electronmon": {
     "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**"],
     "logLevel": "quiet"
+  },
+  "volta": {
+    "node": "18.18.2"
   }
 }
