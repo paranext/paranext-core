@@ -34,6 +34,7 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
         JsonArray jsonArray;
         try
         {
+            Console.WriteLine("Got request:\n" + request);
             jsonArray = ((JsonElement)request!).Deserialize<JsonNode>()!.AsArray();
             if (jsonArray.Count == 0)
                 return ResponseToRequest.Failed(

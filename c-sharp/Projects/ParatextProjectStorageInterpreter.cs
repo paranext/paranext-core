@@ -1,4 +1,3 @@
-using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
@@ -13,17 +12,27 @@ namespace Paranext.DataProvider.Projects;
 
 internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 {
+    #region Constants / Member variables
     public const string BookUSFM = "BookUSFM";
     public const string ChapterUSFM = "ChapterUSFM";
     public const string VerseUSFM = "VerseUSFM";
     public const string ChapterUSX = "ChapterUSX";
 
-    public ParatextProjectStorageInterpreter(PapiClient papiClient)
-        : base(ProjectStorageType.ParatextFolders, new[] { ProjectType.Paratext }, papiClient) { }
+    private readonly LocalProjects _projects;
+    #endregion
 
+    #region Constructor
+    public ParatextProjectStorageInterpreter(PapiClient papiClient, LocalProjects projects)
+        : base(ProjectStorageType.ParatextFolders, new[] { ProjectType.Paratext }, papiClient)
+    {
+        _projects = projects;
+    }
+    #endregion
+
+    #region Implementation of ProjectStorageInterpreter
     protected override Task StartDataProvider()
     {
-        LocalProjects.Initialize();
+        _projects.Initialize();
         return Task.CompletedTask;
     }
 
@@ -31,7 +40,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     {
         return ResponseToRequest.Succeeded(
             JsonConvert.SerializeObject(
-                LocalProjects
+                _projects
                     .GetAllProjectDetails()
                     .Select(details => ProjectMetadataConverter.ToJsonString(details.Metadata))
                     .ToList()
@@ -56,7 +65,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
         try
         {
-            LocalProjects.SaveProjectMetadata(metadata);
+            _projects.SaveProjectMetadata(metadata);
         }
         catch (Exception ex)
         {
@@ -72,7 +81,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (scope.ProjectID == null)
             return ResponseToRequest.Failed("Must provide a project ID");
 
-        var scrText = LocalProjects.GetParatextProject(scope.ProjectID);
+        var scrText = _projects.GetParatextProject(scope.ProjectID);
         return ResponseToRequest.Succeeded(JsonConvert.SerializeObject(scrText.Settings));
     }
 
@@ -88,7 +97,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         // Not making it mandatory that all calls provide a VerseRef since there might be some types that don't use it
         VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
-        var scrText = LocalProjects.GetParatextProject(scope.ProjectID);
+        var scrText = _projects.GetParatextProject(scope.ProjectID);
         return scope.DataType switch
         {
             BookUSFM
@@ -123,7 +132,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         // Not making it mandatory that all calls provide a VerseRef since there might be some types that don't use it
         VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
-        var scrText = LocalProjects.GetParatextProject(scope.ProjectID);
+        var scrText = _projects.GetParatextProject(scope.ProjectID);
         switch (scope.DataType)
         {
             case ChapterUSFM:
@@ -137,7 +146,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                             verseRef.BookNum,
                             verseRef.ChapterNum,
                             false,
-                            data.ToString(),
+                            data,
                             writeLock
                         );
                     }
@@ -188,7 +197,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (dataStream == null)
             return ResponseToRequest.Failed("Unable to create extension data");
 
-        var scrText = LocalProjects.GetParatextProject(scope.ProjectID);
+        var scrText = _projects.GetParatextProject(scope.ProjectID);
         try
         {
             RunWithinLock(
@@ -204,14 +213,16 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                 }
             );
             // The value of returned string is case sensitive and cannot change unless data provider subscriptions change
-            return ResponseToRequest.Succeeded($"ExtensionData");
+            return ResponseToRequest.Succeeded("ExtensionData");
         }
         catch (Exception e)
         {
             return ResponseToRequest.Failed(e.Message);
         }
     }
+    #endregion
 
+    #region Private helper methods
     private static Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
     {
         var projectDetails = LocalProjects.GetProjectDetails(scope.ProjectID!);
@@ -222,7 +233,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         );
     }
 
-    private string GetChapterUsx(ScrText scrText, VerseRef vref)
+    private static string GetChapterUsx(ScrText scrText, VerseRef vref)
     {
         XmlDocument usx = ConvertUsfmToUsx(
             scrText,
@@ -232,7 +243,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         return usx.OuterXml ?? string.Empty;
     }
 
-    private ResponseToRequest SetChapterUsx(
+    private static ResponseToRequest SetChapterUsx(
         ScrText scrText,
         VerseRef vref,
         string newUsx,
@@ -266,7 +277,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         return ResponseToRequest.Succeeded(ChapterUSX);
     }
 
-    private XmlDocument ConvertUsfmToUsx(ScrText scrText, string usfm, int bookNum)
+    private static XmlDocument ConvertUsfmToUsx(ScrText scrText, string usfm, int bookNum)
     {
         ScrStylesheet scrStylesheet = scrText.ScrStylesheet(bookNum);
         // Tokenize usfm
@@ -296,4 +307,5 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
             myLock.ReleaseAndNotify();
         }
     }
+    #endregion
 }
