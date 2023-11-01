@@ -137,7 +137,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                             verseRef.BookNum,
                             verseRef.ChapterNum,
                             false,
-                            data.ToString(),
+                            data,
                             writeLock
                         );
                     }
