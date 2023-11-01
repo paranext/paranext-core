@@ -18,7 +18,6 @@ import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
 import { resolveHtmlPath } from '@node/utils/util';
 import extensionHostService from '@main/services/extension-host.service';
-import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
 import { wait } from '@shared/utils/util';
 import { CommandNames } from 'papi-shared-types';
@@ -34,24 +33,6 @@ const PROCESS_CLOSE_TIME_OUT = 2000;
 // This map should allow any functions because commands can be any function type
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
-  'test.echo': async (message: string) => {
-    return message;
-  },
-  'test.echoRenderer': async (message: string) => {
-    /* const start = performance.now(); */
-    /* const result =  */ await commandService.sendCommand('test.addThree', 1, 4, 9);
-    /* logger.info(
-      `test.addThree(...) = ${result} took ${performance.now() - start} ms`,
-    ); */
-    return message;
-  },
-  'test.echoExtensionHost': async (message: string) => {
-    await commandService.sendCommand('test.addMany', 3, 5, 7, 1, 4);
-    return message;
-  },
-  'test.throwError': async (message: string) => {
-    throw new Error(`Test Error thrown in throwError command: ${message}`);
-  },
   'platform.restartExtensionHost': async () => {
     restartExtensionHost();
   },
@@ -266,7 +247,7 @@ async function main() {
 
   // #endregion
 
-  // #region Register test command handlers
+  // #region Register command handlers
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
     // Re-assert type after passing through `forEach`.
@@ -274,76 +255,6 @@ async function main() {
     commandService.registerCommand(commandName as CommandNames, handler);
   });
 
-  // #endregion
-
-  // #region Test network objects
-
-  const testMain = {
-    doStuff: (stuff: string) => {
-      const result = `testMain did stuff: ${stuff}!`;
-      logger.info(result);
-      return result;
-    },
-    dispose: () => {
-      logger.info('testMain.dispose() ran in testMain');
-      return Promise.resolve(true);
-    },
-  };
-
-  const testMainDisposer = await networkObjectService.set('testMain', testMain);
-  testMain.doStuff('main things');
-  testMainDisposer.onDidDispose(() => {
-    logger.info('testMain disposed in main message #1');
-  });
-  testMainDisposer.onDidDispose(() => {
-    logger.info('testMain disposed in main message #2');
-  });
-
-  setTimeout(testMainDisposer.dispose, 20000);
-
-  setTimeout(async () => {
-    let testExtensionHost = await networkObjectService.get<{
-      getVerse: () => Promise<string>;
-    }>('testExtensionHost');
-    if (testExtensionHost) {
-      logger.info(`get verse: ${await testExtensionHost.getVerse()}`);
-      testExtensionHost.onDidDispose(() => {
-        logger.info('testExtensionHost disposed in main');
-        testExtensionHost = undefined;
-      });
-    } else logger.error('Could not get testExtensionHost from main');
-  }, 5000);
-
-  // #endregion
-
-  // #region Test a .NET data provider
-  // TODO: Uncomment this or similar sample code once https://github.com/paranext/paranext-core/issues/440 is resolved
-  // In the meantime, if you want to try this, copy an existing project into
-  //   <home_dir>/.platform.bible/<project_short_name>_<project_ID_from_settings.xml>/project/paratext
-  // For example: "~/.platform.bible/projects/TPKJ_b4c501ad2538989d6fb723518e92408406e232d3/project/paratext"
-  // Then create a file named "meta.json" in the "<short_name>_<project_ID>" directory with this JSON:
-  //  {
-  //    "id": "REPLACE_THIS_WITH_PROJECT_ID_FROM_SETTINGS_XML",
-  //    "name": "REPLACE_THIS_WITH_PROJECT_SHORT_NAME",
-  //    "storageType": "paratextFolders",
-  //    "projectType": "ParatextStandard"
-  //  }
-  /*
-  setTimeout(async () => {
-    const paratextPdp = await getProjectDataProvider<'ParatextStandard'>(
-      '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
-    );
-    const verse = await paratextPdp.getChapterUSX(new VerseRef('JHN', '1', '1'));
-    logger.info(`Got PDP data: ${verse}`);
-
-    if (verse !== undefined) await paratextPdp.setChapterUSX(new VerseRef('JHN', '1', '1'), verse);
-
-    paratextPdp.setExtensionData(
-      { extensionName: 'foo', dataQualifier: 'fooData' },
-      'This is the data from extension foo',
-    );
-  }, 10000);
-  */
   // #endregion
 }
 

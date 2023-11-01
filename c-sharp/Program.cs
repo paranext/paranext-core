@@ -24,13 +24,6 @@ public static class Program
                 return;
             }
 
-            //TODO: Delete this once we stop including test objects in the builds
-            if (!await papi.RegisterRequestHandler(RequestType.AddOne, RequestAddOne))
-            {
-                Console.WriteLine("Paranext data provider could not register request handler");
-                return;
-            }
-
             var tdp = new TimeDataProvider(papi);
             var sdp = new UsfmDataProvider(papi, "assets", "WEB");
             var paratextPsi = new ParatextProjectStorageInterpreter(papi);
