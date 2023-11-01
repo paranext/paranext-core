@@ -12,6 +12,11 @@ namespace TestParanextDataProvider
 
         //public Stack<Message?> EventMessages { get; } = new();
 
+        /// <summary>
+        /// Fakes a message coming from the server for the PapiClient to handle
+        /// </summary>
+        /// <param name="message">The message to fake</param>
+        /// <returns>The messages that would be returned back to the server</returns>
         public IEnumerable<Message> FakeMessageFromServer(Message message)
         {
             if (!_messageHandlersByMessageType.TryGetValue(message.Type, out var handler))
@@ -23,6 +28,7 @@ namespace TestParanextDataProvider
             return handler.HandleMessage(message);
         }
 
+        #region Overrides of PapiClient
         public override Task<bool> ConnectAsync()
         {
             return Task.FromResult(true); // Pretend we succeeded
@@ -57,5 +63,6 @@ namespace TestParanextDataProvider
         //    Message? result = handler(message.Event);
         //    EventMessages.Push(result);
         //}
+        #endregion
     }
 }
