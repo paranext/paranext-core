@@ -6,7 +6,7 @@ import {
 } from '@shared/models/data-provider.model';
 import { NetworkableObject } from '@shared/models/network-object.model';
 
-/**
+/** JSDOC SOURCE DataProviderEngineNotifyUpdate
  * Method to run to send clients updates for a specific data type outside of the `set<data_type>` method.
  * papi overwrites this function on the DataProviderEngine itself to emit an update after running
  * the `notifyUpdate` method in the DataProviderEngine.
@@ -51,6 +51,7 @@ export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTy
  * @see IDataProviderEngine for more information on using this type.
  */
 export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
+  /** JSDOC DESTINATION DataProviderEngineNotifyUpdate */
   notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
 };
 

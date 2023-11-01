@@ -14,13 +14,14 @@
 
       default-src 'none' so things can't happen unless we allow them
       script-src-elem allows script tags but not in-line attribute scripts. That way, we can remove
-        scripts we don't want using monkey-patched `document.createElement and not have to worry
+        scripts we don't want using monkey-patched `document.createElement` and not have to worry
         about in-line scripts
         'self' so scripts can be loaded from us
         'wasm-unsafe-eval' because webview iframes want to use wasm
-          TODO: PLEASE FIX - we need to remove this once we have webview iframe CSP separated from
-          this so we don't allow extensions to run wasm code in parent window. This may be an avenue
-          through which they can escape their iframe sandbox and do things like navigate the page paranext-core#89
+          TODO: we may want to remove this once we have webview iframe CSP separated from this so we
+          don't allow extensions to run wasm code in parent window. It does not seem to be so, but
+          this may be an avenue through which they can escape their iframe sandbox and do things
+          like navigate the page. Warrants further consideration paranext-core#89
         'unsafe-inline' because web view iframes use srcdoc right now, which inherits CSP from parent frames
           TODO: PLEASE FIX THIS - Move web views to be retrieved from the backend, and remove this. paranext-core#89
           The web views must pass as same origin in order to be able to use same-origin features
@@ -35,28 +36,27 @@
         papi-extension: so styles can be loaded from installed extensions
         'unsafe-inline' because that's how bundled libraries' styles are loaded in :( like MUI
       frame-src determines what iframes can be loaded
-          Note: WebViewContentType.HTML and WebViewContentType.React load in as `srcdoc` iframes with same origin and
-          our CSP (these `srcdoc` iframes inherit this CSP as well in addition to using the CSP
-          defined in `web-view.service.ts`) to prevent them from executing arbitrary code on our
-          origin. However, WebViewContentType.URL loads in as `src` iframes, so we cannot control
-          their CSP. As such, we must not allow them to be on the same origin. See the
-          MutationObserver in `web-view.service.ts` and `web-view.component.tsx` for the allowed
-          iframe `sandbox` attribute options on these WebViewContentTypes. Also note `blob:` urls
-          are considered same origin as parent, so NEVER list blob: here in `frame-src` CSP
         'self' so frame contents can be loaded from us - sort-of includes `srcdoc` iframes with
         extension webview code... `srcdoc` iframes are actually executed in the parent and then put
         in the iframe, so `frame-src` doesn't actually count for them. But the rest of the CSP does
         papi-extension: so extensions can load their bundled asset iframes as WebViewContentType.URL
         on different origin
         https: so extensions can load remote iframes as WebViewContentType.URL on different origin
-      We do not include `frame-ancestors 'self'` so only we can host iframes - it is ok for WebViews
-        with same origin to be able to create child iframes without our CSP and sandbox protection
-        because those child iframes would be on different origin and would only be able to do what
-        the extension developer allows them via message passing. `frame-ancestors` cannot be used in
-        a `meta` tag anyway, so we may need to try to deliver it in the headers for this request if
-        we ever change our minds on this point. For now, we are just preventing children from
-        creating iframes on the parent window with monkey-patch on `document.createElement` in
-        `web-view.service.ts`
+          Note: WebViewContentType.HTML and WebViewContentType.React load in as `srcdoc` iframes
+          with same origin and our CSP (these `srcdoc` iframes inherit this CSP as well in addition
+          to using the CSP defined in `web-view.service.ts`) and iframe sandbox to prevent them from
+          executing arbitrary code on our origin as best we can. However, WebViewContentType.URL
+          loads in as `src` iframes, so we cannot control their CSP. As such, we must not allow them
+          to be on the same origin. See the MutationObserver in `web-view.service.ts` and
+          `web-view.component.tsx` for the allowed iframe `sandbox` attribute options on these
+          WebViewContentTypes. Also note `blob:` urls are considered same origin as parent, so NEVER
+          list blob: here in `frame-src` CSP
+          Note: it is ok for WebViews with same origin in our CSP and sandbox to be able to create
+          child iframes without our CSP and sandbox protection because those child iframes would be
+          on different origin and would only be able to do what the extension developer allows them
+          via message passing and would have the same sandbox restrictions as the WebView.
+          TODO: wrap WebViewContentType.URL webviews in an iframe that's hosting their url and
+          remove `papi-extension:` and `https:` here when we fix webview code to be retrieved from the backend? paranext-core#89
       object-src 'none' to prevent insecure object and embed until we have a reason to use them
       worker-src 'self' so web workers can be loaded from us
       manifest-src 'self' so we can load our manifest

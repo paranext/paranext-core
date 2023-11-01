@@ -441,6 +441,9 @@ export function convertWebViewDefinitionToSaved(
   // deserializing
   delete webViewDefinitionCloned.content;
   delete webViewDefinitionCloned.styles;
+  // We don't want to keep security-related properties so the web view doesn't get loaded with the
+  // wrong security somehow. The web view provider should provide this every time it provides the
+  // content
   delete webViewDefinitionCloned.allowScripts;
   delete webViewDefinitionCloned.allowSameOrigin;
   delete webViewDefinitionCloned.allowedFrameSources;
@@ -986,6 +989,7 @@ export const getWebView = async (
   //   This is derived from the WebViewDefinition's `allowedFrameSources`. WebViews must specify
   //   the host values they want to be listed here. Since this CSP inherits from the `index.ejs`
   //   CSP, these values must be within 'self', papi-extension:, and https:
+  //   See `index.ejs` for more info on why these sources are allowed
   // object-src 'none' to prevent insecure object and embed until we have a reason to use them
   // worker-src determines from where they can run web workers
   //   'none' - we can consider changing if someone gives us a reason to run workers in the renderer
@@ -1205,6 +1209,61 @@ export const initialize = () => {
         attributeFilter: ['src', 'srcdoc'],
       });
 
+      // #region delete some things on `window` for a quick prevention for same-origin child iframes
+      // like HTML and React WebViews from doing things we don't want them to do
+      // We can change these to monkey patches with validation that they are coming from the
+      // renderer if we need them in the renderer or we can save out varaibles and use those
+
+      // Following are a number of deletions that correspond to various iframe sandbox values
+      // as noted in comments. HTML and React WebView iframes have access to these through
+      // `window.top` because they are on the same origin, so we must prevent access in addition to
+      // sandboxing
+
+      // Remove the ability to do presentations
+      // Note: this prevents us from doing a lot of other things. If we ever need the navigator, we
+      // can save it out to a variable. But sadly we cannot only delete navigator.presentation
+      // Corresponds to iframe sandbox `allow-presentation`
+      // @ts-expect-error we want to remove navigator because it allows presentations
+      // eslint-disable-next-line no-eval
+      delete globalThis.navigator;
+
+      // Remove the ability to show modals
+      // Corresponds to iframe sandbox `allow-modals`
+      // @ts-expect-error we want to remove the ability to show modals
+      // eslint-disable-next-line no-eval
+      delete globalThis.alert;
+      // @ts-expect-error we want to remove the ability to show modals
+      // eslint-disable-next-line no-eval
+      delete globalThis.confirm;
+      // @ts-expect-error we want to remove the ability to show modals
+      // eslint-disable-next-line no-eval
+      delete globalThis.print;
+      // @ts-expect-error we want to remove the ability to show modals
+      // eslint-disable-next-line no-eval
+      delete globalThis.prompt;
+
+      // TODO: Remove the ability to change the screen orientation? https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock
+      // Corresponds to iframe sandbox `allow-orientation-lock`
+
+      // TODO: Remove the ability to lock the pointer? https://developer.mozilla.org/en-US/docs/Web/API/Pointer_Lock_API
+      // Corresponds to iframe sandbox `allow-pointer-lock`
+
+      // Remove the ability to create popups
+      // Corresponds to iframe sandbox `allow-popups`
+      // @ts-expect-error we want to remove the ability to create popups
+      // eslint-disable-next-line no-eval
+      delete globalThis.open;
+      // @ts-expect-error we want to remove the ability to create popups
+      // eslint-disable-next-line no-eval
+      delete globalThis.showModalDialog;
+
+      // #endregion
+
+      // #region monkey patches on `window` to prevent same-origin child iframes like HTML and React
+      // WebViews from doing things we don't want them to do
+      // WARNING: calling these requires us to generate a call stack, so all of these things should
+      // be used as sparingly as possible since they are now less performant than usual
+
       // Monkey-patch document.createElement so new script tags cannot be added by anything but our
       // code (since we load renderer files in chunks)
       const createElementOriginal = document.createElement.bind(document);
@@ -1235,6 +1294,8 @@ export const initialize = () => {
         }
         return createElementOriginal(...args);
       };
+
+      // #endregion
 
       // Register built-in requests
       // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?

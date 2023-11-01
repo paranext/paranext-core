@@ -131,11 +131,12 @@ type WebViewDefinitionBase = {
    *
    * It is best practice to set this to `false` where possible.
    *
-   * Note: Until we have a message-passing APi for WebViews, there is currently no way to
+   * Note: Until we have a message-passing API for WebViews, there is currently no way to
    * interact with the platform via a WebView with `allowSameOrigin: false`.
    *
-   * WARNING: If your WebView accepts secure user input like passwords, you MUST set this to `false`
-   * or you will risk exposing that secure input to other extensions who could be phishing for it.
+   * WARNING: If your WebView accepts secure user input like passwords on HTML or React WebViews,
+   * you MUST set this to `false` or you will risk exposing that secure input to other extensions
+   * who could be phishing for it.
    */
   allowSameOrigin?: boolean;
   /**
@@ -147,8 +148,6 @@ type WebViewDefinitionBase = {
    * WARNING: Setting this to `true` increases the possibility of a security threat occurring. If it
    * is not necessary to run scripts in your WebView, you should set this to `false` to reduce risk.
    */
-  // This does not follow our normal pattern of naming booleans because it mirrors the
-  // `allow-scripts` iframe sandbox attribute value
   allowScripts?: boolean;
   /**
    * **For HTML and React WebViews:** List of [Host or scheme values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy#hosts_values)

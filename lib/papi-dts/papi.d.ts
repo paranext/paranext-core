@@ -127,11 +127,12 @@ declare module 'shared/data/web-view.model' {
      *
      * It is best practice to set this to `false` where possible.
      *
-     * Note: Until we have a message-passing APi for WebViews, there is currently no way to
+     * Note: Until we have a message-passing API for WebViews, there is currently no way to
      * interact with the platform via a WebView with `allowSameOrigin: false`.
      *
-     * WARNING: If your WebView accepts secure user input like passwords, you MUST set this to `false`
-     * or you will risk exposing that secure input to other extensions who could be phishing for it.
+     * WARNING: If your WebView accepts secure user input like passwords on HTML or React WebViews,
+     * you MUST set this to `false` or you will risk exposing that secure input to other extensions
+     * who could be phishing for it.
      */
     allowSameOrigin?: boolean;
     /**
@@ -2722,6 +2723,38 @@ declare module 'shared/models/data-provider-engine.model' {
    * @see IDataProviderEngine for more information on using this type.
    */
   export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
+    /**
+     * Method to run to send clients updates for a specific data type outside of the `set<data_type>` method.
+     * papi overwrites this function on the DataProviderEngine itself to emit an update after running
+     * the `notifyUpdate` method in the DataProviderEngine.
+     *
+     * @param updateInstructions information that papi uses to interpret whether to send out updates.
+     * Defaults to `'*'` (meaning send updates for all data types) if parameter `updateInstructions` is
+     * not provided or is undefined. Otherwise returns `updateInstructions`. papi passes the interpreted
+     * update value into this `notifyUpdate` function. For example, running `this.notifyUpdate()` will
+     * call the data provider engine's `notifyUpdate` with `updateInstructions` of `'*'`.
+     *
+     * @see DataProviderUpdateInstructions for more info on the `updateInstructions` parameter
+     *
+     * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
+     * It will create a destructive infinite loop.
+     *
+     * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types
+     * (in a data provider engine):
+     * ```typescript
+     * this.notifyUpdate(['Verse', 'Heresy']);
+     * ```
+     *
+     * @example You can log the manual updates in your data provider engine by specifying the following
+     * `notifyUpdate` function in the data provider engine:
+     * ```typescript
+     * notifyUpdate(updateInstructions) {
+     *   papi.logger.info(updateInstructions);
+     * }
+     * ```
+     *
+     * Note: This function's return is treated the same as the return from `set<data_type>`
+     */
     notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
   };
   /**

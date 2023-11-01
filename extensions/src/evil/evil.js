@@ -114,6 +114,54 @@ const EVIL_WEBVIEW = `
       // window.top.document.body.appendChild(imgWithAttributeScript);
       */
 
+     // Try to create a modal through window.top.alert
+      try {
+        window.top.alert('<<BAD>> Evil could create a modal through window.top.alert!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        //papi.logger.info(\`Evil: Good error on running window.top.alert: \${e.message}\`);
+      }
+
+     // Try to create a modal through window.top.confirm
+      try {
+        window.top.confirm('<<BAD>> Evil could create a modal through window.top.confirm!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        //papi.logger.info(\`Evil: Good error on running window.top.confirm: \${e.message}\`);
+      }
+
+     // Try to create a modal through window.top.print
+      try {
+        window.top.print('<<BAD>> Evil could create a modal through window.top.print!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        //papi.logger.info(\`Evil: Good error on running window.top.print: \${e.message}\`);
+      }
+
+     // Try to create a modal through window.top.prompt
+      try {
+        window.top.prompt('<<BAD>> Evil could create a modal through window.top.prompt!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        //papi.logger.info(\`Evil: Good error on running window.top.prompt: \${e.message}\`);
+      }
+
+     // Try to create a popup through window.top.open
+      try {
+        window.top.open('<<BAD>> Evil could create a popup through window.top.open!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        //papi.logger.info(\`Evil: Good error on running window.top.open: \${e.message}\`);
+      }
+
+     // Try to create a popup through window.top.showModalDialog
+      try {
+        window.top.showModalDialog('<<BAD>> Evil could create a popup through window.top.showModalDialog!');
+      } catch (e) {
+        // No need to log good stuff unless we're testing
+        //papi.logger.info(\`Evil: Good error on running window.top.showModalDialog: \${e.message}\`);
+      }
+
       // Note: we are using this sourceURL in web-view.service.ts, so keep it up-to-date with this
       //# sourceURL=evil.web-view.html
     </script>
@@ -126,7 +174,13 @@ const EVIL_WEBVIEW = `
       Below, you should see an iframe with another evil webview code that also should fail to do bad
       things:
     </div>
-    <iframe src="papi-extension://evil/assets/evil.web-view.html" />
+    <iframe src="papi-extension://evil/assets/evil.web-view.html"></iframe>
+    <!--
+    Uncomment this to test that iframes within iframes are restricted by the sandbox of their parent
+    This is commented out because it causes a sandbox error to show up in the console, and we don't
+    want to distract people with it.
+    <iframe srcdoc="<!DOCTYPE html><html><body><script>try { window.top.location='https://example.com'; } catch (e) {}</script></body></html>"></iframe>
+    -->
   </body>
 </html>
 `;
