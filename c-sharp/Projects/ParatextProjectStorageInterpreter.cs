@@ -176,12 +176,12 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (scope.DataQualifier == null)
             return ResponseToRequest.Failed("Must provide a data qualifier");
 
-        var dataStream = GetExtensionStream(scope, false);
+        var dataStream = GetExtensionReader(scope);
         if (dataStream == null)
             return ResponseToRequest.Failed("Extension data not found");
 
-        using TextReader textReader = new StreamReader(dataStream, Encoding.UTF8);
-        return ResponseToRequest.Succeeded(textReader.ReadToEnd());
+        using (dataStream)
+            return ResponseToRequest.Succeeded(dataStream.ReadToEnd());
     }
 
     public override ResponseToRequest SetExtensionData(ProjectDataScope scope, string data)
@@ -193,7 +193,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (scope.DataQualifier == null)
             return ResponseToRequest.Failed("Must provide a data qualifier");
 
-        var dataStream = GetExtensionStream(scope, true);
+        var dataStream = GetExtensionWriter(scope);
         if (dataStream == null)
             return ResponseToRequest.Failed("Unable to create extension data");
 
@@ -206,10 +206,11 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                 {
                     if (!writeLock.Active)
                         throw new Exception("Write lock is not active");
-                    dataStream.SetLength(0);
-                    using TextWriter textWriter = new StreamWriter(dataStream, Encoding.UTF8);
-                    textWriter.Write(data);
-                    textWriter.Flush();
+                    using (dataStream)
+                    {
+                        dataStream.Write(data);
+                        dataStream.Flush();
+                    }
                 }
             );
             // The value of returned string is case sensitive and cannot change unless data provider subscriptions change
@@ -223,14 +224,34 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     #endregion
 
     #region Private helper methods
-    private static Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
+    private TextReader? GetExtensionReader(ProjectDataScope scope)
     {
-        var projectDetails = LocalProjects.GetProjectDetails(scope.ProjectID!);
-        RawDirectoryProjectStreamManager extensionStreamManager = new(projectDetails);
-        return extensionStreamManager.GetDataStream(
-            $"extensions/{scope.ExtensionName}/{scope.DataQualifier}",
-            createIfNotExists
-        );
+        ScrText scrText = _projects.GetParatextProject(scope.ProjectID!);
+        try
+        {
+            return scrText.FileManager.OpenFileForRead(
+                $"extensions/{scope.ExtensionName}/{scope.DataQualifier}"
+            );
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    private TextWriter? GetExtensionWriter(ProjectDataScope scope)
+    {
+        ScrText scrText = _projects.GetParatextProject(scope.ProjectID!);
+        try
+        {
+            return scrText.FileManager.OpenFileForWrite(
+                $"extensions/{scope.ExtensionName}/{scope.DataQualifier}"
+            );
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     private static string GetChapterUsx(ScrText scrText, VerseRef vref)
