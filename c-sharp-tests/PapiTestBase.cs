@@ -22,13 +22,8 @@ namespace TestParanextDataProvider
         #region Constructor
         static PapiTestBase()
         {
-            // Required for the Paratext.Data.Encodings.StringEncoders static constructor
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-
-            Alert.Implementation = new AlertStub();
-            RegistryU.Implementation = new RegistryStub();
-
-            ParatextData.Initialize();
+            string testFolder = Path.Combine(Path.GetTempPath(), "Platform.Bible.Tests", Path.GetRandomFileName());
+            ParatextGlobals.Initialize(testFolder);
         }
         #endregion
 
