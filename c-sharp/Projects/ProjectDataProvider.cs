@@ -63,10 +63,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
 
             if (functionName.StartsWith("set"))
             {
-                var setReturn = Setters[functionName](
-                    args[0]!.ToJsonString(),
-                    args[1]!.ToJsonString()
-                );
+                var setReturn = Setters[functionName](args[0]!.ToJsonString(), args[1]!.ToString());
                 SendDataUpdateEvent(setReturn.Contents);
                 return setReturn;
             }
@@ -92,14 +89,11 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
         }
     }
 
-    private ResponseToRequest SetExtensionData(string jsonScope, string jsonData)
+    private ResponseToRequest SetExtensionData(string jsonScope, string data)
     {
         try
         {
-            var retVal = SetExtensionData(
-                ExtractDataScope(jsonScope),
-                JsonConvert.DeserializeObject<string>(jsonData)!
-            );
+            var retVal = SetExtensionData(ExtractDataScope(jsonScope), data);
             return retVal;
         }
         catch (Exception ex)
