@@ -419,6 +419,15 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
     throw new Error(message);
   }) as typeof Module.prototype.require;
 
+  // Delete ways to execute arbitrary code https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/script-src#unsafe_eval_expressions
+  // Note: node does not allow strings in setTimeout, setInterval, or setImmediate, so we don't need
+  // to monkey-patch them https://nodejs.org/api/timers.html#scheduling-timers
+  // @ts-expect-error we want to remove eval because it can create code from strings
+  // eslint-disable-next-line no-eval
+  delete globalThis.eval;
+  // @ts-expect-error we want to remove Function because it can create code from strings
+  delete globalThis.Function;
+
   // Replace fetch with papi.fetch.
   // eslint-disable-next-line no-global-assign
   globalThis.fetch = papi.fetch;

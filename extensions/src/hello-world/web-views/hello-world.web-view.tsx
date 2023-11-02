@@ -20,6 +20,7 @@ import type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.
 import type { WebViewProps } from 'shared/data/web-view.model';
 import { ProjectDataTypes } from 'papi-shared-types';
 import Clock from './components/clock.component';
+import Logo from '../assets/offline.svg';
 
 type Row = {
   id: string;
@@ -171,6 +172,12 @@ globalThis.webViewComponent = function HelloWorld({
     <div>
       <div className="title">
         Hello World <span className="framework">React</span>
+        {/**
+         * Note: `Logo` here is inlined into this code as a `data:` url. This is here simply for
+         * demonstration purposes. Inlining as a `data:` url is generally not recommended. Rather,
+         * it is generally better to use `papi-extension:` to avoid unnecessary bloat
+         */}
+        <img width={16} height={16} src={`${Logo}`} alt="Hello World Logo" />
       </div>
       <div>
         <Button

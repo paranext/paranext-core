@@ -101,6 +101,25 @@ const configBase: webpack.Configuration = {
           'sass-loader',
         ],
       },
+      /** Load images as data uris
+       *
+       * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+       */
+      // https://webpack.js.org/guides/asset-management/#loading-images
+      {
+        test: /\.(png|svg|jpg|jpeg|gif)$/i,
+        type: 'asset/inline',
+      },
+      /**
+       * Load fonts as data uris
+       *
+       * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+       */
+      // https://webpack.js.org/guides/asset-management/#loading-fonts
+      {
+        test: /\.(woff|woff2|eot|ttf|otf)$/i,
+        type: 'asset/inline',
+      },
       /**
        * Import files with no transformation as strings with "./file?raw"
        */
