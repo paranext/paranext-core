@@ -60,13 +60,6 @@ async function main() {
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
-  // Extension host test
-  setTimeout(async () => {
-    logger.info(
-      `Add Many (from EH): ${await commandService.sendCommand('test.addMany', 2, 5, 9, 7)}`,
-    );
-  }, 20000);
-
   // #region Start the renderer
 
   // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
