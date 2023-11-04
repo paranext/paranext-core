@@ -1,6 +1,7 @@
 /**
- * Handles setting up a connection to the electron backend and exchanging simple messages.
- * Do not use outside NetworkService.ts. For communication, use NetworkService.ts as it is an abstraction over this.
+ * Handles setting up a connection to the electron backend and exchanging simple messages. Do not
+ * use outside NetworkService.ts. For communication, use NetworkService.ts as it is an abstraction
+ * over this.
  */
 // TODO: Refactor into a class and an interface
 // TODO: Combine with NetworkSerice?
@@ -23,14 +24,20 @@ import { createNetworkConnector } from '@shared/services/network-connector.facto
 import logger from '@shared/services/logger.service';
 import { ComplexResponse, SerializedRequestType } from '@shared/utils/papi-util';
 
-/** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
+/**
+ * Whether this connector is setting up or has finished setting up its connection and is ready to
+ * communicate on the network
+ */
 let connectionStatus = ConnectionStatus.Disconnected;
 /** The client id for this browser as assigned by the server */
 let clientId = CLIENT_ID_UNASSIGNED;
 /** The next requestId to use for identifying requests */
 let nextRequestId = 0;
 
-/** Promise that resolves when the connection is finished or rejects if disconnected before the connection finishes */
+/**
+ * Promise that resolves when the connection is finished or rejects if disconnected before the
+ * connection finishes
+ */
 let connectPromise: Promise<void> | undefined;
 /** Function that resolves the connection promise to be run after receiving a client id */
 let connectResolve: (() => void) | undefined;
@@ -38,7 +45,10 @@ let connectResolve: (() => void) | undefined;
 let connectReject: ((reason?: string) => void) | undefined;
 /** Function that accepts requests from the server and responds accordingly. From connect() */
 let requestHandler: RequestHandler | undefined;
-/** Function that determines the appropriate clientId to which to send requests of the given type. From connect() */
+/**
+ * Function that determines the appropriate clientId to which to send requests of the given type.
+ * From connect()
+ */
 let requestRouter: RequestRouter | undefined;
 /** Function that accepts events from the server and emits them locally. From connect() */
 let eventHandler: NetworkEventHandler | undefined;
@@ -49,9 +59,10 @@ let networkConnector: INetworkConnector | undefined;
 
 /**
  * Send a request to the server and resolve after receiving a response
- * @param requestType the type of request
- * @param contents contents to send in the request
- * @returns promise that resolves with the response message
+ *
+ * @param requestType The type of request
+ * @param contents Contents to send in the request
+ * @returns Promise that resolves with the response message
  */
 export const request = async <TParam, TReturn>(
   requestType: string,
@@ -84,10 +95,11 @@ export const request = async <TParam, TReturn>(
 };
 
 /**
- * Sends an event to other processes. Does NOT run the local event subscriptions
- * as they should be run by NetworkEventEmitter after sending on network.
- * @param eventType unique network event type for coordinating between processes
- * @param event event to emit on the network
+ * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
+ * run by NetworkEventEmitter after sending on network.
+ *
+ * @param eventType Unique network event type for coordinating between processes
+ * @param event Event to emit on the network
  */
 export const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
   if (!networkConnector) throw new Error('emitEventOnNetwork without a networkConnector!');
@@ -118,9 +130,10 @@ export const disconnect = () => {
 
 /**
  * Function that handles internal requests by running the requestHandler given in connect()
- * @param requestType type of request to determine which handler to use
- * @param incomingRequest request message to handle
- * @returns response message for the request
+ *
+ * @param requestType Type of request to determine which handler to use
+ * @param incomingRequest Request message to handle
+ * @returns Response message for the request
  */
 const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
   requestType: string,
@@ -146,8 +159,9 @@ const handleInternalRequest: InternalRequestHandler = async <TParam, TReturn>(
 
 /**
  * Function that handles events from the network by running the event handler given in connect()
- * @param eventType type of request to determine which handler to use
- * @param event event message to handle
+ *
+ * @param eventType Type of request to determine which handler to use
+ * @param event Event message to handle
  */
 const handleEventFromNetwork: InternalNetworkEventHandler = async <T>(
   eventType: string,
@@ -160,10 +174,15 @@ const handleEventFromNetwork: InternalNetworkEventHandler = async <T>(
 
 /**
  * Sets up the ConnectionService by connecting to the server and setting up event handlers
- * @param localRequestHandler function that handles requests from the server by accepting a requestType and a ComplexRequest and returning a Promise of a Complex Response
- * @param networkRequestRouter function that determines the appropriate clientId to which to send requests of the given type
- * @param localEventHandler function that handles events from the server by accepting an eventType and an event and emitting the event locally
- * @param connectorEventHandlers functions that run when network connector events occur like when clients are disconnected
+ *
+ * @param localRequestHandler Function that handles requests from the server by accepting a
+ *   requestType and a ComplexRequest and returning a Promise of a Complex Response
+ * @param networkRequestRouter Function that determines the appropriate clientId to which to send
+ *   requests of the given type
+ * @param localEventHandler Function that handles events from the server by accepting an eventType
+ *   and an event and emitting the event locally
+ * @param connectorEventHandlers Functions that run when network connector events occur like when
+ *   clients are disconnected
  * @returns Promise that resolves when finished connecting
  */
 export const connect = async (

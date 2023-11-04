@@ -1,6 +1,4 @@
-/**
- * Webpack config for production extension-host process
- */
+/** Webpack config for production extension-host process */
 
 import path from 'path';
 import webpack from 'webpack';

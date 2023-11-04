@@ -1,6 +1,4 @@
-/**
- * Module to set up globalThis and polyfills in the renderer
- */
+/** Module to set up globalThis and polyfills in the renderer */
 
 import React from 'react';
 import * as ReactJsxRuntime from 'react/jsx-runtime';
@@ -42,8 +40,8 @@ const registeredModuleList = [...moduleMap]
   .join(', ');
 
 /**
- * Provide a require implementation so we can provide some needed packages for extensions or
- * for packages that extensions import
+ * Provide a require implementation so we can provide some needed packages for extensions or for
+ * packages that extensions import
  */
 function webViewRequire(moduleName: string) {
   const module = moduleMap.get(moduleName);

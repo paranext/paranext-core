@@ -38,14 +38,12 @@ type LiveRequest<TReturn> = {
   reject: (reason?: unknown) => void;
 };
 
-/** localStorage key to store the current clientGuid */
+/** `localStorage` key to store the current clientGuid */
 const CLIENT_GUID_KEY = 'client-network-connector:clientGuid';
 
 // #endregion
 
-/**
- * Handles the connection from the client to the server
- */
+/** Handles the connection from the client to the server */
 export default class ClientNetworkConnector implements INetworkConnector {
   // #region INetworkConnector members
 
@@ -59,10 +57,16 @@ export default class ClientNetworkConnector implements INetworkConnector {
   /** The webSocket connected to the server */
   private webSocket?: IWebSocket;
 
-  /** All message subscriptions - emitters that emit an event each time a message with a specific message type comes in */
+  /**
+   * All message subscriptions - emitters that emit an event each time a message with a specific
+   * message type comes in
+   */
   private messageEmitters = new Map<MessageType, PapiEventEmitter<Message>>();
 
-  /** Promise that resolves when the connection is finished or rejects if disconnected before the connection finishes */
+  /**
+   * Promise that resolves when the connection is finished or rejects if disconnected before the
+   * connection finishes
+   */
   private connectPromise?: Promise<NetworkConnectorInfo>;
 
   /** Function that removes this initClient handler from the connection */
@@ -75,18 +79,18 @@ export default class ClientNetworkConnector implements INetworkConnector {
   private unsubscribeHandleEventMessage?: Unsubscriber;
 
   /**
-   * Function to call when we receive a request that is registered on this connector.
-   * Handles requests from the connection and returns a response to send back
+   * Function to call when we receive a request that is registered on this connector. Handles
+   * requests from the connection and returns a response to send back
    */
   private localRequestHandler?: InternalRequestHandler;
   /**
-   * Function to call when we are sending a request.
-   * Returns a clientId to which to send the request based on the requestType
+   * Function to call when we are sending a request. Returns a clientId to which to send the request
+   * based on the requestType
    */
   private requestRouter?: RequestRouter;
   /**
-   * Function to call when we receive an event.
-   * Handles events from the connection by emitting the event locally
+   * Function to call when we receive an event. Handles events from the connection by emitting the
+   * event locally
    */
   private localEventHandler?: InternalNetworkEventHandler;
 
@@ -301,7 +305,8 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
   /**
    * Send a message to the server via webSocket. Throws if not connected
-   * @param message message to send
+   *
+   * @param message Message to send
    */
   private sendMessage = (message: Message): void => {
     // TODO: add message queueing
@@ -329,8 +334,9 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
   /**
    * Receives and appropriately publishes server webSocket messages
-   * @param event webSocket message information
-   * @param fromSelf whether this message is from this connector instead of from someone else
+   *
+   * @param event WebSocket message information
+   * @param fromSelf Whether this message is from this connector instead of from someone else
    */
   private onMessage = (event: MessageEvent<string>, fromSelf = false) => {
     // Assert our specific message type.
@@ -343,9 +349,11 @@ export default class ClientNetworkConnector implements INetworkConnector {
 
   /**
    * Subscribes a function to run on webSocket messages of a particular type
-   * @param messageType the type of message on which to subscribe the function
-   * @param callback function to run with the contents of the webSocket message
-   * @returns unsubscriber function to run to stop calling the passed-in function on webSocket messages
+   *
+   * @param messageType The type of message on which to subscribe the function
+   * @param callback Function to run with the contents of the webSocket message
+   * @returns Unsubscriber function to run to stop calling the passed-in function on webSocket
+   *   messages
    */
   private subscribe = (
     messageType: MessageType,
@@ -363,8 +371,9 @@ export default class ClientNetworkConnector implements INetworkConnector {
   };
 
   /**
-   * Function that handles webSocket messages of type Response.
-   * Resolves the request associated with the received response message
+   * Function that handles webSocket messages of type Response. Resolves the request associated with
+   * the received response message
+   *
    * @param response Response message to resolve
    */
   private handleResponseMessage = (response: WebSocketResponse<unknown>) => {
@@ -390,9 +399,11 @@ export default class ClientNetworkConnector implements INetworkConnector {
   /**
    * Function that handles incoming webSocket messages and locally sent messages of type Request.
    * Runs the requestHandler provided in connect() and sends a message with the response
-   * @param requestMessage request message to handle
-   * @param isIncoming whether this message is coming from the server and we should definitely handle it locally
-   *   or if it is a locally sent request and we should send to the server if we don't have a local handler
+   *
+   * @param requestMessage Request message to handle
+   * @param isIncoming Whether this message is coming from the server and we should definitely
+   *   handle it locally or if it is a locally sent request and we should send to the server if we
+   *   don't have a local handler
    */
   private handleRequestMessage = async (
     requestMessage: WebSocketRequest<unknown>,
@@ -427,9 +438,10 @@ export default class ClientNetworkConnector implements INetworkConnector {
   };
 
   /**
-   * Function that handles incoming webSocket messages of type Event.
-   * Runs the eventHandler provided in connect()
-   * @param eventMessage event message to handle
+   * Function that handles incoming webSocket messages of type Event. Runs the eventHandler provided
+   * in connect()
+   *
+   * @param eventMessage Event message to handle
    */
   private handleEventMessage = (eventMessage: WebSocketEvent<unknown>) => {
     if (!this.localEventHandler)

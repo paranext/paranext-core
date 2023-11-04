@@ -41,10 +41,9 @@ async function initialize(): Promise<void> {
 /**
  * Determine whether there is an unresolved dialog request for a specified dialog id
  *
- * @param id the dialog id to check for an existing unresolved request
- * @returns true if there is an unresolved dialog request for the specified dialog; false otherwise
- *
- * Internal function; not exposed on papi
+ * @param id The dialog id to check for an existing unresolved request
+ * @returns True if there is an unresolved dialog request for the specified dialog; false otherwise
+ * @internal function; not exposed on papi
  */
 export function hasDialogRequest(id: string) {
   return dialogRequests.has(id);
@@ -53,14 +52,13 @@ export function hasDialogRequest(id: string) {
 /**
  * Resolve a dialog request. Synchronously resolves, then asynchronously closes the dialog
  *
- * @param id the id of the dialog whose request to reject
- * @param data the data to resolve the request with. Either the user's response to the dialog or
- * `null` if the user canceled
- * @param shouldCloseDialog whether we should close the dialog in this function. Should probably
- * only be `false` if the dialog is already being closed another way such as in
- * `platform-dock-layout.component.tsx`. Defaults to true
- *
- * Internal function; not exposed on papi
+ * @param id The id of the dialog whose request to reject
+ * @param data The data to resolve the request with. Either the user's response to the dialog or
+ *   `null` if the user canceled
+ * @param shouldCloseDialog Whether we should close the dialog in this function. Should probably
+ *   only be `false` if the dialog is already being closed another way such as in
+ *   `platform-dock-layout.component.tsx`. Defaults to true
+ * @internal function; not exposed on papi
  */
 export function resolveDialogRequest<TReturn>(
   id: string,
@@ -107,10 +105,9 @@ export function resolveDialogRequest<TReturn>(
 /**
  * Reject a dialog request. Synchronously rejects, then asynchronously closes the dialog
  *
- * @param id the id of the dialog whose request to reject
- * @param message the error message for the rejected request
- *
- * Internal function; not exposed on papi
+ * @param id The id of the dialog whose request to reject
+ * @param message The error message for the rejected request
+ * @internal function; not exposed on papi
  */
 export function rejectDialogRequest(id: string, message: string) {
   const dialogRequest = dialogRequests.get(id);
@@ -207,9 +204,7 @@ const dialogService: DialogService = {
   selectProject,
 };
 
-/**
- * Register the commands that back the PAPI dialog service
- */
+/** Register the commands that back the PAPI dialog service */
 export async function startDialogService(): Promise<void> {
   await initialize();
 

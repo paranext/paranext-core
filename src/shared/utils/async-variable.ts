@@ -1,8 +1,6 @@
 import logger from '@shared/services/logger.service';
 
-/**
- * This class provides a convenient way for one task to wait on a variable that another task sets.
- */
+/** This class provides a convenient way for one task to wait on a variable that another task sets. */
 export default class AsyncVariable<T> {
   private readonly variableName: string;
   private readonly promiseToValue: Promise<T>;
@@ -11,10 +9,11 @@ export default class AsyncVariable<T> {
 
   /**
    * Creates an instance of the class
-   * @param variableName name to use when logging about this variable
-   * @param rejectIfNotSettledWithinMS milliseconds to wait before verifying if the promise was
-   * settled (resolved or rejected); will reject if it has not settled by that time.  Use -1 if you
-   * do not want a timeout at all.
+   *
+   * @param variableName Name to use when logging about this variable
+   * @param rejectIfNotSettledWithinMS Milliseconds to wait before verifying if the promise was
+   *   settled (resolved or rejected); will reject if it has not settled by that time. Use -1 if you
+   *   do not want a timeout at all.
    */
   constructor(variableName: string, rejectIfNotSettledWithinMS: number = 10000) {
     this.variableName = variableName;
@@ -36,7 +35,8 @@ export default class AsyncVariable<T> {
   /**
    * Get this variable's promise to a value. This always returns the same promise even after the
    * value has been resolved or rejected.
-   * @returns the promise for the value to be set
+   *
+   * @returns The promise for the value to be set
    */
   get promise(): Promise<T> {
     return this.promiseToValue;
@@ -44,7 +44,8 @@ export default class AsyncVariable<T> {
 
   /**
    * A simple way to see if this variable's promise was resolved or rejected already
-   * @returns whether the variable was already resolved or rejected
+   *
+   * @returns Whether the variable was already resolved or rejected
    */
   get hasSettled(): boolean {
     return Object.isFrozen(this);
@@ -52,8 +53,10 @@ export default class AsyncVariable<T> {
 
   /**
    * Resolve this variable's promise to the given value
-   * @param value this variable's promise will resolve to this value
-   * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
+   *
+   * @param value This variable's promise will resolve to this value
+   * @param throwIfAlreadySettled Determines whether to throw if the variable was already resolved
+   *   or rejected
    */
   resolveToValue(value: T, throwIfAlreadySettled: boolean = false): void {
     if (this.resolver) {
@@ -68,8 +71,10 @@ export default class AsyncVariable<T> {
 
   /**
    * Reject this variable's promise for the value with the given reason
-   * @param reason this variable's promise will be rejected with this reason
-   * @param throwIfAlreadySettled determines whether to throw if the variable was already resolved or rejected
+   *
+   * @param reason This variable's promise will be rejected with this reason
+   * @param throwIfAlreadySettled Determines whether to throw if the variable was already resolved
+   *   or rejected
    */
   rejectWithReason(reason: string, throwIfAlreadySettled: boolean = false): void {
     if (this.rejecter) {
@@ -82,9 +87,7 @@ export default class AsyncVariable<T> {
     }
   }
 
-  /**
-   * Prevent any further updates to this variable
-   */
+  /** Prevent any further updates to this variable */
   private complete(): void {
     this.resolver = null;
     this.rejecter = null;

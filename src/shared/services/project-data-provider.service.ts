@@ -74,6 +74,7 @@ function getProjectDataProviderFactoryId(projectType: ProjectTypes) {
 /**
  * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
  * existing factory already that handles the same project type or this operation will fail.
+ *
  * @param projectType Type of project that pdpEngineFactory supports
  * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
  * @returns Promise that resolves to a disposable object when the registration operation completes
@@ -88,12 +89,18 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
 }
 
 /**
- * Get a Project Data Provider for the given project ID.
- * For types to work properly, specify the project type as a generic parameter.
+ * Get a Project Data Provider for the given project ID. For types to work properly, specify the
+ * project type as a generic parameter.
+ *
+ * @example
+ *
+ * ```typescript
+ * const pdp = await getProjectDataProvider<'ParatextStandard'>('ProjectID12345');
+ * pdp.getVerse(new VerseRef('JHN', '1', '1'));
+ * ```
+ *
  * @param projectId ID for the project to load
  * @returns Data provider with types that are associated with the given project type
- * @example const pdp = await getProjectDataProvider<'ParatextStandard'>('ProjectID12345');
-            pdp.getVerse(new VerseRef('JHN', '1', '1'));
  */
 export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
   projectId: string,
@@ -121,7 +128,9 @@ export interface PapiBackendProjectDataProviderService {
   getProjectDataProvider: typeof getProjectDataProvider;
 }
 
-/** JSDOC SOURCE papiBackendProjectDataProviderService
+/**
+ * JSDOC SOURCE papiBackendProjectDataProviderService
+ *
  * Service that registers and gets project data providers
  */
 export const papiBackendProjectDataProviderService: PapiBackendProjectDataProviderService = {
@@ -134,7 +143,9 @@ export interface PapiFrontendProjectDataProviderService {
   getProjectDataProvider: typeof getProjectDataProvider;
 }
 
-/** JSDOC SOURCE papiFrontendProjectDataProviderService
+/**
+ * JSDOC SOURCE papiFrontendProjectDataProviderService
+ *
  * Service that gets project data providers
  */
 export const papiFrontendProjectDataProviderService = {
