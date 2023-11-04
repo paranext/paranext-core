@@ -2,17 +2,26 @@ import { useEffect, useState } from 'react';
 
 /**
  * Awaits a promise and returns a loading value while the promise is unresolved
- * @param promiseFactoryCallback a function that returns the promise to await. If the promise resolves to null, the value will not change.
- * If this callback is undefined, the current value will be returned (defaultValue unless it was previously changed and preserveValue is true), and there will be no loading.
  *
- *    WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated every render
- * @param defaultValue the initial value to return while first awaiting the promise. If preserveValue is false, this value is also shown while awaiting the promise on subsequent calls.
+ * @param promiseFactoryCallback A function that returns the promise to await. If the promise
+ *   resolves to null, the value will not change. If this callback is undefined, the current value
+ *   will be returned (defaultValue unless it was previously changed and preserveValue is true), and
+ *   there will be no loading.
  *
- *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be updated every render
- * @param preserveValue whether to leave the value as the most recent resolved promise value or set it back to defaultValue while running the promise again. Default to true
- * @returns [value, isLoading]
- *  - `value`: the current value for the promise, either the defaultValue or the resolved promise value
- *  - `isLoading`: whether the promise is waiting to be resolved
+ *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
+ *   every render
+ * @param defaultValue The initial value to return while first awaiting the promise. If
+ *   preserveValue is false, this value is also shown while awaiting the promise on subsequent
+ *   calls.
+ *
+ *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+ *   updated every render
+ * @param preserveValue Whether to leave the value as the most recent resolved promise value or set
+ *   it back to defaultValue while running the promise again. Default to true
+ * @returns {undefined} Value, isLoading
+ *
+ *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
+ *   - `isLoading`: whether the promise is waiting to be resolved
  */
 const usePromise = <T>(
   promiseFactoryCallback: (() => Promise<T | null>) | undefined,

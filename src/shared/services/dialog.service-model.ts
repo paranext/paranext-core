@@ -1,22 +1,22 @@
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 import { DialogOptions } from '@shared/models/dialog-options.model';
 
-/** JSDOC SOURCE dialogService
+/**
+ * JSDOC SOURCE dialogService
+ *
  * Prompt the user for responses with dialogs
  */
 export interface DialogService {
   /**
    * Shows a dialog to the user and prompts the user to respond
    *
-   * @param dialogType the type of dialog to show the user
-   * @param options various options for configuring the dialog that shows
+   * @type `TReturn` - The type of data the dialog responds with
+   * @param dialogType The type of dialog to show the user
+   * @param options Various options for configuring the dialog that shows
+   * @returns Returns the user's response or `null` if the user cancels
    *
-   * @returns returns the user's response or `null` if the user cancels
-   *
-   * Note: canceling responds with `null` instead of `undefined` so that the dialog definition can
-   * use `undefined` as a meaningful value if desired.
-   *
-   * @type `TReturn` - the type of data the dialog responds with
+   *   Note: canceling responds with `null` instead of `undefined` so that the dialog definition can
+   *   use `undefined` as a meaningful value if desired.
    */
   showDialog<DialogTabType extends DialogTabTypes>(
     dialogType: DialogTabType,
@@ -25,9 +25,8 @@ export interface DialogService {
   /**
    * Shows a select project dialog to the user and prompts the user to select a dialog
    *
-   * @param options various options for configuring the dialog that shows
-   *
-   * @returns returns the user's selected project id or `null` if the user cancels
+   * @param options Various options for configuring the dialog that shows
+   * @returns Returns the user's selected project id or `null` if the user cancels
    */
   selectProject(options?: DialogOptions): Promise<string | null>;
 }

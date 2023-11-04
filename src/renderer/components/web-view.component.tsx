@@ -78,7 +78,8 @@ export default function WebView({
 
 /**
  * Tell the web view service to load the web view with the provided saved definition
- * @param data web view definition to load
+ *
+ * @param data Web view definition to load
  */
 async function retrieveWebViewContent(data: SavedWebViewDefinition): Promise<void> {
   const loadedId = await getWebView(data.webViewType, undefined, {

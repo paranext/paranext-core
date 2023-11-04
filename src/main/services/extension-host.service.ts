@@ -1,6 +1,4 @@
-/**
- * Service that runs the extension-host process from the main file
- */
+/** Service that runs the extension-host process from the main file */
 
 import {
   ARG_EXTENSION_DIRS,
@@ -48,10 +46,8 @@ async function waitForExtensionHost(maxWaitTimeInMS: number) {
   if (!didClose) killExtensionHost();
 }
 
-/**
- * Hard kills the extension host process.
- * TODO: add a more elegant shutdown to avoid this if we possibly can
- */
+/** Hard kills the extension host process. */
+// TODO: add a more elegant shutdown to avoid this if we possibly can
 function killExtensionHost() {
   if (!extensionHost) return;
 
@@ -64,8 +60,8 @@ function killExtensionHost() {
 }
 
 /**
- * Returns an array of the command-line arguments to forward from main (when launching paranext)
- * to the extension host process.
+ * Returns an array of the command-line arguments to forward from main (when launching paranext) to
+ * the extension host process.
  */
 function getCommandLineArgumentsToForward() {
   // Pass through the relevant command-line arguments to the extension host
@@ -75,9 +71,7 @@ function getCommandLineArgumentsToForward() {
   ];
 }
 
-/**
- * Starts the extension host process if it isn't already running.
- */
+/** Starts the extension host process if it isn't already running. */
 async function startExtensionHost() {
   if (extensionHost) return;
 
@@ -151,9 +145,7 @@ async function startExtensionHost() {
   });
 }
 
-/**
- * Service that runs the extension-host process from the main file
- */
+/** Service that runs the extension-host process from the main file */
 const extensionHostService = {
   start: startExtensionHost,
   kill: killExtensionHost,

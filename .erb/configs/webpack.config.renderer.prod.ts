@@ -1,6 +1,4 @@
-/**
- * Build config for electron renderer process
- */
+/** Build config for electron renderer process */
 
 import path from 'path';
 import webpack from 'webpack';
@@ -105,11 +103,9 @@ const configuration: webpack.Configuration = {
     /**
      * Create global constants which can be configured at compile time.
      *
-     * Useful for allowing different behaviour between development builds and
-     * release builds
+     * Useful for allowing different behaviour between development builds and release builds
      *
-     * NODE_ENV should be production so that modules do not perform certain
-     * development checks
+     * NODE_ENV should be production so that modules do not perform certain development checks
      */
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'production',

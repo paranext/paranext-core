@@ -29,11 +29,11 @@ jest.mock('@shared/services/network.service', () => ({
 }));
 jest.mock('@renderer/hooks/papi-hooks/use-promise.hook', () => ({
   __esModule: true,
-  default: /** usePromise Mock */ () => ['mock', false],
+  default: /** `usePromise` Mock */ () => ['mock', false],
 }));
 jest.mock('@renderer/hooks/papi-hooks/use-event.hook', () => ({
   __esModule: true,
-  default: /** useEvent Mock */ () => {},
+  default: /** `useEvent` Mock */ () => {},
 }));
 jest.mock('@renderer/components/docking/platform-dock-layout.component', () => ({
   __esModule: true,

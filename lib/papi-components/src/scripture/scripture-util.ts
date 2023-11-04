@@ -81,7 +81,9 @@ let bookNameOptions: BookNameOption[];
 /**
  * Gets ComboBox options for book names. Use the _bookId_ for reference rather than the _label_ to
  * aid in localization.
- * @remarks This can be localized by loading _label_ with the localized book name.
+ *
+ * @remarks
+ * This can be localized by loading _label_ with the localized book name.
  * @returns An array of ComboBox options for book names.
  */
 export const getBookNameOptions = () => {

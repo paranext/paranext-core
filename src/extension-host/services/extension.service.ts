@@ -1,6 +1,4 @@
-/**
- * Handles setting up activation of and running of extensions
- */
+/** Handles setting up activation of and running of extensions */
 
 import chokidar from 'chokidar';
 import JSZip from 'jszip';
@@ -28,7 +26,7 @@ import LogError from '@shared/log-error.model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
- * https://webpack.js.org/api/module-variables/#__non_webpack_require__-webpack-specific
+ * https://webpack.js.org/api/module-variables/#**non_webpack_require**-webpack-specific
  */
 // eslint-disable-next-line camelcase, no-underscore-dangle
 declare const __non_webpack_require__: typeof require;
@@ -36,8 +34,8 @@ declare const __non_webpack_require__: typeof require;
 /** Extension manifest before it is finalized and frozen */
 
 /**
- * Information about an extension provided by the extension developer.
- * This will be transformed and frozen into an ExtensionInfo before use
+ * Information about an extension provided by the extension developer. This will be transformed and
+ * frozen into an ExtensionInfo before use
  */
 type ExtensionManifest = {
   name: string;
@@ -129,8 +127,9 @@ const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(A
   (extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`,
 );
 
-/** Contents of `nodeFS.readDir()` for all parent folders of extensions
- *  This is expected to be a mixture of directories and ZIP files.
+/**
+ * Contents of `nodeFS.readDir()` for all parent folders of extensions This is expected to be a
+ * mixture of directories and ZIP files.
  */
 async function getExtensionRootDirectoryContents() {
   return Promise.all(extensionRootDirectories.map((extensionUri) => nodeFS.readDir(extensionUri)));
@@ -183,8 +182,9 @@ async function getExtensionUrisToLoad(): Promise<Uri[]> {
   );
 }
 
-/** Process all ZIP file extensions we can find. It might be nice to store unzipped extensions
- *  in memory, but the ESM loader doesn't make that easy. Store them in the file system.
+/**
+ * Process all ZIP file extensions we can find. It might be nice to store unzipped extensions in
+ * memory, but the ESM loader doesn't make that easy. Store them in the file system.
  */
 async function unzipCompressedExtensionFiles(): Promise<void> {
   const zipUris = await getExtensionZipUris();
@@ -241,9 +241,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
   );
 }
 
-/**
- * Get information for all the extensions present
- */
+/** Get information for all the extensions present */
 // TODO: figure out if we can share this code with webpack.util.ts
 async function getExtensions(): Promise<ExtensionInfo[]> {
   const extensionUris = await getExtensionUrisToLoad();
@@ -289,9 +287,7 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
   );
 }
 
-/**
- * Watch for changes in the extension directories
- */
+/** Watch for changes in the extension directories */
 function watchForExtensionChanges(): UnsubscriberAsync {
   const reloadExtensionsDebounced = debounce(async () => {
     try {
@@ -323,9 +319,10 @@ function watchForExtensionChanges(): UnsubscriberAsync {
  * Loads an extension and runs its activate function.
  *
  * WARNING: This does not shim functionality out of extensions! Do not run this alone. Only run
- *   wrapped in activateExtensions().
- * @param extension - extension info for the extension to activate.
- * @returns unsubscriber that deactivates the extension.
+ * wrapped in activateExtensions().
+ *
+ * @param extension - Extension info for the extension to activate.
+ * @returns Unsubscriber that deactivates the extension.
  */
 async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtension> {
   // Import the extension file. Tell webpack to ignore it because extension files are not in the
@@ -377,8 +374,9 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
 
 /**
  * Load extensions and runs their activate functions.
- * @param extensions extension info for the extensions we want to activate
- * @returns unsubscriber that deactivates the extension
+ *
+ * @param extensions Extension info for the extensions we want to activate
+ * @returns Unsubscriber that deactivates the extension
  */
 async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveExtension[]> {
   /** Include whether that extension has already been imported */
@@ -465,9 +463,10 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
 
 /**
  * Deactivates an active extension.
- * @param extensionName - name of the extension.
+ *
+ * @param extensionName - Name of the extension.
  * @returns `true` if the extension deactivates, `false` if at least one deactivation fails,
- * `undefined` otherwise, e.g. not active, not registered.
+ *   `undefined` otherwise, e.g. not active, not registered.
  */
 async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | undefined> {
   const activeExtension = activeExtensions.get(extension.name);
@@ -497,8 +496,9 @@ async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | 
 
 /**
  * Deactivate all given extensions.
- * @param extensions - extension info for the extensions we want to deactivate.
- * @returns an array of the deactivation results - `true`, `false`, or `undefined`.
+ *
+ * @param extensions - Extension info for the extensions we want to deactivate.
+ * @returns An array of the deactivation results - `true`, `false`, or `undefined`.
  */
 function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | undefined)[]> {
   return Promise.all(
