@@ -99,11 +99,17 @@ const root = {
 // type assert on our end.
 /**
  * Run a query
+ *
+ * @example
+ *
+ * ```typescript
+ * runQuery('{ projects { id name } }');
+ * runQuery( '{ getBook(projectId: "b4c501ad2538989d6fb723518e92408406e232d3", verseRef: {book:
+ *   "JUD", chapter: "1", verse: "1"}) }', );
+ * ```
+ *
  * @param query Text of a GraphQL query
  * @returns Promise to whatever GraphQL resolves for the query
- * @example
- * runQuery('{ projects { id name } }');
- * runQuery('{ getBook(projectId: "b4c501ad2538989d6fb723518e92408406e232d3", verseRef: {book: "JUD", chapter: "1", verse: "1"}) }');
  */
 async function runQuery<ReturnType = unknown>(query: string): Promise<ReturnType> {
   const results = await graphql({
@@ -123,7 +129,10 @@ async function runQuery<ReturnType = unknown>(query: string): Promise<ReturnType
   return results.data as ReturnType;
 }
 
-/** This is just a prototype service for running GraphQL queries. It's not ready for production as-is. */
+/**
+ * This is just a prototype service for running GraphQL queries. It's not ready for production
+ * as-is.
+ */
 const graphqlService = {
   runQuery,
 };

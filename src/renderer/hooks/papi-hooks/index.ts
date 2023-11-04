@@ -25,7 +25,9 @@ export interface PapiHooks {
   useSetting: typeof useSetting;
 }
 
-/** JSDOC SOURCE papiHooks
+/**
+ * JSDOC SOURCE papiHooks
+ *
  * All React hooks to be exposed on the papi
  */
 const papiHooks: PapiHooks = {

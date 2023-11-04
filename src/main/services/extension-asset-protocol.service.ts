@@ -111,9 +111,13 @@ const initialize = () => {
   return initializePromise;
 };
 
-/** Initialize a handler for protocol strings like the following:
- *  papi-extension://extension-name/assets/asset.xyz -> load "asset.xyz" from "assets" directory in "extension-name"
- *  papi-extension://extension-name/assets/subdirectory/asset.xyz -> load "asset.xyz" from "assets/subdirectory" directory in "extension-name"
+/**
+ * Initialize a handler for protocol strings like the following:
+ *
+ * - `papi-extension://extension-name/assets/asset.xyz` -> load "asset.xyz" from "assets" directory in
+ *   "extension-name"
+ * - `papi-extension://extension-name/assets/subdirectory/asset.xyz` -> load "asset.xyz" from
+ *   "assets/subdirectory" directory in "extension-name"
  */
 const extensionAssetProtocolService = {
   initialize,

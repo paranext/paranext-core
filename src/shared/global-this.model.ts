@@ -13,7 +13,8 @@ import {
 } from '@shared/data/web-view.model';
 
 /**
- * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts (renderer), and extension-host.ts (extension host)
+ * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts
+ * (renderer), and extension-host.ts (extension host)
  */
 
 declare global {
@@ -21,26 +22,23 @@ declare global {
   var processType: ProcessType;
   /** Whether this process is packaged or running from sources */
   var isPackaged: boolean;
-  /** Path to the app's resources directory. This is a string representation of the resources uri on frontend */
-  var resourcesPath: string;
   /**
-   * How much logging should be recorded. Defaults to 'info' if not packaged, 'error' if packaged
+   * Path to the app's resources directory. This is a string representation of the resources uri on
+   * frontend
    */
+  var resourcesPath: string;
+  /** How much logging should be recorded. Defaults to 'info' if not packaged, 'error' if packaged */
   var logLevel: LogLevel;
   /**
-   * A function that each React WebView extension must provide for Paranext to display it.
-   * Only used in WebView iframes.
+   * A function that each React WebView extension must provide for Paranext to display it. Only used
+   * in WebView iframes.
    */
   var webViewComponent: FunctionComponent<WebViewProps>;
   /** JSDOC DESTINATION UseWebViewStateHook */
   var useWebViewState: UseWebViewStateHook;
-  /**
-   * Retrieve the value from web view state with the given 'stateKey', if it exists.
-   */
+  /** Retrieve the value from web view state with the given 'stateKey', if it exists. */
   var getWebViewState: <T>(stateKey: string) => T | undefined;
-  /**
-   * Set the value for a given key in the web view state.
-   */
+  /** Set the value for a given key in the web view state. */
   var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
   // Web view "by id" functions are used in the default imports for each webview in web-view.service.ts
   // but probably wouldn't be used in a webview

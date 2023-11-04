@@ -1,6 +1,6 @@
 /**
- * Provides access to fetching resources and such things on the internet over the papi.
- * This is important because extensions should not be able to access the internet outside these functions.
+ * Provides access to fetching resources and such things on the internet over the papi. This is
+ * important because extensions should not be able to access the internet outside these functions.
  */
 
 // TODO: use some more universal cached version of fetch in paranext-core#75
@@ -15,7 +15,9 @@ export interface InternetService {
   fetch: typeof papiFetch;
 }
 
-/** JSDOC SOURCE internetService
+/**
+ * JSDOC SOURCE internetService
+ *
  * Service that provides a way to call `fetch` since the original function is not available
  */
 const internetService: InternetService = {

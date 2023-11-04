@@ -10,29 +10,19 @@ export interface DataHandler {
 }
 
 export type ToolbarProps = PropsWithChildren<{
-  /**
-   * The handler to use for menu commands (and eventually toolbar commands).
-   */
+  /** The handler to use for menu commands (and eventually toolbar commands). */
   commandHandler: CommandHandler;
 
-  /**
-   * The handler to use for menu data if there is no menu provided.
-   */
+  /** The handler to use for menu data if there is no menu provided. */
   dataHandler?: DataHandler;
 
-  /**
-   *  Optional unique identifier
-   */
+  /** Optional unique identifier */
   id?: string;
 
-  /**
-   * The optional grid menu to display. If not specified, the "hamburger" menu will not display.
-   */
+  /** The optional grid menu to display. If not specified, the "hamburger" menu will not display. */
   menu?: GridMenuInfo;
 
-  /**
-   * Additional css classes to help with unique styling of the toolbar
-   */
+  /** Additional css classes to help with unique styling of the toolbar */
   className?: string;
 }>;
 

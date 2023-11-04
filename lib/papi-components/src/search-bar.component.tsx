@@ -6,18 +6,15 @@ import './search-bar.component.css';
 type SearchBarProps = {
   /**
    * Callback fired to handle the search query when button pressed
+   *
    * @param searchQuery
    */
   onSearch: (searchQuery: string) => void;
 
-  /**
-   * Optional string that appears in the search bar without a search string
-   */
+  /** Optional string that appears in the search bar without a search string */
   placeholder?: string;
 
-  /**
-   * Optional boolean to set the input base to full width
-   */
+  /** Optional boolean to set the input base to full width */
   isFullWidth?: boolean;
 };
 
