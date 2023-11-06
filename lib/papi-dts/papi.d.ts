@@ -12,7 +12,7 @@ declare module 'shared/data/web-view.model' {
   export type SavedTabInfo = {
     /**
      * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this ID will
-     * match the WebViewDefinition.ID
+     * match the `WebViewDefinition.id`
      */
     id: string;
     /** Type of tab - indicates what kind of built-in tab this info represents */
@@ -154,6 +154,8 @@ declare module 'shared/data/web-view.model' {
      * If you plan on embedding any iframes in your WebView, it is best practice to list only the
      * host values you need to function. The more you list, the higher the theoretical security
      * risks.
+     *
+     * ~-~
      *
      * **For URL WebViews:** List of strings representing RegExp patterns (passed into [the RegExp
      * constructor](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/RegExp))
@@ -3303,7 +3305,7 @@ declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
    *   updated every render
    * @param preserveValue Whether to leave the value as the most recent resolved promise value or
    *   set it back to defaultValue while running the promise again. Default to true
-   * @returns {undefined} Value, isLoading
+   * @returns `[value, isLoading]`
    *
    *   - `value`: the current value for the promise, either the defaultValue or the resolved promise
    *       value
@@ -3580,7 +3582,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
    *   updated every render
-   * @returns {undefined} Setting, setSetting
+   * @returns `[setting, setSetting]`
    *
    *   - `setting`: The current state of the setting, either the defaultState or the stored state on the
    *       papi, if any

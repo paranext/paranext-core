@@ -18,7 +18,7 @@ import { useEffect, useState } from 'react';
  *   updated every render
  * @param preserveValue Whether to leave the value as the most recent resolved promise value or set
  *   it back to defaultValue while running the promise again. Default to true
- * @returns {undefined} Value, isLoading
+ * @returns `[value, isLoading]`
  *
  *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
  *   - `isLoading`: whether the promise is waiting to be resolved

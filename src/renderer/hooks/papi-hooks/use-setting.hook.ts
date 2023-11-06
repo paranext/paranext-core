@@ -17,7 +17,7 @@ import { SettingNames, SettingTypes } from 'papi-shared-types';
  *
  *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
  *   updated every render
- * @returns {undefined} Setting, setSetting
+ * @returns `[setting, setSetting]`
  *
  *   - `setting`: The current state of the setting, either the defaultState or the stored state on the
  *       papi, if any

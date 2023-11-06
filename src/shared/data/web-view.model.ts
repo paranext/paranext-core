@@ -9,7 +9,7 @@ import { Dispatch, ReactNode, SetStateAction } from 'react';
 export type SavedTabInfo = {
   /**
    * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this ID will
-   * match the WebViewDefinition.ID
+   * match the `WebViewDefinition.id`
    */
   id: string;
   /** Type of tab - indicates what kind of built-in tab this info represents */
@@ -155,6 +155,8 @@ type WebViewDefinitionBase = {
    *
    * If you plan on embedding any iframes in your WebView, it is best practice to list only the host
    * values you need to function. The more you list, the higher the theoretical security risks.
+   *
+   * ~-~
    *
    * **For URL WebViews:** List of strings representing RegExp patterns (passed into [the RegExp
    * constructor](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/RegExp))
