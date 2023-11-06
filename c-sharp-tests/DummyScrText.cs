@@ -22,6 +22,9 @@ namespace TestParanextDataProvider
             Settings.Editable = true;
             Settings.UsfmVersion = UsfmVersionOption.Version3;
 
+            cachedDefaultStylesheet.Set(new DummyScrStylesheet());
+            cachedFrontBackStylesheet.Set(cachedDefaultStylesheet);
+            
             LanguageId langId = new("dmy", null, null, null);
             DummyScrLanguage language = new(this);
             language.SetLanguageId(langId);

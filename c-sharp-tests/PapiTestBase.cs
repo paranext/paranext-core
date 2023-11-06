@@ -3,11 +3,10 @@ using Paranext.DataProvider.Projects;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
-using Paranext.DataProvider.ParatextUtils;
 using Paratext.Data;
 using PtxUtils;
-using Newtonsoft.Json;
 using Paranext.DataProvider.Messages;
+using System.Web;
 
 namespace TestParanextDataProvider
 {
@@ -19,18 +18,13 @@ namespace TestParanextDataProvider
         private DummyLocalProjects? _projects;
         #endregion
 
-        #region Constructor
-        static PapiTestBase()
-        {
-            string testFolder = Path.Combine(Path.GetTempPath(), "Platform.Bible.Tests", Path.GetRandomFileName());
-            ParatextGlobals.Initialize(testFolder);
-        }
-        #endregion
-
         #region Test setup/teardown
         [SetUp]
         public virtual void TestSetup()
         {
+            if (OperatingSystem.IsMacOS())
+                Assert.Ignore("Mac is missing ICU support so these tests will not work");
+
             _projects = new DummyLocalProjects();
             _client = new DummyPapiClient();
         }
@@ -111,7 +105,7 @@ namespace TestParanextDataProvider
         /// </summary>
         protected static JsonNode CreateJsonString(string data)
         {
-            JsonNode node = JsonNode.Parse($"{{ \"data\":{JsonConvert.ToString(data)} }}")!;
+            JsonNode node = JsonNode.Parse($"{{ \"data\":\"{HttpUtility.JavaScriptStringEncode(data)}\" }}")!;
             return node.Root["data"]!;
         }
 
@@ -136,7 +130,7 @@ namespace TestParanextDataProvider
                 switch (param)
                 {
                     case string str:
-                        jsonBldr.Append(JsonConvert.ToString(str));
+                        jsonBldr.Append("\"").Append(HttpUtility.JavaScriptStringEncode(str)).Append("\"");
                         break;
                     case JsonNode node:
                         jsonBldr.Append(node.ToJsonString());

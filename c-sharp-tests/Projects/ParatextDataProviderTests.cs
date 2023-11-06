@@ -10,6 +10,7 @@ namespace TestParanextDataProvider.Projects
 {
     internal class ParatextDataProviderTests : PsiTestBase
     {
+        private const string PdpName = "soup";
         private const string PdpDataRequest = "object:soup-pdp-data.function";
 
         private ScrText _scrText = null!; // Will be non-null when the test runs
@@ -34,7 +35,7 @@ namespace TestParanextDataProvider.Projects
             Random random = new();
             int requesterId = random.Next();
 
-            ParatextProjectDataProvider provider = new(Psi, "soup", Client, _projectDetails);
+            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
             JsonElement serverMessage = CreateRequestMessage(function);
@@ -60,7 +61,7 @@ namespace TestParanextDataProvider.Projects
             Random random = new();
             int requesterId = random.Next();
 
-            ParatextProjectDataProvider provider = new(Psi, "soup", Client, _projectDetails);
+            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
             JsonElement serverMessage =
@@ -94,7 +95,7 @@ namespace TestParanextDataProvider.Projects
             _scrText.PutText(1, 0, false,
                 @"\id GEN \ip intro \c 1 \v 1 some text \c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven \c 3 \p \v 1 bla", null);
 
-            ParatextProjectDataProvider provider = new(Psi, "soup", Client, _projectDetails);
+            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
             JsonElement serverMessage =
@@ -122,7 +123,7 @@ namespace TestParanextDataProvider.Projects
             _scrText.PutText(1, 0, false,
                 @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla", null);
 
-            ParatextProjectDataProvider provider = new(Psi, "soup", Client, _projectDetails);
+            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
             JsonElement serverMessage =
@@ -158,7 +159,7 @@ namespace TestParanextDataProvider.Projects
             _scrText.PutText(1, 0, false,
                 @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla", null);
 
-            ParatextProjectDataProvider provider = new(Psi, "soup", Client, _projectDetails);
+            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
             JsonElement serverMessage =
@@ -187,7 +188,7 @@ namespace TestParanextDataProvider.Projects
             Random random = new();
             int requesterId = random.Next();
 
-            ParatextProjectDataProvider provider = new(Psi, "soup", Client, _projectDetails);
+            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
             JsonNode scope = CreateDataScope("myExtension", "myFile.txt");
@@ -205,7 +206,7 @@ namespace TestParanextDataProvider.Projects
             Random random = new();
             int requesterId = random.Next();
 
-            ParatextProjectDataProvider provider = new(Psi, "soup", Client, _projectDetails);
+            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
             JsonNode scope = CreateDataScope("myExtension", "myFile.txt");

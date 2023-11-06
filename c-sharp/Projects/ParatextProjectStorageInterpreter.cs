@@ -1,3 +1,4 @@
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
@@ -176,7 +177,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (scope.DataQualifier == null)
             return ResponseToRequest.Failed("Must provide a data qualifier");
 
-        var dataStream = GetExtensionStream(scope, false);
+        using var dataStream = GetExtensionStream(scope, false);
         if (dataStream == null)
             return ResponseToRequest.Failed("Extension data not found");
 
@@ -193,7 +194,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (scope.DataQualifier == null)
             return ResponseToRequest.Failed("Must provide a data qualifier");
 
-        var dataStream = GetExtensionStream(scope, true);
+        using var dataStream = GetExtensionStream(scope, true);
         if (dataStream == null)
             return ResponseToRequest.Failed("Unable to create extension data");
 
@@ -204,12 +205,14 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                 WriteScope.ProjectData(scrText),
                 writeLock =>
                 {
+                    // ReSharper disable AccessToDisposedClosure
                     if (!writeLock.Active)
                         throw new Exception("Write lock is not active");
                     dataStream.SetLength(0);
                     using TextWriter textWriter = new StreamWriter(dataStream, Encoding.UTF8);
                     textWriter.Write(data);
                     textWriter.Flush();
+                    // ReSharper restore AccessToDisposedClosure
                 }
             );
             // The value of returned string is case sensitive and cannot change unless data provider subscriptions change
@@ -222,11 +225,18 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     }
     #endregion
 
-    #region Private helper methods
-    private static Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
+    #region Protected methods
+    protected virtual IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails)
     {
-        var projectDetails = LocalProjects.GetProjectDetails(scope.ProjectID!);
-        RawDirectoryProjectStreamManager extensionStreamManager = new(projectDetails);
+        return new RawDirectoryProjectStreamManager(projectDetails);
+    }
+    #endregion
+
+    #region Private helper methods
+    private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
+    {
+        var projectDetails = _projects.GetProjectDetails(scope.ProjectID!);
+        IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
         return extensionStreamManager.GetDataStream(
             $"extensions/{scope.ExtensionName}/{scope.DataQualifier}",
             createIfNotExists
