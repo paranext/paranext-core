@@ -11,7 +11,10 @@ import {
   getWebView,
   saveTabInfoBase,
   convertWebViewDefinitionToSaved,
-  DEFAULT_IFRAME_SANDBOX,
+  WEBVIEW_IFRAME_SRCDOC_SANDBOX,
+  WEBVIEW_IFRAME_SRC_SANDBOX,
+  IFRAME_SANDBOX_ALLOW_SCRIPTS,
+  IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
 } from '@shared/services/web-view.service';
 import logger from '@shared/services/logger.service';
 
@@ -21,10 +24,20 @@ export function getTitle({ webViewType, title, contentType }: Partial<WebViewTab
   return title || `${webViewType || contentType} Web View`;
 }
 
-export default function WebView({ webViewType, content, title, contentType }: WebViewTabProps) {
+export default function WebView({
+  webViewType,
+  content,
+  title,
+  contentType,
+  allowScripts,
+  allowSameOrigin,
+}: WebViewTabProps) {
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const iframeRef = useRef<HTMLIFrameElement>(null!);
+
+  /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
+  const shouldUseSrc = contentType === WebViewContentType.URL;
 
   // TODO: We may be catching iframe exceptions moving forward by posting messages from the child
   // iframe to the parent, so it might be good to figure out how it works to add and remove a
@@ -38,12 +51,27 @@ export default function WebView({ webViewType, content, title, contentType }: We
       title={getTitle({ webViewType, title, contentType })}
       /**
        * Sandbox attribute for the webview - controls what resources scripts and other things can
-       * access. See `ALLOWED_IFRAME_SANDBOX_VALUES` in `web-view.service.ts` for more information.
+       * access. See `ALLOWED_IFRAME_SRC_SANDBOX_VALUES` in `web-view.service.ts` for more info.
+       *
+       * Note that this does NOT change after the iframe is first added to the dom. We are relying
+       * on the `MutationObserver` in `web-view.service.ts` to catch if an extension tries to change
+       * its WebViewContentType and src/srcdoc to some combination that is forbidden (unless
+       * changing src or srcdoc re-adds the iframe to the dom, in which case it is fine)
+       *
+       * TODO: test this sometime to see what happens
        *
        * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
        */
-      sandbox={DEFAULT_IFRAME_SANDBOX}
-      srcDoc={content}
+      sandbox={`${shouldUseSrc ? WEBVIEW_IFRAME_SRC_SANDBOX : WEBVIEW_IFRAME_SRCDOC_SANDBOX}${
+        allowSameOrigin ? ` ${IFRAME_SANDBOX_ALLOW_SAME_ORIGIN}` : ''
+      }${allowScripts ? ` ${IFRAME_SANDBOX_ALLOW_SCRIPTS}` : ''}`}
+      // TODO: csp?
+      // TODO: credentialless?
+      // TODO: referrerpolicy?
+      src={shouldUseSrc ? content : undefined}
+      srcDoc={shouldUseSrc ? undefined : content}
+      // Allow WebViews to go fullscreen because why not (fullscreen YouTube video of Psalms LBL)
+      allow="fullscreen;"
     />
   );
 }
