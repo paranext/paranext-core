@@ -53,24 +53,26 @@ const initialize = (): Promise<void> => {
 /** Prefix on requests that indicates that the request is related to a network object */
 const CATEGORY_NETWORK_OBJECT = 'object';
 
-/** Gets a request type for network requests for the specified network object id and request subtype */
+/** Gets a request type for network requests for the specified network object ID and request subtype */
 const getNetworkObjectRequestType = (id: string, subtype: NetworkObjectRequestSubtype) =>
   serializeRequestType(CATEGORY_NETWORK_OBJECT, `${id}.${subtype}`);
 
 /** Each type of request that can be executed for each network object */
 enum NetworkObjectRequestSubtype {
-  /** get(): string[] of functions that are eligible to be run over the network */
+  /** `get(): string[]` of functions that are eligible to be run over the network */
   Get = 'get',
-  /** function(functionName: string, ...args: unknown[]): unknown - runs a function */
+  /** `function(functionName: string, ...args: unknown[]): unknown` - runs a function */
   Function = 'function',
 }
 
 /**
- * Determine if a network object with the specified id exists remotely (does not check locally)
- * @param id id of the network object - all processes must use this id to look up this network object
- * @param retry whether or not the network service should retry failed requests several times
- * @returns empty array if there is a remote network object with this id, undefined otherwise.
- * TODO: return array of all eligible functions
+ * Determine if a network object with the specified ID exists remotely (does not check locally)
+ *
+ * @param id ID of the network object - all processes must use this ID to look up this network
+ *   object
+ * @param retry Whether or not the network service should retry failed requests several times
+ * @returns Empty array if there is a remote network object with this ID, undefined otherwise. TODO:
+ *   return array of all eligible functions
  */
 const getRemoteNetworkObjectFunctions = async (id: string): Promise<string[] | undefined> => {
   try {
@@ -78,7 +80,7 @@ const getRemoteNetworkObjectFunctions = async (id: string): Promise<string[] | u
       getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
     );
   } catch (e) {
-    // No processes are registered to handle this get request, meaning a network object with this id does not exist
+    // No processes are registered to handle this get request, meaning a network object with this ID does not exist
     // TODO: check the message and throw the error if it is not the right message?
     return undefined;
   }
@@ -96,31 +98,39 @@ type NetworkObjectRegistration = {
   registrationType: NetworkObjectRegistrationType;
   /** Proxy object shared with services that don't own the actual object - returned by "get" */
   networkObject: NetworkObject<NetworkableObject>;
-  /** Emitter that indicates locally when the network object was disposed.
-   *  Run when the network disposal emitter runs for this registration's ID.
+  /**
+   * Emitter that indicates locally when the network object was disposed. Run when the network
+   * disposal emitter runs for this registration's ID.
    */
   onDidDisposeEmitter: PapiEventEmitter<void>;
   /** Function to make the proxy stop working. Should be run on disposing this network object. */
   revokeProxy: () => void;
 };
 
-/** Map of id to network object */
+/** Map of ID to network object */
 const networkObjectRegistrations = new Map<string, NetworkObjectRegistration>();
 
-/** Search locally known network objects for the given ID. Don't look on the network for more objects.
- *  @returns whether we know of an existing network object with the provided id already on the network */
+/**
+ * Search locally known network objects for the given ID. Don't look on the network for more
+ * objects.
+ *
+ * @returns Whether we know of an existing network object with the provided ID already on the
+ *   network
+ */
 const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
 
 /**
- * Emitter for when a network object is disposed. Provides the id so that the local emitter specific to that object can be run.
+ * Emitter for when a network object is disposed. Provides the ID so that the local emitter specific
+ * to that object can be run.
  *
- * Only run on local network object registration! Processes should only dispose their own network objects
+ * Only run on local network object registration! Processes should only dispose their own network
+ * objects
  */
 const onDidDisposeNetworkObjectEmitter = networkService.createNetworkEventEmitter<string>(
   serializeRequestType(CATEGORY_NETWORK_OBJECT, 'onDidDisposeNetworkObject'),
 );
 
-/** Event that fires with a network object id when that object is disposed locally or remotely */
+/** Event that fires with a network object ID when that object is disposed locally or remotely */
 const onDidDisposeNetworkObject = onDidDisposeNetworkObjectEmitter.event;
 
 /** Runs to dispose of local and remote network objects when we receive events telling us to do so */
@@ -215,8 +225,10 @@ const createRemoteProxy = (
     },
   });
 
-/** This proxy enables calling functions on a network object that exists in the same process, but is
- * owned by some other service. We only give the actual network object to the owning service. */
+/**
+ * This proxy enables calling functions on a network object that exists in the same process, but is
+ * owned by some other service. We only give the actual network object to the owning service.
+ */
 const createLocalProxy = (
   objectBeingSet: object,
 ): {
@@ -274,15 +286,17 @@ export function overrideDispose(
 // #region get
 
 /**
- * Get a network object that has previously been set up to be shared on the network.
- * A network object is a proxy to an object living somewhere else that local code can use.
+ * Get a network object that has previously been set up to be shared on the network. A network
+ * object is a proxy to an object living somewhere else that local code can use.
  *
  * Running this function twice with the same inputs yields the same network object.
- * @param id id of the network object - all processes must use this id to look up this network object
+ *
+ * @param id ID of the network object - all processes must use this ID to look up this network
+ *   object
  * @param createLocalObjectToProxy Function that creates an object that the network object proxy
- * will be based upon. The object this function creates cannot have an `onDidDispose` property.
- * This function is useful for setting up network events on a network object.
- * @returns A promise for the network object with specified id if one exists, undefined otherwise
+ *   will be based upon. The object this function creates cannot have an `onDidDispose` property.
+ *   This function is useful for setting up network events on a network object.
+ * @returns A promise for the network object with specified ID if one exists, undefined otherwise
  */
 const get = async <T extends object>(
   id: string,
@@ -364,14 +378,15 @@ const get = async <T extends object>(
 
 /**
  * Set up an object to be shared on the network.
+ *
  * @param id ID of the object to share on the network. All processes must use this ID to look it up.
  * @param objectToShare The object to set up as a network object. It will have an event named
- * `onDidDispose` added to its properties. An error will be thrown if the object already had an
- * `onDidDispose` property on it. If the object already contained a `dispose` function, a new
- * `dispose` function will be set that calls the existing function (amongst other things). If the
- * object did not already define a `dispose` function, one will be added.
+ *   `onDidDispose` added to its properties. An error will be thrown if the object already had an
+ *   `onDidDispose` property on it. If the object already contained a `dispose` function, a new
+ *   `dispose` function will be set that calls the existing function (amongst other things). If the
+ *   object did not already define a `dispose` function, one will be added.
  *
- * WARNING: setting a network object mutates the provided object.
+ *   WARNING: setting a network object mutates the provided object.
  * @returns `objectToShare` modified to be a network object
  */
 
@@ -384,10 +399,10 @@ const set = async <T extends NetworkableObject>(
   // Don't allow simultaneous sets to run for the same network object
   const lock: Mutex = setterMutexMap.get(id);
   return lock.runExclusive(async () => {
-    // Check to see if we already know there is a network object with this id.
+    // Check to see if we already know there is a network object with this ID.
     if (hasKnown(id)) throw new Error(`Network object with id ${id} is already registered`);
 
-    // Check if there is a network object with this id remotely by trying to register it
+    // Check if there is a network object with this ID remotely by trying to register it
     const unsubPromises = [
       networkService.registerRequestHandler(
         getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
@@ -485,21 +500,22 @@ interface NetworkObjectService {
 }
 
 /**
- * Network objects are distributed objects within PAPI for TS/JS objects.
- * @see https://en.wikipedia.org/wiki/Distributed_object
+ * Network objects are distributed objects within PAPI for TS/JS objects. @see
+ * https://en.wikipedia.org/wiki/Distributed_object
  *
- * Objects registered via {@link networkObjectService.set} are retrievable using {@link networkObjectService.get}.
+ * Objects registered via {@link networkObjectService.set} are retrievable using
+ * {@link networkObjectService.get}.
  *
- * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied and
- * sent to the original objects registered via {@link networkObjectService.set}.
+ * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+ * and sent to the original objects registered via {@link networkObjectService.set}.
  *
  * Functions on a network object will be called asynchronously by other processes regardless of
  * whether the functions are synchronous or asynchronous, so it is best to make them all
- * asynchronous. All shared functions' arguments and return values must be serializable to be
- * called across processes.
+ * asynchronous. All shared functions' arguments and return values must be serializable to be called
+ * across processes.
  *
- * When a service registers an object via {@link networkObjectService.set}, it is the responsibility of
- * that service, and only that service, to call `dispose` on that object when it is no longer
+ * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+ * of that service, and only that service, to call `dispose` on that object when it is no longer
  * intended to be shared with other services.
  *
  * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`

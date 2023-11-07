@@ -48,7 +48,7 @@ export type DialogProps<TData = unknown> = DialogData & {
   /**
    * Sends the data as a resolved response to the dialog request and closes the dialog
    *
-   * @param data data with which to resolve the request
+   * @param data Data with which to resolve the request
    */
   submitDialog(data: TData): void;
   /** Cancels the dialog request (resolves the response with `null`) and closes the dialog */
@@ -56,7 +56,7 @@ export type DialogProps<TData = unknown> = DialogData & {
   /**
    * Rejects the dialog request with the specified message and closes the dialog
    *
-   * @param errorMessage message to explain why the dialog request was rejected
+   * @param errorMessage Message to explain why the dialog request was rejected
    */
   rejectDialog(errorMessage: string): void;
 };
@@ -120,8 +120,8 @@ function rejectDialogRequest(id: string, message: string) {
  * `dialog.service-host.ts` immediately on startup and by nothing else. This is only here to
  * mitigate a dependency cycle
  *
- * @param dialogServiceFunctions functions from the dialog service host for resolving and rejecting
- * dialogs
+ * @param dialogServiceFunctions Functions from the dialog service host for resolving and rejecting
+ *   dialogs
  */
 export function hookUpDialogService({
   resolveDialogRequest: resolve,

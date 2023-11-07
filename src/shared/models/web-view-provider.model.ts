@@ -13,8 +13,8 @@ import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
 // What the developer registers
 export interface IWebViewProvider extends NetworkableObject {
   /**
-   * @param savedWebView filled out if an existing webview is being called for (matched by id).
-   * Just id if this is a new request or if the web view with the existing id was not found
+   * @param savedWebView Filled out if an existing webview is being called for (matched by ID). Just
+   *   ID if this is a new request or if the web view with the existing ID was not found
    * @param getWebViewOptions
    */
   getWebView(

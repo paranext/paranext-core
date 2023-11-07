@@ -47,3 +47,6 @@ extensions
 
 # generated files
 package-lock.json
+bin
+obj
+

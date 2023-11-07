@@ -3,30 +3,26 @@ import { Dispatch, ReactNode, SetStateAction } from 'react';
 /**
  * Saved information used to recreate a tab.
  *
- * {@link TabLoader} loads this into {@link TabInfo}
- * {@link TabSaver} saves {@link TabInfo} into this
+ * - {@link TabLoader} loads this into {@link TabInfo}
+ * - {@link TabSaver} saves {@link TabInfo} into this
  */
 export type SavedTabInfo = {
   /**
-   * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this id will
-   * match the WebViewDefinition.id
+   * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this ID will
+   * match the `WebViewDefinition.id`
    */
   id: string;
-  /**
-   * Type of tab - indicates what kind of built-in tab this info represents
-   */
+  /** Type of tab - indicates what kind of built-in tab this info represents */
   tabType: string;
-  /**
-   * Data needed to load the tab
-   */
+  /** Data needed to load the tab */
   data?: unknown;
 };
 
 /**
  * Information that Paranext uses to create a tab in the dock layout.
  *
- * {@link TabLoader} loads {@link SavedTabInfo} into this
- * {@link TabSaver} saves this into {@link SavedTabInfo}
+ * - {@link TabLoader} loads {@link SavedTabInfo} into this
+ * - {@link TabSaver} saves this into {@link SavedTabInfo}
  */
 export type TabInfo = SavedTabInfo & {
   /**
@@ -35,21 +31,13 @@ export type TabInfo = SavedTabInfo & {
    * Defaults to Platform.Bible logo
    */
   tabIconUrl?: string;
-  /**
-   * Text to show on the title bar of the tab
-   */
+  /** Text to show on the title bar of the tab */
   tabTitle: string;
-  /**
-   * Content to show inside the tab.
-   */
+  /** Content to show inside the tab. */
   content: ReactNode;
-  /**
-   * (optional) Minimum width that the tab can become in CSS `px` units
-   */
+  /** (optional) Minimum width that the tab can become in CSS `px` units */
   minWidth?: number;
-  /**
-   * (optional) Minimum height that the tab can become in CSS `px` units
-   */
+  /** (optional) Minimum height that the tab can become in CSS `px` units */
   minHeight?: number;
 };
 
@@ -66,8 +54,7 @@ export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
  * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
  * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
  *
- * @param tabInfo the Paranext tab to save
- *
+ * @param tabInfo The Paranext tab to save
  * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
  */
 export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
@@ -92,14 +79,14 @@ export enum WebViewContentType {
 /** What type a WebView is. Each WebView definition must have a unique type. */
 export type WebViewType = string;
 
-/** Id for a specific WebView. Each WebView has a unique id */
+/** ID for a specific WebView. Each WebView has a unique ID */
 export type WebViewId = string;
 
 /** Base WebView properties that all WebViews share */
 type WebViewDefinitionBase = {
   /** What type of WebView this is. Unique to all other WebView definitions */
   webViewType: WebViewType;
-  /** Unique id among webviews specific to this webview instance. */
+  /** Unique ID among webviews specific to this webview instance. */
   id: WebViewId;
   /** The code for the WebView that papi puts into an iframe */
   content: string;
@@ -116,14 +103,14 @@ type WebViewDefinitionBase = {
   /**
    * Whether to allow the WebView iframe to interact with its parent as a same-origin website.
    * Setting this to true adds `allow-same-origin` to the WebView iframe's [sandbox attribute]
-   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to `true`.
+   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to
+   * `true`.
    *
    * Setting this to false on an HTML or React WebView prevents the iframe from importing the `papi`
    * and such and also prevents others from accessing its document. This could be useful when you
    * need secure input from the user because other WebViews may be able to attach event listeners to
-   * your inputs if you are on the same origin. Setting this to `false` on HTML or React WebViews
-   * is a big security win, but it makes interacting with the platform more challenging in some
-   * ways.
+   * your inputs if you are on the same origin. Setting this to `false` on HTML or React WebViews is
+   * a big security win, but it makes interacting with the platform more challenging in some ways.
    *
    * Setting this to false on a URL WebView prevents the iframe from accessing same-origin features
    * on its host website like storage APIs (localstorage, cookies, etc) and such. This will likely
@@ -131,8 +118,8 @@ type WebViewDefinitionBase = {
    *
    * It is best practice to set this to `false` where possible.
    *
-   * Note: Until we have a message-passing API for WebViews, there is currently no way to
-   * interact with the platform via a WebView with `allowSameOrigin: false`.
+   * Note: Until we have a message-passing API for WebViews, there is currently no way to interact
+   * with the platform via a WebView with `allowSameOrigin: false`.
    *
    * WARNING: If your WebView accepts secure user input like passwords on HTML or React WebViews,
    * you MUST set this to `false` or you will risk exposing that secure input to other extensions
@@ -146,12 +133,15 @@ type WebViewDefinitionBase = {
    * for HTML and React WebViews and `false` for URL WebViews
    *
    * WARNING: Setting this to `true` increases the possibility of a security threat occurring. If it
-   * is not necessary to run scripts in your WebView, you should set this to `false` to reduce risk.
+   * is not necessary to run scripts in your WebView, you should set this to `false` to reduce
+   * risk.
    */
   allowScripts?: boolean;
   /**
-   * **For HTML and React WebViews:** List of [Host or scheme values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy#hosts_values)
-   * to include in the [`frame-src` directive](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-src)
+   * **For HTML and React WebViews:** List of [Host or scheme
+   * values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy#hosts_values)
+   * to include in the [`frame-src`
+   * directive](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-src)
    * for this WebView's iframe content-security-policy. This allows iframes with `src` attributes
    * matching these host values to be loaded in your WebView. You can only specify values starting
    * with `papi-extension:` and `https:`; any others are ignored. Specifying urls in this array
@@ -160,15 +150,16 @@ type WebViewDefinitionBase = {
    * attribute in your webview, you must include them in this property.
    *
    * For example, if you specify `allowFrameSources: ['https://example.com/']`, you will be able to
-   * embed iframes with urls starting with `papi-extension:` and on the same host as `https://example.com/`
+   * embed iframes with urls starting with `papi-extension:` and on the same host as
+   * `https://example.com/`
    *
    * If you plan on embedding any iframes in your WebView, it is best practice to list only the host
    * values you need to function. The more you list, the higher the theoretical security risks.
    *
-   * ----
+   * ~-~
    *
-   * **For URL WebViews:** List of strings representing RegExp patterns (passed into
-   * [the RegExp constructor](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/RegExp))
+   * **For URL WebViews:** List of strings representing RegExp patterns (passed into [the RegExp
+   * constructor](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/RegExp))
    * to match against the `content` url specified (using the
    * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
    * function) to determine whether this iframe will be allowed to load. Specifying urls in this
@@ -179,9 +170,9 @@ type WebViewDefinitionBase = {
    * Note: URL WebViews must have `papi-extension:` or `https:` urls. This property does not
    * override that requirement.
    *
-   * For example, if you specify
-   * `allowFrameSources: ['^papi-extension:', '^https://example\\.com.*']`, only `papi-extension:` and
-   * `https://example.com` urls will be accepted.
+   * For example, if you specify `allowFrameSources: ['^papi-extension:',
+   * '^https://example\\.com.*']`, only `papi-extension:` and `https://example.com` urls will be
+   * accepted.
    *
    * If your WebView url is a `const` string and cannot change for any reason, you do not need to
    * specify this property. However, if your WebView url is dynamic and can change in any way, it is
@@ -223,7 +214,7 @@ export type WebViewDefinition =
 
 /**
  * Saved WebView information that does not contain the actual content of the WebView. Saved into
- * layouts. Could have as little as the type and id. WebView providers load these into actual
+ * layouts. Could have as little as the type and ID. WebView providers load these into actual
  * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
  */
 export type SavedWebViewDefinition =
@@ -237,9 +228,7 @@ export type SavedWebViewDefinition =
 /** Props that are passed to the web view tab component */
 export type WebViewTabProps = WebViewDefinition;
 
-/**
- * The properties on a WebViewDefinition that may be updated when that webview is already displayed
- */
+/** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
 // To allow more properties to be updated, add them in
 // `web-view.service.ts` -> `getUpdatablePropertiesFromWebViewDefinition`
 export type WebViewDefinitionUpdatableProperties = Pick<WebViewDefinitionBase, 'iconUrl' | 'title'>;
@@ -258,26 +247,30 @@ export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProp
 // destructured members of object types, so using WebViewProps as
 // `{ useWebViewState }: WebViewProps` was not carrying the annotations out to the new
 // `useWebViewState` variable. One day, this may work, so we can fix this JSDoc back to using real @
-/** JSDOC SOURCE UseWebViewStateHook
+/**
+ * JSDOC SOURCE UseWebViewStateHook
+ *
  * A React hook for working with a state object tied to a webview. Returns a WebView state value and
  * a function to set it. Use similarly to `useState`.
  *
  * Only used in WebView iframes.
  *
- * *＠param* `stateKey` Key of the state value to use. The webview state holds a unique value per
+ * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
  * key.
  *
  * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
  *
- * *＠param* `defaultStateValue` Value to use if the web view state didn't contain a value for the
+ * _＠param_ `defaultStateValue` Value to use if the web view state didn't contain a value for the
  * given 'stateKey'
  *
- * *＠returns* `[stateValue, setStateValue]`
- *  - `stateValue`: the current value for the web view state at the key specified or
- *    `defaultStateValue` if a state was not found
- *  - `setStateValue`: function to use to update the web view state value at the key specified
+ * _＠returns_ `[stateValue, setStateValue]`
  *
- * *＠example*
+ * - `stateValue`: the current value for the web view state at the key specified or
+ *   `defaultStateValue` if a state was not found
+ * - `setStateValue`: function to use to update the web view state value at the key specified
+ *
+ * _＠example_
+ *
  * ```typescript
  * const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen', 'No one');
  * ```
@@ -290,10 +283,12 @@ export type UseWebViewStateHook = <T>(
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
 // destructured members of object types. See comment above UseWebViewStateHook for more info.
-/** JSDOC SOURCE GetWebViewDefinitionUpdatableProperties
+/**
+ * JSDOC SOURCE GetWebViewDefinitionUpdatableProperties
+ *
  * Gets the updatable properties on this WebView's WebView definition
  *
- * *＠returns* updatable properties this WebView's WebView definition or undefined if not found for
+ * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found for
  * some reason
  */
 export type GetWebViewDefinitionUpdatableProperties = () =>
@@ -303,24 +298,25 @@ export type GetWebViewDefinitionUpdatableProperties = () =>
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
 // destructured members of object types. See comment above UseWebViewStateHook for more info.
-/** JSDOC SOURCE UpdateWebViewDefinition
+/**
+ * JSDOC SOURCE UpdateWebViewDefinition
+ *
  * Updates this WebView with the specified properties
  *
- * *＠param* `updateInfo` properties to update on the WebView. Any unspecified
- * properties will stay the same
+ * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
+ * the same
  *
- * *＠returns* true if successfully found the WebView to update; false otherwise
+ * _＠returns_ true if successfully found the WebView to update; false otherwise
  *
- * *＠example*
+ * _＠example_
+ *
  * ```typescript
- * updateWebViewDefinition({ title: `Hello ${name}`});
+ * updateWebViewDefinition({ title: `Hello ${name}` });
  * ```
  */
 export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) => boolean;
 
-/**
- * Props that are passed into the web view itself inside the iframe in the web view tab component
- */
+/** Props that are passed into the web view itself inside the iframe in the web view tab component */
 export type WebViewProps = {
   /** JSDOC DESTINATION UseWebViewStateHook */
   useWebViewState: UseWebViewStateHook;
@@ -338,9 +334,9 @@ interface TabLayout {
 /**
  * Indicates where to display a floating window
  *
- * `cascade` - place the window a bit below and to the right of the previously created floating
- *    window
- * `center` - center the window in the dock layout
+ * - `cascade` - place the window a bit below and to the right of the previously created floating
+ *   window
+ * - `center` - center the window in the dock layout
  */
 type FloatPosition = 'cascade' | 'center';
 
@@ -388,8 +384,8 @@ export type AddWebViewEvent = {
 /** Options that affect what `webViews.getWebView` does */
 export type GetWebViewOptions = {
   /**
-   * If provided and if a web view with this id exists, requests from the web view provider an
-   * existing WebView with this id if one exists. The web view provider can deny the request if it
+   * If provided and if a web view with this ID exists, requests from the web view provider an
+   * existing WebView with this ID if one exists. The web view provider can deny the request if it
    * chooses to do so.
    *
    * Alternatively, set this to '?' to attempt to find any existing web view with the specified
@@ -401,7 +397,7 @@ export type GetWebViewOptions = {
    */
   existingId?: string | '?' | undefined;
   /**
-   * Whether to create a webview with a new id and a webview with id `existingId` was not found.
+   * Whether to create a webview with a new ID and a webview with ID `existingId` was not found.
    * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
    * ignored.
    *

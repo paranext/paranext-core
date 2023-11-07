@@ -279,19 +279,13 @@ function fetchSettingsComponents(): SettingsComponents {
 }
 
 type SettingsDialogProps = {
-  /**
-   * Settings "metadata"
-   */
+  /** Settings "metadata" */
   contributions: SettingsContribution;
 
-  /**
-   * Object that stores the current value of the setting with specific settingId
-   */
+  /** Object that stores the current value of the setting with specific settingId */
   settingValues: SettingsValues;
 
-  /**
-   * Object that stores the components of the setting with specific settingId
-   */
+  /** Object that stores the components of the setting with specific settingId */
   components: SettingsComponents;
 };
 

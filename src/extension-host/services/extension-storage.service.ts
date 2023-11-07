@@ -13,8 +13,9 @@ import { Buffer } from 'buffer';
 
 let registeredUrisPerExtension: Map<string, string> = new Map();
 
-/** This is only intended to be called by the extension service.
- *  This service cannot call into the extension service or it causes a circular dependency.
+/**
+ * This is only intended to be called by the extension service. This service cannot call into the
+ * extension service or it causes a circular dependency.
  */
 export function setExtensionUris(urisPerExtension: Map<string, string>) {
   registeredUrisPerExtension = urisPerExtension;
@@ -53,11 +54,13 @@ export function buildExtensionPathFromName(extensionName: string, fileName: stri
   return joinUriPaths(baseUri, fileName);
 }
 
-/** Return a path to a file unique to:
- *  1) The extension identified by the token,
- *  2) The current user (as identified by the OS), and
- *  3) The key provided by the extension
- * */
+/**
+ * Return a path to a file unique to:
+ *
+ * 1. The extension identified by the token,
+ * 2. The current user (as identified by the OS), and
+ * 3. The key provided by the extension
+ */
 function buildUserDataPath(token: ExecutionToken, key: string): string {
   if (!executionTokenService.tokenIsValid(token)) throw new Error('Invalid token');
   const subDir: string = sanitizeDirectoryName(token.name);
@@ -76,10 +79,12 @@ function buildUserDataPath(token: ExecutionToken, key: string): string {
 
 // TODO: Add functions to read/write to project files once we have something to represent projects
 
-/** Read a text file from the the extension's installation directory
- *  @param token ExecutionToken provided to the extension when `activate()` was called
- *  @param fileName Name of the file to be read
- *  @returns Promise for a string with the contents of the file
+/**
+ * Read a text file from the the extension's installation directory
+ *
+ * @param token ExecutionToken provided to the extension when `activate()` was called
+ * @param fileName Name of the file to be read
+ * @returns Promise for a string with the contents of the file
  */
 async function readTextFileFromInstallDirectory(
   token: ExecutionToken,
@@ -88,10 +93,12 @@ async function readTextFileFromInstallDirectory(
   return readFileText(buildExtensionPathFromToken(token, fileName));
 }
 
-/** Read a binary file from the the extension's installation directory
- *  @param token ExecutionToken provided to the extension when `activate()` was called
- *  @param fileName Name of the file to be read
- *  @returns Promise for a Buffer with the contents of the file
+/**
+ * Read a binary file from the the extension's installation directory
+ *
+ * @param token ExecutionToken provided to the extension when `activate()` was called
+ * @param fileName Name of the file to be read
+ * @returns Promise for a Buffer with the contents of the file
  */
 async function readBinaryFileFromInstallDirectory(
   token: ExecutionToken,
@@ -100,34 +107,40 @@ async function readBinaryFileFromInstallDirectory(
   return readFileBinary(buildExtensionPathFromToken(token, fileName));
 }
 
-/** Read data specific to the user (as identified by the OS) and extension (as identified by
- *  the ExecutionToken)
- *  @param token ExecutionToken provided to the extension when `activate()` was called
- *  @param key Unique identifier of the data
- *  @returns Promise for a string containing the data
+/**
+ * Read data specific to the user (as identified by the OS) and extension (as identified by the
+ * ExecutionToken)
+ *
+ * @param token ExecutionToken provided to the extension when `activate()` was called
+ * @param key Unique identifier of the data
+ * @returns Promise for a string containing the data
  */
 async function readUserData(token: ExecutionToken, key: string): Promise<string> {
   // This could be changed to some store other than the file system
   return readFileText(buildUserDataPath(token, key));
 }
 
-/** Write data specific to the user (as identified by the OS) and extension (as identified by
- *  the ExecutionToken)
- *  @param token ExecutionToken provided to the extension when `activate()` was called
- *  @param key Unique identifier of the data
- *  @param data Data to be written
- *  @returns Promise that will resolve if the data is written successfully
+/**
+ * Write data specific to the user (as identified by the OS) and extension (as identified by the
+ * ExecutionToken)
+ *
+ * @param token ExecutionToken provided to the extension when `activate()` was called
+ * @param key Unique identifier of the data
+ * @param data Data to be written
+ * @returns Promise that will resolve if the data is written successfully
  */
 async function writeUserData(token: ExecutionToken, key: string, data: string): Promise<void> {
   // This could be changed to some store other than the file system
   return writeFile(buildUserDataPath(token, key), data);
 }
 
-/** Delete data previously written that is specific to the user (as identified by the OS)
- *  and extension (as identified by the ExecutionToken)
- *  @param token ExecutionToken provided to the extension when `activate()` was called
- *  @param key Unique identifier of the data
- *  @returns Promise that will resolve if the data is deleted successfully
+/**
+ * Delete data previously written that is specific to the user (as identified by the OS) and
+ * extension (as identified by the ExecutionToken)
+ *
+ * @param token ExecutionToken provided to the extension when `activate()` was called
+ * @param key Unique identifier of the data
+ * @returns Promise that will resolve if the data is deleted successfully
  */
 async function deleteUserData(token: ExecutionToken, key: string): Promise<void> {
   return deleteFile(buildUserDataPath(token, key));
@@ -144,10 +157,12 @@ export interface ExtensionStorageService {
   deleteUserData: typeof deleteUserData;
 }
 
-/** JSDOC SOURCE extensionStorageService
- * This service provides extensions in the extension host the ability to read/write data
- * based on the extension identity and current user (as identified by the OS). This service will
- * not work within the renderer.
+/**
+ * JSDOC SOURCE extensionStorageService
+ *
+ * This service provides extensions in the extension host the ability to read/write data based on
+ * the extension identity and current user (as identified by the OS). This service will not work
+ * within the renderer.
  */
 const extensionStorageService: ExtensionStorageService = {
   readTextFileFromInstallDirectory,

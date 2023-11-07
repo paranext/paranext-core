@@ -3,9 +3,7 @@ import MenuItem, { CommandHandler, MenuItemInfo } from './menu-item.component';
 import './grid-menu.component.css';
 
 export type MenuColumnInfo = {
-  /**
-   * The name of the menu (displayed as the column header).
-   */
+  /** The name of the menu (displayed as the column header). */
   name: string;
   /*
    * The menu items to include.
@@ -14,37 +12,27 @@ export type MenuColumnInfo = {
 };
 
 type MenuColumnProps = MenuColumnInfo & {
-  /**
-   *  Optional unique identifier
-   */
+  /** Optional unique identifier */
   id?: string;
 
   commandHandler: CommandHandler;
 
-  /**
-   * Additional css classes to help with unique styling of the toolbar
-   */
+  /** Additional css classes to help with unique styling of the toolbar */
   className?: string;
 };
 
 export type GridMenuInfo = {
-  /**
-   * The columns to display on the dropdown menu.
-   */
+  /** The columns to display on the dropdown menu. */
   columns: MenuColumnInfo[];
 };
 
 export type GridMenuProps = GridMenuInfo & {
-  /**
-   *  Optional unique identifier
-   */
+  /** Optional unique identifier */
   id?: string;
 
   commandHandler: CommandHandler;
 
-  /**
-   * Additional css classes to help with unique styling of the toolbar
-   */
+  /** Additional css classes to help with unique styling of the toolbar */
   className?: string;
 };
 

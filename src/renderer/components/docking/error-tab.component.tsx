@@ -16,9 +16,7 @@ export default function ErrorTab({ errorMessage }: { errorMessage: string }) {
   );
 }
 
-/**
- * Creates a new error message tab with the specified error message
- */
+/** Creates a new error message tab with the specified error message */
 export const createErrorTab = (errorMessage: string): TabInfo => {
   return {
     id: newGuid(),

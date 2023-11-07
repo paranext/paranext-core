@@ -1,6 +1,6 @@
 /**
- * Types that are internal to the communication we do through WebSocket.
- * These types should not need to be used outside of NetworkConnectors and ConnectionService.ts
+ * Types that are internal to the communication we do through WebSocket. These types should not need
+ * to be used outside of NetworkConnectors and ConnectionService.ts
  */
 
 import { ComplexRequest, ComplexResponse, SerializedRequestType } from '@shared/utils/papi-util';
@@ -34,8 +34,8 @@ export type ClientConnectEvent = {
 export type ClientDisconnectEvent = { clientId: number };
 
 /**
- * Functions that run when network connector events occur.
- * These should likely be emit functions from NetworkEventEmitters so the events inform all interested connections
+ * Functions that run when network connector events occur. These should likely be emit functions
+ * from NetworkEventEmitters so the events inform all interested connections
  */
 export type NetworkConnectorEventHandlers = {
   /** Handles when a new connection is established */
@@ -44,7 +44,10 @@ export type NetworkConnectorEventHandlers = {
   didClientDisconnectHandler?: (event: ClientDisconnectEvent) => void;
 };
 
-/** Whether this connector is setting up or has finished setting up its connection and is ready to communicate on the network */
+/**
+ * Whether this connector is setting up or has finished setting up its connection and is ready to
+ * communicate on the network
+ */
 export enum ConnectionStatus {
   /** This connector is not connected to the network */
   Disconnected,
@@ -69,7 +72,10 @@ export type InternalResponse<TReturn = unknown> = {
   requesterId: number;
 } & ComplexResponse<TReturn>;
 
-/** Handler for requests from the server. Used internally between network connector and Connection Service */
+/**
+ * Handler for requests from the server. Used internally between network connector and Connection
+ * Service
+ */
 export type InternalRequestHandler = <TParam, TReturn>(
   requestType: string,
   request: InternalRequest<TParam>,
@@ -92,7 +98,10 @@ export type InternalEvent<T> = {
   event: T;
 };
 
-/** Handler for events from on the network. Used internally between network connector and Connection Service */
+/**
+ * Handler for events from on the network. Used internally between network connector and Connection
+ * Service
+ */
 export type InternalNetworkEventHandler = <T>(
   eventType: string,
   incomingEvent: InternalEvent<T>,

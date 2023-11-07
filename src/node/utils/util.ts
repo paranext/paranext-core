@@ -1,6 +1,4 @@
-/**
- * Utilities useful for node processes
- */
+/** Utilities useful for node processes */
 import { URL } from 'url';
 import path from 'path';
 import os from 'os';
@@ -42,11 +40,9 @@ export const getAppDir = memoizeOne((): string => {
     : path.join(__dirname, '../../../dev-appdata');
 });
 
-/**
- * Get a mapping from scheme to the absolute path to that scheme.
- * TODO: this is currently lazy-loaded because globalThis doesn't get populated until after this file is imported.
- * Fix this to be a normal object after fixing globalThis import dependencies.
- */
+/** Get a mapping from scheme to the absolute path to that scheme. */
+// TODO: this is currently lazy-loaded because globalThis doesn't get populated until after this
+// file is imported. Fix this to be a normal object after fixing globalThis import dependencies.
 const getSchemePaths = memoizeOne((): { [scheme: string]: string } => {
   const appDir = getAppDir();
   return {
@@ -58,10 +54,8 @@ const getSchemePaths = memoizeOne((): { [scheme: string]: string } => {
   };
 });
 
-/**
- * Parse a URI from a string into its original parts.
- * TODO: Make URI an actual class. Will be challenging when passing through WebSocket
- */
+/** Parse a URI from a string into its original parts. */
+// TODO: Make URI an actual class. Will be challenging when passing through WebSocket
 function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
   // Add app scheme to the uri if it doesn't have one
   const fullUri = uri.includes(PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
@@ -75,8 +69,9 @@ function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
 
 /**
  * Resolves the uri to a path
- * @param uri the uri to resolve
- * @returns real path to the uri supplied
+ *
+ * @param uri The uri to resolve
+ * @returns Real path to the uri supplied
  */
 export function getPathFromUri(uri: Uri): string {
   const { scheme, uriPath } = getPathInfoFromUri(uri);
@@ -85,9 +80,10 @@ export function getPathFromUri(uri: Uri): string {
 
 /**
  * Combines the uri passed in with the paths passed in to make one uri
- * @param uri uri to start from
- * @param paths paths to combine into the uri
- * @returns one uri that combines the uri and the paths in left-to-right order
+ *
+ * @param uri Uri to start from
+ * @param paths Paths to combine into the uri
+ * @returns One uri that combines the uri and the paths in left-to-right order
  */
 export function joinUriPaths(uri: Uri, ...paths: string[]): Uri {
   const { scheme, uriPath } = getPathInfoFromUri(uri);

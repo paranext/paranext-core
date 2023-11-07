@@ -9,13 +9,9 @@ export interface ExtensionToggleHandler {
 
 export type ExtensionToggleProps = ExtensionCardProps &
   PropsWithChildren<{
-    /**
-     * The array of toggled extension names is passed to control the isChecked flag on Switch
-     */
+    /** The array of toggled extension names is passed to control the isChecked flag on Switch */
     toggledExtensionNames: string[];
-    /**
-     * Handler to perform an action when the extension is toggled
-     */
+    /** Handler to perform an action when the extension is toggled */
     handleExtensionToggle: ExtensionToggleHandler;
   }>;
 

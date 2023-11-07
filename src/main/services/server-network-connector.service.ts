@@ -52,9 +52,7 @@ type WebSocketMessageEvent = { data: Message | any; clientId: number };
 
 // #endregion
 
-/**
- * Handles the endpoint and connections from the server to the clients
- */
+/** Handles the endpoint and connections from the server to the clients */
 export default class ServerNetworkConnector implements INetworkConnector {
   // #region INetworkConnector members
 
@@ -73,10 +71,16 @@ export default class ServerNetworkConnector implements INetworkConnector {
   /** The webSocket clients that are connected and information about them */
   private clientSockets = new Map<number, WebSocketClient>();
 
-  /** All message subscriptions - emitters that emit an event each time a message with a specific message type comes in */
+  /**
+   * All message subscriptions - emitters that emit an event each time a message with a specific
+   * message type comes in
+   */
   private messageEmitters = new Map<MessageType, PapiEventEmitter<WebSocketMessageEvent>>();
 
-  /** Promise that resolves when finished starting the server or rejects if disconnected before the server finishes */
+  /**
+   * Promise that resolves when finished starting the server or rejects if disconnected before the
+   * server finishes
+   */
   private connectPromise?: Promise<NetworkConnectorInfo>;
 
   /** Function that removes this clientConnect handler from connections */
@@ -89,23 +93,21 @@ export default class ServerNetworkConnector implements INetworkConnector {
   private unsubscribeHandleEventMessage?: Unsubscriber;
 
   /**
-   * Function to call when we receive a request that is registered on this connector.
-   * Handles requests from connections and returns a response to send back
+   * Function to call when we receive a request that is registered on this connector. Handles
+   * requests from connections and returns a response to send back
    */
   private localRequestHandler?: InternalRequestHandler;
   /**
-   * Function to call when we are sending a request.
-   * Returns a clientId to which to send the request based on the requestType
+   * Function to call when we are sending a request. Returns a clientId to which to send the request
+   * based on the requestType
    */
   private requestRouter?: RequestRouter;
   /**
-   * Function to call when we receive an event.
-   * Handles events from connections and emits the event locally
+   * Function to call when we receive an event. Handles events from connections and emits the event
+   * locally
    */
   private localEventHandler?: InternalNetworkEventHandler;
-  /**
-   * Functions to run when network connector events occur like when clients are disconnected
-   */
+  /** Functions to run when network connector events occur like when clients are disconnected */
   private networkConnectorEventHandlers?: NetworkConnectorEventHandlers;
 
   /** All requests that are waiting for a response */
@@ -259,8 +261,8 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   /**
    * Attempts to get the client socket for a certain clientGuid. Returns undefined if not found.
-   * This does not throw because it will likely be very common that we do not have a clientId for a certain clientGuid
-   * as connecting clients will often supply old clientGuids.
+   * This does not throw because it will likely be very common that we do not have a clientId for a
+   * certain clientGuid as connecting clients will often supply old clientGuids.
    */
   private getClientSocketFromGuid = (
     clientGuid: string | undefined | null,
@@ -287,8 +289,10 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   /**
    * Send a message to a client via webSocket. Throws if not connected
-   * @param message message to send
-   * @param recipientId the client to which to send the message. TODO: determine if we can intuit this instead
+   *
+   * @param message Message to send
+   * @param recipientId The client to which to send the message. TODO: determine if we can intuit
+   *   this instead
    */
   private sendMessage = (message: Message, recipientId: number): void => {
     // TODO: add message queueing
@@ -314,8 +318,9 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   /**
    * Receives and appropriately publishes webSocket messages
-   * @param event webSocket message information
-   * @param fromSelf whether this message is from this connector instead of from someone else
+   *
+   * @param event WebSocket message information
+   * @param fromSelf Whether this message is from this connector instead of from someone else
    */
   private onMessage = (event: MessageEvent, fromSelf = false) => {
     const data: Message = fromSelf
@@ -340,9 +345,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   /**
    * Subscribes a function to run on webSocket messages of a particular type
-   * @param messageType the type of message on which to subscribe the function
-   * @param callback function to run with the contents of the webSocket message
-   * @returns unsubscriber function to run to stop calling the passed-in function on webSocket messages
+   *
+   * @param messageType The type of message on which to subscribe the function
+   * @param callback Function to run with the contents of the webSocket message
+   * @returns Unsubscriber function to run to stop calling the passed-in function on webSocket
+   *   messages
    */
   private subscribe = (
     messageType: MessageType,
@@ -360,8 +367,9 @@ export default class ServerNetworkConnector implements INetworkConnector {
   };
 
   /**
-   * Registers an incoming webSocket connection and sends connection info with InitClient.
-   * Does not consider the client fully connected yet until they respond and tell us they connected with ClientConnect
+   * Registers an incoming webSocket connection and sends connection info with InitClient. Does not
+   * consider the client fully connected yet until they respond and tell us they connected with
+   * ClientConnect
    */
   private onClientConnect = (webSocket: WebSocket) => {
     const clientId = this.nextClientId;
@@ -419,10 +427,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
   };
 
   /**
-   * Function that handles webSocket messages of type ClientConnect.
-   * Mark the connection fully connected and notify that a client connected or reconnected
-   * @param clientConnect message from the client about the connection
-   * @param connectorId clientId of the client who is sending this ClientConnect message
+   * Function that handles webSocket messages of type ClientConnect. Mark the connection fully
+   * connected and notify that a client connected or reconnected
+   *
+   * @param clientConnect Message from the client about the connection
+   * @param connectorId ClientId of the client who is sending this ClientConnect message
    */
   private handleClientConnectMessage = (clientConnect: ClientConnect, connectorId: number) => {
     // Verify that the client has the correct clientId. Otherwise nothing will work properly
@@ -452,10 +461,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
   };
 
   /**
-   * Function that handles webSocket messages of type Response.
-   * Resolves the request associated with the received response message or forwards to appropriate client
+   * Function that handles webSocket messages of type Response. Resolves the request associated with
+   * the received response message or forwards to appropriate client
+   *
    * @param response Response message to resolve
-   * @param responderId responding client
+   * @param responderId Responding client
    */
   private handleResponseMessage = (response: WebSocketResponse<unknown>, responderId: number) => {
     const { requesterId, requestId } = response;
@@ -480,9 +490,11 @@ export default class ServerNetworkConnector implements INetworkConnector {
 
   /**
    * Function that handles incoming webSocket messages and locally sent messages of type Request.
-   * Handles the request and sends a response if we have a handler or forwards to the appropriate client
-   * @param requestMessage request to handle
-   * @param requesterId who sent this message
+   * Handles the request and sends a response if we have a handler or forwards to the appropriate
+   * client
+   *
+   * @param requestMessage Request to handle
+   * @param requesterId Who sent this message
    */
   private handleRequestMessage = async (
     requestMessage: WebSocketRequest<unknown>,
@@ -516,9 +528,10 @@ export default class ServerNetworkConnector implements INetworkConnector {
   };
 
   /**
-   * Function that handles incoming webSocket messages of type Event.
-   * Runs the eventHandler provided in connect() and forwards the event to other clients
-   * @param eventMessage event message to handle
+   * Function that handles incoming webSocket messages of type Event. Runs the eventHandler provided
+   * in connect() and forwards the event to other clients
+   *
+   * @param eventMessage Event message to handle
    */
   private handleEventMessage = (eventMessage: WebSocketEvent<unknown>) => {
     if (!this.localEventHandler)

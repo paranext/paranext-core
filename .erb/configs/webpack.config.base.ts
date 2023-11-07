@@ -1,6 +1,4 @@
-/**
- * Base webpack config used across other specific configs
- */
+/** Base webpack config used across other specific configs */
 
 import webpack from 'webpack';
 import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin';
@@ -53,9 +51,7 @@ const configuration: webpack.Configuration = {
     },
   },
 
-  /**
-   * Determine the array of extensions that should be used to resolve modules.
-   */
+  /** Determine the array of extensions that should be used to resolve modules. */
   resolve: {
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
     modules: [webpackPaths.srcPath, 'node_modules'],

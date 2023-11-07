@@ -13,8 +13,10 @@ export interface OnDidDispose {
   onDidDispose: PapiEvent<void>;
 }
 
-/** Indicates than an object cannot have an `onDidDispose` event.
- *  Also allows an object to include a `dispose` function. */
+/**
+ * Indicates than an object cannot have an `onDidDispose` event. Also allows an object to include a
+ * `dispose` function.
+ */
 export interface CannotHaveOnDidDispose {
   /** Release resources and notify dependent services when tearing down an object */
   // Include dispose optionally to avoid extra type casting later

@@ -1,7 +1,4 @@
-/**
- * Handles registering data providers and serving data around the papi.
- * Exposed on the papi.
- */
+/** Handles registering data providers and serving data around the papi. Exposed on the papi. */
 
 import IDataProvider, { IDisposableDataProvider } from '@shared/models/data-provider.interface';
 import DataProviderInternal, {
@@ -31,18 +28,19 @@ import AsyncVariable from '@shared/utils/async-variable';
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
 
-/** event type for data provider update event */
+/** Event type for data provider update event */
 const ON_DID_UPDATE = 'onDidUpdate';
 
 /**
- * An object reference that is a placeholder for updates for data provider subscribers.
- * We want to make absolutely sure updates that come in are sent to subscribers, so we
- * use this object reference to tell if we have never had an update before.
+ * An object reference that is a placeholder for updates for data provider subscribers. We want to
+ * make absolutely sure updates that come in are sent to subscribers, so we use this object
+ * reference to tell if we have never had an update before.
  */
 const SUBSCRIBE_PLACEHOLDER = {};
 
-/** Gets the id for the data provider network object with the given name
- *  Don't add the suffix to the provider name if it's already there to avoid duplication
+/**
+ * Gets the id for the data provider network object with the given name Don't add the suffix to the
+ * provider name if it's already there to avoid duplication
  */
 const getDataProviderObjectId = (providerName: string) => {
   return providerName.endsWith(`-${DATA_PROVIDER_LABEL}`)
@@ -57,9 +55,9 @@ let isInitialized = false;
 let initializePromise: Promise<void> | undefined;
 
 /**
- * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes.
- * If a data provider engine class extends this class, it doesn't have to specify its own
- * `notifyUpdate` function in order to use `notifyUpdate`.
+ * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
+ * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
+ * function in order to use `notifyUpdate`.
  *
  * @see IDataProviderEngine for more information on extending this class.
  */
@@ -96,10 +94,12 @@ function hasKnown(providerName: string): boolean {
 
 /**
  * Creates a subscribe function for a data provider to allow subscribing to updates on the data
- * @param dataProviderPromise promise to the data provider's network object
- * @param onDidUpdate the event to listen to for updates on the data
- * @param dataType the name of the functions to use (ex: `dataProvider.subscribeBook` -> `dataProvider.getBook`)
- * @returns subscribe function for a data provider
+ *
+ * @param dataProviderPromise Promise to the data provider's network object
+ * @param onDidUpdate The event to listen to for updates on the data
+ * @param dataType The name of the functions to use (ex: `dataProvider.subscribeBook` ->
+ *   `dataProvider.getBook`)
+ * @returns Subscribe function for a data provider
  */
 function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
   dataProviderPromise: Promise<IDataProvider<TDataTypes>>,
@@ -118,13 +118,19 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
 
     const { retrieveDataImmediately, whichUpdates } = subscriberOptions;
 
-    /** The most recent data before the newest update. Used for deep comparison checks to prevent useless updates */
+    /**
+     * The most recent data before the newest update. Used for deep comparison checks to prevent
+     * useless updates
+     */
     // Start this out as a placeholder so updates definitely run the callback (including if the data is undefined or an empty object)
     // TODO: create a cache for the data provider that holds data returned per selector and shares that cache here
     let dataPrevious: unknown = SUBSCRIBE_PLACEHOLDER;
 
     // Create a layer over the provided callback that lets us know if we received an update so we don't run the callback with old data after updating
-    /** Whether we have already received an update event, meaning our initial `get` will return old data */
+    /**
+     * Whether we have already received an update event, meaning our initial `get` will return old
+     * data
+     */
     let receivedUpdate = false;
     const callbackWithUpdate = async (
       updateEventResult: DataProviderUpdateInstructions<TDataTypes>,
@@ -193,10 +199,12 @@ function createDataProviderSubscriber<TDataTypes extends DataProviderDataTypes>(
 
 /**
  * Creates a data provider proxy with `subscribe<data_type>` functions. Runs locally and remote
- * @param dataProviderEngine engine to make the data provider proxy over if local. `undefined` if remote
- * @param dataProviderPromise promise to the data provider's network object
- * @param onDidUpdate the event to listen to for updates on the data
- * @returns data provider proxy with `subscribe<data_type>` functions
+ *
+ * @param dataProviderEngine Engine to make the data provider proxy over if local. `undefined` if
+ *   remote
+ * @param dataProviderPromise Promise to the data provider's network object
+ * @param onDidUpdate The event to listen to for updates on the data
+ * @returns Data provider proxy with `subscribe<data_type>` functions
  */
 function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
   dataProviderEngine: IDataProviderEngine<TDataTypes> | undefined,
@@ -301,12 +309,15 @@ function createDataProviderProxy<TDataTypes extends DataProviderDataTypes>(
 }
 
 /**
- * Maps from update instructions returned from `notifyUpdate` or a `set<data_type>` function
- * to an update event to send over the network to inform subscribers to update their data
- * @param updateInstructions update instructions to reformat into an update event
- * @param dataType the data type of the update instructions (e.g. 'Verse' if update instructions came from `setVerse`)
- * or `undefined` if being mapped for `notifyUpdate`, which doesn't have a data type
- * @returns update event information to send in the `onDidUpdate` event emitter to tell subscribers to update
+ * Maps from update instructions returned from `notifyUpdate` or a `set<data_type>` function to an
+ * update event to send over the network to inform subscribers to update their data
+ *
+ * @param updateInstructions Update instructions to reformat into an update event
+ * @param dataType The data type of the update instructions (e.g. 'Verse' if update instructions
+ *   came from `setVerse`) or `undefined` if being mapped for `notifyUpdate`, which doesn't have a
+ *   data type
+ * @returns Update event information to send in the `onDidUpdate` event emitter to tell subscribers
+ *   to update
  */
 function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataTypes>(
   updateInstructions: DataProviderUpdateInstructions<TDataTypes> | undefined,
@@ -334,39 +345,42 @@ function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataT
  * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
  * papi will not layer over these methods or consider them to be data type methods
  *
- * @param method the method to ignore
+ * @example Use this as a decorator on a class's method:
  *
- * @example use this as a decorator on a class's method:
  * ```typescript
  * class MyDataProviderEngine {
- *   ＠papi.dataProvider.decorators.ignore
- *   async getInternal() {}
+ * ＠papi.dataProvider.decorators.ignore
+ * async getInternal() {}
  * }
  * ```
  *
  * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
- * code blocks, so a different unicode character was used. Please use a normal `@` when using a decorator.
+ * code blocks, so a different unicode character was used. Please use a normal `@` when using a
+ * decorator.
  *
  * OR
  *
- * @example call this function signature on an object's method:
+ * @example Call this function signature on an object's method:
+ *
  * ```typescript
  * const myDataProviderEngine = {
- *   async getInternal() {}
+ *   async getInternal() {},
  * };
  * papi.dataProvider.decorators.ignore(dataProviderEngine.getInternal);
  * ```
+ *
+ * @param method The method to ignore
  */
 function ignore(method: Function & { isIgnored?: boolean }): void;
 /**
  * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
  * papi will not layer over these methods or consider them to be data type methods
  *
- * @param target the class that has the method to ignore
- * @param member the name of the method to ignore
+ * @param target The class that has the method to ignore
+ * @param member The name of the method to ignore
  *
- * Note: this is the signature that provides the actual decorator functionality. However, since
- * users will not be using this signature, the example usage is provided in the signature above.
+ *   Note: this is the signature that provides the actual decorator functionality. However, since
+ *   users will not be using this signature, the example usage is provided in the signature above.
  */
 function ignore<T extends object>(target: T, member: keyof T): void;
 function ignore<T extends object>(
@@ -384,16 +398,18 @@ function ignore<T extends object>(
 /**
  * A collection of decorators to be used with the data provider service
  *
- * @example to use the `ignore` a decorator on a class's method:
+ * @example To use the `ignore` a decorator on a class's method:
+ *
  * ```typescript
  * class MyDataProviderEngine {
- *   ＠papi.dataProvider.decorators.ignore
- *   async getInternal() {}
+ * ＠papi.dataProvider.decorators.ignore
+ * async getInternal() {}
  * }
  * ```
  *
  * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
- * code blocks, so a different unicode character was used. Please use a normal `@` when using a decorator.
+ * code blocks, so a different unicode character was used. Please use a normal `@` when using a
+ * decorator.
  */
 const decorators = {
   ignore,
@@ -402,13 +418,18 @@ const decorators = {
 /**
  * Wrap a data provider engine to create a data provider that handles subscriptions for it.
  *
- * Note: This should only run locally when you have the data provider engine. The remote data provider is pretty much just a network object
+ * Note: This should only run locally when you have the data provider engine. The remote data
+ * provider is pretty much just a network object
  *
- * WARNING: this function mutates the provided object. Its `notifyUpdate` and `set<data_type>` methods are layered over to facilitate data provider subscriptions.
- * @param dataProviderEngine provider engine that handles setting and getting data as well as informing which listeners should get what updates
- * @param dataProviderPromise promise to the data provider's network object
- * @param onDidUpdateEmitter event emitter to use for informing subscribers of updates. The event just returns what set returns (should be true according to IDataProviderEngine)
- * @returns data provider layering over the provided data provider engine
+ * WARNING: this function mutates the provided object. Its `notifyUpdate` and `set<data_type>`
+ * methods are layered over to facilitate data provider subscriptions.
+ *
+ * @param dataProviderEngine Provider engine that handles setting and getting data as well as
+ *   informing which listeners should get what updates
+ * @param dataProviderPromise Promise to the data provider's network object
+ * @param onDidUpdateEmitter Event emitter to use for informing subscribers of updates. The event
+ *   just returns what set returns (should be true according to IDataProviderEngine)
+ * @returns Data provider layering over the provided data provider engine
  */
 function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
   dataProviderEngine: IDataProviderEngine<TDataTypes>,
@@ -495,18 +516,20 @@ function buildDataProvider<TDataTypes extends DataProviderDataTypes>(
 }
 
 /**
- * Creates a data provider to be shared on the network layering over the provided data provider engine.
- * @param providerName name this data provider should be called on the network
- * @param dataProviderEngine the object to layer over with a new data provider object
+ * Creates a data provider to be shared on the network layering over the provided data provider
+ * engine.
  *
- * WARNING: registering a dataProviderEngine mutates the provided object.
- * Its `notifyUpdate` and `set` methods are layered over to facilitate data provider subscriptions.
- * @returns the data provider including control over disposing of it.
- *  Note that this data provider is a new object distinct from the data provider engine passed in.
- * @type `TSelector` - the type of selector used to get some data from this provider.
- *  A selector is an object a caller provides to the data provider to tell the provider what subset of data it wants.
- *  Note: A selector must be stringifiable.
- * @type `TData` - the type of data provided by this data provider based on a provided selector
+ * @type `TSelector` - The type of selector used to get some data from this provider. A selector is
+ *   an object a caller provides to the data provider to tell the provider what subset of data it
+ *   wants. Note: A selector must be stringifiable.
+ * @type `TData` - The type of data provided by this data provider based on a provided selector
+ * @param providerName Name this data provider should be called on the network
+ * @param dataProviderEngine The object to layer over with a new data provider object
+ *
+ *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
+ *   `set` methods are layered over to facilitate data provider subscriptions.
+ * @returns The data provider including control over disposing of it. Note that this data provider
+ *   is a new object distinct from the data provider engine passed in.
  */
 async function registerEngine<TDataTypes extends DataProviderDataTypes>(
   providerName: string,
@@ -522,8 +545,9 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
   // Get the object id for this data provider name
   const dataProviderObjectId = getDataProviderObjectId(providerName);
 
-  /** Variable to hold a promise to the final data provider's network object so the local object
-   *  can reference the network object in its functions
+  /**
+   * Variable to hold a promise to the final data provider's network object so the local object can
+   * reference the network object in its functions
    */
   const dataProviderVariable = new AsyncVariable<IDataProvider<TDataTypes>>(
     `DataProvider-${providerName}`,
@@ -562,9 +586,11 @@ async function registerEngine<TDataTypes extends DataProviderDataTypes>(
 
 /**
  * Create a mock local data provider object for connecting to the remote data provider
- * @param dataProviderObjectId network object id corresponding to this data provider
- * @param dataProviderContainer container that holds a reference to the data provider so this subscribe function can reference the data provider
- * @returns local data provider object that represents a remote data provider
+ *
+ * @param dataProviderObjectId Network object id corresponding to this data provider
+ * @param dataProviderContainer Container that holds a reference to the data provider so this
+ *   subscribe function can reference the data provider
+ * @returns Local data provider object that represents a remote data provider
  */
 // This generic type should be DataProviderInternal because we are making part of a local/internal data provider
 function createLocalDataProviderToProxy<T extends DataProviderInternal>(
@@ -583,6 +609,7 @@ function createLocalDataProviderToProxy<T extends DataProviderInternal>(
 
 /**
  * Get a data provider that has previously been set up
+ *
  * @param providerName Name of the desired data provider
  * @returns The data provider with the given name if one exists, undefined otherwise
  */
@@ -619,7 +646,9 @@ export interface DataProviderService {
   DataProviderEngine: typeof DataProviderEngine;
 }
 
-/** JSDOC SOURCE dataProviderService
+/**
+ * JSDOC SOURCE dataProviderService
+ *
  * Service that allows extensions to send and receive data to/from other extensions
  */
 const dataProviderService: DataProviderService = {

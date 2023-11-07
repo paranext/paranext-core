@@ -210,13 +210,15 @@ VSCode renders JSDoc comments in the UI to make it easier for developers to use 
 
 If you want comments to be copied from one location in `papi.d.ts` to another, do the following:
 
-- In the JSDoc comments that you want copied elsewhere, add "JSDOC SOURCE myServiceName" in the JSDoc comments like this:
+- In the JSDoc comments that you want copied elsewhere, add "JSDOC SOURCE myServiceName" (must have a blank line after) in the JSDoc comments like this:
 
 ```typescript
-/** JSDOC SOURCE myService
-  * myService is amazing. Here are more details about it.
-  * ...
-  */
+/**
+ * JSDOC SOURCE myService
+ *
+ * myService is amazing. Here are more details about it.
+ * ...
+ */
 const myService = {
   ...
 }
