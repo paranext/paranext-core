@@ -65,7 +65,7 @@ namespace TestParanextDataProvider
         /// Add a tag for style with the specified properties.
         /// </summary>
         private void AddTag(string marker, TextProperties textProps, ScrTextType textType,
-                             ScrStyleType styleType, string occursUnder, string endMarker = "", string rawAttributes = null)
+                             ScrStyleType styleType, string occursUnder, string endMarker = "", string? rawAttributes = null)
         {
             ScrTag newTag = new()
             {
