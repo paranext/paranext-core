@@ -1,5 +1,4 @@
 using System.Text.Json.Nodes;
-using Newtonsoft.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
@@ -35,7 +34,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     /// </summary>
     protected Dictionary<string, Func<string, string, ResponseToRequest>> Setters { get; } = new();
 
-    protected ProjectDataScope ExtractDataScope(string jsonString)
+    private ProjectDataScope ExtractDataScope(string jsonString)
     {
         if (
             !ProjectDataScopeConverter.TryGetProjectDataScope(
@@ -56,6 +55,8 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
 
     protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
     {
+        // TODO: Handle wrong number of parameters (e.g. none) more gracefully
+
         try
         {
             if (functionName.StartsWith("get"))
