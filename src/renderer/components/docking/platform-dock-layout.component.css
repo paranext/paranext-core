@@ -41,10 +41,6 @@
   border-left: 0;
 }
 
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab:nth-last-child(2) {
-  border-right: 0;
-}
-
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav {
   border-left: 1px solid #5c5c5c;
   border-right: 1px solid #5c5c5c;
@@ -108,7 +104,6 @@
   border-top: 0;
 }
 
-/* Hide tab group overflow button when the button is not needed */
-.dock-layout .dock-nav-operations-hidden {
-  display: none;
+.dock-panel.dock-style-card .dock-extra-content {
+  height: 30px;
 }
