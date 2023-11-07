@@ -293,10 +293,10 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
  * Watch for changes in the extension directories
  */
 function watchForExtensionChanges(): UnsubscriberAsync {
-  const reloadExtensionsDebounced = debounce(async () => {
+  const reloadExtensionsDebounced = debounce(async (shouldDeactivateExtensions) => {
     try {
       logger.debug('Reload extensions from watching');
-      await reloadExtensions();
+      await reloadExtensions(shouldDeactivateExtensions);
     } catch (e) {
       throw new LogError(`Reload extensions from watching failed. Investigate: ${e}`);
     }
@@ -309,8 +309,10 @@ function watchForExtensionChanges(): UnsubscriberAsync {
         .map((uri) => getPathFromUri(uri)),
       { ignoreInitial: true, awaitWriteFinish: true },
     )
-    .on('all', async () => {
-      reloadExtensionsDebounced();
+    .on('all', async (eventType) => {
+      let shouldDeactivateExtensions: boolean = true;
+      if (eventType === 'add' || eventType === 'addDir') shouldDeactivateExtensions = false;
+      reloadExtensionsDebounced(shouldDeactivateExtensions);
     });
 
   return async () => {
@@ -381,8 +383,14 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
  * @returns unsubscriber that deactivates the extension
  */
 async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveExtension[]> {
+  // Filter out the extensions that are already activated, so when new ones are added only the new extension is activated
+  const extensionsToActivate =
+    activeExtensions.size > 0
+      ? extensions.filter((extension) => activeExtensions.get(extension.name) === undefined)
+      : extensions;
+
   /** Include whether that extension has already been imported */
-  const extensionsWithCheck = extensions.map((extension) => ({
+  const extensionsWithCheck = extensionsToActivate.map((extension) => ({
     extension,
     hasBeenImported: false,
   }));
@@ -506,8 +514,9 @@ function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | u
   );
 }
 
-async function reloadExtensions(): Promise<void> {
-  if (availableExtensions) await deactivateExtensions(availableExtensions);
+async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<void> {
+  if (shouldDeactivateExtensions && availableExtensions)
+    await deactivateExtensions(availableExtensions);
 
   await unzipCompressedExtensionFiles();
 
@@ -537,7 +546,7 @@ export const initialize = () => {
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
 
-    await reloadExtensions();
+    await reloadExtensions(false);
 
     watchForExtensionChanges();
 
