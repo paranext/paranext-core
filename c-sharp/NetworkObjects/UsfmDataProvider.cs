@@ -97,7 +97,7 @@ internal class UsfmDataProvider : DataProvider
         return contents;
     }
 
-    public ResponseToRequest SetChapterOrBookUsx(VerseRef vref, string newUsx)
+    private ResponseToRequest SetChapterOrBookUsx(VerseRef vref, string newUsx)
     {
         try
         {

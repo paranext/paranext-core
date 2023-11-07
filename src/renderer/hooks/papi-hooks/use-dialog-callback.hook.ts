@@ -11,36 +11,36 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * Calling the dialog callback returned from this hook does nothing if you already previously opened
  * the dialog and have not received a response
  *
- * @param dialogType dialog type you want to show on the screen
+ * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
+ * @type `TResponse` The type that the response can be. If you do not specify a `defaultResponse`,
+ *   this can be the dialog response type or `null`. If you specify a `defaultResponse`, this will
+ *   be just the dialog response type. Should be inferred by parameters.
  *
- *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not
- *    be updated every render
- * @param options various options for configuring the dialog that shows
+ *   - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse` then
+ *       becomes that literal instead of being the dialog response type. You can type assert it to
+ *       the appropriate type. Let us know if you run into an issue with this!
  *
- *    WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not
- *    be updated every render
- * @param defaultResponse the starting value for the response. Once a response is received, this is
- * no longer used. Defaults to `null`
+ * @param dialogType Dialog type you want to show on the screen
  *
+ *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+ *   updated every render
+ * @param options Various options for configuring the dialog that shows
+ *
+ *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+ *   updated every render
+ * @param defaultResponse The starting value for the response. Once a response is received, this is
+ *   no longer used. Defaults to `null`
  * @returns `[response, showDialogCallback, errorMessage, isShowingDialog]`
- *  - `response` - the response from the dialog or `defaultResponse` if a response has not been
- *      received (does not reset to `defaultResponse` if the user cancels the dialog).
- *      DOES NOT reset every time the callback is run
- *  - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response.
- *      If this callback is run while the dialog is open, nothing happens
- *  - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
- *      `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
- *  - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not
- *      responded)
  *
- * @type `DialogTabType` the dialog type you are using. Should be inferred by parameters
- * @type `TResponse` the type that the response can be. If you do not specify a `defaultResponse`,
- * this can be the dialog response type or `null`. If you specify a `defaultResponse`, this will
- * be just the dialog response type. Should be inferred by parameters.
- *  - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse`
- *    then becomes that literal instead of being the dialog response type. You can type assert it
- *    to the appropriate type. Let us know if you run into an issue with this!
- *
+ *   - `response` - the response from the dialog or `defaultResponse` if a response has not been
+ *       received (does not reset to `defaultResponse` if the user cancels the dialog). DOES NOT
+ *       reset every time the callback is run
+ *   - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response. If
+ *       this callback is run while the dialog is open, nothing happens
+ *   - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
+ *       `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
+ *   - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not
+ *       responded)
  */
 function useDialogCallback<
   DialogTabType extends DialogTabTypes,

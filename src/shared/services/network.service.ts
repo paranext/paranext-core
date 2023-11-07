@@ -1,7 +1,7 @@
 /**
- * Handles requests, responses, subscriptions, etc. to the backend.
- * Likely shouldn't need/want to expose this whole service on papi,
- * but there are a few things that are exposed via papiNetworkService
+ * Handles requests, responses, subscriptions, etc. to the backend. Likely shouldn't need/want to
+ * expose this whole service on papi, but there are a few things that are exposed via
+ * papiNetworkService
  */
 
 import {
@@ -55,8 +55,8 @@ const requestRegistrations = new Map<string, RequestRegistration>();
  * from that one place. NetworkEventEmitter types should not occur multiple times so extensions
  * cannot emit events they shouldn't, so we have a quick and easy no sharing in process rule in
  * createNetworkEventEmitter.
- * TODO: sync these between processes
  */
+// TODO: sync these between processes
 const networkEventEmitters = new Map<
   string,
   { emitter: PapiNetworkEventEmitter<unknown>; isRegistered: boolean }
@@ -88,10 +88,10 @@ type RequestRegistration<TParam = any, TReturn = any> =
   | RemoteRequestRegistration;
 
 /**
- * Args handler function for a request. Called when a request is handled.
- * The function should accept the spread of the contents array of the request as its parameters.
- * The function should return an object that becomes the contents object of the response.
- * This type of handler is a normal function.
+ * Args handler function for a request. Called when a request is handled. The function should accept
+ * the spread of the contents array of the request as its parameters. The function should return an
+ * object that becomes the contents object of the response. This type of handler is a normal
+ * function.
  */
 type ArgsRequestHandler<
   // Any is probably fine because we likely never know or care about the args or return
@@ -103,19 +103,19 @@ type ArgsRequestHandler<
 > = (...args: TParam) => Promise<TReturn> | TReturn;
 
 /**
- * Contents handler function for a request. Called when a request is handled.
- * The function should accept the contents object of the request as its single parameter.
- * The function should return an object that becomes the contents object of the response.
+ * Contents handler function for a request. Called when a request is handled. The function should
+ * accept the contents object of the request as its single parameter. The function should return an
+ * object that becomes the contents object of the response.
  */
 // Any is probably fine because we likely never know or care about the args or return
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ContentsRequestHandler<TParam = any, TReturn = any> = (contents: TParam) => Promise<TReturn>;
 
 /**
- * Complex handler function for a request. Called when a request is handled.
- * The function should accept a ComplexRequest object as its single parameter.
- * The function should return a ComplexResponse object that becomes the response..
- * This type of handler is the most flexible of the request handlers.
+ * Complex handler function for a request. Called when a request is handled. The function should
+ * accept a ComplexRequest object as its single parameter. The function should return a
+ * ComplexResponse object that becomes the response.. This type of handler is the most flexible of
+ * the request handlers.
  */
 // Any is probably fine because we likely never know or care about the args or return
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -168,9 +168,10 @@ function validateRequestTypeFormatting(requestType: SerializedRequestType) {
  * Note: Unless you need access to ComplexResponse properties, you probably just want to use request
  *
  * WARNING: THIS THROWS IF NOT INITIALIZED. DO NOT USE OUTSIDE OF INITIALIZATION. Use requestRaw
- * @param requestType the type of request
- * @param contents contents to send in the request
- * @returns promise that resolves with the response message
+ *
+ * @param requestType The type of request
+ * @param contents Contents to send in the request
+ * @returns Promise that resolves with the response message
  */
 const requestRawUnsafe = async <TParam, TReturn>(
   requestType: SerializedRequestType,
@@ -205,9 +206,10 @@ const requestRawUnsafe = async <TParam, TReturn>(
  * Send a request on the network and resolve the response contents.
  *
  * WARNING: THIS THROWS IF NOT INITIALIZED. DO NOT USE OUTSIDE OF INITIALIZATION. Use request
- * @param requestType the type of request
- * @param args arguments to send in the request (put in request.contents)
- * @returns promise that resolves with the response message
+ *
+ * @param requestType The type of request
+ * @param args Arguments to send in the request (put in request.contents)
+ * @returns Promise that resolves with the response message
  */
 const requestUnsafe = async <TParam extends Array<unknown>, TReturn>(
   requestType: SerializedRequestType,
@@ -227,12 +229,13 @@ const requestUnsafe = async <TParam extends Array<unknown>, TReturn>(
  *
  * WARNING: DO NOT USE OUTSIDE OF INITIALIZATION. Use unregisterRequestHandler (not created yet as
  * it may never be necessary)
- * @param requestType the type of request from which to unregister the handler
- * @param handler function to unregister from running on requests
- * @returns true if successfully unregistered, false if registration not found or trying to
- * unregister a handler that is not local. Throws if provided handler is not the correct handler
- * Likely will never need to be exported from this file. Just use registerRequestHandler, which
- * returns a matching unsubscriber function that runs this.
+ *
+ * @param requestType The type of request from which to unregister the handler
+ * @param handler Function to unregister from running on requests
+ * @returns True if successfully unregistered, false if registration not found or trying to
+ *   unregister a handler that is not local. Throws if provided handler is not the correct handler
+ *   Likely will never need to be exported from this file. Just use registerRequestHandler, which
+ *   returns a matching unsubscriber function that runs this.
  */
 async function unregisterRequestHandlerUnsafe(
   requestType: SerializedRequestType,
@@ -280,12 +283,13 @@ async function unregisterRequestHandlerUnsafe(
  * Register a local request handler to run on requests.
  *
  * WARNING: DO NOT USE OUTSIDE OF INITIALIZATION. Use registerRequestHandler
- * @param requestType the type of request on which to register the handler
- * @param handler function to register to run on requests
- * @param handlerType type of handler function - indicates what type of parameters and what return
- * type the handler has
- * @returns promise that resolves if the request successfully registered and unsubscriber function
- * to run to stop the passed-in function from handling requests
+ *
+ * @param requestType The type of request on which to register the handler
+ * @param handler Function to register to run on requests
+ * @param handlerType Type of handler function - indicates what type of parameters and what return
+ *   type the handler has
+ * @returns Promise that resolves if the request successfully registered and unsubscriber function
+ *   to run to stop the passed-in function from handling requests
  */
 async function registerRequestHandlerUnsafe(
   requestType: SerializedRequestType,
@@ -343,12 +347,14 @@ async function registerRequestHandlerUnsafe(
 }
 
 /**
- * Sends an event to other processes. Does NOT run the local event subscriptions
- * as they should be run by NetworkEventEmitter after sending on network.
+ * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
+ * run by NetworkEventEmitter after sending on network.
  *
- * WARNING: THIS THROWS IF NOT INITIALIZED. DO NOT USE OUTSIDE OF INITIALIZATION. Use createNetworkEventEmitter
- * @param eventType unique network event type for coordinating between processes
- * @param event event to emit on the network
+ * WARNING: THIS THROWS IF NOT INITIALIZED. DO NOT USE OUTSIDE OF INITIALIZATION. Use
+ * createNetworkEventEmitter
+ *
+ * @param eventType Unique network event type for coordinating between processes
+ * @param event Event to emit on the network
  */
 const emitEventOnNetworkUnsafe = async <T>(eventType: string, event: T) => {
   if (!isInitialized)
@@ -361,29 +367,31 @@ const emitEventOnNetworkUnsafe = async <T>(eventType: string, event: T) => {
 /**
  * Removes a network event emitter.
  *
- * WARNING: DO NOT USE OUTSIDE OF createNetworkEventEmitterUnsafe.
- * This is internal only as it does not actually dispose of the emitter.
- * Use the emitter's dispose method, and it will automatically run this.
- * @param eventType type of network event emitter to remove
- * @returns true if successfully removed an emitter with the specified type, false otherwise
+ * WARNING: DO NOT USE OUTSIDE OF createNetworkEventEmitterUnsafe. This is internal only as it does
+ * not actually dispose of the emitter. Use the emitter's dispose method, and it will automatically
+ * run this.
+ *
+ * @param eventType Type of network event emitter to remove
+ * @returns True if successfully removed an emitter with the specified type, false otherwise
  */
 const removeNetworkEventEmitterInternal = (eventType: string): boolean =>
   networkEventEmitters.delete(eventType);
 
 /**
- * Creates an event emitter that works properly over the network.
- * Other processes receive this event when it is emitted.
+ * Creates an event emitter that works properly over the network. Other processes receive this event
+ * when it is emitted.
  *
  * WARNING: You cannot emit events with complex types on the network.
  *
  * WARNING: DO NOT USE OUTSIDE OF INITIALIZATION. Use createNetworkEventEmitter
- * @param eventType unique network event type for coordinating between processes
- * @param emitOnNetwork the function to use to emit the event on the network. Defaults to
- * emitEventOnNetworkUnsafe. Should only need to provide this in createNetworkEventEmitter to make
- * this function safe.
- * @param register whether to register the emitter aka whether one reference to the emitter has been
- * released and therefore the emitter should not be distributed anymore
- * @returns event emitter whose event works between processes
+ *
+ * @param eventType Unique network event type for coordinating between processes
+ * @param emitOnNetwork The function to use to emit the event on the network. Defaults to
+ *   emitEventOnNetworkUnsafe. Should only need to provide this in createNetworkEventEmitter to make
+ *   this function safe.
+ * @param register Whether to register the emitter aka whether one reference to the emitter has been
+ *   released and therefore the emitter should not be distributed anymore
+ * @returns Event emitter whose event works between processes
  */
 const createNetworkEventEmitterUnsafe = <T>(
   eventType: string,
@@ -417,11 +425,12 @@ const createNetworkEventEmitterUnsafe = <T>(
 // #region Server-only variables and functions
 
 /**
- * Unregisters a client connection's request handler
- * SERVER-ONLY. This should not be needed on the client
- * @param requestType the type of request on which to unregister the handler
- * @param clientId clientId of the client who wants to unregister the handler
- * @returns true if successfully unregistered, false otherwise
+ * Unregisters a client connection's request handler SERVER-ONLY. This should not be needed on the
+ * client
+ *
+ * @param requestType The type of request on which to unregister the handler
+ * @param clientId ClientId of the client who wants to unregister the handler
+ * @returns True if successfully unregistered, false otherwise
  */
 const unregisterRemoteRequestHandler = async (
   requestType: SerializedRequestType,
@@ -444,10 +453,11 @@ const unregisterRemoteRequestHandler = async (
 };
 
 /**
- * Registers a client connection's request handler
- * SERVER-ONLY. This should not be needed on the client
- * @param requestType the type of request on which to register the handler
- * @param clientId clientId of the client who wants to register the handler
+ * Registers a client connection's request handler SERVER-ONLY. This should not be needed on the
+ * client
+ *
+ * @param requestType The type of request on which to register the handler
+ * @param clientId ClientId of the client who wants to register the handler
  */
 const registerRemoteRequestHandler = async (
   requestType: SerializedRequestType,
@@ -473,8 +483,8 @@ const registerRemoteRequestHandler = async (
 };
 
 /**
- * Remove all requestRegistrations associated with a client.
- * SERVER-ONLY. Probably should only be run from ServerNetworkConnector.
+ * Remove all requestRegistrations associated with a client. SERVER-ONLY. Probably should only be
+ * run from ServerNetworkConnector.
  */
 const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
   // TODO: there will probably be something worth doing when a client gets disconnected in the future. Do that here instead of throwing
@@ -513,9 +523,10 @@ let unsubscribeServerRequestHandlers: UnsubscriberAsync | undefined;
 /**
  * Calls the appropriate request handler according to the request type and returns a promise of the
  * response
- * @param requestType type of request to handle
- * @param request the request to handle
- * @returns promise of response to the request
+ *
+ * @param requestType Type of request to handle
+ * @param request The request to handle
+ * @returns Promise of response to the request
  */
 const handleRequestLocal: RequestHandler = async <TParam, TReturn>(
   requestType: SerializedRequestType,
@@ -601,8 +612,9 @@ const handleRequestLocal: RequestHandler = async <TParam, TReturn>(
 
 /**
  * Determines the appropriate clientId to which to send requests of the given type
- * @param requestType type of request to determine which clientId will handle the request
- * @returns clientId that handles requests of the given type
+ *
+ * @param requestType Type of request to determine which clientId will handle the request
+ * @returns ClientId that handles requests of the given type
  */
 const routeRequest: RequestRouter = (requestType: string): number => {
   const registration = requestRegistrations.get(requestType);
@@ -619,8 +631,9 @@ const routeRequest: RequestRouter = (requestType: string): number => {
 
 /**
  * Emits the appropriate network event on this process according to the event type
- * @param eventType type of event to handle
- * @param event the event data to emit
+ *
+ * @param eventType Type of event to handle
+ * @param event The event data to emit
  */
 const handleEventFromNetwork: NetworkEventHandler = <T>(eventType: string, event: T) => {
   const emitter = networkEventEmitters.get(eventType);
@@ -704,9 +717,10 @@ export const initialize = () => {
 
 /**
  * Send a request on the network and resolve the response contents.
- * @param requestType the type of request
- * @param args arguments to send in the request (put in request.contents)
- * @returns promise that resolves with the response message
+ *
+ * @param requestType The type of request
+ * @param args Arguments to send in the request (put in request.contents)
+ * @returns Promise that resolves with the response message
  */
 export const request = async <TParam extends Array<unknown>, TReturn>(
   requestType: SerializedRequestType,
@@ -724,12 +738,13 @@ const registerRequestHandlerInternal = createSafeRegisterFn(
 );
 /**
  * Register a local request handler to run on requests.
- * @param requestType the type of request on which to register the handler
- * @param handler function to register to run on requests
- * @param handlerType type of handler function - indicates what type of parameters and what return
- * type the handler has
- * @returns promise that resolves if the request successfully registered and unsubscriber function
- * to run to stop the passed-in function from handling requests
+ *
+ * @param requestType The type of request on which to register the handler
+ * @param handler Function to register to run on requests
+ * @param handlerType Type of handler function - indicates what type of parameters and what return
+ *   type the handler has
+ * @returns Promise that resolves if the request successfully registered and unsubscriber function
+ *   to run to stop the passed-in function from handling requests
  */
 export function registerRequestHandler(
   requestType: SerializedRequestType,
@@ -755,10 +770,11 @@ export function registerRequestHandler(
 }
 
 /**
- * Sends an event to other connections. Does NOT run the local event subscriptions
- * as they should be run by NetworkEventEmitter after sending on network.
- * @param eventType unique network event type for coordinating between connections
- * @param event event to emit on the network
+ * Sends an event to other connections. Does NOT run the local event subscriptions as they should be
+ * run by NetworkEventEmitter after sending on network.
+ *
+ * @param eventType Unique network event type for coordinating between connections
+ * @param event Event to emit on the network
  */
 const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
   await initialize();
@@ -766,14 +782,16 @@ const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
 };
 
 /**
- * Creates an event emitter that works properly over the network.
- * Other connections receive this event when it is emitted.
+ * Creates an event emitter that works properly over the network. Other connections receive this
+ * event when it is emitted.
  *
- * WARNING: You can only create a network event emitter once per eventType to prevent hijacked event emitters.
+ * WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
+ * emitters.
  *
  * WARNING: You cannot emit events with complex types on the network.
- * @param eventType unique network event type for coordinating between connections
- * @returns event emitter whose event works between connections
+ *
+ * @param eventType Unique network event type for coordinating between connections
+ * @returns Event emitter whose event works between connections
  */
 export const createNetworkEventEmitter = <T>(eventType: string): PapiEventEmitter<T> =>
   // Note: running createNetworkEventEmitterUnsafe without initializing is not technically an
@@ -784,8 +802,9 @@ export const createNetworkEventEmitter = <T>(eventType: string): PapiEventEmitte
 
 /**
  * Gets the network event with the specified type. Creates the emitter if it does not exist
- * @param eventType unique network event type for coordinating between connections
- * @returns event for the event type that runs the callback provided when the event is emitted
+ *
+ * @param eventType Unique network event type for coordinating between connections
+ * @returns Event for the event type that runs the callback provided when the event is emitted
  */
 export const getNetworkEvent = <T>(eventType: string): PapiEvent<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
@@ -803,11 +822,12 @@ export const getNetworkEvent = <T>(eventType: string): PapiEvent<T> => {
 // #endregion
 
 /**
- * Creates a function that is a request function with a baked requestType.
- * This is also nice because you get TypeScript type support using this function.
- * @param requestType requestType for request function
- * @returns function to call with arguments of request that performs the request and resolves with
- * the response contents
+ * Creates a function that is a request function with a baked requestType. This is also nice because
+ * you get TypeScript type support using this function.
+ *
+ * @param requestType RequestType for request function
+ * @returns Function to call with arguments of request that performs the request and resolves with
+ *   the response contents
  */
 export const createRequestFunction = <TParam extends Array<unknown>, TReturn>(
   requestType: SerializedRequestType,
@@ -823,7 +843,9 @@ export interface PapiNetworkService {
   getNetworkEvent: typeof getNetworkEvent;
 }
 
-/** JSDOC SOURCE papiNetworkService
+/**
+ * JSDOC SOURCE papiNetworkService
+ *
  * Service that provides a way to send and receive network events
  */
 export const papiNetworkService: PapiNetworkService = {

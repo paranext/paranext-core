@@ -9,16 +9,10 @@ namespace Paranext.DataProvider.Projects;
 /// <summary>
 /// Direct access methods to the file system for project directories
 /// </summary>
-internal static partial class LocalProjects
+internal partial class LocalProjects
 {
     private const UnixFileMode UNIX_FILE_MODE =
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
-
-    private static readonly ConcurrentDictionary<string, ProjectDetails> s_projectDetailsMap =
-        new();
-
-    // All project directories are subdirectories of this
-    private static readonly string s_projectRootFolder;
 
     // The directory name pattern for each project is "shortName_ID"
     [GeneratedRegex(@"^(?<name>\w(\w|-)*)_(?<id>[^\W_]+)$")]
@@ -31,26 +25,31 @@ internal static partial class LocalProjects
     // Inside of the project subdirectory, these are the subdirectories for Paratext projects
     private const string PARATEXT_DATA_SUBDIRECTORY = "paratext";
 
-    static LocalProjects()
+    private readonly ConcurrentDictionary<string, ProjectDetails> _projectDetailsMap = new();
+
+    // All project directories are subdirectories of this
+    private readonly string _projectRootFolder;
+
+    public LocalProjects()
     {
-        s_projectRootFolder = Path.Join(
+        _projectRootFolder = Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".platform.bible",
             "projects"
         );
     }
 
-    public static void Initialize()
+    public virtual void Initialize()
     {
-        if (!s_projectDetailsMap.IsEmpty)
+        if (!_projectDetailsMap.IsEmpty)
             return;
 
-        if (!Directory.Exists(s_projectRootFolder))
+        if (!Directory.Exists(_projectRootFolder))
         {
             if (OperatingSystem.IsWindows())
-                Directory.CreateDirectory(s_projectRootFolder);
+                Directory.CreateDirectory(_projectRootFolder);
             else
-                Directory.CreateDirectory(s_projectRootFolder, UNIX_FILE_MODE);
+                Directory.CreateDirectory(_projectRootFolder, UNIX_FILE_MODE);
         }
 
         foreach (var projectDetails in LoadAllProjectDetails())
@@ -70,22 +69,22 @@ internal static partial class LocalProjects
         }
     }
 
-    public static IList<ProjectDetails> GetAllProjectDetails()
+    public virtual IList<ProjectDetails> GetAllProjectDetails()
     {
-        return s_projectDetailsMap.Values.ToList();
+        return _projectDetailsMap.Values.ToList();
     }
 
-    public static ProjectDetails GetProjectDetails(string projectId)
+    public virtual ProjectDetails GetProjectDetails(string projectId)
     {
-        return s_projectDetailsMap[projectId.ToUpperInvariant()];
+        return _projectDetailsMap[projectId.ToUpperInvariant()];
     }
 
-    public static ScrText GetParatextProject(string projectId)
+    public virtual ScrText GetParatextProject(string projectId)
     {
         return ScrTextCollection.GetById(HexId.FromStr(projectId));
     }
 
-    public static void SaveProjectMetadata(ProjectMetadata metadata, bool overwrite = false)
+    public void SaveProjectMetadata(ProjectMetadata metadata, bool overwrite = false)
     {
         var projectHomeDir = GetProjectDir(metadata.Name, metadata.ID);
         var projectContentsDir = Path.Join(projectHomeDir, PROJECT_SUBDIRECTORY);
@@ -108,7 +107,7 @@ internal static partial class LocalProjects
         AddProjectToMaps(new ProjectDetails(metadata, projectHomeDir));
     }
 
-    public static void LoadProject(string projectName, string projectID)
+    public void LoadProject(string projectName, string projectID)
     {
         var dir = GetProjectDir(projectName, projectID);
         var projectMetadata =
@@ -116,12 +115,19 @@ internal static partial class LocalProjects
         AddProjectToMaps(new ProjectDetails(projectMetadata, dir));
     }
 
-    private static string GetProjectDir(string projectName, string projectID)
+    public static bool DoesFolderMatchMetadata(string folder, ProjectMetadata metadata)
     {
-        return Path.Join(s_projectRootFolder, $"{projectName}_{projectID}");
+        var matches = ProjectDirectoryRegex().Matches(folder);
+        return matches.Count == 1
+            && metadata.Contains(matches[0].Groups["id"].Value, matches[0].Groups["name"].Value);
     }
 
-    private static void AddProjectToMaps(ProjectDetails projectDetails)
+    private string GetProjectDir(string projectName, string projectID)
+    {
+        return Path.Join(_projectRootFolder, $"{projectName}_{projectID}");
+    }
+
+    private void AddProjectToMaps(ProjectDetails projectDetails)
     {
         var projectPath = Path.Join(
             projectDetails.HomeDirectory,
@@ -131,11 +137,11 @@ internal static partial class LocalProjects
         ProjectName projectName = new(projectPath);
         var id = projectDetails.Metadata.ID;
         Console.WriteLine(
-            s_projectDetailsMap.ContainsKey(id)
+            _projectDetailsMap.ContainsKey(id)
                 ? $"Replacing Paratext project in map: {id} = {projectPath}"
                 : $"Adding Paratext project in map: {id} = {projectPath}"
         );
-        s_projectDetailsMap[id] = projectDetails;
+        _projectDetailsMap[id] = projectDetails;
         ScrTextCollection.Add(new ScrText(projectName, RegistrationInfo.DefaultUser));
     }
 
@@ -143,9 +149,9 @@ internal static partial class LocalProjects
     /// Return projects that are available on disk on the local machine
     /// </summary>
     /// <returns>Enumeration of (ProjectMetadata, project directory) tuples for all projects</returns>
-    private static IEnumerable<ProjectDetails> LoadAllProjectDetails()
+    private IEnumerable<ProjectDetails> LoadAllProjectDetails()
     {
-        foreach (var dir in Directory.EnumerateDirectories(s_projectRootFolder, "*_*"))
+        foreach (var dir in Directory.EnumerateDirectories(_projectRootFolder, "*_*"))
         {
             ProjectMetadata? projectMetadata;
             string errorMessage;
@@ -164,13 +170,6 @@ internal static partial class LocalProjects
             else
                 yield return new ProjectDetails(projectMetadata, dir);
         }
-    }
-
-    public static bool DoesFolderMatchMetadata(string folder, ProjectMetadata metadata)
-    {
-        var matches = ProjectDirectoryRegex().Matches(folder);
-        return matches.Count == 1
-            && metadata.Contains(matches[0].Groups["id"].Value, matches[0].Groups["name"].Value);
     }
 
     private static ProjectMetadata? LoadProjectMetadata(

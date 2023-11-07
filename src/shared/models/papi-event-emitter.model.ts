@@ -1,23 +1,25 @@
-/**
- * Interfaces, classes, and functions related to events and event emitters
- */
+/** Interfaces, classes, and functions related to events and event emitters */
 
 import { PapiEvent, PapiEventHandler } from '@shared/models/papi-event.model';
 import { Dispose } from '@shared/models/disposal.model';
 
-/** JSDOC SOURCE PapiEventEmitter
- * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the event is emitted
- * Use eventEmitter.event(callback) to subscribe to the event.
- * Use eventEmitter.emit(event) to run the subscriptions.
- * Generally, this EventEmitter should be private, and its event should be public. That way, the emitter is not publicized,
- * but anyone can subscribe to the event.
+/**
+ * JSDOC SOURCE PapiEventEmitter
+ *
+ * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
+ * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
+ * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
+ * private, and its event should be public. That way, the emitter is not publicized, but anyone can
+ * subscribe to the event.
  */
 export default class PapiEventEmitter<T> implements Dispose {
   /**
    * Subscribes a function to run when this event is emitted.
+   *
+   * @param callback Function to run with the event when it is emitted
+   * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
+   *   emitted
    * @alias event
-   * @param callback function to run with the event when it is emitted
-   * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
    */
   subscribe = this.event;
 
@@ -31,8 +33,10 @@ export default class PapiEventEmitter<T> implements Dispose {
   /**
    * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
    * Use like `const unsubscriber = event(callback)`
-   * @param callback function to run with the event when it is emitted
-   * @returns unsubscriber function to run to stop calling the passed-in function when the event is emitted
+   *
+   * @param callback Function to run with the event when it is emitted
+   * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
+   *   emitted
    */
   get event(): PapiEvent<T> {
     this.assertNotDisposed();
@@ -71,7 +75,8 @@ export default class PapiEventEmitter<T> implements Dispose {
 
   /**
    * Runs the subscriptions for the event
-   * @param event event data to provide to subscribed callbacks
+   *
+   * @param event Event data to provide to subscribed callbacks
    */
   emit = (event: T) => {
     // Do not do anything other than emitFn here. This emit is just binding `this` to emitFn
@@ -79,9 +84,8 @@ export default class PapiEventEmitter<T> implements Dispose {
   };
 
   /**
-   * Function that runs the subscriptions for the event.
-   * Added here so children can override emit and still call the base functionality.
-   * See NetworkEventEmitter.emit for example
+   * Function that runs the subscriptions for the event. Added here so children can override emit
+   * and still call the base functionality. See NetworkEventEmitter.emit for example
    */
   protected emitFn(event: T) {
     this.assertNotDisposed();
@@ -95,8 +99,8 @@ export default class PapiEventEmitter<T> implements Dispose {
   }
 
   /**
-   * Disposes of this event, preparing it to release from memory.
-   * Added here so children can override emit and still call the base functionality.
+   * Disposes of this event, preparing it to release from memory. Added here so children can
+   * override emit and still call the base functionality.
    */
   protected disposeFn() {
     this.assertNotDisposed();

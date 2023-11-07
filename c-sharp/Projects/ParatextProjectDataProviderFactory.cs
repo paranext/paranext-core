@@ -7,17 +7,20 @@ namespace Paranext.DataProvider.Projects;
 internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
 {
     private readonly ParatextProjectStorageInterpreter _paratextPsi;
+    private readonly LocalProjects _projects;
     private readonly ConcurrentDictionary<string, ParatextProjectDataProvider> _pdpMap = new();
     private readonly object _creationLock = new object();
     private readonly Random _random = new((int)DateTime.Now.Ticks);
 
     public ParatextProjectDataProviderFactory(
         PapiClient papiClient,
-        ParatextProjectStorageInterpreter paratextPsi
+        ParatextProjectStorageInterpreter paratextPsi,
+        LocalProjects projects
     )
         : base(ProjectType.Paratext, papiClient)
     {
         _paratextPsi = paratextPsi;
+        _projects = projects;
     }
 
     protected override ResponseToRequest GetProjectDataProviderID(
@@ -45,7 +48,7 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
             ProjectDetails details;
             try
             {
-                details = LocalProjects.GetProjectDetails(projectID);
+                details = _projects.GetProjectDetails(projectID);
             }
             catch (Exception)
             {

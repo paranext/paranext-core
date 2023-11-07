@@ -12,7 +12,7 @@ namespace Paranext.DataProvider.MessageTransports;
 /// <summary>
 /// Class to facilitate communication to the Paranext server via the PAPI
 /// </summary>
-internal sealed class PapiClient : IDisposable
+internal class PapiClient : IDisposable
 {
     #region Delegates/Constants/Member variables
 
@@ -22,9 +22,11 @@ internal sealed class PapiClient : IDisposable
     private static readonly Uri s_connectionUri = new("ws://localhost:8876");
     private static readonly JsonSerializerOptions s_serializationOptions;
 
-    private readonly Dictionary<Enum<MessageType>, IMessageHandler> _messageHandlersByMessageType =
-        new();
-    private readonly ConcurrentDictionary<int, IMessageHandler> _messageHandlersForMyRequests =
+    protected readonly Dictionary<
+        Enum<MessageType>,
+        IMessageHandler
+    > _messageHandlersByMessageType = new();
+    protected readonly ConcurrentDictionary<int, IMessageHandler> _messageHandlersForMyRequests =
         new();
     private readonly ClientWebSocket _webSocket = new();
     private readonly Task _incomingMessageTask;
@@ -135,7 +137,7 @@ internal sealed class PapiClient : IDisposable
     /// If false is returned, then there is no need to call <see cref="DisconnectAsync"/> before calling <see cref="Dispose"/>.
     /// </summary>
     /// <returns><see cref="Task"/> that will resolve to true if the connection initialized properly, false otherwise</returns>
-    public async Task<bool> ConnectAsync()
+    public virtual async Task<bool> ConnectAsync()
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
@@ -166,7 +168,7 @@ internal sealed class PapiClient : IDisposable
     /// Attempt to close the connection to the server gracefully.
     /// After calling this method, the PapiClient object should not be used for anything. If you want to reconnect, create a new object.
     /// </summary>
-    public async Task DisconnectAsync()
+    public virtual async Task DisconnectAsync()
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
@@ -194,7 +196,7 @@ internal sealed class PapiClient : IDisposable
     /// <param name="requestHandler">Method that is called when a request of the specified type is received from the server</param>
     /// <param name="responseTimeoutInMs">Number of milliseconds to wait for the registration response to be received</param>
     /// <returns><see cref="Task"/> that will resolve to true if registration was successful, false otherwise</returns>
-    public async Task<bool> RegisterRequestHandler(
+    public virtual async Task<bool> RegisterRequestHandler(
         Enum<RequestType> requestType,
         Func<dynamic, ResponseToRequest> requestHandler,
         int responseTimeoutInMs = 1000
@@ -253,7 +255,7 @@ internal sealed class PapiClient : IDisposable
     /// </summary>
     /// <param name="eventType">Event type to monitor</param>
     /// <param name="eventHandler">Function that optionally returns messages to send when an event is received</param>
-    public void RegisterEventHandler(
+    public virtual void RegisterEventHandler(
         Enum<EventType> eventType,
         Func<dynamic?, Message?> eventHandler
     )
@@ -270,7 +272,7 @@ internal sealed class PapiClient : IDisposable
     /// </summary>
     /// <param name="eventType">Event type to monitor</param>
     /// <param name="eventHandler">Same function reference previously passed to RegisterEventHandler</param>
-    public void UnregisterEventHandler(
+    public virtual void UnregisterEventHandler(
         Enum<EventType> eventType,
         Func<dynamic?, Message?> eventHandler
     )
@@ -286,7 +288,7 @@ internal sealed class PapiClient : IDisposable
     /// Send an event message to the server.
     /// </summary>
     /// <param name="message">Event message to send</param>
-    public void SendEvent(MessageEvent message)
+    public virtual void SendEvent(MessageEvent message)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 

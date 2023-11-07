@@ -15,11 +15,11 @@ import { isString } from '@shared/utils/util';
 /**
  * Proxy object that provides hooks to use data provider data with various data types
  *
- * @example `useData.Greeting<PeopleDataTypes, 'Greeting'>(...)`
+ * @example `useData.Greeting<PeopleDataTypes, 'Greeting'>(...);`
  *
- * @type `TDataTypes` - the data provider data types served by the data provider whose data to use.
- * @type `TDataType` - the specific data type on this data provider that you want to use. Must match
- * the data type specified in `useData.<data_type>`
+ * @type `TDataTypes` - The data provider data types served by the data provider whose data to use.
+ * @type `TDataType` - The specific data type on this data provider that you want to use. Must match
+ *   the data type specified in `useData.<data_type>`
  */
 export type UseDataHook = {
   [DataType in string]: <
@@ -116,7 +116,10 @@ function createUseDataHook(
       useEventAsync(wrappedSubscribeEvent, setDataInternal);
 
       // TODO: cache latest setStateAction and fire until we have dataProvider instead of having setData be undefined until we have dataProvider?
-      /** Send an update to the backend to update the data. Let the update handle actually updating our data here */
+      /**
+       * Send an update to the backend to update the data. Let the update handle actually updating
+       * our data here
+       */
       const setData = useMemo(
         () =>
           dataProvider

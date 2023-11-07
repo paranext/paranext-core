@@ -16,11 +16,11 @@ declare module 'papi-shared-types' {
    *
    * ```typescript
    * declare module 'papi-shared-types' {
-       export interface CommandHandlers {
-         'myExtension.myCommand1': (foo: string, bar: number) => string;
-         'myExtension.myCommand2': (foo: string) => Promise<void>;
-       }
-     }
+   *   export interface CommandHandlers {
+   *     'myExtension.myCommand1': (foo: string, bar: number) => string;
+   *     'myExtension.myCommand2': (foo: string) => Promise<void>;
+   *   }
+   * }
    * ```
    */
   export interface CommandHandlers {
@@ -46,7 +46,7 @@ declare module 'papi-shared-types' {
    * Note: Command names must consist of two string separated by at least one period. We recommend
    * one period and lower camel case in case we expand the api in the future to allow dot notation.
    *
-   * @example 'platform.quit'
+   * @example 'platform.quit';
    */
   export type CommandNames = keyof CommandHandlers;
 
@@ -71,12 +71,13 @@ declare module 'papi-shared-types' {
    * all project data types should extend `MandatoryProjectDataTypes` like the following example.
    *
    * @example
+   *
    * ```typescript
    * declare module 'papi-shared-types' {
    *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
    *     MyProjectData1: DataProviderDataType<string, string, string>;
    *     MyProjectData2: DataProviderDataType<string, string, string>;
-   *   }
+   *   };
    *
    *   export interface ProjectDataTypes {
    *     MyExtensionProjectTypeName: MyProjectDataTypes;

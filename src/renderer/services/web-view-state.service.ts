@@ -38,10 +38,11 @@ function getRecord(id: string): Record<string, unknown> {
 }
 
 /**
- * Get the web view state associated with the given ID
- * This function is only intended to be used at startup. getWebViewState is intended for web views to call.
+ * Get the web view state associated with the given ID This function is only intended to be used at
+ * startup. getWebViewState is intended for web views to call.
+ *
  * @param id ID of the web view
- * @returns state object of the given web view
+ * @returns State object of the given web view
  */
 export function getFullWebViewStateById(id: string): Record<string, unknown> {
   if (!id) throw new Error('id must be provided to get webview state');
@@ -49,8 +50,9 @@ export function getFullWebViewStateById(id: string): Record<string, unknown> {
 }
 
 /**
- * Set the web view state associated with the given ID
- * This function is only intended to be used at startup. setWebViewState is intended for web views to call.
+ * Set the web view state associated with the given ID This function is only intended to be used at
+ * startup. setWebViewState is intended for web views to call.
+ *
  * @param id ID of the web view
  * @param state State to set for the given web view
  */
@@ -64,9 +66,10 @@ export function setFullWebViewStateById(id: string, state: Record<string, unknow
 
 /**
  * Get the web view state associated with the given ID
+ *
  * @param id ID of the web view
  * @param stateKey Key used to retrieve the state value
- * @returns string (if it exists) containing the state for the given key of the given web view
+ * @returns String (if it exists) containing the state for the given key of the given web view
  */
 export function getWebViewStateById<T>(id: string, stateKey: string): T | undefined {
   if (!id || !stateKey) throw new Error('id and stateKey must be provided to get webview state');
@@ -78,9 +81,11 @@ export function getWebViewStateById<T>(id: string, stateKey: string): T | undefi
 
 /**
  * Set the web view state object associated with the given ID
+ *
  * @param id ID of the web view
  * @param stateKey Key for the associated state
- * @param stateValue Value of the state for the given key of the given web view - must work with JSON.stringify/parse
+ * @param stateValue Value of the state for the given key of the given web view - must work with
+ *   JSON.stringify/parse
  */
 export function setWebViewStateById<T>(id: string, stateKey: string, stateValue: T): void {
   if (!id || !stateKey) throw new Error('id and stateKey must be provided to set webview state');
@@ -92,8 +97,9 @@ export function setWebViewStateById<T>(id: string, stateKey: string, stateValue:
   save();
 }
 
-/** Purge any web view state that hasn't been touched since the process has been running.
- *  Only call this once all web views have been loaded.
+/**
+ * Purge any web view state that hasn't been touched since the process has been running. Only call
+ * this once all web views have been loaded.
  */
 export function cleanupOldWebViewState(): void {
   if (stateMap.size <= 0 || idsLookedUp.size <= 0) return;

@@ -35,54 +35,40 @@ export type TableCellKeyboardEvent = CellKeyboardEvent;
 export type TableCellKeyDownArgs<R> = CellKeyDownArgs<R>;
 export type TableCellMouseEvent = CellMouseEvent;
 export type TableColumn<R> = {
-  /**
-   * The name of the column. By default it will be displayed in the header cell
-   */
+  /** The name of the column. By default it will be displayed in the header cell */
   readonly name: string | ReactElement;
-  /**
-   * A unique key to distinguish each column
-   */
+  /** A unique key to distinguish each column */
   readonly key: string;
   /**
-   * Column width. If not specified, it will be determined automatically
-   * based on grid width and specified widths of other columns
+   * Column width. If not specified, it will be determined automatically based on grid width and
+   * specified widths of other columns
    */
   readonly width?: number | string;
-  /**
-   * Minimum column width in px.
-   */
+  /** Minimum column width in px. */
   readonly minWidth?: number;
-  /**
-   * Maximum column width in px.
-   */
+  /** Maximum column width in px. */
   readonly maxWidth?: number;
   /**
    * If `true`, editing is enabled. If no custom cell editor is provided through `renderEditCell`
-   * the default text editor will be used for editing.
-   * Note: If `editable` is set to 'true' and no custom `renderEditCell` is provided,
-   * the internal logic that sets the `renderEditCell` will shallow clone the column.
+   * the default text editor will be used for editing. Note: If `editable` is set to 'true' and no
+   * custom `renderEditCell` is provided, the internal logic that sets the `renderEditCell` will
+   * shallow clone the column.
    */
   readonly editable?: boolean | ((row: R) => boolean) | null;
-  /**
-   * Determines whether column is frozen or not
-   */
+  /** Determines whether column is frozen or not */
   readonly frozen?: boolean;
-  /**
-   * Enable resizing of a column
-   */
+  /** Enable resizing of a column */
   readonly resizable?: boolean;
-  /**
-   * Enable sorting of a column
-   */
+  /** Enable sorting of a column */
   readonly sortable?: boolean;
   /**
-   * Sets the column sort order to be descending instead of ascending the first time
-   * the column is sorted
+   * Sets the column sort order to be descending instead of ascending the first time the column is
+   * sorted
    */
   readonly sortDescendingFirst?: boolean | null;
   /**
-   * Editor to be rendered when cell of column is being edited.
-   * Don't forget to also set the `editable` prop to true in order to enable editing.
+   * Editor to be rendered when cell of column is being edited. Don't forget to also set the
+   * `editable` prop to true in order to enable editing.
    */
   readonly renderEditCell?: ((props: TableEditorProps<R>) => ReactNode) | null;
 };
@@ -125,139 +111,131 @@ const renderCheckbox = ({ onChange, disabled, checked, ...props }: RenderCheckbo
 
 // Subset of https://github.com/adazzle/react-data-grid#api
 export type TableProps<R> = {
-  /**
-   * An array of objects representing each column on the grid
-   */
+  /** An array of objects representing each column on the grid */
   columns: readonly TableColumn<R>[];
-  /**
-   * Whether or not a column with checkboxes is inserted that allows you to select rows
-   */
+  /** Whether or not a column with checkboxes is inserted that allows you to select rows */
   enableSelectColumn?: boolean;
   /**
    * Specifies the width of the select column. Only relevant when enableSelectColumn is true
+   *
    * @default 50
    */
   selectColumnWidth?: number;
-  /**
-   * An array of objects representing the currently sorted columns
-   */
+  /** An array of objects representing the currently sorted columns */
   sortColumns?: readonly TableSortColumn[];
   /**
    * A callback function that is called when the sorted columns change
+   *
    * @param sortColumns An array of objects representing the currently sorted columns in the table.
    */
   onSortColumnsChange?: (sortColumns: TableSortColumn[]) => void;
   /**
    * A callback function that is called when a column is resized
+   *
    * @param idx The index of the column being resized
    * @param width The new width of the column in pixels
    */
   onColumnResize?: (idx: number, width: number) => void;
   /**
-   * Default column width. If not specified, it will be determined automatically
-   * based on grid width and specified widths of other columns
+   * Default column width. If not specified, it will be determined automatically based on grid width
+   * and specified widths of other columns
    */
   defaultColumnWidth?: number;
-  /**
-   * Minimum column width in px.
-   */
+  /** Minimum column width in px. */
   defaultColumnMinWidth?: number;
-  /**
-   * Maximum column width in px.
-   */
+  /** Maximum column width in px. */
   defaultColumnMaxWidth?: number;
   /**
    * Whether or not columns are sortable by default
+   *
    * @default true
    */
   defaultColumnSortable?: boolean;
   /**
    * Whether or not columns are resizable by default
+   *
    * @default true
    */
   defaultColumnResizable?: boolean;
-  /**
-   * An array of objects representing the rows in the grid
-   */
+  /** An array of objects representing the rows in the grid */
   rows: readonly R[];
-  /**
-   * A function that returns the key for a given row
-   */
+  /** A function that returns the key for a given row */
   rowKeyGetter?: (row: R) => Key;
   /**
    * The height of each row in pixels
+   *
    * @default 35
    */
   rowHeight?: number;
   /**
    * The height of the header row in pixels
+   *
    * @default 35
    */
   headerRowHeight?: number;
-  /**
-   * A set of keys representing the currently selected rows
-   */
+  /** A set of keys representing the currently selected rows */
   selectedRows?: ReadonlySet<Key>;
-  /**
-   * A callback function that is called when the selected rows change
-   */
+  /** A callback function that is called when the selected rows change */
   onSelectedRowsChange?: (selectedRows: Set<Key>) => void;
-  /**
-   * A callback function that is called when the rows in the grid change
-   */
+  /** A callback function that is called when the rows in the grid change */
   onRowsChange?: (rows: R[], data: TableRowsChangeData<R>) => void;
   /**
    * A callback function that is called when a cell is clicked
+   *
    * @param event The event source of the callback
    */
   onCellClick?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
   /**
    * A callback function that is called when a cell is double-clicked
+   *
    * @param event The event source of the callback
    */
   onCellDoubleClick?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
   /**
    * A callback function that is called when a cell is right-clicked
+   *
    * @param event The event source of the callback
    */
   onCellContextMenu?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
   /**
    * A callback function that is called when a key is pressed while a cell is focused
+   *
    * @param event The event source of the callback
    */
   onCellKeyDown?: (args: TableCellKeyDownArgs<R>, event: TableCellKeyboardEvent) => void;
   /**
    * The text direction of the table
-   * @default "ltr"
+   *
+   * @default 'ltr'
    */
   direction?: 'ltr' | 'rtl';
   /**
    * Whether or not virtualization is enabled for the table
+   *
    * @default true
    */
   enableVirtualization?: boolean;
   /**
    * A callback function that is called when the table is scrolled
+   *
    * @param event The event source of the callback
    */
   onScroll?: (event: UIEvent<HTMLDivElement>) => void;
   /**
    * A callback function that is called when the user copies data from the table.
+   *
    * @param event The event source of the callback
    */
   onCopy?: (event: TableCopyEvent<R>) => void;
   /**
    * A callback function that is called when the user pastes data into the table.
+   *
    * @param event The event source of the callback
    */
   onPaste?: (event: TablePasteEvent<R>) => R;
-  /**
-   * Additional css classes to help with unique styling of the table
-   */
+  /** Additional css classes to help with unique styling of the table */
   className?: string;
-  /**
-   *  Optional unique identifier
-   */
+  /** Optional unique identifier */
   // Patched react-data-grid@7.0.0-beta.34 to add this prop, link to issue: https://github.com/adazzle/react-data-grid/issues/3305
   id?: string;
 };

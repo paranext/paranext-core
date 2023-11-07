@@ -10,6 +10,7 @@ type PlatformTabTitleProps = {
 
 /**
  * Custom tab title for all tabs in Platform
+ *
  * @param text The text to show on the tab title
  */
 export default function PlatformTabTitle({ iconUrl, text }: PlatformTabTitleProps) {

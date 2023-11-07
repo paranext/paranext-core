@@ -15,7 +15,7 @@ public class LocalProjectsTests
     public void DoesFolderMatchMetadata_FolderNameDoesNotMatchRegex_ReturnsFalse(string folder)
     {
         var metadata = CreateParatextProjectMetadata("ABC");
-        Assert.That(LocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.False);
+        Assert.That(DummyLocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.False);
     }
 
     [TestCase("ABC_441f1e41ffb8d319650847df35f4ffb78f12914e", "ABD")]
@@ -24,7 +24,7 @@ public class LocalProjectsTests
     public void DoesFolderMatchMetadata_NameDoesNotMatch_ReturnsFalse(string folder, string name)
     {
         var metadata = CreateParatextProjectMetadata(name);
-        Assert.That(LocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.False);
+        Assert.That(DummyLocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.False);
     }
 
     [TestCase("ABC_541f1e41ffb8d319650847df35f4ffb78f12914e", "ABC")]
@@ -32,7 +32,7 @@ public class LocalProjectsTests
     public void DoesFolderMatchMetadata_IdDoesNotMatch_ReturnsFalse(string folder, string name)
     {
         var metadata = CreateParatextProjectMetadata(name);
-        Assert.That(LocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.False);
+        Assert.That(DummyLocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.False);
     }
 
     [TestCase("ABC_441F1E41FFB8D319650847DF35F4FFB78F12914E", "ABC")]
@@ -42,7 +42,7 @@ public class LocalProjectsTests
     public void DoesFolderMatchMetadata_IdAndNameMatch_ReturnsTrue(string folder, string name)
     {
         var metadata = CreateParatextProjectMetadata(name);
-        Assert.That(LocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.True);
+        Assert.That(DummyLocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.True);
     }
 
     [Test]
@@ -50,7 +50,7 @@ public class LocalProjectsTests
     {
         var metadata = new ProjectMetadata("NotAParatextHexId",
             "MyShortName", "freaky", "alien");
-        Assert.That(LocalProjects.DoesFolderMatchMetadata("MyShortName_NotAParatextHexId",
+        Assert.That(DummyLocalProjects.DoesFolderMatchMetadata("MyShortName_NotAParatextHexId",
             metadata), Is.True);
     }
 

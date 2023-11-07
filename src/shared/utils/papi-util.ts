@@ -12,8 +12,9 @@ export type Unsubscriber = () => boolean;
 
 /**
  * Returns an Unsubscriber function that combines all the unsubscribers passed in.
- * @param unsubscribers all unsubscribers to aggregate into one unsubscriber
- * @returns function that unsubscribes from all passed in unsubscribers when run
+ *
+ * @param unsubscribers All unsubscribers to aggregate into one unsubscriber
+ * @returns Function that unsubscribes from all passed in unsubscribers when run
  */
 export const aggregateUnsubscribers = (unsubscribers: Unsubscriber[]): Unsubscriber => {
   return (...args) => {
@@ -25,13 +26,17 @@ export const aggregateUnsubscribers = (unsubscribers: Unsubscriber[]): Unsubscri
   };
 };
 
-/** Function to run to dispose of something that runs asynchronously. The promise resolves to true if successfully unsubscribed */
+/**
+ * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
+ * successfully unsubscribed
+ */
 export type UnsubscriberAsync = () => Promise<boolean>;
 
 /**
  * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
- * @param unsubscribers - all unsubscribers to aggregate into one unsubscriber.
- * @returns function that unsubscribes from all passed in unsubscribers when run
+ *
+ * @param unsubscribers - All unsubscribers to aggregate into one unsubscriber.
+ * @returns Function that unsubscribes from all passed in unsubscribers when run
  */
 export const aggregateUnsubscriberAsyncs = (
   unsubscribers: (UnsubscriberAsync | Unsubscriber)[],
@@ -47,10 +52,14 @@ export const aggregateUnsubscriberAsyncs = (
 
 /**
  * Creates a safe version of a register function that returns a Promise<UnsubscriberAsync>.
- * @param unsafeRegisterFn function that does some kind of async registration and returns an unsubscriber and a promise that resolves when the registration is finished
- * @param isInitialized whether the service associated with this safe UnsubscriberAsync function is initialized
- * @param initialize promise that resolves when the service is finished initializing
- * @returns safe version of an unsafe function that returns a promise to an UnsubscriberAsync (meaning it will wait to register until the service is initialized)
+ *
+ * @param unsafeRegisterFn Function that does some kind of async registration and returns an
+ *   unsubscriber and a promise that resolves when the registration is finished
+ * @param isInitialized Whether the service associated with this safe UnsubscriberAsync function is
+ *   initialized
+ * @param initialize Promise that resolves when the service is finished initializing
+ * @returns Safe version of an unsafe function that returns a promise to an UnsubscriberAsync
+ *   (meaning it will wait to register until the service is initialized)
  */
 export const createSafeRegisterFn = <TParam extends Array<unknown>>(
   unsafeRegisterFn: (...args: TParam) => Promise<UnsubscriberAsync>,
@@ -76,7 +85,10 @@ export type ComplexRequest<TParam = unknown> = {
 type ComplexResponseSuccess<TReturn = unknown> = {
   /** Whether the handler that created this response was successful in handling the request */
   success: true;
-  /** Content with which to respond to the request. Must be provided unless the response failed or TReturn is undefined */
+  /**
+   * Content with which to respond to the request. Must be provided unless the response failed or
+   * TReturn is undefined
+   */
   contents: TReturn;
 };
 
@@ -84,8 +96,9 @@ type ComplexResponseFailure = {
   /** Whether the handler that created this response was successful in handling the request */
   success: false;
   /**
-   * Content with which to respond to the request. Must be provided unless the response failed or TReturn is undefined
-   * Removed from failure so we do not change the type of contents for type safety. We could add errorContents one day if we really need it
+   * Content with which to respond to the request. Must be provided unless the response failed or
+   * TReturn is undefined Removed from failure so we do not change the type of contents for type
+   * safety. We could add errorContents one day if we really need it
    */
   /* contents?: TReturn; */
   /** Error explaining the problem that is only populated if success is false */
@@ -93,8 +106,9 @@ type ComplexResponseFailure = {
 };
 
 /**
- * Type of object to create when handling a complex request where you desire to provide additional information beyond the contents of the response
- * This type is used as the public-facing interface for responses
+ * Type of object to create when handling a complex request where you desire to provide additional
+ * information beyond the contents of the response This type is used as the public-facing interface
+ * for responses
  */
 export type ComplexResponse<TReturn = unknown> =
   | ComplexResponseSuccess<TReturn>
@@ -110,23 +124,25 @@ export enum RequestHandlerType {
 /**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
- * @param a the first object to compare
- * @param b the second object to compare
+ * @param a The first object to compare
+ * @param b The second object to compare
  *
- * WARNING: Objects like arrays from different iframes have different constructor function
- * references even if they do the same thing, so this deep equality comparison fails objects that
- * look the same but have different constructors because different constructors could produce false
- * positives in [a few specific situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
- * This means that two objects like arrays from different iframes that look the same will fail this
- * check. Please use some other means to check deep equality in those situations.
+ *   WARNING: Objects like arrays from different iframes have different constructor function
+ *   references even if they do the same thing, so this deep equality comparison fails objects that
+ *   look the same but have different constructors because different constructors could produce
+ *   false positives in [a few specific
+ *   situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
+ *   This means that two objects like arrays from different iframes that look the same will fail
+ *   this check. Please use some other means to check deep equality in those situations.
  *
- * Note: This deep equality check considers `undefined` values on keys of objects NOT to be equal to
- * not specifying the key at all. For example, `{ stuff: 3, things: undefined }` and `{ stuff: 3 }`
- * are not considered equal in this case
- * - For more information and examples, see [this CodeSandbox](https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs).
+ *   Note: This deep equality check considers `undefined` values on keys of objects NOT to be equal to
+ *   not specifying the key at all. For example, `{ stuff: 3, things: undefined }` and `{ stuff: 3
+ *   }` are not considered equal in this case
  *
- * @returns true if a and b are deeply equal; false otherwise
+ *   - For more information and examples, see [this
+ *       CodeSandbox](https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs).
  *
+ * @returns True if a and b are deeply equal; false otherwise
  */
 export function deepEqual(a: unknown, b: unknown) {
   return isEqualDeep(a, b);
@@ -134,22 +150,24 @@ export function deepEqual(a: unknown, b: unknown) {
 
 /**
  * Check to see if the value is `JSON.stringify` serializable without losing information
- * @param value value to test
- * @returns true if serializable; false otherwise
  *
- * Note: the value `undefined` is not serializable as `JSON.parse` throws on it. `null` is
- * serializable. However, `undefined` or `null` on properties of objects is serializable.
+ * @param value Value to test
+ * @returns True if serializable; false otherwise
  *
- * WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
- * Please only use this if you need to
+ *   Note: the value `undefined` is not serializable as `JSON.parse` throws on it. `null` is
+ *   serializable. However, `undefined` or `null` on properties of objects is serializable.
  *
- * DISCLAIMER: this does not successfully detect that values are not serializable in some cases:
- * - Losses of removed properties like functions and `Map`s
- * - Class instances (not deserializable into class instances without special code)
+ *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
+ *   Please only use this if you need to
  *
- * We intend to improve this in the future if it becomes important to do so. See
- * [`JSON.stringify` documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#description)
- * for more information.
+ *   DISCLAIMER: this does not successfully detect that values are not serializable in some cases:
+ *
+ *   - Losses of removed properties like functions and `Map`s
+ *   - Class instances (not deserializable into class instances without special code)
+ *
+ *   We intend to improve this in the future if it becomes important to do so. See [`JSON.stringify`
+ *   documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#description)
+ *   for more information.
  */
 export function isSerializable(value: unknown): boolean {
   try {
@@ -164,9 +182,9 @@ const REQUEST_TYPE_SEPARATOR = ':';
 
 /** Information about a request that tells us what to do with it */
 export type RequestType = {
-  /** the general category of request */
+  /** The general category of request */
   category: string;
-  /** specific identifier for this type of request */
+  /** Specific identifier for this type of request */
   directive: string;
 };
 
@@ -179,9 +197,10 @@ export type SerializedRequestType = `${string}${typeof REQUEST_TYPE_SEPARATOR}${
 
 /**
  * Create a request message requestType string from a category and a directive
- * @param category the general category of request
- * @param directive specific identifier for this type of request
- * @returns full requestType for use in network calls
+ *
+ * @param category The general category of request
+ * @param directive Specific identifier for this type of request
+ * @returns Full requestType for use in network calls
  */
 export function serializeRequestType(category: string, directive: string): SerializedRequestType {
   if (!category) throw new Error('serializeRequestType: "category" is not defined or empty.');
@@ -205,9 +224,9 @@ export function deserializeRequestType(requestType: SerializedRequestType): Requ
 }
 
 /**
- * HTML Encodes the provided string.
- * Thanks to ChatGPT
- * @param str string to HTML encode
+ * HTML Encodes the provided string. Thanks to ChatGPT
+ *
+ * @param str String to HTML encode
  * @returns HTML-encoded string
  */
 export const htmlEncode = (str: string): string =>
@@ -220,8 +239,8 @@ export const htmlEncode = (str: string): string =>
     .replace(/\//g, '&#x2F;');
 
 /**
- * Modules that someone might try to require in their extensions that we have similar apis for.
- * When an extension requires these modules, an error throws that lets them know about our similar api.
+ * Modules that someone might try to require in their extensions that we have similar apis for. When
+ * an extension requires these modules, an error throws that lets them know about our similar api.
  */
 export const MODULE_SIMILAR_APIS: Readonly<{
   [moduleName: string]: string | { [process in ProcessType | 'default']?: string } | undefined;
@@ -236,8 +255,9 @@ export const MODULE_SIMILAR_APIS: Readonly<{
 
 /**
  * Get a message that says the module import was rejected and to try a similar api if available.
- * @param moduleName name of `require`d module that was rejected
- * @returns string that says the import was rejected and a similar api to try
+ *
+ * @param moduleName Name of `require`d module that was rejected
+ * @returns String that says the import was rejected and a similar api to try
  */
 export function getModuleSimilarApiMessage(moduleName: string) {
   const similarApi = MODULE_SIMILAR_APIS[moduleName] || MODULE_SIMILAR_APIS[`node:${moduleName}`];
@@ -253,8 +273,11 @@ export function getModuleSimilarApiMessage(moduleName: string) {
   } bundling the module into your code with a build tool like webpack`;
 }
 
-/** JSDOC SOURCE papiUtil
- * papiUtil is a collection of functions, objects, and types that are used as helpers in other services.
- * Extensions should not use or rely on anything in papiUtil unless some other service requires it.
+/**
+ * JSDOC SOURCE papiUtil
+ *
+ * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
+ * services. Extensions should not use or rely on anything in papiUtil unless some other service
+ * requires it.
  */
 export type moduleSummaryComments = {};

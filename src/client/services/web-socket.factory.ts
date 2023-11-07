@@ -8,6 +8,7 @@ import { IWebSocket } from './web-socket.interface';
 
 /**
  * Creates a WebSocket for the renderer or extension host depending on where you're running
+ *
  * @returns WebSocket
  */
 // eslint-disable-next-line import/prefer-default-export

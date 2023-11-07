@@ -54,4 +54,112 @@ declare module '*.css' {
 
 // #endregion
 
+// #region images
+
+/**
+ * Load images as data uris
+ *
+ * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+ */
+declare module '*.png' {
+  const content: string;
+  export default content;
+}
+
+/**
+ * Load images as data uris
+ *
+ * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+ */
+declare module '*.svg' {
+  const content: string;
+  export default content;
+}
+
+/**
+ * Load images as data uris
+ *
+ * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+ */
+declare module '*.jpg' {
+  const content: string;
+  export default content;
+}
+
+/**
+ * Load images as data uris
+ *
+ * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+ */
+declare module '*.jpeg' {
+  const content: string;
+  export default content;
+}
+
+/**
+ * Load images as data uris
+ *
+ * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+ */
+declare module '*.gif' {
+  const content: string;
+  export default content;
+}
+
+// #endregion
+
+// #region fonts
+
+/**
+ * Load fonts as data uris
+ *
+ * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+ */
+declare module '*.woff' {
+  const content: string;
+  export default content;
+}
+
+/**
+ * Load fonts as data uris
+ *
+ * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+ */
+declare module '*.woff2' {
+  const content: string;
+  export default content;
+}
+
+/**
+ * Load fonts as data uris
+ *
+ * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+ */
+declare module '*.eot' {
+  const content: string;
+  export default content;
+}
+
+/**
+ * Load fonts as data uris
+ *
+ * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+ */
+declare module '*.ttf' {
+  const content: string;
+  export default content;
+}
+
+/**
+ * Load fonts as data uris
+ *
+ * Note: it is generally advised to use the `papi-extension:` protocol to load assets
+ */
+declare module '*.otf' {
+  const content: string;
+  export default content;
+}
+
+// #endregion
+
 // #endregion

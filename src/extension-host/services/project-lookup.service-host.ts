@@ -24,7 +24,10 @@ async function getProjectUris(): Promise<string[]> {
   return entries.directory;
 }
 
-/** Convert the contents of a 'meta.json' file to an object, ensuring its project ID is what we expect */
+/**
+ * Convert the contents of a 'meta.json' file to an object, ensuring its project ID is what we
+ * expect
+ */
 function convertToMetadata(jsonString: string, expectedID: string): ProjectMetadata {
   const md: ProjectMetadata = JSON.parse(jsonString);
   if ('id' in md && 'name' in md && 'storageType' in md && 'projectType' in md) {
@@ -119,9 +122,7 @@ const projectLookupService: ProjectLookupServiceType = {
   getMetadataForProject,
 };
 
-/**
- * Register the network object that backs the PAPI project lookup service
- */
+/** Register the network object that backs the PAPI project lookup service */
 // This doesn't really represent this service module, so we're not making it default. To use this
 // service, you should use `project-lookup.service.ts`
 // eslint-disable-next-line import/prefer-default-export
