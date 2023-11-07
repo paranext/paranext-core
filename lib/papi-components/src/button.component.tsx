@@ -3,26 +3,19 @@ import { MouseEventHandler, PropsWithChildren } from 'react';
 import './button.component.css';
 
 export type ButtonProps = PropsWithChildren<{
-  /**
-   *  Optional unique identifier
-   */
+  /** Optional unique identifier */
   id?: string;
   /**
    * Enabled status of button
+   *
    * @default false
    */
   isDisabled?: boolean;
-  /**
-   * Additional css classes to help with unique styling of the button
-   */
+  /** Additional css classes to help with unique styling of the button */
   className?: string;
-  /**
-   * Optional click handler
-   */
+  /** Optional click handler */
   onClick?: MouseEventHandler<HTMLButtonElement>;
-  /**
-   * Optional context menu handler
-   */
+  /** Optional context menu handler */
   onContextMenu?: MouseEventHandler<HTMLButtonElement>;
 }>;
 

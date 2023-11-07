@@ -1,7 +1,6 @@
 /**
- * Service that handles WebView-related operations
- * Likely shouldn't need/want to expose this whole service on papi,
- * but most things are exposed via papiWebViewService
+ * Service that handles WebView-related operations Likely shouldn't need/want to expose this whole
+ * service on papi, but most things are exposed via papiWebViewService
  */
 import cloneDeep from 'lodash/cloneDeep';
 import { isRenderer } from '@shared/utils/internal-util';
@@ -38,7 +37,7 @@ import logger from '@shared/services/logger.service';
 import LogError from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
 
-/** rc-dock's onLayoutChange prop made asynchronous - resolves */
+/** Rc-dock's onLayoutChange prop made asynchronous - resolves */
 export type OnLayoutChangeRCDock = (
   newLayout: LayoutBase,
   currentTabId?: string,
@@ -56,43 +55,42 @@ type PapiDockLayout = {
   onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
   /**
    * Add or update a tab in the layout
-   * @param savedTabInfo info for tab to add or update
-   * @param layout information about where to put a new tab
    *
+   * @param savedTabInfo Info for tab to add or update
+   * @param layout Information about where to put a new tab
    * @returns If tab added, final layout used to display the new tab. If existing tab updated,
    *   `undefined`
    */
   addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => Layout | undefined;
   /**
    * Add or update a webview in the layout
-   * @param webView web view to add or update
-   * @param layout information about where to put a new webview
    *
+   * @param webView Web view to add or update
+   * @param layout Information about where to put a new webview
    * @returns If WebView added, final layout used to display the new webView. If existing webView
    *   updated, `undefined`
    */
   addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => Layout | undefined;
   /**
    * Remove a tab in the layout
-   * @param tabId id of the tab to remove
+   *
+   * @param tabId ID of the tab to remove
    */
   removeTabFromDock: (tabId: string) => boolean;
   /**
-   * Gets the WebView definition for the web view with the specified id
+   * Gets the WebView definition for the web view with the specified ID
    *
-   * @param webViewId the id of the WebView whose web view definition to get
-   *
-   * @returns WebView definition with the specified id or undefined if not found
+   * @param webViewId The ID of the WebView whose web view definition to get
+   * @returns WebView definition with the specified ID or undefined if not found
    */
   getWebViewDefinition: (webViewId: string) => WebViewDefinition | undefined;
   /**
-   * Updates the WebView with the specified id with the specified properties
+   * Updates the WebView with the specified ID with the specified properties
    *
-   * @param webViewId the id of the WebView to update
-   * @param updateInfo properties to update on the WebView. Any unspecified
-   * properties will stay the same
-   *
-   * @returns true if successfully found the WebView to update; false otherwise
+   * @param webViewId The ID of the WebView to update
+   * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
+   *   same
+   * @returns True if successfully found the WebView to update; false otherwise
    */
   updateWebViewDefinition: (webViewId: string, updateInfo: WebViewDefinitionUpdateInfo) => boolean;
   /**
@@ -114,33 +112,37 @@ type PapiDockLayout = {
 export const IFRAME_SANDBOX_ALLOW_SCRIPTS = 'allow-scripts';
 /**
  * The iframe [sandbox attribute]
- * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox) that determines if
- * an iframe is allowed to interact with its parent as a same-origin website. The iframe must still
- * be on the same origin as its parent in order to interact same-origin.
+ * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox) that determines if an
+ * iframe is allowed to interact with its parent as a same-origin website. The iframe must still be
+ * on the same origin as its parent in order to interact same-origin.
  */
 export const IFRAME_SANDBOX_ALLOW_SAME_ORIGIN = 'allow-same-origin';
 /**
  * The only `sandbox` attribute values we allow iframes with `src` to have including URL WebView
  * iframes. These are separate than iframes with `srcdoc` for a few reasons:
+ *
  * - These iframes cannot be on the same origin as the parent window even if `allow-same-origin` is
- * present (unless they are literally on the same origin) because we do not allow `frame-src blob:`
+ *   present (unless they are literally on the same origin) because we do not allow `frame-src
+ *   blob:`
  * - `src` iframes do not inherit the CSP of their parent window.
- * - We are not able to modify the `srcdoc` before inserting it to ensure it has a CSP that we
- * control to attempt to prevent arbitrary code execution on same origin. We are trusting the
- * browser's ability to create a strong and safe boundary between parent and child iframe in
- * different origin.
+ * - We are not able to modify the `srcdoc` before inserting it to ensure it has a CSP that we control
+ *   to attempt to prevent arbitrary code execution on same origin. We are trusting the browser's
+ *   ability to create a strong and safe boundary between parent and child iframe in different
+ *   origin.
  *
  *   TODO: consider using `csp` attribute on iframe to mitigate this issue
  * - Extension developers do not know what code they are executing if they use some random URL in
- * `src` WebViews.
+ *   `src` WebViews.
  *
  * The `sandbox` attribute controls what privileges iframe scripts and other things have:
+ *
  * - `allow-same-origin` so the iframe can access the storage APIs (localstorage, cookies, etc) and
- * other same-origin connections for its own origin. `blob:` iframes are considered part of the
- * parent origin, but we block them with the CSP in `index.ejs`. For more information, see https://web.dev/articles/sandboxed-iframes
+ *   other same-origin connections for its own origin. `blob:` iframes are considered part of the
+ *   parent origin, but we block them with the CSP in `index.ejs`. For more information, see
+ *   https://web.dev/articles/sandboxed-iframes
  * - `allow-scripts` so the iframe can actually do things. Defaults to not present since src iframes
- * can get scripts from anywhere. Extension developers should only enable this if needed as this
- * increases the possibility of a security threat occurring. Defaults to false
+ *   can get scripts from anywhere. Extension developers should only enable this if needed as this
+ *   increases the possibility of a security threat occurring. Defaults to false
  *
  * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
  *
@@ -173,20 +175,22 @@ export const WEBVIEW_IFRAME_SRC_SANDBOX = ALLOWED_IFRAME_SRC_SANDBOX_VALUES.filt
 /**
  * The only `sandbox` attribute values we allow iframes with `srcdoc` to have including HTML and
  * React WebView iframes. These are separate than iframes with `src` for a few reasons:
- * - These iframes will be on the same origin as the parent window if `allow-same-origin` is
- * present. This is very serious and demands significant security risk consideration.
+ *
+ * - These iframes will be on the same origin as the parent window if `allow-same-origin` is present.
+ *   This is very serious and demands significant security risk consideration.
  * - `srcdoc` iframes inherit the CSP of their parent window (in our case, `index.ejs`)
  * - We are modifying the `srcdoc` before inserting it to ensure it has a CSP that we control to
- * attempt to prevent unintended code execution on same origin
- * - Extension developers should know exactly what code they're running in `srcdoc` WebViews,
- * whereas they could include some random URL in `src` WebViews
+ *   attempt to prevent unintended code execution on same origin
+ * - Extension developers should know exactly what code they're running in `srcdoc` WebViews, whereas
+ *   they could include some random URL in `src` WebViews
  *
  *   TODO: consider requiring `srcdoc` WebView content to come directly from `papi-extension://`
- * instead of assuming extension developers will bundle their WebView code? This would mean the only
- * code that runs on same origin is code that extension developers definitely included in their
- * extension bundle https://github.com/paranext/paranext-core/issues/604
+ *   instead of assuming extension developers will bundle their WebView code? This would mean the
+ *   only code that runs on same origin is code that extension developers definitely included in
+ *   their extension bundle https://github.com/paranext/paranext-core/issues/604
  *
  * The `sandbox` attribute controls what privileges iframe scripts and other things have:
+ *
  * - `allow-same-origin` so the iframe can get papi and communicate and such
  * - `allow-scripts` so the iframe can actually do things
  *
@@ -272,8 +276,8 @@ const FORBIDDEN_HTML_TAGS = ['object', 'embed', 'frame', 'frameset'];
  * Note: this only applies to tags added to the document after initial load, so the document
  * metadata tags are not normally hit.
  *
- * WARNING: A stack trace has to be created each time any of these are created, so it is not
- * very efficient when one of these tags is created. Please avoid using these tags where possible.
+ * WARNING: A stack trace has to be created each time any of these are created, so it is not very
+ * efficient when one of these tags is created. Please avoid using these tags where possible.
  */
 const RESTRICTED_HTML_TAGS = [
   // All the [Document metadata](https://developer.mozilla.org/en-US/docs/Web/HTML/Element#document_metadata)
@@ -310,7 +314,7 @@ const CATEGORY_WEB_VIEW = 'webView';
 /** Name for request to get a web view */
 const GET_WEB_VIEW_REQUEST = 'getWebView';
 
-/** localstorage key for saving and loading the dock layout */
+/** `localstorage` key for saving and loading the dock layout */
 const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 
 /** Whether this service has finished setting up */
@@ -333,8 +337,8 @@ export const onDidAddWebView = onDidAddWebViewEmitter.event;
  * props. This is populated by `platform-dock-layout.component.tsx` registering its dock layout with
  * this service, allowing this service to manage layouts and such.
  *
- * WARNING: YOU CAN ONLY USE THIS VARIABLE IN THE RENDERER. Also please do not save this
- * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
+ * WARNING: YOU CAN ONLY USE THIS VARIABLE IN THE RENDERER. Also please do not save this variable
+ * out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
  */
 let papiDockLayoutVar = createDockLayoutAsyncVar();
 /**
@@ -344,8 +348,8 @@ let papiDockLayoutVar = createDockLayoutAsyncVar();
  * props. This is populated by `platform-dock-layout.component.tsx` registering its dock layout with
  * this service, allowing this service to manage layouts and such.
  *
- * WARNING: YOU CAN ONLY USE THIS VARIABLE IN THE RENDERER. Also please do not save this
- * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
+ * WARNING: YOU CAN ONLY USE THIS VARIABLE IN THE RENDERER. Also please do not save this variable
+ * out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
  */
 let papiDockLayoutVarSync: PapiDockLayout | undefined;
 /**
@@ -353,9 +357,9 @@ let papiDockLayoutVarSync: PapiDockLayout | undefined;
  *
  * This should very likely only be used in `registerDockLayout`.
  *
- * @param dockLayout the papi dock layout to set or undefined to reset the dock layout
+ * @param dockLayout The papi dock layout to set or undefined to reset the dock layout
  *
- * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER.
+ *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER.
  */
 function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
   if (dockLayout === undefined) {
@@ -382,21 +386,20 @@ function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
  * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER. Also please do not save the returned
  * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
  *
- * @returns promise that resolves to the papi dock layout
+ * @returns Promise that resolves to the papi dock layout
  */
 function getDockLayout(): Promise<PapiDockLayout> {
   return papiDockLayoutVar.promise;
 }
 /**
- * Get the papi dock layout synchronously *assuming* it has been registered. This should be safe to
+ * Get the papi dock layout synchronously _assuming_ it has been registered. This should be safe to
  * assume if you are accessing this from inside a tab's code
  *
  * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER. Also please do not save the returned
  * variable out anywhere because it can change, invalidating the old one (see `registerDockLayout`)
  *
- * @returns the papi dock layout
- *
- * @throws if the papi dock layout has not been registered
+ * @returns The papi dock layout
+ * @throws If the papi dock layout has not been registered
  */
 function getDockLayoutSync(): PapiDockLayout {
   if (!papiDockLayoutVarSync)
@@ -423,8 +426,9 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
 /**
  * Converts web view definition used in an actual docking tab into saveable web view information by
  * stripping out the members we don't want to save
- * @param webViewDefinition web view to save
- * @returns saveable web view information based on `webViewDefinition`
+ *
+ * @param webViewDefinition Web view to save
+ * @returns Saveable web view information based on `webViewDefinition`
  */
 export function convertWebViewDefinitionToSaved(
   webViewDefinition: WebViewDefinition,
@@ -464,18 +468,19 @@ function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
  * When rc-dock detects a changed layout, save it. This function is given to the registered
  * papiDockLayout to run when the dock layout changes.
  *
- * TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
- * @param newLayout the changed layout to save.
+ * @param newLayout The changed layout to save.
  */
+// TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
 const onLayoutChange: OnLayoutChangeRCDock = async (newLayout) => {
   return saveLayout(newLayout);
 };
 
 /**
  * Safely load a value from local storage.
- * @param key of the value.
- * @param defaultValue to return if the key is not found.
- * @returns the value of the key fetched from local storage, or the default value if not found.
+ *
+ * @param key Of the value.
+ * @param defaultValue To return if the key is not found.
+ * @returns The value of the key fetched from local storage, or the default value if not found.
  */
 function getStorageValue<T>(key: string, defaultValue: T): T {
   const saved = localStorage.getItem(key);
@@ -485,7 +490,8 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
 
 /**
  * Persists the current dock layout information.
- * @param layout layout to persist
+ *
+ * @param layout Layout to persist
  */
 async function saveLayout(layout: LayoutBase): Promise<void> {
   const currentLayout = layout;
@@ -494,10 +500,11 @@ async function saveLayout(layout: LayoutBase): Promise<void> {
 
 /**
  * Loads layout information into the dock layout.
- * @param layout If this parameter is provided, loads that layout information. If not provided, gets
- * the persisted layout information and loads it into the dock layout.
  *
- * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
+ * @param layout If this parameter is provided, loads that layout information. If not provided, gets
+ *   the persisted layout information and loads it into the dock layout.
+ *
+ *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
  */
 async function loadLayout(layout?: LayoutBase): Promise<void> {
   const dockLayoutVar = await getDockLayout();
@@ -514,12 +521,13 @@ async function loadLayout(layout?: LayoutBase): Promise<void> {
 /**
  * Register a dock layout React element to be used by this service to perform layout-related
  * operations
- * @param dockLayout dock layout element to register along with other important properties
- * @returns function used to unregister this dock layout
  *
- * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
+ * @param dockLayout Dock layout element to register along with other important properties
+ * @returns Function used to unregister this dock layout
  *
- * Not exposed on the papi
+ *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
+ *
+ *   Not exposed on the papi
  */
 export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // Save the current async var so we know if it changed before we unsubscribed
@@ -561,13 +569,13 @@ function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOption
 
 /**
  * Remove a tab in the layout
- * @param tabId id of the tab to remove
  *
- * @returns true if successfully found the tab to remove
+ * @param tabId ID of the tab to remove
+ * @returns True if successfully found the tab to remove
  *
- * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
+ *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
  *
- * Not exposed on the papi
+ *   Not exposed on the papi
  */
 export const removeTab = async (tabId: string): Promise<boolean> => {
   return (await getDockLayout()).removeTabFromDock(tabId);
@@ -575,15 +583,15 @@ export const removeTab = async (tabId: string): Promise<boolean> => {
 
 /**
  * Add or update a tab in the layout
- * @param savedTabInfo info for tab to add or update
- * @param layout information about where to put a new tab
  *
+ * @param savedTabInfo Info for tab to add or update
+ * @param layout Information about where to put a new tab
  * @returns If tab added, final layout used to display the new tab. If existing tab updated,
  *   `undefined`
  *
- * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
+ *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
  *
- * Not exposed on the papi
+ *   Not exposed on the papi
  */
 export const addTab = async <TData = unknown>(
   savedTabInfo: SavedTabInfo & { data?: TData },
@@ -594,10 +602,11 @@ export const addTab = async <TData = unknown>(
 
 /**
  * Get just the updatable properties of a web view definition
- * @param webViewDefinition web view definition or update info to get updatable properties from
- * @returns updatable properties of the web view definition
  *
- * Not exposed on the papi
+ * @param webViewDefinition Web view definition or update info to get updatable properties from
+ * @returns Updatable properties of the web view definition
+ *
+ *   Not exposed on the papi
  */
 export function getUpdatablePropertiesFromWebViewDefinition(
   webViewDefinition:
@@ -612,13 +621,14 @@ export function getUpdatablePropertiesFromWebViewDefinition(
 }
 
 /**
- * Merges web view definition updates into a web view definition. Does not modify the original
- * web view definition but returns a new object.
- * @param webViewDefinition web view definition to merge into
- * @param updateInfo updates to merge into the web view definition
- * @returns new copy of web view definition with updates applied
+ * Merges web view definition updates into a web view definition. Does not modify the original web
+ * view definition but returns a new object.
  *
- * Not exposed on the papi
+ * @param webViewDefinition Web view definition to merge into
+ * @param updateInfo Updates to merge into the web view definition
+ * @returns New copy of web view definition with updates applied
+ *
+ *   Not exposed on the papi
  */
 export function mergeUpdatablePropertiesIntoWebViewDefinition<T extends SavedWebViewDefinition>(
   webViewDefinition: T,
@@ -641,18 +651,16 @@ export function mergeUpdatablePropertiesIntoWebViewDefinition<T extends SavedWeb
 }
 
 /**
- * Gets the updatable properties on the WebView definition with the specified id
+ * Gets the updatable properties on the WebView definition with the specified ID
  *
- * @param webViewId the id of the WebView whose updatable properties to get
+ * @param webViewId The ID of the WebView whose updatable properties to get
+ * @returns Updatable properties of the WebView definition with the specified ID or undefined if not
+ *   found
+ * @throws If the papi dock layout has not been registered
  *
- * @returns updatable properties of the WebView definition with the specified id or undefined if
- * not found
+ *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
  *
- * @throws if the papi dock layout has not been registered
- *
- * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
- *
- * Not exposed on the papi
+ *   Not exposed on the papi
  */
 export function getWebViewDefinitionUpdatablePropertiesSync(
   webViewId: string,
@@ -664,19 +672,17 @@ export function getWebViewDefinitionUpdatablePropertiesSync(
 }
 
 /**
- * Updates the WebView with the specified id with the specified properties
+ * Updates the WebView with the specified ID with the specified properties
  *
- * @param webViewId the id of the WebView to update
- * @param webViewDefinitionUpdateInfo properties to update on the WebView. Any unspecified
- * properties will stay the same
+ * @param webViewId The ID of the WebView to update
+ * @param webViewDefinitionUpdateInfo Properties to update on the WebView. Any unspecified
+ *   properties will stay the same
+ * @returns True if successfully found the WebView to update; false otherwise
+ * @throws If the papi dock layout has not been registered
  *
- * @returns true if successfully found the WebView to update; false otherwise
+ *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
  *
- * @throws if the papi dock layout has not been registered
- *
- * WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
- *
- * Not exposed on the papi
+ *   Not exposed on the papi
  */
 export function updateWebViewDefinitionSync(
   webViewId: string,
@@ -694,18 +700,16 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
 // #endregion
 
 /**
- * Creates a new web view or gets an existing one depending on if you request an existing one and
- * if the web view provider decides to give that existing one to you (it is up to the provider).
+ * Creates a new web view or gets an existing one depending on if you request an existing one and if
+ * the web view provider decides to give that existing one to you (it is up to the provider).
  *
- * @param webViewType type of WebView to create
- * @param layout information about where you want the web view to go. Defaults to adding as a tab
- * @param options options that affect what this function does. For example, you can provide an
- * existing web view id to request an existing web view with that id.
- *
- * @returns promise that resolves to the id of the webview we got or undefined if the provider did
- * not create a WebView for this request.
- *
- * @throws if something went wrong like the provider for the webViewType was not found
+ * @param webViewType Type of WebView to create
+ * @param layout Information about where you want the web view to go. Defaults to adding as a tab
+ * @param options Options that affect what this function does. For example, you can provide an
+ *   existing web view ID to request an existing web view with that ID.
+ * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
+ *   not create a WebView for this request.
+ * @throws If something went wrong like the provider for the webViewType was not found
  */
 export const getWebView = async (
   webViewType: WebViewType,
@@ -767,7 +771,7 @@ export const getWebView = async (
     throw new Error(`getWebView: Cannot find Web View Provider for webview type ${webViewType}`);
 
   // Find existing webView if one exists
-  /** Either the existing webview with the specified id or a placeholder webview if one was not found */
+  /** Either the existing webview with the specified ID or a placeholder webview if one was not found */
   let existingSavedWebView: SavedWebViewDefinition | undefined;
   // Look for existing webview
   if (optionsDefaulted.existingId) {
@@ -784,7 +788,7 @@ export const getWebView = async (
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             return (item.data as WebViewDefinition).webViewType === webViewType;
           }
-        : // If they provided any other string, look for a webview with that id
+        : // If they provided any other string, look for a webview with that ID
           optionsDefaulted.existingId,
     ) as TabInfo | undefined;
     if (existingWebView) {
@@ -799,11 +803,11 @@ export const getWebView = async (
     }
   }
 
-  // We didn't find an existing web view with the id
+  // We didn't find an existing web view with the ID
   if (!existingSavedWebView) {
     // If we are not looking to create a new webview, then don't.
     if ('existingId' in optionsDefaulted && !optionsDefaulted.createNewIfNotFound) return undefined;
-    // If we want to create a new webview, set a placeholder with a new id
+    // If we want to create a new webview, set a placeholder with a new ID
     existingSavedWebView = { webViewType, id: newGuid() };
   }
 
@@ -816,10 +820,10 @@ export const getWebView = async (
   // Set up WebViewDefinition default values
   /** WebView.contentType is assumed to be React by default. Extensions can specify otherwise */
   const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
-  /** default allowScripts to false for WebViewContentType.URL and true otherwise */
+  /** Default allowScripts to false for WebViewContentType.URL and true otherwise */
   let { allowScripts } = webView;
   if (contentType !== WebViewContentType.URL) allowScripts = webView.allowScripts ?? true;
-  /** default allowSameOrigin to true */
+  /** Default allowSameOrigin to true */
   const allowSameOrigin = webView.allowSameOrigin ?? true;
   /**
    * Only allow connecting to `papi-extension:` and `https:` urls. For HTML and React WebViews, this
@@ -852,7 +856,8 @@ export const getWebView = async (
   // `useWebViewState` below is defined in `src\shared\global-this.model.ts`
   // We have to bind `useWebViewState` to the current `window` context because calls within PAPI don't have access to a webview's `window` context
   /**
-   * String that sets up 'import' statements in the webview to pull in libraries and clear out internet access and such
+   * String that sets up 'import' statements in the webview to pull in libraries and clear out
+   * internet access and such
    *
    * WARNING: `window.top` is not deletable as a security feature (websites need to know if they are
    * running embedded in an iframe), so the child iframes are NOT isolated from their parents. We
@@ -964,7 +969,8 @@ export const getWebView = async (
    * Content security policy header for the webview - controls what resources scripts and other
    * things can access.
    *
-   * Design decisions and guiding principles at https://github.com/paranext/paranext/wiki/Content-Security-Policy-Design
+   * Design decisions and guiding principles at
+   * https://github.com/paranext/paranext/wiki/Content-Security-Policy-Design
    *
    * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
    *
@@ -1075,7 +1081,10 @@ export const getWebView = async (
   return webView.id;
 };
 
-/** Commands that this process will handle if it is the renderer. Registered automatically at initialization */
+/**
+ * Commands that this process will handle if it is the renderer. Registered automatically at
+ * initialization
+ */
 const rendererRequestHandlers = {
   [serializeRequestType(CATEGORY_WEB_VIEW, GET_WEB_VIEW_REQUEST)]: getWebView,
 };
@@ -1083,8 +1092,9 @@ const rendererRequestHandlers = {
 /**
  * Checks a node and its children recursively to determine if they are forbidden and removes them
  * from the dom if so.
- * @param node the node to check recursively
- * @param parent node from which to remove this node if it is forbidden
+ *
+ * @param node The node to check recursively
+ * @param parent Node from which to remove this node if it is forbidden
  */
 function removeNodeIfForbidden(node: Node) {
   if (node.nodeType !== Node.ELEMENT_NODE) return;
@@ -1328,7 +1338,9 @@ export interface PapiWebViewService {
   initialize: typeof initialize;
 }
 
-/** JSDOC SOURCE papiWebViewService
+/**
+ * JSDOC SOURCE papiWebViewService
+ *
  * Service exposing various functions related to using webViews
  *
  * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either

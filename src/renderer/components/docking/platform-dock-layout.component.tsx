@@ -81,7 +81,10 @@ type TabType = string;
 
 type RCDockTabInfo = TabData & TabInfo;
 
-/** The default initial size for floating tabs in CSS `px` units. Can be overridden by tabTypes' initial sizes */
+/**
+ * The default initial size for floating tabs in CSS `px` units. Can be overridden by tabTypes'
+ * initial sizes
+ */
 const DEFAULT_FLOAT_SIZE: FloatSize = { width: 300, height: 150 };
 /** Default direction a tab will be placed from an existing tab if created as a panel */
 const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
@@ -106,7 +109,7 @@ const groups: { [key: string]: TabGroup } = {
 // a shared file.
 // TODO: please move these utility functions with #203
 
-/** tab loader functions for each Platform tab type */
+/** Tab loader functions for each Platform tab type */
 const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_ABOUT, loadAboutTab],
   [TAB_TYPE_BUTTONS, loadButtonsTab],
@@ -125,7 +128,7 @@ const tabLoaderMap = new Map<TabType, TabLoader>([
   ),
 ]);
 
-/** tab saver functions for each Platform tab type that wants to override the default */
+/** Tab saver functions for each Platform tab type that wants to override the default */
 const tabSaverMap = new Map<TabType, TabSaver>([
   [TAB_TYPE_WEBVIEW, saveWebViewTab],
   [TAB_TYPE_ERROR, saveErrorTab],
@@ -149,8 +152,9 @@ let previousFloatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 
 /**
  * Loads tab data from the specified saved tab information by running the tab loader provided by the
  * component file that registered this tab type
+ *
  * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
- * @returns tab that holds all info needed to make an actual tab in the dock layout
+ * @returns Tab that holds all info needed to make an actual tab in the dock layout
  */
 function loadSavedTabInfo(savedTabInfo: SavedTabInfo): TabInfo {
   const tabLoader = tabLoaderMap.get(savedTabInfo.tabType);
@@ -167,9 +171,9 @@ function loadSavedTabInfo(savedTabInfo: SavedTabInfo): TabInfo {
 
 /**
  * Creates a tab ready to go into rc-dock from platform tab info
- * @param tabInfo data used to create the rc-dock tab
  *
- * @returns rc-dock tab created from `tabInfo`
+ * @param tabInfo Data used to create the rc-dock tab
+ * @returns Rc-dock tab created from `tabInfo`
  */
 function createRCDockTabFromTabInfo(tabInfo: TabInfo) {
   // Translate the data from the loaded tab to be in the form needed by rc-dock
@@ -184,8 +188,9 @@ function createRCDockTabFromTabInfo(tabInfo: TabInfo) {
 
 /**
  * Loads tab data from the specified saved tab information into an actual dock layout tab
+ *
  * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
- * @returns live dock layout tab ready to used
+ * @returns Live dock layout tab ready to used
  */
 export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
   if (!savedTabInfo.id) throw new LogError('loadTab: "id" is missing.');
@@ -199,8 +204,9 @@ export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
 /**
  * Converts the tab data into saved tab information by running the tab saver provided by the
  * component file that registered this tab type
- * @param dockTabInfo the tab data to save
- * @returns saved tab info ready to be saved into the layout
+ *
+ * @param dockTabInfo The tab data to save
+ * @returns Saved tab info ready to be saved into the layout
  */
 function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
   // Remove the rc-dock properties that are not also in SavedTabInfo
@@ -216,7 +222,8 @@ function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
 
 /**
  * Check if the input item is just a tab, i.e. not a panel, box, or float.
- * @param tab to check.
+ *
+ * @param tab To check.
  * @returns `true` if its a tab or `false` otherwise.
  */
 function isTab(tab: PanelData | TabData | BoxData | undefined): tab is TabData {
@@ -239,11 +246,12 @@ function offsetOrOverflowAxis(
 /**
  * Get left & top so float windows cascade their position. Float window should not overflow the
  * layout but start cascading again.
- * @param layout specified by the WebView. Must have all values - this function assumes this layout
+ *
+ * @param layout Specified by the WebView. Must have all values - this function assumes this layout
  *   has had default values set already
- * @param previousPosition used with the previous float window.
- * @param layoutSize of the whole dock layout.
- * @returns cascaded position.
+ * @param previousPosition Used with the previous float window.
+ * @param layoutSize Of the whole dock layout.
+ * @returns Cascaded position.
  */
 export function getFloatPosition(
   layout: FloatLayout,
@@ -316,11 +324,11 @@ function layoutDefaults(layout: Layout, savedTabInfo: SavedTabInfo): Layout {
 
 /**
  * Add or update a tab in the layout
- * @param savedTabInfo info for tab to add or update
- * @param layout information about where to put a new tab
- * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
- * layout
  *
+ * @param savedTabInfo Info for tab to add or update
+ * @param layout Information about where to put a new tab
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
  * @returns If tab added, final layout used to display the new tab. If existing tab updated,
  *   `undefined`
  */
@@ -431,11 +439,11 @@ export function addTabToDock(
 
 /**
  * Add or update a webview in the layout
- * @param webView web view to add or update
- * @param layout information about where to put a new webview
- * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
- * layout
  *
+ * @param webView Web view to add or update
+ * @param layout Information about where to put a new webview
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
  * @returns If WebView added, final layout used to display the new webView. If existing webView
  *   updated, `undefined`
  */
@@ -455,18 +463,18 @@ export function addWebViewToDock(
 /**
  * Gets the web view definition (data on the TabInfo) for the web view with the specified id
  *
- * @param webViewId the id of the WebView whose web view definition to get
+ * @param webViewId The id of the WebView whose web view definition to get
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
- * layout
- * @param methodName name of the method that is calling this - prints in thrown exceptions
- *
+ *   layout
+ * @param methodName Name of the method that is calling this - prints in thrown exceptions
  * @returns `[targetTabInfo, targetTabWebViewData]`
- * - `targetTabInfo` - tab info for the tab containing the web view specified or `undefined` if not
- *   found
- * - `targetTabWebViewData` - web view definition for the specified web view or `undefined` if not
- *   found
  *
- * @throws if the tab found with the specified webViewId is not a tab or is not a webview
+ *   - `targetTabInfo` - tab info for the tab containing the web view specified or `undefined` if not
+ *       found
+ *   - `targetTabWebViewData` - web view definition for the specified web view or `undefined` if not
+ *       found
+ *
+ * @throws If the tab found with the specified webViewId is not a tab or is not a webview
  */
 function getWebViewTabInfoById(
   webViewId: string,
@@ -502,10 +510,9 @@ function getWebViewTabInfoById(
 /**
  * Gets the WebView definition for the web view with the specified id
  *
- * @param webViewId the id of the WebView whose web view definition to get
+ * @param webViewId The id of the WebView whose web view definition to get
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
- * layout
- *
+ *   layout
  * @returns WebView definition with the specified id or undefined if not found
  */
 export function getWebViewDefinition(
@@ -524,13 +531,12 @@ export function getWebViewDefinition(
 /**
  * Updates the WebView with the specified id with the specified properties
  *
- * @param webViewId the id of the WebView to update
- * @param updateInfo properties to update on the WebView. Any unspecified
- * properties will stay the same
+ * @param webViewId The id of the WebView to update
+ * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
+ *   same
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
- * layout
- *
- * @returns true if successfully found the WebView to update; false otherwise
+ *   layout
+ * @returns True if successfully found the WebView to update; false otherwise
  */
 function updateWebViewDefinition(
   webViewId: string,
@@ -566,7 +572,7 @@ export default function PlatformDockLayout() {
   const dockLayoutRef = useRef<DockLayout>(null!);
 
   /**
-   * onLayoutChange function from `web-view.service.ts` once this docklayout is registered.
+   * OnLayoutChange function from `web-view.service.ts` once this docklayout is registered.
    *
    * TODO: Strange pattern that we are setting a ref to a service function. Investigate changing
    * this pattern in some way. Maybe just export `onLayoutChange`?

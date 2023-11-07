@@ -7,8 +7,9 @@ import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 /**
  * This function takes in a getNetworkObject function and creates a hook with that function in it
  * which will return a network object
+ *
  * @param getNetworkObject A function that takes in an id string and returns a network object
- * @returns a function that takes in a networkObjectSource and returns a NetworkObject
+ * @returns A function that takes in a networkObjectSource and returns a NetworkObject
  */
 function createUseNetworkObjectHook(
   getNetworkObject: (id: string) => Promise<NetworkObject<object> | undefined>,

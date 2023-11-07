@@ -42,8 +42,8 @@ export type DialogTabTypes = keyof DialogTypes;
 /** Types related to a specific dialog */
 export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
   /**
-   * The dialog options to specify when calling the dialog.
-   * Passed into `loadDialog` as SavedTabInfo.data
+   * The dialog options to specify when calling the dialog. Passed into `loadDialog` as
+   * SavedTabInfo.data
    *
    * The default implementation of `loadDialog` passes all the options down to the dialog component
    * as props
@@ -58,15 +58,17 @@ export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
 export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<
   DialogDefinitionBase & {
     /**
-     * Type of tab - indicates what kind of built-in dock layout tab this dialog definition represents
+     * Type of tab - indicates what kind of built-in dock layout tab this dialog definition
+     * represents
      */
     tabType: DialogTabType;
     /**
      * React component to render for this dialog
      *
      * This must be specified only if you do not overwrite the default `loadDialog`
-     * @param props props that will be passed through from the dialog tab's data
-     * @returns react element to render
+     *
+     * @param props Props that will be passed through from the dialog tab's data
+     * @returns React element to render
      */
     Component: (
       props: DialogProps<DialogTypes[DialogTabType]['responseType']> &

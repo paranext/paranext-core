@@ -21,10 +21,8 @@ function logProcessInfo(message: unknown) {
   logger.info(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME));
 }
 
-/**
- * Hard kills the Dotnet Data Provider.
- * TODO: add a more elegant shutdown to avoid this if we possibly can
- */
+/** Hard kills the Dotnet Data Provider. */
+// TODO: add a more elegant shutdown to avoid this if we possibly can
 function killDotnetDataProvider() {
   if (!dotnet) return;
 
@@ -45,9 +43,7 @@ async function waitForDotnetDataProvider(maxWaitTimeInMS: number) {
   if (!didClose) killDotnetDataProvider();
 }
 
-/**
- * Starts the Dotnet Data Provider if it isn't already running.
- */
+/** Starts the Dotnet Data Provider if it isn't already running. */
 function startDotnetDataProvider() {
   if (dotnet) return;
 

@@ -15,70 +15,57 @@ export type ComboBoxChangeDetails<T> = AutocompleteChangeDetails<T>;
 export type ComboBoxChangeReason = AutocompleteChangeReason;
 
 export type ComboBoxProps<T> = {
-  /**
-   *  Optional unique identifier
-   */
+  /** Optional unique identifier */
   id?: string;
-  /**
-   * Text label title for combobox
-   */
+  /** Text label title for combobox */
   title?: string;
   /**
    * If `true`, the component is disabled.
+   *
    * @default false
    */
   isDisabled?: boolean;
   /**
    * If `true`, the component can be cleared, and will have a button to do so
+   *
    * @default true
    */
   isClearable?: boolean;
   /**
    * True when (input related to) switch is erroneous
+   *
    * @default false
    */
   hasError?: boolean;
   /**
    * If `true`, the input will take up the full width of its container.
+   *
    * @default false
    */
   isFullWidth?: boolean;
-  /**
-   * Width of the combobox in pixels. Setting this prop overrides the `isFullWidth` prop
-   */
+  /** Width of the combobox in pixels. Setting this prop overrides the `isFullWidth` prop */
   width?: number;
-  /**
-   * List of available options for the dropdown menu
-   */
+  /** List of available options for the dropdown menu */
   options?: readonly T[];
-  /**
-   * Additional css classes to help with unique styling of the combo box
-   */
+  /** Additional css classes to help with unique styling of the combo box */
   className?: string;
   /**
-   * The selected value that the combo box currently holds. Must be shallow equal to one of the options entries.
+   * The selected value that the combo box currently holds. Must be shallow equal to one of the
+   * options entries.
    */
   value?: T;
-  /**
-   * Triggers when content of textfield is changed
-   */
+  /** Triggers when content of textfield is changed */
   onChange?: (
     event: SyntheticEvent<Element, Event>,
     value: ComboBoxValue<T, boolean | undefined, boolean | undefined, boolean | undefined>,
     reason?: ComboBoxChangeReason,
     details?: ComboBoxChangeDetails<T> | undefined,
   ) => void;
-  /**
-   * Triggers when textfield gets focus
-   */
+  /** Triggers when textfield gets focus */
   onFocus?: FocusEventHandler<HTMLDivElement>; // Storybook crashes when giving the combo box focus
-  /**
-   * Triggers when textfield loses focus
-   */
+  /** Triggers when textfield loses focus */
   onBlur?: FocusEventHandler<HTMLDivElement>;
-  /**
-   * Used to determine the string value for a given option.
-   */
+  /** Used to determine the string value for a given option. */
   getOptionLabel?: (option: ComboBoxOption) => string;
 };
 

@@ -3,29 +3,19 @@ import { PropsWithChildren, ReactNode, useMemo } from 'react';
 import './extension-card.component.scss';
 
 export type ExtensionCardProps = PropsWithChildren<{
-  /**
-   * The unique extension name
-   */
+  /** The unique extension name */
   extensionName: string;
 
-  /**
-   * The description of the extension
-   */
+  /** The description of the extension */
   extensionDescription: string;
 
-  /**
-   * File path to the icon
-   */
+  /** File path to the icon */
   iconFilePath?: string;
 
-  /**
-   * Content to provide for a header action that appears in the top right of the Card
-   */
+  /** Content to provide for a header action that appears in the top right of the Card */
   headerAction?: ReactNode;
 
-  /**
-   * Optional className to link to css
-   */
+  /** Optional className to link to css */
   className?: string;
 }>;
 

@@ -13,10 +13,12 @@ export const CATEGORY_EXTENSION_ASSET = 'extensionAsset';
 /** Name for request to get an extension asset */
 const GET_EXTENSION_ASSET_REQUEST = 'getExtensionAsset';
 
-/** Load an asset from the given extension's installation directory
- *  @param extensionName Name of the extension
- *  @param assetName Name of the asset including any path information
- *  @returns Base 64 encoded value of the asset if it exists, otherwise undefined
+/**
+ * Load an asset from the given extension's installation directory
+ *
+ * @param extensionName Name of the extension
+ * @param assetName Name of the asset including any path information
+ * @returns Base 64 encoded value of the asset if it exists, otherwise undefined
  */
 const getExtensionAsset = async (
   extensionName: string,

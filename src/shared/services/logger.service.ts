@@ -4,9 +4,7 @@ import { getProcessType, isClient, isExtensionHost, isRenderer } from '@shared/u
 
 export const WARN_TAG = '<WARN>';
 
-/**
- * Represents details that can be parsed from a single line of an Error object
- */
+/** Represents details that can be parsed from a single line of an Error object */
 type parsedErrorLine =
   | {
       functionName: string;
@@ -18,9 +16,10 @@ type parsedErrorLine =
 
 /**
  * Destructure a line from an Error object
+ *
  * @param errorLine Single line from an Error object string
  * @returns Object containing the function name, file name, line number, and column number from the
- * line of the Error object string. If the line couldn't be parsed, then undefined.
+ *   line of the Error object string. If the line couldn't be parsed, then undefined.
  */
 function parseErrorLine(errorLine: string): parsedErrorLine {
   // A few example lines to parse:
@@ -58,9 +57,10 @@ function parseErrorLine(errorLine: string): parsedErrorLine {
 }
 
 /**
- * Examine the call stack and return a parsed string containing the function name, file name,
- * line number, and column number where the call to the logger was made.
- * @returns string that is suitable to attach to log output to indicate who what code wants to log
+ * Examine the call stack and return a parsed string containing the function name, file name, line
+ * number, and column number where the call to the logger was made.
+ *
+ * @returns String that is suitable to attach to log output to indicate who what code wants to log
  */
 function identifyCaller(): string | undefined {
   const { stack } = new Error();
@@ -83,10 +83,11 @@ function identifyCaller(): string | undefined {
 
 /**
  * Format a string of a service message
- * @param message message from the service
- * @param serviceName name of the service to show in the log
- * @param tag optional tag at the end of the service name
- * @returns formatted string of a service message
+ *
+ * @param message Message from the service
+ * @param serviceName Name of the service to show in the log
+ * @param tag Optional tag at the end of the service name
+ * @returns Formatted string of a service message
  */
 // We can assume we will have more utility functions at some point. This is not the only thing this module will do
 // eslint-disable-next-line import/prefer-default-export
@@ -102,9 +103,7 @@ export function formatLog(message: string, serviceName: string, tag = '') {
   return `${openTag} ${messageTrimmed}`;
 }
 
-/**
- * Abstract and shim the logger
- */
+/** Abstract and shim the logger */
 
 if (isClient()) {
   log.transports.console.level = globalThis.logLevel;
@@ -170,7 +169,9 @@ if (isClient()) {
   log.transports.file.level = globalThis.logLevel;
 }
 
-/** JSDOC SOURCE logger
+/**
+ * JSDOC SOURCE logger
+ *
  * All extensions and services should use this logger to provide a unified output of logs
  */
 const logger = log;

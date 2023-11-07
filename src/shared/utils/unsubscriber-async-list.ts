@@ -2,9 +2,7 @@ import { Dispose } from '@shared/models/disposal.model';
 import logger from '@shared/services/logger.service';
 import { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
 
-/**
- * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
- */
+/** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
 export default class UnsubscriberAsyncList {
   readonly unsubscribers = new Set<UnsubscriberAsync | Unsubscriber>();
 
@@ -12,6 +10,7 @@ export default class UnsubscriberAsyncList {
 
   /**
    * Add unsubscribers to the list. Note that duplicates are not added twice.
+   *
    * @param unsubscribers - Objects that were returned from a registration process.
    */
   add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]) {
@@ -23,6 +22,7 @@ export default class UnsubscriberAsyncList {
 
   /**
    * Run all unsubscribers added to this list and then clear the list.
+   *
    * @returns `true` if all unsubscribers succeeded, `false` otherwise.
    */
   async runAllUnsubscribers(): Promise<boolean> {

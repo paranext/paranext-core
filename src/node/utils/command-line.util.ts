@@ -33,31 +33,27 @@ export function findNextCommandLineArgumentIndex(currentArgIndex: number) {
 }
 
 /**
- * Get a command-line argument's group of arguments. If no arguments are in its group, return nothing
+ * Get a command-line argument's group of arguments. If no arguments are in its group, return
+ * nothing
  *
- * @param argName name of the command-line argument to search for
- * @param shouldIncludeArgName whether to include `argName` at the start of the returned array
- * @returns array of strings of the command-line args in this command-line argument group
+ * @param argName Name of the command-line argument to search for
+ * @param shouldIncludeArgName Whether to include `argName` at the start of the returned array
+ * @returns Array of strings of the command-line args in this command-line argument group
  *
- * ex: '--things ben chuck jerry'
+ *   Ex: '--things ben chuck jerry'
  *
- * - `getCommandLineArgumentsGroup('--things')` returns `['ben', 'chuck', 'jerry']`
+ *   - `getCommandLineArgumentsGroup('--things')` returns `['ben', 'chuck', 'jerry']`
+ *   - `getCommandLineArgumentsGroup('--things', true)` returns `['--things', 'ben', 'chuck', 'jerry']`
  *
- * - `getCommandLineArgumentsGroup('--things', true)` returns `['--things', 'ben', 'chuck', 'jerry']`
+ *   Ex: '--things --stuff ben chuck jerry'
  *
+ *   - `getCommandLineArgumentsGroup('--things')` returns `[]`
+ *   - `getCommandLineArgumentsGroup('--things', true)` returns `['--things']`
  *
- * ex: '--things --stuff ben chuck jerry'
+ *   Ex: '--stuff ben chuck jerry'
  *
- * - `getCommandLineArgumentsGroup('--things')` returns `[]`
- *
- * - `getCommandLineArgumentsGroup('--things', true)` returns `['--things']`
- *
- *
- * ex: '--stuff ben chuck jerry'
- *
- * - `getCommandLineArgumentsGroup('--things')` returns `[]`
- *
- * - `getCommandLineArgumentsGroup('--things', true)` returns `[]`
+ *   - `getCommandLineArgumentsGroup('--things')` returns `[]`
+ *   - `getCommandLineArgumentsGroup('--things', true)` returns `[]`
  */
 export function getCommandLineArgumentsGroup(argName: string, shouldIncludeArgName = false) {
   // TODO: If argName has two hyphens, check for single hyphen and first char + capitals if
@@ -79,12 +75,12 @@ export function getCommandLineArgumentsGroup(argName: string, shouldIncludeArgNa
 /**
  * Get a command-line argument's argument. If the argument is not present, return `undefined`
  *
- * @param argName name of the command-line argument to search for
- * @returns string of the command-line arg provided
+ * @param argName Name of the command-line argument to search for
+ * @returns String of the command-line arg provided
  *
- * ex: '--thing ben'
+ *   Ex: '--thing ben'
  *
- * - `getCommandLineArgument('--thing')` returns `'ben'`
+ *   - `getCommandLineArgument('--thing')` returns `'ben'`
  */
 export function getCommandLineArgument(argName: string) {
   // TODO: If argName has two hyphens, check for single hyphen and first char + capitals if
@@ -108,12 +104,13 @@ export function getCommandLineArgument(argName: string) {
  * Determine whether a command-line argument name is present
  *
  * (a switch is a command-line argument without a value - just a boolean)
- * @param argName name of the switch to look for
- * @returns true if present, false otherwise
  *
- * ex: '--thing --stuff bologna'
+ * @param argName Name of the switch to look for
+ * @returns True if present, false otherwise
  *
- * - `getCommandLineSwitch('--thing')` returns `true`
+ *   Ex: '--thing --stuff bologna'
+ *
+ *   - `getCommandLineSwitch('--thing')` returns `true`
  */
 export function getCommandLineSwitch(argName: string) {
   return process.argv.includes(argName);

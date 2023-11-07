@@ -17,11 +17,13 @@ export type Project = ProjectMetadata & {
  *
  * This is mock data and will be replaced at some point. Probably by the following issues:
  *
- * [Projects: get list of project settings · Issue #368 · paranext/paranext-core](https://github.com/paranext/paranext-core/issues/368)
+ * [Projects: get list of project settings · Issue #368 ·
+ * paranext/paranext-core](https://github.com/paranext/paranext-core/issues/368)
  *
- * [Projects: Support registering Downloadable Project Provider · Issue #372 · paranext/paranext-core](https://github.com/paranext/paranext-core/issues/372)
+ * [Projects: Support registering Downloadable Project Provider · Issue #372 ·
+ * paranext/paranext-core](https://github.com/paranext/paranext-core/issues/372)
  *
- * @returns downloadable (and downloaded) project information
+ * @returns Downloadable (and downloaded) project information
  */
 export function fetchProjects(): Project[] {
   /* eslint-disable no-type-assertion/no-type-assertion */
@@ -76,42 +78,33 @@ export function fetchProjects(): Project[] {
 }
 
 export type ProjectListProps = PropsWithChildren<{
-  /**
-   * Projects to display in the list
-   */
+  /** Projects to display in the list */
   projects: ProjectMetadata[];
 
-  /**
-   * Handler to perform an action when the project is clicked
-   */
+  /** Handler to perform an action when the project is clicked */
   handleSelectProject: (projectId: string) => void;
 
-  /**
-   * Optional flag to set the list to multiselect
-   */
+  /** Optional flag to set the list to multiselect */
   isMultiselect?: boolean;
 
   /**
-   * If multiselect is selected, then the array of selected project IDs is passed to control
-   *  the selected flag on ListItemButton
+   * If multiselect is selected, then the array of selected project IDs is passed to control the
+   * selected flag on ListItemButton
    */
   selectedProjectIds?: string[] | undefined;
 
-  /**
-   * Optional subheader
-   */
+  /** Optional subheader */
   subheader?: string;
 
-  /**
-   * Adds a checkbox to the end of each list item that reflects the selected state of
-   * each project
-   */
+  /** Adds a checkbox to the end of each list item that reflects the selected state of each project */
   isCheckable?: boolean;
 }>;
 
 /**
- * Project List component that creates a list for a provided array of projects. Assumes there is only one button per project.
- * @param ProjectListProps and any children elements
+ * Project List component that creates a list for a provided array of projects. Assumes there is
+ * only one button per project.
+ *
+ * @param ProjectListProps And any children elements
  * @returns <ProjectList />
  */
 export default function ProjectList({

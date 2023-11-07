@@ -9,10 +9,12 @@ function getMapKey(name: string, tokenType: ExecutionTokenType = 'extension'): s
   return `${tokenType}:${name}`;
 }
 
-/** This should be called when extensions are being loaded
- *  @param extensionName Name of the extension to register
- *  @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers.
- *  It is important that the token is not shared to avoid impersonation of API callers.
+/**
+ * This should be called when extensions are being loaded
+ *
+ * @param extensionName Name of the extension to register
+ * @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers. It
+ *   is important that the token is not shared to avoid impersonation of API callers.
  */
 function registerExtension(extensionName: string): ExecutionToken {
   const mapKey: string = getMapKey(extensionName);
@@ -24,12 +26,14 @@ function registerExtension(extensionName: string): ExecutionToken {
   return newToken;
 }
 
-/** Remove a registered token.  Note that a hash of a token is what is needed to unregister, not
- *  the full token itself (notably not the nonce), so something can be delegated the ability to
- *  unregister a token without having been given the full token itself.
- *  @param extensionName Name of the extension that was originally registered
- *  @param tokenHash Value of `getHash()` of the token that was originally registered.
- *  @returns `true` if the token was successfully unregistered, `false` otherwise
+/**
+ * Remove a registered token. Note that a hash of a token is what is needed to unregister, not the
+ * full token itself (notably not the nonce), so something can be delegated the ability to
+ * unregister a token without having been given the full token itself.
+ *
+ * @param extensionName Name of the extension that was originally registered
+ * @param tokenHash Value of `getHash()` of the token that was originally registered.
+ * @returns `true` if the token was successfully unregistered, `false` otherwise
  */
 function unregisterExtension(extensionName: string, tokenHash: string): boolean {
   const mapKey: string = getMapKey(extensionName);
@@ -38,9 +42,11 @@ function unregisterExtension(extensionName: string, tokenHash: string): boolean 
   return tokenMap.delete(mapKey);
 }
 
-/** This should only be needed by services that need to contextualize the response for the caller
- *  @param executionToken Token that was previously registered.
- *  @returns `true` if the token matches a token that was previous registered, `false` otherwise.
+/**
+ * This should only be needed by services that need to contextualize the response for the caller
+ *
+ * @param executionToken Token that was previously registered.
+ * @returns `true` if the token matches a token that was previous registered, `false` otherwise.
  */
 function tokenIsValid(executionToken: ExecutionToken): boolean {
   if (!executionToken) throw new Error('Token must be defined');

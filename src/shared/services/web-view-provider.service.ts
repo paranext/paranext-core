@@ -1,6 +1,6 @@
 /**
- * Handles registering web view providers and serving web views around the papi.
- * Exposed on the papi.
+ * Handles registering web view providers and serving web views around the papi. Exposed on the
+ * papi.
  */
 
 import {
@@ -46,7 +46,8 @@ const initialize = () => {
  * Indicate if we are aware of an existing web view provider with the given type. If a web view
  * provider with the given type is somewhere else on the network, this function won't tell you about
  * it unless something else in the existing process is subscribed to it.
- * @param webViewType type of webView to check for
+ *
+ * @param webViewType Type of webView to check for
  */
 function hasKnown(webViewType: string): boolean {
   return networkObjectService.hasKnown(getWebViewProviderObjectId(webViewType));
@@ -55,11 +56,11 @@ function hasKnown(webViewType: string): boolean {
 /**
  * Register a web view provider to serve webViews for a specified type of webViews
  *
- * @param webViewType type of web view to provide
- * @param webViewProvider object to register as a webView provider including control over disposing
- * of it.
+ * @param webViewType Type of web view to provide
+ * @param webViewProvider Object to register as a webView provider including control over disposing
+ *   of it.
  *
- * WARNING: setting a webView provider mutates the provided object.
+ *   WARNING: setting a webView provider mutates the provided object.
  * @returns `webViewProvider` modified to be a network object
  */
 async function register(
@@ -107,8 +108,9 @@ async function register(
 
 /**
  * Get a web view provider that has previously been set up
- * @param webViewType type of webview provider to get
- * @returns web view provider with the given name if one exists, undefined otherwise
+ *
+ * @param webViewType Type of webview provider to get
+ * @returns Web view provider with the given name if one exists, undefined otherwise
  */
 async function get(webViewType: string): Promise<WebViewProvider | undefined> {
   await initialize();
@@ -145,7 +147,9 @@ const webViewProviderService: WebViewProviderService = {
   get,
 };
 
-/** JSDOC SOURCE papiWebViewProviderService
+/**
+ * JSDOC SOURCE papiWebViewProviderService
+ *
  * Interface for registering webView providers
  */
 export const papiWebViewProviderService: PapiWebViewProviderService = {
