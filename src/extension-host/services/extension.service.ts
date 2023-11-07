@@ -311,7 +311,7 @@ function watchForExtensionChanges(): UnsubscriberAsync {
     )
     .on('all', async (eventType) => {
       let shouldDeactivateExtensions: boolean = true;
-      if (eventType === 'addDir') shouldDeactivateExtensions = false;
+      if (eventType === 'add' || eventType === 'addDir') shouldDeactivateExtensions = false;
       reloadExtensionsDebounced(shouldDeactivateExtensions);
     });
 
