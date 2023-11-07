@@ -123,7 +123,7 @@ export default function RunBasicChecksTab({
         />
       </fieldset>
       <div className="basic-checks-dialog-actions">
-        <Button onClick={() => handleSubmit()}>OK</Button>
+        <Button onClick={() => handleSubmit()}>Run</Button>
         <Button onClick={() => logger.info(`Canceled`)}>Cancel</Button>
       </div>
     </div>
