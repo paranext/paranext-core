@@ -74,9 +74,6 @@ function createUseDataHook(
         dataProviderSource as string | IDataProvider | undefined,
       );
 
-      // Indicates if the data with the selector is awaiting retrieval from the data provider
-      const [isLoading, setIsLoading] = useState<boolean>(true);
-
       // Wrap subscribe so we can call it as a normal PapiEvent in useEvent
       const wrappedSubscribeEvent: PapiEventAsync<TDataTypes[TDataType]['getData']> | undefined =
         useMemo(
@@ -96,15 +93,11 @@ function createUseDataHook(
                       selector,
                       (subscriptionData: TDataTypes[TDataType]['getData']) => {
                         eventCallback(subscriptionData);
-                        // When we receive updated data, mark that we are not loading
-                        setIsLoading(false);
                       },
                       subscriberOptions,
                     );
 
                   return async () => {
-                    // When we change data type or selector, mark that we are loading
-                    setIsLoading(true);
                     return unsub();
                   };
                 }
@@ -137,7 +130,7 @@ function createUseDataHook(
         [dataProvider, selector],
       );
 
-      return [data, setData, isLoading];
+      return [data, setData, false];
     };
   }
 
