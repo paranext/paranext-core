@@ -26,6 +26,7 @@ export default class WebViewResolveWebpackPlugin {
   /**
    * Function that applies this plugin to webpack resolving. Use the resolver to "tap into" webpack
    * resolving with our own logic
+   *
    * @param resolver
    */
   apply(resolver: Resolver) {
@@ -43,19 +44,20 @@ export default class WebViewResolveWebpackPlugin {
         /**
          * The logic to add to webpack resolving so it will look in the temp dir for built code.
          *
-         * @param request information about the resolve request
-         * @param resolveContext information about the process the hook has taken to get here
-         * @param callback function to run to continue the resolution process
-         *   - call with no parameters to continue resolving like this plugin did nothing
-         *   - call with first parameter null and second parameter a fully resolved
-         *   `{ path, relativePath }` (including file extension) to conclude resolving at that file
-         *   - call with first parameter `string` or `Error` or something (not sure) to indicate
-         *   error
-         *   - Note: another option is to call `resolver.doResolve` to start the resolution process
-         *   over with a new `path` and `relativePath` that do not need to be fully resolved. Just
-         *   make sure that second call can't come into your hook again and cause another
-         *   `resolver.doResolve`, or you will have an infinite loop. We pass this `callback` param
-         *   into `resolver.doResolve`, and it calls it automatically
+         * @param request Information about the resolve request
+         * @param resolveContext Information about the process the hook has taken to get here
+         * @param callback Function to run to continue the resolution process
+         *
+         *   - Call with no parameters to continue resolving like this plugin did nothing
+         *   - Call with first parameter null and second parameter a fully resolved `{ path,
+         *       relativePath }` (including file extension) to conclude resolving at that file
+         *   - Call with first parameter `string` or `Error` or something (not sure) to indicate error
+         *   - Note: another option is to call `resolver.doResolve` to start the resolution process over
+         *       with a new `path` and `relativePath` that do not need to be fully resolved. Just
+         *       make sure that second call can't come into your hook again and cause another
+         *       `resolver.doResolve`, or you will have an infinite loop. We pass this `callback`
+         *       param into `resolver.doResolve`, and it calls it automatically
+         *
          * @returns Seems it doesn't matter if or what you return. Just return to quit early
          */
         (request, resolveContext, callback) => {

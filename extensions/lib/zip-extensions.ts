@@ -24,7 +24,10 @@ async function zipExtensions() {
     try {
       /** Directory to zip. The output extension folder */
       const dirToZip = path.join(rootDir, outputFolder, extension.dirName);
-      /** The file to output. Into release folder. `<extension_directory_name>_<extension_manifest_version>.zip */
+      /**
+       * The file to output. Into release folder.
+       * `<extension_directory_name>_<extension_manifest_version>.zip`
+       */
       const outputFile = path.join(releaseFolder, `${extension.dirName}_${extension.version}.zip`);
 
       return zipFolder(dirToZip, outputFile);

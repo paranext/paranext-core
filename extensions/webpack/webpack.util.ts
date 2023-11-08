@@ -14,14 +14,10 @@ import { LIBRARY_TYPE } from './webpack.config.base';
  * Web Views should be named <name>.web-view.<extension>
  */
 const webViewTag = '.web-view';
-/**
- * Glob filename matcher for React web views.
- * React Web Views should be named <name>.web-view.tsx
- */
+/** Glob filename matcher for React web views. React Web Views should be named <name>.web-view.tsx */
 const webViewTsxGlob = '**/*.web-view.tsx';
 /**
- * Regex file name matcher for React web views.
- * React Web Views should be named <name>.web-view.tsx
+ * Regex file name matcher for React web views. React Web Views should be named <name>.web-view.tsx
  *
  * Note: this regex allows the extension to be optional.
  */
@@ -32,18 +28,16 @@ export const webViewTempDir = 'temp-build';
 /** Folder containing the built extension files */
 export const outputFolder = 'dist';
 
-/**
- * Get a list of TypeScript WebView files to bundle.
- * Path relative to project root
- */
+/** Get a list of TypeScript WebView files to bundle. Path relative to project root */
 function getWebViewTsxPaths() {
   return glob(webViewTsxGlob, { ignore: 'node_modules/**' });
 }
 
 /**
  * Gets the bundled WebView path for a WebView file path
- * @param webViewPath relative path to webView e.g. './src/extension-template.web-view.tsx'
- * @param join function to use to join the paths together
+ *
+ * @param webViewPath Relative path to webView e.g. './src/extension-template.web-view.tsx'
+ * @param join Function to use to join the paths together
  * @returns WebView path with temporary WebView directory inserted into the module path
  */
 export function getWebViewTempPath(
@@ -66,7 +60,8 @@ export function getWebViewTempPath(
 /**
  * Get webpack entry configuration to build each web-view source file and put it in a temporary
  * folder in the same directory
- * @returns promise that resolves to the webView entry config
+ *
+ * @returns Promise that resolves to the webView entry config
  */
 export async function getWebViewEntries(): Promise<webpack.EntryObject> {
   const tsxWebViews = await getWebViewTsxPaths();
@@ -89,7 +84,7 @@ export async function getWebViewEntries(): Promise<webpack.EntryObject> {
 /** Folder containing the source files for the extensions */
 const sourceFolder = 'src';
 
-/** dirNames of extensions that should be copied to the output folder but not bundled */
+/** `dirNames` of extensions that should be copied to the output folder but not bundled */
 const extensionsNotBundled = [
   // Webpack wouldn't leave the requires alone even with webpackIgnore: true. Apparently webpack
   // catches errors and returns {} when it can't find a module :(
@@ -154,9 +149,10 @@ export function getMainCopyFilePatterns(extensions: ExtensionInfo[]): Pattern[] 
 
 /**
  * Replace the file extension on a file on a path
- * @param filePath path to file including the file name and extension
- * @param newExtension extension to replace the existing extension with
- * @returns file path with new extension
+ *
+ * @param filePath Path to file including the file name and extension
+ * @param newExtension Extension to replace the existing extension with
+ * @returns File path with new extension
  */
 function replaceExtension(filePath: string, newExtension: string): string {
   const fileInfo = path.parse(filePath);
@@ -166,7 +162,7 @@ function replaceExtension(filePath: string, newExtension: string): string {
 /**
  * Get webpack entry configuration to build each extension main source file
  *
- * @returns promise that resolves to the main entry config
+ * @returns Promise that resolves to the main entry config
  */
 export function getMainEntries(extensions: ExtensionInfo[]): webpack.EntryObject {
   const mainEntries: webpack.EntryObject = Object.fromEntries(
@@ -202,8 +198,8 @@ export function getMainEntries(extensions: ExtensionInfo[]): webpack.EntryObject
 // #region sort-of shared with extension.service.ts
 
 /**
- * Information about an extension provided by the extension developer.
- * This will be transformed and frozen into an ExtensionInfo before use
+ * Information about an extension provided by the extension developer. This will be transformed and
+ * frozen into an ExtensionInfo before use
  */
 type ExtensionManifest = {
   name: string;

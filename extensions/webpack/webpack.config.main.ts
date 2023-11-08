@@ -11,7 +11,7 @@ import {
   getMainEntries,
 } from './webpack.util';
 
-/** webpack configuration for building main */
+/** Webpack configuration for building main */
 const configMain: () => Promise<webpack.Configuration> = async () => {
   const extensions = await getExtensions();
 

@@ -19,25 +19,30 @@ logger.info('Hello Someone is importing!');
  * Example data provider engine that provides information about people.
  *
  * It has three data types:
- *  - Greeting: a person's greeting
- *  - Age: a person's age
- *  - People: information about all the people associated with this engine
+ *
+ * - Greeting: a person's greeting
+ * - Age: a person's age
+ * - People: information about all the people associated with this engine
  *
  * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`.
  *
- * papi will create a data provider that internally uses this engine. The data provider layers over
- * this engine and adds functionality like `subscribe<data_type>` functions with automatic updates.
+ * `papi` will create a data provider that internally uses this engine. The data provider layers
+ * over this engine and adds functionality like `subscribe<data_type>` functions with automatic
+ * updates.
  *
  * This data provider engine is defined by an object, which we recommend starting with to get
  * comfortable with the data provider api because of the following pros and cons:
- *  - Pros
- *    - Intellisense works better (Ctrl+Space lists methods you need to implement)
- *    - Function parameter and return types are inferred - no need to specify types
- *  - Cons
- *    - Must specify all properties and methods in the object type
- *    - papi.dataProvider.decorators.ignore is difficult to apply to tell papi to ignore methods
- *    - When using `this.notifyUpdate`, you must include the `WithNotifyUpdate` type and provide a
- *      placeholder `notifyUpdate` method
+ *
+ * - Pros
+ *
+ *   - Intellisense works better (Ctrl+Space lists methods you need to implement)
+ *   - Function parameter and return types are inferred - no need to specify types
+ * - Cons
+ *
+ *   - Must specify all properties and methods in the object type
+ *   - `papi.dataProvider.decorators.ignore` is difficult to apply to tell papi to ignore methods
+ *   - When using `this.notifyUpdate`, you must include the `WithNotifyUpdate` type and provide a
+ *       placeholder `notifyUpdate` method
  *
  * If you would like more advanced functionality, you can alternatively define a data provider
  * engine with a class. An example of this is found in `quick-verse.ts`.
@@ -59,16 +64,17 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
 
   /**
    * Get a person by name. By default, creates that person if they don't exist yet
-   * @param name name of person
-   * @param createIfDoesNotExist whether to create the person if they don't exist. Defaults to true
-   * @returns person according to the provided name or undefined if they don't exist and
-   * were not set to be created in this method.
    *
-   * Note: this method is named `getPerson`, which would normally mean papi would consider it to be
-   * a data type method and would fail to use this engine because it would expect a `setPerson` as
-   * well. However, we added the `ignore` decorator (the line immediately after defining this
-   * peopleDataProviderEngine object), so papi will not pick it up. Alternatively, you can name
-   * it anything that doesn't start with `get` like `_getPerson` or `internalGetPerson`.
+   * @param name Name of person
+   * @param createIfDoesNotExist Whether to create the person if they don't exist. Defaults to true
+   * @returns Person according to the provided name or undefined if they don't exist and were not
+   *   set to be created in this method.
+   *
+   *   Note: this method is named `getPerson`, which would normally mean papi would consider it to be
+   *   a data type method and would fail to use this engine because it would expect a `setPerson` as
+   *   well. However, we added the `ignore` decorator (the line immediately after defining this
+   *   peopleDataProviderEngine object), so papi will not pick it up. Alternatively, you can name it
+   *   anything that doesn't start with `get` like `_getPerson` or `internalGetPerson`.
    */
   getPerson<T extends boolean = true>(
     name: string,
@@ -85,16 +91,17 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
 
   /**
    * Sets a person's greeting, creating the person if they do not exist.
-   * @param name name of person
-   * @param greeting person's new greeting
-   * @returns update instructions for updating the Greeting and People data types because we want
-   * subscribers to either of these data types to update based on this change.
    *
-   * Note: this method gets layered over so that you can run `this.setGreeting` inside this data
-   * provider engine, and it will send updates after returning.
+   * @param name Name of person
+   * @param greeting Person's new greeting
+   * @returns Update instructions for updating the Greeting and People data types because we want
+   *   subscribers to either of these data types to update based on this change.
    *
-   * Note: this method is used when someone uses the `useData.Greeting` hook on the data
-   * provider papi creates for this engine.
+   *   Note: this method gets layered over so that you can run `this.setGreeting` inside this data
+   *   provider engine, and it will send updates after returning.
+   *
+   *   Note: this method is used when someone uses the `useData.Greeting` hook on the data provider
+   *   papi creates for this engine.
    */
   async setGreeting(
     name: string,
@@ -112,11 +119,12 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
 
   /**
    * Get a person's greeting
-   * @param name name of person
-   * @returns person's greeting or undefined
    *
-   * Note: this method is used when someone uses the `useData.Greeting` hook or the
-   * `subscribeGreeting` method on the data provider papi creates for this engine.
+   * @param name Name of person
+   * @returns Person's greeting or undefined
+   *
+   *   Note: this method is used when someone uses the `useData.Greeting` hook or the
+   *   `subscribeGreeting` method on the data provider papi creates for this engine.
    */
   async getGreeting(name: string) {
     return this.getPerson(name, false)?.greeting;
@@ -124,16 +132,17 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
 
   /**
    * Set's a person's age, creating the person if they do not exist.
-   * @param name name of person
-   * @param age person's new age
-   * @returns update instructions for updating the Age and People data types because we want
-   * subscribers to either of these data types to update based on this change.
    *
-   * Note: this method gets layered over so that you can run `this.setAge` inside this data
-   * provider engine, and it will send updates after returning.
+   * @param name Name of person
+   * @param age Person's new age
+   * @returns Update instructions for updating the Age and People data types because we want
+   *   subscribers to either of these data types to update based on this change.
    *
-   * Note: this method is used when someone uses the `useData.Age` hook on the data
-   * provider papi creates for this engine.
+   *   Note: this method gets layered over so that you can run `this.setAge` inside this data provider
+   *   engine, and it will send updates after returning.
+   *
+   *   Note: this method is used when someone uses the `useData.Age` hook on the data provider papi
+   *   creates for this engine.
    */
   async setAge(
     name: string,
@@ -151,11 +160,12 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
 
   /**
    * Get a person's age
-   * @param name name of person
-   * @returns person's age or undefined
    *
-   * Note: this method is used when someone uses the `useData.Age` hook or the
-   * `subscribeAge` method on the data provider papi creates for this engine.
+   * @param name Name of person
+   * @returns Person's age or undefined
+   *
+   *   Note: this method is used when someone uses the `useData.Age` hook or the `subscribeAge` method
+   *   on the data provider papi creates for this engine.
    */
   async getAge(name: string) {
     return this.getPerson(name, false)?.age;
@@ -166,13 +176,13 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    * can run `this.notifyUpdate` inside this data provider engine, and it will send updates after
    * running.
    *
-   * @param updateInstructions information that papi uses to interpret whether to send out updates.
-   * papi passes the interpreted update value into this function. For example, running
-   * `this.notifyUpdate()` will call this `notifyUpdate` with `updateInstructions` of `'*'`.
+   * @param updateInstructions Information that papi uses to interpret whether to send out updates.
+   *   papi passes the interpreted update value into this function. For example, running
+   *   `this.notifyUpdate()` will call this `notifyUpdate` with `updateInstructions` of `'*'`.
    *
-   * Note: this method does not have to be provided here for it to work properly because it is
-   * layered over on the papi. The only thing you can do here that will affect the update is to
-   * throw an error.
+   *   Note: this method does not have to be provided here for it to work properly because it is
+   *   layered over on the papi. The only thing you can do here that will affect the update is to
+   *   throw an error.
    */
   notifyUpdate(updateInstructions) {
     logger.info(`people data provider engine ran notifyUpdate! ${updateInstructions}`);
@@ -181,7 +191,8 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
   /**
    * Does nothing (meaning the People data type is read-only). This method is provided to match with
    * `getPeople`.
-   * @returns false meaning do not update anything
+   *
+   * @returns False meaning do not update anything
    */
   async setPeople() {
     // Don't change everyone's greeting, you heathen!
@@ -190,7 +201,8 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
 
   /**
    * Gets information about all people in this data provider.
-   * @returns information about all people in this data provider
+   *
+   * @returns Information about all people in this data provider
    */
   async getPeople() {
     // WARNING: returning the object reference itself allows in-process consumers to edit this
@@ -200,11 +212,13 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
 
   /**
    * Deletes a person from this data provider.
-   * @param name name of person
-   * @returns true if deleted, false if did not exist
    *
-   * Note: this is an example of a data provider engine custom method. It uses `notifyUpdateAll` to
-   * inform subscribers that the data has changed because it is not in a `set<data_type>` function.
+   * @param name Name of person
+   * @returns True if deleted, false if did not exist
+   *
+   *   Note: this is an example of a data provider engine custom method. It uses `notifyUpdateAll` to
+   *   inform subscribers that the data has changed because it is not in a `set<data_type>`
+   *   function.
    */
   async deletePerson(name: string) {
     const person = this.getPerson(name, false);
@@ -229,9 +243,7 @@ papi.dataProvider.decorators.ignore(peopleDataProviderEngine.getPerson);
 const peopleWebViewType = 'helloSomeone.peopleViewer';
 const peopleWebViewIdKey = 'peopleWebViewId';
 
-/**
- * Simple web view provider that provides People web views when papi requests them
- */
+/** Simple web view provider that provides People web views when papi requests them */
 const peopleWebViewProvider: IWebViewProvider = {
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== peopleWebViewType)

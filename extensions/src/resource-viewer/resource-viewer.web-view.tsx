@@ -12,7 +12,10 @@ interface StyleInfo {
   style: string;
   /** Whether this marker style can be closed (e.g. \nd and \nd*). In-line styles only. */
   canClose?: boolean;
-  /** Whether this marker style only applies to the word following it (e.g. \v 2). In-line styles only. */
+  /**
+   * Whether this marker style only applies to the word following it (e.g. \v 2). In-line styles
+   * only.
+   */
   oneWord?: boolean;
 }
 
@@ -20,7 +23,10 @@ interface StyleInfo {
 interface ElementInfo {
   /** Whether the element should be considered within one line or should be a block of text */
   inline?: boolean;
-  /** Marker styles for this element. All marker styles should be unique. There should not be a marker style repeated between two elements. */
+  /**
+   * Marker styles for this element. All marker styles should be unique. There should not be a
+   * marker style repeated between two elements.
+   */
   validStyles?: StyleInfo[];
 }
 

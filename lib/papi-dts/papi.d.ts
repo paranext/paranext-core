@@ -43,8 +43,8 @@ declare module 'shared/data/web-view.model' {
     minHeight?: number;
   };
   /**
-   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of
-   * tab must provide a {@link TabLoader}.
+   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
+   * must provide a {@link TabLoader}.
    *
    * For now all tab creators must do their own data type verification
    */
@@ -52,8 +52,7 @@ declare module 'shared/data/web-view.model' {
   /**
    * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
    * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
-   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a
-   * {@link SavedTabInfo}).
+   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
    *
    * @param tabInfo The Paranext tab to save
    * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
@@ -70,8 +69,8 @@ declare module 'shared/data/web-view.model' {
     HTML = 'html',
     /**
      * This webview's content is fetched from the url specified (iframe `src` attribute). Note that
-     * webViews of this type cannot access the `papi` because they cannot be on the same origin as
-     * the parent window.
+     * webViews of this type cannot access the `papi` because they cannot be on the same origin as the
+     * parent window.
      */
     URL = 'url',
   }
@@ -103,16 +102,15 @@ declare module 'shared/data/web-view.model' {
      * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to
      * `true`.
      *
-     * Setting this to false on an HTML or React WebView prevents the iframe from importing the
-     * `papi` and such and also prevents others from accessing its document. This could be useful
-     * when you need secure input from the user because other WebViews may be able to attach event
-     * listeners to your inputs if you are on the same origin. Setting this to `false` on HTML or
-     * React WebViews is a big security win, but it makes interacting with the platform more
-     * challenging in some ways.
+     * Setting this to false on an HTML or React WebView prevents the iframe from importing the `papi`
+     * and such and also prevents others from accessing its document. This could be useful when you
+     * need secure input from the user because other WebViews may be able to attach event listeners to
+     * your inputs if you are on the same origin. Setting this to `false` on HTML or React WebViews is
+     * a big security win, but it makes interacting with the platform more challenging in some ways.
      *
-     * Setting this to false on a URL WebView prevents the iframe from accessing same-origin
-     * features on its host website like storage APIs (localstorage, cookies, etc) and such. This
-     * will likely break many websites.
+     * Setting this to false on a URL WebView prevents the iframe from accessing same-origin features
+     * on its host website like storage APIs (localstorage, cookies, etc) and such. This will likely
+     * break many websites.
      *
      * It is best practice to set this to `false` where possible.
      *
@@ -127,11 +125,11 @@ declare module 'shared/data/web-view.model' {
     /**
      * Whether to allow scripts to run in this iframe. Setting this to true adds `allow-scripts` to
      * the WebView iframe's [sandbox attribute]
-     * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to
-     * `true` for HTML and React WebViews and `false` for URL WebViews
+     * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to `true`
+     * for HTML and React WebViews and `false` for URL WebViews
      *
-     * WARNING: Setting this to `true` increases the possibility of a security threat occurring. If
-     * it is not necessary to run scripts in your WebView, you should set this to `false` to reduce
+     * WARNING: Setting this to `true` increases the possibility of a security threat occurring. If it
+     * is not necessary to run scripts in your WebView, you should set this to `false` to reduce
      * risk.
      */
     allowScripts?: boolean;
@@ -147,13 +145,12 @@ declare module 'shared/data/web-view.model' {
      * default, no urls are available to be iframes. If you want to embed iframes with the `src`
      * attribute in your webview, you must include them in this property.
      *
-     * For example, if you specify `allowFrameSources: ['https://example.com/']`, you will be able
-     * to embed iframes with urls starting with `papi-extension:` and on the same host as
+     * For example, if you specify `allowFrameSources: ['https://example.com/']`, you will be able to
+     * embed iframes with urls starting with `papi-extension:` and on the same host as
      * `https://example.com/`
      *
-     * If you plan on embedding any iframes in your WebView, it is best practice to list only the
-     * host values you need to function. The more you list, the higher the theoretical security
-     * risks.
+     * If you plan on embedding any iframes in your WebView, it is best practice to list only the host
+     * values you need to function. The more you list, the higher the theoretical security risks.
      *
      * ~-~
      *
@@ -163,8 +160,8 @@ declare module 'shared/data/web-view.model' {
      * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
      * function) to determine whether this iframe will be allowed to load. Specifying urls in this
      * array is essentially a security check to make sure the url you pass is one of the urls you
-     * intend it to be. By default, the url you specify in `content` will be accepted (you do not
-     * have to specify this unless you want to, but it is recommended in some scenarios).
+     * intend it to be. By default, the url you specify in `content` will be accepted (you do not have
+     * to specify this unless you want to, but it is recommended in some scenarios).
      *
      * Note: URL WebViews must have `papi-extension:` or `https:` urls. This property does not
      * override that requirement.
@@ -174,9 +171,9 @@ declare module 'shared/data/web-view.model' {
      * accepted.
      *
      * If your WebView url is a `const` string and cannot change for any reason, you do not need to
-     * specify this property. However, if your WebView url is dynamic and can change in any way, it
-     * is best practice to specify this property and to list only the urls you need for your URL
-     * WebView to function. The more you list, the higher the theoretical security risks.
+     * specify this property. However, if your WebView url is dynamic and can change in any way, it is
+     * best practice to specify this property and to list only the urls you need for your URL WebView
+     * to function. The more you list, the higher the theoretical security risks.
      */
     allowedFrameSources?: string[];
   };
@@ -219,10 +216,7 @@ declare module 'shared/data/web-view.model' {
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
-  /**
-   * The properties on a WebViewDefinition that may be updated when that webview is already
-   * displayed
-   */
+  /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
     WebViewDefinitionBase,
     'iconUrl' | 'title'
@@ -233,16 +227,15 @@ declare module 'shared/data/web-view.model' {
    */
   export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
   /**
-   * A React hook for working with a state object tied to a webview. Returns a WebView state value
-   * and a function to set it. Use similarly to `useState`.
+   * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+   * a function to set it. Use similarly to `useState`.
    *
    * Only used in WebView iframes.
    *
    * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
    * key.
    *
-   * NOTE: `stateKey` needs to be a constant string, not something that could change during
-   * execution.
+   * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
    *
    * _＠param_ `defaultStateValue` Value to use if the web view state didn't contain a value for the
    * given 'stateKey'
@@ -290,19 +283,18 @@ declare module 'shared/data/web-view.model' {
   /** Props that are passed into the web view itself inside the iframe in the web view tab component */
   export type WebViewProps = {
     /**
-     * A React hook for working with a state object tied to a webview. Returns a WebView state value
-     * and a function to set it. Use similarly to `useState`.
+     * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+     * a function to set it. Use similarly to `useState`.
      *
      * Only used in WebView iframes.
      *
      * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
      * key.
      *
-     * NOTE: `stateKey` needs to be a constant string, not something that could change during
-     * execution.
+     * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
      *
-     * _＠param_ `defaultStateValue` Value to use if the web view state didn't contain a value for
-     * the given 'stateKey'
+     * _＠param_ `defaultStateValue` Value to use if the web view state didn't contain a value for the
+     * given 'stateKey'
      *
      * _＠returns_ `[stateValue, setStateValue]`
      *
@@ -320,15 +312,15 @@ declare module 'shared/data/web-view.model' {
     /**
      * Gets the updatable properties on this WebView's WebView definition
      *
-     * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found
-     * for some reason
+     * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found for
+     * some reason
      */
     getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
     /**
      * Updates this WebView with the specified properties
      *
-     * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will
-     * stay the same
+     * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
+     * the same
      *
      * _＠returns_ true if successfully found the WebView to update; false otherwise
      *
@@ -399,10 +391,9 @@ declare module 'shared/data/web-view.model' {
      * Alternatively, set this to '?' to attempt to find any existing web view with the specified
      * webViewType.
      *
-     * Note: setting `existingId` to `undefined` counts as providing in this case (providing is
-     * tested with `'existingId' in options`, not just testing if `existingId` is truthy). Not
-     * providing an `existingId` at all is the only way to specify we are not looking for an
-     * existing webView
+     * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
+     * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
+     * `existingId` at all is the only way to specify we are not looking for an existing webView
      */
     existingId?: string | '?' | undefined;
     /**
@@ -436,31 +427,30 @@ declare module 'shared/global-this.model' {
     /** Whether this process is packaged or running from sources */
     var isPackaged: boolean;
     /**
-     * Path to the app's resources directory. This is a string representation of the resources uri
-     * on frontend
+     * Path to the app's resources directory. This is a string representation of the resources uri on
+     * frontend
      */
     var resourcesPath: string;
     /** How much logging should be recorded. Defaults to 'info' if not packaged, 'error' if packaged */
     var logLevel: LogLevel;
     /**
-     * A function that each React WebView extension must provide for Paranext to display it. Only
-     * used in WebView iframes.
+     * A function that each React WebView extension must provide for Paranext to display it. Only used
+     * in WebView iframes.
      */
     var webViewComponent: FunctionComponent<WebViewProps>;
     /**
-     * A React hook for working with a state object tied to a webview. Returns a WebView state value
-     * and a function to set it. Use similarly to `useState`.
+     * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+     * a function to set it. Use similarly to `useState`.
      *
      * Only used in WebView iframes.
      *
      * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
      * key.
      *
-     * NOTE: `stateKey` needs to be a constant string, not something that could change during
-     * execution.
+     * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
      *
-     * _＠param_ `defaultStateValue` Value to use if the web view state didn't contain a value for
-     * the given 'stateKey'
+     * _＠param_ `defaultStateValue` Value to use if the web view state didn't contain a value for the
+     * given 'stateKey'
      *
      * _＠returns_ `[stateValue, setStateValue]`
      *
@@ -489,15 +479,15 @@ declare module 'shared/global-this.model' {
     /**
      * Gets the updatable properties on this WebView's WebView definition
      *
-     * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found
-     * for some reason
+     * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found for
+     * some reason
      */
     var getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
     /**
      * Updates this WebView with the specified properties
      *
-     * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will
-     * stay the same
+     * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
+     * the same
      *
      * _＠returns_ true if successfully found the WebView to update; false otherwise
      *
@@ -519,9 +509,8 @@ declare module 'shared/global-this.model' {
 declare module 'shared/utils/util' {
   export function newGuid(): string;
   /**
-   * Create a nonce that is at least 128 bits long and should be (is not currently)
-   * cryptographically random. See nonce spec at
-   * https://w3c.github.io/webappsec-csp/#security-nonces
+   * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
+   * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
    *
    * WARNING: THIS IS NOT CURRENTLY CRYPTOGRAPHICALLY SECURE! TODO: Make this cryptographically
    * random! Use some polymorphic library that works in all contexts?
@@ -539,18 +528,16 @@ declare module 'shared/utils/util' {
    * Get a function that reduces calls to the function passed in
    *
    * @param fn The function to debounce
-   * @param delay How much delay in milliseconds after the most recent call to the debounced
-   *   function to call the function
-   * @returns Function that, when called, only calls the function passed in at maximum every delay
-   *   ms
+   * @param delay How much delay in milliseconds after the most recent call to the debounced function
+   *   to call the function
+   * @returns Function that, when called, only calls the function passed in at maximum every delay ms
    */
   export function debounce<T extends (...args: any[]) => void>(fn: T, delay?: number): T;
   /**
    * Groups each item in the array of items into a map according to the keySelector
    *
    * @param items Array of items to group by
-   * @param keySelector Function to run on each item to get the key for the group to which it
-   *   belongs
+   * @param keySelector Function to run on each item to get the key for the group to which it belongs
    * @param valueSelector Function to run on each item to get the value it should have in the group
    *   (like map function). If not provided, uses the item itself
    * @returns Map of keys to groups of values corresponding to each item
@@ -612,8 +599,8 @@ declare module 'shared/utils/papi-util' {
    */
   export const aggregateUnsubscribers: (unsubscribers: Unsubscriber[]) => Unsubscriber;
   /**
-   * Function to run to dispose of something that runs asynchronously. The promise resolves to true
-   * if successfully unsubscribed
+   * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
+   * successfully unsubscribed
    */
   export type UnsubscriberAsync = () => Promise<boolean>;
   /**
@@ -630,8 +617,8 @@ declare module 'shared/utils/papi-util' {
    *
    * @param unsafeRegisterFn Function that does some kind of async registration and returns an
    *   unsubscriber and a promise that resolves when the registration is finished
-   * @param isInitialized Whether the service associated with this safe UnsubscriberAsync function
-   *   is initialized
+   * @param isInitialized Whether the service associated with this safe UnsubscriberAsync function is
+   *   initialized
    * @param initialize Promise that resolves when the service is finished initializing
    * @returns Safe version of an unsafe function that returns a promise to an UnsubscriberAsync
    *   (meaning it will wait to register until the service is initialized)
@@ -670,16 +657,13 @@ declare module 'shared/utils/papi-util' {
   };
   /**
    * Type of object to create when handling a complex request where you desire to provide additional
-   * information beyond the contents of the response This type is used as the public-facing
-   * interface for responses
+   * information beyond the contents of the response This type is used as the public-facing interface
+   * for responses
    */
   export type ComplexResponse<TReturn = unknown> =
     | ComplexResponseSuccess<TReturn>
     | ComplexResponseFailure;
-  /**
-   * Type of request handler - indicates what type of parameters and what return type the handler
-   * has
-   */
+  /** Type of request handler - indicates what type of parameters and what return type the handler has */
   export enum RequestHandlerType {
     Args = 'args',
     Contents = 'contents',
@@ -692,16 +676,16 @@ declare module 'shared/utils/papi-util' {
    * @param b The second object to compare
    *
    *   WARNING: Objects like arrays from different iframes have different constructor function
-   *   references even if they do the same thing, so this deep equality comparison fails objects
-   *   that look the same but have different constructors because different constructors could
-   *   produce false positives in [a few specific
+   *   references even if they do the same thing, so this deep equality comparison fails objects that
+   *   look the same but have different constructors because different constructors could produce
+   *   false positives in [a few specific
    *   situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
    *   This means that two objects like arrays from different iframes that look the same will fail
    *   this check. Please use some other means to check deep equality in those situations.
    *
-   *   Note: This deep equality check considers `undefined` values on keys of objects NOT to be equal
-   *   to not specifying the key at all. For example, `{ stuff: 3, things: undefined }` and `{
-   *   stuff: 3 }` are not considered equal in this case
+   *   Note: This deep equality check considers `undefined` values on keys of objects NOT to be equal to
+   *   not specifying the key at all. For example, `{ stuff: 3, things: undefined }` and `{ stuff: 3
+   *   }` are not considered equal in this case
    *
    *   - For more information and examples, see [this
    *       CodeSandbox](https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs).
@@ -718,8 +702,8 @@ declare module 'shared/utils/papi-util' {
    *   Note: the value `undefined` is not serializable as `JSON.parse` throws on it. `null` is
    *   serializable. However, `undefined` or `null` on properties of objects is serializable.
    *
-   *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the
-   *   value. Please only use this if you need to
+   *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
+   *   Please only use this if you need to
    *
    *   DISCLAIMER: this does not successfully detect that values are not serializable in some cases:
    *
@@ -764,9 +748,8 @@ declare module 'shared/utils/papi-util' {
    */
   export const htmlEncode: (str: string) => string;
   /**
-   * Modules that someone might try to require in their extensions that we have similar apis for.
-   * When an extension requires these modules, an error throws that lets them know about our similar
-   * api.
+   * Modules that someone might try to require in their extensions that we have similar apis for. When
+   * an extension requires these modules, an error throws that lets them know about our similar api.
    */
   export const MODULE_SIMILAR_APIS: Readonly<{
     [moduleName: string]:
@@ -811,8 +794,8 @@ declare module 'shared/models/papi-event.model' {
 }
 declare module 'shared/data/internal-connection.model' {
   /**
-   * Types that are internal to the communication we do through WebSocket. These types should not
-   * need to be used outside of NetworkConnectors and ConnectionService.ts
+   * Types that are internal to the communication we do through WebSocket. These types should not need
+   * to be used outside of NetworkConnectors and ConnectionService.ts
    */
   import { ComplexRequest, ComplexResponse, SerializedRequestType } from 'shared/utils/papi-util';
   /** Represents when the client id has not been assigned by the server */
@@ -896,8 +879,8 @@ declare module 'shared/data/internal-connection.model' {
     event: T;
   };
   /**
-   * Handler for events from on the network. Used internally between network connector and
-   * Connection Service
+   * Handler for events from on the network. Used internally between network connector and Connection
+   * Service
    */
   export type InternalNetworkEventHandler = <T>(
     eventType: string,
@@ -925,26 +908,25 @@ declare module 'shared/services/network-connector.interface' {
     /** Information about the connector. Populated by the server while connecting */
     connectorInfo: NetworkConnectorInfo;
     /**
-     * Whether this connector is setting up or has finished setting up its connection and is ready
-     * to communicate on the network
+     * Whether this connector is setting up or has finished setting up its connection and is ready to
+     * communicate on the network
      */
     connectionStatus: ConnectionStatus;
     /**
-     * Sets up the NetworkConnector by populating connector info, setting up event handlers, and
-     * doing one of the following:
+     * Sets up the NetworkConnector by populating connector info, setting up event handlers, and doing
+     * one of the following:
      *
      * - On Client: connecting to the server.
      * - On Server: opening an endpoint for clients to connect.
      *
      * MUST ALSO RUN notifyClientConnected() WHEN PROMISE RESOLVES
      *
-     * @param localRequestHandler Function that handles requests from the connection. Only called
-     *   when this connector can handle the request
-     * @param requestRouter Function that returns a clientId to which to send the request based on
-     *   the requestType. If requestRouter returns this connector's clientId, localRequestHandler is
-     *   used
-     * @param localEventHandler Function that handles events from the server by accepting an
-     *   eventType and an event and emitting the event locally
+     * @param localRequestHandler Function that handles requests from the connection. Only called when
+     *   this connector can handle the request
+     * @param requestRouter Function that returns a clientId to which to send the request based on the
+     *   requestType. If requestRouter returns this connector's clientId, localRequestHandler is used
+     * @param localEventHandler Function that handles events from the server by accepting an eventType
+     *   and an event and emitting the event locally
      * @param networkConnectorEventHandlers Functions that run when network connector events occur
      *   like when clients are disconnected
      * @returns Promise that resolves with connector info when finished connecting
@@ -979,8 +961,8 @@ declare module 'shared/services/network-connector.interface' {
      */
     request: InternalRequestHandler;
     /**
-     * Sends an event to other processes. Does NOT run the local event subscriptions as they should
-     * be run by NetworkEventEmitter after sending on network.
+     * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
+     * run by NetworkEventEmitter after sending on network.
      *
      * @param eventType Unique network event type for coordinating between processes
      * @param event Event to emit on the network
@@ -1064,10 +1046,10 @@ declare module 'shared/data/network-connector.model' {
     type: MessageType.ClientConnect;
     senderId: number;
     /**
-     * ClientGuid for this client the last time it was connected to the server. Used when
-     * reconnecting (like if the browser refreshes): if the server has a connection with this
-     * clientGuid, it will unregister all requests on that client so the reconnecting client can
-     * register its request handlers again.
+     * ClientGuid for this client the last time it was connected to the server. Used when reconnecting
+     * (like if the browser refreshes): if the server has a connection with this clientGuid, it will
+     * unregister all requests on that client so the reconnecting client can register its request
+     * handlers again.
      */
     reconnectingClientGuid?: string | null;
   };
@@ -1129,8 +1111,8 @@ declare module 'shared/models/disposal.model' {
     onDidDispose: PapiEvent<void>;
   }
   /**
-   * Indicates than an object cannot have an `onDidDispose` event. Also allows an object to include
-   * a `dispose` function.
+   * Indicates than an object cannot have an `onDidDispose` event. Also allows an object to include a
+   * `dispose` function.
    */
   export interface CannotHaveOnDidDispose {
     /** Release resources and notify dependent services when tearing down an object */
@@ -1138,10 +1120,7 @@ declare module 'shared/models/disposal.model' {
     /** Event that emits when `dispose` is called on an object */
     onDidDispose?: undefined;
   }
-  /**
-   * Allow onDidDispose to exist on the type if it was previously disallowed by
-   * CannotHaveOnDidDispose
-   */
+  /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
   export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
 }
 declare module 'shared/models/papi-event-emitter.model' {
@@ -1152,16 +1131,16 @@ declare module 'shared/models/papi-event-emitter.model' {
    * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
    * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
    * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-   * private, and its event should be public. That way, the emitter is not publicized, but anyone
-   * can subscribe to the event.
+   * private, and its event should be public. That way, the emitter is not publicized, but anyone can
+   * subscribe to the event.
    */
   export default class PapiEventEmitter<T> implements Dispose {
     /**
      * Subscribes a function to run when this event is emitted.
      *
      * @param callback Function to run with the event when it is emitted
-     * @returns Unsubscriber function to run to stop calling the passed-in function when the event
-     *   is emitted
+     * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
+     *   emitted
      * @alias event
      */
     subscribe: PapiEvent<T>;
@@ -1176,8 +1155,8 @@ declare module 'shared/models/papi-event-emitter.model' {
      * Use like `const unsubscriber = event(callback)`
      *
      * @param callback Function to run with the event when it is emitted
-     * @returns Unsubscriber function to run to stop calling the passed-in function when the event
-     *   is emitted
+     * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
+     *   emitted
      */
     get event(): PapiEvent<T>;
     /** Disposes of this event, preparing it to release from memory */
@@ -1207,23 +1186,23 @@ declare module 'client/services/web-socket.interface' {
    * Interface that defines the webSocket functionality the extension host and the renderer must
    * implement. Used by WebSocketFactory to supply the right kind of WebSocket to
    * ClientNetworkConnector. For now, we are just using the browser WebSocket type. We may need
-   * specific functionality that don't line up between the ws library's implementation and the
-   * browser implementation. We can adjust as needed at that point.
+   * specific functionality that don't line up between the ws library's implementation and the browser
+   * implementation. We can adjust as needed at that point.
    */
   export type IWebSocket = WebSocket;
 }
 declare module 'renderer/services/renderer-web-socket.model' {
   /**
-   * The renderer's implementation of WebSocket is the browser-supplied WebSocket, which doesn't
-   * work in Node
+   * The renderer's implementation of WebSocket is the browser-supplied WebSocket, which doesn't work
+   * in Node
    */
   export default WebSocket;
 }
 declare module 'extension-host/services/extension-host-web-socket.model' {
   import ws from 'ws';
   /**
-   * Extension-host client uses ws as its WebSocket client, but the renderer can't use it. So we
-   * need to exclude it from the renderer webpack bundle like this.
+   * Extension-host client uses ws as its WebSocket client, but the renderer can't use it. So we need
+   * to exclude it from the renderer webpack bundle like this.
    */
   export default ws;
 }
@@ -1278,8 +1257,8 @@ declare module 'client/services/client-network-connector.service' {
      */
     private localRequestHandler?;
     /**
-     * Function to call when we are sending a request. Returns a clientId to which to send the
-     * request based on the requestType
+     * Function to call when we are sending a request. Returns a clientId to which to send the request
+     * based on the requestType
      */
     private requestRouter?;
     /**
@@ -1330,8 +1309,8 @@ declare module 'client/services/client-network-connector.service' {
      */
     private subscribe;
     /**
-     * Function that handles webSocket messages of type Response. Resolves the request associated
-     * with the received response message
+     * Function that handles webSocket messages of type Response. Resolves the request associated with
+     * the received response message
      *
      * @param response Response message to resolve
      */
@@ -1347,8 +1326,8 @@ declare module 'client/services/client-network-connector.service' {
      */
     private handleRequestMessage;
     /**
-     * Function that handles incoming webSocket messages of type Event. Runs the eventHandler
-     * provided in connect()
+     * Function that handles incoming webSocket messages of type Event. Runs the eventHandler provided
+     * in connect()
      *
      * @param eventMessage Event message to handle
      */
@@ -1402,13 +1381,13 @@ declare module 'main/services/server-network-connector.service' {
      */
     private localRequestHandler?;
     /**
-     * Function to call when we are sending a request. Returns a clientId to which to send the
-     * request based on the requestType
+     * Function to call when we are sending a request. Returns a clientId to which to send the request
+     * based on the requestType
      */
     private requestRouter?;
     /**
-     * Function to call when we receive an event. Handles events from connections and emits the
-     * event locally
+     * Function to call when we receive an event. Handles events from connections and emits the event
+     * locally
      */
     private localEventHandler?;
     /** Functions to run when network connector events occur like when clients are disconnected */
@@ -1436,8 +1415,8 @@ declare module 'main/services/server-network-connector.service' {
     private getClientSocket;
     /**
      * Attempts to get the client socket for a certain clientGuid. Returns undefined if not found.
-     * This does not throw because it will likely be very common that we do not have a clientId for
-     * a certain clientGuid as connecting clients will often supply old clientGuids.
+     * This does not throw because it will likely be very common that we do not have a clientId for a
+     * certain clientGuid as connecting clients will often supply old clientGuids.
      */
     private getClientSocketFromGuid;
     /** Get the clientId for a certain webSocket. Throws if not found */
@@ -1467,9 +1446,9 @@ declare module 'main/services/server-network-connector.service' {
      */
     private subscribe;
     /**
-     * Registers an incoming webSocket connection and sends connection info with InitClient. Does
-     * not consider the client fully connected yet until they respond and tell us they connected
-     * with ClientConnect
+     * Registers an incoming webSocket connection and sends connection info with InitClient. Does not
+     * consider the client fully connected yet until they respond and tell us they connected with
+     * ClientConnect
      */
     private onClientConnect;
     /** Handles when client connection disconnects. Unregisters and such */
@@ -1485,8 +1464,8 @@ declare module 'main/services/server-network-connector.service' {
      */
     private handleClientConnectMessage;
     /**
-     * Function that handles webSocket messages of type Response. Resolves the request associated
-     * with the received response message or forwards to appropriate client
+     * Function that handles webSocket messages of type Response. Resolves the request associated with
+     * the received response message or forwards to appropriate client
      *
      * @param response Response message to resolve
      * @param responderId Responding client
@@ -1502,8 +1481,8 @@ declare module 'main/services/server-network-connector.service' {
      */
     private handleRequestMessage;
     /**
-     * Function that handles incoming webSocket messages of type Event. Runs the eventHandler
-     * provided in connect() and forwards the event to other clients
+     * Function that handles incoming webSocket messages of type Event. Runs the eventHandler provided
+     * in connect() and forwards the event to other clients
      *
      * @param eventMessage Event message to handle
      */
@@ -1581,10 +1560,10 @@ declare module 'shared/models/papi-network-event-emitter.model' {
   /**
    * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
    * callbacks when the event is emitted. Events on NetworkEventEmitters can be emitted across
-   * processes. They are coordinated between processes by their type. Use
-   * eventEmitter.event(callback) to subscribe to the event. Use eventEmitter.emit(event) to run the
-   * subscriptions. Generally, this EventEmitter should be private, and its event should be public.
-   * That way, the emitter is not publicized, but anyone can subscribe to the event.
+   * processes. They are coordinated between processes by their type. Use eventEmitter.event(callback)
+   * to subscribe to the event. Use eventEmitter.emit(event) to run the subscriptions. Generally, this
+   * EventEmitter should be private, and its event should be public. That way, the emitter is not
+   * publicized, but anyone can subscribe to the event.
    *
    * WARNING: Do not use this class directly outside of NetworkService, or it will not do what you
    * expect. Use NetworkService.createNetworkEventEmitter.
@@ -1610,8 +1589,7 @@ declare module 'shared/models/papi-network-event-emitter.model' {
     );
     emit: (event: T) => void;
     /**
-     * Runs only the subscriptions for the event that are on this process. Does not send over
-     * network
+     * Runs only the subscriptions for the event that are on this process. Does not send over network
      *
      * @param event Event data to provide to subscribed callbacks
      */
@@ -1636,18 +1614,18 @@ declare module 'shared/services/network.service' {
   import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
   import { PapiEvent } from 'shared/models/papi-event.model';
   /**
-   * Args handler function for a request. Called when a request is handled. The function should
-   * accept the spread of the contents array of the request as its parameters. The function should
-   * return an object that becomes the contents object of the response. This type of handler is a
-   * normal function.
+   * Args handler function for a request. Called when a request is handled. The function should accept
+   * the spread of the contents array of the request as its parameters. The function should return an
+   * object that becomes the contents object of the response. This type of handler is a normal
+   * function.
    */
   type ArgsRequestHandler<TParam extends Array<unknown> = any[], TReturn = any> = (
     ...args: TParam
   ) => Promise<TReturn> | TReturn;
   /**
    * Contents handler function for a request. Called when a request is handled. The function should
-   * accept the contents object of the request as its single parameter. The function should return
-   * an object that becomes the contents object of the response.
+   * accept the contents object of the request as its single parameter. The function should return an
+   * object that becomes the contents object of the response.
    */
   type ContentsRequestHandler<TParam = any, TReturn = any> = (contents: TParam) => Promise<TReturn>;
   /**
@@ -1707,8 +1685,8 @@ declare module 'shared/services/network.service' {
    * Creates an event emitter that works properly over the network. Other connections receive this
    * event when it is emitted.
    *
-   * WARNING: You can only create a network event emitter once per eventType to prevent hijacked
-   * event emitters.
+   * WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
+   * emitters.
    *
    * WARNING: You cannot emit events with complex types on the network.
    *
@@ -1724,8 +1702,8 @@ declare module 'shared/services/network.service' {
    */
   export const getNetworkEvent: <T>(eventType: string) => PapiEvent<T>;
   /**
-   * Creates a function that is a request function with a baked requestType. This is also nice
-   * because you get TypeScript type support using this function.
+   * Creates a function that is a request function with a baked requestType. This is also nice because
+   * you get TypeScript type support using this function.
    *
    * @param requestType RequestType for request function
    * @returns Function to call with arguments of request that performs the request and resolves with
@@ -1755,8 +1733,8 @@ declare module 'shared/utils/async-variable' {
      *
      * @param variableName Name to use when logging about this variable
      * @param rejectIfNotSettledWithinMS Milliseconds to wait before verifying if the promise was
-     *   settled (resolved or rejected); will reject if it has not settled by that time. Use -1 if
-     *   you do not want a timeout at all.
+     *   settled (resolved or rejected); will reject if it has not settled by that time. Use -1 if you
+     *   do not want a timeout at all.
      */
     constructor(variableName: string, rejectIfNotSettledWithinMS?: number);
     /**
@@ -1838,13 +1816,12 @@ declare module 'shared/services/network-object.service' {
   /**
    * Set up an object to be shared on the network.
    *
-   * @param id ID of the object to share on the network. All processes must use this ID to look it
-   *   up.
+   * @param id ID of the object to share on the network. All processes must use this ID to look it up.
    * @param objectToShare The object to set up as a network object. It will have an event named
    *   `onDidDispose` added to its properties. An error will be thrown if the object already had an
    *   `onDidDispose` property on it. If the object already contained a `dispose` function, a new
-   *   `dispose` function will be set that calls the existing function (amongst other things). If
-   *   the object did not already define a `dispose` function, one will be added.
+   *   `dispose` function will be set that calls the existing function (amongst other things). If the
+   *   object did not already define a `dispose` function, one will be added.
    *
    *   WARNING: setting a network object mutates the provided object.
    * @returns `objectToShare` modified to be a network object
@@ -1866,21 +1843,21 @@ declare module 'shared/services/network-object.service' {
    * Objects registered via {@link networkObjectService.set} are retrievable using
    * {@link networkObjectService.get}.
    *
-   * Function calls made on network objects retrieved via {@link networkObjectService.get} are
-   * proxied and sent to the original objects registered via {@link networkObjectService.set}.
+   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+   * and sent to the original objects registered via {@link networkObjectService.set}.
    *
    * Functions on a network object will be called asynchronously by other processes regardless of
    * whether the functions are synchronous or asynchronous, so it is best to make them all
-   * asynchronous. All shared functions' arguments and return values must be serializable to be
-   * called across processes.
+   * asynchronous. All shared functions' arguments and return values must be serializable to be called
+   * across processes.
    *
-   * When a service registers an object via {@link networkObjectService.set}, it is the
-   * responsibility of that service, and only that service, to call `dispose` on that object when it
-   * is no longer intended to be shared with other services.
+   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+   * of that service, and only that service, to call `dispose` on that object when it is no longer
+   * intended to be shared with other services.
    *
-   * When an object is disposed by calling `dispose`, all functions registered with the
-   * `onDidDispose` event handler will be called. After an object is disposed, calls to its
-   * functions will no longer be proxied to the original object.
+   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+   * event handler will be called. After an object is disposed, calls to its functions will no longer
+   * be proxied to the original object.
    */
   const networkObjectService: NetworkObjectService;
   export default networkObjectService;
@@ -1898,9 +1875,9 @@ declare module 'shared/models/network-object.model' {
    * Override the NetworkableObject type's force-undefined onDidDispose to NetworkObject's
    * onDidDispose type because it will have an onDidDispose added.
    *
-   * If an object of type T had `dispose` on it, `networkObjectService.get` will remove the ability
-   * to call that method. This is because we don't want users of network objects to dispose of them.
-   * Only the caller of `networkObjectService.set` should be able to dispose of the network object.
+   * If an object of type T had `dispose` on it, `networkObjectService.get` will remove the ability to
+   * call that method. This is because we don't want users of network objects to dispose of them. Only
+   * the caller of `networkObjectService.set` should be able to dispose of the network object.
    *
    * @see networkObjectService
    */
@@ -1920,19 +1897,18 @@ declare module 'shared/models/network-object.model' {
   export type NetworkableObject<T = object> = T & CannotHaveOnDidDispose;
   /**
    * If a network object with the provided ID exists remotely but has not been set up to use inside
-   * this process, this function is run in {@link networkObjectService.get}, and the returned object
-   * is used as a base on which to set up a NetworkObject for use on this process. All properties
-   * that are exposed in the base object will be used as-is, and all other properties will be
-   * assumed to exist on the remote network object.
+   * this process, this function is run in {@link networkObjectService.get}, and the returned object is
+   * used as a base on which to set up a NetworkObject for use on this process. All properties that
+   * are exposed in the base object will be used as-is, and all other properties will be assumed to
+   * exist on the remote network object.
    *
    * @param id ID of the network object to get
    * @param networkObjectContainer Holds a reference to the NetworkObject that will be setup within
-   *   {@link networkObjectService.get}. It is passed in to allow the return value to call functions
-   *   on the NetworkObject. NOTE: networkObjectContainer.contents does not point to a real
-   *   NetworkObject while this function is running. The real reference is assigned later, but
-   *   before the NetworkObject will be used. The return value should always reference the
-   *   NetworkObject as `networkObjectContainer.contents` to avoid acting upon an undefined
-   *   NetworkObject.
+   *   {@link networkObjectService.get}. It is passed in to allow the return value to call functions on
+   *   the NetworkObject. NOTE: networkObjectContainer.contents does not point to a real NetworkObject
+   *   while this function is running. The real reference is assigned later, but before the
+   *   NetworkObject will be used. The return value should always reference the NetworkObject as
+   *   `networkObjectContainer.contents` to avoid acting upon an undefined NetworkObject.
    * @returns The local object to proxy into a network object.
    *
    *   Note: This function should return Partial<T>. For some reason, TypeScript can't infer the type
@@ -1956,8 +1932,8 @@ declare module 'shared/models/data-provider.model' {
      * possible.
      *
      * This allows a subscriber to simply subscribe and provide a callback instead of subscribing,
-     * running `get`, and managing the race condition of an event coming in to update the data and
-     * the initial `get` coming back in.
+     * running `get`, and managing the race condition of an event coming in to update the data and the
+     * initial `get` coming back in.
      *
      * @default true
      */
@@ -1969,8 +1945,8 @@ declare module 'shared/models/data-provider.model' {
      *
      *   For example, suppose your selector is targeting John 3:5, and the data provider updates its
      *   data for Luke 5:3. Your data at John 3:5 does not change, and your callback will not run.
-     * - `'*'` - run the update callback every time the data has been updated whether or not the data
-     *   at this selector has changed.
+     * - `'*'` - run the update callback every time the data has been updated whether or not the data at
+     *   this selector has changed.
      *
      *   For example, suppose your selector is targeting John 3:5, and the data provider updates its
      *   data for Luke 5:3. Your data at John 3:5 does not change, but your callback will run again
@@ -2006,8 +1982,8 @@ declare module 'shared/models/data-provider.model' {
    *
    * @param selector Tells the provider what subset of data is being set
    * @param data The data that determines what to set at the selector
-   * @returns Information that papi uses to interpret whether to send out updates. Defaults to
-   *   `true` (meaning send updates only for this data type).
+   * @returns Information that papi uses to interpret whether to send out updates. Defaults to `true`
+   *   (meaning send updates only for this data type).
    * @see DataProviderUpdateInstructions for more info on what to return
    */
   export type DataProviderSetter<
@@ -2034,9 +2010,9 @@ declare module 'shared/models/data-provider.model' {
    * Subscribe to receive updates relevant to the provided selector from this data provider for a
    * specific data type.
    *
-   * Note: By default, this `subscribe<data_type>` function automatically retrieves the current
-   * state of the data and runs the provided callback as soon as possible. That way, if you want to
-   * keep your data up-to-date, you do not also have to run `get<data_type>`. You can turn this
+   * Note: By default, this `subscribe<data_type>` function automatically retrieves the current state
+   * of the data and runs the provided callback as soon as possible. That way, if you want to keep
+   * your data up-to-date, you do not also have to run `get<data_type>`. You can turn this
    * functionality off in the `options` parameter.
    *
    * @param selector Tells the provider what data this listener is listening for
@@ -2050,16 +2026,16 @@ declare module 'shared/models/data-provider.model' {
     options?: DataProviderSubscriberOptions,
   ) => Promise<UnsubscriberAsync>;
   /**
-   * A helper type describing the types associated with a data provider's methods for a specific
-   * data type it handles.
+   * A helper type describing the types associated with a data provider's methods for a specific data
+   * type it handles.
    *
    * @type `TSelector` - The type of selector used to get some data from this provider at this data
-   *   type. A selector is an object a caller provides to the data provider to tell the provider
-   *   what subset of data it wants at this data type.
-   * @type `TGetData` - The type of data provided by this data provider when you run
-   *   `get<data_type>` based on a provided selector
-   * @type `TSetData` - The type of data ingested by this data provider when you run
-   *   `set<data_type>` based on a provided selector
+   *   type. A selector is an object a caller provides to the data provider to tell the provider what
+   *   subset of data it wants at this data type.
+   * @type `TGetData` - The type of data provided by this data provider when you run `get<data_type>`
+   *   based on a provided selector
+   * @type `TSetData` - The type of data ingested by this data provider when you run `set<data_type>`
+   *   based on a provided selector
    */
   export type DataProviderDataType<
     TSelector = unknown,
@@ -2067,9 +2043,9 @@ declare module 'shared/models/data-provider.model' {
     TSetData = TGetData,
   > = {
     /**
-     * The type of selector used to get some data from this provider at this data type. A selector
-     * is an object a caller provides to the data provider to tell the provider what subset of data
-     * it wants at this data type.
+     * The type of selector used to get some data from this provider at this data type. A selector is
+     * an object a caller provides to the data provider to tell the provider what subset of data it
+     * wants at this data type.
      */
     selector: TSelector;
     /**
@@ -2087,8 +2063,8 @@ declare module 'shared/models/data-provider.model' {
    * A helper type describing all the data types a data provider handles. Each property on this type
    * (consisting of a DataProviderDataType, which describes the types that correspond to that data
    * type) describes a data type that the data provider handles. The data provider has a
-   * `set<data_type>`, `get<data_type>`, and `subscribe<data_type>` for each property (aka data
-   * type) listed in this type.
+   * `set<data_type>`, `get<data_type>`, and `subscribe<data_type>` for each property (aka data type)
+   * listed in this type.
    *
    * @example A data provider that handles greeting strings and age numbers (as well as an All data
    * type that just provides all the data) could have a DataProviderDataTypes that looks like the
@@ -2183,9 +2159,8 @@ declare module 'shared/models/project-data-provider.model' {
      * - Name of a downloaded data set that is being cached
      * - Name of a resource created by a user that should be maintained in a project
      *
-     * This is the smallest level of granularity provided by a PDP for accessing extension data.
-     * There is no way to get or set just a portion of data identified by a single dataQualifier
-     * value.
+     * This is the smallest level of granularity provided by a PDP for accessing extension data. There
+     * is no way to get or set just a portion of data identified by a single dataQualifier value.
      */
     dataQualifier: string;
   };
@@ -2295,12 +2270,12 @@ declare module 'shared/services/command.service' {
     ...args: Parameters<CommandHandlers[CommandName]>
   ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
   /**
-   * Creates a function that is a command function with a baked commandName. This is also nice
-   * because you get TypeScript type support using this function.
+   * Creates a function that is a command function with a baked commandName. This is also nice because
+   * you get TypeScript type support using this function.
    *
    * @param commandName Command name for command function
-   * @returns Function to call with arguments of command that sends the command and resolves with
-   *   the result of the command
+   * @returns Function to call with arguments of command that sends the command and resolves with the
+   *   result of the command
    */
   export const createSendCommandFunction: <CommandName extends keyof CommandHandlers>(
     commandName: CommandName,
@@ -2312,9 +2287,8 @@ declare module 'shared/services/command.service' {
    *
    * @param commandName Command name to register for handling here
    *
-   *   - Note: Command names must consist of two string separated by at least one period. We recommend
-   *       one period and lower camel case in case we expand the api in the future to allow dot
-   *       notation.
+   *   - Note: Command names must consist of two string separated by at least one period. We recommend one
+   *       period and lower camel case in case we expand the api in the future to allow dot notation.
    *
    * @param handler Function to run when the command is invoked
    * @returns True if successfully registered, throws with error message if not
@@ -2325,8 +2299,8 @@ declare module 'shared/services/command.service' {
   ) => Promise<UnsubscriberAsync>;
   /**
    * The command service allows you to exchange messages with other components in the platform. You
-   * can register a command that other services and extensions can send you. You can send commands
-   * to other services and extensions that have registered commands.
+   * can register a command that other services and extensions can send you. You can send commands to
+   * other services and extensions that have registered commands.
    */
   export type moduleSummaryComments = {};
 }
@@ -2344,8 +2318,8 @@ declare module 'shared/models/web-view-provider.model' {
   import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
   export interface IWebViewProvider extends NetworkableObject {
     /**
-     * @param savedWebView Filled out if an existing webview is being called for (matched by ID).
-     *   Just ID if this is a new request or if the web view with the existing ID was not found
+     * @param savedWebView Filled out if an existing webview is being called for (matched by ID). Just
+     *   ID if this is a new request or if the web view with the existing ID was not found
      * @param getWebViewOptions
      */
     getWebView(
@@ -2374,8 +2348,8 @@ declare module 'shared/services/web-view-provider.service' {
   const initialize: () => Promise<void>;
   /**
    * Indicate if we are aware of an existing web view provider with the given type. If a web view
-   * provider with the given type is somewhere else on the network, this function won't tell you
-   * about it unless something else in the existing process is subscribed to it.
+   * provider with the given type is somewhere else on the network, this function won't tell you about
+   * it unless something else in the existing process is subscribed to it.
    *
    * @param webViewType Type of webView to check for
    */
@@ -2384,8 +2358,8 @@ declare module 'shared/services/web-view-provider.service' {
    * Register a web view provider to serve webViews for a specified type of webViews
    *
    * @param webViewType Type of web view to provide
-   * @param webViewProvider Object to register as a webView provider including control over
-   *   disposing of it.
+   * @param webViewProvider Object to register as a webView provider including control over disposing
+   *   of it.
    *
    *   WARNING: setting a webView provider mutates the provided object.
    * @returns `webViewProvider` modified to be a network object
@@ -2416,26 +2390,23 @@ declare module 'shared/services/web-view-provider.service' {
   export default webViewProviderService;
 }
 declare module 'shared/log-error.model' {
-  /**
-   * Error that force logs the error message before throwing. Useful for debugging in some
-   * situations.
-   */
+  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
   export default class LogError extends Error {
     constructor(message?: string);
   }
 }
 declare module 'renderer/services/web-view-state.service' {
   /**
-   * Get the web view state associated with the given ID This function is only intended to be used
-   * at startup. getWebViewState is intended for web views to call.
+   * Get the web view state associated with the given ID This function is only intended to be used at
+   * startup. getWebViewState is intended for web views to call.
    *
    * @param id ID of the web view
    * @returns State object of the given web view
    */
   export function getFullWebViewStateById(id: string): Record<string, unknown>;
   /**
-   * Set the web view state associated with the given ID This function is only intended to be used
-   * at startup. setWebViewState is intended for web views to call.
+   * Set the web view state associated with the given ID This function is only intended to be used at
+   * startup. setWebViewState is intended for web views to call.
    *
    * @param id ID of the web view
    * @param state State to set for the given web view
@@ -2532,8 +2503,8 @@ declare module 'shared/services/web-view.service' {
      * Updates the WebView with the specified ID with the specified properties
      *
      * @param webViewId The ID of the WebView to update
-     * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay
-     *   the same
+     * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
+     *   same
      * @returns True if successfully found the WebView to update; false otherwise
      */
     updateWebViewDefinition: (
@@ -2544,9 +2515,9 @@ declare module 'shared/services/web-view.service' {
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
      * TODO: This should be removed and the `testLayout` imported directly in this file once this
-     * service is refactored to split the code between processes. The only reason this is passed
-     * from `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since
-     * this service is currently all shared code. Refactor should happen in #203
+     * service is refactored to split the code between processes. The only reason this is passed from
+     * `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
+     * service is currently all shared code. Refactor should happen in #203
      */
     testLayout: LayoutBase;
   };
@@ -2558,9 +2529,9 @@ declare module 'shared/services/web-view.service' {
   export const IFRAME_SANDBOX_ALLOW_SCRIPTS = 'allow-scripts';
   /**
    * The iframe [sandbox attribute]
-   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox) that determines if
-   * an iframe is allowed to interact with its parent as a same-origin website. The iframe must
-   * still be on the same origin as its parent in order to interact same-origin.
+   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox) that determines if an
+   * iframe is allowed to interact with its parent as a same-origin website. The iframe must still be
+   * on the same origin as its parent in order to interact same-origin.
    */
   export const IFRAME_SANDBOX_ALLOW_SAME_ORIGIN = 'allow-same-origin';
   /**
@@ -2571,10 +2542,10 @@ declare module 'shared/services/web-view.service' {
    *   present (unless they are literally on the same origin) because we do not allow `frame-src
    *   blob:`
    * - `src` iframes do not inherit the CSP of their parent window.
-   * - We are not able to modify the `srcdoc` before inserting it to ensure it has a CSP that we
-   *   control to attempt to prevent arbitrary code execution on same origin. We are trusting the
-   *   browser's ability to create a strong and safe boundary between parent and child iframe in
-   *   different origin.
+   * - We are not able to modify the `srcdoc` before inserting it to ensure it has a CSP that we control
+   *   to attempt to prevent arbitrary code execution on same origin. We are trusting the browser's
+   *   ability to create a strong and safe boundary between parent and child iframe in different
+   *   origin.
    *
    *   TODO: consider using `csp` attribute on iframe to mitigate this issue
    * - Extension developers do not know what code they are executing if they use some random URL in
@@ -2595,19 +2566,19 @@ declare module 'shared/services/web-view.service' {
    * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
    * allows the child scripts to remove this sandbox attribute from the iframe. This should only be
    * possible on iframes that are on the same origin as the parent including those that use `srcdoc`
-   * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes
-   * from creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove
-   * any iframes that do not comply with these sandbox requirements. This successfully prevents
-   * iframes with too many privileges from executing as of July 2023. However, this means the
-   * sandboxing could do nothing for a determined hacker if they ever find a way around all this. We
-   * must distrust the whole renderer due to this issue. We will probably want to stay vigilant on
-   * security in this area.
+   * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes from
+   * creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove any
+   * iframes that do not comply with these sandbox requirements. This successfully prevents iframes
+   * with too many privileges from executing as of July 2023. However, this means the sandboxing could
+   * do nothing for a determined hacker if they ever find a way around all this. We must distrust the
+   * whole renderer due to this issue. We will probably want to stay vigilant on security in this
+   * area.
    */
   export const ALLOWED_IFRAME_SRC_SANDBOX_VALUES: string[];
   /**
-   * The minimal `src` WebView iframe sandboxing. This is applied to WebView iframes that use `src`
-   * in `web-view.component.tsx`. See {@link ALLOWED_IFRAME_SRC_SANDBOX_VALUES} for more information
-   * on our sandboxing methods and why we chose these values.
+   * The minimal `src` WebView iframe sandboxing. This is applied to WebView iframes that use `src` in
+   * `web-view.component.tsx`. See {@link ALLOWED_IFRAME_SRC_SANDBOX_VALUES} for more information on
+   * our sandboxing methods and why we chose these values.
    *
    * Note: 'allow-same-origin' and 'allow-scripts' are not included here because they are added
    * conditionally depending on the WebViewDefinition in `web-view.component.tsx`
@@ -2617,13 +2588,13 @@ declare module 'shared/services/web-view.service' {
    * The only `sandbox` attribute values we allow iframes with `srcdoc` to have including HTML and
    * React WebView iframes. These are separate than iframes with `src` for a few reasons:
    *
-   * - These iframes will be on the same origin as the parent window if `allow-same-origin` is
-   *   present. This is very serious and demands significant security risk consideration.
+   * - These iframes will be on the same origin as the parent window if `allow-same-origin` is present.
+   *   This is very serious and demands significant security risk consideration.
    * - `srcdoc` iframes inherit the CSP of their parent window (in our case, `index.ejs`)
    * - We are modifying the `srcdoc` before inserting it to ensure it has a CSP that we control to
    *   attempt to prevent unintended code execution on same origin
-   * - Extension developers should know exactly what code they're running in `srcdoc` WebViews,
-   *   whereas they could include some random URL in `src` WebViews
+   * - Extension developers should know exactly what code they're running in `srcdoc` WebViews, whereas
+   *   they could include some random URL in `src` WebViews
    *
    *   TODO: consider requiring `srcdoc` WebView content to come directly from `papi-extension://`
    *   instead of assuming extension developers will bundle their WebView code? This would mean the
@@ -2640,13 +2611,13 @@ declare module 'shared/services/web-view.service' {
    * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
    * allows the child scripts to remove this sandbox attribute from the iframe. This should only be
    * possible on iframes that are on the same origin as the parent including those that use `srcdoc`
-   * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes
-   * from creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove
-   * any iframes that do not comply with these sandbox requirements. This successfully prevents
-   * iframes with too many privileges from executing as of July 2023. However, this means the
-   * sandboxing could do nothing for a determined hacker if they ever find a way around all this. We
-   * must distrust the whole renderer due to this issue. We will probably want to stay vigilant on
-   * security in this area.
+   * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes from
+   * creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove any
+   * iframes that do not comply with these sandbox requirements. This successfully prevents iframes
+   * with too many privileges from executing as of July 2023. However, this means the sandboxing could
+   * do nothing for a determined hacker if they ever find a way around all this. We must distrust the
+   * whole renderer due to this issue. We will probably want to stay vigilant on security in this
+   * area.
    */
   export const ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES: string[];
   /**
@@ -2667,8 +2638,8 @@ declare module 'shared/services/web-view.service' {
    */
   export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
   /**
-   * Converts web view definition used in an actual docking tab into saveable web view information
-   * by stripping out the members we don't want to save
+   * Converts web view definition used in an actual docking tab into saveable web view information by
+   * stripping out the members we don't want to save
    *
    * @param webViewDefinition Web view to save
    * @returns Saveable web view information based on `webViewDefinition`
@@ -2750,8 +2721,8 @@ declare module 'shared/services/web-view.service' {
    * Gets the updatable properties on the WebView definition with the specified ID
    *
    * @param webViewId The ID of the WebView whose updatable properties to get
-   * @returns Updatable properties of the WebView definition with the specified ID or undefined if
-   *   not found
+   * @returns Updatable properties of the WebView definition with the specified ID or undefined if not
+   *   found
    * @throws If the papi dock layout has not been registered
    *
    *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
@@ -2779,8 +2750,8 @@ declare module 'shared/services/web-view.service' {
     webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
   ): boolean;
   /**
-   * Creates a new web view or gets an existing one depending on if you request an existing one and
-   * if the web view provider decides to give that existing one to you (it is up to the provider).
+   * Creates a new web view or gets an existing one depending on if you request an existing one and if
+   * the web view provider decides to give that existing one to you (it is up to the provider).
    *
    * @param webViewType Type of WebView to create
    * @param layout Information about where you want the web view to go. Defaults to adding as a tab
@@ -2816,7 +2787,9 @@ declare module 'shared/services/internet.service' {
   export interface InternetService {
     fetch: typeof papiFetch;
   }
-  /** Service that provides a way to call `fetch` since the original function is not available */
+  /**
+   * Service that provides a way to call `fetch` since the original function is not available
+   */
   const internetService: InternetService;
   export default internetService;
 }
@@ -2858,15 +2831,15 @@ declare module 'shared/models/data-provider-engine.model' {
    * method. papi overwrites this function on the DataProviderEngine itself to emit an update after
    * running the `notifyUpdate` method in the DataProviderEngine.
    *
-   * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
-   * data provider engine):
+   * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a data
+   * provider engine):
    *
    * ```typescript
    * this.notifyUpdate(['Verse', 'Heresy']);
    * ```
    *
-   * @example You can log the manual updates in your data provider engine by specifying the
-   * following `notifyUpdate` function in the data provider engine:
+   * @example You can log the manual updates in your data provider engine by specifying the following
+   * `notifyUpdate` function in the data provider engine:
    *
    * ```typescript
    * notifyUpdate(updateInstructions) {
@@ -2900,19 +2873,19 @@ declare module 'shared/models/data-provider-engine.model' {
    */
   export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
     /**
-     * Method to run to send clients updates for a specific data type outside of the
-     * `set<data_type>` method. papi overwrites this function on the DataProviderEngine itself to
-     * emit an update after running the `notifyUpdate` method in the DataProviderEngine.
+     * Method to run to send clients updates for a specific data type outside of the `set<data_type>`
+     * method. papi overwrites this function on the DataProviderEngine itself to emit an update after
+     * running the `notifyUpdate` method in the DataProviderEngine.
      *
-     * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
-     * data provider engine):
+     * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a data
+     * provider engine):
      *
      * ```typescript
      * this.notifyUpdate(['Verse', 'Heresy']);
      * ```
      *
-     * @example You can log the manual updates in your data provider engine by specifying the
-     * following `notifyUpdate` function in the data provider engine:
+     * @example You can log the manual updates in your data provider engine by specifying the following
+     * `notifyUpdate` function in the data provider engine:
      *
      * ```typescript
      * notifyUpdate(updateInstructions) {
@@ -2922,12 +2895,12 @@ declare module 'shared/models/data-provider-engine.model' {
      *
      * Note: This function's return is treated the same as the return from `set<data_type>`
      *
-     * @param updateInstructions Information that papi uses to interpret whether to send out
-     *   updates. Defaults to `'*'` (meaning send updates for all data types) if parameter
-     *   `updateInstructions` is not provided or is undefined. Otherwise returns
-     *   `updateInstructions`. papi passes the interpreted update value into this `notifyUpdate`
-     *   function. For example, running `this.notifyUpdate()` will call the data provider engine's
-     *   `notifyUpdate` with `updateInstructions` of `'*'`.
+     * @param updateInstructions Information that papi uses to interpret whether to send out updates.
+     *   Defaults to `'*'` (meaning send updates for all data types) if parameter `updateInstructions`
+     *   is not provided or is undefined. Otherwise returns `updateInstructions`. papi passes the
+     *   interpreted update value into this `notifyUpdate` function. For example, running
+     *   `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
+     *   `updateInstructions` of `'*'`.
      * @see DataProviderUpdateInstructions for more info on the `updateInstructions` parameter
      *
      * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
@@ -2937,8 +2910,8 @@ declare module 'shared/models/data-provider-engine.model' {
   };
   /**
    * The object to register with the DataProviderService to create a data provider. The
-   * DataProviderService creates an IDataProvider on the papi that layers over this engine,
-   * providing special functionality.
+   * DataProviderService creates an IDataProvider on the papi that layers over this engine, providing
+   * special functionality.
    *
    * @type TDataTypes - The data types that this data provider engine serves. For each data type
    *   defined, the engine must have corresponding `get<data_type>` and `set<data_type> function`
@@ -2979,9 +2952,9 @@ declare module 'shared/models/data-provider-engine.model' {
   type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
     NetworkableObject &
       /**
-       * Set of all `set<data_type>` methods that a data provider engine must provide according to
-       * its data types. papi overwrites this function on the DataProviderEngine itself to emit an
-       * update after running the defined `set<data_type>` method in the DataProviderEngine.
+       * Set of all `set<data_type>` methods that a data provider engine must provide according to its
+       * data types. papi overwrites this function on the DataProviderEngine itself to emit an update
+       * after running the defined `set<data_type>` method in the DataProviderEngine.
        *
        * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
        * method.
@@ -2996,8 +2969,8 @@ declare module 'shared/models/data-provider-engine.model' {
        */
       DataProviderSetters<TDataTypes> &
       /**
-       * Set of all `get<data_type>` methods that a data provider engine must provide according to
-       * its data types. Run by the data provider on `get<data_type>`
+       * Set of all `get<data_type>` methods that a data provider engine must provide according to its
+       * data types. Run by the data provider on `get<data_type>`
        *
        * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
        * method.
@@ -3016,9 +2989,9 @@ declare module 'shared/services/data-provider.service' {
     DataProviderEngineNotifyUpdate,
   } from 'shared/models/data-provider-engine.model';
   /**
-   * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If
-   * a data provider engine class extends this class, it doesn't have to specify its own
-   * `notifyUpdate` function in order to use `notifyUpdate`.
+   * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
+   * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
+   * function in order to use `notifyUpdate`.
    *
    * @see IDataProviderEngine for more information on extending this class.
    */
@@ -3074,8 +3047,7 @@ declare module 'shared/services/data-provider.service' {
    * @param member The name of the method to ignore
    *
    *   Note: this is the signature that provides the actual decorator functionality. However, since
-   *   users will not be using this signature, the example usage is provided in the signature
-   *   above.
+   *   users will not be using this signature, the example usage is provided in the signature above.
    */
   function ignore<T extends object>(target: T, member: keyof T): void;
   /**
@@ -3101,9 +3073,9 @@ declare module 'shared/services/data-provider.service' {
    * Creates a data provider to be shared on the network layering over the provided data provider
    * engine.
    *
-   * @type `TSelector` - The type of selector used to get some data from this provider. A selector
-   *   is an object a caller provides to the data provider to tell the provider what subset of data
-   *   it wants. Note: A selector must be stringifiable.
+   * @type `TSelector` - The type of selector used to get some data from this provider. A selector is
+   *   an object a caller provides to the data provider to tell the provider what subset of data it
+   *   wants. Note: A selector must be stringifiable.
    * @type `TData` - The type of data provided by this data provider based on a provided selector
    * @param providerName Name this data provider should be called on the network
    * @param dataProviderEngine The object to layer over with a new data provider object
@@ -3131,15 +3103,17 @@ declare module 'shared/services/data-provider.service' {
     decorators: typeof decorators;
     DataProviderEngine: typeof DataProviderEngine;
   }
-  /** Service that allows extensions to send and receive data to/from other extensions */
+  /**
+   * Service that allows extensions to send and receive data to/from other extensions
+   */
   const dataProviderService: DataProviderService;
   export default dataProviderService;
 }
 declare module 'shared/models/project-metadata.model' {
   import { ProjectTypes } from 'papi-shared-types';
   /**
-   * Low-level information describing a project that Platform.Bible directly manages and uses to
-   * load project data
+   * Low-level information describing a project that Platform.Bible directly manages and uses to load
+   * project data
    */
   export type ProjectMetadata = {
     /** ID of the project (must be unique and case insensitive) */
@@ -3231,8 +3205,8 @@ declare module 'shared/services/project-data-provider.service' {
   } from 'shared/models/project-data-provider-engine.model';
   import { Dispose } from 'shared/models/disposal.model';
   /**
-   * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be
-   * an existing factory already that handles the same project type or this operation will fail.
+   * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
+   * existing factory already that handles the same project type or this operation will fail.
    *
    * @param projectType Type of project that pdpEngineFactory supports
    * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
@@ -3292,8 +3266,8 @@ declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
    *
    * @param promiseFactoryCallback A function that returns the promise to await. If the promise
    *   resolves to null, the value will not change. If this callback is undefined, the current value
-   *   will be returned (defaultValue unless it was previously changed and preserveValue is true),
-   *   and there will be no loading.
+   *   will be returned (defaultValue unless it was previously changed and preserveValue is true), and
+   *   there will be no loading.
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
    *   every render
@@ -3303,12 +3277,11 @@ declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
    *   updated every render
-   * @param preserveValue Whether to leave the value as the most recent resolved promise value or
-   *   set it back to defaultValue while running the promise again. Default to true
+   * @param preserveValue Whether to leave the value as the most recent resolved promise value or set
+   *   it back to defaultValue while running the promise again. Default to true
    * @returns `[value, isLoading]`
    *
-   *   - `value`: the current value for the promise, either the defaultValue or the resolved promise
-   *       value
+   *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
    *   - `isLoading`: whether the promise is waiting to be resolved
    */
   const usePromise: <T>(
@@ -3347,8 +3320,8 @@ declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
    * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
    * runs when the event is emitted
    *
-   * @param event The asynchronously (un)subscribing event to subscribe to. Can be either a string
-   *   or an Event
+   * @param event The asynchronously (un)subscribing event to subscribe to. Can be either a string or
+   *   an Event
    *
    *   - If event is a `string`, the network event associated with this type will automatically be used
    *   - If event is a `PapiEvent` or `PapiEventAsync`, that event will be used
@@ -3411,10 +3384,9 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
    *
    * @example `useData.Greeting<PeopleDataTypes, 'Greeting'>(...);`
    *
-   * @type `TDataTypes` - The data provider data types served by the data provider whose data to
-   *   use.
-   * @type `TDataType` - The specific data type on this data provider that you want to use. Must
-   *   match the data type specified in `useData.<data_type>`
+   * @type `TDataTypes` - The data provider data types served by the data provider whose data to use.
+   * @type `TDataType` - The specific data type on this data provider that you want to use. Must match
+   *   the data type specified in `useData.<data_type>`
    */
   export type UseDataHook = {
     [DataType in string]: <
@@ -3472,10 +3444,9 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * For example, `useData.Verse<QuickVerseDataTypes, 'Verse'>` lets you subscribe to verses from a
    * data provider that serves `QuickVerseDataTypes`.
    *
-   * _＠example_ When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we
-   * need to tell the useData.Verse hook what types we are using, so we use the
-   * `QuickVerseDataTypes` data types and specify that we are using the `'Verse'` data type as
-   * follows:
+   * _＠example_ When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we need
+   * to tell the useData.Verse hook what types we are using, so we use the `QuickVerseDataTypes` data
+   * types and specify that we are using the `'Verse'` data type as follows:
    *
    * ```typescript
    * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<
@@ -3496,8 +3467,8 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *
    * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
    *
-   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The
-   * reference must not be updated every render
+   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
+   * must not be updated every render
    *
    * _＠returns_ `[data, setData, isLoading]`
    *
@@ -3507,8 +3478,8 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *   type and selector. Returns true if successful. Note that this function does not update the
    *   data. The data provider sends out an update to this subscription if it successfully updates
    *   data.
-   * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
-   *   data provider
+   * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
+   *   provider
    *
    * _＠type_ `TDataTypes` - the data provider data types served by the data provider whose data to
    * use.
@@ -3568,8 +3539,8 @@ declare module 'shared/services/settings.service' {
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   import { SettingTypes } from 'papi-shared-types';
   /**
-   * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes and
-   * gets updated when the setting is changed by others.
+   * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes and gets
+   * updated when the setting is changed by others.
    *
    * Setting the value to `null` is the equivalent of deleting the setting.
    *
@@ -3601,11 +3572,11 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    * Gets a project data provider with specified provider name
    *
    * @param projectDataProviderSource String name of the id of the project to get OR
-   *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return
-   *   the data provider again)
+   *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
+   *   data provider again)
    * @returns Undefined if the project data provider has not been retrieved, the requested project
-   *   data provider if it has been retrieved and is not disposed, and undefined again if the
-   *   project data provider is disposed
+   *   data provider if it has been retrieved and is not disposed, and undefined again if the project
+   *   data provider is disposed
    * @ProjectType `ProjectType` - the project type for the project to use. The returned project data
    * provider will have the project data provider type associated with this project type.
    */
@@ -3637,8 +3608,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *   because it refused to accept that `'selector'` was a valid member:
    *   `ProjectDataTypes[ProjectType][TDataType]['selector']`
    *
-   *   As such, this hook proxy actually has the same types as `UseDataHook` but with a couple of
-   *   things renamed for easier readability.
+   *   As such, this hook proxy actually has the same types as `UseDataHook` but with a couple of things
+   *   renamed for easier readability.
    */
   type UseProjectDataHook = {
     [DataType in string]: <
@@ -3691,9 +3662,9 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *
    * _＠example_ When subscribing to JHN 11:35 Verse USFM info on a `ParatextStandard` project with
    * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`, we need to tell the
-   * `useProjectData.VerseUSFM` hook what types we are using, so we specify the project data types
-   * as `ProjectDataTypes['ParatextStandard']` and specify that we are using the `'VerseUSFM'` data
-   * type as follows:
+   * `useProjectData.VerseUSFM` hook what types we are using, so we specify the project data types as
+   * `ProjectDataTypes['ParatextStandard']` and specify that we are using the `'VerseUSFM'` data type
+   * as follows:
    *
    * ```typescript
    * const [verse, setVerse, verseIsLoading] = useProjectData.VerseUSFM<
@@ -3707,8 +3678,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * ```
    *
    * _＠param_ `projectDataProviderSource` string name of the id of the project to get OR
-   * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get
-   * the project data provider once)
+   * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
+   * project data provider once)
    *
    * _＠param_ `selector` tells the provider what data this listener is listening for
    *
@@ -3719,8 +3690,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *
    * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
    *
-   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The
-   * reference must not be updated every render
+   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
+   * must not be updated every render
    *
    * _＠returns_ `[data, setData, isLoading]`
    *
@@ -3733,11 +3704,11 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
    *   project data provider for this project id
    *
-   * _＠type_ `TProjectDataTypes` - the project data types associated with the `projectType` used.
-   * You can specify this type with `ProjectDataTypes['<project_type>']`
+   * _＠type_ `TProjectDataTypes` - the project data types associated with the `projectType` used. You
+   * can specify this type with `ProjectDataTypes['<project_type>']`
    *
-   * _＠type_ `TDataType` - the specific data type on this project you want to use. Must match the
-   * data type specified in `useProjectData.<data_type>`
+   * _＠type_ `TDataType` - the specific data type on this project you want to use. Must match the data
+   * type specified in `useProjectData.<data_type>`
    */
   const useProjectData: UseProjectDataHook;
   export default useProjectData;
@@ -3818,12 +3789,12 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
     rejectDialog(errorMessage: string): void;
   };
   /**
-   * Set the functionality of submitting and canceling dialogs. This should be called specifically
-   * by `dialog.service-host.ts` immediately on startup and by nothing else. This is only here to
+   * Set the functionality of submitting and canceling dialogs. This should be called specifically by
+   * `dialog.service-host.ts` immediately on startup and by nothing else. This is only here to
    * mitigate a dependency cycle
    *
-   * @param dialogServiceFunctions Functions from the dialog service host for resolving and
-   *   rejecting dialogs
+   * @param dialogServiceFunctions Functions from the dialog service host for resolving and rejecting
+   *   dialogs
    */
   export function hookUpDialogService({
     resolveDialogRequest: resolve,
@@ -3839,9 +3810,9 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
    * specify `tabType` and `Component` in order to comply with `DialogDefinition`
    *
    * Note: this is not a class that can be inherited because all properties would be static but then
-   * we would not be able to use the default `loadDialog` because it would be using a static
-   * reference to a nonexistent `Component`. Instead of inheriting this as a class, any dialog
-   * definition can spread this `{ ...DIALOG_BASE }`
+   * we would not be able to use the default `loadDialog` because it would be using a static reference
+   * to a nonexistent `Component`. Instead of inheriting this as a class, any dialog definition can
+   * spread this `{ ...DIALOG_BASE }`
    */
   const DIALOG_BASE: DialogDefinitionBase;
   export default DIALOG_BASE;
@@ -3888,8 +3859,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      * The dialog options to specify when calling the dialog. Passed into `loadDialog` as
      * SavedTabInfo.data
      *
-     * The default implementation of `loadDialog` passes all the options down to the dialog
-     * component as props
+     * The default implementation of `loadDialog` passes all the options down to the dialog component
+     * as props
      */
     options: TOptions;
     /** The type of the response to the dialog request */
@@ -3958,21 +3929,21 @@ declare module 'shared/services/dialog.service' {
 declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   /**
-   * Enables using `papi.dialogs.showDialog` in React more easily. Provides a callback to run to get
-   * a response from a dialog as well as states that indicate the dialog's response and whether the
+   * Enables using `papi.dialogs.showDialog` in React more easily. Provides a callback to run to get a
+   * response from a dialog as well as states that indicate the dialog's response and whether the
    * dialog is open.
    *
-   * Calling the dialog callback returned from this hook does nothing if you already previously
-   * opened the dialog and have not received a response
+   * Calling the dialog callback returned from this hook does nothing if you already previously opened
+   * the dialog and have not received a response
    *
    * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
    * @type `TResponse` The type that the response can be. If you do not specify a `defaultResponse`,
    *   this can be the dialog response type or `null`. If you specify a `defaultResponse`, this will
    *   be just the dialog response type. Should be inferred by parameters.
    *
-   *   - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse`
-   *       then becomes that literal instead of being the dialog response type. You can type assert
-   *       it to the appropriate type. Let us know if you run into an issue with this!
+   *   - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse` then
+   *       becomes that literal instead of being the dialog response type. You can type assert it to
+   *       the appropriate type. Let us know if you run into an issue with this!
    *
    * @param dialogType Dialog type you want to show on the screen
    *
@@ -3982,8 +3953,8 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
    *   updated every render
-   * @param defaultResponse The starting value for the response. Once a response is received, this
-   *   is no longer used. Defaults to `null`
+   * @param defaultResponse The starting value for the response. Once a response is received, this is
+   *   no longer used. Defaults to `null`
    * @returns `[response, showDialogCallback, errorMessage, isShowingDialog]`
    *
    *   - `response` - the response from the dialog or `defaultResponse` if a response has not been
@@ -3992,8 +3963,7 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
    *   - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response. If
    *       this callback is run while the dialog is open, nothing happens
    *   - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
-   *       `undefined` if there is no error. DOES reset to `undefined` every time the callback is
-   *       run
+   *       `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
    *   - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not
    *       responded)
    */
@@ -4031,8 +4001,8 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
    *   updated every render.
    * @returns An array of data providers that correspond by index to the values in
    *   `dataProviderSources`. Each item in the array will be (a) undefined if the data provider has
-   *   not been retrieved or has been disposed, or (b) a data provider if it has been retrieved and
-   *   is not disposed.
+   *   not been retrieved or has been disposed, or (b) a data provider if it has been retrieved and is
+   *   not disposed.
    */
   function useDataProviderMulti<T extends IDataProvider<any>[]>(
     dataProviderSources: (string | T[number] | undefined)[],
@@ -4081,14 +4051,13 @@ declare module 'renderer/hooks/papi-hooks/index' {
      * selector on any data type that data provider serves.
      *
      * Usage: Specify the data type on the data provider with `useData.<data_type>` and use like any
-     * other React hook. Specify the generic types in order to receive type support from
-     * Intellisense. For example, `useData.Verse<QuickVerseDataTypes, 'Verse'>` lets you subscribe
-     * to verses from a data provider that serves `QuickVerseDataTypes`.
+     * other React hook. Specify the generic types in order to receive type support from Intellisense.
+     * For example, `useData.Verse<QuickVerseDataTypes, 'Verse'>` lets you subscribe to verses from a
+     * data provider that serves `QuickVerseDataTypes`.
      *
-     * _＠example_ When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we
-     * need to tell the useData.Verse hook what types we are using, so we use the
-     * `QuickVerseDataTypes` data types and specify that we are using the `'Verse'` data type as
-     * follows:
+     * _＠example_ When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we need
+     * to tell the useData.Verse hook what types we are using, so we use the `QuickVerseDataTypes` data
+     * types and specify that we are using the `'Verse'` data type as follows:
      *
      * ```typescript
      * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<
@@ -4104,24 +4073,24 @@ declare module 'renderer/hooks/papi-hooks/index' {
      *
      * _＠param_ `defaultValue` the initial value to return while first awaiting the data
      *
-     * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not
-     * be updated every render
+     * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+     * updated every render
      *
      * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
      *
-     * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The
-     * reference must not be updated every render
+     * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
+     * must not be updated every render
      *
      * _＠returns_ `[data, setData, isLoading]`
      *
-     * - `data`: the current value for the data from the data provider with the specified data type
-     *   and selector, either the defaultValue or the resolved data
-     * - `setData`: asynchronous function to request that the data provider update the data at this
-     *   data type and selector. Returns true if successful. Note that this function does not update
-     *   the data. The data provider sends out an update to this subscription if it successfully
-     *   updates data.
-     * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
-     *   data provider
+     * - `data`: the current value for the data from the data provider with the specified data type and
+     *   selector, either the defaultValue or the resolved data
+     * - `setData`: asynchronous function to request that the data provider update the data at this data
+     *   type and selector. Returns true if successful. Note that this function does not update the
+     *   data. The data provider sends out an update to this subscription if it successfully updates
+     *   data.
+     * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
+     *   provider
      *
      * _＠type_ `TDataTypes` - the data provider data types served by the data provider whose data to
      * use.
@@ -4153,18 +4122,17 @@ declare module 'renderer/hooks/papi-hooks/index' {
      * specified selector on any data type that the project data provider serves according to its
      * projectType.
      *
-     * Usage: Specify the data type on the project data provider with `useProjectData.<data_type>`
-     * and use like any other React hook. Specify the generic types in order to receive type support
-     * from Intellisense. For example,
-     * `useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'], 'VerseUSFM'>` lets you
-     * subscribe to verse USFM from a project data provider for the `ParatextStandard`
-     * `projectType`.
+     * Usage: Specify the data type on the project data provider with `useProjectData.<data_type>` and
+     * use like any other React hook. Specify the generic types in order to receive type support from
+     * Intellisense. For example, `useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'],
+     * 'VerseUSFM'>` lets you subscribe to verse USFM from a project data provider for the
+     * `ParatextStandard` `projectType`.
      *
      * _＠example_ When subscribing to JHN 11:35 Verse USFM info on a `ParatextStandard` project with
      * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`, we need to tell the
-     * `useProjectData.VerseUSFM` hook what types we are using, so we specify the project data types
-     * as `ProjectDataTypes['ParatextStandard']` and specify that we are using the `'VerseUSFM'`
-     * data type as follows:
+     * `useProjectData.VerseUSFM` hook what types we are using, so we specify the project data types as
+     * `ProjectDataTypes['ParatextStandard']` and specify that we are using the `'VerseUSFM'` data type
+     * as follows:
      *
      * ```typescript
      * const [verse, setVerse, verseIsLoading] = useProjectData.VerseUSFM<
@@ -4178,38 +4146,37 @@ declare module 'renderer/hooks/papi-hooks/index' {
      * ```
      *
      * _＠param_ `projectDataProviderSource` string name of the id of the project to get OR
-     * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get
-     * the project data provider once)
+     * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
+     * project data provider once)
      *
      * _＠param_ `selector` tells the provider what data this listener is listening for
      *
      * _＠param_ `defaultValue` the initial value to return while first awaiting the data
      *
-     * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not
-     * be updated every render
+     * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+     * updated every render
      *
      * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
      *
-     * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The
-     * reference must not be updated every render
+     * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
+     * must not be updated every render
      *
      * _＠returns_ `[data, setData, isLoading]`
      *
-     * - `data`: the current value for the data from the project data provider for the specified
-     *   project id with the specified data type and selector, either the defaultValue or the
-     *   resolved data
-     * - `setData`: asynchronous function to request that the data provider for the specified project
-     *   id update the data at this data type and selector. Returns true if successful. Note that
-     *   this function does not update the data. The project data provider sends out an update to
-     *   this subscription if it successfully updates data.
+     * - `data`: the current value for the data from the project data provider for the specified project
+     *   id with the specified data type and selector, either the defaultValue or the resolved data
+     * - `setData`: asynchronous function to request that the data provider for the specified project id
+     *   update the data at this data type and selector. Returns true if successful. Note that this
+     *   function does not update the data. The project data provider sends out an update to this
+     *   subscription if it successfully updates data.
      * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
      *   project data provider for this project id
      *
-     * _＠type_ `TProjectDataTypes` - the project data types associated with the `projectType` used.
-     * You can specify this type with `ProjectDataTypes['<project_type>']`
+     * _＠type_ `TProjectDataTypes` - the project data types associated with the `projectType` used. You
+     * can specify this type with `ProjectDataTypes['<project_type>']`
      *
-     * _＠type_ `TDataType` - the specific data type on this project you want to use. Must match the
-     * data type specified in `useProjectData.<data_type>`
+     * _＠type_ `TDataType` - the specific data type on this project you want to use. Must match the data
+     * type specified in `useProjectData.<data_type>`
      */
     useProjectData: typeof useProjectData;
     useSetting: typeof useSetting;
@@ -4239,19 +4206,19 @@ declare module 'papi-frontend' {
   import { DialogService } from 'shared/services/dialog.service-model';
   const papi: {
     /**
-     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when
-     * the event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
+     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
+     * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
      * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-     * private, and its event should be public. That way, the emitter is not publicized, but anyone
-     * can subscribe to the event.
+     * private, and its event should be public. That way, the emitter is not publicized, but anyone can
+     * subscribe to the event.
      */
     EventEmitter: typeof PapiEventEmitter;
     /** This is just an alias for internet.fetch */
     fetch: typeof fetch;
     /**
-     * The command service allows you to exchange messages with other components in the platform.
-     * You can register a command that other services and extensions can send you. You can send
-     * commands to other services and extensions that have registered commands.
+     * The command service allows you to exchange messages with other components in the platform. You
+     * can register a command that other services and extensions can send you. You can send commands to
+     * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
     /**
@@ -4263,8 +4230,8 @@ declare module 'papi-frontend' {
     /**
      * Service exposing various functions related to using webViews
      *
-     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code,
-     * either HTML or React components.
+     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+     * HTML or React components.
      */
     webViews: PapiWebViewService;
     /** Prompt the user for responses with dialogs */
@@ -4275,9 +4242,13 @@ declare module 'papi-frontend' {
     logger: import('electron-log').MainLogger & {
       default: import('electron-log').MainLogger;
     };
-    /** Service that provides a way to call `fetch` since the original function is not available */
+    /**
+     * Service that provides a way to call `fetch` since the original function is not available
+     */
     internet: InternetService;
-    /** Service that allows extensions to send and receive data to/from other extensions */
+    /**
+     * Service that allows extensions to send and receive data to/from other extensions
+     */
     dataProvider: DataProviderService;
     /** Service that gets project data providers */
     projectDataProvider: PapiFrontendProjectDataProviderService;
@@ -4376,8 +4347,8 @@ declare module 'node/services/node-file-system.service' {
    * https://en.wikipedia.org/wiki/Year_2038_problem
    *
    * @param uri URI of file or directory
-   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats
-   *   if file or directory exists, undefined if it doesn't
+   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if
+   *   file or directory exists, undefined if it doesn't
    */
   export function getStats(uri: Uri): Promise<BigIntStats | undefined>;
   /**
@@ -4455,8 +4426,8 @@ declare module 'node/services/execution-token.service' {
    * This should be called when extensions are being loaded
    *
    * @param extensionName Name of the extension to register
-   * @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers.
-   *   It is important that the token is not shared to avoid impersonation of API callers.
+   * @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers. It
+   *   is important that the token is not shared to avoid impersonation of API callers.
    */
   function registerExtension(extensionName: string): ExecutionToken;
   /**
@@ -4578,19 +4549,19 @@ declare module 'papi-backend' {
   import { DialogService } from 'shared/services/dialog.service-model';
   const papi: {
     /**
-     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when
-     * the event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
+     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
+     * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
      * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-     * private, and its event should be public. That way, the emitter is not publicized, but anyone
-     * can subscribe to the event.
+     * private, and its event should be public. That way, the emitter is not publicized, but anyone can
+     * subscribe to the event.
      */
     EventEmitter: typeof PapiEventEmitter;
     /** This is just an alias for internet.fetch */
     fetch: typeof fetch;
     /**
-     * The command service allows you to exchange messages with other components in the platform.
-     * You can register a command that other services and extensions can send you. You can send
-     * commands to other services and extensions that have registered commands.
+     * The command service allows you to exchange messages with other components in the platform. You
+     * can register a command that other services and extensions can send you. You can send commands to
+     * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
     /**
@@ -4602,8 +4573,8 @@ declare module 'papi-backend' {
     /**
      * Service exposing various functions related to using webViews
      *
-     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code,
-     * either HTML or React components.
+     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+     * HTML or React components.
      */
     webViews: PapiWebViewService;
     /** Interface for registering webView providers */
@@ -4616,18 +4587,22 @@ declare module 'papi-backend' {
     logger: import('electron-log').MainLogger & {
       default: import('electron-log').MainLogger;
     };
-    /** Service that provides a way to call `fetch` since the original function is not available */
+    /**
+     * Service that provides a way to call `fetch` since the original function is not available
+     */
     internet: InternetService;
-    /** Service that allows extensions to send and receive data to/from other extensions */
+    /**
+     * Service that allows extensions to send and receive data to/from other extensions
+     */
     dataProvider: DataProviderService;
     /** Service that registers and gets project data providers */
     projectDataProvider: PapiBackendProjectDataProviderService;
     /** Provides metadata for projects known by the platform */
     projectLookup: ProjectLookupServiceType;
     /**
-     * This service provides extensions in the extension host the ability to read/write data based
-     * on the extension identity and current user (as identified by the OS). This service will not
-     * work within the renderer.
+     * This service provides extensions in the extension host the ability to read/write data based on
+     * the extension identity and current user (as identified by the OS). This service will not work
+     * within the renderer.
      */
     storage: ExtensionStorageService;
   };

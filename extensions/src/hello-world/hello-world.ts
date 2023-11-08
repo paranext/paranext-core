@@ -21,9 +21,7 @@ const { logger } = papi;
 
 logger.info('Hello world is importing!');
 
-/**
- * Simple web view provider that provides sample html web views when papi requests them
- */
+/** Simple web view provider that provides sample html web views when papi requests them */
 const htmlWebViewProvider: IWebViewProviderWithType = {
   webViewType: 'helloWorld.html',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
@@ -42,9 +40,7 @@ const htmlWebViewProvider: IWebViewProviderWithType = {
   },
 };
 
-/**
- * Simple web view provider that provides React web views when papi requests them
- */
+/** Simple web view provider that provides React web views when papi requests them */
 const reactWebViewProvider: IWebViewProviderWithType = {
   webViewType: 'helloWorld.react',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
@@ -66,9 +62,7 @@ const reactWebViewProvider: IWebViewProviderWithType = {
   },
 };
 
-/**
- * Simple web view provider that provides other React web views when papi requests them
- */
+/** Simple web view provider that provides other React web views when papi requests them */
 const reactWebView2Provider: IWebViewProviderWithType = {
   webViewType: 'helloWorld.react2',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
