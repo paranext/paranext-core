@@ -5,11 +5,12 @@ import {
   ProjectDataProviderEngineFactory,
 } from '@shared/models/project-data-provider-engine.model';
 import networkObjectService from '@shared/services/network-object.service';
-import dataProviderService from '@shared/services/data-provider.service';
+import { getByType, registerEngineByType } from '@shared/services/data-provider.service';
 import { newNonce } from '@shared/utils/util';
 import { Dispose } from '@shared/models/disposal.model';
 import UnsubscriberAsyncList from '@shared/utils/unsubscriber-async-list';
-import projectLookupService from './project-lookup.service';
+import projectLookupService from '@shared/services/project-lookup.service';
+import logger from '@shared/services/logger.service';
 
 class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
   private readonly pdpIds: Map<string, string> = new Map();
@@ -58,7 +59,7 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
     if (!('getExtensionData' in projectDataProviderEngine))
       throw new Error('projectDataProviderEngine must implement "MandatoryProjectDataTypes"');
     const pdpId: string = `${newNonce()}-pdp`;
-    const pdp = await dataProviderService.registerEngine<ProjectDataTypes[ProjectType]>(
+    const pdp = await registerEngineByType<ProjectDataTypes[ProjectType]>(
       pdpId,
       projectDataProviderEngine,
     );
@@ -99,25 +100,44 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
  * pdp.getVerse(new VerseRef('JHN', '1', '1'));
  * ```
  *
+ * @example
+ *
+ * ```typescript
+ * const pdp = await getProjectDataProvider('ProjectID12345', 'ParatextStandard');
+ * pdp.getVerse(new VerseRef('JHN', '1', '1'));
+ * ```
+ *
+ * @type `ProjectType` - The `projectType` of the project whose data to retrieve. Alternatively,
+ *   specify this as the second argument to this function for Intellisense support
  * @param projectId ID for the project to load
+ * @param projectType Indicates what you expect the `projectType` to be for the project with the
+ *   specified id. Currently, this does nothing but indicate to TypeScript what type the Project
+ *   Data Provider is. This is an alternative way to specify the `ProjectType` generic type.
+ *   Optional.
  * @returns Data provider with types that are associated with the given project type
  */
 export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
   projectId: string,
+  projectType?: ProjectType,
 ): Promise<ProjectDataProvider[ProjectType]> {
   const metadata = await projectLookupService.getMetadataForProject(projectId);
-  const { projectType } = metadata;
-  const pdpFactoryId: string = getProjectDataProviderFactoryId(projectType);
+  const { projectType: projectTypeFromMetadata } = metadata;
+  if (projectType && projectType !== projectTypeFromMetadata)
+    logger.warn(
+      `Project type for project ${projectId} is ${projectTypeFromMetadata}, but getProjectDataProvider was run with mismatching projectType ${projectType}. This could cause issues`,
+    );
+  const pdpFactoryId: string = getProjectDataProviderFactoryId(projectTypeFromMetadata);
   const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<ProjectType>>(
     pdpFactoryId,
   );
-  if (!pdpFactory) throw new Error(`Cannot create project data providers of type ${projectType}`);
+  if (!pdpFactory)
+    throw new Error(`Cannot create project data providers of type ${projectTypeFromMetadata}`);
 
   // TODO: Get the appropriate PSI ID and pass it into pdpFactory.getProjectDataProviderId instead
   // of the storageType. https://github.com/paranext/paranext-core/issues/367
   const { storageType } = metadata;
   const pdpId = await pdpFactory.getProjectDataProviderId(projectId, storageType);
-  const pdp = await dataProviderService.get<ProjectDataProvider[ProjectType]>(pdpId);
+  const pdp = await getByType<ProjectDataProvider[ProjectType]>(pdpId);
   if (!pdp) throw new Error(`Cannot create project data provider for project ID ${projectId}`);
   return pdp;
 }

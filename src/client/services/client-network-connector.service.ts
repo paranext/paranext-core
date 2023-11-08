@@ -324,6 +324,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
         {
           data: message as unknown as string,
         } as MessageEvent,
+        /* eslint-enable */
         true,
       );
     } else {

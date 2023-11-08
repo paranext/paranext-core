@@ -1,6 +1,3 @@
-/* eslint-disable vars-on-top */
-/* eslint-disable no-var */
-
 import { LogLevel } from 'electron-log';
 import { FunctionComponent } from 'react';
 import {
@@ -17,6 +14,7 @@ import {
  * (renderer), and extension-host.ts (extension host)
  */
 
+/* eslint-disable vars-on-top, no-var */
 declare global {
   /** Type of process this is. Helps with running specific code based on which process you're in */
   var processType: ProcessType;
@@ -56,6 +54,7 @@ declare global {
   /** JSDOC DESTINATION UpdateWebViewDefinition */
   var updateWebViewDefinition: UpdateWebViewDefinition;
 }
+/* eslint-enable */
 
 /** Type of Paranext process */
 // eslint-disable-next-line import/prefer-default-export

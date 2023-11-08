@@ -5,7 +5,6 @@ import { ScriptureReference } from 'papi-components';
 import { JSX, useMemo } from 'react';
 import UsxEditor from 'usxeditor';
 import type { WebViewProps } from 'shared/data/web-view.model';
-import { ProjectDataTypes } from 'papi-shared-types';
 
 /** Characteristics of a marker style */
 interface StyleInfo {
@@ -162,11 +161,7 @@ globalThis.webViewComponent = function ResourceViewer({
 
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  const [usx, setUsx] = useProjectData.ChapterUSX<
-    ProjectDataTypes['ParatextStandard'],
-    'ChapterUSX'
-  >(
-    projectId,
+  const [usx, setUsx] = useProjectData(projectId, 'ParatextStandard').ChapterUSX(
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
   );

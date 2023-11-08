@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import IDataProvider from '@shared/models/data-provider.interface';
 import { isString } from '@shared/utils/util';
 import dataProviderService from '@shared/services/data-provider.service';
 import logger from '@shared/services/logger.service';
+import { DataProviderNames, DataProviders } from 'papi-shared-types';
 
 /**
  * Gets an array of data providers based on an array of input sources
@@ -29,11 +29,18 @@ import logger from '@shared/services/logger.service';
  */
 // We don't know what types the data providers serve
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProviderMulti<T extends IDataProvider<any>[]>(
-  dataProviderSources: (string | T[number] | undefined)[],
-): (T[number] | undefined)[] {
-  type InputType = string | T[number] | undefined;
-  type OutputType = T[number] | undefined;
+function useDataProviderMulti<EachDataProviderName extends DataProviderNames[]>(
+  dataProviderSources: (
+    | EachDataProviderName[number]
+    | DataProviders[EachDataProviderName[number]]
+    | undefined
+  )[],
+): (DataProviders[EachDataProviderName[number]] | undefined)[] {
+  type InputType =
+    | EachDataProviderName[number]
+    | DataProviders[EachDataProviderName[number]]
+    | undefined;
+  type OutputType = DataProviders[EachDataProviderName[number]] | undefined;
 
   const [dataProviders, setDataProviders] = useState(() =>
     Array<OutputType>(dataProviderSources.length),

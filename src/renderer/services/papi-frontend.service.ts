@@ -71,6 +71,8 @@ const papi = {
   /** JSDOC DESTINATION settingsService */
   settings: settingsService as SettingsService,
 };
+/* eslint-enable */
+
 export default papi;
 
 // If you add to the PAPI you need to add to this

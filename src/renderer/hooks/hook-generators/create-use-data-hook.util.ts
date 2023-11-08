@@ -1,5 +1,4 @@
 import {
-  DataProviderDataTypes,
   DataProviderSetter,
   DataProviderSubscriber,
   DataProviderSubscriberOptions,
@@ -11,45 +10,92 @@ import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
 import { useMemo, useState } from 'react';
 import { PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.model';
 import { isString } from '@shared/utils/util';
+import ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
 
 /**
- * Proxy object that provides hooks to use data provider data with various data types
+ * The final function called as part of the `useData` hook that is the actual React hook
  *
- * @example `useData.Greeting<PeopleDataTypes, 'Greeting'>(...);`
- *
- * @type `TDataTypes` - The data provider data types served by the data provider whose data to use.
- * @type `TDataType` - The specific data type on this data provider that you want to use. Must match
- *   the data type specified in `useData.<data_type>`
+ * This is the `.Greeting(...)` part of `useData('helloSomeone.people').Greeting(...)`
  */
-export type UseDataHook = {
-  [DataType in string]: <
-    TDataTypes extends DataProviderDataTypes,
-    TDataType extends keyof TDataTypes,
-  >(
-    dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
-    selector: TDataTypes[TDataType]['selector'],
-    defaultValue: TDataTypes[TDataType]['getData'],
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ) => [
-    TDataTypes[TDataType]['getData'],
-    (
-      | ((
-          newData: TDataTypes[TDataType]['setData'],
-        ) => Promise<DataProviderUpdateInstructions<TDataTypes>>)
-      | undefined
-    ),
-    boolean,
-  ];
+type UseDataFunctionWithProviderType<
+  // Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  TDataProvider extends IDataProvider<any>,
+  TDataType extends keyof ExtractDataProviderDataTypes<TDataProvider>,
+> = (
+  selector: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['selector'],
+  defaultValue: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
+  subscriberOptions?: DataProviderSubscriberOptions,
+) => [
+  ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
+  (
+    | ((
+        newData: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['setData'],
+      ) => Promise<DataProviderUpdateInstructions<ExtractDataProviderDataTypes<TDataProvider>>>)
+    | undefined
+  ),
+  boolean,
+];
+
+/**
+ * A proxy that serves the actual hooks for a single data provider
+ *
+ * This is the `useData('helloSomeone.people')` part of
+ * `useData('helloSomeone.people').Greeting(...)`
+ */
+// Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type UseDataProxy<TDataProvider extends IDataProvider<any>> = {
+  [TDataType in keyof ExtractDataProviderDataTypes<TDataProvider>]: UseDataFunctionWithProviderType<
+    TDataProvider,
+    TDataType
+  >;
 };
 
+/**
+ * React hook to use data provider data with various data types
+ *
+ * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
+ *
+ * @type `TDataProvider` - The type of data provider to get. Use
+ *   `IDataProvider<TDataProviderDataTypes>`, specifying your own types, or provide a custom data
+ *   provider type
+ */
+type UseDataHookGeneric = {
+  <
+    // Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TDataProvider extends IDataProvider<any>,
+  >(
+    dataProviderSource: string | TDataProvider | undefined,
+  ): UseDataProxy<TDataProvider>;
+};
+
+/**
+ * Create a `useData(...).DataType(selector, defaultValue, options)` hook for a specific subset of
+ * data providers as supported by `useDataProviderHook`
+ *
+ * @param useDataProviderHook Hook that gets a data provider from a specific subset of data
+ *   providers
+ * @returns `useData` hook for getting data from a data provider
+ */
 function createUseDataHook(
   useDataProviderHook: (
     dataProviderSource: string | IDataProvider | undefined,
   ) => IDataProvider | undefined,
-): UseDataHook {
-  function createUseDataHookForDataTypeInternal(dataType: string) {
-    return <TDataTypes extends DataProviderDataTypes, TDataType extends typeof dataType>(
-      dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
+): UseDataHookGeneric {
+  function createUseDataHookForDataProviderInternal<
+    // Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TDataProvider extends IDataProvider<any>,
+  >(
+    dataProviderSource: string | TDataProvider | undefined,
+    dataType: keyof ExtractDataProviderDataTypes<TDataProvider>,
+  ): UseDataFunctionWithProviderType<TDataProvider, typeof dataType> {
+    return <
+      TDataTypes extends ExtractDataProviderDataTypes<TDataProvider>,
+      TDataType extends typeof dataType,
+    >(
       selector: TDataTypes[TDataType]['selector'],
       defaultValue: TDataTypes[TDataType]['getData'],
       subscriberOptions?: DataProviderSubscriberOptions,
@@ -144,39 +190,65 @@ function createUseDataHook(
     };
   }
 
-  // People can make whatever data hook they want
-  const useDataCachedHooks: UseDataHook = {};
+  // People can make whatever data hook they want. We don't have type information here
+  /** Map of Data Provider Source to use data provider hook proxy */
+  const useDataCachedHooks = new Map<
+    string | IDataProvider | undefined,
+    UseDataProxy<IDataProvider>
+  >();
 
-  const useData: UseDataHook = new Proxy(useDataCachedHooks, {
-    get(obj, prop) {
-      // Pass promises through. Assert type of `prop` to index `obj`.
+  const useData: UseDataHookGeneric = <
+    // Seems TypeScript doesn't like using a generic string to index DataProviderDataTypes
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TDataProvider extends IDataProvider<any>,
+  >(
+    dataProviderSource: string | TDataProvider | undefined,
+  ) => {
+    if (useDataCachedHooks.has(dataProviderSource))
+      // We just determined that it exists, so assert that it is not `undefined`
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      if (prop === 'then') return obj[prop as keyof typeof obj];
+      return useDataCachedHooks.get(dataProviderSource)!;
 
-      // Special react prop to tell if it's a component
-      if (prop === '$$typeof') return undefined;
-
-      // If we have already generated the hook, return the cached version
-      if (prop in useDataCachedHooks)
-        // Assert type of `prop` to index `useDataCachedHooks`.
+    // The object has nothing in it, but it's about to be proxied to have stuff
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const useDataHooksForProvider = {} as UseDataProxy<TDataProvider>;
+    const useDataProxy = new Proxy(useDataHooksForProvider, {
+      get(obj, prop) {
+        // Pass promises through. Assert type of `prop` to index `obj`.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        return useDataCachedHooks[prop as keyof typeof useDataCachedHooks];
+        if (prop === 'then') return obj[prop as keyof typeof obj];
 
-      // Build a new useData hook
-      if (!isString(prop)) throw new Error('Must provide a string to the useData hook proxy');
+        // Special react prop to tell if it's a component
+        if (prop === '$$typeof') return undefined;
 
-      const newHook = createUseDataHookForDataTypeInternal(prop);
+        // If we have already generated the hook, return the cached version
+        if (prop in useDataHooksForProvider)
+          // Assert type of `prop` to index `useDataHooksForProvider`.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          return useDataHooksForProvider[prop as keyof typeof useDataHooksForProvider];
 
-      // Save the hook in the cache to be used later
-      useDataCachedHooks[prop] = newHook;
+        // Build a new useData hook
+        if (!isString(prop)) throw new Error('Must provide a string to the useData hook proxy');
 
-      return newHook;
-    },
-    set() {
-      // Doing this makes no sense
-      throw new Error('Cannot set useData hook');
-    },
-  });
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const dataType = prop as keyof ExtractDataProviderDataTypes<TDataProvider>;
+
+        const newHook = createUseDataHookForDataProviderInternal(dataProviderSource, dataType);
+
+        // Save the hook in the cache to be used later
+        useDataHooksForProvider[dataType] = newHook;
+
+        return newHook;
+      },
+      set() {
+        // Doing this makes no sense
+        throw new Error('Cannot set useData hook');
+      },
+    });
+
+    useDataCachedHooks.set(dataProviderSource, useDataProxy);
+    return useDataProxy;
+  };
   return useData;
 }
 

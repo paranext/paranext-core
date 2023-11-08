@@ -1,17 +1,17 @@
-import { VerseRef } from '@sillsdev/scripture';
-import type {
-  DataProviderDataType,
-  DataProviderSubscriberOptions,
-  DataProviderUpdateInstructions,
-} from 'shared/models/data-provider.model';
-import type IDataProvider from 'shared/models/data-provider.interface';
-import type {
-  ExtensionDataScope,
-  MandatoryProjectDataType,
-} from 'shared/models/project-data-provider.model';
-import type { Unsubscriber } from 'shared/utils/papi-util';
-
 declare module 'usfm-data-provider' {
+  import { VerseRef } from '@sillsdev/scripture';
+  import type {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import type IDataProvider from 'shared/models/data-provider.interface';
+  import type {
+    ExtensionDataScope,
+    MandatoryProjectDataType,
+  } from 'shared/models/project-data-provider.model';
+  import type { Unsubscriber } from 'shared/utils/papi-util';
+
   export type UsfmProviderDataTypes = {
     BookNames: DataProviderDataType<boolean, string[], never>;
     Chapter: DataProviderDataType<VerseRef, string | undefined, never>;
@@ -21,9 +21,7 @@ declare module 'usfm-data-provider' {
   };
 
   export type UsfmDataProvider = IDataProvider<UsfmProviderDataTypes>;
-}
 
-declare module 'papi-shared-types' {
   /**
    * Provides project data for Paratext Scripture projects.
    *
@@ -63,10 +61,6 @@ declare module 'papi-shared-types' {
      */
     VerseUSJ: DataProviderDataType<VerseRef, USJDocument | undefined, USJDocument>;
   };
-
-  export interface ProjectDataTypes {
-    ParatextStandard: ParatextStandardProjectDataTypes;
-  }
 
   /**
    * Scripture data represented in JSON format. Transformation from USX
@@ -366,4 +360,16 @@ declare module 'papi-shared-types' {
       options?: DataProviderSubscriberOptions,
     ): Unsubscriber;
   };
+}
+
+declare module 'papi-shared-types' {
+  import type { ParatextStandardProjectDataTypes, UsfmDataProvider } from 'usfm-data-provider';
+
+  export interface ProjectDataTypes {
+    ParatextStandard: ParatextStandardProjectDataTypes;
+  }
+
+  export interface DataProviders {
+    usfm: UsfmDataProvider;
+  }
 }
