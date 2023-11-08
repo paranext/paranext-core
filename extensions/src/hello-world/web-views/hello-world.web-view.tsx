@@ -11,14 +11,10 @@ import {
   Table,
   ScriptureReference,
 } from 'papi-components';
-import type { QuickVerseDataTypes } from 'quick-verse';
-import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
-import type { UsfmProviderDataTypes } from 'usfm-data-provider';
 import { Key, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
 import type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
 import type { WebViewProps } from 'shared/data/web-view.model';
-import { ProjectDataTypes } from 'papi-shared-types';
 import Clock from './components/clock.component';
 import Logo from '../assets/offline.svg';
 
@@ -121,8 +117,7 @@ globalThis.webViewComponent = function HelloWorld({
     }).current,
   );
 
-  const [latestVerseText] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
-    'quickVerse.quickVerse',
+  const [latestVerseText] = useData('quickVerse.quickVerse').Verse(
     'latest',
     'Loading latest Scripture text...',
   );
@@ -141,32 +136,26 @@ globalThis.webViewComponent = function HelloWorld({
 
   const [name, setName] = useState('Bill');
 
-  const peopleDataProvider = useDataProvider<PeopleDataProvider>('helloSomeone.people');
+  const peopleDataProvider = useDataProvider('helloSomeone.people');
 
-  const [personGreeting] = useData.Greeting<PeopleDataTypes, 'Greeting'>(
-    'helloSomeone.people',
-    name,
-    'Greeting loading',
-  );
+  const [personGreeting] = useData('helloSomeone.people').Greeting(name, 'Greeting loading');
 
-  const [personAge] = useData.Age<PeopleDataTypes, 'Age'>('helloSomeone.people', name, -1);
+  const [personAge] = useData('helloSomeone.people').Age(name, -1);
 
-  const [psalm1] = useData.Chapter<UsfmProviderDataTypes, 'Chapter'>(
-    'usfm',
+  const [psalm1] = useData('usfm').Chapter(
     useMemo(() => new VerseRef('PSA', '1', '1', ScrVers.English), []),
     'Loading Psalm 1...',
   );
 
-  const [john11] = useData.Verse<UsfmProviderDataTypes, 'Verse'>(
-    'usfm',
+  const [john11] = useData('usfm').Verse(
     useMemo(() => new VerseRef('JHN 1:1'), []),
     'Loading John 1:1...',
   );
 
-  const [currentProjectVerse] = useProjectData.VerseUSFM<
-    ProjectDataTypes['ParatextStandard'],
-    'VerseUSFM'
-  >(project ?? undefined, verseRef, 'Loading Verse');
+  const [currentProjectVerse] = useProjectData(project ?? undefined, 'ParatextStandard').VerseUSFM(
+    verseRef,
+    'Loading Verse',
+  );
 
   return (
     <div>
@@ -174,8 +163,8 @@ globalThis.webViewComponent = function HelloWorld({
         Hello World <span className="framework">React</span>
         {/**
          * Note: `Logo` here is inlined into this code as a `data:` url. This is here simply for
-         * demonstration purposes. Inlining as a `data:` url is generally not recommended. Rather,
-         * it is generally better to use `papi-extension:` to avoid unnecessary bloat
+         * demonstration purposes. Inlining as a `data:` url is generally not recommended. Rather, it is
+         * generally better to use `papi-extension:` to avoid unnecessary bloat
          */}
         <img width={16} height={16} src={`${Logo}`} alt="Hello World Logo" />
       </div>

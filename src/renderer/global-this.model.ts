@@ -58,8 +58,7 @@ type ReactDOMClientType = typeof ReactDOMClient;
 type SillsdevScriptureType = typeof SillsdevScripture;
 type WebViewRequire = typeof webViewRequire;
 
-/* eslint-disable vars-on-top */
-/* eslint-disable no-var */
+/* eslint-disable vars-on-top, no-var */
 declare global {
   var papi: Papi;
   var React: typeof React;

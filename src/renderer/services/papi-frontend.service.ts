@@ -71,6 +71,8 @@ const papi = {
   /** JSDOC DESTINATION settingsService */
   settings: settingsService as SettingsService,
 };
+/* eslint-enable */
+
 export default papi;
 
 export type Papi = typeof papi;

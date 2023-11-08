@@ -4,7 +4,6 @@ import { ScriptureReference } from 'papi-components';
 import { JSX, useMemo } from 'react';
 import UsxEditor from 'usxeditor';
 import type { WebViewProps } from 'shared/data/web-view.model';
-import { ProjectDataTypes } from 'papi-shared-types';
 
 /** Characteristics of a marker style */
 interface StyleInfo {
@@ -12,7 +11,10 @@ interface StyleInfo {
   style: string;
   /** Whether this marker style can be closed (e.g. \nd and \nd*). In-line styles only. */
   canClose?: boolean;
-  /** Whether this marker style only applies to the word following it (e.g. \v 2). In-line styles only. */
+  /**
+   * Whether this marker style only applies to the word following it (e.g. \v 2). In-line styles
+   * only.
+   */
   oneWord?: boolean;
 }
 
@@ -20,7 +22,10 @@ interface StyleInfo {
 interface ElementInfo {
   /** Whether the element should be considered within one line or should be a block of text */
   inline?: boolean;
-  /** Marker styles for this element. All marker styles should be unique. There should not be a marker style repeated between two elements. */
+  /**
+   * Marker styles for this element. All marker styles should be unique. There should not be a
+   * marker style repeated between two elements.
+   */
   validStyles?: StyleInfo[];
 }
 
@@ -162,11 +167,7 @@ globalThis.webViewComponent = function ResourceViewer({
 
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  const [usx, setUsx] = useProjectData.ChapterUSX<
-    ProjectDataTypes['ParatextStandard'],
-    'ChapterUSX'
-  >(
-    projectId,
+  const [usx, setUsx] = useProjectData(projectId, 'ParatextStandard').ChapterUSX(
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
   );

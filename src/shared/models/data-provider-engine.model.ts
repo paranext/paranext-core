@@ -100,6 +100,7 @@ export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
  * }
  * ```
  */
+// Try using DataProviderName here instead of TDataTypes?
 type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
   NetworkableObject &
     /**

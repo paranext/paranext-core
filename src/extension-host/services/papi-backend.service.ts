@@ -71,4 +71,6 @@ const papi = {
   /** JSDOC DESTINATION extensionStorageService */
   storage: extensionStorageService as ExtensionStorageService,
 };
+/* eslint-enable */
+
 export default papi;

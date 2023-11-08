@@ -21,7 +21,7 @@ import IDataProvider from '@shared/models/data-provider.interface';
 const useProjectDataProvider = createUseNetworkObjectHook(
   papiFrontendProjectDataProviderService.getProjectDataProvider,
 ) as <ProjectType extends ProjectTypes>(
-  projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+  projectDataProviderSource: ProjectType | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
 ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
 
 export default useProjectDataProvider;

@@ -5,7 +5,6 @@ import type {
   WebViewDefinition,
   SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
-import type { PeopleDataProvider } from 'hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 import type PapiEventEmitter from 'shared/models/papi-event-emitter.model';
 import type { HelloWorldEvent } from 'hello-world';
@@ -21,9 +20,7 @@ const { logger } = papi;
 
 logger.info('Hello world is importing!');
 
-/**
- * Simple web view provider that provides sample html web views when papi requests them
- */
+/** Simple web view provider that provides sample html web views when papi requests them */
 const htmlWebViewProvider: IWebViewProviderWithType = {
   webViewType: 'helloWorld.html',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
@@ -42,9 +39,7 @@ const htmlWebViewProvider: IWebViewProviderWithType = {
   },
 };
 
-/**
- * Simple web view provider that provides React web views when papi requests them
- */
+/** Simple web view provider that provides React web views when papi requests them */
 const reactWebViewProvider: IWebViewProviderWithType = {
   webViewType: 'helloWorld.react',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
@@ -66,9 +61,7 @@ const reactWebViewProvider: IWebViewProviderWithType = {
   },
 };
 
-/**
- * Simple web view provider that provides other React web views when papi requests them
- */
+/** Simple web view provider that provides other React web views when papi requests them */
 const reactWebView2Provider: IWebViewProviderWithType = {
   webViewType: 'helloWorld.react2',
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
@@ -149,7 +142,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   papi.webViews.getWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
   papi.webViews.getWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
 
-  const peopleDataProvider = await papi.dataProvider.get<PeopleDataProvider>('helloSomeone.people');
+  const peopleDataProvider = await papi.dataProvider.get('helloSomeone.people');
 
   if (peopleDataProvider) {
     // Test subscribing to a data provider

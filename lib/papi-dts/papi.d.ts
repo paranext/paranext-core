@@ -2194,19 +2194,244 @@ declare module 'shared/models/project-data-provider.model' {
     ExtensionData: DataProviderDataType<ExtensionDataScope, string | undefined, string>;
   };
 }
+declare module 'shared/models/data-provider.interface' {
+  import {
+    DataProviderDataTypes,
+    DataProviderGetters,
+    DataProviderSetters,
+    DataProviderSubscribers,
+  } from 'shared/models/data-provider.model';
+  import { Dispose, OnDidDispose } from 'shared/models/disposal.model';
+  /**
+   * An object on the papi that manages data and has methods for interacting with that data. Created
+   * by the papi and layers over an IDataProviderEngine provided by an extension. Returned from
+   * getting a data provider with dataProviderService.get.
+   *
+   * Note: each `set<data_type>` method has a corresponding `get<data_type>` and
+   * `subscribe<data_type>` method.
+   */
+  type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    DataProviderSetters<TDataTypes> &
+      DataProviderGetters<TDataTypes> &
+      DataProviderSubscribers<TDataTypes> &
+      OnDidDispose;
+  export default IDataProvider;
+  /**
+   * A data provider that has control over disposing of it with dispose. Returned from registering a
+   * data provider (only the service that set it up should dispose of it) with
+   * dataProviderService.registerEngine
+   *
+   * @see IDataProvider
+   */
+  export type IDisposableDataProvider<TDataProvider extends IDataProvider<any>> = TDataProvider &
+    Dispose;
+}
+declare module 'shared/models/data-provider-engine.model' {
+  import {
+    DataProviderDataTypes,
+    DataProviderGetters,
+    DataProviderUpdateInstructions,
+    DataProviderSetters,
+  } from 'shared/models/data-provider.model';
+  import { NetworkableObject } from 'shared/models/network-object.model';
+  /**
+   * Method to run to send clients updates for a specific data type outside of the `set<data_type>`
+   * method. papi overwrites this function on the DataProviderEngine itself to emit an update after
+   * running the `notifyUpdate` method in the DataProviderEngine.
+   *
+   * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
+   * data provider engine):
+   *
+   * ```typescript
+   * this.notifyUpdate(['Verse', 'Heresy']);
+   * ```
+   *
+   * @example You can log the manual updates in your data provider engine by specifying the
+   * following `notifyUpdate` function in the data provider engine:
+   *
+   * ```typescript
+   * notifyUpdate(updateInstructions) {
+   * papi.logger.info(updateInstructions);
+   * }
+   * ```
+   *
+   * Note: This function's return is treated the same as the return from `set<data_type>`
+   *
+   * @param updateInstructions Information that papi uses to interpret whether to send out updates.
+   *   Defaults to `'*'` (meaning send updates for all data types) if parameter `updateInstructions`
+   *   is not provided or is undefined. Otherwise returns `updateInstructions`. papi passes the
+   *   interpreted update value into this `notifyUpdate` function. For example, running
+   *   `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
+   *   `updateInstructions` of `'*'`.
+   * @see DataProviderUpdateInstructions for more info on the `updateInstructions` parameter
+   *
+   * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
+   * It will create a destructive infinite loop.
+   */
+  export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTypes> = (
+    updateInstructions?: DataProviderUpdateInstructions<TDataTypes>,
+  ) => void;
+  /**
+   * Addon type for IDataProviderEngine to specify that there is a `notifyUpdate` method on the data
+   * provider engine. You do not need to specify this type unless you are creating an object that is
+   * to be registered as a data provider engine and you need to use `notifyUpdate`.
+   *
+   * @see DataProviderEngineNotifyUpdate for more information on `notifyUpdate`.
+   * @see IDataProviderEngine for more information on using this type.
+   */
+  export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
+    /**
+     * Method to run to send clients updates for a specific data type outside of the
+     * `set<data_type>` method. papi overwrites this function on the DataProviderEngine itself to
+     * emit an update after running the `notifyUpdate` method in the DataProviderEngine.
+     *
+     * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
+     * data provider engine):
+     *
+     * ```typescript
+     * this.notifyUpdate(['Verse', 'Heresy']);
+     * ```
+     *
+     * @example You can log the manual updates in your data provider engine by specifying the
+     * following `notifyUpdate` function in the data provider engine:
+     *
+     * ```typescript
+     * notifyUpdate(updateInstructions) {
+     * papi.logger.info(updateInstructions);
+     * }
+     * ```
+     *
+     * Note: This function's return is treated the same as the return from `set<data_type>`
+     *
+     * @param updateInstructions Information that papi uses to interpret whether to send out
+     *   updates. Defaults to `'*'` (meaning send updates for all data types) if parameter
+     *   `updateInstructions` is not provided or is undefined. Otherwise returns
+     *   `updateInstructions`. papi passes the interpreted update value into this `notifyUpdate`
+     *   function. For example, running `this.notifyUpdate()` will call the data provider engine's
+     *   `notifyUpdate` with `updateInstructions` of `'*'`.
+     * @see DataProviderUpdateInstructions for more info on the `updateInstructions` parameter
+     *
+     * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
+     * It will create a destructive infinite loop.
+     */
+    notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
+  };
+  /**
+   * The object to register with the DataProviderService to create a data provider. The
+   * DataProviderService creates an IDataProvider on the papi that layers over this engine,
+   * providing special functionality.
+   *
+   * @type TDataTypes - The data types that this data provider engine serves. For each data type
+   *   defined, the engine must have corresponding `get<data_type>` and `set<data_type> function`
+   *   functions.
+   * @see DataProviderDataTypes for information on how to make powerful types that work well with
+   * Intellisense.
+   *
+   * Note: papi creates a `notifyUpdate` function on the data provider engine if one is not provided, so it
+   * is not necessary to provide one in order to call `this.notifyUpdate`. However, TypeScript does
+   * not understand that papi will create one as you are writing your data provider engine, so you can
+   * avoid type errors with one of the following options:
+   *
+   * 1. If you are using an object or class to create a data provider engine, you can add a
+   * `notifyUpdate` function (and, with an object, add the WithNotifyUpdate type) to
+   * your data provider engine like so:
+   * ```typescript
+   * const myDPE: IDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
+   *   notifyUpdate(updateInstructions) {},
+   *   ...
+   * }
+   * ```
+   * OR
+   * ```typescript
+   * class MyDPE implements IDataProviderEngine<MyDataTypes> {
+   *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
+   *   ...
+   * }
+   * ```
+   *
+   * 2. If you are using a class to create a data provider engine, you can extend the `DataProviderEngine`
+   * class, and it will provide `notifyUpdate` for you:
+   * ```typescript
+   * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
+   *   ...
+   * }
+   * ```
+   */
+  type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+    NetworkableObject &
+      /**
+       * Set of all `set<data_type>` methods that a data provider engine must provide according to
+       * its data types. papi overwrites this function on the DataProviderEngine itself to emit an
+       * update after running the defined `set<data_type>` method in the DataProviderEngine.
+       *
+       * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
+       * method.
+       *
+       * Note: to make a data type read-only, you can always return false or throw from
+       * `set<data_type>`.
+       *
+       * WARNING: Do not run this recursively in its own `set<data_type>` method! It will create as
+       * many updates as you run `set<data_type>` methods.
+       *
+       * @see DataProviderSetter for more information
+       */
+      DataProviderSetters<TDataTypes> &
+      /**
+       * Set of all `get<data_type>` methods that a data provider engine must provide according to
+       * its data types. Run by the data provider on `get<data_type>`
+       *
+       * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
+       * method.
+       *
+       * @see DataProviderGetter for more information
+       */
+      DataProviderGetters<TDataTypes> &
+      Partial<WithNotifyUpdate<TDataTypes>>;
+  export default IDataProviderEngine;
+}
+declare module 'shared/models/extract-data-provider-data-types.model' {
+  import IDataProviderEngine from 'shared/models/data-provider-engine.model';
+  import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
+  import DataProviderInternal from 'shared/models/data-provider.model';
+  /**
+   * Get the `DataProviderDataTypes` associated with the `IDataProvider` - essentially, returns
+   * `TDataTypes` from `IDataProvider<TDataTypes>`.
+   *
+   * Works with generic types `IDataProvider`, `DataProviderInternal`, `IDisposableDataProvider`,
+   * and `IDataProviderEngine` along with the `papi-shared-types` extensible interfaces
+   * `DataProviders` and `DisposableDataProviders`
+   */
+  type ExtractDataProviderDataTypes<TDataProvider> = TDataProvider extends IDataProvider<
+    infer TDataProviderDataTypes
+  >
+    ? TDataProviderDataTypes
+    : TDataProvider extends DataProviderInternal<infer TDataProviderDataTypes>
+    ? TDataProviderDataTypes
+    : TDataProvider extends IDisposableDataProvider<infer TDataProviderDataTypes>
+    ? TDataProviderDataTypes
+    : TDataProvider extends IDataProviderEngine<infer TDataProviderDataTypes>
+    ? TDataProviderDataTypes
+    : never;
+  export default ExtractDataProviderDataTypes;
+}
 declare module 'papi-shared-types' {
-  import { ScriptureReference } from 'papi-components';
+  import type { ScriptureReference } from 'papi-components';
   import type { DataProviderDataType } from 'shared/models/data-provider.model';
   import type { MandatoryProjectDataType } from 'shared/models/project-data-provider.model';
+  import type { IDisposableDataProvider } from 'shared/models/data-provider.interface';
+  import type IDataProvider from 'shared/models/data-provider.interface';
+  import type ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
-   * to add commands that it registers on the papi.
+   * to add commands that it registers on the papi with `papi.commands.registerCommand`.
    *
    * Note: Command names must consist of two string separated by at least one period. We recommend
    * one period and lower camel case in case we expand the api in the future to allow dot notation.
    *
-   * @example An extension can extend this interface to add types for the commands it registers by
-   * adding the following to its `.d.ts` file:
+   * An extension can extend this interface to add types for the commands it registers by adding the
+   * following to its `.d.ts` file:
+   *
+   * @example
    *
    * ```typescript
    * declare module 'papi-shared-types' {
@@ -2228,11 +2453,9 @@ declare module 'papi-shared-types' {
     'test.throwErrorExtensionHost': (message: string) => void;
   }
   /**
-   * Names for each command available on the papi. Automatically includes all extensions' commands
-   * that are added to {@link CommandHandlers}.
+   * Names for each command available on the papi.
    *
-   * Note: Command names must consist of two string separated by at least one period. We recommend
-   * one period and lower camel case in case we expand the api in the future to allow dot notation.
+   * Automatically includes all extensions' commands that are added to {@link CommandHandlers}.
    *
    * @example 'platform.quit';
    */
@@ -2248,7 +2471,7 @@ declare module 'papi-shared-types' {
   };
   /**
    * Data types for each project data provider supported by PAPI. Extensions can add more data types
-   * with corresponding project data provider IDs by adding details to their `d.ts` file. Note that
+   * with corresponding project data provider IDs by adding details to their `.d.ts` file. Note that
    * all project data types should extend `MandatoryProjectDataTypes` like the following example.
    *
    * @example
@@ -2275,6 +2498,100 @@ declare module 'papi-shared-types' {
    * to the set of project types available in Paratext.
    */
   type ProjectTypes = keyof ProjectDataTypes;
+  type StuffDataTypes = {
+    Stuff: DataProviderDataType<string, number, never>;
+  };
+  type PlaceholderDataTypes = {
+    Placeholder: DataProviderDataType<
+      {
+        thing: number;
+      },
+      string[],
+      number
+    >;
+  };
+  /**
+   * `IDataProvider` types for each data provider supported by PAPI. Extensions can add more data
+   * providers with corresponding data provider IDs by adding details to their `.d.ts` file and
+   * registering a data provider engine in their `activate` function with
+   * `papi.dataProvider.registerEngine`.
+   *
+   * Note: Data Provider names must consist of two string separated by at least one period. We
+   * recommend one period and lower camel case in case we expand the api in the future to allow dot
+   * notation.
+   *
+   * An extension can extend this interface to add types for the data provider it registers by
+   * adding the following to its `.d.ts` file (in this example, we are adding the
+   * `'helloSomeone.people'` data provider types):
+   *
+   * @example
+   *
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export type PeopleDataTypes = {
+   *     Greeting: DataProviderDataType<string, string | undefined, string>;
+   *     Age: DataProviderDataType<string, number | undefined, number>;
+   *     People: DataProviderDataType<undefined, PeopleData, never>;
+   *   };
+   *
+   *   export type PeopleDataMethods = {
+   *     deletePerson(name: string): Promise<boolean>;
+   *     testRandomMethod(things: string): Promise<string>;
+   *   };
+   *
+   *   export type PeopleDataProvider = IDataProvider<PeopleDataTypes> & PeopleDataMethods;
+   *
+   *   export interface DataProviders {
+   *     'helloSomeone.people': PeopleDataProvider;
+   *   }
+   * }
+   * ```
+   */
+  interface DataProviders {
+    'platform.stuff': IDataProvider<StuffDataTypes>;
+    'platform.placeholder': IDataProvider<PlaceholderDataTypes>;
+  }
+  /**
+   * Names for each data provider available on the papi.
+   *
+   * Automatically includes all extensions' data providers that are added to {@link DataProviders}.
+   *
+   * @example 'platform.placeholder'
+   */
+  type DataProviderNames = keyof DataProviders;
+  /**
+   * `DataProviderDataTypes` for each data provider supported by PAPI. These are the data types
+   * served by each data provider.
+   *
+   * Automatically includes all extensions' data providers that are added to {@link DataProviders}.
+   *
+   * @example
+   *
+   * ```typescript
+   * DataProviderTypes['helloSomeone.people'] => {
+   *     Greeting: DataProviderDataType<string, string | undefined, string>;
+   *     Age: DataProviderDataType<string, number | undefined, number>;
+   *     People: DataProviderDataType<undefined, PeopleData, never>;
+   *   }
+   * ```
+   */
+  type DataProviderTypes = {
+    [DataProviderName in DataProviderNames]: ExtractDataProviderDataTypes<
+      DataProviders[DataProviderName]
+    >;
+  };
+  /**
+   * Disposable version of each data provider type supported by PAPI. These objects are only
+   * returned from `papi.dataProvider.registerEngine` - only the one who registers a data provider
+   * engine is allowed to dispose of the data provider.
+   *
+   * Automatically includes all extensions' data providers that are added to {@link DataProviders}.
+   */
+  type DisposableDataProviders = {
+    [DataProviderName in DataProviderNames]: IDisposableDataProvider<
+      DataProviders[DataProviderName]
+    >;
+  };
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
@@ -2820,201 +3137,19 @@ declare module 'shared/services/internet.service' {
   const internetService: InternetService;
   export default internetService;
 }
-declare module 'shared/models/data-provider.interface' {
-  import DataProviderInternal, { DataProviderDataTypes } from 'shared/models/data-provider.model';
-  import { DisposableNetworkObject, NetworkObject } from 'shared/models/network-object.model';
-  /**
-   * An object on the papi that manages data and has methods for interacting with that data. Created
-   * by the papi and layers over an IDataProviderEngine provided by an extension. Returned from
-   * getting a data provider with dataProviderService.get.
-   *
-   * Note: each `set<data_type>` method has a corresponding `get<data_type>` and
-   * `subscribe<data_type>` method.
-   */
-  type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-    NetworkObject<DataProviderInternal<TDataTypes>>;
-  export default IDataProvider;
-  /**
-   * A data provider that has control over disposing of it with dispose. Returned from registering a
-   * data provider (only the service that set it up should dispose of it) with
-   * dataProviderService.registerEngine
-   *
-   * @see IDataProvider
-   */
-  export type IDisposableDataProvider<
-    TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
-  > = DisposableNetworkObject<Omit<IDataProvider<TDataTypes>, 'dispose'>>;
-}
-declare module 'shared/models/data-provider-engine.model' {
-  import {
-    DataProviderDataTypes,
-    DataProviderGetters,
-    DataProviderUpdateInstructions,
-    DataProviderSetters,
-  } from 'shared/models/data-provider.model';
-  import { NetworkableObject } from 'shared/models/network-object.model';
-  /**
-   * Method to run to send clients updates for a specific data type outside of the `set<data_type>`
-   * method. papi overwrites this function on the DataProviderEngine itself to emit an update after
-   * running the `notifyUpdate` method in the DataProviderEngine.
-   *
-   * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
-   * data provider engine):
-   *
-   * ```typescript
-   * this.notifyUpdate(['Verse', 'Heresy']);
-   * ```
-   *
-   * @example You can log the manual updates in your data provider engine by specifying the
-   * following `notifyUpdate` function in the data provider engine:
-   *
-   * ```typescript
-   * notifyUpdate(updateInstructions) {
-   * papi.logger.info(updateInstructions);
-   * }
-   * ```
-   *
-   * Note: This function's return is treated the same as the return from `set<data_type>`
-   *
-   * @param updateInstructions Information that papi uses to interpret whether to send out updates.
-   *   Defaults to `'*'` (meaning send updates for all data types) if parameter `updateInstructions`
-   *   is not provided or is undefined. Otherwise returns `updateInstructions`. papi passes the
-   *   interpreted update value into this `notifyUpdate` function. For example, running
-   *   `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
-   *   `updateInstructions` of `'*'`.
-   * @see DataProviderUpdateInstructions for more info on the `updateInstructions` parameter
-   *
-   * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
-   * It will create a destructive infinite loop.
-   */
-  export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTypes> = (
-    updateInstructions?: DataProviderUpdateInstructions<TDataTypes>,
-  ) => void;
-  /**
-   * Addon type for IDataProviderEngine to specify that there is a `notifyUpdate` method on the data
-   * provider engine. You do not need to specify this type unless you are creating an object that is
-   * to be registered as a data provider engine and you need to use `notifyUpdate`.
-   *
-   * @see DataProviderEngineNotifyUpdate for more information on `notifyUpdate`.
-   * @see IDataProviderEngine for more information on using this type.
-   */
-  export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
-    /**
-     * Method to run to send clients updates for a specific data type outside of the
-     * `set<data_type>` method. papi overwrites this function on the DataProviderEngine itself to
-     * emit an update after running the `notifyUpdate` method in the DataProviderEngine.
-     *
-     * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
-     * data provider engine):
-     *
-     * ```typescript
-     * this.notifyUpdate(['Verse', 'Heresy']);
-     * ```
-     *
-     * @example You can log the manual updates in your data provider engine by specifying the
-     * following `notifyUpdate` function in the data provider engine:
-     *
-     * ```typescript
-     * notifyUpdate(updateInstructions) {
-     * papi.logger.info(updateInstructions);
-     * }
-     * ```
-     *
-     * Note: This function's return is treated the same as the return from `set<data_type>`
-     *
-     * @param updateInstructions Information that papi uses to interpret whether to send out
-     *   updates. Defaults to `'*'` (meaning send updates for all data types) if parameter
-     *   `updateInstructions` is not provided or is undefined. Otherwise returns
-     *   `updateInstructions`. papi passes the interpreted update value into this `notifyUpdate`
-     *   function. For example, running `this.notifyUpdate()` will call the data provider engine's
-     *   `notifyUpdate` with `updateInstructions` of `'*'`.
-     * @see DataProviderUpdateInstructions for more info on the `updateInstructions` parameter
-     *
-     * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
-     * It will create a destructive infinite loop.
-     */
-    notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
-  };
-  /**
-   * The object to register with the DataProviderService to create a data provider. The
-   * DataProviderService creates an IDataProvider on the papi that layers over this engine,
-   * providing special functionality.
-   *
-   * @type TDataTypes - The data types that this data provider engine serves. For each data type
-   *   defined, the engine must have corresponding `get<data_type>` and `set<data_type> function`
-   *   functions.
-   * @see DataProviderDataTypes for information on how to make powerful types that work well with
-   * Intellisense.
-   *
-   * Note: papi creates a `notifyUpdate` function on the data provider engine if one is not provided, so it
-   * is not necessary to provide one in order to call `this.notifyUpdate`. However, TypeScript does
-   * not understand that papi will create one as you are writing your data provider engine, so you can
-   * avoid type errors with one of the following options:
-   *
-   * 1. If you are using an object or class to create a data provider engine, you can add a
-   * `notifyUpdate` function (and, with an object, add the WithNotifyUpdate type) to
-   * your data provider engine like so:
-   * ```typescript
-   * const myDPE: IDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
-   *   notifyUpdate(updateInstructions) {},
-   *   ...
-   * }
-   * ```
-   * OR
-   * ```typescript
-   * class MyDPE implements IDataProviderEngine<MyDataTypes> {
-   *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
-   *   ...
-   * }
-   * ```
-   *
-   * 2. If you are using a class to create a data provider engine, you can extend the `DataProviderEngine`
-   * class, and it will provide `notifyUpdate` for you:
-   * ```typescript
-   * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
-   *   ...
-   * }
-   * ```
-   */
-  type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-    NetworkableObject &
-      /**
-       * Set of all `set<data_type>` methods that a data provider engine must provide according to
-       * its data types. papi overwrites this function on the DataProviderEngine itself to emit an
-       * update after running the defined `set<data_type>` method in the DataProviderEngine.
-       *
-       * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
-       * method.
-       *
-       * Note: to make a data type read-only, you can always return false or throw from
-       * `set<data_type>`.
-       *
-       * WARNING: Do not run this recursively in its own `set<data_type>` method! It will create as
-       * many updates as you run `set<data_type>` methods.
-       *
-       * @see DataProviderSetter for more information
-       */
-      DataProviderSetters<TDataTypes> &
-      /**
-       * Set of all `get<data_type>` methods that a data provider engine must provide according to
-       * its data types. Run by the data provider on `get<data_type>`
-       *
-       * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
-       * method.
-       *
-       * @see DataProviderGetter for more information
-       */
-      DataProviderGetters<TDataTypes> &
-      Partial<WithNotifyUpdate<TDataTypes>>;
-  export default IDataProviderEngine;
-}
 declare module 'shared/services/data-provider.service' {
   /** Handles registering data providers and serving data around the papi. Exposed on the papi. */
-  import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
   import { DataProviderDataTypes } from 'shared/models/data-provider.model';
   import IDataProviderEngine, {
     DataProviderEngineNotifyUpdate,
   } from 'shared/models/data-provider-engine.model';
+  import {
+    DataProviderNames,
+    DataProviderTypes,
+    DataProviders,
+    DisposableDataProviders,
+  } from 'papi-shared-types';
+  import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
   /**
    * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If
    * a data provider engine class extends this class, it doesn't have to specify its own
@@ -3101,10 +3236,6 @@ declare module 'shared/services/data-provider.service' {
    * Creates a data provider to be shared on the network layering over the provided data provider
    * engine.
    *
-   * @type `TSelector` - The type of selector used to get some data from this provider. A selector
-   *   is an object a caller provides to the data provider to tell the provider what subset of data
-   *   it wants. Note: A selector must be stringifiable.
-   * @type `TData` - The type of data provided by this data provider based on a provided selector
    * @param providerName Name this data provider should be called on the network
    * @param dataProviderEngine The object to layer over with a new data provider object
    *
@@ -3113,17 +3244,61 @@ declare module 'shared/services/data-provider.service' {
    * @returns The data provider including control over disposing of it. Note that this data provider
    *   is a new object distinct from the data provider engine passed in.
    */
-  function registerEngine<TDataTypes extends DataProviderDataTypes>(
+  function registerEngine<DataProviderName extends DataProviderNames>(
+    providerName: DataProviderName,
+    dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
+  ): Promise<DisposableDataProviders[DataProviderName]>;
+  /**
+   * Create a mock local data provider object for connecting to the remote data provider
+   *
+   * @type `TDataTypes` - The data provider data types served by the data provider to create.
+   *
+   *   This is not exposed on the papi as it is a helper function to enable other services to layer
+   *   over this service and create their own subsets of data providers with other types than
+   *   `DataProviders` types using this function and {@link getByType}
+   * @param dataProviderObjectId Network object id corresponding to this data provider
+   * @param dataProviderContainer Container that holds a reference to the data provider so this
+   *   subscribe function can reference the data provider
+   * @param providerName Name this data provider should be called on the network
+   * @param dataProviderEngine The object to layer over with a new data provider object
+   *
+   *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
+   *   `set` methods are layered over to facilitate data provider subscriptions.
+   * @returns Local data provider object that represents a remote data provider
+   *
+   *   Creates a data provider to be shared on the network layering over the provided data provider
+   *   engine.
+   * @returns The data provider including control over disposing of it. Note that this data provider
+   *   is a new object distinct from the data provider engine passed in.
+   */
+  export function registerEngineByType<TDataTypes extends DataProviderDataTypes>(
     providerName: string,
     dataProviderEngine: IDataProviderEngine<TDataTypes>,
-  ): Promise<IDisposableDataProvider<TDataTypes>>;
+  ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>>;
   /**
    * Get a data provider that has previously been set up
    *
    * @param providerName Name of the desired data provider
    * @returns The data provider with the given name if one exists, undefined otherwise
    */
-  function get<T extends IDataProvider<any>>(providerName: string): Promise<T | undefined>;
+  function get<DataProviderName extends DataProviderNames>(
+    providerName: DataProviderName,
+  ): Promise<DataProviders[DataProviderName] | undefined>;
+  /**
+   * Get a data provider that has previously been set up
+   *
+   * @type `T` - The type of data provider to get. Use `IDataProvider<TDataProviderDataTypes>`,
+   *   specifying your own types, or provide a custom data provider type
+   *
+   *   This is not exposed on the papi as it is a helper function to enable other services to layer
+   *   over this service and create their own subsets of data providers with other types than
+   *   `DataProviders` types using this function and {@link registerEngineByType}
+   * @param providerName Name of the desired data provider
+   * @returns The data provider with the given name if one exists, undefined otherwise
+   */
+  export function getByType<T extends IDataProvider<any>>(
+    providerName: string,
+  ): Promise<T | undefined>;
   export interface DataProviderService {
     hasKnown: typeof hasKnown;
     registerEngine: typeof registerEngine;
@@ -3184,16 +3359,14 @@ declare module 'shared/models/project-data-provider-engine.model' {
   import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
   import type IDataProvider from 'shared/models/data-provider.interface';
   import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  type IDataProviderEngineGeneric<T extends ProjectDataTypes> = {
-    [K in keyof T]: IDataProviderEngine<T[K]>;
-  };
   /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
-  export type ProjectDataProviderEngineTypes = IDataProviderEngineGeneric<ProjectDataTypes>;
-  type IProjectDataProviderGeneric<T extends ProjectDataTypes> = {
-    [K in keyof T]: IDataProvider<T[K]>;
+  export type ProjectDataProviderEngineTypes = {
+    [ProjectType in ProjectTypes]: IDataProviderEngine<ProjectDataTypes[ProjectType]>;
   };
   /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
-  export type ProjectDataProvider = IProjectDataProviderGeneric<ProjectDataTypes>;
+  export type ProjectDataProvider = {
+    [ProjectType in ProjectTypes]: IDataProvider<ProjectDataTypes[ProjectType]>;
+  };
   export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
     createProjectDataProviderEngine(
       projectId: string,
@@ -3253,11 +3426,25 @@ declare module 'shared/services/project-data-provider.service' {
    * pdp.getVerse(new VerseRef('JHN', '1', '1'));
    * ```
    *
+   * @example
+   *
+   * ```typescript
+   * const pdp = await getProjectDataProvider('ProjectID12345', 'ParatextStandard');
+   * pdp.getVerse(new VerseRef('JHN', '1', '1'));
+   * ```
+   *
+   * @type `ProjectType` - The `projectType` of the project whose data to retrieve. Alternatively,
+   *   specify this as the second argument to this function for Intellisense support
    * @param projectId ID for the project to load
+   * @param projectType Indicates what you expect the `projectType` to be for the project with the
+   *   specified id. Currently, this does nothing but indicate to TypeScript what type the Project
+   *   Data Provider is. This is an alternative way to specify the `ProjectType` generic type.
+   *   Optional.
    * @returns Data provider with types that are associated with the given project type
    */
   export function getProjectDataProvider<ProjectType extends ProjectTypes>(
     projectId: string,
+    projectType?: ProjectType,
   ): Promise<ProjectDataProvider[ProjectType]>;
   export interface PapiBackendProjectDataProviderService {
     registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
@@ -3383,7 +3570,7 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
   export default createUseNetworkObjectHook;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
-  import IDataProvider from 'shared/models/data-provider.interface';
+  import { DataProviders } from 'papi-shared-types';
   /**
    * Gets a data provider with specified provider name
    *
@@ -3394,100 +3581,154 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @returns Undefined if the data provider has not been retrieved, data provider if it has been
    *   retrieved and is not disposed, and undefined again if the data provider is disposed
    */
-  const useDataProvider: <T extends IDataProvider<any>>(
-    dataProviderSource: string | T | undefined,
-  ) => T | undefined;
+  const useDataProvider: <DataProviderName extends keyof DataProviders>(
+    dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+  ) => DataProviders[DataProviderName] | undefined;
   export default useDataProvider;
 }
 declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
   import {
-    DataProviderDataTypes,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import IDataProvider from 'shared/models/data-provider.interface';
+  import ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
   /**
-   * Proxy object that provides hooks to use data provider data with various data types
+   * The final function called as part of the `useData` hook that is the actual React hook
    *
-   * @example `useData.Greeting<PeopleDataTypes, 'Greeting'>(...);`
-   *
-   * @type `TDataTypes` - The data provider data types served by the data provider whose data to
-   *   use.
-   * @type `TDataType` - The specific data type on this data provider that you want to use. Must
-   *   match the data type specified in `useData.<data_type>`
+   * This is the `.Greeting(...)` part of `useData('helloSomeone.people').Greeting(...)`
    */
-  export type UseDataHook = {
-    [DataType in string]: <
-      TDataTypes extends DataProviderDataTypes,
-      TDataType extends keyof TDataTypes,
-    >(
-      dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
-      selector: TDataTypes[TDataType]['selector'],
-      defaultValue: TDataTypes[TDataType]['getData'],
-      subscriberOptions?: DataProviderSubscriberOptions,
-    ) => [
-      TDataTypes[TDataType]['getData'],
-      (
-        | ((
-            newData: TDataTypes[TDataType]['setData'],
-          ) => Promise<DataProviderUpdateInstructions<TDataTypes>>)
-        | undefined
-      ),
-      boolean,
-    ];
+  type UseDataFunctionWithProviderType<
+    TDataProvider extends IDataProvider<any>,
+    TDataType extends keyof ExtractDataProviderDataTypes<TDataProvider>,
+  > = (
+    selector: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['selector'],
+    defaultValue: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
+    subscriberOptions?: DataProviderSubscriberOptions,
+  ) => [
+    ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
+    (
+      | ((
+          newData: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['setData'],
+        ) => Promise<DataProviderUpdateInstructions<ExtractDataProviderDataTypes<TDataProvider>>>)
+      | undefined
+    ),
+    boolean,
+  ];
+  /**
+   * A proxy that serves the actual hooks for a single data provider
+   *
+   * This is the `useData('helloSomeone.people')` part of
+   * `useData('helloSomeone.people').Greeting(...)`
+   */
+  type UseDataProxy<TDataProvider extends IDataProvider<any>> = {
+    [TDataType in keyof ExtractDataProviderDataTypes<TDataProvider>]: UseDataFunctionWithProviderType<
+      TDataProvider,
+      TDataType
+    >;
   };
+  /**
+   * React hook to use data provider data with various data types
+   *
+   * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
+   *
+   * @type `TDataProvider` - The type of data provider to get. Use
+   *   `IDataProvider<TDataProviderDataTypes>`, specifying your own types, or provide a custom data
+   *   provider type
+   */
+  type UseDataHookGeneric = {
+    <TDataProvider extends IDataProvider<any>>(
+      dataProviderSource: string | TDataProvider | undefined,
+    ): UseDataProxy<TDataProvider>;
+  };
+  /**
+   * Create a `useData(...).DataType(selector, defaultValue, options)` hook for a specific subset of
+   * data providers as supported by `useDataProviderHook`
+   *
+   * @param useDataProviderHook Hook that gets a data provider from a specific subset of data
+   *   providers
+   * @returns `useData` hook for getting data from a data provider
+   */
   function createUseDataHook(
     useDataProviderHook: (
       dataProviderSource: string | IDataProvider | undefined,
     ) => IDataProvider | undefined,
-  ): UseDataHook;
+  ): UseDataHookGeneric;
   export default createUseDataHook;
 }
 declare module 'renderer/hooks/papi-hooks/use-data.hook' {
-  import { UseDataHook } from 'renderer/hooks/hook-generators/create-use-data-hook.util';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { DataProviderNames, DataProviderTypes, DataProviders } from 'papi-shared-types';
+  /**
+   * React hook to use data from a data provider
+   *
+   * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
+   */
+  type UseDataHook = {
+    <DataProviderName extends DataProviderNames>(
+      dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+    ): {
+      [TDataType in keyof DataProviderTypes[DataProviderName]]: (
+        selector: DataProviderTypes[DataProviderName][TDataType]['selector'],
+        defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
+        subscriberOptions?: DataProviderSubscriberOptions,
+      ) => [
+        DataProviderTypes[DataProviderName][TDataType]['getData'],
+        (
+          | ((
+              newData: DataProviderTypes[DataProviderName][TDataType]['setData'],
+            ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
+          | undefined
+        ),
+        boolean,
+      ];
+    };
+  };
   /**
    * ```typescript
-   * useData.DataType<TDataTypes extends DataProviderDataTypes, TDataType extends keyof TDataTypes>(
-   *   dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
-   *   selector: TDataTypes[TDataType]['selector'],
-   *   defaultValue: TDataTypes[TDataType]['getData'],
-   *   subscriberOptions?: DataProviderSubscriberOptions,
-   * ): [
-   *   TDataTypes[TDataType]['getData'],
-   *   (
-   *     | ((
-   *         newData: TDataTypes[TDataType]['setData'],
-   *       ) => Promise<DataProviderUpdateInstructions<TDataTypes>>)
-   *     | undefined
-   *   ),
-   *   boolean,
-   * ]
+   * useData<DataProviderName extends DataProviderNames>(
+   *     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+   *   ).DataType(
+   *       selector: DataProviderTypes[DataProviderName][DataType]['selector'],
+   *       defaultValue: DataProviderTypes[DataProviderName][DataType]['getData'],
+   *       subscriberOptions?: DataProviderSubscriberOptions,
+   *     ) => [
+   *       DataProviderTypes[DataProviderName][DataType]['getData'],
+   *       (
+   *         | ((
+   *             newData: DataProviderTypes[DataProviderName][DataType]['setData'],
+   *           ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
+   *         | undefined
+   *       ),
+   *       boolean,
+   *     ]
    * ```
    *
-   * Special React hook that subscribes to run a callback on a data provider's data with specified
-   * selector on any data type that data provider serves.
+   * React hook to use data from a data provider. Subscribes to run a callback on a data provider's
+   * data with specified selector on the specified data type that data provider serves.
    *
-   * Usage: Specify the data type on the data provider with `useData.<data_type>` and use like any
-   * other React hook. Specify the generic types in order to receive type support from Intellisense.
-   * For example, `useData.Verse<QuickVerseDataTypes, 'Verse'>` lets you subscribe to verses from a
-   * data provider that serves `QuickVerseDataTypes`.
+   * Usage: Specify the data provider and the data type on the data provider with
+   * `useData('<data_provider>').<data_type>` and use like any other React hook.
    *
-   * _＠example_ When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we
-   * need to tell the useData.Verse hook what types we are using, so we use the
-   * `QuickVerseDataTypes` data types and specify that we are using the `'Verse'` data type as
-   * follows:
+   * _＠example_ Subscribing to Verse data at JHN 11:35 on the `'quickVerse.quickVerse'` data
+   * provider:
    *
    * ```typescript
-   * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<
-   *   QuickVerseDataTypes,
-   *   'Verse'
-   * >('quickVerse.quickVerse', 'JHN 11:35', 'Verse text goes here');
+   * const [verseText, setVerseText, verseTextIsLoading] = useData(
+   *   'quickVerse.quickVerse',
+   * ).Verse('JHN 11:35', 'Verse text goes here');
    * ```
    *
    * _＠param_ `dataProviderSource` string name of data provider to get OR dataProvider (result of
    * useDataProvider if you want to consolidate and only get the data provider once)
    *
    * _＠param_ `selector` tells the provider what data this listener is listening for
+   *
+   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   * updated every render
    *
    * _＠param_ `defaultValue` the initial value to return while first awaiting the data
    *
@@ -3509,12 +3750,6 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *   data.
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
    *   data provider
-   *
-   * _＠type_ `TDataTypes` - the data provider data types served by the data provider whose data to
-   * use.
-   *
-   * _＠type_ `TDataType` - the specific data type on this data provider that you want to use. Must
-   * match the data type specified in `useData.<data_type>`
    */
   const useData: UseDataHook;
   export default useData;
@@ -3610,21 +3845,26 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    * provider will have the project data provider type associated with this project type.
    */
   const useProjectDataProvider: <ProjectType extends keyof ProjectDataTypes>(
-    projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+    projectDataProviderSource:
+      | ProjectType
+      | IDataProvider<ProjectDataTypes[ProjectType]>
+      | undefined,
   ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
   export default useProjectDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   import {
-    DataProviderDataTypes,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import IDataProvider from 'shared/models/data-provider.interface';
+  import { ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
   /**
-   * Proxy object that provides hooks to use project data provider data with various data types
+   * React hook to use data from a project data provider
    *
    * @example `useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'], 'VerseUSFM'>(...);`
+   *
+   * @example `useProjectData('<project_id>', 'ParatextStandard').VerseUSFM(...)`
    *
    * @type `TProjectDataTypes` - The project data types associated with the `projectType` used. You
    *   can specify this type with `ProjectDataTypes['<project_type>']`
@@ -3637,70 +3877,71 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *   because it refused to accept that `'selector'` was a valid member:
    *   `ProjectDataTypes[ProjectType][TDataType]['selector']`
    *
-   *   As such, this hook proxy actually has the same types as `UseDataHook` but with a couple of
-   *   things renamed for easier readability.
+   *   # As such, this hook proxy actually has the same types as `UseDataHook` but with a couple of things
+   *
+   *   Renamed for easier readability.
+   * @type `ProjectType` - The `projectType` of the project whose data to retrieve. Alternatively,
+   *   specify this as the second argument to the `useProjectData` function for Intellisense
+   *   support
    */
   type UseProjectDataHook = {
-    [DataType in string]: <
-      TProjectDataTypes extends DataProviderDataTypes,
-      TDataType extends keyof TProjectDataTypes,
-    >(
-      projectDataProviderSource: string | IDataProvider<TProjectDataTypes> | undefined,
-      selector: TProjectDataTypes[TDataType]['selector'],
-      defaultValue: TProjectDataTypes[TDataType]['getData'],
-      subscriberOptions?: DataProviderSubscriberOptions,
-    ) => [
-      TProjectDataTypes[TDataType]['getData'],
-      (
-        | ((
-            newData: TProjectDataTypes[TDataType]['setData'],
-          ) => Promise<DataProviderUpdateInstructions<TProjectDataTypes>>)
-        | undefined
-      ),
-      boolean,
-    ];
+    <ProjectType extends ProjectTypes>(
+      projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+      projectType?: ProjectType,
+    ): {
+      [TDataType in keyof ProjectDataTypes[ProjectType]]: (
+        selector: ProjectDataTypes[ProjectType][TDataType]['selector'],
+        defaultValue: ProjectDataTypes[ProjectType][TDataType]['getData'],
+        subscriberOptions?: DataProviderSubscriberOptions,
+      ) => [
+        ProjectDataTypes[ProjectType][TDataType]['getData'],
+        (
+          | ((
+              newData: ProjectDataTypes[ProjectType][TDataType]['setData'],
+            ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+          | undefined
+        ),
+        boolean,
+      ];
+    };
   };
   /**
    * ```typescript
-   * useProjectData.DataType<TProjectDataTypes extends DataProviderDataTypes, TDataType extends keyof TProjectDataTypes>(
-   *   projectDataProviderSource: string | IDataProvider<TProjectDataTypes> | undefined,
-   *   selector: TProjectDataTypes[TDataType]['selector'],
-   *   defaultValue: TProjectDataTypes[TDataType]['getData'],
-   *   subscriberOptions?: DataProviderSubscriberOptions,
-   * ): [
-   *   TProjectDataTypes[TDataType]['getData'],
-   *   (
-   *     | ((
-   *         newData: TProjectDataTypes[TDataType]['setData'],
-   *       ) => Promise<DataProviderUpdateInstructions<TProjectDataTypes>>)
-   *     | undefined
-   *   ),
-   *   boolean,
-   * ]
+   * useProjectData<ProjectType extends ProjectTypes>(
+   *     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+   *     projectType?: ProjectType,
+   *   ).DataType(
+   *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
+   *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
+   *       subscriberOptions?: DataProviderSubscriberOptions,
+   *     ) => [
+   *       ProjectDataTypes[ProjectType][DataType]['getData'],
+   *       (
+   *         | ((
+   *             newData: ProjectDataTypes[ProjectType][DataType]['setData'],
+   *           ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+   *         | undefined
+   *       ),
+   *       boolean,
+   *     ]
    * ```
    *
-   * Special React hook that subscribes to run a callback on a project data provider's data with
-   * specified selector on any data type that the project data provider serves according to its
-   * projectType.
+   * React hook to use data from a project data provider. Subscribes to run a callback on a project
+   * data provider's data with specified selector on the specified data type that the project data
+   * provider serves according to its `projectType`.
    *
-   * Usage: Specify the data type on the project data provider with `useProjectData.<data_type>` and
-   * use like any other React hook. Specify the generic types in order to receive type support from
-   * Intellisense. For example, `useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'],
-   * 'VerseUSFM'>` lets you subscribe to verse USFM from a project data provider for the
-   * `ParatextStandard` `projectType`.
+   * Usage: Specify the project id, the project type, and the data type on the project data provider
+   * with `useProjectData('<project_id>', '<project_type>').<data_type>` and use like any other
+   * React hook.
    *
-   * _＠example_ When subscribing to JHN 11:35 Verse USFM info on a `ParatextStandard` project with
-   * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`, we need to tell the
-   * `useProjectData.VerseUSFM` hook what types we are using, so we specify the project data types
-   * as `ProjectDataTypes['ParatextStandard']` and specify that we are using the `'VerseUSFM'` data
-   * type as follows:
+   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `ParatextStandard` project with
+   * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
    *
    * ```typescript
-   * const [verse, setVerse, verseIsLoading] = useProjectData.VerseUSFM<
-   *   ProjectDataTypes['ParatextStandard'],
-   *   'Verse'
-   * >(
+   * const [verse, setVerse, verseIsLoading] = useProjectData(
    *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+   *   'ParatextStandard',
+   * ).VerseUSFM(
    *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
    *   'Loading verse ',
    * );
@@ -3710,7 +3951,15 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get
    * the project data provider once)
    *
+   * _＠param_ `projectType` indicates what you expect the `projectType` to be for the project with
+   * the specified id. Currently, this does nothing but indicate to TypeScript what type the Project
+   * Data Provider is. This is an alternative way to specify the `ProjectType` generic type.
+   * Optional.
+   *
    * _＠param_ `selector` tells the provider what data this listener is listening for
+   *
+   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   * updated every render
    *
    * _＠param_ `defaultValue` the initial value to return while first awaiting the data
    *
@@ -3724,20 +3973,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *
    * _＠returns_ `[data, setData, isLoading]`
    *
-   * - `data`: the current value for the data from the project data provider for the specified project
-   *   id with the specified data type and selector, either the defaultValue or the resolved data
-   * - `setData`: asynchronous function to request that the data provider for the specified project id
-   *   update the data at this data type and selector. Returns true if successful. Note that this
-   *   function does not update the data. The project data provider sends out an update to this
-   *   subscription if it successfully updates data.
-   * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
-   *   project data provider for this project id
-   *
-   * _＠type_ `TProjectDataTypes` - the project data types associated with the `projectType` used.
-   * You can specify this type with `ProjectDataTypes['<project_type>']`
-   *
-   * _＠type_ `TDataType` - the specific data type on this project you want to use. Must match the
-   * data type specified in `useProjectData.<data_type>`
+   * _＠type_ `ProjectType` - the `projectType` of the project whose data to retrieve. Alternatively,
+   * specify this as the second argument to the `useProjectData` function for Intellisense support
    */
   const useProjectData: UseProjectDataHook;
   export default useProjectData;
@@ -4010,7 +4247,7 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   export default useDialogCallback;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
-  import IDataProvider from 'shared/models/data-provider.interface';
+  import { DataProviderNames, DataProviders } from 'papi-shared-types';
   /**
    * Gets an array of data providers based on an array of input sources
    *
@@ -4034,9 +4271,13 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
    *   not been retrieved or has been disposed, or (b) a data provider if it has been retrieved and
    *   is not disposed.
    */
-  function useDataProviderMulti<T extends IDataProvider<any>[]>(
-    dataProviderSources: (string | T[number] | undefined)[],
-  ): (T[number] | undefined)[];
+  function useDataProviderMulti<EachDataProviderName extends DataProviderNames[]>(
+    dataProviderSources: (
+      | EachDataProviderName[number]
+      | DataProviders[EachDataProviderName[number]]
+      | undefined
+    )[],
+  ): (DataProviders[EachDataProviderName[number]] | undefined)[];
   export default useDataProviderMulti;
 }
 declare module 'renderer/hooks/papi-hooks/index' {
@@ -4060,47 +4301,47 @@ declare module 'renderer/hooks/papi-hooks/index' {
     useDataProviderMulti: typeof useDataProviderMulti;
     /**
      * ```typescript
-     * useData.DataType<TDataTypes extends DataProviderDataTypes, TDataType extends keyof TDataTypes>(
-     *   dataProviderSource: string | IDataProvider<TDataTypes> | undefined,
-     *   selector: TDataTypes[TDataType]['selector'],
-     *   defaultValue: TDataTypes[TDataType]['getData'],
-     *   subscriberOptions?: DataProviderSubscriberOptions,
-     * ): [
-     *   TDataTypes[TDataType]['getData'],
-     *   (
-     *     | ((
-     *         newData: TDataTypes[TDataType]['setData'],
-     *       ) => Promise<DataProviderUpdateInstructions<TDataTypes>>)
-     *     | undefined
-     *   ),
-     *   boolean,
-     * ]
+     * useData<DataProviderName extends DataProviderNames>(
+     *     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+     *   ).DataType(
+     *       selector: DataProviderTypes[DataProviderName][DataType]['selector'],
+     *       defaultValue: DataProviderTypes[DataProviderName][DataType]['getData'],
+     *       subscriberOptions?: DataProviderSubscriberOptions,
+     *     ) => [
+     *       DataProviderTypes[DataProviderName][DataType]['getData'],
+     *       (
+     *         | ((
+     *             newData: DataProviderTypes[DataProviderName][DataType]['setData'],
+     *           ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
+     *         | undefined
+     *       ),
+     *       boolean,
+     *     ]
      * ```
      *
-     * Special React hook that subscribes to run a callback on a data provider's data with specified
-     * selector on any data type that data provider serves.
+     * React hook to use data from a data provider. Subscribes to run a callback on a data
+     * provider's data with specified selector on the specified data type that data provider
+     * serves.
      *
-     * Usage: Specify the data type on the data provider with `useData.<data_type>` and use like any
-     * other React hook. Specify the generic types in order to receive type support from
-     * Intellisense. For example, `useData.Verse<QuickVerseDataTypes, 'Verse'>` lets you subscribe
-     * to verses from a data provider that serves `QuickVerseDataTypes`.
+     * Usage: Specify the data provider and the data type on the data provider with
+     * `useData('<data_provider>').<data_type>` and use like any other React hook.
      *
-     * _＠example_ When subscribing to JHN 11:35 on the `'quickVerse.quickVerse'` data provider, we
-     * need to tell the useData.Verse hook what types we are using, so we use the
-     * `QuickVerseDataTypes` data types and specify that we are using the `'Verse'` data type as
-     * follows:
+     * _＠example_ Subscribing to Verse data at JHN 11:35 on the `'quickVerse.quickVerse'` data
+     * provider:
      *
      * ```typescript
-     * const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<
-     *   QuickVerseDataTypes,
-     *   'Verse'
-     * >('quickVerse.quickVerse', 'JHN 11:35', 'Verse text goes here');
+     * const [verseText, setVerseText, verseTextIsLoading] = useData(
+     *   'quickVerse.quickVerse',
+     * ).Verse('JHN 11:35', 'Verse text goes here');
      * ```
      *
      * _＠param_ `dataProviderSource` string name of data provider to get OR dataProvider (result of
      * useDataProvider if you want to consolidate and only get the data provider once)
      *
      * _＠param_ `selector` tells the provider what data this listener is listening for
+     *
+     * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not
+     * be updated every render
      *
      * _＠param_ `defaultValue` the initial value to return while first awaiting the data
      *
@@ -4122,56 +4363,45 @@ declare module 'renderer/hooks/papi-hooks/index' {
      *   updates data.
      * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
      *   data provider
-     *
-     * _＠type_ `TDataTypes` - the data provider data types served by the data provider whose data to
-     * use.
-     *
-     * _＠type_ `TDataType` - the specific data type on this data provider that you want to use. Must
-     * match the data type specified in `useData.<data_type>`
      */
     useData: typeof useData;
     /**
      * ```typescript
-     * useProjectData.DataType<TProjectDataTypes extends DataProviderDataTypes, TDataType extends keyof TProjectDataTypes>(
-     *   projectDataProviderSource: string | IDataProvider<TProjectDataTypes> | undefined,
-     *   selector: TProjectDataTypes[TDataType]['selector'],
-     *   defaultValue: TProjectDataTypes[TDataType]['getData'],
-     *   subscriberOptions?: DataProviderSubscriberOptions,
-     * ): [
-     *   TProjectDataTypes[TDataType]['getData'],
-     *   (
-     *     | ((
-     *         newData: TProjectDataTypes[TDataType]['setData'],
-     *       ) => Promise<DataProviderUpdateInstructions<TProjectDataTypes>>)
-     *     | undefined
-     *   ),
-     *   boolean,
-     * ]
+     * useProjectData<ProjectType extends ProjectTypes>(
+     *     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+     *     projectType?: ProjectType,
+     *   ).DataType(
+     *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
+     *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
+     *       subscriberOptions?: DataProviderSubscriberOptions,
+     *     ) => [
+     *       ProjectDataTypes[ProjectType][DataType]['getData'],
+     *       (
+     *         | ((
+     *             newData: ProjectDataTypes[ProjectType][DataType]['setData'],
+     *           ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+     *         | undefined
+     *       ),
+     *       boolean,
+     *     ]
      * ```
      *
-     * Special React hook that subscribes to run a callback on a project data provider's data with
-     * specified selector on any data type that the project data provider serves according to its
-     * projectType.
+     * React hook to use data from a project data provider. Subscribes to run a callback on a
+     * project data provider's data with specified selector on the specified data type that the
+     * project data provider serves according to its `projectType`.
      *
-     * Usage: Specify the data type on the project data provider with `useProjectData.<data_type>`
-     * and use like any other React hook. Specify the generic types in order to receive type support
-     * from Intellisense. For example,
-     * `useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'], 'VerseUSFM'>` lets you
-     * subscribe to verse USFM from a project data provider for the `ParatextStandard`
-     * `projectType`.
+     * Usage: Specify the project id, the project type, and the data type on the project data
+     * provider with `useProjectData('<project_id>', '<project_type>').<data_type>` and use like any
+     * other React hook.
      *
-     * _＠example_ When subscribing to JHN 11:35 Verse USFM info on a `ParatextStandard` project with
-     * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`, we need to tell the
-     * `useProjectData.VerseUSFM` hook what types we are using, so we specify the project data types
-     * as `ProjectDataTypes['ParatextStandard']` and specify that we are using the `'VerseUSFM'`
-     * data type as follows:
+     * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `ParatextStandard` project with
+     * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
      *
      * ```typescript
-     * const [verse, setVerse, verseIsLoading] = useProjectData.VerseUSFM<
-     *   ProjectDataTypes['ParatextStandard'],
-     *   'Verse'
-     * >(
+     * const [verse, setVerse, verseIsLoading] = useProjectData(
      *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+     *   'ParatextStandard',
+     * ).VerseUSFM(
      *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
      *   'Loading verse ',
      * );
@@ -4181,7 +4411,15 @@ declare module 'renderer/hooks/papi-hooks/index' {
      * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get
      * the project data provider once)
      *
+     * _＠param_ `projectType` indicates what you expect the `projectType` to be for the project with
+     * the specified id. Currently, this does nothing but indicate to TypeScript what type the
+     * Project Data Provider is. This is an alternative way to specify the `ProjectType` generic
+     * type. Optional.
+     *
      * _＠param_ `selector` tells the provider what data this listener is listening for
+     *
+     * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not
+     * be updated every render
      *
      * _＠param_ `defaultValue` the initial value to return while first awaiting the data
      *
@@ -4195,21 +4433,9 @@ declare module 'renderer/hooks/papi-hooks/index' {
      *
      * _＠returns_ `[data, setData, isLoading]`
      *
-     * - `data`: the current value for the data from the project data provider for the specified
-     *   project id with the specified data type and selector, either the defaultValue or the
-     *   resolved data
-     * - `setData`: asynchronous function to request that the data provider for the specified project
-     *   id update the data at this data type and selector. Returns true if successful. Note that
-     *   this function does not update the data. The project data provider sends out an update to
-     *   this subscription if it successfully updates data.
-     * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the
-     *   project data provider for this project id
-     *
-     * _＠type_ `TProjectDataTypes` - the project data types associated with the `projectType` used.
-     * You can specify this type with `ProjectDataTypes['<project_type>']`
-     *
-     * _＠type_ `TDataType` - the specific data type on this project you want to use. Must match the
-     * data type specified in `useProjectData.<data_type>`
+     * _＠type_ `ProjectType` - the `projectType` of the project whose data to retrieve.
+     * Alternatively, specify this as the second argument to the `useProjectData` function for
+     * Intellisense support
      */
     useProjectData: typeof useProjectData;
     useSetting: typeof useSetting;
