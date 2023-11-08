@@ -84,7 +84,7 @@ export default function RunBasicChecksTab({
     );
   };
 
-  const project = useProjectDataProvider<'ParatextStandard'>(currentProjectId);
+  const project = useProjectDataProvider(currentProjectId, 'ParatextStandard');
 
   const [projectString] = usePromise(
     useMemo(() => {

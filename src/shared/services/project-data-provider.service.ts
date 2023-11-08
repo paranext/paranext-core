@@ -107,8 +107,9 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
  * pdp.getVerse(new VerseRef('JHN', '1', '1'));
  * ```
  *
- * @type `ProjectType` - The `projectType` of the project whose data to retrieve. Alternatively,
- *   specify this as the second argument to this function for Intellisense support
+ * @type `ProjectType` - The `projectType` for the project to use. The returned project data
+ *   provider will have the project data provider type associated with this project type.
+ *   Alternatively, specify this as the second argument to this function for Intellisense support
  * @param projectId ID for the project to load
  * @param projectType Indicates what you expect the `projectType` to be for the project with the
  *   specified id. Currently, this does nothing but indicate to TypeScript what type the Project
