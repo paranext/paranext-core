@@ -3433,8 +3433,9 @@ declare module 'shared/services/project-data-provider.service' {
    * pdp.getVerse(new VerseRef('JHN', '1', '1'));
    * ```
    *
-   * @type `ProjectType` - The `projectType` of the project whose data to retrieve. Alternatively,
-   *   specify this as the second argument to this function for Intellisense support
+   * @type `ProjectType` - The `projectType` for the project to use. The returned project data
+   *   provider will have the project data provider type associated with this project type.
+   *   Alternatively, specify this as the second argument to this function for Intellisense support
    * @param projectId ID for the project to load
    * @param projectType Indicates what you expect the `projectType` to be for the project with the
    *   specified id. Currently, this does nothing but indicate to TypeScript what type the Project
@@ -3835,20 +3836,23 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
   /**
    * Gets a project data provider with specified provider name
    *
+   * @type `ProjectType` - The `projectType` for the project to use. The returned project data
+   *   provider will have the project data provider type associated with this project type.
+   *   Alternatively, specify this as the second argument to this function for Intellisense support
    * @param projectDataProviderSource String name of the id of the project to get OR
    *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return
    *   the data provider again)
-   * @returns Undefined if the project data provider has not been retrieved, the requested project
+   * @param projectType Indicates what you expect the `projectType` to be for the project with the
+   *   specified id. Currently, this does nothing but indicate to TypeScript what type the Project
+   *   Data Provider is. This is an alternative way to specify the `ProjectType` generic type.
+   *   Optional.
+   * @returns `undefined` if the project data provider has not been retrieved, the requested project
    *   data provider if it has been retrieved and is not disposed, and undefined again if the
    *   project data provider is disposed
-   * @ProjectType `ProjectType` - the project type for the project to use. The returned project data
-   * provider will have the project data provider type associated with this project type.
    */
   const useProjectDataProvider: <ProjectType extends keyof ProjectDataTypes>(
-    projectDataProviderSource:
-      | ProjectType
-      | IDataProvider<ProjectDataTypes[ProjectType]>
-      | undefined,
+    projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+    projectType?: ProjectType | undefined,
   ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
   export default useProjectDataProvider;
 }
