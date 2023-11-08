@@ -1,4 +1,14 @@
-import { Box, List, ListItem, ListItemText, Tab, Tabs, Typography } from '@mui/material';
+import {
+  Box,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem,
+  Select,
+  Tab,
+  Tabs,
+  Typography,
+} from '@mui/material';
 import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import {
   SyntheticEvent,
@@ -8,7 +18,7 @@ import {
   useCallback,
   useMemo,
 } from 'react';
-import { Checkbox, ComboBox, SearchBar, TextField } from 'papi-components';
+import { Checkbox, SearchBar, TextField } from 'papi-components';
 import TabPanel from '@renderer/components/tab-panel.component';
 import './settings-tab.component.scss';
 import logger from '@shared/services/logger.service';
@@ -183,15 +193,11 @@ const options = ['English', 'Spanish', 'French'];
 // Example component of a platform setting - shows how SettingProps would be used
 function InterfaceLanguageSetting({ setting, setSetting }: SettingProps<string>) {
   return (
-    <ComboBox<string>
-      options={options}
-      value={setting}
-      // Type asserting because combobox props aren't precise enough yet
-      // Issue https://github.com/paranext/paranext-core/issues/560
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      onChange={(_e, v) => setSetting(v as string)}
-      width={200}
-    />
+    <Select value={setting} onChange={(e) => setSetting(e.target.value)} sx={{ width: 200 }}>
+      {options.map((option) => (
+        <MenuItem value={option}>{option}</MenuItem>
+      ))}
+    </Select>
   );
 }
 
@@ -250,11 +256,14 @@ function CheckboxSetting({ setting, setSetting }: SettingProps<boolean>) {
 }
 
 // Example component of a platform setting
-function ComboboxSetting({ setting, setSetting }: SettingProps<string>) {
-  // Type asserting because combobox props aren't precise enough yet
-  // Issue https://github.com/paranext/paranext-core/issues/560
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return <ComboBox value={setting} onChange={(_e, v) => setSetting(v as string)} width={200} />;
+// Since this is a blanket component for all settings that need a Select, the only option included is the default value of the setting
+// Settings components will look more like InterfaceLanguageSetting, with appropriate options
+function SelectSetting({ setting, setSetting }: SettingProps<string>) {
+  return (
+    <Select value={setting} onChange={(e) => setSetting(e.target.value)} sx={{ width: 200 }}>
+      <MenuItem value={setting}>{setting}</MenuItem>
+    </Select>
+  );
 }
 
 // Returns mock data
@@ -263,7 +272,7 @@ function fetchSettingsComponents(): SettingsComponents {
   return {
     'platform.interfaceLanguage': InterfaceLanguageSetting,
     'platform.highlightCurrentVerse': CheckboxSetting,
-    'platform.brightnessOfHighlight': ComboboxSetting,
+    'platform.brightnessOfHighlight': SelectSetting,
     'platform.displayFloatingWindows': CheckboxSetting,
     'platform.hardwareAcceleration': CheckboxSetting,
     'platform.scrollScripture': CheckboxSetting,
@@ -272,7 +281,7 @@ function fetchSettingsComponents(): SettingsComponents {
     'platform.autoAssignProjectNotes': CheckboxSetting,
     'platform.autosave': CheckboxSetting,
     'platform.khmerOnly': CheckboxSetting,
-    'platform.internetUse': ComboboxSetting,
+    'platform.internetUse': SelectSetting,
     'platform.shareParatextData': CheckboxSetting,
     'platform.proxySettings': ProxySettings,
   };
