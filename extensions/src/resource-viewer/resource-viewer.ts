@@ -21,7 +21,8 @@ interface ResourceViewerOptions extends GetWebViewOptions {
 }
 
 /**
- * Function to prompt for a project and open it in the resource viewer. Registered as a command handler.
+ * Function to prompt for a project and open it in the resource viewer. Registered as a command
+ * handler.
  */
 async function openResourceViewer(
   projectId: string | undefined,
@@ -43,9 +44,7 @@ async function openResourceViewer(
   return null;
 }
 
-/**
- * Simple web view provider that provides Resource web views when papi requests them
- */
+/** Simple web view provider that provides Resource web views when papi requests them */
 const resourceWebViewProvider: IWebViewProvider = {
   async getWebView(
     savedWebView: SavedWebViewDefinition,

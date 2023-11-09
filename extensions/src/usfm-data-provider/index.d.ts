@@ -71,7 +71,8 @@ declare module 'papi-shared-types' {
   /**
    * Scripture data represented in JSON format. Transformation from USX
    *
-   * [See more information here](https://github.com/paranext/paranext-core/issues/480#issuecomment-1751094148)
+   * [See more information
+   * here](https://github.com/paranext/paranext-core/issues/480#issuecomment-1751094148)
    */
   type USJDocument = {
     /** The Scripture data serialization format used for this document */
@@ -120,9 +121,11 @@ declare module 'papi-shared-types' {
   type BookCode = "GEN" | "EXO" | "LEV" | "NUM" | "DEU" | "JOS" | "JDG" | "RUT" | "1SA" | "2SA" | "1KI" | "2KI" | "1CH" | "2CH" | "EZR" | "NEH" | "EST" | "JOB" | "PSA" | "PRO" | "ECC" | "SNG" | "ISA" | "JER" | "LAM" | "EZK" | "DAN" | "HOS" | "JOL" | "AMO" | "OBA" | "JON" | "MIC" | "NAM" | "HAB" | "ZEP" | "HAG" | "ZEC" | "MAL" | "MAT" | "MRK" | "LUK" | "JHN" | "ACT" | "ROM" | "1CO" | "2CO" | "GAL" | "EPH" | "PHP" | "COL" | "1TH" | "2TH" | "1TI" | "2TI" | "TIT" | "PHM" | "HEB" | "JAS" | "1PE" | "2PE" | "1JN" | "2JN" | "3JN" | "JUD" | "REV" | "TOB" | "JDT" | "ESG" | "WIS" | "SIR" | "BAR" | "LJE" | "S3Y" | "SUS" | "BEL" | "1MA" | "2MA" | "3MA" | "4MA" | "1ES" | "2ES" | "MAN" | "PS2" | "ODA" | "PSS" | "EZA" | "5EZ" | "6EZ" | "DAG" | "PS3" | "2BA" | "LBA" | "JUB" | "ENO" | "1MQ" | "2MQ" | "3MQ" | "REP" | "4BA" | "LAO" | "FRT" | "BAK" | "OTH" | "INT" | "CNC" | "GLO" | "TDX" | "NDX" | "XXA" | "XXB" | "XXC" | "XXD" | "XXE" | "XXF" | "XXG";
 
   /**
-   * Provides project data for Paratext Scripture projects. One is created for each project that is used
+   * Provides project data for Paratext Scripture projects. One is created for each project that is
+   * used
    *
-   * This is a hand-written baked-out version of `ParatextStandardProjectDataProvider` for ease of reading
+   * This is a hand-written baked-out version of `ParatextStandardProjectDataProvider` for ease of
+   * reading
    */
   type ParatextStandardProjectDataProviderExpanded = {
     /** Gets the "raw" USFM data for the specified book */
@@ -135,11 +138,10 @@ declare module 'papi-shared-types' {
     /**
      * Subscribe to run a callback function when the "raw" USFM data is changed
      *
-     * @param verseRef tells the provider what changes to listen for
-     * @param callback function to run with the updated USFM for this selector
-     * @param options various options to adjust how the subscriber emits updates
-     *
-     * @returns unsubscriber function (run to unsubscribe from listening for updates)
+     * @param verseRef Tells the provider what changes to listen for
+     * @param callback Function to run with the updated USFM for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeBookUSFM(
       verseRef: VerseRef,
@@ -157,11 +159,10 @@ declare module 'papi-shared-types' {
     /**
      * Subscribe to run a callback function when the "raw" USFM data is changed
      *
-     * @param verseRef tells the provider what changes to listen for
-     * @param callback function to run with the updated USFM for this selector
-     * @param options various options to adjust how the subscriber emits updates
-     *
-     * @returns unsubscriber function (run to unsubscribe from listening for updates)
+     * @param verseRef Tells the provider what changes to listen for
+     * @param callback Function to run with the updated USFM for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeChapterUSFM(
       verseRef: VerseRef,
@@ -179,11 +180,10 @@ declare module 'papi-shared-types' {
     /**
      * Subscribe to run a callback function when the "raw" USFM data is changed
      *
-     * @param verseRef tells the provider what changes to listen for
-     * @param callback function to run with the updated USFM for this selector
-     * @param options various options to adjust how the subscriber emits updates
-     *
-     * @returns unsubscriber function (run to unsubscribe from listening for updates)
+     * @param verseRef Tells the provider what changes to listen for
+     * @param callback Function to run with the updated USFM for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeVerseUSFM(
       verseRef: VerseRef,
@@ -201,11 +201,10 @@ declare module 'papi-shared-types' {
     /**
      * Subscribe to run a callback function when the USX data is changed
      *
-     * @param verseRef tells the provider what changes to listen for
-     * @param callback function to run with the updated USX for this selector
-     * @param options various options to adjust how the subscriber emits updates
-     *
-     * @returns unsubscriber function (run to unsubscribe from listening for updates)
+     * @param verseRef Tells the provider what changes to listen for
+     * @param callback Function to run with the updated USX for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeChapterUSX(
       verseRef: VerseRef,
@@ -239,11 +238,10 @@ declare module 'papi-shared-types' {
      * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
      * change over time.
      *
-     * @param verseRef tells the provider what changes to listen for
-     * @param callback function to run with the updated USJ for this selector
-     * @param options various options to adjust how the subscriber emits updates
-     *
-     * @returns unsubscriber function (run to unsubscribe from listening for updates)
+     * @param verseRef Tells the provider what changes to listen for
+     * @param callback Function to run with the updated USJ for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeBookUSJ(
       verseRef: VerseRef,
@@ -277,11 +275,10 @@ declare module 'papi-shared-types' {
      * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
      * change over time.
      *
-     * @param verseRef tells the provider what changes to listen for
-     * @param callback function to run with the updated USJ for this selector
-     * @param options various options to adjust how the subscriber emits updates
-     *
-     * @returns unsubscriber function (run to unsubscribe from listening for updates)
+     * @param verseRef Tells the provider what changes to listen for
+     * @param callback Function to run with the updated USJ for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeChapterUSJ(
       verseRef: VerseRef,
@@ -315,11 +312,10 @@ declare module 'papi-shared-types' {
      * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
      * change over time.
      *
-     * @param verseRef tells the provider what changes to listen for
-     * @param callback function to run with the updated USJ for this selector
-     * @param options various options to adjust how the subscriber emits updates
-     *
-     * @returns unsubscriber function (run to unsubscribe from listening for updates)
+     * @param verseRef Tells the provider what changes to listen for
+     * @param callback Function to run with the updated USJ for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeVerseUSJ(
       verseRef: VerseRef,
@@ -328,22 +324,26 @@ declare module 'papi-shared-types' {
     ): Unsubscriber;
 
     /**
-     * Gets an extension's serialized project data (so the extension can provide and manipulate its project data)
+     * Gets an extension's serialized project data (so the extension can provide and manipulate its
+     * project data)
      *
-     * @param dataScope contains the name of the extension requesting the data and which data it is requesting
      * @example `{ extensionName: 'biblicalTerms', dataQualifier: 'renderings' }`
      *
-     * @returns promise that resolves to the requested extension project data
+     * @param dataScope Contains the name of the extension requesting the data and which data it is
+     *   requesting
+     * @returns Promise that resolves to the requested extension project data
      */
     getExtensionData(dataScope: ExtensionDataScope): Promise<string | undefined>;
     /**
-     * Sets an extension's serialized project data (so the extension can provide and manipulate its project data)
+     * Sets an extension's serialized project data (so the extension can provide and manipulate its
+     * project data)
      *
-     * @param dataScope contains the name of the extension requesting the data and which data it is requesting
      * @example `{ extensionName: 'biblicalTerms', dataQualifier: 'renderings' }`
-     * @param extensionData the new project data for this extension
      *
-     * @returns promise that resolves indicating which data types received updates
+     * @param dataScope Contains the name of the extension requesting the data and which data it is
+     *   requesting
+     * @param extensionData The new project data for this extension
+     * @returns Promise that resolves indicating which data types received updates
      */
     setExtensionData(
       dataScope: ExtensionDataScope,
@@ -352,12 +352,13 @@ declare module 'papi-shared-types' {
     /**
      * Subscribe to run a callback function when an extension's serialized project data is changed
      *
-     * @param dataScope contains the name of the extension requesting the data and which data it is requesting
      * @example `{ extensionName: 'biblicalTerms', dataQualifier: 'renderings' }`
-     * @param callback function to run with the updated extension data for this selector
-     * @param options various options to adjust how the subscriber emits updates
      *
-     * @returns unsubscriber function (run to unsubscribe from listening for updates)
+     * @param dataScope Contains the name of the extension requesting the data and which data it is
+     *   requesting
+     * @param callback Function to run with the updated extension data for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeExtensionData(
       dataScope: ExtensionDataScope,

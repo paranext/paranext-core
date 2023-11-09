@@ -5,7 +5,7 @@ import merge from 'webpack-merge';
 import configBase, { rootDir } from './webpack.config.base';
 import { getWebViewEntries } from './webpack.util';
 
-/** webpack configuration for building webViews */
+/** Webpack configuration for building webViews */
 const configWebView: webpack.Configuration = merge(configBase, {
   // Build for web since Paranext loads WebViews in browser https://webpack.js.org/concepts/targets/
   target: 'web',

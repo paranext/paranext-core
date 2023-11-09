@@ -174,8 +174,8 @@ globalThis.webViewComponent = function HelloWorld({
         Hello World <span className="framework">React</span>
         {/**
          * Note: `Logo` here is inlined into this code as a `data:` url. This is here simply for
-         * demonstration purposes. Inlining as a `data:` url is generally not recommended. Rather,
-         * it is generally better to use `papi-extension:` to avoid unnecessary bloat
+         * demonstration purposes. Inlining as a `data:` url is generally not recommended. Rather, it is
+         * generally better to use `papi-extension:` to avoid unnecessary bloat
          */}
         <img width={16} height={16} src={`${Logo}`} alt="Hello World Logo" />
       </div>
