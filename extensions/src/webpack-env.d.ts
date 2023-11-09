@@ -12,41 +12,33 @@
  * Import fully loaded and transformed files as strings with "./file?inline"
  *
  * WARNING: These files are NOT bundled. The rules are applied, but webpack does not bundle
- * dependencies into these files before providing them, unfortunately. However, React WebView
- * files are an exception as they are fully bundled.
+ * dependencies into these files before providing them, unfortunately. However, React WebView files
+ * are an exception as they are fully bundled.
  */
 declare module '*?inline' {
   const content: string;
   export default content;
 }
 
-/**
- * Import files with no transformation as strings with "./file?raw"
- */
+/** Import files with no transformation as strings with "./file?raw" */
 declare module '*?raw' {
   const content: string;
   export default content;
 }
 
-/**
- * Import scss, sass, and css files as strings
- */
+/** Import scss, sass, and css files as strings */
 declare module '*.scss' {
   const content: string;
   export default content;
 }
 
-/**
- * Import scss, sass, and css files as strings
- */
+/** Import scss, sass, and css files as strings */
 declare module '*.sass' {
   const content: string;
   export default content;
 }
 
-/**
- * Import scss, sass, and css files as strings
- */
+/** Import scss, sass, and css files as strings */
 declare module '*.css' {
   const content: string;
   export default content;

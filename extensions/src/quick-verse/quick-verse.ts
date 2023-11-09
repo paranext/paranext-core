@@ -56,8 +56,10 @@ class QuickVerseDataProviderEngine
   implements IDataProviderEngine<QuickVerseDataTypes>
 {
   /**
-   * Verses stored by the Data Provider. Keys are Scripture References. Values are { text:
-   * '<verse_text>', isChanged?: boolean }
+   * Verses stored by the Data Provider.
+   *
+   * - Keys are Scripture References.
+   * - Values are { text: '<verse_text>', isChanged?: boolean }
    */
   verses: { [scrRef: string]: { text: string; isChanged?: boolean } } = {};
 

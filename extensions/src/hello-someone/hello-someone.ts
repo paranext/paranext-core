@@ -25,8 +25,9 @@ logger.info('Hello Someone is importing!');
  *
  * For each data type, an engine needs a `get<data_type>` and a `set<data_type>`.
  *
- * Papi will create a data provider that internally uses this engine. The data provider layers over
- * this engine and adds functionality like `subscribe<data_type>` functions with automatic updates.
+ * `papi` will create a data provider that internally uses this engine. The data provider layers
+ * over this engine and adds functionality like `subscribe<data_type>` functions with automatic
+ * updates.
  *
  * This data provider engine is defined by an object, which we recommend starting with to get
  * comfortable with the data provider api because of the following pros and cons:
@@ -38,7 +39,7 @@ logger.info('Hello Someone is importing!');
  * - Cons
  *
  *   - Must specify all properties and methods in the object type
- *   - Papi.dataProvider.decorators.ignore is difficult to apply to tell papi to ignore methods
+ *   - `papi.dataProvider.decorators.ignore` is difficult to apply to tell papi to ignore methods
  *   - When using `this.notifyUpdate`, you must include the `WithNotifyUpdate` type and provide a
  *       placeholder `notifyUpdate` method
  *
