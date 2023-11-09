@@ -17,7 +17,7 @@ import {
   getCommandLineArgumentsGroup,
 } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
-import papi from '@extension-host/services/papi-backend.service';
+import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
 import UnsubscriberAsyncList from '@shared/utils/unsubscriber-async-list';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
@@ -436,7 +436,7 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
 
   // Replace fetch with papi.fetch.
   // eslint-disable-next-line no-global-assign
-  globalThis.fetch = papi.fetch;
+  globalThis.fetch = papiFetch;
 
   // @ts-expect-error we want to remove XMLHttpRequest
   // eslint-disable-next-line no-global-assign

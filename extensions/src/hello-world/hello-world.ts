@@ -1,4 +1,4 @@
-import papi from 'papi-backend';
+import papi, { logger } from 'papi-backend';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import type {
   WebViewContentType,
@@ -16,8 +16,6 @@ import helloWorldReactWebView2Styles from './web-views/hello-world-2.web-view.sc
 import helloWorldHtmlWebView from './web-views/hello-world.web-view.html?inline';
 
 type IWebViewProviderWithType = IWebViewProvider & { webViewType: string };
-
-const { logger } = papi;
 
 logger.info('Hello world is importing!');
 

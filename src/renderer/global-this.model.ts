@@ -13,6 +13,7 @@ import {
   setWebViewStateById,
 } from '@renderer/services/web-view-state.service';
 import useWebViewState from '@renderer/hooks/use-webview-state.hook';
+import * as papiReact from '@renderer/services/papi-frontend-react.service';
 
 // #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
 
@@ -28,6 +29,7 @@ declare const webpackRenderer: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const moduleMap = new Map<string, any>();
 moduleMap.set('papi-frontend', papi);
+moduleMap.set('papi-frontend/react', papiReact);
 moduleMap.set('react', React);
 moduleMap.set('react/jsx-runtime', ReactJsxRuntime);
 moduleMap.set('react-dom', ReactDOM);

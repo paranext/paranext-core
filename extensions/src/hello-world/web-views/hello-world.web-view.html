@@ -23,13 +23,10 @@
     />
     <script>
       // Test React component to render in the root
-      const { createElement, useCallback, useState } = React;
-      const {
-        react: {
-          hooks: { usePromise, useEvent },
-        },
-        logger,
-      } = papi;
+      const { createElement, useCallback, useState } = require('react');
+      const { usePromise, useEvent } = require('papi-frontend/react');
+      const papi = require('papi-frontend');
+      const { logger } = require('papi-frontend');
 
       const NAME = 'Hello World React WebView in HTML';
 

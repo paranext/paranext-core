@@ -1,4 +1,4 @@
-import papi from 'papi-backend';
+import papi, { logger } from 'papi-backend';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import type {
   WebViewContentType,
@@ -12,7 +12,6 @@ import type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model'
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 import helloSomeoneHtmlWebView from './hello-someone.web-view.html?inline';
 
-const { logger } = papi;
 logger.info('Hello Someone is importing!');
 
 /**

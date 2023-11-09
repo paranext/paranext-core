@@ -22,6 +22,7 @@
   "include": [
     "../../src/declarations/*",
     "../../src/renderer/services/papi-frontend.service.ts",
+    "../../src/renderer/services/papi-frontend-react.service.ts",
     "../../src/extension-host/services/papi-backend.service.ts",
     "../../src/extension-host/extension-types/extension.interface.ts"
   ],

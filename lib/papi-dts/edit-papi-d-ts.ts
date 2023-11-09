@@ -20,6 +20,10 @@ papiDTS = papiDTS
     '"papi-frontend"',
   )
   .replace(
+    new RegExp(escapeStringRegexp('"renderer/services/papi-frontend-react.service"'), 'g'),
+    '"papi-frontend/react"',
+  )
+  .replace(
     new RegExp(escapeStringRegexp('"extension-host/services/papi-backend.service"'), 'g'),
     '"papi-backend"',
   );

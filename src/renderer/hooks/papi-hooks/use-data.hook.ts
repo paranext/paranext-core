@@ -7,8 +7,6 @@ import createUseDataHook, {
 // such on this object. JSDoc does not usually allow these on the object. One day, we may be able to
 // put this comment on an actual function, so we can fix the comments back to using real @
 /**
- * JSDOC SOURCE UseDataHook
- *
  * ```typescript
  * useData.DataType<TDataTypes extends DataProviderDataTypes, TDataType extends keyof TDataTypes>(
  *   dataProviderSource: string | IDataProvider<TDataTypes> | undefined,

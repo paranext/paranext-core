@@ -51,8 +51,6 @@ type UseProjectDataHook = {
 // such on this object. JSDoc does not usually allow these on the object. One day, we may be able to
 // put this comment on an actual function, so we can fix the comments back to using real @
 /**
- * JSDOC SOURCE UseProjectDataHook
- *
  * ```typescript
  * useProjectData.DataType<TProjectDataTypes extends DataProviderDataTypes, TDataType extends keyof TProjectDataTypes>(
  *   projectDataProviderSource: string | IDataProvider<TProjectDataTypes> | undefined,

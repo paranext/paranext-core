@@ -1,5 +1,6 @@
 import { VerseRef } from '@sillsdev/scripture';
-import papi from 'papi-frontend';
+import { logger } from 'papi-frontend';
+import { useProjectData, useSetting } from 'papi-frontend/react';
 import { ScriptureReference } from 'papi-components';
 import { JSX, useMemo } from 'react';
 import UsxEditor from 'usxeditor';
@@ -29,13 +30,6 @@ interface ElementInfo {
    */
   validStyles?: StyleInfo[];
 }
-
-const {
-  react: {
-    hooks: { useProjectData, useSetting },
-  },
-  logger,
-} = papi;
 
 /** All available elements for use in slate editor */
 const editorElements: { [type: string]: ElementInfo } = {

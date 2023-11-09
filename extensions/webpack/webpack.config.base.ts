@@ -44,6 +44,7 @@ const configBase: webpack.Configuration = {
     'react-dom',
     'react-dom/client',
     'papi-frontend',
+    'papi-frontend/react',
     'papi-backend',
     '@sillsdev/scripture',
   ],

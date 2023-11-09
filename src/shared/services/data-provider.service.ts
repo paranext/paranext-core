@@ -55,13 +55,15 @@ let isInitialized = false;
 let initializePromise: Promise<void> | undefined;
 
 /**
+ * JSDOC SOURCE DataProviderEngine
+ *
  * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
  * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
  * function in order to use `notifyUpdate`.
  *
  * @see IDataProviderEngine for more information on extending this class.
  */
-abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
+export abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
   // This is just a placeholder and will be layered over by papi. We don't need it to do anything
   // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
   notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes> = (_updateInstructions) => {};

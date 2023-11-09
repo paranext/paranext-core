@@ -1,16 +1,11 @@
 import { VerseRef } from '@sillsdev/scripture';
-import papi from 'papi-backend';
+import papi, { logger, DataProviderEngine } from 'papi-backend';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import type { ExecutionToken } from 'node/models/execution-token.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
 import type { QuickVerseDataTypes, QuickVerseSetData } from 'quick-verse';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 import type { UsfmDataProvider } from 'usfm-data-provider';
-
-const {
-  logger,
-  dataProvider: { DataProviderEngine },
-} = papi;
 
 logger.info('Quick Verse is importing!');
 
