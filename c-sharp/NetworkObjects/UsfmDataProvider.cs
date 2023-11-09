@@ -53,7 +53,7 @@ internal class UsfmDataProvider : DataProvider
         catch (Exception e)
         {
             Console.Error.WriteLine(e.ToString());
-            return ResponseToRequest.Failed(e.Message);
+            return ResponseToRequest.Failed(e.ToString());
         }
     }
 
@@ -119,7 +119,7 @@ internal class UsfmDataProvider : DataProvider
         }
         catch (Exception e)
         {
-            return ResponseToRequest.Failed(e.Message);
+            return ResponseToRequest.Failed(e.ToString());
         }
 
         return ResponseToRequest.Succeeded();

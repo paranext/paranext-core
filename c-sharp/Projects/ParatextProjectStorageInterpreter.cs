@@ -70,7 +70,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         }
         catch (Exception ex)
         {
-            return ResponseToRequest.Failed(ex.Message);
+            return ResponseToRequest.Failed(ex.ToString());
         }
 
         // TODO: Do something to actually create the Paratext part of the project
@@ -220,7 +220,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         }
         catch (Exception e)
         {
-            return ResponseToRequest.Failed(e.Message);
+            return ResponseToRequest.Failed(e.ToString());
         }
     }
     #endregion
