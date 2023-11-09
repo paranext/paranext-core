@@ -865,13 +865,13 @@ export const getWebView = async (
    * properly delete `window.top`
    */
   const imports = `
-  var papi = window.parent.papi;
-  var React = window.parent.React;
-  var ReactJsxRuntime = window.parent.ReactJsxRuntime;
-  var ReactDom = window.parent.ReactDom;
-  var ReactDOMClient = window.parent.ReactDOMClient;
-  var createRoot = window.parent.createRoot;
-  var SillsdevScripture = window.parent.SillsdevScripture;
+  window.papi = window.parent.papi;
+  window.React = window.parent.React;
+  window.ReactJsxRuntime = window.parent.ReactJsxRuntime;
+  window.ReactDom = window.parent.ReactDom;
+  window.ReactDOMClient = window.parent.ReactDOMClient;
+  window.createRoot = window.parent.createRoot;
+  window.SillsdevScripture = window.parent.SillsdevScripture;
   var require = window.parent.webViewRequire;
   var getWebViewStateById = window.parent.getWebViewStateById;
   var setWebViewStateById = window.parent.setWebViewStateById;
