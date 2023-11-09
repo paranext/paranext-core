@@ -199,7 +199,7 @@ internal class PapiClient : IDisposable
     public virtual async Task<bool> RegisterRequestHandler(
         Enum<RequestType> requestType,
         Func<dynamic, ResponseToRequest> requestHandler,
-        int responseTimeoutInMs = 1000
+        int responseTimeoutInMs = 5000
     )
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
@@ -245,7 +245,10 @@ internal class PapiClient : IDisposable
 
         var timeout = TimeSpan.FromMilliseconds(responseTimeoutInMs);
         if (!await IsTaskCompleted(registrationTask, timeout, _cancellationToken))
+        {
             Console.WriteLine($"No response when registering request type \"{requestType}\"");
+            registrationSource.TrySetCanceled();
+        }
 
         return registrationSucceeded;
     }

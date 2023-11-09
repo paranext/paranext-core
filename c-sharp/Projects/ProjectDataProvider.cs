@@ -74,7 +74,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
         catch (Exception e)
         {
             Console.Error.WriteLine(e.ToString());
-            return ResponseToRequest.Failed(e.Message);
+            return ResponseToRequest.Failed(e.ToString());
         }
     }
 
@@ -86,7 +86,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
         }
         catch (Exception ex)
         {
-            return ResponseToRequest.Failed(ex.Message);
+            return ResponseToRequest.Failed(ex.ToString());
         }
     }
 
@@ -99,7 +99,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
         }
         catch (Exception ex)
         {
-            return ResponseToRequest.Failed(ex.Message);
+            return ResponseToRequest.Failed(ex.ToString());
         }
     }
 

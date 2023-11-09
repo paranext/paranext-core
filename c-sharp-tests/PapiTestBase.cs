@@ -82,7 +82,7 @@ namespace TestParanextDataProvider
         }
 
         /// <summary>
-        /// Creates fake project details to fake the existence of a project 
+        /// Creates fake project details to fake the existence of a project
         /// </summary>
         /// <seealso cref="DummyLocalProjects.FakeAddProject"/>
         protected static ProjectDetails CreateProjectDetails(string id, string name)
@@ -142,7 +142,7 @@ namespace TestParanextDataProvider
             }
 
             jsonBldr.Append("] }");
-            
+
             JsonDocument serverMessage = JsonDocument.Parse(jsonBldr.ToString());
             return serverMessage.RootElement.GetProperty("value");
         }
@@ -173,7 +173,7 @@ namespace TestParanextDataProvider
 
             Assert.That(usfm1, Is.EqualTo(usfm2));
         }
-        
+
         /// <summary>
         /// Asserts that the two snippets of USX are the same. This function normalizes both snippets
         /// to ensure maximum compatibility between them.
@@ -218,7 +218,7 @@ namespace TestParanextDataProvider
                 Assert.That(message.Type, Is.EqualTo(MessageType.Response));
 
                 MessageResponse response = (MessageResponse)message;
-                Assert.That(response.ErrorMessage, Is.EqualTo(expectedErrorMessage));
+                Assert.That(response.ErrorMessage ?? "", Does.Contain(expectedErrorMessage ?? ""));
                 Assert.That(response.Success, Is.EqualTo(string.IsNullOrEmpty(expectedErrorMessage)));
                 Assert.That(response.RequestType, Is.EqualTo(expectedResponseType));
                 Assert.That(response.RequestId, Is.EqualTo(expectedRequestId));
