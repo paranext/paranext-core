@@ -3929,13 +3929,17 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
       dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
     ): {
       [TDataType in keyof DataProviderTypes[DataProviderName]]: (
+        // @ts-expect-error TypeScript pretends it can't find `selector`, but it works just fine
         selector: DataProviderTypes[DataProviderName][TDataType]['selector'],
+        // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
         defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
+        // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
         DataProviderTypes[DataProviderName][TDataType]['getData'],
         (
           | ((
+              // @ts-expect-error TypeScript pretends it can't find `setData`, but it works just fine
               newData: DataProviderTypes[DataProviderName][TDataType]['setData'],
             ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
           | undefined
@@ -4081,13 +4085,17 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
       projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
     ): {
       [TDataType in keyof ProjectDataTypes[ProjectType]]: (
+        // @ts-expect-error TypeScript pretends it can't find `selector`, but it works just fine
         selector: ProjectDataTypes[ProjectType][TDataType]['selector'],
+        // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
         defaultValue: ProjectDataTypes[ProjectType][TDataType]['getData'],
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
+        // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
         ProjectDataTypes[ProjectType][TDataType]['getData'],
         (
           | ((
+              // @ts-expect-error TypeScript pretends it can't find `setData`, but it works just fine
               newData: ProjectDataTypes[ProjectType][TDataType]['setData'],
             ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
           | undefined

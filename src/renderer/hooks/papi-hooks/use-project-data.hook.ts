@@ -18,21 +18,17 @@ type UseProjectDataHook = {
     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
   ): {
     [TDataType in keyof ProjectDataTypes[ProjectType]]: (
-      // @ts-expect-error For some reason, TypeScript pretends it can't find `selector`, but it
-      // works just fine
+      // @ts-expect-error TypeScript pretends it can't find `selector`, but it works just fine
       selector: ProjectDataTypes[ProjectType][TDataType]['selector'],
-      // @ts-expect-error For some reason, TypeScript pretends it can't find `getData`, but it
-      // works just fine
+      // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
       defaultValue: ProjectDataTypes[ProjectType][TDataType]['getData'],
       subscriberOptions?: DataProviderSubscriberOptions,
     ) => [
-      // @ts-expect-error For some reason, TypeScript pretends it can't find `getData`, but it
-      // works just fine
+      // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
       ProjectDataTypes[ProjectType][TDataType]['getData'],
       (
         | ((
-            // @ts-expect-error For some reason, TypeScript pretends it can't find `setData`, but it
-            // works just fine
+            // @ts-expect-error TypeScript pretends it can't find `setData`, but it works just fine
             newData: ProjectDataTypes[ProjectType][TDataType]['setData'],
           ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
         | undefined
