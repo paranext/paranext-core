@@ -62,7 +62,11 @@ const papi = {
     papiFrontendProjectDataProviderService as PapiFrontendProjectDataProviderService,
   /** JSDOC DESTINATION projectLookupService */
   projectLookup: projectLookupService as ProjectLookupServiceType,
-  /** JSDOC SOURCE papiReact */
+  /**
+   * JSDOC SOURCE papiReact
+   *
+   * React hooks that enable interacting with the `papi` in React components more easily.
+   */
   react: papiReact,
   /** JSDOC DESTINATION settingsService */
   settings: settingsService as SettingsService,

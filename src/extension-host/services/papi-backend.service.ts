@@ -15,7 +15,10 @@ import {
   PapiWebViewProviderService,
 } from '@shared/services/web-view-provider.service';
 import internetService, { InternetService } from '@shared/services/internet.service';
-import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
+import dataProviderService, {
+  DataProviderService,
+  DataProviderEngine as PapiDataProviderEngine,
+} from '@shared/services/data-provider.service';
 import {
   papiBackendProjectDataProviderService,
   PapiBackendProjectDataProviderService,
@@ -41,7 +44,7 @@ const papi = {
   /** JSDOC DESTINATION PapiEventEmitter */
   EventEmitter: PapiEventEmitter,
   /** JSDOC DESTINATION DataProviderEngine */
-  DataProviderEngine: dataProviderService.DataProviderEngine,
+  DataProviderEngine: PapiDataProviderEngine,
 
   // Functions
   /** This is just an alias for internet.fetch */

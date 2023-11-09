@@ -63,7 +63,7 @@ let initializePromise: Promise<void> | undefined;
  *
  * @see IDataProviderEngine for more information on extending this class.
  */
-abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
+export abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
   // This is just a placeholder and will be layered over by papi. We don't need it to do anything
   // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
   notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes> = (_updateInstructions) => {};
