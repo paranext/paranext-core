@@ -143,7 +143,7 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading John 1:1...',
   );
 
-  const [currentProjectVerse] = useProjectData(project ?? undefined, 'ParatextStandard').VerseUSFM(
+  const [currentProjectVerse] = useProjectData('ParatextStandard', project ?? undefined).VerseUSFM(
     verseRef,
     'Loading Verse',
   );

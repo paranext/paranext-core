@@ -3420,36 +3420,25 @@ declare module 'shared/services/project-data-provider.service' {
     pdpEngineFactory: ProjectDataProviderEngineFactory<ProjectType>,
   ): Promise<Dispose>;
   /**
-   * Get a Project Data Provider for the given project ID. For types to work properly, specify the
-   * project type as a generic parameter.
+   * Get a Project Data Provider for the given project ID.
    *
    * @example
    *
    * ```typescript
-   * const pdp = await getProjectDataProvider<'ParatextStandard'>('ProjectID12345');
+   * const pdp = await getProjectDataProvider('ParatextStandard', 'ProjectID12345');
    * pdp.getVerse(new VerseRef('JHN', '1', '1'));
    * ```
    *
-   * @example
-   *
-   * ```typescript
-   * const pdp = await getProjectDataProvider('ProjectID12345', 'ParatextStandard');
-   * pdp.getVerse(new VerseRef('JHN', '1', '1'));
-   * ```
-   *
-   * @type `ProjectType` - The `projectType` for the project to use. The returned project data
-   *   provider will have the project data provider type associated with this project type.
-   *   Alternatively, specify this as the second argument to this function for Intellisense support
-   * @param projectId ID for the project to load
    * @param projectType Indicates what you expect the `projectType` to be for the project with the
-   *   specified id. Currently, this does nothing but indicate to TypeScript what type the Project
-   *   Data Provider is. This is an alternative way to specify the `ProjectType` generic type.
-   *   Optional.
+   *   specified id. The TypeScript type for the returned project data provider will have the project
+   *   data provider type associated with this project type. If this argument does not match the
+   *   project's actual `projectType` (according to its metadata), a warning will be logged
+   * @param projectId ID for the project to load
    * @returns Data provider with types that are associated with the given project type
    */
   export function getProjectDataProvider<ProjectType extends ProjectTypes>(
+    projectType: ProjectType,
     projectId: string,
-    projectType?: ProjectType,
   ): Promise<ProjectDataProvider[ProjectType]>;
   export interface PapiBackendProjectDataProviderService {
     registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
@@ -3822,13 +3811,21 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
    * which will return a network object
    *
    * @param getNetworkObject A function that takes in an id string and returns a network object
+   * @param mapParametersToNetworkObjectSource Function that takes the parameters passed into the hook
+   *   and returns the `networkObjectSource` associated with those parameters. Defaults to taking the
+   *   first parameter passed into the hook and using that as the `networkObjectSource`.
+   *
+   *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
+   *       (result of this hook, if you want this hook to just return the network object again)
+   *
    * @returns A function that takes in a networkObjectSource and returns a NetworkObject
    */
-  function createUseNetworkObjectHook(
-    getNetworkObject: (id: string) => Promise<NetworkObject<object> | undefined>,
-  ): (
-    networkObjectSource: string | NetworkObject<object> | undefined,
-  ) => NetworkObject<object> | undefined;
+  function createUseNetworkObjectHook<THookParams extends unknown[]>(
+    getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
+    mapParametersToNetworkObjectSource?: (
+      ...args: THookParams
+    ) => string | NetworkObject<object> | undefined,
+  ): (...args: THookParams) => NetworkObject<object> | undefined;
   export default createUseNetworkObjectHook;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
@@ -3898,9 +3895,9 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
    *   `IDataProvider<TDataProviderDataTypes>`, specifying your own types, or provide a custom data
    *   provider type
    */
-  type UseDataHookGeneric = {
+  type UseDataHookGeneric<TUseDataProviderParams extends unknown[]> = {
     <TDataProvider extends IDataProvider<any>>(
-      dataProviderSource: string | TDataProvider | undefined,
+      ...args: TUseDataProviderParams
     ): UseDataProxy<TDataProvider>;
   };
   /**
@@ -3911,11 +3908,9 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
    *   providers
    * @returns `useData` hook for getting data from a data provider
    */
-  function createUseDataHook(
-    useDataProviderHook: (
-      dataProviderSource: string | IDataProvider | undefined,
-    ) => IDataProvider | undefined,
-  ): UseDataHookGeneric;
+  function createUseDataHook<TUseDataProviderParams extends unknown[]>(
+    useDataProviderHook: (...args: TUseDataProviderParams) => IDataProvider | undefined,
+  ): UseDataHookGeneric<TUseDataProviderParams>;
   export default createUseDataHook;
 }
 declare module 'renderer/hooks/papi-hooks/use-data.hook' {
@@ -4051,23 +4046,20 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
   /**
    * Gets a project data provider with specified provider name
    *
-   * @type `ProjectType` - The `projectType` for the project to use. The returned project data
-   *   provider will have the project data provider type associated with this project type.
-   *   Alternatively, specify this as the second argument to this function for Intellisense support
+   * @param projectType Indicates what you expect the `projectType` to be for the project with the
+   *   specified id. The TypeScript type for the returned project data provider will have the project
+   *   data provider type associated with this project type. If this argument does not match the
+   *   project's actual `projectType` (according to its metadata), a warning will be logged
    * @param projectDataProviderSource String name of the id of the project to get OR
    *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
    *   data provider again)
-   * @param projectType Indicates what you expect the `projectType` to be for the project with the
-   *   specified id. Currently, this does nothing but indicate to TypeScript what type the Project
-   *   Data Provider is. This is an alternative way to specify the `ProjectType` generic type.
-   *   Optional.
    * @returns `undefined` if the project data provider has not been retrieved, the requested project
    *   data provider if it has been retrieved and is not disposed, and undefined again if the project
    *   data provider is disposed
    */
   const useProjectDataProvider: <ProjectType extends keyof ProjectDataTypes>(
+    projectType: ProjectType,
     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
-    projectType?: ProjectType | undefined,
   ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
   export default useProjectDataProvider;
 }
@@ -4081,31 +4073,12 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   /**
    * React hook to use data from a project data provider
    *
-   * @example `useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'], 'VerseUSFM'>(...);`
-   *
-   * @example `useProjectData('<project_id>', 'ParatextStandard').VerseUSFM(...)`
-   *
-   * @type `TProjectDataTypes` - The project data types associated with the `projectType` used. You
-   *   can specify this type with `ProjectDataTypes['<project_type>']`
-   * @type `TDataType` - The specific data type on this project you want to use. Must match the data
-   *   type specified in `useProjectData.<data_type>`
-   *
-   *   Unfortunately, accessing properties from the `DataProviderDataType`s in `ProjectDataTypes` did
-   *   not work. Maybe TypeScript refuses to look at all properties in each member of
-   *   `ProjectDataTypes` and tell that they're all `DataProviderDataType`s. So this did not work
-   *   because it refused to accept that `'selector'` was a valid member:
-   *   `ProjectDataTypes[ProjectType][TDataType]['selector']`
-   *
-   *   # As such, this hook proxy actually has the same types as `UseDataHook` but with a couple of things
-   *
-   *   Renamed for easier readability.
-   * @type `ProjectType` - The `projectType` of the project whose data to retrieve. Alternatively,
-   *   specify this as the second argument to the `useProjectData` function for Intellisense support
+   * @example `useProjectData('ParatextStandard', 'project id').VerseUSFM(...);`
    */
   type UseProjectDataHook = {
     <ProjectType extends ProjectTypes>(
+      projectType: ProjectType,
       projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
-      projectType?: ProjectType,
     ): {
       [TDataType in keyof ProjectDataTypes[ProjectType]]: (
         selector: ProjectDataTypes[ProjectType][TDataType]['selector'],
@@ -4126,8 +4099,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   /**
    * ```typescript
    * useProjectData<ProjectType extends ProjectTypes>(
+   *     projectType: ProjectType,
    *     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
-   *     projectType?: ProjectType,
    *   ).DataType(
    *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
    *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
@@ -4148,8 +4121,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * data provider's data with specified selector on the specified data type that the project data
    * provider serves according to its `projectType`.
    *
-   * Usage: Specify the project id, the project type, and the data type on the project data provider
-   * with `useProjectData('<project_id>', '<project_type>').<data_type>` and use like any other React
+   * Usage: Specify the project type, the project id, and the data type on the project data provider
+   * with `useProjectData('<project_type>', '<project_id>').<data_type>` and use like any other React
    * hook.
    *
    * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `ParatextStandard` project with
@@ -4157,21 +4130,22 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *
    * ```typescript
    * const [verse, setVerse, verseIsLoading] = useProjectData(
-   *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
    *   'ParatextStandard',
+   *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
    * ).VerseUSFM(
    *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
    *   'Loading verse ',
    * );
    * ```
    *
-   * _＠param_ `projectDataProviderSource` string name of the id of the project to get OR
+   * _＠param_ `projectType` Indicates what you expect the `projectType` to be for the project with the
+   * specified id. The TypeScript type for the returned project data provider will have the project
+   * data provider type associated with this project type. If this argument does not match the
+   * project's actual `projectType` (according to its metadata), a warning will be logged
+   *
+   * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
    * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
    * project data provider once)
-   *
-   * _＠param_ `projectType` indicates what you expect the `projectType` to be for the project with the
-   * specified id. Currently, this does nothing but indicate to TypeScript what type the Project Data
-   * Provider is. This is an alternative way to specify the `ProjectType` generic type. Optional.
    *
    * _＠param_ `selector` tells the provider what data this listener is listening for
    *
@@ -4189,9 +4163,6 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * must not be updated every render
    *
    * _＠returns_ `[data, setData, isLoading]`
-   *
-   * _＠type_ `ProjectType` - the `projectType` of the project whose data to retrieve. Alternatively,
-   * specify this as the second argument to the `useProjectData` function for Intellisense support
    */
   const useProjectData: UseProjectDataHook;
   export default useProjectData;

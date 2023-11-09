@@ -10,33 +10,12 @@ import { ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
 /**
  * React hook to use data from a project data provider
  *
- * @example `useProjectData.VerseUSFM<ProjectDataTypes['ParatextStandard'], 'VerseUSFM'>(...);`
- *
- * @example `useProjectData('<project_id>', 'ParatextStandard').VerseUSFM(...)`
- *
- * @type `TProjectDataTypes` - The project data types associated with the `projectType` used. You
- *   can specify this type with `ProjectDataTypes['<project_type>']`
- * @type `TDataType` - The specific data type on this project you want to use. Must match the data
- *   type specified in `useProjectData.<data_type>`
- *
- *   Unfortunately, accessing properties from the `DataProviderDataType`s in `ProjectDataTypes` did
- *   not work. Maybe TypeScript refuses to look at all properties in each member of
- *   `ProjectDataTypes` and tell that they're all `DataProviderDataType`s. So this did not work
- *   because it refused to accept that `'selector'` was a valid member:
- *   `ProjectDataTypes[ProjectType][TDataType]['selector']`
- *
- *   # As such, this hook proxy actually has the same types as `UseDataHook` but with a couple of things
- *
- *   Renamed for easier readability.
- * @type `ProjectType` - The `projectType` of the project whose data to retrieve. Alternatively,
- *   specify this as the second argument to the `useProjectData` function for Intellisense support
+ * @example `useProjectData('ParatextStandard', 'project id').VerseUSFM(...);`
  */
 type UseProjectDataHook = {
-  // Here we do not use `ProjectType extends ProjectTypes` because `useProjectData<''>` Intellisense
-  // was not working to show the options. Whereas `useProjectData<ProjectDataTypes['']>` does
   <ProjectType extends ProjectTypes>(
+    projectType: ProjectType,
     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
-    projectType?: ProjectType,
   ): {
     [TDataType in keyof ProjectDataTypes[ProjectType]]: (
       // @ts-expect-error For some reason, TypeScript pretends it can't find `selector`, but it
@@ -69,8 +48,8 @@ type UseProjectDataHook = {
 /**
  * ```typescript
  * useProjectData<ProjectType extends ProjectTypes>(
+ *     projectType: ProjectType,
  *     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
- *     projectType?: ProjectType,
  *   ).DataType(
  *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
  *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
@@ -91,8 +70,8 @@ type UseProjectDataHook = {
  * data provider's data with specified selector on the specified data type that the project data
  * provider serves according to its `projectType`.
  *
- * Usage: Specify the project id, the project type, and the data type on the project data provider
- * with `useProjectData('<project_id>', '<project_type>').<data_type>` and use like any other React
+ * Usage: Specify the project type, the project id, and the data type on the project data provider
+ * with `useProjectData('<project_type>', '<project_id>').<data_type>` and use like any other React
  * hook.
  *
  * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `ParatextStandard` project with
@@ -100,21 +79,22 @@ type UseProjectDataHook = {
  *
  * ```typescript
  * const [verse, setVerse, verseIsLoading] = useProjectData(
- *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
  *   'ParatextStandard',
+ *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
  * ).VerseUSFM(
  *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
  *   'Loading verse ',
  * );
  * ```
  *
- * _＠param_ `projectDataProviderSource` string name of the id of the project to get OR
+ * _＠param_ `projectType` Indicates what you expect the `projectType` to be for the project with the
+ * specified id. The TypeScript type for the returned project data provider will have the project
+ * data provider type associated with this project type. If this argument does not match the
+ * project's actual `projectType` (according to its metadata), a warning will be logged
+ *
+ * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
  * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
  * project data provider once)
- *
- * _＠param_ `projectType` indicates what you expect the `projectType` to be for the project with the
- * specified id. Currently, this does nothing but indicate to TypeScript what type the Project Data
- * Provider is. This is an alternative way to specify the `ProjectType` generic type. Optional.
  *
  * _＠param_ `selector` tells the provider what data this listener is listening for
  *
@@ -132,14 +112,12 @@ type UseProjectDataHook = {
  * must not be updated every render
  *
  * _＠returns_ `[data, setData, isLoading]`
- *
- * _＠type_ `ProjectType` - the `projectType` of the project whose data to retrieve. Alternatively,
- * specify this as the second argument to the `useProjectData` function for Intellisense support
  */
 // Assert the more general and more specific types.
 /* eslint-disable no-type-assertion/no-type-assertion */
 const useProjectData = createUseDataHook(
   useProjectDataProvider as (
+    projectType: ProjectTypes,
     dataProviderSource: string | IDataProvider | undefined,
   ) => IDataProvider | undefined,
 ) as UseProjectDataHook;

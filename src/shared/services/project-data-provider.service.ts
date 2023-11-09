@@ -90,36 +90,25 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
 }
 
 /**
- * Get a Project Data Provider for the given project ID. For types to work properly, specify the
- * project type as a generic parameter.
+ * Get a Project Data Provider for the given project ID.
  *
  * @example
  *
  * ```typescript
- * const pdp = await getProjectDataProvider<'ParatextStandard'>('ProjectID12345');
+ * const pdp = await getProjectDataProvider('ParatextStandard', 'ProjectID12345');
  * pdp.getVerse(new VerseRef('JHN', '1', '1'));
  * ```
  *
- * @example
- *
- * ```typescript
- * const pdp = await getProjectDataProvider('ProjectID12345', 'ParatextStandard');
- * pdp.getVerse(new VerseRef('JHN', '1', '1'));
- * ```
- *
- * @type `ProjectType` - The `projectType` for the project to use. The returned project data
- *   provider will have the project data provider type associated with this project type.
- *   Alternatively, specify this as the second argument to this function for Intellisense support
- * @param projectId ID for the project to load
  * @param projectType Indicates what you expect the `projectType` to be for the project with the
- *   specified id. Currently, this does nothing but indicate to TypeScript what type the Project
- *   Data Provider is. This is an alternative way to specify the `ProjectType` generic type.
- *   Optional.
+ *   specified id. The TypeScript type for the returned project data provider will have the project
+ *   data provider type associated with this project type. If this argument does not match the
+ *   project's actual `projectType` (according to its metadata), a warning will be logged
+ * @param projectId ID for the project to load
  * @returns Data provider with types that are associated with the given project type
  */
 export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
+  projectType: ProjectType,
   projectId: string,
-  projectType?: ProjectType,
 ): Promise<ProjectDataProvider[ProjectType]> {
   const metadata = await projectLookupService.getMetadataForProject(projectId);
   const { projectType: projectTypeFromMetadata } = metadata;

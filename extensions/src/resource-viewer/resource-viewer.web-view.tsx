@@ -161,7 +161,7 @@ globalThis.webViewComponent = function ResourceViewer({
 
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  const [usx, setUsx] = useProjectData(projectId, 'ParatextStandard').ChapterUSX(
+  const [usx, setUsx] = useProjectData('ParatextStandard', projectId).ChapterUSX(
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     'Loading Scripture...',
   );
