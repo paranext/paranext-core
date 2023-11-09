@@ -62,7 +62,7 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
         }
         catch (Exception e)
         {
-            return ResponseToRequest.Failed(e.Message);
+            return ResponseToRequest.Failed(e.ToString());
         }
     }
 
