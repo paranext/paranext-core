@@ -1,5 +1,14 @@
 ﻿import { ScrVers, VerseRef } from '@sillsdev/scripture';
-import papi from 'papi-frontend';
+import papi, { logger } from 'papi-frontend';
+import {
+  useData,
+  useProjectData,
+  usePromise,
+  useEvent,
+  useSetting,
+  useDialogCallback,
+  useDataProvider,
+} from 'papi-frontend/react';
 import {
   Button,
   Checkbox,
@@ -14,7 +23,7 @@ import {
 import type { QuickVerseDataTypes } from 'quick-verse';
 import type { PeopleDataProvider, PeopleDataTypes } from 'hello-someone';
 import type { UsfmProviderDataTypes } from 'usfm-data-provider';
-import { Key, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
 import type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
 import type { WebViewProps } from 'shared/data/web-view.model';
@@ -27,22 +36,6 @@ type Row = {
   title: string;
   subtitle: string;
 };
-
-const {
-  react: {
-    context: { TestContext },
-    hooks: {
-      useData,
-      useDataProvider,
-      useProjectData,
-      usePromise,
-      useEvent,
-      useSetting,
-      useDialogCallback,
-    },
-  },
-  logger,
-} = papi;
 
 const NAME = 'Hello World React WebView';
 
@@ -73,8 +66,6 @@ globalThis.webViewComponent = function HelloWorld({
   getWebViewDefinitionUpdatableProperties,
   updateWebViewDefinition,
 }: WebViewProps) {
-  const test = useContext(TestContext) || "Context didn't work!! :(";
-
   const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
   const [rows, setRows] = useState(initializeRows());
   const [selectedRows, setSelectedRows] = useState(new Set<Key>());
@@ -174,8 +165,8 @@ globalThis.webViewComponent = function HelloWorld({
         Hello World <span className="framework">React</span>
         {/**
          * Note: `Logo` here is inlined into this code as a `data:` url. This is here simply for
-         * demonstration purposes. Inlining as a `data:` url is generally not recommended. Rather,
-         * it is generally better to use `papi-extension:` to avoid unnecessary bloat
+         * demonstration purposes. Inlining as a `data:` url is generally not recommended. Rather, it is
+         * generally better to use `papi-extension:` to avoid unnecessary bloat
          */}
         <img width={16} height={16} src={`${Logo}`} alt="Hello World Logo" />
       </div>
@@ -192,7 +183,6 @@ globalThis.webViewComponent = function HelloWorld({
           Hello World {clicks}
         </Button>
       </div>
-      <div>{test}</div>
       <div>{echoResult}</div>
       <div>
         <Button

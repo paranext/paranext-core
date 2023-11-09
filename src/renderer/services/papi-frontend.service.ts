@@ -7,7 +7,7 @@
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as commandService from '@shared/services/command.service';
 import * as papiUtil from '@shared/utils/papi-util';
-import logger from '@shared/services/logger.service';
+import papiLogger from '@shared/services/logger.service';
 import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
 import { papiWebViewService, PapiWebViewService } from '@shared/services/web-view.service';
 import internetService, { InternetService } from '@shared/services/internet.service';
@@ -18,11 +18,10 @@ import {
   papiFrontendProjectDataProviderService,
   PapiFrontendProjectDataProviderService,
 } from '@shared/services/project-data-provider.service';
-import papiContext, { PapiContext } from '@renderer/context/papi-context';
-import papiHooks, { PapiHooks } from '@renderer/hooks/papi-hooks';
 import settingsService, { SettingsService } from '@shared/services/settings.service';
 import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
+import * as papiReact from '@renderer/services/papi-frontend-react.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-backend.service.ts.
@@ -31,6 +30,7 @@ import { DialogService } from '@shared/services/dialog.service-model';
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion */
 // 3) The "JSDOC DESTINATION" comments are there to provide anchors for JSDocs to be copied in.
 // Please add to all properties you add.
+// 4) Anytime you add anything to PAPI also add it to the destructured export below
 const papi = {
   // Classes
   /** JSDOC DESTINATION PapiEventEmitter */
@@ -52,7 +52,7 @@ const papi = {
   /** JSDOC DESTINATION papiNetworkService */
   network: papiNetworkService as PapiNetworkService,
   /** JSDOC DESTINATION logger */
-  logger,
+  logger: papiLogger,
   /** JSDOC DESTINATION internetService */
   internet: internetService as InternetService,
   /** JSDOC DESTINATION dataProviderService */
@@ -62,15 +62,42 @@ const papi = {
     papiFrontendProjectDataProviderService as PapiFrontendProjectDataProviderService,
   /** JSDOC DESTINATION projectLookupService */
   projectLookup: projectLookupService as ProjectLookupServiceType,
-  react: {
-    /** JSDOC DESTINATION papiContext */
-    context: papiContext as PapiContext,
-    /** JSDOC DESTINATION papiHooks */
-    hooks: papiHooks as PapiHooks,
-  },
+  /** JSDOC SOURCE papiReact */
+  react: papiReact,
   /** JSDOC DESTINATION settingsService */
   settings: settingsService as SettingsService,
 };
 export default papi;
+
+// If you add to the PAPI you need to add to this
+
+/** JSDOC DESTINATION PapiEventEmitter */
+export const { EventEmitter } = papi;
+/** This is just an alias for internet.fetch */
+export const { fetch } = papi;
+/** JSDOC DESTINATION commandService */
+export const { commands } = papi;
+/** JSDOC DESTINATION papiUtil */
+export const { util } = papi;
+/** JSDOC DESTINATION papiWebViewService */
+export const { webViews } = papi;
+/** JSDOC DESTINATION dialogService */
+export const { dialogs } = papi;
+/** JSDOC DESTINATION papiNetworkService */
+export const { network } = papi;
+/** JSDOC DESTINATION logger */
+export const { logger } = papi;
+/** JSDOC DESTINATION internetService */
+export const { internet } = papi;
+/** JSDOC DESTINATION dataProviderService */
+export const { dataProvider } = papi;
+/** JSDOC DESTINATION papiBackendProjectDataProviderService */
+export const { projectDataProvider } = papi;
+/** JSDOC DESTINATION projectLookupService */
+export const { projectLookup } = papi;
+/** JSDOC DESTINATION papiReact */
+export const { react } = papi;
+/** JSDOC DESTINATION settingsService */
+export const { settings } = papi;
 
 export type Papi = typeof papi;

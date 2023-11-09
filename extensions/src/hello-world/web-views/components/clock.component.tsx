@@ -1,11 +1,5 @@
 import type { TimeDataTypes } from 'c-sharp-provider-test';
-import papi from 'papi-frontend';
-
-const {
-  react: {
-    hooks: { useData },
-  },
-} = papi;
+import { useData } from 'papi-frontend/react';
 
 export default function Clock() {
   const [currentTime] = useData.Time<TimeDataTypes, 'TimeData'>(

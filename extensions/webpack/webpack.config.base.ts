@@ -23,7 +23,7 @@ export const LIBRARY_TYPE: NonNullable<webpack.Configuration['externalsType']> =
 // Note: we do not want to do any chunking because neither webViews nor main can import dependencies
 // other than those listed in configBase.externals. Each webView must contain all its dependency
 // code, and main must contain all its dependency code.
-/** webpack configuration shared by webView building and main building */
+/** Webpack configuration shared by webView building and main building */
 const configBase: webpack.Configuration = {
   // The operating directory for webpack instead of current working directory
   context: rootDir,
@@ -44,6 +44,7 @@ const configBase: webpack.Configuration = {
     'react-dom',
     'react-dom/client',
     'papi-frontend',
+    'papi-frontend/react',
     'papi-backend',
     '@sillsdev/scripture',
   ],
@@ -86,9 +87,7 @@ const configBase: webpack.Configuration = {
         },
         exclude: /node_modules/,
       },
-      /**
-       * Import scss, sass, and css files as strings
-       */
+      /** Import scss, sass, and css files as strings */
       // https://webpack.js.org/loaders/sass-loader/#getting-started
       {
         test: /\.(sa|sc|c)ss$/,
@@ -101,7 +100,8 @@ const configBase: webpack.Configuration = {
           'sass-loader',
         ],
       },
-      /** Load images as data uris
+      /**
+       * Load images as data uris
        *
        * Note: it is generally advised to use the `papi-extension:` protocol to load assets
        */
@@ -120,9 +120,7 @@ const configBase: webpack.Configuration = {
         test: /\.(woff|woff2|eot|ttf|otf)$/i,
         type: 'asset/inline',
       },
-      /**
-       * Import files with no transformation as strings with "./file?raw"
-       */
+      /** Import files with no transformation as strings with "./file?raw" */
       // This must be the last rule in order to be applied before all other transformations
       // https://webpack.js.org/guides/asset-modules/#replacing-inline-loader-syntax
       {

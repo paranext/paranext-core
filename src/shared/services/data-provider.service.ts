@@ -55,6 +55,8 @@ let isInitialized = false;
 let initializePromise: Promise<void> | undefined;
 
 /**
+ * JSDOC SOURCE DataProviderEngine
+ *
  * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
  * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
  * function in order to use `notifyUpdate`.

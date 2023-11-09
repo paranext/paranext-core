@@ -1,13 +1,8 @@
 import papi from 'papi-frontend';
+import { useEvent } from 'papi-frontend/react';
 import { useCallback, useState } from 'react';
 import { Button } from 'papi-components';
 import type { HelloWorldEvent } from 'hello-world';
-
-const {
-  react: {
-    hooks: { useEvent },
-  },
-} = papi;
 
 globalThis.webViewComponent = function HelloWorld2() {
   const [clicks, setClicks] = useState(0);
