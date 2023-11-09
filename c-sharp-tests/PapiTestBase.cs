@@ -218,7 +218,7 @@ namespace TestParanextDataProvider
                 Assert.That(message.Type, Is.EqualTo(MessageType.Response));
 
                 MessageResponse response = (MessageResponse)message;
-                Assert.That(response.ErrorMessage, Does.Contain(expectedErrorMessage));
+                Assert.That(response.ErrorMessage ?? "", Does.Contain(expectedErrorMessage ?? ""));
                 Assert.That(response.Success, Is.EqualTo(string.IsNullOrEmpty(expectedErrorMessage)));
                 Assert.That(response.RequestType, Is.EqualTo(expectedResponseType));
                 Assert.That(response.RequestId, Is.EqualTo(expectedRequestId));
