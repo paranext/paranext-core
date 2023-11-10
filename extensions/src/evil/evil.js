@@ -119,7 +119,7 @@ const EVIL_WEBVIEW = `
         window.top.alert('<<BAD>> Evil could create a modal through window.top.alert!');
       } catch (e) {
         // No need to log good stuff unless we're testing
-        //papi.logger.info(\`Evil: Good error on running window.top.alert: \${e.message}\`);
+        // papi.logger.info(\`Evil: Good error on running window.top.alert: \${e.message}\`);
       }
 
      // Try to create a modal through window.top.confirm
@@ -127,7 +127,7 @@ const EVIL_WEBVIEW = `
         window.top.confirm('<<BAD>> Evil could create a modal through window.top.confirm!');
       } catch (e) {
         // No need to log good stuff unless we're testing
-        //papi.logger.info(\`Evil: Good error on running window.top.confirm: \${e.message}\`);
+        // papi.logger.info(\`Evil: Good error on running window.top.confirm: \${e.message}\`);
       }
 
      // Try to create a modal through window.top.print
@@ -135,7 +135,7 @@ const EVIL_WEBVIEW = `
         window.top.print('<<BAD>> Evil could create a modal through window.top.print!');
       } catch (e) {
         // No need to log good stuff unless we're testing
-        //papi.logger.info(\`Evil: Good error on running window.top.print: \${e.message}\`);
+        // papi.logger.info(\`Evil: Good error on running window.top.print: \${e.message}\`);
       }
 
      // Try to create a modal through window.top.prompt
@@ -143,7 +143,7 @@ const EVIL_WEBVIEW = `
         window.top.prompt('<<BAD>> Evil could create a modal through window.top.prompt!');
       } catch (e) {
         // No need to log good stuff unless we're testing
-        //papi.logger.info(\`Evil: Good error on running window.top.prompt: \${e.message}\`);
+        // papi.logger.info(\`Evil: Good error on running window.top.prompt: \${e.message}\`);
       }
 
      // Try to create a popup through window.top.open
@@ -151,7 +151,7 @@ const EVIL_WEBVIEW = `
         window.top.open('<<BAD>> Evil could create a popup through window.top.open!');
       } catch (e) {
         // No need to log good stuff unless we're testing
-        //papi.logger.info(\`Evil: Good error on running window.top.open: \${e.message}\`);
+        // papi.logger.info(\`Evil: Good error on running window.top.open: \${e.message}\`);
       }
 
      // Try to create a popup through window.top.showModalDialog
@@ -159,7 +159,20 @@ const EVIL_WEBVIEW = `
         window.top.showModalDialog('<<BAD>> Evil could create a popup through window.top.showModalDialog!');
       } catch (e) {
         // No need to log good stuff unless we're testing
-        //papi.logger.info(\`Evil: Good error on running window.top.showModalDialog: \${e.message}\`);
+        // papi.logger.info(\`Evil: Good error on running window.top.showModalDialog: \${e.message}\`);
+      }
+
+     // Try to access \`navigator.presentation\` through window.top.navigator
+      try {
+        if (window.top.navigator.presentation)
+          papi.logger.error('<<BAD>> Evil could access \`window.top.navigator.presentation\`!');
+        else throw new Error('navigator.presentation is undefined');
+      } catch (e) {
+        if (e.message === 'navigator.presentation is undefined') {
+          // No need to log good stuff unless we're testing
+          // papi.logger.info(\`Evil: Good error on running window.top.navigator.presentation: \${e.message}\`);
+        }
+        else papi.logger.warn(\`Evil web view failed to access window.top.navigator.presentation, but it was not because window.top.navigator.presentation is undefined. Investigate!: \${e.message}\`);
       }
 
       // Note: we are using this sourceURL in web-view.service.ts, so keep it up-to-date with this

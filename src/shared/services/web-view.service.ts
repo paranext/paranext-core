@@ -1232,26 +1232,29 @@ export const initialize = () => {
       // sandboxing
 
       // Remove the ability to do presentations
-      // Note: this prevents us from doing a lot of other things. If we ever need the navigator, we
-      // can save it out to a variable. But sadly we cannot only delete navigator.presentation
       // Corresponds to iframe sandbox `allow-presentation`
-      // @ts-expect-error we want to remove navigator because it allows presentations
-      // eslint-disable-next-line no-eval
-      delete globalThis.navigator;
+      // `window.navigator` does not have a setter but is configurable, so we redefine the property
+      Object.defineProperty(window, 'navigator', {
+        writable: false,
+        value: new Proxy(globalThis.navigator, {
+          get(obj, prop) {
+            if (prop === 'presentation') return undefined;
+            // Get the property on the object - doesn't matter what it is
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            return obj[prop as keyof typeof obj];
+          },
+        }),
+      });
 
       // Remove the ability to show modals
       // Corresponds to iframe sandbox `allow-modals`
       // @ts-expect-error we want to remove the ability to show modals
-      // eslint-disable-next-line no-eval
       delete globalThis.alert;
       // @ts-expect-error we want to remove the ability to show modals
-      // eslint-disable-next-line no-eval
       delete globalThis.confirm;
       // @ts-expect-error we want to remove the ability to show modals
-      // eslint-disable-next-line no-eval
       delete globalThis.print;
       // @ts-expect-error we want to remove the ability to show modals
-      // eslint-disable-next-line no-eval
       delete globalThis.prompt;
 
       // TODO: Remove the ability to change the screen orientation? https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock
@@ -1263,10 +1266,8 @@ export const initialize = () => {
       // Remove the ability to create popups
       // Corresponds to iframe sandbox `allow-popups`
       // @ts-expect-error we want to remove the ability to create popups
-      // eslint-disable-next-line no-eval
       delete globalThis.open;
       // @ts-expect-error we want to remove the ability to create popups
-      // eslint-disable-next-line no-eval
       delete globalThis.showModalDialog;
 
       // #endregion
