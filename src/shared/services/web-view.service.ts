@@ -952,6 +952,8 @@ export const getWebView = async (
                 };
 
                 root.render(React.createElement(globalThis.webViewComponent, webViewProps));
+
+                window.addEventListener('unload', () => {root.unmount()});
               }
 
               if (document.readyState === 'loading')
