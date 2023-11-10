@@ -5,7 +5,6 @@ import type {
   WebViewDefinition,
   SavedWebViewDefinition,
 } from 'shared/data/web-view.model';
-import type { PeopleDataProvider } from 'hello-someone';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 import type PapiEventEmitter from 'shared/models/papi-event-emitter.model';
 import type { HelloWorldEvent } from 'hello-world';
@@ -141,7 +140,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   papi.webViews.getWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
   papi.webViews.getWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
 
-  const peopleDataProvider = await papi.dataProvider.get<PeopleDataProvider>('helloSomeone.people');
+  const peopleDataProvider = await papi.dataProvider.get('helloSomeone.people');
 
   if (peopleDataProvider) {
     // Test subscribing to a data provider

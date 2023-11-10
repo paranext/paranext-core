@@ -26,7 +26,7 @@
   "main": "",
   "types": "papi.d.ts",
   "scripts": {
-    "build": "tsc && ts-node edit-papi-d-ts.ts && prettier --write papi.d.ts",
+    "build": "tsc && prettier --write papi.d.ts && ts-node edit-papi-d-ts.ts",
     "build:clean": "rimraf papi.tsbuildinfo",
     "build:fresh": "npm run build:clean && npm run build",
     "lint": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",

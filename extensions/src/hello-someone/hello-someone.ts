@@ -39,7 +39,7 @@ logger.info('Hello Someone is importing!');
  * - Cons
  *
  *   - Must specify all properties and methods in the object type
- *   - `papi.dataProvider.decorators.ignore` is difficult to apply to tell papi to ignore methods
+ *   - `@papi.dataProvider.decorators.ignore` is difficult to apply to tell papi to ignore methods
  *   - When using `this.notifyUpdate`, you must include the `WithNotifyUpdate` type and provide a
  *       placeholder `notifyUpdate` method
  *
@@ -99,8 +99,8 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   Note: this method gets layered over so that you can run `this.setGreeting` inside this data
    *   provider engine, and it will send updates after returning.
    *
-   *   Note: this method is used when someone uses the `useData.Greeting` hook on the data provider
-   *   papi creates for this engine.
+   *   Note: this method is used when someone uses the `useData('helloSomeone.people').Greeting` hook
+   *   on the data provider papi creates for this engine.
    */
   async setGreeting(
     name: string,
@@ -122,8 +122,8 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    * @param name Name of person
    * @returns Person's greeting or undefined
    *
-   *   Note: this method is used when someone uses the `useData.Greeting` hook or the
-   *   `subscribeGreeting` method on the data provider papi creates for this engine.
+   *   Note: this method is used when someone uses the `useData('helloSomeone.people').Greeting` hook
+   *   or the `subscribeGreeting` method on the data provider papi creates for this engine.
    */
   async getGreeting(name: string) {
     return this.getPerson(name, false)?.greeting;
@@ -140,8 +140,8 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   Note: this method gets layered over so that you can run `this.setAge` inside this data provider
    *   engine, and it will send updates after returning.
    *
-   *   Note: this method is used when someone uses the `useData.Age` hook on the data provider papi
-   *   creates for this engine.
+   *   Note: this method is used when someone uses the `useData('helloSomeone.people').Age` hook on
+   *   the data provider papi creates for this engine.
    */
   async setAge(
     name: string,
@@ -163,8 +163,8 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    * @param name Name of person
    * @returns Person's age or undefined
    *
-   *   Note: this method is used when someone uses the `useData.Age` hook or the `subscribeAge` method
-   *   on the data provider papi creates for this engine.
+   *   Note: this method is used when someone uses the `useData('helloSomeone.people').Age` hook or
+   *   the `subscribeAge` method on the data provider papi creates for this engine.
    */
   async getAge(name: string) {
     return this.getPerson(name, false)?.age;
@@ -263,7 +263,7 @@ const peopleWebViewProvider: IWebViewProvider = {
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello Someone is activating!');
 
-  const peopleDataProviderPromise = papi.dataProvider.registerEngine<PeopleDataTypes>(
+  const peopleDataProviderPromise = papi.dataProvider.registerEngine(
     'helloSomeone.people',
     peopleDataProviderEngine,
   );

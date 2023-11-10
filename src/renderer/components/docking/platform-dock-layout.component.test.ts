@@ -23,6 +23,7 @@ import {
   getFloatPosition,
   loadTab,
 } from './platform-dock-layout.component';
+/* eslint-enable */
 
 describe('Dock Layout Component', () => {
   const mockDockLayout = mock(DockLayout);

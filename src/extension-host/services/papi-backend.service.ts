@@ -77,6 +77,8 @@ const papi = {
   /** JSDOC DESTINATION extensionStorageService */
   storage: extensionStorageService as ExtensionStorageService,
 };
+/* eslint-enable */
+
 export default papi;
 
 // This is the destructured export, if you add to the PAPI you need to add to this

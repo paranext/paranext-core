@@ -5,20 +5,52 @@ import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 
 /**
+ * Takes the parameters passed into the hook and returns the `networkObjectSource` associated with
+ * those parameters. This default implementation simply returns the first argument assuming it is
+ * the `networkObjectSource`.
+ *
+ * @param networkObjectSource String name of the network object to get OR `networkObject` (result of
+ *   this hook, if you want this hook to just return the network object again)
+ * @returns `networkObjectSource` for getting the network object
+ */
+function mapParametersToNetworkObjectSourceDefault(
+  networkObjectSource: string | NetworkObject<object> | undefined,
+) {
+  return networkObjectSource;
+}
+
+/**
  * This function takes in a getNetworkObject function and creates a hook with that function in it
  * which will return a network object
  *
  * @param getNetworkObject A function that takes in an id string and returns a network object
+ * @param mapParametersToNetworkObjectSource Function that takes the parameters passed into the hook
+ *   and returns the `networkObjectSource` associated with those parameters. Defaults to taking the
+ *   first parameter passed into the hook and using that as the `networkObjectSource`.
+ *
+ *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
+ *       (result of this hook, if you want this hook to just return the network object again)
+ *
  * @returns A function that takes in a networkObjectSource and returns a NetworkObject
  */
-function createUseNetworkObjectHook(
-  getNetworkObject: (id: string) => Promise<NetworkObject<object> | undefined>,
-): (
-  networkObjectSource: string | NetworkObject<object> | undefined,
-) => NetworkObject<object> | undefined {
-  return function useNetworkObject(
-    networkObjectSource: string | NetworkObject<object> | undefined,
-  ): NetworkObject<object> | undefined {
+function createUseNetworkObjectHook<THookParams extends unknown[]>(
+  getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
+  mapParametersToNetworkObjectSource?: (
+    ...args: THookParams
+  ) => string | NetworkObject<object> | undefined,
+): (...args: THookParams) => NetworkObject<object> | undefined {
+  return function useNetworkObject(...args: THookParams): NetworkObject<object> | undefined {
+    const mapParameters =
+      mapParametersToNetworkObjectSource ||
+      // We don't use the spread args because we don't need them. And TS is having a fit that this
+      // default function doesn't literally use `unknown[]`
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (mapParametersToNetworkObjectSourceDefault as NonNullable<
+        typeof mapParametersToNetworkObjectSource
+      >);
+
+    const networkObjectSource = mapParameters(...args);
+
     // Check to see if they passed in the results of a useNetworkObject hook or undefined
     const didReceiveNetworkObject = !isString(networkObjectSource);
 
@@ -32,8 +64,11 @@ function createUseNetworkObjectHook(
             undefined
           : async () =>
               // We have the network object's type, so we need to get the provider
-              networkObjectSource ? getNetworkObject(networkObjectSource) : undefined;
-      }, [didReceiveNetworkObject, networkObjectSource]),
+              networkObjectSource ? getNetworkObject(...args) : undefined;
+        // We need to spread `args` in here since we don't know how many members it has. Be VERY
+        // CAREFUL when editing this `usePromise` since we don't have dependency checking on
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [didReceiveNetworkObject, networkObjectSource, ...args]),
       undefined,
     );
 

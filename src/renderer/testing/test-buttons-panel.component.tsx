@@ -9,8 +9,6 @@ import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
-import type { PeopleDataProvider } from 'hello-someone';
-import type { QuickVerseDataTypes } from 'quick-verse';
 
 export const TAB_TYPE_BUTTONS = 'buttons';
 
@@ -143,7 +141,7 @@ export default function TestButtonsPanel() {
 
   // Test a method on a data provider engine that isn't on the interface to see if you can actually do this
   const [hasTestedRandomMethod, setHasTestedRandomMethod] = useState(false);
-  const peopleDataProvider = useDataProvider<PeopleDataProvider>('helloSomeone.people');
+  const peopleDataProvider = useDataProvider('helloSomeone.people');
   if (!hasTestedRandomMethod && peopleDataProvider) {
     setHasTestedRandomMethod(true);
     (async () => {
@@ -167,8 +165,7 @@ export default function TestButtonsPanel() {
 
   // We need to tell the useData.Verse hook what types we are using, so we get the Verse data types
   // from the quick verse data types
-  const [verseText, setVerseText, verseTextIsLoading] = useData.Verse<QuickVerseDataTypes, 'Verse'>(
-    'quickVerse.quickVerse',
+  const [verseText, setVerseText, verseTextIsLoading] = useData('quickVerse.quickVerse').Verse(
     verseRef,
     'Verse text goes here',
   );

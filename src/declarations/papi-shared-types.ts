@@ -1,18 +1,23 @@
 declare module 'papi-shared-types' {
-  import { ScriptureReference } from 'papi-components';
+  import type { ScriptureReference } from 'papi-components';
   import type { DataProviderDataType } from 'shared/models/data-provider.model';
   import type { MandatoryProjectDataType } from '@shared/models/project-data-provider.model';
+  import type { IDisposableDataProvider } from '@shared/models/data-provider.interface';
+  import type IDataProvider from '@shared/models/data-provider.interface';
+  import type ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
 
   // TODO: Adding an index type removes type checking on the key :( How do we make sure extensions provide only functions?
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
-   * to add commands that it registers on the papi.
+   * to add commands that it registers on the papi with `papi.commands.registerCommand`.
    *
    * Note: Command names must consist of two string separated by at least one period. We recommend
    * one period and lower camel case in case we expand the api in the future to allow dot notation.
    *
-   * @example An extension can extend this interface to add types for the commands it registers by
-   * adding the following to its `.d.ts` file:
+   * An extension can extend this interface to add types for the commands it registers by adding the
+   * following to its `.d.ts` file:
+   *
+   * @example
    *
    * ```typescript
    * declare module 'papi-shared-types' {
@@ -40,11 +45,9 @@ declare module 'papi-shared-types' {
   }
 
   /**
-   * Names for each command available on the papi. Automatically includes all extensions' commands
-   * that are added to {@link CommandHandlers}.
+   * Names for each command available on the papi.
    *
-   * Note: Command names must consist of two string separated by at least one period. We recommend
-   * one period and lower camel case in case we expand the api in the future to allow dot notation.
+   * Automatically includes all extensions' commands that are added to {@link CommandHandlers}.
    *
    * @example 'platform.quit';
    */
@@ -67,7 +70,7 @@ declare module 'papi-shared-types' {
 
   /**
    * Data types for each project data provider supported by PAPI. Extensions can add more data types
-   * with corresponding project data provider IDs by adding details to their `d.ts` file. Note that
+   * with corresponding project data provider IDs by adding details to their `.d.ts` file. Note that
    * all project data types should extend `MandatoryProjectDataTypes` like the following example.
    *
    * @example
@@ -98,4 +101,96 @@ declare module 'papi-shared-types' {
    * to the set of project types available in Paratext.
    */
   export type ProjectTypes = keyof ProjectDataTypes;
+
+  type StuffDataTypes = { Stuff: DataProviderDataType<string, number, never> };
+
+  type PlaceholderDataTypes = {
+    Placeholder: DataProviderDataType<{ thing: number }, string[], number>;
+  };
+
+  /**
+   * `IDataProvider` types for each data provider supported by PAPI. Extensions can add more data
+   * providers with corresponding data provider IDs by adding details to their `.d.ts` file and
+   * registering a data provider engine in their `activate` function with
+   * `papi.dataProvider.registerEngine`.
+   *
+   * Note: Data Provider names must consist of two string separated by at least one period. We
+   * recommend one period and lower camel case in case we expand the api in the future to allow dot
+   * notation.
+   *
+   * An extension can extend this interface to add types for the data provider it registers by
+   * adding the following to its `.d.ts` file (in this example, we are adding the
+   * `'helloSomeone.people'` data provider types):
+   *
+   * @example
+   *
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export type PeopleDataTypes = {
+   *     Greeting: DataProviderDataType<string, string | undefined, string>;
+   *     Age: DataProviderDataType<string, number | undefined, number>;
+   *     People: DataProviderDataType<undefined, PeopleData, never>;
+   *   };
+   *
+   *   export type PeopleDataMethods = {
+   *     deletePerson(name: string): Promise<boolean>;
+   *     testRandomMethod(things: string): Promise<string>;
+   *   };
+   *
+   *   export type PeopleDataProvider = IDataProvider<PeopleDataTypes> & PeopleDataMethods;
+   *
+   *   export interface DataProviders {
+   *     'helloSomeone.people': PeopleDataProvider;
+   *   }
+   * }
+   * ```
+   */
+  export interface DataProviders {
+    'platform.stuff': IDataProvider<StuffDataTypes>;
+    'platform.placeholder': IDataProvider<PlaceholderDataTypes>;
+  }
+
+  /**
+   * Names for each data provider available on the papi.
+   *
+   * Automatically includes all extensions' data providers that are added to {@link DataProviders}.
+   *
+   * @example 'platform.placeholder'
+   */
+  export type DataProviderNames = keyof DataProviders;
+
+  /**
+   * `DataProviderDataTypes` for each data provider supported by PAPI. These are the data types
+   * served by each data provider.
+   *
+   * Automatically includes all extensions' data providers that are added to {@link DataProviders}.
+   *
+   * @example
+   *
+   * ```typescript
+   * DataProviderTypes['helloSomeone.people'] => {
+   *     Greeting: DataProviderDataType<string, string | undefined, string>;
+   *     Age: DataProviderDataType<string, number | undefined, number>;
+   *     People: DataProviderDataType<undefined, PeopleData, never>;
+   *   }
+   * ```
+   */
+  export type DataProviderTypes = {
+    [DataProviderName in DataProviderNames]: ExtractDataProviderDataTypes<
+      DataProviders[DataProviderName]
+    >;
+  };
+
+  /**
+   * Disposable version of each data provider type supported by PAPI. These objects are only
+   * returned from `papi.dataProvider.registerEngine` - only the one who registers a data provider
+   * engine is allowed to dispose of the data provider.
+   *
+   * Automatically includes all extensions' data providers that are added to {@link DataProviders}.
+   */
+  export type DisposableDataProviders = {
+    [DataProviderName in DataProviderNames]: IDisposableDataProvider<
+      DataProviders[DataProviderName]
+    >;
+  };
 }

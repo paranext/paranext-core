@@ -1,7 +1,7 @@
-import type IDataProvider from 'shared/models/data-provider.interface';
-import type { DataProviderDataType } from 'shared/models/data-provider.model';
-
 declare module 'hello-someone' {
+  import type IDataProvider from 'shared/models/data-provider.interface';
+  import type { DataProviderDataType } from 'shared/models/data-provider.model';
+
   export type Person = {
     greeting?: string;
     age?: number;
@@ -26,8 +26,14 @@ declare module 'hello-someone' {
 }
 
 declare module 'papi-shared-types' {
+  import type { PeopleDataProvider } from 'hello-someone';
+
   export interface CommandHandlers {
     'helloSomeone.helloSomeone': (name: string) => string;
     'helloSomeone.echoSomeoneRenderer': (message: string) => Promise<string>;
+  }
+
+  export interface DataProviders {
+    'helloSomeone.people': PeopleDataProvider;
   }
 }
