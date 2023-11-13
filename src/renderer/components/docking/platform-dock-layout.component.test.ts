@@ -16,7 +16,12 @@ jest.mock(
 
 import DockLayout, { FloatPosition } from 'rc-dock';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
-import { FloatLayout, Layout, SavedTabInfo, WebViewTabProps } from '@shared/data/web-view.model';
+import {
+  FloatLayout,
+  Layout,
+  SavedTabInfo,
+  WebViewTabProps,
+} from '@shared/models/docking-framework.model';
 import {
   addTabToDock,
   addWebViewToDock,
