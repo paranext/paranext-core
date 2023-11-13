@@ -1,4 +1,5 @@
-import { WebViewContentType, WebViewTabProps } from '../../shared/data/web-view.model';
+import { WebViewContentType } from '@shared/models/web-view.model';
+import { WebViewTabProps } from '@shared/models/docking-framework.model';
 import { getTitle } from './web-view.component';
 
 describe('WebView Component', () => {

@@ -1,4 +1,4 @@
-import { FloatSize, TabLoader, TabSaver } from '@shared/data/web-view.model';
+import { FloatSize, TabLoader, TabSaver } from '@shared/models/docking-framework.model';
 import { DialogData } from '@shared/models/dialog-options.model';
 import logger from '@shared/services/logger.service';
 import { ReactElement, createElement } from 'react';
