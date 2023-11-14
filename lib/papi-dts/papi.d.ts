@@ -2746,8 +2746,8 @@ declare module 'shared/services/web-view.service-model' {
      */
     getWebView: (
       webViewType: WebViewType,
-      layout: Layout | undefined,
-      options: GetWebViewOptions,
+      layout?: Layout,
+      options?: GetWebViewOptions,
     ) => Promise<WebViewId | undefined>;
   }
   /** Name to use when creating a network event that is fired when webViews are created */
