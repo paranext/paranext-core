@@ -195,7 +195,9 @@ function InterfaceLanguageSetting({ setting, setSetting }: SettingProps<string>)
   return (
     <Select value={setting} onChange={(e) => setSetting(e.target.value)} sx={{ width: 200 }}>
       {options.map((option) => (
-        <MenuItem value={option}>{option}</MenuItem>
+        <MenuItem key={option} value={option}>
+          {option}
+        </MenuItem>
       ))}
     </Select>
   );
@@ -349,50 +351,53 @@ export default function SettingsDialog({
       <div className="settings-search-bar">
         <SearchBar onSearch={handleSearchInput} placeholder="Search Settings..." isFullWidth />
       </div>
-      <div className="settings-tab-group">
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          orientation="vertical"
-          className="settings-tabs"
-        >
-          {settingsGroups.map((group) => (
-            <Tab
-              key={group.label}
-              label={group.label}
-              value={group.label}
-              sx={{ alignItems: 'start' }}
-            />
-          ))}
-        </Tabs>
-        <span className="settings-tab-panels">
-          {settingsGroups.map((group) => (
-            <TabPanel key={group.label} value={tabValue} index={group.label} name={group.label}>
-              <List>
-                {fetchSettings(group).map((settingKey) => (
-                  <span key={group.properties[settingKey].label} className="settings-list-item">
-                    <ListItem divider key={settingKey}>
-                      <ListItemText
-                        primary={group.properties[settingKey].label}
-                        secondary={group.properties[settingKey].description}
-                      />
-                      {components[settingKey] ? (
-                        createElement(components[settingKey], {
-                          setting: settingValues[settingKey],
-                          setSetting: (value: unknown) => setSettingValue(settingKey, value),
-                        })
-                      ) : (
-                        <Typography component="span" alignSelf="center" variant="caption">
-                          Setting Action Missing
-                        </Typography>
-                      )}
-                    </ListItem>
-                  </span>
-                ))}
-              </List>
-            </TabPanel>
-          ))}
-        </span>
+      <div className="settings-tabs-and-content">
+        <div className="settings-tabs">
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            orientation="vertical"
+            variant="scrollable"
+          >
+            {settingsGroups.map((group) => (
+              <Tab
+                key={group.label}
+                label={group.label}
+                value={group.label}
+                sx={{ alignItems: 'start' }}
+              />
+            ))}
+          </Tabs>
+        </div>
+        {settingsGroups.map((group) => (
+          <TabPanel
+            key={group.label}
+            value={tabValue}
+            index={group.label}
+            name="settings-tab-panel"
+          >
+            <List>
+              {fetchSettings(group).map((settingKey) => (
+                <ListItem divider key={settingKey}>
+                  <ListItemText
+                    primary={group.properties[settingKey].label}
+                    secondary={group.properties[settingKey].description}
+                  />
+                  {components[settingKey] ? (
+                    createElement(components[settingKey], {
+                      setting: settingValues[settingKey],
+                      setSetting: (value: unknown) => setSettingValue(settingKey, value),
+                    })
+                  ) : (
+                    <Typography component="span" alignSelf="center" variant="caption">
+                      Setting Action Missing
+                    </Typography>
+                  )}
+                </ListItem>
+              ))}
+            </List>
+          </TabPanel>
+        ))}
       </div>
     </div>
   );

@@ -1,30 +1,33 @@
 .settings-dialog {
-  padding: 3%;
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  box-sizing: border-box;
 }
 
 .settings-search-bar {
+  padding: 2%;
   display: block;
-  width: 100%;
-  padding-bottom: 2%;
+  box-sizing: border-box;
 }
 
-.settings-tab-group {
-  flex-grow: 1;
+.settings-tabs-and-content {
   display: flex;
+  flex: 1;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .settings-tabs {
-  border-color: divider;
-  flex-basis: 20%;
+  width: 20%;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  overflow-y: auto;
 }
 
-.settings-tab-panels {
-  flex-basis: 80%;
-}
-
-.settings-list-item {
-  display: flex;
-  width: 100%;
-  justify-content: space-between;
+.settings-tab-panel {
+  width: 80%;
+  flex: 1;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
