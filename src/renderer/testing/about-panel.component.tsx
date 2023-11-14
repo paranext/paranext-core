@@ -1,5 +1,5 @@
 import icon from '@assets/icon.png';
-import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
+import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 
 export const TAB_TYPE_ABOUT = 'about';
 

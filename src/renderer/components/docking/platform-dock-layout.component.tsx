@@ -32,6 +32,11 @@ import {
   TAB_TYPE_QUICK_VERSE_HERESY,
 } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import {
+  WebViewDefinitionUpdateInfo,
+  WebViewDefinition,
+  WebViewDefinitionUpdatableProperties,
+} from '@shared/models/web-view.model';
+import {
   FloatLayout,
   FloatSize,
   SavedTabInfo,
@@ -39,18 +44,17 @@ import {
   TabInfo,
   TabSaver,
   Layout,
-  WebViewTabProps,
   PanelDirection,
-  WebViewDefinitionUpdateInfo,
-  WebViewDefinition,
-} from '@shared/data/web-view.model';
+  OnLayoutChangeRCDock,
+  WebViewTabProps,
+} from '@shared/models/docking-framework.model';
+
 import LogError from '@shared/log-error.model';
 import {
-  OnLayoutChangeRCDock,
   mergeUpdatablePropertiesIntoWebViewDefinition,
   registerDockLayout,
   saveTabInfoBase,
-} from '@shared/services/web-view.service';
+} from '@renderer/services/web-view.service-host';
 import { getErrorMessage } from '@shared/utils/util';
 import {
   loadDownloadUpdateProjectTab,
@@ -594,9 +598,12 @@ export default function PlatformDockLayout() {
         // Return whether or not we found the tab to remove
         return !!tabToRemove;
       },
-      getWebViewDefinition: (webViewId) => getWebViewDefinition(webViewId, dockLayoutRef.current),
-      updateWebViewDefinition: (webViewId, updateInfo) =>
-        updateWebViewDefinition(webViewId, updateInfo, dockLayoutRef.current),
+      getWebViewDefinition: (webViewId: string) =>
+        getWebViewDefinition(webViewId, dockLayoutRef.current),
+      updateWebViewDefinition: (
+        webViewId: string,
+        updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
+      ) => updateWebViewDefinition(webViewId, updateInfo, dockLayoutRef.current),
       testLayout,
     });
     return () => {

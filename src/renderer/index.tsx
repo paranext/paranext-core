@@ -2,7 +2,7 @@ import '@renderer/global-this.model';
 import { createRoot } from 'react-dom/client';
 import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
-import * as webViewService from '@shared/services/web-view.service';
+import { startWebViewService } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
 import webViewProviderService from '@shared/services/web-view-provider.service';
 import { startDialogService } from '@renderer/services/dialog.service-host';
@@ -40,7 +40,7 @@ logger.info('Starting renderer');
 })();
 (async () => {
   try {
-    await webViewService.initialize();
+    await startWebViewService();
   } catch (e) {
     logger.error(`WebView service failed to initialize! Error: ${e}`);
   }

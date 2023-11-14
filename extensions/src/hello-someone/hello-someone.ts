@@ -4,7 +4,7 @@ import type {
   WebViewContentType,
   WebViewDefinition,
   SavedWebViewDefinition,
-} from 'shared/data/web-view.model';
+} from 'shared/models/web-view.model';
 import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
 import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
 import type IDataProviderEngine from 'shared/models/data-provider-engine.model';

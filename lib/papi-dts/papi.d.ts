@@ -1,63 +1,8 @@
 /// <reference types="react" />
 /// <reference types="node" />
 /// <reference types="node" />
-declare module 'shared/data/web-view.model' {
-  import { Dispatch, ReactNode, SetStateAction } from 'react';
-  /**
-   * Saved information used to recreate a tab.
-   *
-   * - {@link TabLoader} loads this into {@link TabInfo}
-   * - {@link TabSaver} saves {@link TabInfo} into this
-   */
-  export type SavedTabInfo = {
-    /**
-     * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this ID will
-     * match the `WebViewDefinition.id`
-     */
-    id: string;
-    /** Type of tab - indicates what kind of built-in tab this info represents */
-    tabType: string;
-    /** Data needed to load the tab */
-    data?: unknown;
-  };
-  /**
-   * Information that Paranext uses to create a tab in the dock layout.
-   *
-   * - {@link TabLoader} loads {@link SavedTabInfo} into this
-   * - {@link TabSaver} saves this into {@link SavedTabInfo}
-   */
-  export type TabInfo = SavedTabInfo & {
-    /**
-     * Url of image to show on the title bar of the tab
-     *
-     * Defaults to Platform.Bible logo
-     */
-    tabIconUrl?: string;
-    /** Text to show on the title bar of the tab */
-    tabTitle: string;
-    /** Content to show inside the tab. */
-    content: ReactNode;
-    /** (optional) Minimum width that the tab can become in CSS `px` units */
-    minWidth?: number;
-    /** (optional) Minimum height that the tab can become in CSS `px` units */
-    minHeight?: number;
-  };
-  /**
-   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
-   * must provide a {@link TabLoader}.
-   *
-   * For now all tab creators must do their own data type verification
-   */
-  export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
-  /**
-   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
-   * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
-   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
-   *
-   * @param tabInfo The Paranext tab to save
-   * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
-   */
-  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
+declare module 'shared/models/web-view.model' {
+  import { Dispatch, SetStateAction } from 'react';
   /** The type of code that defines a webview's content */
   export enum WebViewContentType {
     /**
@@ -214,8 +159,6 @@ declare module 'shared/data/web-view.model' {
     | Partial<Omit<WebViewDefinitionURL, 'content' | 'allowScripts'>>
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
-  /** Props that are passed to the web view tab component */
-  export type WebViewTabProps = WebViewDefinition;
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
     WebViewDefinitionBase,
@@ -338,55 +281,6 @@ declare module 'shared/data/web-view.model' {
      */
     updateWebViewDefinition: UpdateWebViewDefinition;
   };
-  /** Information about a tab in a panel */
-  interface TabLayout {
-    type: 'tab';
-  }
-  /**
-   * Indicates where to display a floating window
-   *
-   * - `cascade` - place the window a bit below and to the right of the previously created floating
-   *   window
-   * - `center` - center the window in the dock layout
-   */
-  type FloatPosition = 'cascade' | 'center';
-  /** The dimensions for a floating tab in CSS `px` units */
-  export type FloatSize = {
-    width: number;
-    height: number;
-  };
-  /** Information about a floating window */
-  export interface FloatLayout {
-    type: 'float';
-    floatSize?: FloatSize;
-    /** Where to display the floating window. Defaults to `cascade` */
-    position?: FloatPosition;
-  }
-  export type PanelDirection =
-    | 'left'
-    | 'right'
-    | 'bottom'
-    | 'top'
-    | 'before-tab'
-    | 'after-tab'
-    | 'maximize'
-    | 'move'
-    | 'active'
-    | 'update';
-  /** Information about a panel */
-  interface PanelLayout {
-    type: 'panel';
-    direction?: PanelDirection;
-    /** If undefined, it will add in the `direction` relative to the previously added tab. */
-    targetTabId?: string;
-  }
-  /** Information about how a Paranext tab fits into the dock layout */
-  export type Layout = TabLayout | FloatLayout | PanelLayout;
-  /** Event emitted when webViews are created */
-  export type AddWebViewEvent = {
-    webView: SavedWebViewDefinition;
-    layout: Layout;
-  };
   /** Options that affect what `webViews.getWebView` does */
   export type GetWebViewOptions = {
     /**
@@ -422,7 +316,7 @@ declare module 'shared/global-this.model' {
     WebViewDefinitionUpdatableProperties,
     WebViewDefinitionUpdateInfo,
     WebViewProps,
-  } from 'shared/data/web-view.model';
+  } from 'shared/models/web-view.model';
   /**
    * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts
    * (renderer), and extension-host.ts (extension host)
@@ -2641,166 +2535,128 @@ declare module 'shared/services/command.service' {
    */
   export type moduleSummaryComments = {};
 }
-declare module 'shared/models/web-view-provider.model' {
-  import {
-    GetWebViewOptions,
-    WebViewDefinition,
-    SavedWebViewDefinition,
-  } from 'shared/data/web-view.model';
-  import {
-    DisposableNetworkObject,
-    NetworkObject,
-    NetworkableObject,
-  } from 'shared/models/network-object.model';
-  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
-  export interface IWebViewProvider extends NetworkableObject {
-    /**
-     * @param savedWebView Filled out if an existing webview is being called for (matched by ID). Just
-     *   ID if this is a new request or if the web view with the existing ID was not found
-     * @param getWebViewOptions
-     */
-    getWebView(
-      savedWebView: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
-    ): Promise<WebViewDefinition | undefined>;
-  }
-  export interface WebViewProvider
-    extends NetworkObject<NetworkableObject>,
-      CanHaveOnDidDispose<IWebViewProvider> {}
-  export interface DisposableWebViewProvider
-    extends DisposableNetworkObject<NetworkableObject>,
-      Omit<WebViewProvider, 'dispose'> {}
-}
-declare module 'shared/services/web-view-provider.service' {
-  /**
-   * Handles registering web view providers and serving web views around the papi. Exposed on the
-   * papi.
-   */
-  import {
-    DisposableWebViewProvider,
-    IWebViewProvider,
-    WebViewProvider,
-  } from 'shared/models/web-view-provider.model';
-  /** Sets up the service. Only runs once and always returns the same promise after that */
-  const initialize: () => Promise<void>;
-  /**
-   * Indicate if we are aware of an existing web view provider with the given type. If a web view
-   * provider with the given type is somewhere else on the network, this function won't tell you about
-   * it unless something else in the existing process is subscribed to it.
-   *
-   * @param webViewType Type of webView to check for
-   */
-  function hasKnown(webViewType: string): boolean;
-  /**
-   * Register a web view provider to serve webViews for a specified type of webViews
-   *
-   * @param webViewType Type of web view to provide
-   * @param webViewProvider Object to register as a webView provider including control over disposing
-   *   of it.
-   *
-   *   WARNING: setting a webView provider mutates the provided object.
-   * @returns `webViewProvider` modified to be a network object
-   */
-  function register(
-    webViewType: string,
-    webViewProvider: IWebViewProvider,
-  ): Promise<DisposableWebViewProvider>;
-  /**
-   * Get a web view provider that has previously been set up
-   *
-   * @param webViewType Type of webview provider to get
-   * @returns Web view provider with the given name if one exists, undefined otherwise
-   */
-  function get(webViewType: string): Promise<WebViewProvider | undefined>;
-  export interface WebViewProviderService {
-    initialize: typeof initialize;
-    hasKnown: typeof hasKnown;
-    register: typeof register;
-    get: typeof get;
-  }
-  export interface PapiWebViewProviderService {
-    register: typeof register;
-  }
-  const webViewProviderService: WebViewProviderService;
-  /**
-   *
-   * Interface for registering webView providers
-   */
-  export const papiWebViewProviderService: PapiWebViewProviderService;
-  export default webViewProviderService;
-}
-declare module 'shared/log-error.model' {
-  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
-  export default class LogError extends Error {
-    constructor(message?: string);
-  }
-}
-declare module 'renderer/services/web-view-state.service' {
-  /**
-   * Get the web view state associated with the given ID This function is only intended to be used at
-   * startup. getWebViewState is intended for web views to call.
-   *
-   * @param id ID of the web view
-   * @returns State object of the given web view
-   */
-  export function getFullWebViewStateById(id: string): Record<string, unknown>;
-  /**
-   * Set the web view state associated with the given ID This function is only intended to be used at
-   * startup. setWebViewState is intended for web views to call.
-   *
-   * @param id ID of the web view
-   * @param state State to set for the given web view
-   */
-  export function setFullWebViewStateById(id: string, state: Record<string, unknown>): void;
-  /**
-   * Get the web view state associated with the given ID
-   *
-   * @param id ID of the web view
-   * @param stateKey Key used to retrieve the state value
-   * @returns String (if it exists) containing the state for the given key of the given web view
-   */
-  export function getWebViewStateById<T>(id: string, stateKey: string): T | undefined;
-  /**
-   * Set the web view state object associated with the given ID
-   *
-   * @param id ID of the web view
-   * @param stateKey Key for the associated state
-   * @param stateValue Value of the state for the given key of the given web view - must work with
-   *   JSON.stringify/parse
-   */
-  export function setWebViewStateById<T>(id: string, stateKey: string, stateValue: T): void;
-  /**
-   * Purge any web view state that hasn't been touched since the process has been running. Only call
-   * this once all web views have been loaded.
-   */
-  export function cleanupOldWebViewState(): void;
-}
-declare module 'shared/services/web-view.service' {
-  import { Unsubscriber } from 'shared/utils/papi-util';
-  import { MutableRefObject } from 'react';
-  import {
-    AddWebViewEvent,
-    Layout,
-    SavedTabInfo,
-    TabInfo,
-    WebViewTabProps,
-    WebViewType,
-    WebViewId,
-    GetWebViewOptions,
-    WebViewDefinition,
-    SavedWebViewDefinition,
-    WebViewDefinitionUpdateInfo,
-    WebViewDefinitionUpdatableProperties,
-  } from 'shared/data/web-view.model';
+declare module 'shared/models/docking-framework.model' {
+  import { MutableRefObject, ReactNode } from 'react';
   import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
+  import {
+    SavedWebViewDefinition,
+    WebViewDefinition,
+    WebViewDefinitionUpdateInfo,
+  } from 'shared/models/web-view.model';
+  /**
+   * Saved information used to recreate a tab.
+   *
+   * - {@link TabLoader} loads this into {@link TabInfo}
+   * - {@link TabSaver} saves {@link TabInfo} into this
+   */
+  export type SavedTabInfo = {
+    /**
+     * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this ID will
+     * match the `WebViewDefinition.id`
+     */
+    id: string;
+    /** Type of tab - indicates what kind of built-in tab this info represents */
+    tabType: string;
+    /** Data needed to load the tab */
+    data?: unknown;
+  };
+  /**
+   * Information that Paranext uses to create a tab in the dock layout.
+   *
+   * - {@link TabLoader} loads {@link SavedTabInfo} into this
+   * - {@link TabSaver} saves this into {@link SavedTabInfo}
+   */
+  export type TabInfo = SavedTabInfo & {
+    /**
+     * Url of image to show on the title bar of the tab
+     *
+     * Defaults to Platform.Bible logo
+     */
+    tabIconUrl?: string;
+    /** Text to show on the title bar of the tab */
+    tabTitle: string;
+    /** Content to show inside the tab. */
+    content: ReactNode;
+    /** (optional) Minimum width that the tab can become in CSS `px` units */
+    minWidth?: number;
+    /** (optional) Minimum height that the tab can become in CSS `px` units */
+    minHeight?: number;
+  };
+  /**
+   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
+   * must provide a {@link TabLoader}.
+   *
+   * For now all tab creators must do their own data type verification
+   */
+  export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
+  /**
+   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+   * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
+   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
+   *
+   * @param tabInfo The Paranext tab to save
+   * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
+   */
+  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
+  /** Information about a tab in a panel */
+  interface TabLayout {
+    type: 'tab';
+  }
+  /**
+   * Indicates where to display a floating window
+   *
+   * - `cascade` - place the window a bit below and to the right of the previously created floating
+   *   window
+   * - `center` - center the window in the dock layout
+   */
+  type FloatPosition = 'cascade' | 'center';
+  /** The dimensions for a floating tab in CSS `px` units */
+  export type FloatSize = {
+    width: number;
+    height: number;
+  };
+  /** Information about a floating window */
+  export interface FloatLayout {
+    type: 'float';
+    floatSize?: FloatSize;
+    /** Where to display the floating window. Defaults to `cascade` */
+    position?: FloatPosition;
+  }
+  export type PanelDirection =
+    | 'left'
+    | 'right'
+    | 'bottom'
+    | 'top'
+    | 'before-tab'
+    | 'after-tab'
+    | 'maximize'
+    | 'move'
+    | 'active'
+    | 'update';
+  /** Information about a panel */
+  interface PanelLayout {
+    type: 'panel';
+    direction?: PanelDirection;
+    /** If undefined, it will add in the `direction` relative to the previously added tab. */
+    targetTabId?: string;
+  }
+  /** Information about how a Paranext tab fits into the dock layout */
+  export type Layout = TabLayout | FloatLayout | PanelLayout;
+  /** Event emitted when webViews are created */
+  export type AddWebViewEvent = {
+    webView: SavedWebViewDefinition;
+    layout: Layout;
+  };
+  /** Props that are passed to the web view tab component */
+  export type WebViewTabProps = WebViewDefinition;
   /** Rc-dock's onLayoutChange prop made asynchronous - resolves */
   export type OnLayoutChangeRCDock = (
     newLayout: LayoutBase,
     currentTabId?: string,
     direction?: DropDirection,
   ) => Promise<void>;
-  /** Properties related to the dock layout provided by `platform-dock-layout.component.tsx` */
-  type PapiDockLayout = {
+  /** Properties related to the dock layout */
+  export type PapiDockLayout = {
     /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
     dockLayout: DockLayout;
     /**
@@ -2861,258 +2717,11 @@ declare module 'shared/services/web-view.service' {
      */
     testLayout: LayoutBase;
   };
-  /**
-   * The iframe [sandbox attribute]
-   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox) that determines if
-   * scripts are allowed to run on an iframe
-   */
-  export const IFRAME_SANDBOX_ALLOW_SCRIPTS = 'allow-scripts';
-  /**
-   * The iframe [sandbox attribute]
-   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox) that determines if an
-   * iframe is allowed to interact with its parent as a same-origin website. The iframe must still be
-   * on the same origin as its parent in order to interact same-origin.
-   */
-  export const IFRAME_SANDBOX_ALLOW_SAME_ORIGIN = 'allow-same-origin';
-  /**
-   * The only `sandbox` attribute values we allow iframes with `src` to have including URL WebView
-   * iframes. These are separate than iframes with `srcdoc` for a few reasons:
-   *
-   * - These iframes cannot be on the same origin as the parent window even if `allow-same-origin` is
-   *   present (unless they are literally on the same origin) because we do not allow `frame-src
-   *   blob:`
-   * - `src` iframes do not inherit the CSP of their parent window.
-   * - We are not able to modify the `srcdoc` before inserting it to ensure it has a CSP that we control
-   *   to attempt to prevent arbitrary code execution on same origin. We are trusting the browser's
-   *   ability to create a strong and safe boundary between parent and child iframe in different
-   *   origin.
-   *
-   *   TODO: consider using `csp` attribute on iframe to mitigate this issue
-   * - Extension developers do not know what code they are executing if they use some random URL in
-   *   `src` WebViews.
-   *
-   * The `sandbox` attribute controls what privileges iframe scripts and other things have:
-   *
-   * - `allow-same-origin` so the iframe can access the storage APIs (localstorage, cookies, etc) and
-   *   other same-origin connections for its own origin. `blob:` iframes are considered part of the
-   *   parent origin, but we block them with the CSP in `index.ejs`. For more information, see
-   *   https://web.dev/articles/sandboxed-iframes
-   * - `allow-scripts` so the iframe can actually do things. Defaults to not present since src iframes
-   *   can get scripts from anywhere. Extension developers should only enable this if needed as this
-   *   increases the possibility of a security threat occurring. Defaults to false
-   *
-   * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
-   *
-   * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
-   * allows the child scripts to remove this sandbox attribute from the iframe. This should only be
-   * possible on iframes that are on the same origin as the parent including those that use `srcdoc`
-   * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes from
-   * creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove any
-   * iframes that do not comply with these sandbox requirements. This successfully prevents iframes
-   * with too many privileges from executing as of July 2023. However, this means the sandboxing could
-   * do nothing for a determined hacker if they ever find a way around all this. We must distrust the
-   * whole renderer due to this issue. We will probably want to stay vigilant on security in this
-   * area.
-   */
-  export const ALLOWED_IFRAME_SRC_SANDBOX_VALUES: string[];
-  /**
-   * The minimal `src` WebView iframe sandboxing. This is applied to WebView iframes that use `src` in
-   * `web-view.component.tsx`. See {@link ALLOWED_IFRAME_SRC_SANDBOX_VALUES} for more information on
-   * our sandboxing methods and why we chose these values.
-   *
-   * Note: 'allow-same-origin' and 'allow-scripts' are not included here because they are added
-   * conditionally depending on the WebViewDefinition in `web-view.component.tsx`
-   */
-  export const WEBVIEW_IFRAME_SRC_SANDBOX: string;
-  /**
-   * The only `sandbox` attribute values we allow iframes with `srcdoc` to have including HTML and
-   * React WebView iframes. These are separate than iframes with `src` for a few reasons:
-   *
-   * - These iframes will be on the same origin as the parent window if `allow-same-origin` is present.
-   *   This is very serious and demands significant security risk consideration.
-   * - `srcdoc` iframes inherit the CSP of their parent window (in our case, `index.ejs`)
-   * - We are modifying the `srcdoc` before inserting it to ensure it has a CSP that we control to
-   *   attempt to prevent unintended code execution on same origin
-   * - Extension developers should know exactly what code they're running in `srcdoc` WebViews, whereas
-   *   they could include some random URL in `src` WebViews
-   *
-   *   TODO: consider requiring `srcdoc` WebView content to come directly from `papi-extension://`
-   *   instead of assuming extension developers will bundle their WebView code? This would mean the
-   *   only code that runs on same origin is code that extension developers definitely included in
-   *   their extension bundle https://github.com/paranext/paranext-core/issues/604
-   *
-   * The `sandbox` attribute controls what privileges iframe scripts and other things have:
-   *
-   * - `allow-same-origin` so the iframe can get papi and communicate and such
-   * - `allow-scripts` so the iframe can actually do things
-   *
-   * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
-   *
-   * Note: Mozilla's iframe page warns that listing both 'allow-same-origin' and 'allow-scripts'
-   * allows the child scripts to remove this sandbox attribute from the iframe. This should only be
-   * possible on iframes that are on the same origin as the parent including those that use `srcdoc`
-   * to define their HTML code. We monkey-patch `document.createElement` to prevent child iframes from
-   * creating new iframes and also use a `MutationObserver` in `web-view.service.ts` to remove any
-   * iframes that do not comply with these sandbox requirements. This successfully prevents iframes
-   * with too many privileges from executing as of July 2023. However, this means the sandboxing could
-   * do nothing for a determined hacker if they ever find a way around all this. We must distrust the
-   * whole renderer due to this issue. We will probably want to stay vigilant on security in this
-   * area.
-   */
-  export const ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES: string[];
-  /**
-   * The minimal `srcdoc` WebView iframe sandboxing. This is applied to WebView iframes that use
-   * `srcDoc` in `web-view.component.tsx`. See {@link ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES} for more
-   * information on our sandboxing methods and why we chose these values.
-   *
-   * Note: 'allow-same-origin' and 'allow-scripts' are not included here because they are added
-   * conditionally depending on the WebViewDefinition in `web-view.component.tsx`
-   */
-  export const WEBVIEW_IFRAME_SRCDOC_SANDBOX: string;
-  /** Event that emits with webView info when a webView is added */
-  export const onDidAddWebView: import('shared/models/papi-event.model').PapiEvent<AddWebViewEvent>;
-  /**
-   * Basic `saveTabInfo` that simply strips the properties added by {@link TabInfo} off of the object
-   * and returns it as a {@link SavedTabInfo}. Runs as the {@link TabSaver} by default if the tab type
-   * does not have a specific `TabSaver`
-   */
-  export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo;
-  /**
-   * Converts web view definition used in an actual docking tab into saveable web view information by
-   * stripping out the members we don't want to save
-   *
-   * @param webViewDefinition Web view to save
-   * @returns Saveable web view information based on `webViewDefinition`
-   */
-  export function convertWebViewDefinitionToSaved(
-    webViewDefinition: WebViewDefinition,
-  ): SavedWebViewDefinition;
-  /**
-   * Register a dock layout React element to be used by this service to perform layout-related
-   * operations
-   *
-   * @param dockLayout Dock layout element to register along with other important properties
-   * @returns Function used to unregister this dock layout
-   *
-   *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
-   *
-   *   Not exposed on the papi
-   */
-  export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber;
-  /**
-   * Remove a tab in the layout
-   *
-   * @param tabId ID of the tab to remove
-   * @returns True if successfully found the tab to remove
-   *
-   *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
-   *
-   *   Not exposed on the papi
-   */
-  export const removeTab: (tabId: string) => Promise<boolean>;
-  /**
-   * Add or update a tab in the layout
-   *
-   * @param savedTabInfo Info for tab to add or update
-   * @param layout Information about where to put a new tab
-   * @returns If tab added, final layout used to display the new tab. If existing tab updated,
-   *   `undefined`
-   *
-   *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
-   *
-   *   Not exposed on the papi
-   */
-  export const addTab: <TData = unknown>(
-    savedTabInfo: SavedTabInfo & {
-      data?: TData | undefined;
-    },
-    layout: Layout,
-  ) => Promise<Layout | undefined>;
-  /**
-   * Get just the updatable properties of a web view definition
-   *
-   * @param webViewDefinition Web view definition or update info to get updatable properties from
-   * @returns Updatable properties of the web view definition
-   *
-   *   Not exposed on the papi
-   */
-  export function getUpdatablePropertiesFromWebViewDefinition(
-    webViewDefinition:
-      | SavedWebViewDefinition
-      | WebViewDefinition
-      | WebViewDefinitionUpdatableProperties
-      | WebViewDefinitionUpdateInfo,
-  ): WebViewDefinitionUpdatableProperties;
-  /**
-   * Merges web view definition updates into a web view definition. Does not modify the original web
-   * view definition but returns a new object.
-   *
-   * @param webViewDefinition Web view definition to merge into
-   * @param updateInfo Updates to merge into the web view definition
-   * @returns New copy of web view definition with updates applied
-   *
-   *   Not exposed on the papi
-   */
-  export function mergeUpdatablePropertiesIntoWebViewDefinition<T extends SavedWebViewDefinition>(
-    webViewDefinition: T,
-    updateInfo: WebViewDefinitionUpdateInfo,
-  ): T;
-  /**
-   * Gets the updatable properties on the WebView definition with the specified ID
-   *
-   * @param webViewId The ID of the WebView whose updatable properties to get
-   * @returns Updatable properties of the WebView definition with the specified ID or undefined if not
-   *   found
-   * @throws If the papi dock layout has not been registered
-   *
-   *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
-   *
-   *   Not exposed on the papi
-   */
-  export function getWebViewDefinitionUpdatablePropertiesSync(
-    webViewId: string,
-  ): WebViewDefinitionUpdatableProperties | undefined;
-  /**
-   * Updates the WebView with the specified ID with the specified properties
-   *
-   * @param webViewId The ID of the WebView to update
-   * @param webViewDefinitionUpdateInfo Properties to update on the WebView. Any unspecified
-   *   properties will stay the same
-   * @returns True if successfully found the WebView to update; false otherwise
-   * @throws If the papi dock layout has not been registered
-   *
-   *   WARNING: YOU CAN ONLY USE THIS FUNCTION IN THE RENDERER
-   *
-   *   Not exposed on the papi
-   */
-  export function updateWebViewDefinitionSync(
-    webViewId: string,
-    webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
-  ): boolean;
-  /**
-   * Creates a new web view or gets an existing one depending on if you request an existing one and if
-   * the web view provider decides to give that existing one to you (it is up to the provider).
-   *
-   * @param webViewType Type of WebView to create
-   * @param layout Information about where you want the web view to go. Defaults to adding as a tab
-   * @param options Options that affect what this function does. For example, you can provide an
-   *   existing web view ID to request an existing web view with that ID.
-   * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
-   *   not create a WebView for this request.
-   * @throws If something went wrong like the provider for the webViewType was not found
-   */
-  export const getWebView: (
-    webViewType: WebViewType,
-    layout?: Layout,
-    options?: GetWebViewOptions,
-  ) => Promise<WebViewId | undefined>;
-  /** Sets up the WebViewService. Runs only once */
-  export const initialize: () => Promise<void>;
-  export interface PapiWebViewService {
-    onDidAddWebView: typeof onDidAddWebView;
-    getWebView: typeof getWebView;
-    initialize: typeof initialize;
-  }
+}
+declare module 'shared/services/web-view.service-model' {
+  import { GetWebViewOptions, WebViewId, WebViewType } from 'shared/models/web-view.model';
+  import { AddWebViewEvent, Layout } from 'shared/models/docking-framework.model';
+  import { PapiEvent } from 'shared/models/papi-event.model';
   /**
    *
    * Service exposing various functions related to using webViews
@@ -3120,7 +2729,35 @@ declare module 'shared/services/web-view.service' {
    * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
    * HTML or React components.
    */
-  export const papiWebViewService: PapiWebViewService;
+  export interface WebViewServiceType {
+    /** Event that emits with webView info when a webView is added */
+    onDidAddWebView: PapiEvent<AddWebViewEvent>;
+    /**
+     * Creates a new web view or gets an existing one depending on if you request an existing one and
+     * if the web view provider decides to give that existing one to you (it is up to the provider).
+     *
+     * @param webViewType Type of WebView to create
+     * @param layout Information about where you want the web view to go. Defaults to adding as a tab
+     * @param options Options that affect what this function does. For example, you can provide an
+     *   existing web view ID to request an existing web view with that ID.
+     * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
+     *   not create a WebView for this request.
+     * @throws If something went wrong like the provider for the webViewType was not found
+     */
+    getWebView: (
+      webViewType: WebViewType,
+      layout?: Layout,
+      options?: GetWebViewOptions,
+    ) => Promise<WebViewId | undefined>;
+  }
+  /** Name to use when creating a network event that is fired when webViews are created */
+  export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
+  export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+}
+declare module 'shared/services/web-view.service' {
+  import { WebViewServiceType } from 'shared/services/web-view.service-model';
+  const webViewService: WebViewServiceType;
+  export default webViewService;
 }
 declare module 'shared/services/internet.service' {
   /** Our shim over fetch. Allows us to control internet access. */
@@ -3525,7 +3162,7 @@ declare module 'shared/models/dialog-options.model' {
   };
 }
 declare module 'renderer/components/dialogs/dialog-base.data' {
-  import { FloatSize, TabLoader, TabSaver } from 'shared/data/web-view.model';
+  import { FloatSize, TabLoader, TabSaver } from 'shared/models/docking-framework.model';
   import { DialogData } from 'shared/models/dialog-options.model';
   import { ReactElement } from 'react';
   /** Base type for DialogDefinition. Contains reasonable defaults for dialogs */
@@ -4287,7 +3924,7 @@ declare module 'papi-frontend' {
   import * as commandService from 'shared/services/command.service';
   import * as papiUtil from 'shared/utils/papi-util';
   import { PapiNetworkService } from 'shared/services/network.service';
-  import { PapiWebViewService } from 'shared/services/web-view.service';
+  import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { InternetService } from 'shared/services/internet.service';
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
@@ -4328,7 +3965,7 @@ declare module 'papi-frontend' {
      * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
      * HTML or React components.
      */
-    webViews: PapiWebViewService;
+    webViews: WebViewServiceType;
     /**
      *
      * Prompt the user for responses with dialogs
@@ -4410,7 +4047,7 @@ declare module 'papi-frontend' {
    * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
    * HTML or React components.
    */
-  export const webViews: PapiWebViewService;
+  export const webViews: WebViewServiceType;
   /**
    *
    * Prompt the user for responses with dialogs
@@ -4459,6 +4096,94 @@ declare module 'papi-frontend' {
    */
   export const settings: SettingsService;
   export type Papi = typeof papi;
+}
+declare module 'shared/models/web-view-provider.model' {
+  import {
+    GetWebViewOptions,
+    WebViewDefinition,
+    SavedWebViewDefinition,
+  } from 'shared/models/web-view.model';
+  import {
+    DisposableNetworkObject,
+    NetworkObject,
+    NetworkableObject,
+  } from 'shared/models/network-object.model';
+  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
+  export interface IWebViewProvider extends NetworkableObject {
+    /**
+     * @param savedWebView Filled out if an existing webview is being called for (matched by ID). Just
+     *   ID if this is a new request or if the web view with the existing ID was not found
+     * @param getWebViewOptions
+     */
+    getWebView(
+      savedWebView: SavedWebViewDefinition,
+      getWebViewOptions: GetWebViewOptions,
+    ): Promise<WebViewDefinition | undefined>;
+  }
+  export interface WebViewProvider
+    extends NetworkObject<NetworkableObject>,
+      CanHaveOnDidDispose<IWebViewProvider> {}
+  export interface DisposableWebViewProvider
+    extends DisposableNetworkObject<NetworkableObject>,
+      Omit<WebViewProvider, 'dispose'> {}
+}
+declare module 'shared/services/web-view-provider.service' {
+  /**
+   * Handles registering web view providers and serving web views around the papi. Exposed on the
+   * papi.
+   */
+  import {
+    DisposableWebViewProvider,
+    IWebViewProvider,
+    WebViewProvider,
+  } from 'shared/models/web-view-provider.model';
+  /** Sets up the service. Only runs once and always returns the same promise after that */
+  const initialize: () => Promise<void>;
+  /**
+   * Indicate if we are aware of an existing web view provider with the given type. If a web view
+   * provider with the given type is somewhere else on the network, this function won't tell you about
+   * it unless something else in the existing process is subscribed to it.
+   *
+   * @param webViewType Type of webView to check for
+   */
+  function hasKnown(webViewType: string): boolean;
+  /**
+   * Register a web view provider to serve webViews for a specified type of webViews
+   *
+   * @param webViewType Type of web view to provide
+   * @param webViewProvider Object to register as a webView provider including control over disposing
+   *   of it.
+   *
+   *   WARNING: setting a webView provider mutates the provided object.
+   * @returns `webViewProvider` modified to be a network object
+   */
+  function register(
+    webViewType: string,
+    webViewProvider: IWebViewProvider,
+  ): Promise<DisposableWebViewProvider>;
+  /**
+   * Get a web view provider that has previously been set up
+   *
+   * @param webViewType Type of webview provider to get
+   * @returns Web view provider with the given name if one exists, undefined otherwise
+   */
+  function get(webViewType: string): Promise<WebViewProvider | undefined>;
+  export interface WebViewProviderService {
+    initialize: typeof initialize;
+    hasKnown: typeof hasKnown;
+    register: typeof register;
+    get: typeof get;
+  }
+  export interface PapiWebViewProviderService {
+    register: typeof register;
+  }
+  const webViewProviderService: WebViewProviderService;
+  /**
+   *
+   * Interface for registering webView providers
+   */
+  export const papiWebViewProviderService: PapiWebViewProviderService;
+  export default webViewProviderService;
 }
 declare module 'shared/data/file-system.model' {
   /** Types to use with file system operations */
@@ -4734,7 +4459,7 @@ declare module 'papi-backend' {
   import * as commandService from 'shared/services/command.service';
   import * as papiUtil from 'shared/utils/papi-util';
   import { PapiNetworkService } from 'shared/services/network.service';
-  import { PapiWebViewService } from 'shared/services/web-view.service';
+  import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiWebViewProviderService } from 'shared/services/web-view-provider.service';
   import { InternetService } from 'shared/services/internet.service';
   import {
@@ -4787,7 +4512,7 @@ declare module 'papi-backend' {
      * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
      * HTML or React components.
      */
-    webViews: PapiWebViewService;
+    webViews: WebViewServiceType;
     /**
      *
      * Interface for registering webView providers
@@ -4880,7 +4605,7 @@ declare module 'papi-backend' {
    * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
    * HTML or React components.
    */
-  export const webViews: PapiWebViewService;
+  export const webViews: WebViewServiceType;
   /**
    *
    * Interface for registering webView providers

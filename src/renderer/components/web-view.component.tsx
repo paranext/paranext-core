@@ -1,21 +1,19 @@
 import { useRef } from 'react';
 import {
-  SavedTabInfo,
-  TabInfo,
   WebViewContentType,
   WebViewDefinition,
   SavedWebViewDefinition,
-  WebViewTabProps,
-} from '@shared/data/web-view.model';
+} from '@shared/models/web-view.model';
+import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
+  convertWebViewDefinitionToSaved,
   getWebView,
   saveTabInfoBase,
-  convertWebViewDefinitionToSaved,
-  WEBVIEW_IFRAME_SRCDOC_SANDBOX,
-  WEBVIEW_IFRAME_SRC_SANDBOX,
-  IFRAME_SANDBOX_ALLOW_SCRIPTS,
   IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
-} from '@shared/services/web-view.service';
+  IFRAME_SANDBOX_ALLOW_SCRIPTS,
+  WEBVIEW_IFRAME_SRC_SANDBOX,
+  WEBVIEW_IFRAME_SRCDOC_SANDBOX,
+} from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
 
 export const TAB_TYPE_WEBVIEW = 'webView';

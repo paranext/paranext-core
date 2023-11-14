@@ -5,7 +5,7 @@ import type {
   GetWebViewOptions,
   SavedWebViewDefinition,
   WebViewDefinition,
-} from 'shared/data/web-view.model';
+} from 'shared/models/web-view.model';
 import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
 import resourceViewerWebView from './resource-viewer.web-view?inline';
 import resourceViewerWebViewStyles from './resource-viewer.web-view.scss?inline';

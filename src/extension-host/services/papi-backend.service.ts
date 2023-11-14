@@ -9,7 +9,8 @@ import * as commandService from '@shared/services/command.service';
 import * as papiUtil from '@shared/utils/papi-util';
 import papiLogger from '@shared/services/logger.service';
 import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
-import { papiWebViewService, PapiWebViewService } from '@shared/services/web-view.service';
+import { WebViewServiceType } from '@shared/services/web-view.service-model';
+import webViewService from '@shared/services/web-view.service';
 import {
   papiWebViewProviderService,
   PapiWebViewProviderService,
@@ -56,7 +57,7 @@ const papi = {
   /** JSDOC DESTINATION papiUtil */
   util: papiUtil,
   /** JSDOC DESTINATION papiWebViewService */
-  webViews: papiWebViewService as PapiWebViewService,
+  webViews: webViewService as WebViewServiceType,
   /** JSDOC DESTINATION papiWebViewProviderService */
   webViewProviders: papiWebViewProviderService as PapiWebViewProviderService,
   /** JSDOC DESTINATION dialogService */
