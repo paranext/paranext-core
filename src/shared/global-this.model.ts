@@ -7,7 +7,7 @@ import {
   WebViewDefinitionUpdatableProperties,
   WebViewDefinitionUpdateInfo,
   WebViewProps,
-} from '@shared/data/web-view.model';
+} from '@shared/models/web-view.model';
 
 /**
  * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts

@@ -2,7 +2,7 @@ import { DialogData } from '@shared/models/dialog-options.model';
 import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service-model';
 import * as networkService from '@shared/services/network.service';
 import { aggregateUnsubscriberAsyncs, serializeRequestType } from '@shared/utils/papi-util';
-import * as webViewService from '@shared/services/web-view.service';
+import * as webViewService from '@renderer/services/web-view.service-host';
 import { newGuid } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';

@@ -4,7 +4,7 @@ import type {
   WebViewContentType,
   WebViewDefinition,
   SavedWebViewDefinition,
-} from 'shared/data/web-view.model';
+} from 'shared/models/web-view.model';
 import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 import type PapiEventEmitter from 'shared/models/papi-event-emitter.model';
 import type { HelloWorldEvent } from 'hello-world';

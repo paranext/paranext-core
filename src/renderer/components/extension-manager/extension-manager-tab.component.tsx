@@ -1,4 +1,4 @@
-import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
+import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { useMemo, useState } from 'react';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';

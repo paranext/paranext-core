@@ -2,7 +2,7 @@ import {
   GetWebViewOptions,
   WebViewDefinition,
   SavedWebViewDefinition,
-} from '@shared/data/web-view.model';
+} from '@shared/models/web-view.model';
 import {
   DisposableNetworkObject,
   NetworkObject,

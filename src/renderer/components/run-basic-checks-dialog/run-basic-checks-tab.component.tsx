@@ -1,4 +1,4 @@
-import { SavedTabInfo, TabInfo } from '@shared/data/web-view.model';
+import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { Button, ScriptureReference, getChaptersForBook } from 'papi-components';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';

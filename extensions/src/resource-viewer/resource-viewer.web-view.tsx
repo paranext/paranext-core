@@ -4,7 +4,7 @@ import { useProjectData, useSetting } from 'papi-frontend/react';
 import { ScriptureReference } from 'papi-components';
 import { JSX, useMemo } from 'react';
 import UsxEditor from 'usxeditor';
-import type { WebViewProps } from 'shared/data/web-view.model';
+import type { WebViewProps } from 'shared/models/web-view.model';
 
 /** Characteristics of a marker style */
 interface StyleInfo {
