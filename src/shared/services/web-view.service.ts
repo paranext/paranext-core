@@ -57,11 +57,7 @@ async function initialize(): Promise<void> {
 }
 
 const webViewService: WebViewServiceType = {
-  getWebView: async (
-    webViewType: WebViewType,
-    layout: Layout | undefined,
-    options: GetWebViewOptions,
-  ) => {
+  getWebView: async (webViewType: WebViewType, layout?: Layout, options?: GetWebViewOptions) => {
     await initialize();
     return networkObject.getWebView(webViewType, layout, options);
   },

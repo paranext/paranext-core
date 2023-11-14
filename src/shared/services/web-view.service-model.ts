@@ -29,8 +29,8 @@ export interface WebViewServiceType {
    */
   getWebView: (
     webViewType: WebViewType,
-    layout: Layout | undefined,
-    options: GetWebViewOptions,
+    layout?: Layout,
+    options?: GetWebViewOptions,
   ) => Promise<WebViewId | undefined>;
 }
 
