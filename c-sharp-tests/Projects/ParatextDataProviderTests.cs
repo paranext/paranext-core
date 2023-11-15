@@ -39,7 +39,7 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             JsonElement serverMessage = CreateRequestMessage(function);
-            
+
             Enum<RequestType> requestType = new(PdpDataRequest);
             Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
 
@@ -66,7 +66,7 @@ namespace TestParanextDataProvider.Projects
 
             JsonElement serverMessage =
                 CreateRequestMessage(function, CreateVerseRefNode(bookNum, chapterNum, verseNum));
-            
+
             Enum<RequestType> requestType = new(PdpDataRequest);
             Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
 
@@ -132,7 +132,7 @@ namespace TestParanextDataProvider.Projects
             Enum<RequestType> requestType = new(PdpDataRequest);
             Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
 
-            VerifyResponse(result, null, requestType, requesterId, "ChapterUSX");
+            VerifyResponse(result, null, requestType, requesterId, ParatextProjectStorageInterpreter.AllScriptureDataTypes);
 
             // Verify the new text was saved to disk
             VerseRef reference = new(bookNum, chapterNum, verseNum, _scrText.Settings.Versification);
@@ -168,7 +168,7 @@ namespace TestParanextDataProvider.Projects
             Enum<RequestType> requestType = new(PdpDataRequest);
             Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
 
-            VerifyResponse(result, null, requestType, requesterId, "ChapterUSFM");
+            VerifyResponse(result, null, requestType, requesterId, ParatextProjectStorageInterpreter.AllScriptureDataTypes);
 
             // Verify the new text was saved to disk
             VerseRef reference = new(bookNum, chapterNum, verseNum, _scrText.Settings.Versification);

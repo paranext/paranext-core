@@ -12,14 +12,14 @@ namespace Paranext.DataProvider.NetworkObjects;
 internal abstract class DataProvider : NetworkObject
 {
     // This is an internal class because nothing else should be instantiating it directly
-    private class MessageEventDataUpdated : MessageEventGeneric<string>
+    private class MessageEventDataUpdated : MessageEventGeneric<object>
     {
         // A parameterless constructor is required for serialization to work
         // ReSharper disable once UnusedMember.Local
         public MessageEventDataUpdated()
             : base(Enum<EventType>.Null) { }
 
-        public MessageEventDataUpdated(Enum<EventType> eventType, string dataScope)
+        public MessageEventDataUpdated(Enum<EventType> eventType, object dataScope)
             : base(eventType, dataScope) { }
     }
 
@@ -76,37 +76,63 @@ internal abstract class DataProvider : NetworkObject
     }
 
     /// <summary>
-    /// Notify all processes on the network that this data provider has new data
+    /// Notify all processes on the network that this data provider has new data.
+    ///
+    /// This method transforms the data scope in the same way that `data-provider`service.ts`'s
+    /// `mapUpdateInstructionsToUpdateEvent` does
     /// </summary>
-    /// <param name="dataScope">Indicator of what data changed in the provider</param>
+    /// <param name="dataScope">Indicator of what data changed in the provider. Can be '*' for all
+    /// updates, a `string` to update one data type, or a `List<string>` of data types to update. If dataScope is null, nothing happens. </param>
     protected void SendDataUpdateEvent(dynamic? dataScope)
     {
-        string scopeString;
+        // The final computed data scope to send out in the update event. Based on dataScope
+        object dataScopeResult;
 
         if ((dataScope is string s) && !string.IsNullOrWhiteSpace(s))
         {
-            // If we are returning "*", just pass it as a string.  Otherwise we have to provide a JSON list of strings.
+            // If we are returning "*", just pass it as a string.  Otherwise we have to provide a list of strings.
             // Presumably this will change as part of https://github.com/paranext/paranext-core/issues/443
-            scopeString = (s == "*") ? s : JsonConvert.SerializeObject(new List<string> { s });
+            dataScopeResult = (s == "*") ? s : new List<string> { s };
         }
-        else if (dataScope != null)
+        else if (dataScope is List<string> dataScopeList)
         {
-            try
+            if (dataScopeList.Count > 0)
+                dataScopeResult = dataScope;
+            // Empty list means no data type updates
+            else
             {
-                scopeString = JsonConvert.SerializeObject(dataScope);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Unable to send data update event: {ex}");
+                Console.WriteLine("Did not send data update event. dataScope is an empty list");
                 return;
             }
         }
         else
+        {
+            if (dataScope != null)
+                Console.WriteLine(
+                    "Did not send data update event. dataScope is not a string or list of strings"
+                );
             return;
+        }
+
+        // a string representation of the data scope result to use when finding an existing message
+        // for the event
+        string dataScopeKey;
+        if (dataScopeResult is string sR)
+            dataScopeKey = sR;
+        else if (dataScopeResult is List<string> dataScopeListR)
+            dataScopeKey = string.Join(',', dataScopeListR);
+        else
+        {
+            Console.WriteLine(
+                $"dataScopeResult {dataScopeResult} was not string or list of strings. Unable to send data update event"
+            );
+            return;
+        }
 
         var dataUpdateEventMessage = _updateEventsByScope.GetOrAdd(
-            scopeString,
-            (scope) => new MessageEventDataUpdated(_eventType, scope)
+            dataScopeKey,
+            (scope, result) => new MessageEventDataUpdated(_eventType, result),
+            dataScopeResult
         );
         PapiClient.SendEvent(dataUpdateEventMessage);
     }
