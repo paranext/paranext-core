@@ -12,18 +12,15 @@ namespace Paranext.DataProvider.NetworkObjects;
 internal abstract class DataProvider : NetworkObject
 {
     // This is an internal class because nothing else should be instantiating it directly
-    private class MessageEventDataUpdated : MessageEventGeneric<dynamic>
+    private class MessageEventDataUpdated : MessageEventGeneric<object>
     {
         // A parameterless constructor is required for serialization to work
         // ReSharper disable once UnusedMember.Local
         public MessageEventDataUpdated()
             : base(Enum<EventType>.Null) { }
 
-        public MessageEventDataUpdated(Enum<EventType> eventType, dynamic dataScope)
-            // Must cast to (object) for C# to know which base constructor to use
-            // See https://stackoverflow.com/questions/8098981/why-do-i-get-this-compile-error-trying-to-call-a-base-constructor-method-that-ta
-            // for more info
-            : base(eventType, (object)dataScope) { }
+        public MessageEventDataUpdated(Enum<EventType> eventType, object dataScope)
+            : base(eventType, dataScope) { }
     }
 
     private readonly Enum<EventType> _eventType;
@@ -89,7 +86,7 @@ internal abstract class DataProvider : NetworkObject
     protected void SendDataUpdateEvent(dynamic? dataScope)
     {
         // The final computed data scope to send out in the update event. Based on dataScope
-        dynamic dataScopeResult;
+        object dataScopeResult;
 
         if ((dataScope is string s) && !string.IsNullOrWhiteSpace(s))
         {
@@ -134,12 +131,7 @@ internal abstract class DataProvider : NetworkObject
 
         var dataUpdateEventMessage = _updateEventsByScope.GetOrAdd(
             dataScopeKey,
-            // Must cast to specific function type because the anonymous lambda was not clear to the
-            // compiler. See https://stackoverflow.com/questions/43890447/cannot-use-a-lambda-expression-as-an-argument-to-a-dynamically-dispatched
-            // for more information
-            (Func<string, dynamic, MessageEventDataUpdated>)(
-                (scope, result) => new MessageEventDataUpdated(_eventType, result)
-            ),
+            (scope, result) => new MessageEventDataUpdated(_eventType, result),
             dataScopeResult
         );
         PapiClient.SendEvent(dataUpdateEventMessage);
