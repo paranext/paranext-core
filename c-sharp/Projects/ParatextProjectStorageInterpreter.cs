@@ -21,6 +21,16 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     public ParatextProjectStorageInterpreter(PapiClient papiClient)
         : base(ProjectStorageType.ParatextFolders, new[] { ProjectType.Paratext }, papiClient) { }
 
+    // All data types related to Scripture editing. Changes to any portion of Scripture should send
+    // out updates to all these data types
+    public static readonly List<string> AllScriptureDataTypes = new List<string>
+    {
+        BookUSFM,
+        ChapterUSFM,
+        VerseUSFM,
+        ChapterUSX
+    };
+
     protected override Task StartDataProvider()
     {
         LocalProjects.Initialize();
@@ -142,8 +152,8 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                         );
                     }
                 );
-                // The value of returned string is case sensitive and cannot change unless data provider subscriptions change
-                return ResponseToRequest.Succeeded(ChapterUSFM);
+                // The value of returned strings are case sensitive and cannot change unless data provider subscriptions change
+                return ResponseToRequest.Succeeded(AllScriptureDataTypes);
             case ChapterUSX:
                 if (!string.IsNullOrEmpty(error))
                     return ResponseToRequest.Failed(error);
@@ -263,7 +273,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
             return ResponseToRequest.Failed(e.ToString());
         }
 
-        return ResponseToRequest.Succeeded(ChapterUSX);
+        return ResponseToRequest.Succeeded(AllScriptureDataTypes);
     }
 
     private XmlDocument ConvertUsfmToUsx(ScrText scrText, string usfm, int bookNum)
