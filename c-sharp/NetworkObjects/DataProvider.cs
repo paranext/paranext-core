@@ -134,6 +134,9 @@ internal abstract class DataProvider : NetworkObject
 
         var dataUpdateEventMessage = _updateEventsByScope.GetOrAdd(
             dataScopeKey,
+            // Must cast to specific function type because the anonymous lambda was not clear to the
+            // compiler. See https://stackoverflow.com/questions/43890447/cannot-use-a-lambda-expression-as-an-argument-to-a-dynamically-dispatched
+            // for more information
             (Func<string, dynamic, MessageEventDataUpdated>)(
                 (scope, result) => new MessageEventDataUpdated(_eventType, result)
             ),
