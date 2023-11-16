@@ -8,9 +8,9 @@ namespace TestParanextDataProvider
 {
     internal class DummyPapiClient : PapiClient
     {
-        //private readonly Dictionary<Enum<EventType>, Func<dynamic?, Message?>> _eventHandlers = new();
+        private readonly Dictionary<Enum<EventType>, Func<dynamic?, Message?>> _eventHandlers = new();
 
-        //public Stack<Message?> EventMessages { get; } = new();
+        public Stack<Message?> EventMessages { get; } = new();
 
         /// <summary>
         /// Fakes a message coming from the server for the PapiClient to handle
@@ -50,19 +50,19 @@ namespace TestParanextDataProvider
             return Task.FromResult(true);
         }
 
-        //public override void RegisterEventHandler(Enum<EventType> eventType, Func<dynamic?, Message?> eventHandler)
-        //{
-        //    _eventHandlers.Add(eventType, eventHandler);
-        //}
+        public override void RegisterEventHandler(Enum<EventType> eventType, Func<dynamic?, Message?> eventHandler)
+        {
+           _eventHandlers.Add(eventType, eventHandler);
+        }
 
-        //public override void SendEvent(MessageEvent message)
-        //{
-        //    if (!_eventHandlers.TryGetValue(message.EventType, out var handler))
-        //        return;
+        public override void SendEvent(MessageEvent message)
+        {
+           if (!_eventHandlers.TryGetValue(message.EventType, out var handler))
+               return;
 
-        //    Message? result = handler(message.Event);
-        //    EventMessages.Push(result);
-        //}
+           Message? result = handler(message.Event);
+           EventMessages.Push(result);
+        }
         #endregion
     }
 }
