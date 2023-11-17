@@ -157,8 +157,6 @@ namespace TestParanextDataProvider.Projects
             Message result2 = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage2)).First();
             VerifyResponseExceptContents(result2, null, requestType, requesterId);
             VerifyUsxSame(((MessageResponse)result2).Contents, newValue);
-
-            // Verify an update event was sent out properly
         }
 
         [TestCase(1, 4, 0, @"\c 4 \p \v 3 a whole new chapter!",
