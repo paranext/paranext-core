@@ -12,6 +12,7 @@ namespace TestParanextDataProvider.Projects
     {
         private const string PdpName = "soup";
         private const string PdpDataRequest = "object:soup-pdp-data.function";
+        private const string PdpDataUpdateEvent = "soup-pdp-data:onDidUpdate";
 
         private ScrText _scrText = null!; // Will be non-null when the test runs
         private ProjectDetails _projectDetails = null!; // Will be non-null when the test runs
@@ -126,6 +127,14 @@ namespace TestParanextDataProvider.Projects
             ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
+            // Set up an event listener to listen for the update
+            List<dynamic?> updateEvents = new();
+            Enum<EventType> dataUpdateEvent = new(PdpDataUpdateEvent);
+            Client.RegisterEventHandler(dataUpdateEvent, (e) => {
+                updateEvents.Add(e);
+                return null;
+            });
+
             JsonElement serverMessage =
                 CreateRequestMessage("setChapterUSX", CreateVerseRefNode(bookNum, chapterNum, verseNum), newValue);
 
@@ -133,6 +142,10 @@ namespace TestParanextDataProvider.Projects
             Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
 
             VerifyResponse(result, null, requestType, requesterId, ParatextProjectStorageInterpreter.AllScriptureDataTypes);
+
+            // Verify an update event was sent out properly
+            Assert.That(updateEvents.Count, Is.EqualTo(1));
+            Assert.That(updateEvents[0], Is.EqualTo(ParatextProjectStorageInterpreter.AllScriptureDataTypes));
 
             // Verify the new text was saved to disk
             VerseRef reference = new(bookNum, chapterNum, verseNum, _scrText.Settings.Versification);
@@ -162,6 +175,14 @@ namespace TestParanextDataProvider.Projects
             ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
+            // Set up an event listener to listen for the update
+            List<dynamic?> updateEvents = new();
+            Enum<EventType> dataUpdateEvent = new(PdpDataUpdateEvent);
+            Client.RegisterEventHandler(dataUpdateEvent, (e) => {
+                updateEvents.Add(e);
+                return null;
+            });
+
             JsonElement serverMessage =
                 CreateRequestMessage("setChapterUSFM", CreateVerseRefNode(bookNum, chapterNum, verseNum), newValue);
 
@@ -169,6 +190,10 @@ namespace TestParanextDataProvider.Projects
             Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
 
             VerifyResponse(result, null, requestType, requesterId, ParatextProjectStorageInterpreter.AllScriptureDataTypes);
+
+            // Verify an update event was sent out properly
+            Assert.That(updateEvents.Count, Is.EqualTo(1));
+            Assert.That(updateEvents[0], Is.EqualTo(ParatextProjectStorageInterpreter.AllScriptureDataTypes));
 
             // Verify the new text was saved to disk
             VerseRef reference = new(bookNum, chapterNum, verseNum, _scrText.Settings.Versification);
