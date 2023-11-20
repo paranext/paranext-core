@@ -57,7 +57,7 @@ const papi = {
   /** JSDOC DESTINATION internetService */
   internet: internetService as InternetService,
   /** JSDOC DESTINATION dataProviderService */
-  dataProvider: dataProviderService as DataProviderService,
+  dataProviders: dataProviderService as DataProviderService,
   /** JSDOC DESTINATION papiFrontendProjectDataProviderService */
   projectDataProvider:
     papiFrontendProjectDataProviderService as PapiFrontendProjectDataProviderService,
@@ -97,7 +97,7 @@ export const { logger } = papi;
 /** JSDOC DESTINATION internetService */
 export const { internet } = papi;
 /** JSDOC DESTINATION dataProviderService */
-export const { dataProvider } = papi;
+export const { dataProviders } = papi;
 /** JSDOC DESTINATION papiBackendProjectDataProviderService */
 export const { projectDataProvider } = papi;
 /** JSDOC DESTINATION projectLookupService */
