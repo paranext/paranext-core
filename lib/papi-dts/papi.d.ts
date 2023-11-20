@@ -97,7 +97,7 @@ declare module 'shared/models/web-view.model' {
      * If you plan on embedding any iframes in your WebView, it is best practice to list only the host
      * values you need to function. The more you list, the higher the theoretical security risks.
      *
-     * ~-~
+     *     ---
      *
      * **For URL WebViews:** List of strings representing RegExp patterns (passed into [the RegExp
      * constructor](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/RegExp))
