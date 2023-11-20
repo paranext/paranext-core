@@ -45,7 +45,7 @@ const papi = {
   /** JSDOC DESTINATION commandService */
   commands: commandService,
   /** JSDOC DESTINATION papiUtil */
-  util: papiUtil,
+  utils: papiUtil,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: webViewService as WebViewServiceType,
   /** JSDOC DESTINATION dialogService */
@@ -85,7 +85,7 @@ export const { fetch } = papi;
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 /** JSDOC DESTINATION papiUtil */
-export const { util } = papi;
+export const { utils } = papi;
 /** JSDOC DESTINATION papiWebViewService */
 export const { webViews } = papi;
 /** JSDOC DESTINATION dialogService */

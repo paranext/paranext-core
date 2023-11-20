@@ -3957,7 +3957,7 @@ declare module 'papi-frontend' {
      * services. Extensions should not use or rely on anything in papiUtil unless some other service
      * requires it.
      */
-    util: typeof papiUtil;
+    utils: typeof papiUtil;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -4039,7 +4039,7 @@ declare module 'papi-frontend' {
    * services. Extensions should not use or rely on anything in papiUtil unless some other service
    * requires it.
    */
-  export const util: typeof papiUtil;
+  export const utils: typeof papiUtil;
   /**
    *
    * Service exposing various functions related to using webViews
@@ -4504,7 +4504,7 @@ declare module 'papi-backend' {
      * services. Extensions should not use or rely on anything in papiUtil unless some other service
      * requires it.
      */
-    util: typeof papiUtil;
+    utils: typeof papiUtil;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -4597,7 +4597,7 @@ declare module 'papi-backend' {
    * services. Extensions should not use or rely on anything in papiUtil unless some other service
    * requires it.
    */
-  export const util: typeof papiUtil;
+  export const utils: typeof papiUtil;
   /**
    *
    * Service exposing various functions related to using webViews
