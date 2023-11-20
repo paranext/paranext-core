@@ -39,7 +39,7 @@
         logger.info(input);
       }
 
-      const dataProviderPromise = papi.dataProvider.get('helloSomeone.people');
+      const dataProviderPromise = papi.dataProviders.get('helloSomeone.people');
 
       async function setupWebView() {
         const peopleDataProvider = await dataProviderPromise;

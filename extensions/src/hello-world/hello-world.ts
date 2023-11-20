@@ -140,7 +140,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   papi.webViews.getWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
   papi.webViews.getWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
 
-  const peopleDataProvider = await papi.dataProvider.get('helloSomeone.people');
+  const peopleDataProvider = await papi.dataProviders.get('helloSomeone.people');
 
   if (peopleDataProvider) {
     // Test subscribing to a data provider

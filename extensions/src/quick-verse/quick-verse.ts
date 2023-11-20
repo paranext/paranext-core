@@ -35,7 +35,7 @@ logger.info('Quick Verse is importing!');
  *
  *   - Can freely add properties and methods without specifying them in an extra type
  *   - Can use private methods (prefix with `#`) that are automatically ignored by papi
- *   - Can use `@papi.dataProvider.decorators.ignore` to tell papi to ignore methods
+ *   - Can use `@papi.dataProviders.decorators.ignore` to tell papi to ignore methods
  *   - Can extend `DataProviderEngine` so TypeScript will understand you can call `this.notifyUpdate`
  *       without specifying a `notifyUpdate` function
  *   - Can easily create multiple data providers from the same engine if you have two independent sets
@@ -65,7 +65,7 @@ class QuickVerseDataProviderEngine
   /** Latest updated verse reference */
   latestVerseRef = 'JHN 11:35';
 
-  usfmDataProviderPromise = papi.dataProvider.get('usfm');
+  usfmDataProviderPromise = papi.dataProviders.get('usfm');
 
   /** Number of times any verse has been modified by a user this session */
   heresyCount = 0;
@@ -94,7 +94,7 @@ class QuickVerseDataProviderEngine
    *   Alternatively, you can name it anything that doesn't start with `set` like `_setInternal` or
    *   `internalSet`.
    */
-  @papi.dataProvider.decorators.ignore
+  @papi.dataProviders.decorators.ignore
   async setInternal(
     selector: string,
     data: QuickVerseSetData,
@@ -292,7 +292,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   }
   engine.heresyCount = storedHeresyCount;
 
-  const quickVerseDataProvider = await papi.dataProvider.registerEngine(
+  const quickVerseDataProvider = await papi.dataProviders.registerEngine(
     'quickVerse.quickVerse',
     engine,
   );
