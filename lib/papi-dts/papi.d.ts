@@ -3062,7 +3062,7 @@ declare module 'shared/services/project-data-provider.service' {
    * @example
    *
    * ```typescript
-   * const pdp = await getProjectDataProvider('ParatextStandard', 'ProjectID12345');
+   * const pdp = await get('ParatextStandard', 'ProjectID12345');
    * pdp.getVerse(new VerseRef('JHN', '1', '1'));
    * ```
    *
@@ -3073,13 +3073,13 @@ declare module 'shared/services/project-data-provider.service' {
    * @param projectId ID for the project to load
    * @returns Data provider with types that are associated with the given project type
    */
-  export function getProjectDataProvider<ProjectType extends ProjectTypes>(
+  export function get<ProjectType extends ProjectTypes>(
     projectType: ProjectType,
     projectId: string,
   ): Promise<ProjectDataProvider[ProjectType]>;
   export interface PapiBackendProjectDataProviderService {
     registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
-    getProjectDataProvider: typeof getProjectDataProvider;
+    get: typeof get;
   }
   /**
    *
@@ -3087,14 +3087,14 @@ declare module 'shared/services/project-data-provider.service' {
    */
   export const papiBackendProjectDataProviderService: PapiBackendProjectDataProviderService;
   export interface PapiFrontendProjectDataProviderService {
-    getProjectDataProvider: typeof getProjectDataProvider;
+    get: typeof get;
   }
   /**
    *
    * Service that gets project data providers
    */
   export const papiFrontendProjectDataProviderService: {
-    getProjectDataProvider: typeof getProjectDataProvider;
+    get: typeof get;
   };
 }
 declare module 'shared/services/settings.service' {
@@ -3997,7 +3997,7 @@ declare module 'papi-frontend' {
      *
      * Service that gets project data providers
      */
-    projectDataProvider: PapiFrontendProjectDataProviderService;
+    projectDataProviders: PapiFrontendProjectDataProviderService;
     /**
      *
      * Provides metadata for projects known by the platform
@@ -4079,7 +4079,7 @@ declare module 'papi-frontend' {
    *
    * Service that registers and gets project data providers
    */
-  export const projectDataProvider: PapiFrontendProjectDataProviderService;
+  export const projectDataProviders: PapiFrontendProjectDataProviderService;
   /**
    *
    * Provides metadata for projects known by the platform
@@ -4549,7 +4549,7 @@ declare module 'papi-backend' {
      *
      * Service that registers and gets project data providers
      */
-    projectDataProvider: PapiBackendProjectDataProviderService;
+    projectDataProviders: PapiBackendProjectDataProviderService;
     /**
      *
      * Provides metadata for projects known by the platform
@@ -4642,7 +4642,7 @@ declare module 'papi-backend' {
    *
    * Service that registers and gets project data providers
    */
-  export const projectDataProvider: PapiBackendProjectDataProviderService;
+  export const projectDataProviders: PapiBackendProjectDataProviderService;
   /**
    *
    * Provides metadata for projects known by the platform

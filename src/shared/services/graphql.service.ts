@@ -3,7 +3,7 @@ import { VerseRef, ScrVers } from '@sillsdev/scripture';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { ProjectDataProvider } from '@shared/models/project-data-provider-engine.model';
-import { getProjectDataProvider } from '@shared/services/project-data-provider.service';
+import { get } from '@shared/services/project-data-provider.service';
 
 // TODO: figure out what to do with the schema. It's a baked in string just to get things rolling, not because it's optimal.
 const usfmSchema = buildSchema(`
@@ -64,7 +64,7 @@ async function preparePdpCall(
   const parsedVerseRef = extractVerseRef(verseRef);
   const existingPdp = paratextProjectMap.get(projectId);
   if (existingPdp) return { pdp: existingPdp, verseRef: parsedVerseRef };
-  const pdp = await getProjectDataProvider<'ParatextStandard'>(projectId);
+  const pdp = await get<'ParatextStandard'>('ParatextStandard', projectId);
   paratextProjectMap.set(projectId, pdp);
   return { pdp, verseRef: parsedVerseRef };
 }
@@ -81,17 +81,17 @@ const root = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getBook: async (inputs: any): Promise<string | undefined> => {
     const { pdp, verseRef } = await preparePdpCall(inputs);
-    return pdp.getBook(verseRef);
+    return pdp.getBookUSFM(verseRef);
   },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getChapter: async (inputs: any): Promise<string | undefined> => {
     const { pdp, verseRef } = await preparePdpCall(inputs);
-    return pdp.getChapter(verseRef);
+    return pdp.getChapterUSFM(verseRef);
   },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getVerse: async (inputs: any): Promise<string | undefined> => {
     const { pdp, verseRef } = await preparePdpCall(inputs);
-    return pdp.getVerse(verseRef);
+    return pdp.getVerseUSFM(verseRef);
   },
 };
 
