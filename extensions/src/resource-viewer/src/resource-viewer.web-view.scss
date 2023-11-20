@@ -1,2 +1,8 @@
+// TODO: replace this `styles` file with one from each Scripture project.
+@import './styles';
 @import './editor';
 @import './editor-overrides';
+
+body {
+  background-color: #eee;
+}

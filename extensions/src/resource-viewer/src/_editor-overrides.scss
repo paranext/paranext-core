@@ -1,42 +1,6 @@
 /* Platform.Bible image protocol overrides */
 /* stylelint-disable selector-no-qualifying-type */
 
-.emoji.happysmile {
-  background-image: url('papi-extension://resource-viewer/assets/images/emoji/1F642.png');
-}
-
-i.chevron-down {
-  background-image: url('papi-extension://resource-viewer/assets/images/icons/chevron-down.svg');
-}
-
-#block-controls span.block-type.paragraph {
-  background-image: url('papi-extension://resource-viewer/assets/images/icons/text-paragraph.svg');
-}
-
-#block-controls span.block-type.h1 {
-  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-h1.svg');
-}
-
-#block-controls span.block-type.h2 {
-  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-h2.svg');
-}
-
-#block-controls span.block-type.quote {
-  background-image: url('papi-extension://resource-viewer/assets/images/icons/chat-square-quote.svg');
-}
-
-#block-controls span.block-type.ul {
-  background-image: url('papi-extension://resource-viewer/assets/images/icons/list-ul.svg');
-}
-
-#block-controls span.block-type.ol {
-  background-image: url('papi-extension://resource-viewer/assets/images/icons/list-ol.svg');
-}
-
-#block-controls span.block-type.code {
-  background-image: url('papi-extension://resource-viewer/assets/images/icons/code.svg');
-}
-
 .link-editor div.link-edit {
   background-image: url('papi-extension://resource-viewer/assets/images/icons/pencil-fill.svg');
 }
@@ -49,18 +13,44 @@ i.redo {
   background-image: url('papi-extension://resource-viewer/assets/images/icons/arrow-clockwise.svg');
 }
 
-.icon.paragraph {
+%paragraph {
   background-image: url('papi-extension://resource-viewer/assets/images/icons/text-paragraph.svg');
 }
 
-.icon.large-heading,
-.icon.h1 {
+%h-one {
   background-image: url('papi-extension://resource-viewer/assets/images/icons/type-h1.svg');
 }
 
-.icon.small-heading,
-.icon.h2 {
+%h-two {
   background-image: url('papi-extension://resource-viewer/assets/images/icons/type-h2.svg');
+}
+
+%h-three {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-h3.svg');
+}
+
+%square-one {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/1-square.svg');
+}
+
+%square-two {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/2-square.svg');
+}
+
+%square-three {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/3-square.svg');
+}
+
+%square-four {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/4-square.svg');
+}
+
+%bookmark {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/bookmark.svg');
+}
+
+%file-earmark {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/file-earmark.svg');
 }
 
 .icon.bullet-list,
@@ -73,8 +63,12 @@ i.redo {
   background-image: url('papi-extension://resource-viewer/assets/images/icons/list-ol.svg');
 }
 
-.icon.quote {
+%quote {
   background-image: url('papi-extension://resource-viewer/assets/images/icons/chat-square-quote.svg');
+}
+
+.icon.ban {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/ban.svg');
 }
 
 .icon.code {
@@ -119,4 +113,8 @@ i.right-align {
 
 i.justify-align {
   background-image: url('papi-extension://resource-viewer/assets/images/icons/justify.svg');
+}
+
+i.chevron-down {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/chevron-down.svg');
 }
