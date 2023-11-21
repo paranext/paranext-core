@@ -84,7 +84,7 @@
         function updateHelloWorldClicks(clicks) {
           helloWorldClicks = clicks;
           const helloWorldButton = document.getElementById('hello-world');
-          helloWorldButton.textContent = papi.util.htmlEncode(`Hello World ${helloWorldClicks}`);
+          helloWorldButton.textContent = papi.utils.htmlEncode(`Hello World ${helloWorldClicks}`);
         }
 
         // Update the clicks when we are informed helloWorld has been run
@@ -109,7 +109,7 @@
             .sendCommand('test.echoRenderer', 'From Hello World WebView')
             .then((message) => {
               const echoRendererOutput = document.getElementById('echo-renderer-output');
-              echoRendererOutput.textContent = papi.util.htmlEncode(message);
+              echoRendererOutput.textContent = papi.utils.htmlEncode(message);
               print(message);
             }),
         );
@@ -128,7 +128,7 @@
             .sendCommand('helloSomeone.helloSomeone', "'Hello World WebView'")
             .then((message) => {
               const helloSomeoneOutput = document.getElementById('hello-someone-output');
-              helloSomeoneOutput.textContent = papi.util.htmlEncode(message);
+              helloSomeoneOutput.textContent = papi.utils.htmlEncode(message);
               print(message);
             }),
         );

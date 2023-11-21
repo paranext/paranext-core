@@ -39,7 +39,7 @@
         logger.info(input);
       }
 
-      const dataProviderPromise = papi.dataProvider.get('helloSomeone.people');
+      const dataProviderPromise = papi.dataProviders.get('helloSomeone.people');
 
       async function setupWebView() {
         const peopleDataProvider = await dataProviderPromise;
@@ -50,7 +50,7 @@
           const nameInput = document.getElementById('name-input');
           const greeting = await peopleDataProvider.getGreeting(nameInput.value.toLowerCase());
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.textContent = papi.util.htmlEncode(greeting || '');
+          helloSomeoneOutput.textContent = papi.utils.htmlEncode(greeting || '');
           print(greeting);
         });
         greetingsButton.addEventListener('contextmenu', async (e) => {
@@ -69,7 +69,7 @@
           const nameInput = document.getElementById('name-input');
           const success = await peopleDataProvider.deletePerson(nameInput.value.toLowerCase());
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.textContent = papi.util.htmlEncode(
+          helloSomeoneOutput.textContent = papi.utils.htmlEncode(
             `${success ? 'Successfully' : 'Unsuccessfully'} deleted ${nameInput.value}.${
               success ? ' RIP ⚰️' : ''
             }`.replace(/'/g, '`'),
@@ -87,7 +87,7 @@
             setGreetingsInput.value,
           );
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.textContent = papi.util.htmlEncode(
+          helloSomeoneOutput.textContent = papi.utils.htmlEncode(
             `${success ? 'Successfully' : 'Unsuccessfully'} set ${name}'s greeting!`.replace(
               /'/g,
               '`',
@@ -106,7 +106,7 @@
             parseInt(setAgeInput.value),
           );
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.textContent = papi.util.htmlEncode(
+          helloSomeoneOutput.textContent = papi.utils.htmlEncode(
             `${success ? 'Successfully' : 'Unsuccessfully'} set ${name}'s age!`.replace(/'/g, '`'),
           );
         });
@@ -115,7 +115,7 @@
         peopleDataProvider.subscribePeople(undefined, (people) => {
           const peopleData = document.getElementById('people-data');
           const peopleString = JSON.stringify(people, null, 2);
-          peopleData.textContent = papi.util.htmlEncode(peopleString.replace(/"/g, '`'));
+          peopleData.textContent = papi.utils.htmlEncode(peopleString.replace(/"/g, '`'));
           print(peopleString);
         });
 
@@ -126,7 +126,7 @@
           () => {
             peopleUpdateCount += 1;
             const peopleUpdateCountDiv = document.getElementById('people-update-count');
-            peopleUpdateCountDiv.textContent = papi.util.htmlEncode(
+            peopleUpdateCountDiv.textContent = papi.utils.htmlEncode(
               `People Updates: ${peopleUpdateCount}`,
             );
           },
@@ -142,7 +142,7 @@
             const billAnyGreetingsUpdateCountDiv = document.getElementById(
               'bill-any-greetings-update-count',
             );
-            billAnyGreetingsUpdateCountDiv.textContent = papi.util.htmlEncode(
+            billAnyGreetingsUpdateCountDiv.textContent = papi.utils.htmlEncode(
               `Any Greetings Updates (via Bill): ${billAnyGreetingsUpdateCount}`,
             );
           },
@@ -156,7 +156,7 @@
           const billGreetingsUpdateCountDiv = document.getElementById(
             'bill-greetings-update-count',
           );
-          billGreetingsUpdateCountDiv.textContent = papi.util.htmlEncode(
+          billGreetingsUpdateCountDiv.textContent = papi.utils.htmlEncode(
             `Bill Greetings Updates: ${billGreetingsUpdateCount}`,
           );
         });
@@ -168,7 +168,7 @@
           () => {
             billAnyAgeUpdateCount += 1;
             const billAnyAgeUpdateCountDiv = document.getElementById('bill-any-age-update-count');
-            billAnyAgeUpdateCountDiv.textContent = papi.util.htmlEncode(
+            billAnyAgeUpdateCountDiv.textContent = papi.utils.htmlEncode(
               `Any Age Updates (via Bill): ${billAnyAgeUpdateCount}`,
             );
           },
@@ -180,7 +180,7 @@
         peopleDataProvider.subscribeAge('bIlL', () => {
           billAgeUpdateCount += 1;
           const billAgeUpdateCountDiv = document.getElementById('bill-age-update-count');
-          billAgeUpdateCountDiv.textContent = papi.util.htmlEncode(
+          billAgeUpdateCountDiv.textContent = papi.utils.htmlEncode(
             `Bill Age Updates: ${billAgeUpdateCount}`,
           );
         });

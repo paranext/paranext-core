@@ -112,7 +112,7 @@ declare module 'papi-shared-types' {
    * `IDataProvider` types for each data provider supported by PAPI. Extensions can add more data
    * providers with corresponding data provider IDs by adding details to their `.d.ts` file and
    * registering a data provider engine in their `activate` function with
-   * `papi.dataProvider.registerEngine`.
+   * `papi.dataProviders.registerEngine`.
    *
    * Note: Data Provider names must consist of two string separated by at least one period. We
    * recommend one period and lower camel case in case we expand the api in the future to allow dot
@@ -183,7 +183,7 @@ declare module 'papi-shared-types' {
 
   /**
    * Disposable version of each data provider type supported by PAPI. These objects are only
-   * returned from `papi.dataProvider.registerEngine` - only the one who registers a data provider
+   * returned from `papi.dataProviders.registerEngine` - only the one who registers a data provider
    * engine is allowed to dispose of the data provider.
    *
    * Automatically includes all extensions' data providers that are added to {@link DataProviders}.

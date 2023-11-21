@@ -39,7 +39,7 @@ logger.info('Hello Someone is importing!');
  * - Cons
  *
  *   - Must specify all properties and methods in the object type
- *   - `@papi.dataProvider.decorators.ignore` is difficult to apply to tell papi to ignore methods
+ *   - `@papi.dataProviders.decorators.ignore` is difficult to apply to tell papi to ignore methods
  *   - When using `this.notifyUpdate`, you must include the `WithNotifyUpdate` type and provide a
  *       placeholder `notifyUpdate` method
  *
@@ -237,7 +237,7 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
     return result;
   },
 };
-papi.dataProvider.decorators.ignore(peopleDataProviderEngine.getPerson);
+papi.dataProviders.decorators.ignore(peopleDataProviderEngine.getPerson);
 
 const peopleWebViewType = 'helloSomeone.peopleViewer';
 const peopleWebViewIdKey = 'peopleWebViewId';
@@ -263,7 +263,7 @@ const peopleWebViewProvider: IWebViewProvider = {
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello Someone is activating!');
 
-  const peopleDataProviderPromise = papi.dataProvider.registerEngine(
+  const peopleDataProviderPromise = papi.dataProviders.registerEngine(
     'helloSomeone.people',
     peopleDataProviderEngine,
   );

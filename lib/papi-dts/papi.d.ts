@@ -2402,7 +2402,7 @@ declare module 'papi-shared-types' {
    * `IDataProvider` types for each data provider supported by PAPI. Extensions can add more data
    * providers with corresponding data provider IDs by adding details to their `.d.ts` file and
    * registering a data provider engine in their `activate` function with
-   * `papi.dataProvider.registerEngine`.
+   * `papi.dataProviders.registerEngine`.
    *
    * Note: Data Provider names must consist of two string separated by at least one period. We
    * recommend one period and lower camel case in case we expand the api in the future to allow dot
@@ -2470,7 +2470,7 @@ declare module 'papi-shared-types' {
   };
   /**
    * Disposable version of each data provider type supported by PAPI. These objects are only
-   * returned from `papi.dataProvider.registerEngine` - only the one who registers a data provider
+   * returned from `papi.dataProviders.registerEngine` - only the one who registers a data provider
    * engine is allowed to dispose of the data provider.
    *
    * Automatically includes all extensions' data providers that are added to {@link DataProviders}.
@@ -2810,7 +2810,7 @@ declare module 'shared/services/data-provider.service' {
    *
    * ```typescript
    * class MyDataProviderEngine {
-   * ＠papi.dataProvider.decorators.ignore
+   * ＠papi.dataProviders.decorators.ignore
    * async getInternal() {}
    * }
    * ```
@@ -2827,7 +2827,7 @@ declare module 'shared/services/data-provider.service' {
    * const myDataProviderEngine = {
    *   async getInternal() {},
    * };
-   * papi.dataProvider.decorators.ignore(dataProviderEngine.getInternal);
+   * papi.dataProviders.decorators.ignore(dataProviderEngine.getInternal);
    * ```
    *
    * @param method The method to ignore
@@ -2855,7 +2855,7 @@ declare module 'shared/services/data-provider.service' {
    *
    * ```typescript
    * class MyDataProviderEngine {
-   * ＠papi.dataProvider.decorators.ignore
+   * ＠papi.dataProviders.decorators.ignore
    * async getInternal() {}
    * }
    * ```
@@ -3062,7 +3062,7 @@ declare module 'shared/services/project-data-provider.service' {
    * @example
    *
    * ```typescript
-   * const pdp = await getProjectDataProvider('ParatextStandard', 'ProjectID12345');
+   * const pdp = await get('ParatextStandard', 'ProjectID12345');
    * pdp.getVerse(new VerseRef('JHN', '1', '1'));
    * ```
    *
@@ -3073,13 +3073,13 @@ declare module 'shared/services/project-data-provider.service' {
    * @param projectId ID for the project to load
    * @returns Data provider with types that are associated with the given project type
    */
-  export function getProjectDataProvider<ProjectType extends ProjectTypes>(
+  export function get<ProjectType extends ProjectTypes>(
     projectType: ProjectType,
     projectId: string,
   ): Promise<ProjectDataProvider[ProjectType]>;
   export interface PapiBackendProjectDataProviderService {
     registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
-    getProjectDataProvider: typeof getProjectDataProvider;
+    get: typeof get;
   }
   /**
    *
@@ -3087,14 +3087,14 @@ declare module 'shared/services/project-data-provider.service' {
    */
   export const papiBackendProjectDataProviderService: PapiBackendProjectDataProviderService;
   export interface PapiFrontendProjectDataProviderService {
-    getProjectDataProvider: typeof getProjectDataProvider;
+    get: typeof get;
   }
   /**
    *
    * Service that gets project data providers
    */
   export const papiFrontendProjectDataProviderService: {
-    getProjectDataProvider: typeof getProjectDataProvider;
+    get: typeof get;
   };
 }
 declare module 'shared/services/settings.service' {
@@ -3957,7 +3957,7 @@ declare module 'papi-frontend' {
      * services. Extensions should not use or rely on anything in papiUtil unless some other service
      * requires it.
      */
-    util: typeof papiUtil;
+    utils: typeof papiUtil;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -3992,12 +3992,12 @@ declare module 'papi-frontend' {
      *
      * Service that allows extensions to send and receive data to/from other extensions
      */
-    dataProvider: DataProviderService;
+    dataProviders: DataProviderService;
     /**
      *
      * Service that gets project data providers
      */
-    projectDataProvider: PapiFrontendProjectDataProviderService;
+    projectDataProviders: PapiFrontendProjectDataProviderService;
     /**
      *
      * Provides metadata for projects known by the platform
@@ -4039,7 +4039,7 @@ declare module 'papi-frontend' {
    * services. Extensions should not use or rely on anything in papiUtil unless some other service
    * requires it.
    */
-  export const util: typeof papiUtil;
+  export const utils: typeof papiUtil;
   /**
    *
    * Service exposing various functions related to using webViews
@@ -4074,12 +4074,12 @@ declare module 'papi-frontend' {
    *
    * Service that allows extensions to send and receive data to/from other extensions
    */
-  export const dataProvider: DataProviderService;
+  export const dataProviders: DataProviderService;
   /**
    *
    * Service that registers and gets project data providers
    */
-  export const projectDataProvider: PapiFrontendProjectDataProviderService;
+  export const projectDataProviders: PapiFrontendProjectDataProviderService;
   /**
    *
    * Provides metadata for projects known by the platform
@@ -4504,7 +4504,7 @@ declare module 'papi-backend' {
      * services. Extensions should not use or rely on anything in papiUtil unless some other service
      * requires it.
      */
-    util: typeof papiUtil;
+    utils: typeof papiUtil;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -4544,12 +4544,12 @@ declare module 'papi-backend' {
      *
      * Service that allows extensions to send and receive data to/from other extensions
      */
-    dataProvider: DataProviderService;
+    dataProviders: DataProviderService;
     /**
      *
      * Service that registers and gets project data providers
      */
-    projectDataProvider: PapiBackendProjectDataProviderService;
+    projectDataProviders: PapiBackendProjectDataProviderService;
     /**
      *
      * Provides metadata for projects known by the platform
@@ -4597,7 +4597,7 @@ declare module 'papi-backend' {
    * services. Extensions should not use or rely on anything in papiUtil unless some other service
    * requires it.
    */
-  export const util: typeof papiUtil;
+  export const utils: typeof papiUtil;
   /**
    *
    * Service exposing various functions related to using webViews
@@ -4637,12 +4637,12 @@ declare module 'papi-backend' {
    *
    * Service that allows extensions to send and receive data to/from other extensions
    */
-  export const dataProvider: DataProviderService;
+  export const dataProviders: DataProviderService;
   /**
    *
    * Service that registers and gets project data providers
    */
-  export const projectDataProvider: PapiBackendProjectDataProviderService;
+  export const projectDataProviders: PapiBackendProjectDataProviderService;
   /**
    *
    * Provides metadata for projects known by the platform

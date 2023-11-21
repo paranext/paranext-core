@@ -382,7 +382,7 @@ function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataT
  *
  * ```typescript
  * class MyDataProviderEngine {
- * ＠papi.dataProvider.decorators.ignore
+ * ＠papi.dataProviders.decorators.ignore
  * async getInternal() {}
  * }
  * ```
@@ -399,7 +399,7 @@ function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataT
  * const myDataProviderEngine = {
  *   async getInternal() {},
  * };
- * papi.dataProvider.decorators.ignore(dataProviderEngine.getInternal);
+ * papi.dataProviders.decorators.ignore(dataProviderEngine.getInternal);
  * ```
  *
  * @param method The method to ignore
@@ -435,7 +435,7 @@ function ignore<T extends object>(
  *
  * ```typescript
  * class MyDataProviderEngine {
- * ＠papi.dataProvider.decorators.ignore
+ * ＠papi.dataProviders.decorators.ignore
  * async getInternal() {}
  * }
  * ```

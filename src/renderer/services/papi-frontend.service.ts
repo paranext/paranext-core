@@ -45,7 +45,7 @@ const papi = {
   /** JSDOC DESTINATION commandService */
   commands: commandService,
   /** JSDOC DESTINATION papiUtil */
-  util: papiUtil,
+  utils: papiUtil,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: webViewService as WebViewServiceType,
   /** JSDOC DESTINATION dialogService */
@@ -57,9 +57,9 @@ const papi = {
   /** JSDOC DESTINATION internetService */
   internet: internetService as InternetService,
   /** JSDOC DESTINATION dataProviderService */
-  dataProvider: dataProviderService as DataProviderService,
+  dataProviders: dataProviderService as DataProviderService,
   /** JSDOC DESTINATION papiFrontendProjectDataProviderService */
-  projectDataProvider:
+  projectDataProviders:
     papiFrontendProjectDataProviderService as PapiFrontendProjectDataProviderService,
   /** JSDOC DESTINATION projectLookupService */
   projectLookup: projectLookupService as ProjectLookupServiceType,
@@ -85,7 +85,7 @@ export const { fetch } = papi;
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 /** JSDOC DESTINATION papiUtil */
-export const { util } = papi;
+export const { utils } = papi;
 /** JSDOC DESTINATION papiWebViewService */
 export const { webViews } = papi;
 /** JSDOC DESTINATION dialogService */
@@ -97,9 +97,9 @@ export const { logger } = papi;
 /** JSDOC DESTINATION internetService */
 export const { internet } = papi;
 /** JSDOC DESTINATION dataProviderService */
-export const { dataProvider } = papi;
+export const { dataProviders } = papi;
 /** JSDOC DESTINATION papiBackendProjectDataProviderService */
-export const { projectDataProvider } = papi;
+export const { projectDataProviders } = papi;
 /** JSDOC DESTINATION projectLookupService */
 export const { projectLookup } = papi;
 /** JSDOC DESTINATION papiReact */

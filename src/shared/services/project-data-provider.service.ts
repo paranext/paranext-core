@@ -95,7 +95,7 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
  * @example
  *
  * ```typescript
- * const pdp = await getProjectDataProvider('ParatextStandard', 'ProjectID12345');
+ * const pdp = await get('ParatextStandard', 'ProjectID12345');
  * pdp.getVerse(new VerseRef('JHN', '1', '1'));
  * ```
  *
@@ -106,7 +106,7 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
  * @param projectId ID for the project to load
  * @returns Data provider with types that are associated with the given project type
  */
-export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
+export async function get<ProjectType extends ProjectTypes>(
   projectType: ProjectType,
   projectId: string,
 ): Promise<ProjectDataProvider[ProjectType]> {
@@ -114,7 +114,7 @@ export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
   const { projectType: projectTypeFromMetadata } = metadata;
   if (projectType && projectType !== projectTypeFromMetadata)
     logger.warn(
-      `Project type for project ${projectId} is ${projectTypeFromMetadata}, but getProjectDataProvider was run with mismatching projectType ${projectType}. This could cause issues`,
+      `Project type for project ${projectId} is ${projectTypeFromMetadata}, but 'papi.projectDataProviders.get' was run with mismatching projectType ${projectType}. This could cause issues`,
     );
   const pdpFactoryId: string = getProjectDataProviderFactoryId(projectTypeFromMetadata);
   const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<ProjectType>>(
@@ -135,7 +135,7 @@ export async function getProjectDataProvider<ProjectType extends ProjectTypes>(
 // Declare an interface for the object we're exporting so that JSDoc comments propagate
 export interface PapiBackendProjectDataProviderService {
   registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
-  getProjectDataProvider: typeof getProjectDataProvider;
+  get: typeof get;
 }
 
 /**
@@ -145,12 +145,12 @@ export interface PapiBackendProjectDataProviderService {
  */
 export const papiBackendProjectDataProviderService: PapiBackendProjectDataProviderService = {
   registerProjectDataProviderEngineFactory,
-  getProjectDataProvider,
+  get,
 };
 
 // Declare an interface for the object we're exporting so that JSDoc comments propagate
 export interface PapiFrontendProjectDataProviderService {
-  getProjectDataProvider: typeof getProjectDataProvider;
+  get: typeof get;
 }
 
 /**
@@ -159,5 +159,5 @@ export interface PapiFrontendProjectDataProviderService {
  * Service that gets project data providers
  */
 export const papiFrontendProjectDataProviderService = {
-  getProjectDataProvider,
+  get,
 };
