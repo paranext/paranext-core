@@ -114,7 +114,7 @@ export async function get<ProjectType extends ProjectTypes>(
   const { projectType: projectTypeFromMetadata } = metadata;
   if (projectType && projectType !== projectTypeFromMetadata)
     logger.warn(
-      `Project type for project ${projectId} is ${projectTypeFromMetadata}, but the 'get' function on the ProjectDataProvider was run with mismatching projectType ${projectType}. This could cause issues`,
+      `Project type for project ${projectId} is ${projectTypeFromMetadata}, but 'papi.projectDataProviders.get' was run with mismatching projectType ${projectType}. This could cause issues`,
     );
   const pdpFactoryId: string = getProjectDataProviderFactoryId(projectTypeFromMetadata);
   const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<ProjectType>>(

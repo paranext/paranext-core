@@ -64,7 +64,7 @@ async function preparePdpCall(
   const parsedVerseRef = extractVerseRef(verseRef);
   const existingPdp = paratextProjectMap.get(projectId);
   if (existingPdp) return { pdp: existingPdp, verseRef: parsedVerseRef };
-  const pdp = await get<'ParatextStandard'>('ParatextStandard', projectId);
+  const pdp = await get('ParatextStandard', projectId);
   paratextProjectMap.set(projectId, pdp);
   return { pdp, verseRef: parsedVerseRef };
 }
