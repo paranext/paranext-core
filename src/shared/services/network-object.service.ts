@@ -119,6 +119,22 @@ const networkObjectRegistrations = new Map<string, NetworkObjectRegistration>();
  */
 const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
 
+export type NetworkObjectDetails = {
+  id: string;
+  functions: string[];
+};
+
+/**
+ * Emitter for when a network object is created. Includes the list of functions exposed by the
+ * network object.
+ */
+const onDidCreateNetworkObjectEmitter =
+  networkService.createNetworkEventEmitter<NetworkObjectDetails>(
+    serializeRequestType(CATEGORY_NETWORK_OBJECT, 'onDidCreateNetworkObject'),
+  );
+
+export const onDidCreateNetworkObject = onDidCreateNetworkObjectEmitter.event;
+
 /**
  * Emitter for when a network object is disposed. Provides the ID so that the local emitter specific
  * to that object can be run.
@@ -185,15 +201,15 @@ const createRemoteProxy = (
 } =>
   Proxy.revocable(base ?? {}, {
     get: (target, key) => {
-      if (key === 'dispose') return undefined;
+      // Block access to constructors and dispose
+      if (key === 'constructor' || key === 'dispose') return undefined;
       // Assert type of `key` to index `target`.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       if (key === 'then' || key in target) return target[key as keyof typeof target];
-      // If onDidDispose wasn't found in the target already, don't create a remote proxy for it
-      if (key === 'onDidDispose') return undefined;
-
       // If the prop requested is a symbol, that doesn't work over the network. Reject
-      if (!isString(key)) return null;
+      if (!isString(key)) return undefined;
+      // Don't create remote proxies for events
+      if (key.startsWith('on')) return undefined;
 
       // If the local network object doesn't have the property, build a request for it
       const requestFunction = (...args: unknown[]) =>
@@ -239,10 +255,56 @@ const createLocalProxy = (
 } =>
   Proxy.revocable(objectBeingSet, {
     get: (target, key) => {
-      if (key === 'dispose') return undefined;
+      // Block access to constructors and dispose
+      if (key === 'constructor' || key === 'dispose') return undefined;
+      // Don't proxy events
+      if (isString(key) && key.startsWith('on')) return undefined;
+
       return Reflect.get(target, key, objectBeingSet);
     },
   });
+
+/** Construct details about an object that is becoming a network object */
+function createNetworkObjectDetails(
+  id: string,
+  objectToShare: Record<string, unknown>,
+): NetworkObjectDetails {
+  const objectFunctions = new Set<string>();
+
+  // Get all function properties directly defined on the object
+  Object.getOwnPropertyNames(objectToShare).forEach((property) => {
+    try {
+      if (typeof objectToShare[property] === 'function') objectFunctions.add(property);
+    } catch (error) {
+      logger.debug(`Skipping ${property} on ${id} due to error: ${error}`);
+    }
+  });
+
+  // Walk up the prototype chain and get additional function properties, skipping the functions
+  // provided by the final (Object) prototype
+  let objectPrototype = Object.getPrototypeOf(objectToShare);
+  while (objectPrototype && Object.getPrototypeOf(objectPrototype)) {
+    Object.getOwnPropertyNames(objectPrototype).forEach((property) => {
+      try {
+        if (typeof objectToShare[property] === 'function') objectFunctions.add(property);
+      } catch (error) {
+        logger.debug(`Skipping ${property} on ${id}'s prototype due to error: ${error}`);
+      }
+    });
+    objectPrototype = Object.getPrototypeOf(objectPrototype);
+  }
+
+  // Remove functions we don't allow to be called remotely on network objects
+  objectFunctions.delete('constructor');
+  objectFunctions.delete('dispose');
+  objectFunctions.forEach((functionName) => {
+    if (functionName.startsWith('on')) objectFunctions.delete(functionName);
+  });
+  return {
+    id,
+    functions: [...objectFunctions].sort(),
+  };
+}
 
 interface IOnDidDisposableObject {
   onDidDispose?: PapiEvent<void>;
@@ -446,10 +508,8 @@ const set = async <T extends NetworkableObject>(
       );
     }
 
-    // The network object was successfully registered!
-    logger.info(`Network object registered: ${id}`);
-
-    // Create a proxy object that blocks "dispose" for anyone else in the same process
+    // At this point, the network object has been registered
+    // Create a proxy object that blocks functions like "dispose" for others in the same process
     const localProxy = createLocalProxy(objectToShare);
 
     // Setup onDidDispose so that services will know when the proxy is dead
@@ -481,6 +541,12 @@ const set = async <T extends NetworkableObject>(
       revokeProxy: localProxy.revoke,
     });
 
+    // Notify that the network object was successfully registered
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const netObjDetails = createNetworkObjectDetails(id, objectToShare as Record<string, unknown>);
+    logger.info(`Network object registered: ${JSON.stringify(netObjDetails)}`);
+    onDidCreateNetworkObjectEmitter.emit(netObjDetails);
+
     // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's
     // onDidDispose type because it had an onDidDispose added in overrideOnDidDispose.
     // Assert to specified generic type.
@@ -497,6 +563,7 @@ interface NetworkObjectService {
   hasKnown: typeof hasKnown;
   get: typeof get;
   set: typeof set;
+  onDidCreateNetworkObject: typeof onDidCreateNetworkObject;
 }
 
 /**
@@ -527,6 +594,7 @@ const networkObjectService: NetworkObjectService = {
   hasKnown,
   get,
   set,
+  onDidCreateNetworkObject,
 };
 
 export default networkObjectService;

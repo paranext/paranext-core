@@ -53,6 +53,14 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
         return dataScope;
     }
 
+    protected override List<string> GetFunctionNames()
+    {
+        var functionNames = new List<string>();
+        functionNames.AddRange(Getters.Keys);
+        functionNames.AddRange(Setters.Keys);
+        return functionNames;
+    }
+
     protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
     {
         // TODO: Handle wrong number of parameters (e.g. none) more gracefully

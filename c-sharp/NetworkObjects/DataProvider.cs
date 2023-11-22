@@ -43,7 +43,7 @@ internal abstract class DataProvider : NetworkObject
     /// </summary>
     public async Task RegisterDataProvider()
     {
-        await RegisterNetworkObject(DataProviderName, FunctionHandler);
+        await RegisterNetworkObject(DataProviderName, GetFunctionNames(), FunctionHandler);
         await StartDataProvider();
     }
 
@@ -81,7 +81,8 @@ internal abstract class DataProvider : NetworkObject
     /// `mapUpdateInstructionsToUpdateEvent` does
     /// </summary>
     /// <param name="dataScope">Indicator of what data changed in the provider. Can be '*' for all
-    /// updates, a `string` to update one data type, or a `List<string>` of data types to update. If dataScope is null, nothing happens. </param>
+    /// updates, a `string` to update one data type, or a `List&lt;string&gt;` of data types to update.
+    /// If dataScope is null, nothing happens. </param>
     protected void SendDataUpdateEvent(dynamic? dataScope)
     {
         // The final computed data scope to send out in the update event. Based on dataScope
@@ -116,16 +117,19 @@ internal abstract class DataProvider : NetworkObject
         // a string representation of the data scope result to use when finding an existing message
         // for the event
         string dataScopeKey;
-        if (dataScopeResult is string sR)
-            dataScopeKey = sR;
-        else if (dataScopeResult is List<string> dataScopeListR)
-            dataScopeKey = string.Join(',', dataScopeListR);
-        else
+        switch (dataScopeResult)
         {
-            Console.WriteLine(
-                $"dataScopeResult {dataScopeResult} was not string or list of strings. Unable to send data update event"
-            );
-            return;
+            case string sR:
+                dataScopeKey = sR;
+                break;
+            case List<string> dataScopeListR:
+                dataScopeKey = string.Join(',', dataScopeListR);
+                break;
+            default:
+                Console.WriteLine(
+                    $"dataScopeResult {dataScopeResult} was not string or list of strings. Unable to send data update event"
+                );
+                return;
         }
 
         var dataUpdateEventMessage = _updateEventsByScope.GetOrAdd(
@@ -135,6 +139,12 @@ internal abstract class DataProvider : NetworkObject
         );
         PapiClient.SendEvent(dataUpdateEventMessage);
     }
+
+    /// <summary>
+    /// Provide the list of functions that can be called on this data provider
+    /// </summary>
+    /// <returns>Array of strings containing all the functions that are callable on this data provider</returns>
+    protected abstract List<string> GetFunctionNames();
 
     /// <summary>
     /// Once a data provider has started, it should send out update events whenever its data changes.
