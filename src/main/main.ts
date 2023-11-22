@@ -22,6 +22,8 @@ import extensionAssetProtocolService from '@main/services/extension-asset-protoc
 import { wait } from '@shared/utils/util';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/papi-util';
+import networkObjectStatusService from '@shared/services/network-object-status.service';
+import { startNetworkObjectStatusService } from './services/network-object-status.service-host';
 // Used with the commented out code at the bottom of this file to test the ParatextProjectDataProvider
 // import { get } from '@shared/services/project-data-provider.service';
 // import { VerseRef } from '@sillsdev/scripture';
@@ -62,6 +64,9 @@ const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
 async function main() {
   // The network service relies on nothing else, and other things rely on it, so start it first
   await networkService.initialize();
+
+  // The network object status service relies on seeing everything else start up later
+  startNetworkObjectStatusService();
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
@@ -312,6 +317,14 @@ async function main() {
       });
     } else logger.error('Could not get testExtensionHost from main');
   }, 5000);
+
+  setTimeout(async () => {
+    logger.info(
+      `Available network objects after 30 seconds: ${JSON.stringify(
+        await networkObjectStatusService.getAllNetworkObjects(),
+      )}`,
+    );
+  }, 30000);
 
   // #endregion
 
