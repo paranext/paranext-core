@@ -1683,6 +1683,7 @@ declare module 'shared/utils/async-variable' {
 }
 declare module 'shared/services/network-object.service' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import { PapiEvent } from 'shared/models/papi-event.model';
   import {
     NetworkObject,
     DisposableNetworkObject,
@@ -1699,6 +1700,11 @@ declare module 'shared/services/network-object.service' {
    *   network
    */
   const hasKnown: (id: string) => boolean;
+  export type NetworkObjectDetails = {
+    id: string;
+    functions: string[];
+  };
+  export const onDidCreateNetworkObject: PapiEvent<NetworkObjectDetails>;
   interface IDisposableObject {
     dispose?: UnsubscriberAsync;
   }
@@ -1746,6 +1752,7 @@ declare module 'shared/services/network-object.service' {
     hasKnown: typeof hasKnown;
     get: typeof get;
     set: typeof set;
+    onDidCreateNetworkObject: typeof onDidCreateNetworkObject;
   }
   /**
    * Network objects are distributed objects within PAPI for TS/JS objects. @see

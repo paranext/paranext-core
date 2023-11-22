@@ -21,7 +21,11 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
 
     public async Task Initialize()
     {
-        await RegisterNetworkObject($"platform.pdpFactory-{_projectType}", FunctionHandler);
+        await RegisterNetworkObject(
+            $"platform.pdpFactory-{_projectType}",
+            new List<string>() { "getProjectDataProviderId" },
+            FunctionHandler
+        );
     }
 
     // An array of strings serialized as JSON will be sent here.

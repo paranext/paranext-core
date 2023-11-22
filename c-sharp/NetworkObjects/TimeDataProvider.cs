@@ -13,6 +13,8 @@ internal class TimeDataProvider : DataProvider
     // Fire an event that says our "time data" updated once per second
     private readonly System.Timers.Timer _timer = new(TimeSpan.FromSeconds(1));
 
+    private readonly List<string> _supportedFunctions = new() { "getTime" };
+
     public TimeDataProvider(PapiClient papiClient)
         : base("current-time", papiClient) { }
 
@@ -25,6 +27,11 @@ internal class TimeDataProvider : DataProvider
         _timer.AutoReset = true;
         _timer.Enabled = true;
         return Task.CompletedTask;
+    }
+
+    protected override List<string> GetFunctionNames()
+    {
+        return _supportedFunctions;
     }
 
     protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)

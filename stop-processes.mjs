@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import fkill from 'fkill';
 
 // All processes with any of these terms in the command line will be killed
-const searchTerms = ['electronmon', 'esbuild', 'nodemon', 'vite', 'webpack'];
+const searchTerms = ['electronmon', 'esbuild', 'nodemon', 'vite', 'webpack', 'extension-host'];
 
 // Don't display errors because we try to kill processes that already died because of a previous kill
 const fkillOptions = { silent: true, forceAfterTimeout: 1000 };
