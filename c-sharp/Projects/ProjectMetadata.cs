@@ -5,6 +5,11 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 public class ProjectMetadata
 {
+    // Not sure if this is how we want to handle this long-term, but for now, I'm
+    // adding constants here for the various known values of ProjectType (so that
+    // LocalProjects can handle them differently as needed.
+    public const string PARATEXT = "paratext";
+
     public ProjectMetadata(string id, string name, string projectStorageType, string projectType)
     {
         ID = id.ToUpperInvariant();

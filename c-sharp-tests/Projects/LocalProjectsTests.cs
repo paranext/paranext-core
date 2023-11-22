@@ -2,8 +2,28 @@ using Paranext.DataProvider.Projects;
 
 namespace TestParanextDataProvider.Projects;
 
+[TestFixture]
 public class LocalProjectsTests
 {
+    private const string TEST_ID = "441f1e41ffb8d319650847df35f4ffb78f12914e";
+    private LocalProjects _localProjects;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _localProjects = new TestLocalProjectsInTempDir();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        (_localProjects as IDisposable)?.Dispose();
+    }
+
+#region Tests originally for now defunct DoesFolderMatchMetadata method
+    // Previously, local project folder names had to follow the pattern shortname_id. Now this
+    // has been relaxed, and folders can be named with any name allowed by the OS.
+
     [TestCase("-ABC_441f1e41ffb8d319650847df35f4ffb78f12914e")]
     [TestCase("-_441f1e41ffb8d319650847df35f4ffb78f12914e")]
     [TestCase("ABC@_441f1e41ffb8d319650847df35f4ffb78f12914e")]
@@ -12,50 +32,92 @@ public class LocalProjectsTests
     [TestCase("ABC_441f1e41ffb8d319650847df35f4ffb78f1291 e")]
     [TestCase("_441f1e41ffb8d319650847df35f4ffb78f12914e")]
     [TestCase("ABC")]
-    public void DoesFolderMatchMetadata_FolderNameDoesNotMatchRegex_ReturnsFalse(string folder)
+    public void Initialize_NonStandardFolderName_ProjectIsRetrievable(string folder)
     {
-        var metadata = CreateParatextProjectMetadata("ABC");
-        Assert.That(DummyLocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.False);
+        CreateTempProject(folder, CreateParatextProjectMetadata("ABC"));
+
+        _localProjects.Initialize();
+        var details = _localProjects.GetAllProjectDetails().Single();
+        Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
+        Assert.That(details.HomeDirectory, Does.EndWith(folder));
+        Assert.That(details.Metadata.Name, Is.EqualTo("ABC"));
+        Assert.True(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
     [TestCase("ABC_441f1e41ffb8d319650847df35f4ffb78f12914e", "ABD")]
     [TestCase("AB-C_441f1e41ffb8d319650847df35f4ffb78f12914e", "AB-D")]
     [TestCase("A-B-C_441f1e41ffb8d319650847df35f4ffb78f12914e", "ABC")]
-    public void DoesFolderMatchMetadata_NameDoesNotMatch_ReturnsFalse(string folder, string name)
+    public void Initialize_NameDoesNotMatch_ProjectIsRetrievable(string folder, string name)
     {
         var metadata = CreateParatextProjectMetadata(name);
-        Assert.That(DummyLocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.False);
+        CreateTempProject(folder, metadata);
+        _localProjects.Initialize();
+        var details = _localProjects.GetAllProjectDetails().Single();
+        Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
+        Assert.That(details.HomeDirectory, Does.EndWith(folder));
+        Assert.That(details.Metadata.Name, Is.EqualTo(name));
+        Assert.True(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
     [TestCase("ABC_541f1e41ffb8d319650847df35f4ffb78f12914e", "ABC")]
     [TestCase("AB-C_541f1e41ffb8d319650847df35f4ffb78f12914e", "AB-C")]
-    public void DoesFolderMatchMetadata_IdDoesNotMatch_ReturnsFalse(string folder, string name)
+    public void Initialize_IdDoesNotMatch_ProjectIsRetrievable(string folder, string name)
     {
         var metadata = CreateParatextProjectMetadata(name);
-        Assert.That(DummyLocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.False);
+        CreateTempProject(folder, metadata);
+        _localProjects.Initialize();
+        var details = _localProjects.GetAllProjectDetails().Single();
+        Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
+        Assert.That(details.HomeDirectory, Does.EndWith(folder));
+        Assert.That(details.Metadata.Name, Is.EqualTo(name));
+        Assert.True(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
     [TestCase("ABC_441F1E41FFB8D319650847DF35F4FFB78F12914E", "ABC")]
     [TestCase("ABC_441F1E41FFB8D319650847DF35F4FFB78F12914E", "abc")]
     [TestCase("AB-C_441f1e41ffb8d319650847df35f4ffb78f12914e", "AB-C")]
     [TestCase("A-B-C_441f1e41ffb8d319650847df35f4ffb78f12914e", "A-B-C")]
-    public void DoesFolderMatchMetadata_IdAndNameMatch_ReturnsTrue(string folder, string name)
+    public void Initialize_IdAndNameMatch_ProjectIsRetrievable(string folder, string name)
     {
         var metadata = CreateParatextProjectMetadata(name);
-        Assert.That(DummyLocalProjects.DoesFolderMatchMetadata(folder, metadata), Is.True);
+        CreateTempProject(folder, metadata);
+        _localProjects.Initialize();
+        var details = _localProjects.GetAllProjectDetails().Single();
+        Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
+        Assert.That(details.HomeDirectory, Does.EndWith(folder));
+        Assert.That(details.Metadata.Name, Is.EqualTo(name));
+        Assert.True(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
     [Test]
-    public void DoesFolderMatchMetadata_NonParatextIdAndNameMatch_ReturnsTrue()
+    public void Initialize_NonParatextIdAndNameMatch_ProjectRetrievedByGetAllProjectDetails()
     {
-        var metadata = new ProjectMetadata("NotAParatextHexId",
-            "MyShortName", "freaky", "alien");
-        Assert.That(DummyLocalProjects.DoesFolderMatchMetadata("MyShortName_NotAParatextHexId",
-            metadata), Is.True);
+        const string folder = "MyShortName_NotAParatextHexId";
+        const string name = "My really long non-Paratext name";
+        const string id = "NotAParatextHexId";
+
+        var metadata = new ProjectMetadata(id, name, "freaky", "alien");
+
+
+        CreateTempProject(folder, metadata);
+        _localProjects.Initialize();
+        var details = _localProjects.GetAllProjectDetails().Single();
+        Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(id)));
+        Assert.That(details.HomeDirectory, Does.EndWith(folder));
+        Assert.That(details.Metadata.Name, Is.EqualTo(name));
+        Assert.True(details.Metadata.ID.Equals(id, StringComparison.OrdinalIgnoreCase));
+    }
+    #endregion
+
+
+
+    private void CreateTempProject(string folder, ProjectMetadata metadata)
+    {
+        ((TestLocalProjectsInTempDir)_localProjects).CreateTempProject(folder, metadata);
     }
 
     private static ProjectMetadata CreateParatextProjectMetadata(string name)
     {
-        return new ProjectMetadata("441f1e41ffb8d319650847df35f4ffb78f12914e", name, "paratextFolders", "paratext");
+        return new ProjectMetadata(TEST_ID, name, "paratextFolders", "paratext");
     }
 }
