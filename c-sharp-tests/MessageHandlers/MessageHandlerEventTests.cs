@@ -1,9 +1,11 @@
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using PtxUtils;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider.MessageHandlers;
 
+[ExcludeFromCodeCoverage]
 public class MessageHandlerEventTests
 {
     [Test]

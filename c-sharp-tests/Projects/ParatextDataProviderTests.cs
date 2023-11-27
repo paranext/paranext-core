@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
 using PtxUtils;
@@ -8,6 +9,7 @@ using SIL.Scripture;
 
 namespace TestParanextDataProvider.Projects
 {
+    [ExcludeFromCodeCoverage]
     internal class ParatextDataProviderTests : PsiTestBase
     {
         private const string PdpName = "soup";

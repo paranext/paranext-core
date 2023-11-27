@@ -25,7 +25,7 @@ internal partial class LocalProjects
     // Inside of the project subdirectory, these are the subdirectories for Paratext projects
     private const string PARATEXT_DATA_SUBDIRECTORY = "paratext";
 
-    private readonly ConcurrentDictionary<string, ProjectDetails> _projectDetailsMap = new();
+    protected readonly ConcurrentDictionary<string, ProjectDetails> _projectDetailsMap = new();
 
     // All project directories are subdirectories of this
     private readonly string _projectRootFolder;
@@ -69,19 +69,21 @@ internal partial class LocalProjects
         }
     }
 
-    public virtual IList<ProjectDetails> GetAllProjectDetails()
+    public IList<ProjectDetails> GetAllProjectDetails()
     {
         return _projectDetailsMap.Values.ToList();
     }
 
-    public virtual ProjectDetails GetProjectDetails(string projectId)
+    public ProjectDetails? GetProjectDetails(string projectId)
     {
-        return _projectDetailsMap[projectId.ToUpperInvariant()];
+        _projectDetailsMap.TryGetValue(projectId.ToUpperInvariant(), out var details);
+        return details;
     }
 
-    public virtual ScrText GetParatextProject(string projectId)
+    public ScrText? GetParatextProject(string projectId)
     {
-        return ScrTextCollection.GetById(HexId.FromStr(projectId));
+        HexId? id = HexId.FromStrSafe(projectId);
+        return id != null ? ScrTextCollection.FindById(id) : null;
     }
 
     public void SaveProjectMetadata(ProjectMetadata metadata, bool overwrite = false)

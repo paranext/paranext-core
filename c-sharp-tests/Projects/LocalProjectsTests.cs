@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Projects;
 
 namespace TestParanextDataProvider.Projects;
 
+[ExcludeFromCodeCoverage]
 public class LocalProjectsTests
 {
     [TestCase("-ABC_441f1e41ffb8d319650847df35f4ffb78f12914e")]

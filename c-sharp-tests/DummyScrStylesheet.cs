@@ -1,4 +1,5 @@
 using Paratext.Data;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider
 {
@@ -6,6 +7,7 @@ namespace TestParanextDataProvider
     /// In-memory stylesheet used for testing
     /// </summary>
     /// <remarks>Shamelessly stolen from Paratext tests and simplified</remarks>
+    [ExcludeFromCodeCoverage]
     internal class DummyScrStylesheet : ScrStylesheet
     {
         /// <summary>

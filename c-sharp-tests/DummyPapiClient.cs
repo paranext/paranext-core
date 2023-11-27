@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
@@ -6,6 +7,7 @@ using PtxUtils;
 
 namespace TestParanextDataProvider
 {
+    [ExcludeFromCodeCoverage]
     internal class DummyPapiClient : PapiClient
     {
         private readonly Dictionary<Enum<EventType>, Func<dynamic?, Message?>> _eventHandlers = new();
