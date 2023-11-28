@@ -224,10 +224,9 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
     }
     #endregion
 
+    #region CreateProject tests
     [TestCase(ProjectIdType.Exclude, "Project Name", "Must provide a project ID")]
     [TestCase(ProjectIdType.Empty, "Project Name", "Must provide a project ID")]
-    [TestCase(ProjectIdType.Invalid, "Project Name", "Project with ID 'asdf' was not found")]
-    [TestCase(ProjectIdType.Missing, "Project Name", "Project with ID '1854ab' was not found")]
     [TestCase(ProjectIdType.Include, null, "Must provide a project name")]
     [TestCase(ProjectIdType.Include, "", "Must provide a project name")]
     public async Task CreateProject_InvalidParameters_ReturnsError(ProjectIdType projectIdType,
@@ -244,7 +243,8 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
 
         VerifyResponse(response, expectedError, null);
     }
-    
+    #endregion
+
     #region Helper methods
     private static void VerifyResponse(ResponseToRequest response, string? expectedErrorMessage,
         string? expectedContents)

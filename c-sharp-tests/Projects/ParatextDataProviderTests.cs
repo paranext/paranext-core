@@ -112,10 +112,10 @@ namespace TestParanextDataProvider.Projects
         }
 
         [TestCase(1, 4, 0, @"<usx version=""3.0""><chapter number=""4"" style=""c"" />" +
-                @"<para style=""p""><verse number=""3"" style=""v"" /> a whole new chapter!</para></usx>",
+                @"<para style=""p""><verse number=""3"" style=""v"" />a whole new chapter!</para></usx>",
             @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla \c 4 \p \v 3 a whole new chapter!")]
         [TestCase(1, 2, 0, @"<usx version=""3.0""><chapter number=""2"" style=""c"" />" +
-                @"<para style=""p""><verse number=""2"" style=""v"" /> New chapter text.</para></usx>",
+                @"<para style=""p""><verse number=""2"" style=""v"" />New chapter text.</para></usx>",
             @"\id GEN \ip intro \c 2 \p \v 2 New chapter text. \c 3 \p \v 1 bla")]
         public async Task SetChapterUsx_ValidResults(int bookNum, int chapterNum, int verseNum,
             string newValue, string expectedResult)

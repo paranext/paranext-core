@@ -342,7 +342,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     {
         ScrStylesheet scrStylesheet = scrText.ScrStylesheet(bookNum);
         // Tokenize usfm
-        List<UsfmToken> tokens = UsfmToken.Tokenize(scrStylesheet, usfm ?? string.Empty, true);
+        List<UsfmToken> tokens = UsfmToken.Tokenize(scrStylesheet, usfm ?? string.Empty, false);
 
         XmlDocument doc = new XmlDocument();
         using (XmlWriter xmlw = doc.CreateNavigator()!.AppendChild())
