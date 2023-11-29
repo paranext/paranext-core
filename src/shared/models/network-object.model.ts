@@ -67,3 +67,14 @@ export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
 // because its Partial<T> is different than this signature's Partial<T> even though T is generic
 // and extends NetworkableObject in both cases.
 Partial<NetworkableObject>;
+
+/**
+ * Data about an object shared on the network
+ *
+ * @param id ID of the network object that processes use to reference it
+ * @param functionNames Array of strings with the function names exposed on this network object
+ */
+export type NetworkObjectDetails = {
+  id: string;
+  functionNames: string[];
+};

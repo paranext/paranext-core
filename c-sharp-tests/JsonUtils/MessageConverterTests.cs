@@ -45,7 +45,7 @@ public class MessageConverterTests
         string messageToDecode = """
             {"type":"event","eventType":"object:onDidDisposeNetworkObject","senderId":0,"event":"test-main"}
             """;
-        var msg = DeserializeMessageEvent<MessageEventObjectDispose>(messageToDecode);
+        var msg = DeserializeMessageEvent<MessageEventObjectDisposed>(messageToDecode);
         Assert.That(msg.EventContents!, Is.EqualTo("test-main"));
     }
 

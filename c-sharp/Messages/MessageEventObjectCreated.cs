@@ -1,18 +1,19 @@
 namespace Paranext.DataProvider.Messages;
 
-public sealed class MessageEventObjectCreate : MessageEventGeneric<MessageEventObjectCreateContents>
+public sealed class MessageEventObjectCreated
+    : MessageEventGeneric<MessageEventObjectCreatedContents>
 {
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageEventObjectCreate()
+    private MessageEventObjectCreated()
         : base(Messages.EventType.ObjectCreate) { }
 
-    public MessageEventObjectCreate(MessageEventObjectCreateContents eventContents)
+    public MessageEventObjectCreated(MessageEventObjectCreatedContents eventContents)
         : base(Messages.EventType.ObjectCreate, eventContents) { }
 }
 
-public sealed record MessageEventObjectCreateContents
+public sealed record MessageEventObjectCreatedContents
 {
     public string? Id { get; set; }
     public string[]? Functions { get; set; }

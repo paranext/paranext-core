@@ -48,12 +48,12 @@ internal abstract class NetworkObject
         // Notify the network that we registered this network object
         functionNames.Sort();
         _networkObjectFunctionNames = functionNames.ToArray();
-        var newObjectCreationDetails = new MessageEventObjectCreateContents()
+        var newObjectCreationDetails = new MessageEventObjectCreatedContents()
         {
             Id = networkObjectName,
             Functions = _networkObjectFunctionNames
         };
-        PapiClient.SendEvent(new MessageEventObjectCreate(newObjectCreationDetails));
+        PapiClient.SendEvent(new MessageEventObjectCreated(newObjectCreationDetails));
     }
 
     private ResponseToRequest HandleGet(dynamic getRequest)
