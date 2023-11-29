@@ -50,9 +50,9 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
             {
                 details = _projects.GetProjectDetails(projectID);
             }
-            catch (Exception)
+            catch (KeyNotFoundException)
             {
-                return ResponseToRequest.Failed($"Unknown project ID: {projectID}");
+                return ResponseToRequest.Failed("Unknown project ID: " + projectID);
             }
 
             // Create a random 30 character string containing letters A-Z

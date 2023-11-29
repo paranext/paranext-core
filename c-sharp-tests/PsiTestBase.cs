@@ -1,5 +1,8 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace TestParanextDataProvider
 {
+    [ExcludeFromCodeCoverage]
     internal abstract class PsiTestBase : PapiTestBase
     {
         public override void TestSetup()

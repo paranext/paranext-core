@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Xml;
 using Paratext.Data;
@@ -9,6 +10,7 @@ using PtxUtils;
 
 namespace TestParanextDataProvider
 {
+    [ExcludeFromCodeCoverage]
     internal class DummyScrText : ScrText
     {
         private readonly HexId _id;

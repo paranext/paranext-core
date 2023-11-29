@@ -1,8 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.ParatextUtils;
 
 namespace TestParanextDataProvider.Projects
 {
     [SetUpFixture]
+    [ExcludeFromCodeCoverage]
     public class FixtureSetup
     {
         private static readonly string s_testFolder = Path.Combine(Path.GetTempPath(), "Platform.Bible.Tests");

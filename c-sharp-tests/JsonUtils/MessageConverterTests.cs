@@ -1,9 +1,11 @@
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Messages;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace TestParanextDataProvider.JsonUtils;
 
+[ExcludeFromCodeCoverage]
 public class MessageConverterTests
 {
     [Test]

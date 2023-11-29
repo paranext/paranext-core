@@ -21,7 +21,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
         _writableRootDir = Path.Join(projectDetails.HomeDirectory, "project");
     }
 
-    public void Initialize()
+    public void Initialize() // TODO: This doesn't seem to be used
     {
         if (!Directory.Exists(_projectDetails.HomeDirectory))
             throw new Exception(
@@ -29,7 +29,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             );
     }
 
-    public string[] GetExistingDataStreamNames()
+    public string[] GetExistingDataStreamNames() // TODO: This doesn't seem to be used
     {
         var files = Directory.GetFiles(
             _writableRootDir,
@@ -61,16 +61,6 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
         return retVal.ToArray();
     }
 
-    private string GetFileNameFromStreamName(string streamName)
-    {
-        if (string.IsNullOrEmpty(streamName) || streamName.Contains(".."))
-            throw new ArgumentException("Invalid stream name", nameof(streamName));
-
-        streamName = streamName.Replace('/', Path.DirectorySeparatorChar);
-        streamName = streamName.Replace('\\', Path.DirectorySeparatorChar);
-        return Path.Join(_writableRootDir, streamName);
-    }
-
     public Stream? GetDataStream(string streamName, bool createIfNotExists = false)
     {
         var fileName = GetFileNameFromStreamName(streamName);
@@ -96,7 +86,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
         return retVal;
     }
 
-    public bool DeleteDataStream(string streamName)
+    public bool DeleteDataStream(string streamName) // TODO: This doesn't seem to be used
     {
         var fileName = GetFileNameFromStreamName(streamName);
         if (!File.Exists(fileName))
@@ -112,5 +102,15 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             Console.Error.WriteLine(e);
             return false;
         }
+    }
+
+    private string GetFileNameFromStreamName(string streamName)
+    {
+        if (string.IsNullOrEmpty(streamName) || streamName.Contains(".."))
+            throw new ArgumentException("Invalid stream name", nameof(streamName));
+
+        streamName = streamName.Replace('/', Path.DirectorySeparatorChar);
+        streamName = streamName.Replace('\\', Path.DirectorySeparatorChar);
+        return Path.Join(_writableRootDir, streamName);
     }
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
@@ -5,7 +6,7 @@ using PtxUtils;
 
 namespace TestParanextDataProvider.Projects
 {
-    [TestFixture]
+    [ExcludeFromCodeCoverage]
     internal class ParatextProjectDataProviderFactoryTests : PsiTestBase
     {
         private const string PdbFactoryGetRequest =

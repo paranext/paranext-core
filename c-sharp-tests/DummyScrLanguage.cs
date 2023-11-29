@@ -2,6 +2,7 @@ using Paratext.Data.Languages;
 using Paratext.Data;
 using PtxUtils;
 using SIL.WritingSystems;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider
 {
@@ -9,6 +10,7 @@ namespace TestParanextDataProvider
     /// Replaces a ScrLanguage for use in testing. Does not use the file system to save/load data. 
     /// </summary>
     /// <remarks>Shamelessly copied from Paratext tests.</remarks>
+    [ExcludeFromCodeCoverage]
     public class DummyScrLanguage : ScrLanguage
     {
         public DummyScrLanguage(ScrText scrText) : base(null, ProjectNormalization.Undefined, scrText)
