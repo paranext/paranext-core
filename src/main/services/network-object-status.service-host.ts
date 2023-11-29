@@ -1,3 +1,4 @@
+import { NetworkObjectDetails } from '@shared/models/network-object.model';
 import logger from '@shared/services/logger.service';
 import {
   NetworkObjectStatusRemoteServiceType,
@@ -12,30 +13,30 @@ import networkObjectService, {
 // us to start from a clean map. If somehow network objects can be registered before we hook up
 // the events, then we have to figure out a way to insert pre-existing objects into the map in a way
 // that avoids race conditions with the events that fire around the same time.
-const networkObjectIDsToFunctions = new Map<string, string[]>();
+const networkObjectIDsToDetails = new Map<string, NetworkObjectDetails>();
 
 onDidCreateNetworkObject((networkObjectDetails) => {
-  if (networkObjectIDsToFunctions.has(networkObjectDetails.id))
+  if (networkObjectIDsToDetails.has(networkObjectDetails.id))
     logger.warn(`Re-saving network object details for ${networkObjectDetails.id}`);
-  networkObjectIDsToFunctions.set(networkObjectDetails.id, networkObjectDetails.functions);
+  networkObjectIDsToDetails.set(networkObjectDetails.id, networkObjectDetails);
 });
 
 onDidDisposeNetworkObject((networkObjectId) => {
-  if (!networkObjectIDsToFunctions.delete(networkObjectId))
+  if (!networkObjectIDsToDetails.delete(networkObjectId))
     logger.warn(`Notification of disposed object ${networkObjectId} that was previously unknown`);
 });
 
 // Making this async to align with the service model even though it could really be synchronous
-async function getAllNetworkObjects(): Promise<Record<string, string[]>> {
-  const allNetworkObjects: Record<string, string[]> = {};
-  networkObjectIDsToFunctions.forEach((value: string[], key: string) => {
-    allNetworkObjects[key] = value;
+async function getAllNetworkObjectDetails(): Promise<Record<string, NetworkObjectDetails>> {
+  const allNetworkObjectDetails: Record<string, NetworkObjectDetails> = {};
+  networkObjectIDsToDetails.forEach((value: NetworkObjectDetails, key: string) => {
+    allNetworkObjectDetails[key] = value;
   });
-  return Promise.resolve(allNetworkObjects);
+  return Promise.resolve(allNetworkObjectDetails);
 }
 
 const networkObjectStatusService: NetworkObjectStatusRemoteServiceType = {
-  getAllNetworkObjects,
+  getAllNetworkObjectDetails,
 };
 
 /** Register the network object that backs the network object status service */

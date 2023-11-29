@@ -1,12 +1,14 @@
+import { NetworkObjectDetails } from '@shared/models/network-object.model';
+
 // Functions that are exposed through the network object
 export interface NetworkObjectStatusRemoteServiceType {
   /**
-   * Get all available network objects and their available functions
+   * Get details about all available network objects
    *
    * @returns Object whose keys are the names of the network objects and whose values are the
-   *   functions available for each network object
+   *   {@link NetworkObjectDetails} for each network object
    */
-  getAllNetworkObjects: () => Promise<Record<string, string[]>>;
+  getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
 }
 
 // Functions that are added in the service client on top of what is provided by the network object
@@ -15,11 +17,11 @@ export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemot
   /**
    * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
    *
-   * @returns Promise that either resolves to the list of available functions on a network object
+   * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
    *   once the network object is registered, or rejects if a timeout is provided and the timeout is
    *   reached before the network object is registered
    */
-  waitForNetworkObject: (id: string, timeoutInMS?: number) => Promise<string[]>;
+  waitForNetworkObject: (id: string, timeoutInMS?: number) => Promise<NetworkObjectDetails>;
 }
 
 export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';

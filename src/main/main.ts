@@ -66,7 +66,7 @@ async function main() {
   await networkService.initialize();
 
   // The network object status service relies on seeing everything else start up later
-  startNetworkObjectStatusService();
+  await startNetworkObjectStatusService();
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
@@ -321,7 +321,7 @@ async function main() {
   setTimeout(async () => {
     logger.info(
       `Available network objects after 30 seconds: ${JSON.stringify(
-        await networkObjectStatusService.getAllNetworkObjects(),
+        await networkObjectStatusService.getAllNetworkObjectDetails(),
       )}`,
     );
   }, 30000);
