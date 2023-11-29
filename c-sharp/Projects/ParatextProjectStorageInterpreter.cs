@@ -92,9 +92,15 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (string.IsNullOrEmpty(scope.ProjectID))
             return ResponseToRequest.Failed("Must provide a project ID");
 
-        var scrText = _projects.GetParatextProject(scope.ProjectID);
-        if (scrText == null)
+        ScrText scrText;
+        try
+        {
+            scrText = _projects.GetParatextProject(scope.ProjectID);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
             return ResponseToRequest.Failed($"Project with ID '{scope.ProjectID}' was not found");
+        }
 
         // TODO: Determine how we really want to handle project settings
         JObject settingsObj = new();
@@ -116,9 +122,15 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         // Not making it mandatory that all calls provide a VerseRef since there might be some types that don't use it
         VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
-        var scrText = _projects.GetParatextProject(scope.ProjectID);
-        if (scrText == null)
+        ScrText scrText;
+        try
+        {
+            scrText = _projects.GetParatextProject(scope.ProjectID);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
             return ResponseToRequest.Failed($"Project with ID '{scope.ProjectID}' was not found");
+        }
 
         return scope.DataType switch
         {
@@ -154,9 +166,15 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         // Not making it mandatory that all calls provide a VerseRef since there might be some types that don't use it
         VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
-        var scrText = _projects.GetParatextProject(scope.ProjectID);
-        if (scrText == null)
+        ScrText scrText;
+        try
+        {
+            scrText = _projects.GetParatextProject(scope.ProjectID);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
             return ResponseToRequest.Failed($"Project with ID '{scope.ProjectID}' was not found");
+        }
 
         switch (scope.DataType)
         {
@@ -206,6 +224,10 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         {
             dataStream = GetExtensionStream(scope, false);
         }
+        catch (KeyNotFoundException)
+        {
+            return ResponseToRequest.Failed("Unknown project ID: " + scope.ProjectID);
+        }
         catch (ArgumentException ex)
         {
             return ResponseToRequest.Failed(ex.Message);
@@ -235,6 +257,10 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         {
             dataStream = GetExtensionStream(scope, true);
         }
+        catch (KeyNotFoundException)
+        {
+            return ResponseToRequest.Failed("Unknown project ID: " + scope.ProjectID);
+        }
         catch (ArgumentException ex)
         {
             return ResponseToRequest.Failed(ex.Message);
@@ -243,9 +269,15 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         if (dataStream == null)
             return ResponseToRequest.Failed("Unable to create extension data");
 
-        var scrText = _projects.GetParatextProject(scope.ProjectID);
-        if (scrText == null)
+        ScrText scrText;
+        try
+        {
+            scrText = _projects.GetParatextProject(scope.ProjectID);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
             return ResponseToRequest.Failed($"Project with ID '{scope.ProjectID}' was not found");
+        }
 
         try
         {
@@ -283,9 +315,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     #region Private helper methods
     private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
     {
-        var projectDetails =
-            _projects.GetProjectDetails(scope.ProjectID!)
-            ?? throw new ArgumentException("Unknown project ID: " + scope.ProjectID);
+        ProjectDetails projectDetails = _projects.GetProjectDetails(scope.ProjectID!);
 
         IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
         return extensionStreamManager.GetDataStream(

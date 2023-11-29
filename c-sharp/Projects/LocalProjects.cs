@@ -74,16 +74,14 @@ internal partial class LocalProjects
         return _projectDetailsMap.Values.ToList();
     }
 
-    public ProjectDetails? GetProjectDetails(string projectId)
+    public ProjectDetails GetProjectDetails(string projectId)
     {
-        _projectDetailsMap.TryGetValue(projectId.ToUpperInvariant(), out var details);
-        return details;
+        return _projectDetailsMap[projectId.ToUpperInvariant()];
     }
 
-    public ScrText? GetParatextProject(string projectId)
+    public ScrText GetParatextProject(string projectId)
     {
-        HexId? id = HexId.FromStrSafe(projectId);
-        return id != null ? ScrTextCollection.FindById(id) : null;
+        return ScrTextCollection.GetById(HexId.FromStr(projectId));
     }
 
     public void SaveProjectMetadata(ProjectMetadata metadata, bool overwrite = false)

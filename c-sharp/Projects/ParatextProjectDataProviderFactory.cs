@@ -45,9 +45,15 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
             if (_pdpMap.TryGetValue(projectID, out var existingPdpInLock))
                 return ResponseToRequest.Succeeded(existingPdpInLock.DataProviderName);
 
-            ProjectDetails? details = _projects.GetProjectDetails(projectID);
-            if (details == null)
+            ProjectDetails details;
+            try
+            {
+                details = _projects.GetProjectDetails(projectID);
+            }
+            catch (KeyNotFoundException)
+            {
                 return ResponseToRequest.Failed("Unknown project ID: " + projectID);
+            }
 
             // Create a random 30 character string containing letters A-Z
             var name = new string(
