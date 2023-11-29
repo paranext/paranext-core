@@ -8,13 +8,14 @@ import {
 } from '@shared/utils/papi-util';
 import { PapiEvent } from '@shared/models/papi-event.model';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
-import { isString } from '@shared/utils/util';
+import { getAllObjectFunctionNames, isString } from '@shared/utils/util';
 import AsyncVariable from '@shared/utils/async-variable';
 import {
   NetworkObject,
   DisposableNetworkObject,
   NetworkableObject,
   LocalObjectToProxyCreator,
+  NetworkObjectDetails,
 } from '@shared/models/network-object.model';
 import { Mutex } from 'async-mutex';
 import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
@@ -119,11 +120,6 @@ const networkObjectRegistrations = new Map<string, NetworkObjectRegistration>();
  */
 const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
 
-export type NetworkObjectDetails = {
-  id: string;
-  functions: string[];
-};
-
 /**
  * Emitter for when a network object is created. Includes the list of functions exposed by the
  * network object.
@@ -133,6 +129,10 @@ const onDidCreateNetworkObjectEmitter =
     serializeRequestType(CATEGORY_NETWORK_OBJECT, 'onDidCreateNetworkObject'),
   );
 
+/**
+ * Event that fires when a new object has been created on the network (locally or remotely). The
+ * event contains information about the new network object.
+ */
 export const onDidCreateNetworkObject = onDidCreateNetworkObjectEmitter.event;
 
 /**
@@ -267,42 +267,19 @@ const createLocalProxy = (
 /** Construct details about an object that is becoming a network object */
 function createNetworkObjectDetails(
   id: string,
-  objectToShare: Record<string, unknown>,
+  objectToShare: { [property: string]: unknown },
 ): NetworkObjectDetails {
-  const objectFunctions = new Set<string>();
-
-  // Get all function properties directly defined on the object
-  Object.getOwnPropertyNames(objectToShare).forEach((property) => {
-    try {
-      if (typeof objectToShare[property] === 'function') objectFunctions.add(property);
-    } catch (error) {
-      logger.debug(`Skipping ${property} on ${id} due to error: ${error}`);
-    }
-  });
-
-  // Walk up the prototype chain and get additional function properties, skipping the functions
-  // provided by the final (Object) prototype
-  let objectPrototype = Object.getPrototypeOf(objectToShare);
-  while (objectPrototype && Object.getPrototypeOf(objectPrototype)) {
-    Object.getOwnPropertyNames(objectPrototype).forEach((property) => {
-      try {
-        if (typeof objectToShare[property] === 'function') objectFunctions.add(property);
-      } catch (error) {
-        logger.debug(`Skipping ${property} on ${id}'s prototype due to error: ${error}`);
-      }
-    });
-    objectPrototype = Object.getPrototypeOf(objectPrototype);
-  }
+  const objectFunctionNames = getAllObjectFunctionNames(objectToShare, id);
 
   // Remove functions we don't allow to be called remotely on network objects
-  objectFunctions.delete('constructor');
-  objectFunctions.delete('dispose');
-  objectFunctions.forEach((functionName) => {
-    if (functionName.startsWith('on')) objectFunctions.delete(functionName);
+  objectFunctionNames.delete('constructor');
+  objectFunctionNames.delete('dispose');
+  objectFunctionNames.forEach((functionName) => {
+    if (functionName.startsWith('on')) objectFunctionNames.delete(functionName);
   });
   return {
     id,
-    functions: [...objectFunctions].sort(),
+    functionNames: [...objectFunctionNames].sort(),
   };
 }
 
