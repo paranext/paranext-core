@@ -275,6 +275,7 @@ function createNetworkObjectDetails(
   objectFunctionNames.delete('constructor');
   objectFunctionNames.delete('dispose');
   objectFunctionNames.forEach((functionName) => {
+    // If we come up with some better way to identify events, we can remove this and related checks
     if (functionName.startsWith('on')) objectFunctionNames.delete(functionName);
   });
   return {
@@ -551,7 +552,11 @@ interface NetworkObjectService {
  * {@link networkObjectService.get}.
  *
  * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
- * and sent to the original objects registered via {@link networkObjectService.set}.
+ * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+ * the registered object are proxied except for constructors, `dispose`, and functions starting with
+ * `on` since those should be events (which are not intended to be proxied) based on our naming
+ * convention. If you don't want a function to be proxied, don't make it a property of the
+ * registered object.
  *
  * Functions on a network object will be called asynchronously by other processes regardless of
  * whether the functions are synchronous or asynchronous, so it is best to make them all
