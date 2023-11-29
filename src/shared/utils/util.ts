@@ -1,3 +1,5 @@
+import logger from '@shared/services/logger.service';
+
 // Thanks to blubberdiblub at https://stackoverflow.com/a/68141099/217579
 export function newGuid(): string {
   return '00-0-4-1-000'.replace(/[^-]/g, (s) =>
@@ -157,22 +159,44 @@ export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTime
 }
 
 /**
- * Get all functions on an object and its prototype (so we don't miss any class methods or any
- * object methods).
- *
- * Note: this does return some potentially unexpected function names. For example:
- * `getAllObjectFunctionNames({})` returns `[constructor,__defineGetter__,__defineSetter__,
- * hasOwnProperty,__lookupGetter__,__lookupSetter__,isPrototypeOf,propertyIsEnumerable,toString,
- * valueOf,toLocaleString]`
+ * Get all functions on an object and its prototype chain (so we don't miss any class methods or any
+ * object methods). Note that the functions on the final item in the prototype chain (i.e., Object)
+ * are skipped to avoid including functions like `__defineGetter__`, `__defineSetter__`, `toString`,
+ * etc.
  *
  * @param obj Object whose functions to get
+ * @param objId Optional ID of the object to use for debug logging
  * @returns Array of all function names on an object
  */
 // Note: lodash has something that MIGHT do the same thing as this. Investigate for https://github.com/paranext/paranext-core/issues/134
-// We want to use any so it can be an object, number, string, etc. Just can't be null or undefined
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getAllObjectFunctionNames(obj: NonNullable<any>) {
-  return Object.getOwnPropertyNames(obj)
-    .concat(Object.getOwnPropertyNames(Object.getPrototypeOf(obj)))
-    .filter((fn) => typeof obj[fn] === 'function');
+export function getAllObjectFunctionNames(
+  obj: { [property: string]: unknown },
+  objId: string = 'obj',
+): Set<string> {
+  const objectFunctionNames = new Set<string>();
+
+  // Get all function properties directly defined on the object
+  Object.getOwnPropertyNames(obj).forEach((property) => {
+    try {
+      if (typeof obj[property] === 'function') objectFunctionNames.add(property);
+    } catch (error) {
+      logger.debug(`Skipping ${property} on ${objId} due to error: ${error}`);
+    }
+  });
+
+  // Walk up the prototype chain and get additional function properties, skipping the functions
+  // provided by the final (Object) prototype
+  let objectPrototype = Object.getPrototypeOf(obj);
+  while (objectPrototype && Object.getPrototypeOf(objectPrototype)) {
+    Object.getOwnPropertyNames(objectPrototype).forEach((property) => {
+      try {
+        if (typeof obj[property] === 'function') objectFunctionNames.add(property);
+      } catch (error) {
+        logger.debug(`Skipping ${property} on ${objId}'s prototype due to error: ${error}`);
+      }
+    });
+    objectPrototype = Object.getPrototypeOf(objectPrototype);
+  }
+
+  return objectFunctionNames;
 }

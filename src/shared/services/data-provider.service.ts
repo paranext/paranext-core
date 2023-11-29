@@ -486,7 +486,7 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
     'get' | 'set' | 'other',
     DataTypeNames<DataProviderTypes[DataProviderName]>
   >(
-    getAllObjectFunctionNames(dataProviderEngine),
+    [...getAllObjectFunctionNames(dataProviderEngine)],
     (fnName) => {
       // If the function was decorated with @ignore, do not consider it a special function
       // We don't care about types. We just want to check the decorator

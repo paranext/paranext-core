@@ -14,6 +14,16 @@ namespace Paranext.DataProvider.NetworkObjects;
 internal class UsfmDataProvider : DataProvider
 {
     private readonly string _collectionName;
+    private readonly List<string> _supportedFunctions =
+        new()
+        {
+            "getBookNames",
+            "getBookUsx",
+            "getChapter",
+            "getChapterUsx",
+            "getVerse",
+            "setChapterUsx"
+        };
     private ScrText? _scrText;
 
     public UsfmDataProvider(PapiClient papiClient, string dataFolderPath, string collectionName)
@@ -27,6 +37,11 @@ internal class UsfmDataProvider : DataProvider
     {
         _scrText = ScrTextCollection.Find(_collectionName);
         return Task.CompletedTask;
+    }
+
+    protected override List<string> GetFunctionNames()
+    {
+        return _supportedFunctions;
     }
 
     protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
