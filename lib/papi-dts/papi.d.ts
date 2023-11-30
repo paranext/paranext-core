@@ -39,7 +39,7 @@ declare module 'shared/models/web-view.model' {
     iconUrl?: string;
     /** Name of the tab for the WebView */
     title?: string;
-    /** Tooltip than is shown when hovering over the webview title */
+    /** Tooltip that is shown when hovering over the webview title */
     tooltip?: string;
     /** General object to store unique state for this webview */
     state?: Record<string, unknown>;
