@@ -13,6 +13,9 @@ public class LocalParatextProjectsTests
     [SetUp]
     public void SetUp()
     {
+        if (OperatingSystem.IsMacOS())
+            Assert.Ignore("Mac is missing ICU support so some of these tests will not work");
+
         _localProjects = new TestLocalParatextProjectsInTempDir();
     }
 
