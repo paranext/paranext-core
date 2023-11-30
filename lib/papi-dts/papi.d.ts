@@ -39,6 +39,8 @@ declare module 'shared/models/web-view.model' {
     iconUrl?: string;
     /** Name of the tab for the WebView */
     title?: string;
+    /** Tooltip that is shown when hovering over the webview title */
+    tooltip?: string;
     /** General object to store unique state for this webview */
     state?: Record<string, unknown>;
     /**
@@ -162,7 +164,7 @@ declare module 'shared/models/web-view.model' {
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
     WebViewDefinitionBase,
-    'iconUrl' | 'title'
+    'iconUrl' | 'title' | 'tooltip'
   >;
   /**
    * WebViewDefinition properties for updating a WebView that is already displayed. Any unspecified
@@ -409,6 +411,61 @@ declare module 'shared/global-this.model' {
     ExtensionHost = 'extension-host',
   }
 }
+declare module 'shared/utils/internal-util' {
+  /** Utility functions specific to the internal technologies we are using. */
+  import { ProcessType } from 'shared/global-this.model';
+  /**
+   * Determine if running on a client process (renderer, extension-host) or on the server.
+   *
+   * @returns Returns true if running on a client, false otherwise
+   */
+  export const isClient: () => boolean;
+  /**
+   * Determine if running on the server process (main)
+   *
+   * @returns Returns true if running on the server, false otherwise
+   */
+  export const isServer: () => boolean;
+  /**
+   * Determine if running on the renderer process
+   *
+   * @returns Returns true if running on the renderer, false otherwise
+   */
+  export const isRenderer: () => boolean;
+  /**
+   * Determine if running on the extension host
+   *
+   * @returns Returns true if running on the extension host, false otherwise
+   */
+  export const isExtensionHost: () => boolean;
+  /**
+   * Gets which kind of process this is (main, renderer, extension-host)
+   *
+   * @returns ProcessType for this process
+   */
+  export const getProcessType: () => ProcessType;
+}
+declare module 'shared/services/logger.service' {
+  import log from 'electron-log';
+  export const WARN_TAG = '<WARN>';
+  /**
+   * Format a string of a service message
+   *
+   * @param message Message from the service
+   * @param serviceName Name of the service to show in the log
+   * @param tag Optional tag at the end of the service name
+   * @returns Formatted string of a service message
+   */
+  export function formatLog(message: string, serviceName: string, tag?: string): string;
+  /**
+   *
+   * All extensions and services should use this logger to provide a unified output of logs
+   */
+  const logger: log.MainLogger & {
+    default: log.MainLogger;
+  };
+  export default logger;
+}
 declare module 'shared/utils/util' {
   export function newGuid(): string;
   /**
@@ -477,18 +534,21 @@ declare module 'shared/utils/util' {
     maxWaitTimeInMS: number,
   ): Promise<Awaited<TResult> | null>;
   /**
-   * Get all functions on an object and its prototype (so we don't miss any class methods or any
-   * object methods).
-   *
-   * Note: this does return some potentially unexpected function names. For example:
-   * `getAllObjectFunctionNames({})` returns `[constructor,__defineGetter__,__defineSetter__,
-   * hasOwnProperty,__lookupGetter__,__lookupSetter__,isPrototypeOf,propertyIsEnumerable,toString,
-   * valueOf,toLocaleString]`
+   * Get all functions on an object and its prototype chain (so we don't miss any class methods or any
+   * object methods). Note that the functions on the final item in the prototype chain (i.e., Object)
+   * are skipped to avoid including functions like `__defineGetter__`, `__defineSetter__`, `toString`,
+   * etc.
    *
    * @param obj Object whose functions to get
+   * @param objId Optional ID of the object to use for debug logging
    * @returns Array of all function names on an object
    */
-  export function getAllObjectFunctionNames(obj: NonNullable<any>): string[];
+  export function getAllObjectFunctionNames(
+    obj: {
+      [property: string]: unknown;
+    },
+    objId?: string,
+  ): Set<string>;
 }
 declare module 'shared/utils/papi-util' {
   import { ProcessType } from 'shared/global-this.model';
@@ -874,40 +934,6 @@ declare module 'shared/services/network-connector.interface' {
     emitEventOnNetwork: <T>(eventType: string, event: InternalEvent<T>) => Promise<void>;
   }
 }
-declare module 'shared/utils/internal-util' {
-  /** Utility functions specific to the internal technologies we are using. */
-  import { ProcessType } from 'shared/global-this.model';
-  /**
-   * Determine if running on a client process (renderer, extension-host) or on the server.
-   *
-   * @returns Returns true if running on a client, false otherwise
-   */
-  export const isClient: () => boolean;
-  /**
-   * Determine if running on the server process (main)
-   *
-   * @returns Returns true if running on the server, false otherwise
-   */
-  export const isServer: () => boolean;
-  /**
-   * Determine if running on the renderer process
-   *
-   * @returns Returns true if running on the renderer, false otherwise
-   */
-  export const isRenderer: () => boolean;
-  /**
-   * Determine if running on the extension host
-   *
-   * @returns Returns true if running on the extension host, false otherwise
-   */
-  export const isExtensionHost: () => boolean;
-  /**
-   * Gets which kind of process this is (main, renderer, extension-host)
-   *
-   * @returns ProcessType for this process
-   */
-  export const getProcessType: () => ProcessType;
-}
 declare module 'shared/data/network-connector.model' {
   /**
    * Types that are relevant particularly to the implementation of communication on
@@ -982,27 +1008,6 @@ declare module 'shared/data/network-connector.model' {
     | WebSocketRequest
     | WebSocketResponse
     | WebSocketEvent<unknown>;
-}
-declare module 'shared/services/logger.service' {
-  import log from 'electron-log';
-  export const WARN_TAG = '<WARN>';
-  /**
-   * Format a string of a service message
-   *
-   * @param message Message from the service
-   * @param serviceName Name of the service to show in the log
-   * @param tag Optional tag at the end of the service name
-   * @returns Formatted string of a service message
-   */
-  export function formatLog(message: string, serviceName: string, tag?: string): string;
-  /**
-   *
-   * All extensions and services should use this logger to provide a unified output of logs
-   */
-  const logger: log.MainLogger & {
-    default: log.MainLogger;
-  };
-  export default logger;
 }
 declare module 'shared/models/disposal.model' {
   import { PapiEvent } from 'shared/models/papi-event.model';
@@ -1683,11 +1688,13 @@ declare module 'shared/utils/async-variable' {
 }
 declare module 'shared/services/network-object.service' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import { PapiEvent } from 'shared/models/papi-event.model';
   import {
     NetworkObject,
     DisposableNetworkObject,
     NetworkableObject,
     LocalObjectToProxyCreator,
+    NetworkObjectDetails,
   } from 'shared/models/network-object.model';
   /** Sets up the service. Only runs once and always returns the same promise after that */
   const initialize: () => Promise<void>;
@@ -1699,6 +1706,13 @@ declare module 'shared/services/network-object.service' {
    *   network
    */
   const hasKnown: (id: string) => boolean;
+  /**
+   * Event that fires when a new object has been created on the network (locally or remotely). The
+   * event contains information about the new network object.
+   */
+  export const onDidCreateNetworkObject: PapiEvent<NetworkObjectDetails>;
+  /** Event that fires with a network object ID when that object is disposed locally or remotely */
+  export const onDidDisposeNetworkObject: PapiEvent<string>;
   interface IDisposableObject {
     dispose?: UnsubscriberAsync;
   }
@@ -1746,6 +1760,7 @@ declare module 'shared/services/network-object.service' {
     hasKnown: typeof hasKnown;
     get: typeof get;
     set: typeof set;
+    onDidCreateNetworkObject: typeof onDidCreateNetworkObject;
   }
   /**
    * Network objects are distributed objects within PAPI for TS/JS objects. @see
@@ -1755,7 +1770,11 @@ declare module 'shared/services/network-object.service' {
    * {@link networkObjectService.get}.
    *
    * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
-   * and sent to the original objects registered via {@link networkObjectService.set}.
+   * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+   * the registered object are proxied except for constructors, `dispose`, and functions starting with
+   * `on` since those should be events (which are not intended to be proxied) based on our naming
+   * convention. If you don't want a function to be proxied, don't make it a property of the
+   * registered object.
    *
    * Functions on a network object will be called asynchronously by other processes regardless of
    * whether the functions are synchronous or asynchronous, so it is best to make them all
@@ -1831,6 +1850,16 @@ declare module 'shared/models/network-object.model' {
     id: string,
     networkObjectPromise: Promise<NetworkObject<T>>,
   ) => Partial<NetworkableObject>;
+  /**
+   * Data about an object shared on the network
+   *
+   * @param id ID of the network object that processes use to reference it
+   * @param functionNames Array of strings with the function names exposed on this network object
+   */
+  export type NetworkObjectDetails = {
+    id: string;
+    functionNames: string[];
+  };
 }
 declare module 'shared/models/data-provider.model' {
   import { UnsubscriberAsync } from 'shared/utils/papi-util';
@@ -2575,6 +2604,8 @@ declare module 'shared/models/docking-framework.model' {
     tabIconUrl?: string;
     /** Text to show on the title bar of the tab */
     tabTitle: string;
+    /** Text to show when hovering over the title bar of the tab */
+    tabTooltip?: string;
     /** Content to show inside the tab. */
     content: ReactNode;
     /** (optional) Minimum width that the tab can become in CSS `px` units */
@@ -2753,6 +2784,35 @@ declare module 'shared/services/web-view.service-model' {
   /** Name to use when creating a network event that is fired when webViews are created */
   export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+}
+declare module 'shared/services/network-object-status.service-model' {
+  import { NetworkObjectDetails } from 'shared/models/network-object.model';
+  export interface NetworkObjectStatusRemoteServiceType {
+    /**
+     * Get details about all available network objects
+     *
+     * @returns Object whose keys are the names of the network objects and whose values are the
+     *   {@link NetworkObjectDetails} for each network object
+     */
+    getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
+  }
+  /** Provides functions related to the set of available network objects */
+  export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
+    /**
+     * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
+     *
+     * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
+     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
+     *   reached before the network object is registered
+     */
+    waitForNetworkObject: (id: string, timeoutInMS?: number) => Promise<NetworkObjectDetails>;
+  }
+  export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
+}
+declare module 'shared/services/network-object-status.service' {
+  import { NetworkObjectStatusServiceType } from 'shared/services/network-object-status.service-model';
+  const networkObjectStatusService: NetworkObjectStatusServiceType;
+  export default networkObjectStatusService;
 }
 declare module 'shared/services/web-view.service' {
   import { WebViewServiceType } from 'shared/services/web-view.service-model';

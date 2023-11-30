@@ -96,6 +96,7 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
     data,
     tabIconUrl: data.iconUrl,
     tabTitle: data.title ?? 'Unknown',
+    tabTooltip: data.tooltip ?? '',
     content: <WebView {...data} />,
   };
 }

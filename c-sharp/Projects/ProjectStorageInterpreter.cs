@@ -12,6 +12,18 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
 {
+    private readonly List<string> _functionNames =
+        new()
+        {
+            "getAllProjects",
+            "getProjectSettings",
+            "getSupportedTypes",
+            "getProjectData",
+            "setProjectData",
+            "getExtensionData",
+            "setExtensionData"
+        };
+
     protected ProjectStorageInterpreter(
         string storageType,
         IReadOnlyList<string> projectTypes,
@@ -22,6 +34,11 @@ internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
     {
         StorageType = storageType;
         ProjectTypes = projectTypes;
+    }
+
+    protected override List<string> GetFunctionNames()
+    {
+        return _functionNames;
     }
 
     protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)

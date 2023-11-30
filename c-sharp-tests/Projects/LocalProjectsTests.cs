@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Projects;
 
 namespace TestParanextDataProvider.Projects;
 
+[ExcludeFromCodeCoverage]
 [TestFixture]
 public class LocalProjectsTests
 {

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Configuration;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Paranext.DataProvider.ParatextUtils;
 using Paratext.Data;
@@ -7,6 +8,7 @@ using PtxUtils;
 
 namespace TestParanextDataProvider
 {
+    [ExcludeFromCodeCoverage]
     internal class ParatextDataConnectionTests
     {
         // Work around a known issue where NUnit doesn't pick up config files

@@ -39,6 +39,8 @@ export type TabInfo = SavedTabInfo & {
   tabIconUrl?: string;
   /** Text to show on the title bar of the tab */
   tabTitle: string;
+  /** Text to show when hovering over the title bar of the tab */
+  tabTooltip?: string;
   /** Content to show inside the tab. */
   content: ReactNode;
   /** (optional) Minimum width that the tab can become in CSS `px` units */

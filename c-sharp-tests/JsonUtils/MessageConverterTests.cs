@@ -1,9 +1,11 @@
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Messages;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace TestParanextDataProvider.JsonUtils;
 
+[ExcludeFromCodeCoverage]
 public class MessageConverterTests
 {
     [Test]
@@ -43,7 +45,7 @@ public class MessageConverterTests
         string messageToDecode = """
             {"type":"event","eventType":"object:onDidDisposeNetworkObject","senderId":0,"event":"test-main"}
             """;
-        var msg = DeserializeMessageEvent<MessageEventObjectDispose>(messageToDecode);
+        var msg = DeserializeMessageEvent<MessageEventObjectDisposed>(messageToDecode);
         Assert.That(msg.EventContents!, Is.EqualTo("test-main"));
     }
 

@@ -7,10 +7,12 @@ using Paratext.Data;
 using PtxUtils;
 using Paranext.DataProvider.Messages;
 using System.Web;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider
 {
     [TestFixture]
+    [ExcludeFromCodeCoverage]
     internal abstract class PapiTestBase
     {
         #region Member variables
@@ -85,9 +87,9 @@ namespace TestParanextDataProvider
         /// Creates fake project details to fake the existence of a project
         /// </summary>
         /// <seealso cref="DummyLocalProjects.FakeAddProject"/>
-        protected static ProjectDetails CreateProjectDetails(string id, string name)
+        protected static ProjectDetails CreateProjectDetails(string id, string name, string projectType = "")
         {
-            ProjectMetadata metadata = new(id, name, "ParatextFolders", "");
+            ProjectMetadata metadata = new(id, name, "ParatextFolders", projectType);
             return new ProjectDetails(metadata, "testDirectoryThatDoesNotExist");
         }
 
