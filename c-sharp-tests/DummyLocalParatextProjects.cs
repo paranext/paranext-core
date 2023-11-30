@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace TestParanextDataProvider
 {
     [ExcludeFromCodeCoverage]
-    internal class DummyLocalProjects : LocalProjects
+    internal class DummyLocalParatextProjects : LocalParatextProjects
     {
         public void FakeAddProject(ProjectDetails details)
         {

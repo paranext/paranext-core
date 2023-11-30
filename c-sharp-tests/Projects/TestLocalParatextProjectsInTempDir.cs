@@ -5,10 +5,11 @@ using SIL.Xml;
 
 namespace TestParanextDataProvider.Projects
 {
-    internal class TestLocalProjectsInTempDir : LocalProjects, IDisposable
+    internal class TestLocalParatextProjectsInTempDir : LocalParatextProjects, IDisposable
     {
         private TemporaryFolder _folder;
-        public TestLocalProjectsInTempDir()
+
+        public TestLocalParatextProjectsInTempDir()
         {
             _folder = new TemporaryFolder(TestContext.CurrentContext.Test.ID);
         }
@@ -25,17 +26,15 @@ namespace TestParanextDataProvider.Projects
         {
             var folderPath = Path.Combine(ProjectRootFolder, folder);
             CreateDirectory(folderPath);
-            if (projectMetadata.ProjectType == ProjectMetadata.PARATEXT)
-            {
-                var settings = new MinimalParatextProjectSettings { Guid = projectMetadata.ID };
-                var projectParatextSubdirectory = Path.Join(folderPath,
-                    PROJECT_SUBDIRECTORY,
-                    ProjectMetadata.PARATEXT);
-                CreateDirectory(projectParatextSubdirectory);
-                var settingsPath = Path.Join(projectParatextSubdirectory,
-                    "Settings.xml");
-                XmlSerializationHelper.SerializeToFileWithWriteThrough(settingsPath, settings);
-            }
+            var settings = new MinimalParatextProjectSettings { Guid = projectMetadata.ID };
+            var projectParatextSubdirectory = Path.Join(
+                folderPath,
+                PROJECT_SUBDIRECTORY,
+                PARATEXT_DATA_SUBDIRECTORY
+            );
+            CreateDirectory(projectParatextSubdirectory);
+            var settingsPath = Path.Join(projectParatextSubdirectory, "Settings.xml");
+            XmlSerializationHelper.SerializeToFileWithWriteThrough(settingsPath, settings);
 
             SaveProjectMetadata(folderPath, projectMetadata, false);
         }

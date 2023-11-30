@@ -7,7 +7,7 @@ namespace Paranext.DataProvider.Projects;
 internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
 {
     private readonly ParatextProjectStorageInterpreter _paratextPsi;
-    private readonly LocalProjects _projects;
+    private readonly LocalParatextProjects _paratextProjects;
     private readonly ConcurrentDictionary<string, ParatextProjectDataProvider> _pdpMap = new();
     private readonly object _creationLock = new object();
     private readonly Random _random = new((int)DateTime.Now.Ticks);
@@ -15,12 +15,12 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
     public ParatextProjectDataProviderFactory(
         PapiClient papiClient,
         ParatextProjectStorageInterpreter paratextPsi,
-        LocalProjects projects
+        LocalParatextProjects paratextProjects
     )
         : base(ProjectType.Paratext, papiClient)
     {
         _paratextPsi = paratextPsi;
-        _projects = projects;
+        _paratextProjects = paratextProjects;
     }
 
     protected override ResponseToRequest GetProjectDataProviderID(
@@ -48,7 +48,7 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
             ProjectDetails details;
             try
             {
-                details = _projects.GetProjectDetails(projectID);
+                details = _paratextProjects.GetProjectDetails(projectID);
             }
             catch (KeyNotFoundException)
             {

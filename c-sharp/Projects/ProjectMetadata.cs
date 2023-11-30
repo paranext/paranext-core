@@ -7,11 +7,6 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 public class ProjectMetadata
 {
-    // Not sure if this is how we want to handle this long-term, but for now, I'm
-    // adding constants here for the various known values of ProjectType (so that
-    // LocalProjects can handle them differently as needed.
-    public const string PARATEXT = "paratext";
-
     public ProjectMetadata(string id, string name, string projectStorageType, string projectType)
     {
         ID = id.ToUpperInvariant();
@@ -43,16 +38,6 @@ public class ProjectMetadata
     /// </summary>
     [JsonProperty("projectType")]
     public string ProjectType { get; }
-
-    public bool Contains(string id, string name, bool nameIsCaseSensitive = false)
-    {
-        return ID.Equals(id, StringComparison.InvariantCultureIgnoreCase)
-            && (
-                nameIsCaseSensitive
-                    ? Name.Equals(name)
-                    : Name.Equals(name, StringComparison.InvariantCultureIgnoreCase)
-            );
-    }
 
     public override bool Equals(object? obj)
     {

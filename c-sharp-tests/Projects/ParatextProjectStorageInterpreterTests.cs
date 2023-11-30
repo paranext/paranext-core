@@ -14,7 +14,7 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
     {
         base.TestSetup();
 
-        _interpreter = new ParatextProjectStorageInterpreter(Client, Projects);
+        _interpreter = new ParatextProjectStorageInterpreter(Client, ParatextProjects);
     }
 
     #region GetAllProjects tests
@@ -32,8 +32,10 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
     {
         await _interpreter.RegisterDataProvider();
 
-        Projects.FakeAddProject(CreateProjectDetails("abcd", "Monkey Soup", "BackTranslation"));
-        Projects.FakeAddProject(CreateProjectDetails("b4da", "George", "Transliteration"));
+        ParatextProjects.FakeAddProject(
+            CreateProjectDetails("abcd", "Monkey Soup", "BackTranslation")
+        );
+        ParatextProjects.FakeAddProject(CreateProjectDetails("b4da", "George", "Transliteration"));
 
         ResponseToRequest response = _interpreter.GetAllProjects();
         Assert.Multiple(() =>
@@ -43,11 +45,17 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
             string? contents = response.Contents as string;
 
             // The order of items seems "random", so allow either order
-            Assert.That(contents,
-                Is.EqualTo("[{\"id\":\"ABCD\",\"name\":\"Monkey Soup\",\"storageType\":\"ParatextFolders\",\"projectType\":\"BackTranslation\"}," +
-                           "{\"id\":\"B4DA\",\"name\":\"George\",\"storageType\":\"ParatextFolders\",\"projectType\":\"Transliteration\"}]")
-                .Or.EqualTo("[{\"id\":\"B4DA\",\"name\":\"George\",\"storageType\":\"ParatextFolders\",\"projectType\":\"Transliteration\"}," +
-                            "{\"id\":\"ABCD\",\"name\":\"Monkey Soup\",\"storageType\":\"ParatextFolders\",\"projectType\":\"BackTranslation\"}]"));
+            Assert.That(
+                contents,
+                Is.EqualTo(
+                    "[{\"id\":\"ABCD\",\"name\":\"Monkey Soup\",\"storageType\":\"ParatextFolders\",\"projectType\":\"BackTranslation\"},"
+                        + "{\"id\":\"B4DA\",\"name\":\"George\",\"storageType\":\"ParatextFolders\",\"projectType\":\"Transliteration\"}]"
+                )
+                    .Or.EqualTo(
+                        "[{\"id\":\"B4DA\",\"name\":\"George\",\"storageType\":\"ParatextFolders\",\"projectType\":\"Transliteration\"},"
+                            + "{\"id\":\"ABCD\",\"name\":\"Monkey Soup\",\"storageType\":\"ParatextFolders\",\"projectType\":\"BackTranslation\"}]"
+                    )
+            );
         });
     }
     #endregion
@@ -68,7 +76,9 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
         await _interpreter.RegisterDataProvider();
         CreateDummyProject();
 
-        ResponseToRequest response = _interpreter.GetProjectSettings(new ProjectDataScope {ProjectID = "nothing"});
+        ResponseToRequest response = _interpreter.GetProjectSettings(
+            new ProjectDataScope { ProjectID = "nothing" }
+        );
         VerifyResponse(response, "Project with ID 'nothing' was not found", null);
     }
 
@@ -78,7 +88,9 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
         await _interpreter.RegisterDataProvider();
         CreateDummyProject();
 
-        ResponseToRequest response = _interpreter.GetProjectSettings(new ProjectDataScope {ProjectID = "1748ac19"});
+        ResponseToRequest response = _interpreter.GetProjectSettings(
+            new ProjectDataScope { ProjectID = "1748ac19" }
+        );
         VerifyResponse(response, "Project with ID '1748ac19' was not found", null);
     }
 
@@ -88,7 +100,9 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
         await _interpreter.RegisterDataProvider();
         var scrText = CreateDummyProject();
 
-        ResponseToRequest response = _interpreter.GetProjectSettings(new ProjectDataScope {ProjectID = scrText.Guid.ToString()});
+        ResponseToRequest response = _interpreter.GetProjectSettings(
+            new ProjectDataScope { ProjectID = scrText.Guid.ToString() }
+        );
         Assert.Multiple(() =>
         {
             Assert.That(response.Success, Is.True);
@@ -109,18 +123,24 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
     [TestCase(ProjectIdType.Include, "", "myFile.txt", "Must provide an extension name")]
     [TestCase(ProjectIdType.Include, "myExtension", null, "Must provide a data qualifier")]
     [TestCase(ProjectIdType.Include, "myExtension", "", "Must provide a data qualifier")]
-    public async Task GetExtensionData_InvalidParameters_ReturnsError(ProjectIdType projectIdType,
-        string? extensionName, string? dataQualifier, string? expectedError)
+    public async Task GetExtensionData_InvalidParameters_ReturnsError(
+        ProjectIdType projectIdType,
+        string? extensionName,
+        string? dataQualifier,
+        string? expectedError
+    )
     {
         await _interpreter.RegisterDataProvider();
         var scrText = CreateDummyProject();
 
         ResponseToRequest response = _interpreter.GetExtensionData(
-            new ProjectDataScope {
+            new ProjectDataScope
+            {
                 ProjectID = GetProjectId(projectIdType, scrText),
                 ExtensionName = extensionName,
                 DataQualifier = dataQualifier
-            });
+            }
+        );
 
         VerifyResponse(response, expectedError, null);
     }
@@ -135,90 +155,174 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
     [TestCase(ProjectIdType.Include, "", "myFile.txt", "Must provide an extension name")]
     [TestCase(ProjectIdType.Include, "myExtension", null, "Must provide a data qualifier")]
     [TestCase(ProjectIdType.Include, "myExtension", "", "Must provide a data qualifier")]
-    public async Task SetExtensionData_InvalidParameters_ReturnsError(ProjectIdType projectIdType,
-        string? extensionName, string? dataQualifier, string? expectedError)
+    public async Task SetExtensionData_InvalidParameters_ReturnsError(
+        ProjectIdType projectIdType,
+        string? extensionName,
+        string? dataQualifier,
+        string? expectedError
+    )
     {
         await _interpreter.RegisterDataProvider();
         var scrText = CreateDummyProject();
 
         ResponseToRequest response = _interpreter.SetExtensionData(
-            new ProjectDataScope {
+            new ProjectDataScope
+            {
                 ProjectID = GetProjectId(projectIdType, scrText),
                 ExtensionName = extensionName,
                 DataQualifier = dataQualifier
-            }, "Random data");
+            },
+            "Random data"
+        );
 
         VerifyResponse(response, expectedError, null);
     }
     #endregion
 
     #region GetProjectData tests
-    [TestCase(ProjectIdType.Exclude, "VerseUSFM", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Must provide a project ID")]
-    [TestCase(ProjectIdType.Empty, "VerseUSFM", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Must provide a project ID")]
-    [TestCase(ProjectIdType.Invalid, "VerseUSFM", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Project with ID 'asdf' was not found")]
-    [TestCase(ProjectIdType.Missing, "VerseUSFM", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Project with ID '1854ab' was not found")]
-    [TestCase(ProjectIdType.Include, null, "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Must provide a data type")]
-    [TestCase(ProjectIdType.Include, "", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Must provide a data type")]
-    [TestCase(ProjectIdType.Include, "nothing", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Unknown data type: nothing")]
+    [TestCase(
+        ProjectIdType.Exclude,
+        "VerseUSFM",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Must provide a project ID"
+    )]
+    [TestCase(
+        ProjectIdType.Empty,
+        "VerseUSFM",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Must provide a project ID"
+    )]
+    [TestCase(
+        ProjectIdType.Invalid,
+        "VerseUSFM",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Project with ID 'asdf' was not found"
+    )]
+    [TestCase(
+        ProjectIdType.Missing,
+        "VerseUSFM",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Project with ID '1854ab' was not found"
+    )]
+    [TestCase(
+        ProjectIdType.Include,
+        null,
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Must provide a data type"
+    )]
+    [TestCase(
+        ProjectIdType.Include,
+        "",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Must provide a data type"
+    )]
+    [TestCase(
+        ProjectIdType.Include,
+        "nothing",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Unknown data type: nothing"
+    )]
     [TestCase(ProjectIdType.Include, "VerseUSFM", null, "Must provide a data qualifier")]
     [TestCase(ProjectIdType.Include, "VerseUSFM", "", "Must provide a data qualifier")]
-    [TestCase(ProjectIdType.Include, "VerseUSFM", "bogus",
-        "Invalid VerseRef (bogus): Unexpected character encountered while parsing value: b. Path '', line 0, position 0.")]
-    public async Task GetProjectData_InvalidParameters_ReturnsError(ProjectIdType projectIdType,
-        string? dataType, string? dataQualifier, string? expectedError)
+    [TestCase(
+        ProjectIdType.Include,
+        "VerseUSFM",
+        "bogus",
+        "Invalid VerseRef (bogus): Unexpected character encountered while parsing value: b. Path '', line 0, position 0."
+    )]
+    public async Task GetProjectData_InvalidParameters_ReturnsError(
+        ProjectIdType projectIdType,
+        string? dataType,
+        string? dataQualifier,
+        string? expectedError
+    )
     {
         await _interpreter.RegisterDataProvider();
         var scrText = CreateDummyProject();
 
         ResponseToRequest response = _interpreter.GetProjectData(
-            new ProjectDataScope {
+            new ProjectDataScope
+            {
                 ProjectID = GetProjectId(projectIdType, scrText),
                 DataType = dataType,
                 DataQualifier = dataQualifier
-            });
+            }
+        );
 
         VerifyResponse(response, expectedError, null);
     }
     #endregion
 
     #region SetProjectData tests
-    [TestCase(ProjectIdType.Exclude, "ChapterUSFM", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Must provide a project ID")]
-    [TestCase(ProjectIdType.Empty, "ChapterUSFM", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Must provide a project ID")]
-    [TestCase(ProjectIdType.Invalid, "ChapterUSFM", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Project with ID 'asdf' was not found")]
-    [TestCase(ProjectIdType.Missing, "ChapterUSFM", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Project with ID '1854ab' was not found")]
-    [TestCase(ProjectIdType.Include, null, "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Must provide a data type")]
-    [TestCase(ProjectIdType.Include, "", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Must provide a data type")]
-    [TestCase(ProjectIdType.Include, "nothing", "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
-        "Unknown data type: nothing")]
+    [TestCase(
+        ProjectIdType.Exclude,
+        "ChapterUSFM",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Must provide a project ID"
+    )]
+    [TestCase(
+        ProjectIdType.Empty,
+        "ChapterUSFM",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Must provide a project ID"
+    )]
+    [TestCase(
+        ProjectIdType.Invalid,
+        "ChapterUSFM",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Project with ID 'asdf' was not found"
+    )]
+    [TestCase(
+        ProjectIdType.Missing,
+        "ChapterUSFM",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Project with ID '1854ab' was not found"
+    )]
+    [TestCase(
+        ProjectIdType.Include,
+        null,
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Must provide a data type"
+    )]
+    [TestCase(
+        ProjectIdType.Include,
+        "",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Must provide a data type"
+    )]
+    [TestCase(
+        ProjectIdType.Include,
+        "nothing",
+        "{ \"versification\":\"English\", \"_bookNum\":1, \"_chapterNum\":2, \"_verseNum\":0 }",
+        "Unknown data type: nothing"
+    )]
     [TestCase(ProjectIdType.Include, "ChapterUSFM", null, "Must provide a data qualifier")]
     [TestCase(ProjectIdType.Include, "ChapterUSFM", "", "Must provide a data qualifier")]
-    [TestCase(ProjectIdType.Include, "ChapterUSFM", "bogus",
-        "Invalid VerseRef (bogus): Unexpected character encountered while parsing value: b. Path '', line 0, position 0.")]
-    public async Task SetProjectData_InvalidParameters_ReturnsError(ProjectIdType projectIdType,
-        string? dataType, string? dataQualifier, string? expectedError)
+    [TestCase(
+        ProjectIdType.Include,
+        "ChapterUSFM",
+        "bogus",
+        "Invalid VerseRef (bogus): Unexpected character encountered while parsing value: b. Path '', line 0, position 0."
+    )]
+    public async Task SetProjectData_InvalidParameters_ReturnsError(
+        ProjectIdType projectIdType,
+        string? dataType,
+        string? dataQualifier,
+        string? expectedError
+    )
     {
         await _interpreter.RegisterDataProvider();
         var scrText = CreateDummyProject();
 
         ResponseToRequest response = _interpreter.SetProjectData(
-            new ProjectDataScope {
+            new ProjectDataScope
+            {
                 ProjectID = GetProjectId(projectIdType, scrText),
                 DataType = dataType,
                 DataQualifier = dataQualifier
-            }, "Random data");
+            },
+            "Random data"
+        );
 
         VerifyResponse(response, expectedError, null);
     }
@@ -229,25 +333,33 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
     [TestCase(ProjectIdType.Empty, "Project Name", "Must provide a project ID")]
     [TestCase(ProjectIdType.Include, null, "Must provide a project name")]
     [TestCase(ProjectIdType.Include, "", "Must provide a project name")]
-    public async Task CreateProject_InvalidParameters_ReturnsError(ProjectIdType projectIdType,
-        string projectName, string expectedError)
+    public async Task CreateProject_InvalidParameters_ReturnsError(
+        ProjectIdType projectIdType,
+        string projectName,
+        string expectedError
+    )
     {
         await _interpreter.RegisterDataProvider();
         var scrText = CreateDummyProject();
 
         ResponseToRequest response = _interpreter.CreateProject(
-            new ProjectDataScope {
+            new ProjectDataScope
+            {
                 ProjectID = GetProjectId(projectIdType, scrText),
                 ProjectName = projectName
-            });
+            }
+        );
 
         VerifyResponse(response, expectedError, null);
     }
     #endregion
 
     #region Helper methods
-    private static void VerifyResponse(ResponseToRequest response, string? expectedErrorMessage,
-        string? expectedContents)
+    private static void VerifyResponse(
+        ResponseToRequest response,
+        string? expectedErrorMessage,
+        string? expectedContents
+    )
     {
         Assert.Multiple(() =>
         {

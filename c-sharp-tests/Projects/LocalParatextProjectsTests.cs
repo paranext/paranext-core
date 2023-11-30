@@ -5,15 +5,15 @@ namespace TestParanextDataProvider.Projects;
 
 [ExcludeFromCodeCoverage]
 [TestFixture]
-public class LocalProjectsTests
+public class LocalParatextProjectsTests
 {
     private const string TEST_ID = "441f1e41ffb8d319650847df35f4ffb78f12914e";
-    private LocalProjects _localProjects;
+    private LocalParatextProjects _localProjects;
 
     [SetUp]
     public void SetUp()
     {
-        _localProjects = new TestLocalProjectsInTempDir();
+        _localProjects = new TestLocalParatextProjectsInTempDir();
     }
 
     [TearDown]
@@ -22,7 +22,7 @@ public class LocalProjectsTests
         (_localProjects as IDisposable)?.Dispose();
     }
 
-#region Tests originally for now defunct DoesFolderMatchMetadata method
+    #region Tests originally for now defunct DoesFolderMatchMetadata method
     // Previously, local project folder names had to follow the pattern shortname_id. Now this
     // has been relaxed, and folders can be named with any name allowed by the OS.
 
@@ -91,31 +91,11 @@ public class LocalProjectsTests
         Assert.True(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
-    [Test]
-    public void Initialize_NonParatextIdAndNameMatch_ProjectRetrievedByGetAllProjectDetails()
-    {
-        const string folder = "MyShortName_NotAParatextHexId";
-        const string name = "My really long non-Paratext name";
-        const string id = "NotAParatextHexId";
-
-        var metadata = new ProjectMetadata(id, name, "freaky", "alien");
-
-
-        CreateTempProject(folder, metadata);
-        _localProjects.Initialize();
-        var details = _localProjects.GetAllProjectDetails().Single();
-        Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(id)));
-        Assert.That(details.HomeDirectory, Does.EndWith(folder));
-        Assert.That(details.Metadata.Name, Is.EqualTo(name));
-        Assert.True(details.Metadata.ID.Equals(id, StringComparison.OrdinalIgnoreCase));
-    }
     #endregion
-
-
 
     private void CreateTempProject(string folder, ProjectMetadata metadata)
     {
-        ((TestLocalProjectsInTempDir)_localProjects).CreateTempProject(folder, metadata);
+        ((TestLocalParatextProjectsInTempDir)_localProjects).CreateTempProject(folder, metadata);
     }
 
     private static ProjectMetadata CreateParatextProjectMetadata(string name)

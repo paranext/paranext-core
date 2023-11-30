@@ -30,21 +30,24 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         ChapterUSX
     };
 
-    private readonly LocalProjects _projects;
+    private readonly LocalParatextProjects _paratextProjects;
     #endregion
 
     #region Constructor
-    public ParatextProjectStorageInterpreter(PapiClient papiClient, LocalProjects projects)
+    public ParatextProjectStorageInterpreter(
+        PapiClient papiClient,
+        LocalParatextProjects paratextProjects
+    )
         : base(ProjectStorageType.ParatextFolders, new[] { ProjectType.Paratext }, papiClient)
     {
-        _projects = projects;
+        _paratextProjects = paratextProjects;
     }
     #endregion
 
     #region Implementation of ProjectStorageInterpreter
     protected override Task StartDataProvider()
     {
-        _projects.Initialize();
+        _paratextProjects.Initialize();
         return Task.CompletedTask;
     }
 
@@ -52,7 +55,10 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     {
         return ResponseToRequest.Succeeded(
             JsonConvert.SerializeObject(
-                _projects.GetAllProjectDetails().Select(details => details.Metadata).ToList()
+                _paratextProjects
+                    .GetAllProjectDetails()
+                    .Select(details => details.Metadata)
+                    .ToList()
             )
         );
     }
@@ -74,7 +80,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
         try
         {
-            _projects.SaveProjectMetadata(metadata);
+            _paratextProjects.SaveProjectMetadata(metadata);
         }
         catch (Exception ex)
         {
@@ -95,7 +101,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         ScrText scrText;
         try
         {
-            scrText = _projects.GetParatextProject(scope.ProjectID);
+            scrText = LocalParatextProjects.GetParatextProject(scope.ProjectID);
         }
         catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
         {
@@ -125,7 +131,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         ScrText scrText;
         try
         {
-            scrText = _projects.GetParatextProject(scope.ProjectID);
+            scrText = LocalParatextProjects.GetParatextProject(scope.ProjectID);
         }
         catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
         {
@@ -169,7 +175,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         ScrText scrText;
         try
         {
-            scrText = _projects.GetParatextProject(scope.ProjectID);
+            scrText = LocalParatextProjects.GetParatextProject(scope.ProjectID);
         }
         catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
         {
@@ -272,7 +278,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         ScrText scrText;
         try
         {
-            scrText = _projects.GetParatextProject(scope.ProjectID);
+            scrText = LocalParatextProjects.GetParatextProject(scope.ProjectID);
         }
         catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
         {
@@ -315,7 +321,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     #region Private helper methods
     private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
     {
-        ProjectDetails projectDetails = _projects.GetProjectDetails(scope.ProjectID!);
+        ProjectDetails projectDetails = _paratextProjects.GetProjectDetails(scope.ProjectID!);
 
         IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
         return extensionStreamManager.GetDataStream(

@@ -9,7 +9,7 @@ namespace TestParanextDataProvider
     {
         private readonly Dictionary<string, byte[]> _inMemoryFiles = new();
         
-        public DummyParatextProjectStorageInterpreter(PapiClient papiClient, DummyLocalProjects projects) : base(papiClient, projects)
+        public DummyParatextProjectStorageInterpreter(PapiClient papiClient, DummyLocalParatextProjects paratextProjects) : base(papiClient, paratextProjects)
         {
         }
 

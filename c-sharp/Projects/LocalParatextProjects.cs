@@ -6,40 +6,33 @@ using Paratext.Data.Users;
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
-/// Direct access methods to the file system for project directories
+/// Direct access methods to the file system for Paratext project directories
 /// </summary>
-internal partial class LocalProjects
+internal class LocalParatextProjects
 {
-    private const UnixFileMode UNIX_FILE_MODE =
-        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+    #region Constructors, consts, and fields
 
     // Inside of each project's "home" directory, these are the subdirectories and files
     protected const string PROJECT_SUBDIRECTORY = "project";
-    private const string PROJECT_METADATA_FILE = "meta.json";
+    protected const string PROJECT_METADATA_FILE = "meta.json";
 
     // Inside of the project subdirectory, this is the subdirectory for Paratext projects
     protected const string PARATEXT_DATA_SUBDIRECTORY = "paratext";
 
     protected readonly ConcurrentDictionary<string, ProjectDetails> _projectDetailsMap = new();
 
-    // All project directories are subdirectories of this
-    private string? _projectRootFolder;
-    protected virtual string ProjectRootFolder
+    public LocalParatextProjects()
     {
-        get
-        {
-            if (_projectRootFolder == null)
-            {
-                _projectRootFolder = Path.Join(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".platform.bible",
-                    "projects"
-                );
-            }
-            ;
-            return _projectRootFolder;
-        }
+        ProjectRootFolder = Path.Join(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".platform.bible",
+            "projects"
+        );
     }
+
+    #endregion
+
+    #region Public properties and methods
 
     public virtual void Initialize()
     {
@@ -75,7 +68,7 @@ internal partial class LocalProjects
         return _projectDetailsMap[projectId.ToUpperInvariant()];
     }
 
-    public ScrText GetParatextProject(string projectId)
+    public static ScrText GetParatextProject(string projectId)
     {
         return ScrTextCollection.GetById(HexId.FromStr(projectId));
     }
@@ -85,6 +78,12 @@ internal partial class LocalProjects
         var projectHomeDir = GetProjectDir(metadata.Name, metadata.ID);
         SaveProjectMetadata(projectHomeDir, metadata, overwrite);
     }
+
+    #endregion
+
+    #region Protected properties and methods
+
+    protected virtual string ProjectRootFolder { get; }
 
     protected void SaveProjectMetadata(
         string projectHomeDir,
@@ -106,7 +105,7 @@ internal partial class LocalProjects
         AddProjectToMaps(new ProjectDetails(metadata, projectHomeDir));
     }
 
-    protected void CreateDirectory(string dir)
+    protected static void CreateDirectory(string dir)
     {
         if (Directory.Exists(dir))
             return;
@@ -114,16 +113,15 @@ internal partial class LocalProjects
         if (OperatingSystem.IsWindows())
             Directory.CreateDirectory(dir);
         else
-            Directory.CreateDirectory(dir, UNIX_FILE_MODE);
+            Directory.CreateDirectory(
+                dir,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+            );
     }
 
-    public void LoadProject(string projectName, string projectID)
-    {
-        var dir = GetProjectDir(projectName, projectID);
-        var projectMetadata =
-            LoadProjectMetadata(dir, out string errorMessage) ?? throw new Exception(errorMessage);
-        AddProjectToMaps(new ProjectDetails(projectMetadata, dir));
-    }
+    #endregion
+
+    #region Private properties and methods
 
     private string GetProjectDir(string projectName, string projectID)
     {
@@ -135,7 +133,7 @@ internal partial class LocalProjects
         var projectPath = Path.Join(
             projectDetails.HomeDirectory,
             PROJECT_SUBDIRECTORY,
-            projectDetails.Metadata.ProjectType
+            PARATEXT_DATA_SUBDIRECTORY
         );
 
         var id = projectDetails.Metadata.ID;
@@ -146,15 +144,12 @@ internal partial class LocalProjects
         );
         _projectDetailsMap[id.ToUpperInvariant()] = projectDetails;
 
-        if (projectDetails.Metadata.ProjectType == ProjectMetadata.PARATEXT)
+        var projectName = new ProjectName
         {
-            ProjectName projectName = new ProjectName
-            {
-                ShortName = projectDetails.Metadata.Name,
-                ProjectPath = projectPath
-            };
-            ScrTextCollection.Add(new ScrText(projectName, RegistrationInfo.DefaultUser));
-        }
+            ShortName = projectDetails.Metadata.Name,
+            ProjectPath = projectPath
+        };
+        ScrTextCollection.Add(new ScrText(projectName, RegistrationInfo.DefaultUser));
     }
 
     /// <summary>
@@ -212,4 +207,6 @@ internal partial class LocalProjects
         errorMessage = "";
         return metadata;
     }
+
+    #endregion
 }
