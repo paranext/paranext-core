@@ -39,6 +39,8 @@ declare module 'shared/models/web-view.model' {
     iconUrl?: string;
     /** Name of the tab for the WebView */
     title?: string;
+    /** Tooltip than is shown when hovering over the webview title */
+    tooltip?: string;
     /** General object to store unique state for this webview */
     state?: Record<string, unknown>;
     /**
@@ -162,7 +164,7 @@ declare module 'shared/models/web-view.model' {
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
     WebViewDefinitionBase,
-    'iconUrl' | 'title'
+    'iconUrl' | 'title' | 'tooltip'
   >;
   /**
    * WebViewDefinition properties for updating a WebView that is already displayed. Any unspecified
@@ -2602,6 +2604,8 @@ declare module 'shared/models/docking-framework.model' {
     tabIconUrl?: string;
     /** Text to show on the title bar of the tab */
     tabTitle: string;
+    /** Text to show when hovering over the title bar of the tab */
+    tabTooltip?: string;
     /** Content to show inside the tab. */
     content: ReactNode;
     /** (optional) Minimum width that the tab can become in CSS `px` units */

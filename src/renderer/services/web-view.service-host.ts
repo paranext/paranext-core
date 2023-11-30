@@ -579,7 +579,8 @@ export const removeTab = async (tabId: string): Promise<boolean> => {
 export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
   // We don't need to use the other properties, but we need to remove them
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { tabTitle, tabIconUrl, content, minWidth, minHeight, ...savedTabInfo } = tabInfo;
+  const { tabTitle, tabTooltip, tabIconUrl, content, minWidth, minHeight, ...savedTabInfo } =
+    tabInfo;
   return savedTabInfo;
 }
 
@@ -617,8 +618,8 @@ export function getUpdatablePropertiesFromWebViewDefinition(
     | WebViewDefinitionUpdateInfo,
 ): WebViewDefinitionUpdatableProperties {
   // Make sure we're only including the specific properties we allow updates on
-  const { iconUrl, title } = webViewDefinition;
-  return { iconUrl, title };
+  const { iconUrl, title, tooltip } = webViewDefinition;
+  return { iconUrl, title, tooltip };
 }
 
 /**
