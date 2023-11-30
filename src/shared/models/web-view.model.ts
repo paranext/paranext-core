@@ -39,6 +39,8 @@ type WebViewDefinitionBase = {
   iconUrl?: string;
   /** Name of the tab for the WebView */
   title?: string;
+  /** Tooltip that is shown when hovering over the webview title */
+  tooltip?: string;
   /** General object to store unique state for this webview */
   state?: Record<string, unknown>;
   /**
@@ -169,7 +171,10 @@ export type SavedWebViewDefinition =
 /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
 // To allow more properties to be updated, add them in
 // `web-view.service.ts` -> `getUpdatablePropertiesFromWebViewDefinition`
-export type WebViewDefinitionUpdatableProperties = Pick<WebViewDefinitionBase, 'iconUrl' | 'title'>;
+export type WebViewDefinitionUpdatableProperties = Pick<
+  WebViewDefinitionBase,
+  'iconUrl' | 'title' | 'tooltip'
+>;
 
 /**
  * WebViewDefinition properties for updating a WebView that is already displayed. Any unspecified

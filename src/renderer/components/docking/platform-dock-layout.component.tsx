@@ -183,7 +183,13 @@ function createRCDockTabFromTabInfo(tabInfo: TabInfo) {
   // Translate the data from the loaded tab to be in the form needed by rc-dock
   return {
     ...tabInfo,
-    title: <PlatformTabTitle iconUrl={tabInfo.tabIconUrl} text={tabInfo.tabTitle} />,
+    title: (
+      <PlatformTabTitle
+        iconUrl={tabInfo.tabIconUrl}
+        text={tabInfo.tabTitle}
+        tooltip={tabInfo.tabTooltip}
+      />
+    ),
     content: <PlatformPanel>{tabInfo.content}</PlatformPanel>,
     group: TAB_GROUP,
     closable: true,

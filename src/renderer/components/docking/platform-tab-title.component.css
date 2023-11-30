@@ -16,3 +16,7 @@
   height: 16px;
   vertical-align: middle;
 }
+
+.tooltip {
+  white-space: pre-wrap;
+}
