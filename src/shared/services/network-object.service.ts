@@ -147,7 +147,7 @@ const onDidDisposeNetworkObjectEmitter = networkService.createNetworkEventEmitte
 );
 
 /** Event that fires with a network object ID when that object is disposed locally or remotely */
-const onDidDisposeNetworkObject = onDidDisposeNetworkObjectEmitter.event;
+export const onDidDisposeNetworkObject = onDidDisposeNetworkObjectEmitter.event;
 
 /** Runs to dispose of local and remote network objects when we receive events telling us to do so */
 onDidDisposeNetworkObject((id: string) => {

@@ -1709,6 +1709,8 @@ declare module 'shared/services/network-object.service' {
    * event contains information about the new network object.
    */
   export const onDidCreateNetworkObject: PapiEvent<NetworkObjectDetails>;
+  /** Event that fires with a network object ID when that object is disposed locally or remotely */
+  export const onDidDisposeNetworkObject: PapiEvent<string>;
   interface IDisposableObject {
     dispose?: UnsubscriberAsync;
   }
@@ -2778,6 +2780,35 @@ declare module 'shared/services/web-view.service-model' {
   /** Name to use when creating a network event that is fired when webViews are created */
   export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+}
+declare module 'shared/services/network-object-status.service-model' {
+  import { NetworkObjectDetails } from 'shared/models/network-object.model';
+  export interface NetworkObjectStatusRemoteServiceType {
+    /**
+     * Get details about all available network objects
+     *
+     * @returns Object whose keys are the names of the network objects and whose values are the
+     *   {@link NetworkObjectDetails} for each network object
+     */
+    getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
+  }
+  /** Provides functions related to the set of available network objects */
+  export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
+    /**
+     * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
+     *
+     * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
+     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
+     *   reached before the network object is registered
+     */
+    waitForNetworkObject: (id: string, timeoutInMS?: number) => Promise<NetworkObjectDetails>;
+  }
+  export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
+}
+declare module 'shared/services/network-object-status.service' {
+  import { NetworkObjectStatusServiceType } from 'shared/services/network-object-status.service-model';
+  const networkObjectStatusService: NetworkObjectStatusServiceType;
+  export default networkObjectStatusService;
 }
 declare module 'shared/services/web-view.service' {
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
