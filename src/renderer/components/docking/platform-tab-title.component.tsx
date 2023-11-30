@@ -23,7 +23,7 @@ export default function PlatformTabTitle({ iconUrl, text, tooltip }: PlatformTab
     logger.info('Pretend a menu was shown!');
   };
 
-  const tooltipDiv = tooltip ? <div style={{ whiteSpace: 'pre-line' }}>{tooltip}</div> : '';
+  const tooltipDiv = tooltip ? <div className="tooltip">{tooltip}</div> : '';
 
   return (
     <Tooltip title={tooltipDiv}>
