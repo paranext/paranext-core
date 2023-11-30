@@ -39,16 +39,6 @@ public class ProjectMetadata
     [JsonProperty("projectType")]
     public string ProjectType { get; }
 
-    public bool Contains(string id, string name, bool nameIsCaseSensitive = false)
-    {
-        return ID.Equals(id, StringComparison.InvariantCultureIgnoreCase)
-            && (
-                nameIsCaseSensitive
-                    ? Name.Equals(name)
-                    : Name.Equals(name, StringComparison.InvariantCultureIgnoreCase)
-            );
-    }
-
     public override bool Equals(object? obj)
     {
         ProjectMetadata? that = obj as ProjectMetadata;

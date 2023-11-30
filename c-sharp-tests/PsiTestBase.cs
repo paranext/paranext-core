@@ -9,7 +9,7 @@ namespace TestParanextDataProvider
         {
             base.TestSetup();
 
-            Psi = new DummyParatextProjectStorageInterpreter(Client, Projects);
+            Psi = new DummyParatextProjectStorageInterpreter(Client, ParatextProjects);
         }
 
         protected DummyParatextProjectStorageInterpreter Psi { get; private set; } = null!; // Will be non-null when tests are run
