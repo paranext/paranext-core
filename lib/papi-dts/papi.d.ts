@@ -4290,7 +4290,7 @@ declare module 'node/utils/util' {
 }
 declare module 'node/services/node-file-system.service' {
   /** File system calls from Node */
-  import { BigIntStats } from 'fs';
+  import fs, { BigIntStats } from 'fs';
   import { Uri } from 'shared/data/file-system.model';
   /**
    * Read a text file
@@ -4314,6 +4314,21 @@ declare module 'node/services/node-file-system.service' {
    * @returns Promise that resolves after writing the file
    */
   export function writeFile(uri: Uri, fileContents: string | Buffer): Promise<void>;
+  /**
+   * Copies a file from one location to another. Creates the path to the destination if it does not
+   * exist
+   *
+   * @param sourceUri The location of the file to copy
+   * @param destinationUri The uri to the file to create as a copy of the source file
+   * @param mode Bitwise modifiers that affect how the copy works. See
+   *   [`fsPromises.copyFile`](https://nodejs.org/api/fs.html#fspromisescopyfilesrc-dest-mode) for
+   *   more information
+   */
+  export function copyFile(
+    sourceUri: Uri,
+    destinationUri: Uri,
+    mode?: Parameters<typeof fs.promises.copyFile>[2],
+  ): Promise<void>;
   /**
    * Delete a file if it exists
    *
@@ -4359,7 +4374,7 @@ declare module 'node/services/node-file-system.service' {
     entryFilter?: (entryName: string) => boolean,
   ): Promise<DirectoryEntries>;
   /**
-   * Create a directory in the file system
+   * Create a directory in the file system if it does not exist. Does not throw if it already exists.
    *
    * @param uri URI of directory
    * @returns Promise that resolves once the directory has been created
