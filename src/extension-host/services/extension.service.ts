@@ -395,9 +395,9 @@ function createDtsInfoFromUri(declarationUri: Uri): DtsInfo {
 }
 
 /**
- * Caches type definition files for each extension. Gets the type definition file from each
+ * Caches type declaration files for each extension. Gets the type declaration file from each
  * extension and copies it to `extension-types/<extension_type_file_name_without_.d.ts>/index.d.ts`
- * because that is the path that works. If the extension's type definition file does not start with
+ * because that is the path that works. If the extension's type declaration file does not start with
  * `<extension_name>`, the folder created will be named `<extension_name>` instead of the name of
  * the extension type declaration file name.
  *
@@ -407,7 +407,7 @@ function createDtsInfoFromUri(declarationUri: Uri): DtsInfo {
  *
  * @param extensionInfos Extension info for extensions whose types to cache
  */
-async function cacheExtensionTypeDefinitions(extensionInfos: ExtensionInfo[]) {
+async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
   return Promise.all(
     extensionInfos.map(async (extensionInfo) => {
       /** The default assumed name for the dts file including `.d.ts` */
@@ -746,12 +746,12 @@ async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<vo
   // Get a list of all extensions found
   const allExtensions = await getExtensions();
 
-  // Cache type definitions in development
+  // Cache type declarations in development
   if (!globalThis.isPackaged)
     try {
-      await cacheExtensionTypeDefinitions(allExtensions);
+      await cacheExtensionTypeDeclarations(allExtensions);
     } catch (e) {
-      logger.warn(`Could not cache extension type definitions: ${e}`);
+      logger.warn(`Could not cache extension type declarations: ${e}`);
     }
 
   // Save extensions that have JavaScript to run

@@ -16,7 +16,7 @@ export type ExtensionManifest = {
    */
   main: string | null;
   /**
-   * Path to the TypeScript type definition file that describes this extension and its interactions
+   * Path to the TypeScript type declaration file that describes this extension and its interactions
    * on the PAPI. Relative to the extension's root folder.
    *
    * If not provided, Platform.Bible will look in the following locations:
@@ -24,6 +24,10 @@ export type ExtensionManifest = {
    * 1. `<extension_name>.d.ts`
    * 2. `<extension_name><other_stuff>.d.ts`
    * 3. `index.d.ts`
+   *
+   * See [Extension Anatomy - Type Declaration
+   * Files](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#type-declaration-files-dts)
+   * for more information about extension type declaration files.
    */
   types?: string;
   /**
