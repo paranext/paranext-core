@@ -23,6 +23,7 @@ import UnsubscriberAsyncList from '@shared/utils/unsubscriber-async-list';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import { debounce } from '@shared/utils/util';
 import LogError from '@shared/log-error.model';
+import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -31,29 +32,13 @@ import LogError from '@shared/log-error.model';
 // eslint-disable-next-line camelcase, no-underscore-dangle
 declare const __non_webpack_require__: typeof require;
 
-/** Extension manifest before it is finalized and frozen */
-
 /**
- * Information about an extension provided by the extension developer. This will be transformed and
- * frozen into an ExtensionInfo before use
+ * Information about an extension and extra metadata about it that we generate
+ *
+ * This is a transformed and frozen version of the extension's {@link ExtensionManifest}
  */
-type ExtensionManifest = {
-  name: string;
-  version: string;
-  /**
-   * The JavaScript file to run in the extension host.
-   *
-   * Must be specified. Can be `null` if the extension does not have any JavaScript to run.
-   */
-  main: string | null;
-  activationEvents: string[];
-};
-
-/** Information about an extension and extra metadata about it that we generate */
 type ExtensionInfo = Readonly<
   ExtensionManifest & {
-    /** We filtered out undefined and null in `getExtensions`, so this should now be defined */
-    main: string;
     /**
      * Uri to this extension's directory. Not provided in actual manifest, but added while parsing
      * the manifest
@@ -397,46 +382,34 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
 }
 
 /**
+ * Creates a `DtsInfo` from a Uri
+ *
+ * @param declarationUri The uri to the dts file
+ * @returns `DtsInfo` for the declaration file at the uri specified
+ */
+function createDtsInfoFromUri(declarationUri: Uri): DtsInfo {
+  return {
+    uri: declarationUri,
+    base: path.parse(declarationUri).base,
+  };
+}
+
+/**
  * Caches type definition files for each extension. Gets the type definition file from each
  * extension and copies it to `extension-types/<extension_type_file_name_without_.d.ts>/index.d.ts`
- * because that is the path that works.
+ * because that is the path that works. If the extension's type definition file does not start with
+ * `<extension_name>`, the folder created will be named `<extension_name>` instead of the name of
+ * the extension type declaration file name.
  *
- * We look for predetermined files in the following order and copy over the first one found:
- *
- * 1. `<extension_name>.d.ts`
- * 2. `<extension_name><other_stuff>.d.ts`
- * 3. `index.d.ts`
- *
- * If it becomes a need, we can also add a `types` field to the manifest that overrides these and
- * points to the location where this types file should be found. However, we need to be sure to
- * prevent extensions from overlapping type definition file names, so keep `<extension_name>` at the
- * start of the destination file name however we end up getting the types file.
- *
- * If the type definition file found does not start with `<extension_name>`, it will be renamed to
- * `<extension_name>.d.ts`.
+ * We look first at the location provided by the extension manifest's `types` property. If one is
+ * not provided, we look for files according to the specification in the JSDoc for
+ * {@link ExtensionManifest}'s `types` property order and copy over the first one found.
  *
  * @param extensionInfos Extension info for extensions whose types to cache
  */
 async function cacheExtensionTypeDefinitions(extensionInfos: ExtensionInfo[]) {
   return Promise.all(
     extensionInfos.map(async (extensionInfo) => {
-      // Get a list of all the dts files
-      const dtsInfos = (
-        await nodeFS.readDir(extensionInfo.dirUri, (entryName) => entryName.endsWith('.d.ts'))
-      )[nodeFS.EntryType.File].map(
-        (declarationUri): DtsInfo => ({
-          uri: declarationUri,
-          base: path.parse(declarationUri).base,
-        }),
-      );
-
-      if (dtsInfos.length <= 0) {
-        logger.debug(
-          `Extension ${extensionInfo.name} does not seem to have any .d.ts files in its root`,
-        );
-        return;
-      }
-
       /** The default assumed name for the dts file including `.d.ts` */
       const extensionDtsBaseDefault = `${extensionInfo.name}.d.ts`;
       /** The declaration file uri we are copying for this extension */
@@ -444,25 +417,64 @@ async function cacheExtensionTypeDefinitions(extensionInfos: ExtensionInfo[]) {
       /** The declaration file name we are creating for this extension including `.d.ts` */
       let extensionDtsBaseDestination = extensionDtsBaseDefault;
 
-      // Try using a dts file whose name matches the name of the extension
-      extensionDtsInfo = dtsInfos.find((dtsInfo) => dtsInfo.base === extensionDtsBaseDefault);
-
-      // Try using a dts file whose name starts with the name of the extension in case they suffixed
-      // with version number or something
-      if (!extensionDtsInfo) {
-        extensionDtsInfo = dtsInfos.find((dtsInfo) => dtsInfo.base.startsWith(extensionInfo.name));
-        if (extensionDtsInfo) extensionDtsBaseDestination = extensionDtsInfo.base;
+      // Try using the path to the type declaration file specified in the extension manifest
+      if (extensionInfo.types) {
+        const providedDtsUri = joinUriPaths(extensionInfo.dirUri, extensionInfo.types);
+        const providedDtsStats = await nodeFS.getStats(providedDtsUri);
+        if (providedDtsStats && providedDtsStats.isFile()) {
+          // The extension's specified dts exists, so use it
+          extensionDtsInfo = createDtsInfoFromUri(providedDtsUri);
+        } else
+          logger.warn(
+            `Extension ${extensionInfo.name} specified its type declaration file was at ${extensionInfo.types}, but this path does not seem to exist. Trying other options`,
+          );
       }
 
-      // Try using a dts file whose name is `index.d.ts`
-      if (!extensionDtsInfo)
-        extensionDtsInfo = dtsInfos.find((dtsInfo) => dtsInfo.base === 'index.d.ts');
-
+      // If the extension manifest's specified types didn't work out for some reason, try to find a
+      // dts file elsewhere
       if (!extensionDtsInfo) {
-        logger.debug(`Extension ${extensionInfo.name} did not have a type declaration file with a
-        fitting name. If you are trying to provide one, try naming it \`${extensionInfo.name}.d.ts\` or \`index.d.ts\``);
-        return;
+        // Get a list of all the dts files in the extension's root
+        // Note: checking if the file exists before copying it is generally not great practice as
+        // it can lead to problems with race conditions. If this ever becomes a problem, we can fix
+        // this code.
+        const dtsInfos = (
+          await nodeFS.readDir(extensionInfo.dirUri, (entryName) => entryName.endsWith('.d.ts'))
+        )[nodeFS.EntryType.File].map(createDtsInfoFromUri);
+
+        if (dtsInfos.length <= 0) {
+          logger.debug(
+            `Extension ${extensionInfo.name} does not seem to have any .d.ts files in its root`,
+          );
+          return;
+        }
+
+        // Try using a dts file whose name matches the name of the extension
+        if (!extensionDtsInfo)
+          extensionDtsInfo = dtsInfos.find((dtsInfo) => dtsInfo.base === extensionDtsBaseDefault);
+
+        // Try using a dts file whose name starts with the name of the extension in case they suffixed
+        // with version number or something
+        if (!extensionDtsInfo)
+          extensionDtsInfo = dtsInfos.find((dtsInfo) =>
+            dtsInfo.base.startsWith(extensionInfo.name),
+          );
+
+        // Try using a dts file whose name is `index.d.ts`
+        if (!extensionDtsInfo)
+          extensionDtsInfo = dtsInfos.find((dtsInfo) => dtsInfo.base === 'index.d.ts');
+
+        if (!extensionDtsInfo) {
+          logger.debug(
+            `Could not find a type declaration file for extension ${extensionInfo.name}. If you are trying to provide one, try specifying its path relative to your extension root folder in your \`manifest.json\`'s \`types\` or naming it \`${extensionInfo.name}.d.ts\` or \`index.d.ts\``,
+          );
+          return;
+        }
       }
+
+      // If the dts file has stuff after the extension name, we want to use it so they can suffix a
+      // version number or something
+      if (extensionDtsInfo.base.startsWith(extensionInfo.name))
+        extensionDtsBaseDestination = extensionDtsInfo.base;
 
       // Put the extension's dts in the types cache in its own folder
       // Without being put in its own folder, it was being lazy loaded by Intellisense, so its types
@@ -739,7 +751,7 @@ async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<vo
     try {
       await cacheExtensionTypeDefinitions(allExtensions);
     } catch (e) {
-      logger.error(`Could not cache extension type definitions: ${e}`);
+      logger.warn(`Could not cache extension type definitions: ${e}`);
     }
 
   // Save extensions that have JavaScript to run
