@@ -1,0 +1,53 @@
+name: Publish documentation
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  publish-docs:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        dotnet_version: [7.0.x]
+        node_version: [18.x]
+
+    steps:
+      - name: Checkout git repo
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '14'
+
+      - name: Install Node and NPM
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node_version }}
+          cache: npm
+
+      - name: Install and build
+        run: |
+          npm install
+          npm run build
+
+      - name: Build documentation
+        run: | # renaming the folders so that pages links at /{their name} instead of at /docs
+          cd ~/lib/papi-components
+          npm run build:docs
+          mv docs papi-components
+          cd ~/lib/papi-dts
+          npm run build:docs
+          mv docs papi-dts
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@4.1.4
+        with:
+          branch: github-pages
+          folder: |
+            lib/papi-components/papi-components
+            lib/papi-dts/papi-dts

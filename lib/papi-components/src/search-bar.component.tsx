@@ -3,7 +3,7 @@ import { useState } from 'react';
 import TextField from './text-field.component';
 import './search-bar.component.css';
 
-type SearchBarProps = {
+export type SearchBarProps = {
   /**
    * Callback fired to handle the search query when button pressed
    *
