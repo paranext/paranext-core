@@ -6,8 +6,8 @@ body {
   position: relative;
   color: white;
   height: 100vh;
-  background: #8c8c8c;
-  font-family: sans-serif;
+  background: #cfcfcf;
+  font-family: 'Roboto medium', sans-serif;
   overflow-y: hidden;
   display: flex;
   justify-content: center;
