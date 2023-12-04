@@ -33,12 +33,12 @@ public static class Program
 
             var tdp = new TimeDataProvider(papi);
             var sdp = new UsfmDataProvider(papi, "assets", "WEB");
-            var projects = new LocalProjects();
-            var paratextPsi = new ParatextProjectStorageInterpreter(papi, projects);
+            var paratextProjects = new LocalParatextProjects();
+            var paratextPsi = new ParatextProjectStorageInterpreter(papi, paratextProjects);
             var paratextFactory = new ParatextProjectDataProviderFactory(
                 papi,
                 paratextPsi,
-                projects
+                paratextProjects
             );
 
             await tdp.RegisterDataProvider();

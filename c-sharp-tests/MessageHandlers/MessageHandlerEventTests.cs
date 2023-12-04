@@ -1,9 +1,11 @@
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using PtxUtils;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider.MessageHandlers;
 
+[ExcludeFromCodeCoverage]
 public class MessageHandlerEventTests
 {
     [Test]
@@ -70,20 +72,20 @@ public class MessageHandlerEventTests
 
     private static Enum<EventType> TestEventType => EventType.ObjectDispose;
 
-    private static MessageEvent TestMessage => new MessageEventObjectDispose("test");
+    private static MessageEvent TestMessage => new MessageEventObjectDisposed("test");
 
     private Message? ProcessEvent1(MessageEvent messageEvent)
     {
-        return new MessageEventObjectDispose("1");
+        return new MessageEventObjectDisposed("1");
     }
 
     private Message? ProcessEvent2(MessageEvent messageEvent)
     {
-        return new MessageEventObjectDispose("2");
+        return new MessageEventObjectDisposed("2");
     }
 
     private Message? ProcessEvent3(MessageEvent messageEvent)
     {
-        return new MessageEventObjectDispose("3");
+        return new MessageEventObjectDisposed("3");
     }
 }

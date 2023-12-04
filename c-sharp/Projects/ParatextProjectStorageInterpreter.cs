@@ -3,6 +3,7 @@ using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
@@ -29,21 +30,24 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         ChapterUSX
     };
 
-    private readonly LocalProjects _projects;
+    private readonly LocalParatextProjects _paratextProjects;
     #endregion
 
     #region Constructor
-    public ParatextProjectStorageInterpreter(PapiClient papiClient, LocalProjects projects)
+    public ParatextProjectStorageInterpreter(
+        PapiClient papiClient,
+        LocalParatextProjects paratextProjects
+    )
         : base(ProjectStorageType.ParatextFolders, new[] { ProjectType.Paratext }, papiClient)
     {
-        _projects = projects;
+        _paratextProjects = paratextProjects;
     }
     #endregion
 
     #region Implementation of ProjectStorageInterpreter
     protected override Task StartDataProvider()
     {
-        _projects.Initialize();
+        _paratextProjects.Initialize();
         return Task.CompletedTask;
     }
 
@@ -51,9 +55,9 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     {
         return ResponseToRequest.Succeeded(
             JsonConvert.SerializeObject(
-                _projects
+                _paratextProjects
                     .GetAllProjectDetails()
-                    .Select(details => ProjectMetadataConverter.ToJsonString(details.Metadata))
+                    .Select(details => details.Metadata)
                     .ToList()
             )
         );
@@ -61,9 +65,9 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
     public override ResponseToRequest CreateProject(ProjectDataScope scope)
     {
-        if (scope.ProjectID == null)
+        if (string.IsNullOrEmpty(scope.ProjectID))
             return ResponseToRequest.Failed("Must provide a project ID");
-        if (scope.ProjectName == null)
+        if (string.IsNullOrEmpty(scope.ProjectName))
             return ResponseToRequest.Failed("Must provide a project name");
 
         ProjectMetadata metadata =
@@ -76,7 +80,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
         try
         {
-            _projects.SaveProjectMetadata(metadata);
+            _paratextProjects.SaveProjectMetadata(metadata);
         }
         catch (Exception ex)
         {
@@ -84,31 +88,56 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
         }
 
         // TODO: Do something to actually create the Paratext part of the project
+        // See ParatextPluginHost.CreateNewProject in the Paratext repository for a reference.
+
         return ResponseToRequest.Succeeded();
     }
 
     public override ResponseToRequest GetProjectSettings(ProjectDataScope scope)
     {
-        if (scope.ProjectID == null)
+        if (string.IsNullOrEmpty(scope.ProjectID))
             return ResponseToRequest.Failed("Must provide a project ID");
 
-        var scrText = _projects.GetParatextProject(scope.ProjectID);
-        return ResponseToRequest.Succeeded(JsonConvert.SerializeObject(scrText.Settings));
+        ScrText scrText;
+        try
+        {
+            scrText = LocalParatextProjects.GetParatextProject(scope.ProjectID);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
+            return ResponseToRequest.Failed($"Project with ID '{scope.ProjectID}' was not found");
+        }
+
+        // TODO: Determine how we really want to handle project settings
+        JObject settingsObj = new();
+        foreach (KeyValuePair<string, string> setting in scrText.Settings.ParametersDictionary)
+            settingsObj[setting.Key] = setting.Value;
+
+        return ResponseToRequest.Succeeded(settingsObj.ToString());
     }
 
     public override ResponseToRequest GetProjectData(ProjectDataScope scope)
     {
-        if (scope.ProjectID == null)
+        if (string.IsNullOrEmpty(scope.ProjectID))
             return ResponseToRequest.Failed("Must provide a project ID");
-        if (scope.DataType == null)
+        if (string.IsNullOrEmpty(scope.DataType))
             return ResponseToRequest.Failed("Must provide a data type");
-        if (scope.DataQualifier == null)
+        if (string.IsNullOrEmpty(scope.DataQualifier))
             return ResponseToRequest.Failed("Must provide a data qualifier");
 
         // Not making it mandatory that all calls provide a VerseRef since there might be some types that don't use it
         VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
-        var scrText = _projects.GetParatextProject(scope.ProjectID);
+        ScrText scrText;
+        try
+        {
+            scrText = LocalParatextProjects.GetParatextProject(scope.ProjectID);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
+            return ResponseToRequest.Failed($"Project with ID '{scope.ProjectID}' was not found");
+        }
+
         return scope.DataType switch
         {
             BookUSFM
@@ -133,17 +162,26 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
     public override ResponseToRequest SetProjectData(ProjectDataScope scope, string data)
     {
-        if (scope.ProjectID == null)
+        if (string.IsNullOrEmpty(scope.ProjectID))
             return ResponseToRequest.Failed("Must provide a project ID");
-        if (scope.DataType == null)
+        if (string.IsNullOrEmpty(scope.DataType))
             return ResponseToRequest.Failed("Must provide a data type");
-        if (scope.DataQualifier == null)
+        if (string.IsNullOrEmpty(scope.DataQualifier))
             return ResponseToRequest.Failed("Must provide a data qualifier");
 
         // Not making it mandatory that all calls provide a VerseRef since there might be some types that don't use it
         VerseRefConverter.TryCreateVerseRef(scope.DataQualifier, out var verseRef, out var error);
 
-        var scrText = _projects.GetParatextProject(scope.ProjectID);
+        ScrText scrText;
+        try
+        {
+            scrText = LocalParatextProjects.GetParatextProject(scope.ProjectID);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
+            return ResponseToRequest.Failed($"Project with ID '{scope.ProjectID}' was not found");
+        }
+
         switch (scope.DataType)
         {
             case ChapterUSFM:
@@ -180,35 +218,73 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
     public override ResponseToRequest GetExtensionData(ProjectDataScope scope)
     {
-        if (scope.ProjectID == null)
+        if (string.IsNullOrEmpty(scope.ProjectID))
             return ResponseToRequest.Failed("Must provide a project ID");
-        if (scope.ExtensionName == null)
+        if (string.IsNullOrEmpty(scope.ExtensionName))
             return ResponseToRequest.Failed("Must provide an extension name");
-        if (scope.DataQualifier == null)
+        if (string.IsNullOrEmpty(scope.DataQualifier))
             return ResponseToRequest.Failed("Must provide a data qualifier");
 
-        using var dataStream = GetExtensionStream(scope, false);
+        Stream? dataStream;
+        try
+        {
+            dataStream = GetExtensionStream(scope, false);
+        }
+        catch (KeyNotFoundException)
+        {
+            return ResponseToRequest.Failed("Unknown project ID: " + scope.ProjectID);
+        }
+        catch (ArgumentException ex)
+        {
+            return ResponseToRequest.Failed(ex.Message);
+        }
+
         if (dataStream == null)
             return ResponseToRequest.Failed("Extension data not found");
 
-        using TextReader textReader = new StreamReader(dataStream, Encoding.UTF8);
-        return ResponseToRequest.Succeeded(textReader.ReadToEnd());
+        using (dataStream)
+        {
+            using TextReader textReader = new StreamReader(dataStream, Encoding.UTF8);
+            return ResponseToRequest.Succeeded(textReader.ReadToEnd());
+        }
     }
 
     public override ResponseToRequest SetExtensionData(ProjectDataScope scope, string data)
     {
-        if (scope.ProjectID == null)
+        if (string.IsNullOrEmpty(scope.ProjectID))
             return ResponseToRequest.Failed("Must provide a project ID");
-        if (scope.ExtensionName == null)
+        if (string.IsNullOrEmpty(scope.ExtensionName))
             return ResponseToRequest.Failed("Must provide an extension name");
-        if (scope.DataQualifier == null)
+        if (string.IsNullOrEmpty(scope.DataQualifier))
             return ResponseToRequest.Failed("Must provide a data qualifier");
 
-        using var dataStream = GetExtensionStream(scope, true);
+        Stream? dataStream;
+        try
+        {
+            dataStream = GetExtensionStream(scope, true);
+        }
+        catch (KeyNotFoundException)
+        {
+            return ResponseToRequest.Failed("Unknown project ID: " + scope.ProjectID);
+        }
+        catch (ArgumentException ex)
+        {
+            return ResponseToRequest.Failed(ex.Message);
+        }
+
         if (dataStream == null)
             return ResponseToRequest.Failed("Unable to create extension data");
 
-        var scrText = _projects.GetParatextProject(scope.ProjectID);
+        ScrText scrText;
+        try
+        {
+            scrText = LocalParatextProjects.GetParatextProject(scope.ProjectID);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
+            return ResponseToRequest.Failed($"Project with ID '{scope.ProjectID}' was not found");
+        }
+
         try
         {
             RunWithinLock(
@@ -245,7 +321,8 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     #region Private helper methods
     private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
     {
-        var projectDetails = _projects.GetProjectDetails(scope.ProjectID!);
+        ProjectDetails projectDetails = _paratextProjects.GetProjectDetails(scope.ProjectID!);
+
         IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
         return extensionStreamManager.GetDataStream(
             $"extensions/{scope.ExtensionName}/{scope.DataQualifier}",
@@ -301,7 +378,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
     {
         ScrStylesheet scrStylesheet = scrText.ScrStylesheet(bookNum);
         // Tokenize usfm
-        List<UsfmToken> tokens = UsfmToken.Tokenize(scrStylesheet, usfm ?? string.Empty, true);
+        List<UsfmToken> tokens = UsfmToken.Tokenize(scrStylesheet, usfm ?? string.Empty, false);
 
         XmlDocument doc = new XmlDocument();
         using (XmlWriter xmlw = doc.CreateNavigator()!.AppendChild())

@@ -8,8 +8,7 @@ import {
 } from '@shared/services/web-view.service-model';
 import { AddWebViewEvent, Layout } from '@shared/models/docking-framework.model';
 import networkObjectService from '@shared/services/network-object.service';
-import { wait } from '@shared/utils/util';
-import logger from '@shared/services/logger.service';
+import networkObjectStatusService from './network-object-status.service';
 
 const onDidAddWebView: PapiEvent<AddWebViewEvent> = getNetworkEvent<AddWebViewEvent>(
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
@@ -22,24 +21,15 @@ async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          // Normally automatic retrying within the network object service is sufficient
-          // However, in this case we know webViewService is being requested before it is registered
-          // Give it some extra time to be registered by the renderer
-          let localWebViewService: WebViewServiceType | undefined;
-          const maxAttempts: number = 3;
-          for (let attemptsRemaining = maxAttempts; attemptsRemaining > 0; attemptsRemaining--) {
-            // eslint-disable-next-line no-await-in-loop
-            localWebViewService = await networkObjectService.get<WebViewServiceType>(
-              NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-            );
-            if (localWebViewService) break;
+          await networkObjectStatusService.waitForNetworkObject(
+            NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+            // Wait 30 seconds for the web view service to appear
+            30000,
+          );
 
-            // eslint-disable-next-line no-await-in-loop
-            await wait(1000);
-
-            logger.debug(`Retrying to get the web view service`);
-          }
-
+          const localWebViewService = await networkObjectService.get<WebViewServiceType>(
+            NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+          );
           if (!localWebViewService)
             throw new Error(
               `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE} is not available as a network object`,

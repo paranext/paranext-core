@@ -41,6 +41,28 @@ export async function writeFile(uri: Uri, fileContents: string | Buffer): Promis
 }
 
 /**
+ * Copies a file from one location to another. Creates the path to the destination if it does not
+ * exist
+ *
+ * @param sourceUri The location of the file to copy
+ * @param destinationUri The uri to the file to create as a copy of the source file
+ * @param mode Bitwise modifiers that affect how the copy works. See
+ *   [`fsPromises.copyFile`](https://nodejs.org/api/fs.html#fspromisescopyfilesrc-dest-mode) for
+ *   more information
+ */
+export async function copyFile(
+  sourceUri: Uri,
+  destinationUri: Uri,
+  mode?: Parameters<typeof fs.promises.copyFile>[2],
+) {
+  const filePathSource: string = getPathFromUri(sourceUri);
+  const filePathDest: string = getPathFromUri(destinationUri);
+  const destDirName: string = path.dirname(filePathDest);
+  await fs.promises.mkdir(destDirName, { recursive: true });
+  return fs.promises.copyFile(filePathSource, filePathDest, mode);
+}
+
+/**
  * Delete a file if it exists
  *
  * @param uri URI of file
@@ -147,7 +169,7 @@ export async function readDir(
 }
 
 /**
- * Create a directory in the file system
+ * Create a directory in the file system if it does not exist. Does not throw if it already exists.
  *
  * @param uri URI of directory
  * @returns Promise that resolves once the directory has been created

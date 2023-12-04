@@ -1,13 +1,13 @@
 namespace Paranext.DataProvider.Messages;
 
-public sealed class MessageEventObjectDispose : MessageEventGeneric<string>
+public sealed class MessageEventObjectDisposed : MessageEventGeneric<string>
 {
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    private MessageEventObjectDispose()
+    private MessageEventObjectDisposed()
         : base(Messages.EventType.ObjectDispose) { }
 
-    public MessageEventObjectDispose(string eventContents)
+    public MessageEventObjectDisposed(string eventContents)
         : base(Messages.EventType.ObjectDispose, eventContents) { }
 }

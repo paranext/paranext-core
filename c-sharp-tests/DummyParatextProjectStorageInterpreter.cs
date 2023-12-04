@@ -1,13 +1,15 @@
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.Projects;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider
 {
+    [ExcludeFromCodeCoverage]
     internal class DummyParatextProjectStorageInterpreter : ParatextProjectStorageInterpreter
     {
         private readonly Dictionary<string, byte[]> _inMemoryFiles = new();
         
-        public DummyParatextProjectStorageInterpreter(PapiClient papiClient, DummyLocalProjects projects) : base(papiClient, projects)
+        public DummyParatextProjectStorageInterpreter(PapiClient papiClient, DummyLocalParatextProjects paratextProjects) : base(papiClient, paratextProjects)
         {
         }
 

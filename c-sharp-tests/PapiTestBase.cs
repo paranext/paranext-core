@@ -7,15 +7,17 @@ using Paratext.Data;
 using PtxUtils;
 using Paranext.DataProvider.Messages;
 using System.Web;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider
 {
     [TestFixture]
+    [ExcludeFromCodeCoverage]
     internal abstract class PapiTestBase
     {
         #region Member variables
         private DummyPapiClient? _client;
-        private DummyLocalProjects? _projects;
+        private DummyLocalParatextProjects? _projects;
         #endregion
 
         #region Test setup/teardown
@@ -25,7 +27,7 @@ namespace TestParanextDataProvider
             if (OperatingSystem.IsMacOS())
                 Assert.Ignore("Mac is missing ICU support so these tests will not work");
 
-            _projects = new DummyLocalProjects();
+            _projects = new DummyLocalParatextProjects();
             _client = new DummyPapiClient();
         }
 
@@ -51,7 +53,7 @@ namespace TestParanextDataProvider
             }
         }
 
-        protected DummyLocalProjects Projects
+        protected DummyLocalParatextProjects ParatextProjects
         {
             get
             {
@@ -84,10 +86,10 @@ namespace TestParanextDataProvider
         /// <summary>
         /// Creates fake project details to fake the existence of a project
         /// </summary>
-        /// <seealso cref="DummyLocalProjects.FakeAddProject"/>
-        protected static ProjectDetails CreateProjectDetails(string id, string name)
+        /// <seealso cref="DummyLocalParatextProjects.FakeAddProject"/>
+        protected static ProjectDetails CreateProjectDetails(string id, string name, string projectType = "")
         {
-            ProjectMetadata metadata = new(id, name, "ParatextFolders", "");
+            ProjectMetadata metadata = new(id, name, "ParatextFolders", projectType);
             return new ProjectDetails(metadata, "testDirectoryThatDoesNotExist");
         }
 

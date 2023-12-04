@@ -23,6 +23,7 @@ import UnsubscriberAsyncList from '@shared/utils/unsubscriber-async-list';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import { debounce } from '@shared/utils/util';
 import LogError from '@shared/log-error.model';
+import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -31,29 +32,13 @@ import LogError from '@shared/log-error.model';
 // eslint-disable-next-line camelcase, no-underscore-dangle
 declare const __non_webpack_require__: typeof require;
 
-/** Extension manifest before it is finalized and frozen */
-
 /**
- * Information about an extension provided by the extension developer. This will be transformed and
- * frozen into an ExtensionInfo before use
+ * Information about an extension and extra metadata about it that we generate
+ *
+ * This is a transformed and frozen version of the extension's {@link ExtensionManifest}
  */
-type ExtensionManifest = {
-  name: string;
-  version: string;
-  /**
-   * The JavaScript file to run in the extension host.
-   *
-   * Must be specified. Can be `null` if the extension does not have any JavaScript to run.
-   */
-  main: string | null;
-  activationEvents: string[];
-};
-
-/** Information about an extension and extra metadata about it that we generate */
 type ExtensionInfo = Readonly<
   ExtensionManifest & {
-    /** We filtered out undefined and null in `getExtensions`, so this should now be defined */
-    main: string;
     /**
      * Uri to this extension's directory. Not provided in actual manifest, but added while parsing
      * the manifest
@@ -77,6 +62,14 @@ type ActiveExtension = {
  */
 type AmbiguousExtensionModule = IExtension | { default: IExtension };
 
+/** Information about a DTS file needed for copying it properly */
+type DtsInfo = {
+  /** Uri to the `.d.ts` file */
+  uri: Uri;
+  /** File name including `.d.ts` */
+  base: string;
+};
+
 /**
  * Name of the file describing the extension and its capabilities. Provided by the extension
  * developer
@@ -89,8 +82,18 @@ const requireOriginal = Module.prototype.require;
 // eslint-disable-next-line camelcase
 const systemRequire = globalThis.isPackaged ? __non_webpack_require__ : require;
 
-/** This is the location where we will store decompressed extension ZIP files */
+/** The location where installed extensions are stored. Created if it does not exist for ease of use */
+const installedExtensionsUri: Uri = `app://installed-extensions`;
+nodeFS.createDir(installedExtensionsUri);
+
+/** The location where we will store decompressed extension ZIP files */
 const userUnzippedExtensionsCacheUri: Uri = 'cache://extensions';
+
+/**
+ * The location where we will copy extension type declaration files for extensions to use in
+ * development
+ */
+const userExtensionTypesCacheUri: Uri = 'cache://extension-types';
 
 /** Map of extension name to extension that is currently active and running */
 const activeExtensions = new Map<string, ActiveExtension>();
@@ -101,7 +104,10 @@ let isInitialized = false;
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
 
-/** Extensions that are available to us */
+/**
+ * Extensions that are available to us excluding extensions that do not have a JavaScript `main`
+ * file to run
+ */
 let availableExtensions: ExtensionInfo[];
 
 /** Parse string extension manifest into an object and perform any transformations needed */
@@ -116,55 +122,117 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
   return extensionManifest;
 }
 
+/**
+ * The directories we will search for extension directories and zips.
+ *
+ * Command-line-provided directories are given priority, so they are provided in this order:
+ *
+ * 1. `--extensionDirs`-provided directories
+ * 2. Installed extensions directory
+ *
+ *    - In development: `paranext-core/dev-appdata/installed-extensions`
+ *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ * 3. Core extensions directory
+ *
+ *    - In development: `paranext-core/extensions/dist`
+ *    - In production: `resources/extensions`
+ */
 const extensionRootDirectories: Uri[] = [
-  `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
   ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
     (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
   ),
+  installedExtensionsUri,
+  `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
 ];
 
+/** Individual extension folders and/or zips to load as provided by command-line `--extensions` */
 const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(ARG_EXTENSIONS).map(
   (extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`,
 );
 
 /**
- * Contents of `nodeFS.readDir()` for all parent folders of extensions This is expected to be a
+ * Contents of `nodeFS.readDir()` for all parent folders of extensions. This is expected to be a
  * mixture of directories and ZIP files.
+ *
+ * Command-line-provided directories are given priority, so they are provided in this order:
+ *
+ * 1. `--extensionDirs`-provided directories
+ * 2. Installed extensions directory
+ *
+ *    - In development: `paranext-core/dev-appdata/installed-extensions`
+ *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ * 3. Core extensions directory
+ *
+ *    - In development: `paranext-core/extensions/dist`
+ *    - In production: `resources/extensions`
  */
 async function getExtensionRootDirectoryContents() {
   return Promise.all(extensionRootDirectories.map((extensionUri) => nodeFS.readDir(extensionUri)));
 }
 
-/** All of the URIs of ZIP files for extensions we want to load */
+/**
+ * All of the URIs of ZIP files for extensions we want to load
+ *
+ * Command-line-provided extensions are given priority, so they are provided in this order:
+ *
+ * 1. `--extensions`-provided extensions
+ * 2. Extensions in `--extensionDirs`-provided directories
+ * 3. Extensions in installed extensions directory
+ *
+ *    - In development: `paranext-core/dev-appdata/installed-extensions`
+ *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ * 4. Extensions in core extensions directory
+ *
+ *    - In development: `paranext-core/extensions/dist`
+ *    - In production: `resources/extensions`
+ */
 async function getExtensionZipUris(): Promise<Uri[]> {
-  return (await getExtensionRootDirectoryContents())
-    .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.File])
-    .filter((extensionFileUri) => extensionFileUri)
-    .filter((extensionFileUri) => extensionFileUri.toLowerCase().endsWith('.zip'))
+  return commandLineExtensionDirectories
     .concat(
-      commandLineExtensionDirectories.filter((extensionUri) =>
-        extensionUri.toLowerCase().endsWith('.zip'),
-      ),
-    );
+      (await getExtensionRootDirectoryContents())
+        .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.File])
+        .filter((extensionFileUri) => extensionFileUri),
+    )
+    .filter((extensionFileUri) => extensionFileUri.toLowerCase().endsWith('.zip'));
 }
 
-/** All of the URIs of extensions to load */
+/**
+ * All of the URIs of extensions to load
+ *
+ * Command-line-provided extensions are given priority, so they are provided in this order:
+ *
+ * 1. `--extensions`-provided extensions
+ * 2. Extensions in `--extensionDirs`-provided directories
+ * 3. Extensions in installed extensions directory
+ *
+ *    - In development: `paranext-core/dev-appdata/installed-extensions`
+ *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ * 4. Extensions in core extensions directory
+ *
+ *    - In development: `paranext-core/extensions/dist`
+ *    - In production: `resources/extensions`
+ * 5. Unzipped extensions in the extension cache
+ *
+ * Note that all zips have lower priority than all directories instead of being lower than only the
+ * directories within their categories. This means directory extensions will always be run instead
+ * of zipped extensions of the same name.
+ */
 async function getExtensionUrisToLoad(): Promise<Uri[]> {
-  // Get all subdirectories for bundled extensions and command line ARG_EXTENSION_DIRS values
+  // Get all subdirectories for command line ARG_EXTENSION_DIRS values and bundled extensions
   let extensionFolders: Uri[] = (await getExtensionRootDirectoryContents())
     .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.Directory])
     .filter((extensionDirUri) => extensionDirUri);
 
-  // Add in all directories explicitly provided by the ARG_EXTENSIONS command line arguments
-  const extensionFolderPromises = extensionFolders
-    .concat(
-      commandLineExtensionDirectories.map((extensionDirPath) => {
-        const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
-          ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
-          : extensionDirPath;
-        return extensionFolder;
-      }),
-    )
+  // Add in all directories explicitly provided by the ARG_EXTENSIONS command line arguments and
+  // filter out files
+  const extensionFolderPromises = commandLineExtensionDirectories
+    .map((extensionDirPath) => {
+      const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
+        ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
+        : extensionDirPath;
+      return extensionFolder;
+    })
+    .concat(extensionFolders)
     .map(async (extensionFolder) => {
       return (await nodeFS.getStats(extensionFolder))?.isFile() ? '' : extensionFolder;
     });
@@ -241,49 +309,195 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
   );
 }
 
-/** Get information for all the extensions present */
+/**
+ * Get information for all unique extensions present.
+ *
+ * Command-line-provided extensions are given priority, so they are provided in this order:
+ *
+ * 1. `--extensions`-provided extensions
+ * 2. Extensions in `--extensionDirs`-provided directories
+ * 3. Extensions in installed extensions directory
+ *
+ *    - In development: `paranext-core/dev-appdata/installed-extensions`
+ *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ * 4. Extensions in core extensions directory
+ *
+ *    - In development: `paranext-core/extensions/dist`
+ *    - In production: `resources/extensions`
+ * 5. Unzipped extensions in the extension cache
+ *
+ * Note that all zips have lower priority than all directories instead of being lower than only the
+ * directories within their categories. This means directory extensions will always be run instead
+ * of zipped extensions of the same name.
+ */
 // TODO: figure out if we can share this code with webpack.util.ts
 async function getExtensions(): Promise<ExtensionInfo[]> {
   const extensionUris = await getExtensionUrisToLoad();
-  return (
-    (
-      await Promise.allSettled(
-        extensionUris.map(async (extensionUri) => {
-          try {
-            const extensionManifestJson = await nodeFS.readFileText(
-              joinUriPaths(extensionUri, MANIFEST_FILE_NAME),
-            );
-            // Assert the return type after freeze.
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            return Object.freeze({
-              ...parseManifest(extensionManifestJson),
-              dirUri: extensionUri,
-            }) as ExtensionInfo;
-          } catch (e) {
-            const error = new Error(
-              `Extension folder ${extensionUri} failed to load. Reason: ${e}`,
-            );
-            logger.warn(error);
-            throw error;
-          }
-        }),
-      )
-    )
-      .filter((settled) => {
-        // Ignore failed to load manifest issues - already logged those issues
-        if (settled.status !== 'fulfilled') return false;
-        if (settled.value.main === undefined) {
-          logger.warn(
-            `Extension ${settled.value.name} failed to load. Must provide property \`main\` in \`manifest.json\`. If you do not have JavaScript code to run, provide \`"main": null\``,
+  const allExtensionInfos = (
+    await Promise.allSettled(
+      extensionUris.map(async (extensionUri) => {
+        try {
+          const extensionManifestJson = await nodeFS.readFileText(
+            joinUriPaths(extensionUri, MANIFEST_FILE_NAME),
           );
-          return false;
+          // Assert the return type after freeze.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          return Object.freeze({
+            ...parseManifest(extensionManifestJson),
+            dirUri: extensionUri,
+          }) as ExtensionInfo;
+        } catch (e) {
+          const error = new Error(`Extension folder ${extensionUri} failed to load. Reason: ${e}`);
+          logger.warn(error);
+          throw error;
         }
-        // If main is null, having no JavaScript is intentional. Do not load this extension
-        return settled.value.main !== null;
-      })
-      // Assert the fulfilled type since the unfulfilled ones have been filtered out.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value)
+      }),
+    )
+  )
+    .filter((settled) => {
+      // Ignore failed to load manifest issues - already logged those issues
+      if (settled.status !== 'fulfilled') return false;
+      // Completely ignore extensions that do not have `main` at all as a hint to developers
+      if (settled.value.main === undefined) {
+        logger.error(
+          `Extension ${settled.value.name} failed to load. Must provide property \`main\` in \`manifest.json\`. If you do not have JavaScript code to run, provide \`"main": null\``,
+        );
+        return false;
+      }
+      return true;
+    })
+    // Assert the fulfilled type since the unfulfilled ones have been filtered out.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value);
+
+  // Filter out duplicate extensions. Only the first extension encountered in order is used
+  const extensionInfos: ExtensionInfo[] = [];
+  allExtensionInfos.forEach((extensionInfo) => {
+    if (
+      !extensionInfos.some((finalExtensionInfo) => finalExtensionInfo.name === extensionInfo.name)
+    )
+      extensionInfos.push(extensionInfo);
+  });
+  return extensionInfos;
+}
+
+/**
+ * Creates a `DtsInfo` from a Uri
+ *
+ * @param declarationUri The uri to the dts file
+ * @returns `DtsInfo` for the declaration file at the uri specified
+ */
+function createDtsInfoFromUri(declarationUri: Uri): DtsInfo {
+  return {
+    uri: declarationUri,
+    base: path.parse(declarationUri).base,
+  };
+}
+
+/**
+ * Caches type declaration files for each extension. Gets the type declaration file from each
+ * extension and copies it to `extension-types/<extension_type_file_name_without_.d.ts>/index.d.ts`
+ * because that is the path that works. If the extension's type declaration file does not start with
+ * `<extension_name>`, the folder created will be named `<extension_name>` instead of the name of
+ * the extension type declaration file name.
+ *
+ * We look first at the location provided by the extension manifest's `types` property. If one is
+ * not provided, we look for files according to the specification in the JSDoc for
+ * {@link ExtensionManifest}'s `types` property order and copy over the first one found.
+ *
+ * @param extensionInfos Extension info for extensions whose types to cache
+ */
+async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
+  return Promise.all(
+    extensionInfos.map(async (extensionInfo) => {
+      /** The default assumed name for the dts file including `.d.ts` */
+      const extensionDtsBaseDefault = `${extensionInfo.name}.d.ts`;
+      /** The declaration file uri we are copying for this extension */
+      let extensionDtsInfo: DtsInfo | undefined;
+      /** The declaration file name we are creating for this extension including `.d.ts` */
+      let extensionDtsBaseDestination = extensionDtsBaseDefault;
+
+      // Try using the path to the type declaration file specified in the extension manifest
+      if (extensionInfo.types) {
+        const providedDtsUri = joinUriPaths(extensionInfo.dirUri, extensionInfo.types);
+        const providedDtsStats = await nodeFS.getStats(providedDtsUri);
+        if (providedDtsStats && providedDtsStats.isFile()) {
+          // The extension's specified dts exists, so use it
+          extensionDtsInfo = createDtsInfoFromUri(providedDtsUri);
+        } else
+          logger.warn(
+            `Extension ${extensionInfo.name} specified its type declaration file was at ${extensionInfo.types}, but this path does not seem to exist. Trying other options`,
+          );
+      }
+
+      // If the extension manifest's specified types didn't work out for some reason, try to find a
+      // dts file elsewhere
+      if (!extensionDtsInfo) {
+        // Get a list of all the dts files in the extension's root
+        // Note: checking if the file exists before copying it is generally not great practice as
+        // it can lead to problems with race conditions. If this ever becomes a problem, we can fix
+        // this code.
+        const dtsInfos = (
+          await nodeFS.readDir(extensionInfo.dirUri, (entryName) => entryName.endsWith('.d.ts'))
+        )[nodeFS.EntryType.File].map(createDtsInfoFromUri);
+
+        if (dtsInfos.length <= 0) {
+          logger.debug(
+            `Extension ${extensionInfo.name} does not seem to have any .d.ts files in its root`,
+          );
+          return;
+        }
+
+        // Try using a dts file whose name matches the name of the extension
+        if (!extensionDtsInfo)
+          extensionDtsInfo = dtsInfos.find((dtsInfo) => dtsInfo.base === extensionDtsBaseDefault);
+
+        // Try using a dts file whose name starts with the name of the extension in case they suffixed
+        // with version number or something
+        if (!extensionDtsInfo)
+          extensionDtsInfo = dtsInfos.find((dtsInfo) =>
+            dtsInfo.base.startsWith(extensionInfo.name),
+          );
+
+        // Try using a dts file whose name is `index.d.ts`
+        if (!extensionDtsInfo)
+          extensionDtsInfo = dtsInfos.find((dtsInfo) => dtsInfo.base === 'index.d.ts');
+
+        if (!extensionDtsInfo) {
+          logger.debug(
+            `Could not find a type declaration file for extension ${extensionInfo.name}. If you are trying to provide one, try specifying its path relative to your extension root folder in your \`manifest.json\`'s \`types\` or naming it \`${extensionInfo.name}.d.ts\` or \`index.d.ts\``,
+          );
+          return;
+        }
+      }
+
+      // If the dts file has stuff after the extension name, we want to use it so they can suffix a
+      // version number or something
+      if (extensionDtsInfo.base.startsWith(extensionInfo.name))
+        extensionDtsBaseDestination = extensionDtsInfo.base;
+
+      // Put the extension's dts in the types cache in its own folder
+      // Without being put in its own folder, it was being lazy loaded by Intellisense, so its types
+      // weren't being discovered for some reason. So put it in its own folder whose name is the
+      // same as the .d.ts file's name so the module name matches. And call it `index.d.ts` because
+      // naming it something else makes TypeScript lose track of where it is without making a
+      // package.json for each folder too
+      const extensionDtsUriDestination = joinUriPaths(
+        userExtensionTypesCacheUri,
+        // Folder name must match module name which we are assuming is the same as the name of the
+        // .d.ts file, so get the .d.ts file's name and use it as the folder name
+        extensionDtsBaseDestination.slice(0, -'.d.ts'.length),
+        'index.d.ts',
+      );
+
+      // We found a dts file! Copy it to the appropriate destination
+      logger.info(
+        `Copying Extension ${extensionInfo.name}'s type declaration file ${getPathFromUri(
+          extensionDtsInfo.uri,
+        )} to ${getPathFromUri(extensionDtsUriDestination)}`,
+      );
+      await nodeFS.copyFile(extensionDtsInfo.uri, extensionDtsUriDestination);
+    }),
   );
 }
 
@@ -529,8 +743,20 @@ async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<vo
 
   await unzipCompressedExtensionFiles();
 
-  // Get a list of extensions
-  availableExtensions = await getExtensions();
+  // Get a list of all extensions found
+  const allExtensions = await getExtensions();
+
+  // Cache type declarations in development
+  if (!globalThis.isPackaged)
+    try {
+      await cacheExtensionTypeDeclarations(allExtensions);
+    } catch (e) {
+      logger.warn(`Could not cache extension type declarations: ${e}`);
+    }
+
+  // Save extensions that have JavaScript to run
+  // If main is null, having no JavaScript is intentional. Do not load this extension
+  availableExtensions = allExtensions.filter((extension) => extension.main !== null);
 
   // Store their base URIs in the extension storage service
   const uriMap: Map<string, string> = new Map();

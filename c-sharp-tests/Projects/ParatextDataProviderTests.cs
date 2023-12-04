@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
 using PtxUtils;
@@ -8,6 +9,7 @@ using SIL.Scripture;
 
 namespace TestParanextDataProvider.Projects
 {
+    [ExcludeFromCodeCoverage]
     internal class ParatextDataProviderTests : PsiTestBase
     {
         private const string PdpName = "soup";
@@ -23,7 +25,7 @@ namespace TestParanextDataProvider.Projects
             _scrText = CreateDummyProject();
 
             _projectDetails = CreateProjectDetails(_scrText);
-            Projects.FakeAddProject(_projectDetails);
+            ParatextProjects.FakeAddProject(_projectDetails);
         }
 
         [TestCase("getBookUSFM")]
@@ -42,22 +44,49 @@ namespace TestParanextDataProvider.Projects
             JsonElement serverMessage = CreateRequestMessage(function);
 
             Enum<RequestType> requestType = new(PdpDataRequest);
-            Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
+            Message result = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
+                .First();
 
             // TODO: Handle this better
-            VerifyResponse(result,
+            VerifyResponse(
+                result,
                 "Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')",
-                requestType, requesterId, null);
+                requestType,
+                requesterId,
+                null
+            );
         }
 
         [TestCase("unknownFunction", 5, 1, 0, "Unknown function: unknownFunction")]
-        [TestCase("getBookUSFM", 0, 1, 0,
-            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":0,\"_chapterNum\":1,\"_verseNum\":0}): BookNum must be greater than zero and less than or equal to last book")]
-        [TestCase("getChapterUSFM", 2, -1, 0,
-            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":2,\"_chapterNum\":-1,\"_verseNum\":0}): ChapterNum can not be negative")]
-        [TestCase("getVerseUSFM", 2, 1, -1,
-            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":2,\"_chapterNum\":1,\"_verseNum\":-1}): VerseNum can not be negative")]
-        public async Task GetFunctions_InvalidParameters(string function, int bookNum, int chapterNum, int verseNum, string expectedError)
+        [TestCase(
+            "getBookUSFM",
+            0,
+            1,
+            0,
+            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":0,\"_chapterNum\":1,\"_verseNum\":0}): BookNum must be greater than zero and less than or equal to last book"
+        )]
+        [TestCase(
+            "getChapterUSFM",
+            2,
+            -1,
+            0,
+            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":2,\"_chapterNum\":-1,\"_verseNum\":0}): ChapterNum can not be negative"
+        )]
+        [TestCase(
+            "getVerseUSFM",
+            2,
+            1,
+            -1,
+            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":2,\"_chapterNum\":1,\"_verseNum\":-1}): VerseNum can not be negative"
+        )]
+        public async Task GetFunctions_InvalidParameters(
+            string function,
+            int bookNum,
+            int chapterNum,
+            int verseNum,
+            string expectedError
+        )
         {
             Random random = new();
             int requesterId = random.Next();
@@ -65,11 +94,15 @@ namespace TestParanextDataProvider.Projects
             ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
-            JsonElement serverMessage =
-                CreateRequestMessage(function, CreateVerseRefNode(bookNum, chapterNum, verseNum));
+            JsonElement serverMessage = CreateRequestMessage(
+                function,
+                CreateVerseRefNode(bookNum, chapterNum, verseNum)
+            );
 
             Enum<RequestType> requestType = new(PdpDataRequest);
-            Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
+            Message result = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
+                .First();
 
             VerifyResponse(result, expectedError, requestType, requesterId, null);
         }
@@ -81,48 +114,94 @@ namespace TestParanextDataProvider.Projects
         [TestCase("getVerseUSFM", 1, 6, 1, "")] // Missing chapter
         [TestCase("getVerseUSFM", 3, 5, 3, "")] // Missing book
         [TestCase("getChapterUSFM", 1, 1, 0, @"\id GEN \ip intro \c 1 \v 1 some text")]
-        [TestCase("getChapterUSFM", 1, 2, 0, @"\c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven")]
+        [TestCase(
+            "getChapterUSFM",
+            1,
+            2,
+            0,
+            @"\c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven"
+        )]
         [TestCase("getChapterUSFM", 1, 3, 0, @"\c 3 \p \v 1 bla")]
         [TestCase("getChapterUSFM", 1, 5, 0, "")] // Missing chapter
         [TestCase("getChapterUSFM", 3, 5, 0, "")] // Missing book
-        [TestCase("getBookUSFM", 1, 2, 0,
-            @"\id GEN \ip intro \c 1 \v 1 some text \c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven \c 3 \p \v 1 bla")]
+        [TestCase(
+            "getBookUSFM",
+            1,
+            2,
+            0,
+            @"\id GEN \ip intro \c 1 \v 1 some text \c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven \c 3 \p \v 1 bla"
+        )]
         [TestCase("getBookUSFM", 3, 2, 0, "")] // Missing book
-        public async Task GetFunctions_ValidResults(string function, int bookNum, int chapterNum, int verseNum, string expectedResult)
+        public async Task GetFunctions_ValidResults(
+            string function,
+            int bookNum,
+            int chapterNum,
+            int verseNum,
+            string expectedResult
+        )
         {
             Random random = new();
             int requesterId = random.Next();
 
-            _scrText.PutText(1, 0, false,
-                @"\id GEN \ip intro \c 1 \v 1 some text \c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven \c 3 \p \v 1 bla", null);
+            _scrText.PutText(
+                1,
+                0,
+                false,
+                @"\id GEN \ip intro \c 1 \v 1 some text \c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven \c 3 \p \v 1 bla",
+                null
+            );
 
             ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
 
-            JsonElement serverMessage =
-                CreateRequestMessage(function, CreateVerseRefNode(bookNum, chapterNum, verseNum));
+            JsonElement serverMessage = CreateRequestMessage(
+                function,
+                CreateVerseRefNode(bookNum, chapterNum, verseNum)
+            );
 
             Enum<RequestType> requestType = new(PdpDataRequest);
-            Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
+            Message result = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
+                .First();
 
             VerifyResponseExceptContents(result, null, requestType, requesterId);
             VerifyUsfmSame(((MessageResponse)result).Contents, expectedResult, _scrText, 1);
         }
 
-        [TestCase(1, 4, 0, @"<usx version=""3.0""><chapter number=""4"" style=""c"" />" +
-                @"<para style=""p""><verse number=""3"" style=""v"" /> a whole new chapter!</para></usx>",
-            @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla \c 4 \p \v 3 a whole new chapter!")]
-        [TestCase(1, 2, 0, @"<usx version=""3.0""><chapter number=""2"" style=""c"" />" +
-                @"<para style=""p""><verse number=""2"" style=""v"" /> New chapter text.</para></usx>",
-            @"\id GEN \ip intro \c 2 \p \v 2 New chapter text. \c 3 \p \v 1 bla")]
-        public async Task SetChapterUsx_ValidResults(int bookNum, int chapterNum, int verseNum,
-            string newValue, string expectedResult)
+        [TestCase(
+            1,
+            4,
+            0,
+            @"<usx version=""3.0""><chapter number=""4"" style=""c"" />"
+                + @"<para style=""p""><verse number=""3"" style=""v"" />a whole new chapter!</para></usx>",
+            @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla \c 4 \p \v 3 a whole new chapter!"
+        )]
+        [TestCase(
+            1,
+            2,
+            0,
+            @"<usx version=""3.0""><chapter number=""2"" style=""c"" />"
+                + @"<para style=""p""><verse number=""2"" style=""v"" />New chapter text.</para></usx>",
+            @"\id GEN \ip intro \c 2 \p \v 2 New chapter text. \c 3 \p \v 1 bla"
+        )]
+        public async Task SetChapterUsx_ValidResults(
+            int bookNum,
+            int chapterNum,
+            int verseNum,
+            string newValue,
+            string expectedResult
+        )
         {
             Random random = new();
             int requesterId = random.Next();
 
-            _scrText.PutText(1, 0, false,
-                @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla", null);
+            _scrText.PutText(
+                1,
+                0,
+                false,
+                @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla",
+                null
+            );
 
             ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
@@ -130,47 +209,91 @@ namespace TestParanextDataProvider.Projects
             // Set up an event listener to listen for the update
             List<dynamic?> updateEvents = new();
             Enum<EventType> dataUpdateEvent = new(PdpDataUpdateEvent);
-            Client.RegisterEventHandler(dataUpdateEvent, (e) => {
-                updateEvents.Add(e);
-                return null;
-            });
+            Client.RegisterEventHandler(
+                dataUpdateEvent,
+                (e) =>
+                {
+                    updateEvents.Add(e);
+                    return null;
+                }
+            );
 
-            JsonElement serverMessage =
-                CreateRequestMessage("setChapterUSX", CreateVerseRefNode(bookNum, chapterNum, verseNum), newValue);
+            JsonElement serverMessage = CreateRequestMessage(
+                "setChapterUSX",
+                CreateVerseRefNode(bookNum, chapterNum, verseNum),
+                newValue
+            );
 
             Enum<RequestType> requestType = new(PdpDataRequest);
-            Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
+            Message result = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
+                .First();
 
-            VerifyResponse(result, null, requestType, requesterId, ParatextProjectStorageInterpreter.AllScriptureDataTypes);
+            VerifyResponse(
+                result,
+                null,
+                requestType,
+                requesterId,
+                ParatextProjectStorageInterpreter.AllScriptureDataTypes
+            );
 
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
-            Assert.That(updateEvents[0], Is.EqualTo(ParatextProjectStorageInterpreter.AllScriptureDataTypes));
+            Assert.That(
+                updateEvents[0],
+                Is.EqualTo(ParatextProjectStorageInterpreter.AllScriptureDataTypes)
+            );
 
             // Verify the new text was saved to disk
-            VerseRef reference = new(bookNum, chapterNum, verseNum, _scrText.Settings.Versification);
+            VerseRef reference =
+                new(bookNum, chapterNum, verseNum, _scrText.Settings.Versification);
             VerifyUsfmSame(_scrText.GetText(reference, false, false), expectedResult, _scrText, 1);
 
             // Verify getting the same reference gets the new data (make sure no caching problems)
-            JsonElement serverMessage2 =
-                CreateRequestMessage("getChapterUSX", CreateVerseRefNode(bookNum, chapterNum, verseNum), newValue);
-            Message result2 = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage2)).First();
+            JsonElement serverMessage2 = CreateRequestMessage(
+                "getChapterUSX",
+                CreateVerseRefNode(bookNum, chapterNum, verseNum),
+                newValue
+            );
+            Message result2 = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage2))
+                .First();
             VerifyResponseExceptContents(result2, null, requestType, requesterId);
             VerifyUsxSame(((MessageResponse)result2).Contents, newValue);
         }
 
-        [TestCase(1, 4, 0, @"\c 4 \p \v 3 a whole new chapter!",
-            @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla \c 4 \p \v 3 a whole new chapter!")]
-        [TestCase(1, 2, 0, @"\c 2 \p \v 2 New chapter text.",
-            @"\id GEN \ip intro \c 2 \p \v 2 New chapter text. \c 3 \p \v 1 bla")]
-        public async Task SetChapterUsfm_ValidResults(int bookNum, int chapterNum, int verseNum,
-            string newValue, string expectedResult)
+        [TestCase(
+            1,
+            4,
+            0,
+            @"\c 4 \p \v 3 a whole new chapter!",
+            @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla \c 4 \p \v 3 a whole new chapter!"
+        )]
+        [TestCase(
+            1,
+            2,
+            0,
+            @"\c 2 \p \v 2 New chapter text.",
+            @"\id GEN \ip intro \c 2 \p \v 2 New chapter text. \c 3 \p \v 1 bla"
+        )]
+        public async Task SetChapterUsfm_ValidResults(
+            int bookNum,
+            int chapterNum,
+            int verseNum,
+            string newValue,
+            string expectedResult
+        )
         {
             Random random = new();
             int requesterId = random.Next();
 
-            _scrText.PutText(1, 0, false,
-                @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla", null);
+            _scrText.PutText(
+                1,
+                0,
+                false,
+                @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla",
+                null
+            );
 
             ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
             await provider.RegisterDataProvider();
@@ -178,31 +301,55 @@ namespace TestParanextDataProvider.Projects
             // Set up an event listener to listen for the update
             List<dynamic?> updateEvents = new();
             Enum<EventType> dataUpdateEvent = new(PdpDataUpdateEvent);
-            Client.RegisterEventHandler(dataUpdateEvent, (e) => {
-                updateEvents.Add(e);
-                return null;
-            });
+            Client.RegisterEventHandler(
+                dataUpdateEvent,
+                (e) =>
+                {
+                    updateEvents.Add(e);
+                    return null;
+                }
+            );
 
-            JsonElement serverMessage =
-                CreateRequestMessage("setChapterUSFM", CreateVerseRefNode(bookNum, chapterNum, verseNum), newValue);
+            JsonElement serverMessage = CreateRequestMessage(
+                "setChapterUSFM",
+                CreateVerseRefNode(bookNum, chapterNum, verseNum),
+                newValue
+            );
 
             Enum<RequestType> requestType = new(PdpDataRequest);
-            Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
+            Message result = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
+                .First();
 
-            VerifyResponse(result, null, requestType, requesterId, ParatextProjectStorageInterpreter.AllScriptureDataTypes);
+            VerifyResponse(
+                result,
+                null,
+                requestType,
+                requesterId,
+                ParatextProjectStorageInterpreter.AllScriptureDataTypes
+            );
 
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
-            Assert.That(updateEvents[0], Is.EqualTo(ParatextProjectStorageInterpreter.AllScriptureDataTypes));
+            Assert.That(
+                updateEvents[0],
+                Is.EqualTo(ParatextProjectStorageInterpreter.AllScriptureDataTypes)
+            );
 
             // Verify the new text was saved to disk
-            VerseRef reference = new(bookNum, chapterNum, verseNum, _scrText.Settings.Versification);
+            VerseRef reference =
+                new(bookNum, chapterNum, verseNum, _scrText.Settings.Versification);
             VerifyUsfmSame(_scrText.GetText(reference, false, false), expectedResult, _scrText, 1);
 
             // Verify getting the same reference gets the new data (make sure no caching problems)
-            JsonElement serverMessage2 =
-                CreateRequestMessage("getChapterUSFM", CreateVerseRefNode(bookNum, chapterNum, verseNum), newValue);
-            Message result2 = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage2)).First();
+            JsonElement serverMessage2 = CreateRequestMessage(
+                "getChapterUSFM",
+                CreateVerseRefNode(bookNum, chapterNum, verseNum),
+                newValue
+            );
+            Message result2 = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage2))
+                .First();
             VerifyResponseExceptContents(result2, null, requestType, requesterId);
             VerifyUsfmSame(((MessageResponse)result2).Contents, newValue, _scrText, 1);
         }
@@ -220,7 +367,9 @@ namespace TestParanextDataProvider.Projects
             JsonElement serverMessage = CreateRequestMessage("getExtensionData", scope);
 
             Enum<RequestType> requestType = new(PdpDataRequest);
-            Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
+            Message result = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
+                .First();
 
             VerifyResponse(result, "Extension data not found", requestType, requesterId, null);
         }
@@ -235,17 +384,24 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             JsonNode scope = CreateDataScope("myExtension", "myFile.txt");
-            JsonElement serverMessage =
-                CreateRequestMessage("setExtensionData", scope, CreateJsonString("Random file contents"));
+            JsonElement serverMessage = CreateRequestMessage(
+                "setExtensionData",
+                scope,
+                CreateJsonString("Random file contents")
+            );
 
             Enum<RequestType> requestType = new(PdpDataRequest);
-            Message result = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage)).First();
+            Message result = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
+                .First();
 
             VerifyResponse(result, null, requestType, requesterId, "ExtensionData");
 
             // Verify the data was updated by reading it right away
             JsonElement serverMessage2 = CreateRequestMessage("getExtensionData", scope);
-            Message result2 = Client.FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage2)).First();
+            Message result2 = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage2))
+                .First();
 
             VerifyResponse(result2, null, requestType, requesterId, "Random file contents");
         }
