@@ -7,7 +7,11 @@ import { IExtension } from '@extension-host/extension-types/extension.interface'
 import * as nodeFS from '@node/services/node-file-system.service';
 import { FILE_PROTOCOL, getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
-import { UnsubscriberAsync, getModuleSimilarApiMessage } from '@shared/utils/papi-util';
+import {
+  UnsubscriberAsync,
+  deserialize,
+  getModuleSimilarApiMessage,
+} from '@shared/utils/papi-util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import logger from '@shared/services/logger.service';
@@ -112,7 +116,7 @@ let availableExtensions: ExtensionInfo[];
 
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
-  const extensionManifest: ExtensionManifest = JSON.parse(extensionManifestJson);
+  const extensionManifest: ExtensionManifest = deserialize(extensionManifestJson);
   if (extensionManifest.name.includes('..'))
     throw new Error('Extension name must not include `..`!');
   // Replace ts with js so people can list their source code ts name but run the transpiled js
@@ -360,7 +364,7 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
       // Completely ignore extensions that do not have `main` at all as a hint to developers
       if (settled.value.main === undefined) {
         logger.error(
-          `Extension ${settled.value.name} failed to load. Must provide property \`main\` in \`manifest.json\`. If you do not have JavaScript code to run, provide \`"main": null\``,
+          `Extension ${settled.value.name} failed to load. Must provide property \`main\` in \`manifest.json\`. If you do not have JavaScript code to run, provide \`"main": ""\``,
         );
         return false;
       }
@@ -665,7 +669,7 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   };
 
   // Import the extensions and run their activate() functions
-  // Assert the type has been filtered for null.
+  // Assert the type has been filtered for undefined.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const extensionsActive = (
     await Promise.all(
@@ -674,11 +678,11 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
           logger.error(
             `Extension '${extensionWithCheck.extension.name}' threw while activating! ${e}`,
           );
-          return null;
+          return undefined;
         }),
       ),
     )
-  ).filter((activeExtension) => activeExtension !== null) as ActiveExtension[];
+  ).filter((activeExtension) => activeExtension !== undefined) as ActiveExtension[];
 
   return extensionsActive;
 }
@@ -755,8 +759,8 @@ async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<vo
     }
 
   // Save extensions that have JavaScript to run
-  // If main is null, having no JavaScript is intentional. Do not load this extension
-  availableExtensions = allExtensions.filter((extension) => extension.main !== null);
+  // If main is am empty string, having no JavaScript is intentional. Do not load this extension
+  availableExtensions = allExtensions.filter((extension) => extension.main);
 
   // Store their base URIs in the extension storage service
   const uriMap: Map<string, string> = new Map();

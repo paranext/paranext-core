@@ -4,8 +4,8 @@ import logger from '@shared/services/logger.service';
 export default class AsyncVariable<T> {
   private readonly variableName: string;
   private readonly promiseToValue: Promise<T>;
-  private resolver: ((value: T) => void) | null = null;
-  private rejecter: ((reason: string | undefined) => void) | null = null;
+  private resolver: ((value: T) => void) | undefined;
+  private rejecter: ((reason: string | undefined) => void) | undefined;
 
   /**
    * Creates an instance of the class
@@ -89,8 +89,8 @@ export default class AsyncVariable<T> {
 
   /** Prevent any further updates to this variable */
   private complete(): void {
-    this.resolver = null;
-    this.rejecter = null;
+    this.resolver = undefined;
+    this.rejecter = undefined;
     Object.freeze(this);
   }
 }

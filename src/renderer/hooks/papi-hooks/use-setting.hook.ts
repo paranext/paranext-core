@@ -6,7 +6,7 @@ import { SettingNames, SettingTypes } from 'papi-shared-types';
  * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes and gets
  * updated when the setting is changed by others.
  *
- * Setting the value to `null` is the equivalent of deleting the setting.
+ * Setting the value to `undefined` is the equivalent of deleting the setting.
  *
  * @param key The string id that is used to store the setting in local storage
  *
@@ -29,12 +29,12 @@ const useSetting = <SettingName extends SettingNames>(
 ): [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void] => {
   const [setting, setSettingInternal] = useState(() => {
     const initialSetting = settingsService.get(key);
-    return initialSetting !== null ? initialSetting : defaultState;
+    return initialSetting !== undefined ? initialSetting : defaultState;
   });
 
   useEffect(() => {
-    const updateSettingFromService = (newSetting: SettingTypes[SettingName] | null) => {
-      if (newSetting !== null) {
+    const updateSettingFromService = (newSetting: SettingTypes[SettingName] | undefined) => {
+      if (newSetting !== undefined) {
         setSettingInternal(newSetting);
       } else {
         setSettingInternal(defaultState);
@@ -54,9 +54,9 @@ const useSetting = <SettingName extends SettingNames>(
   }, [key, defaultState]);
 
   const setSetting = useCallback(
-    (newSetting: SettingTypes[SettingName] | null) => {
+    (newSetting: SettingTypes[SettingName] | undefined) => {
       settingsService.set(key, newSetting);
-      setSettingInternal(newSetting !== null ? newSetting : defaultState);
+      setSettingInternal(newSetting !== undefined ? newSetting : defaultState);
     },
     [key, defaultState],
   );

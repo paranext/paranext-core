@@ -526,13 +526,13 @@ declare module 'shared/utils/util' {
    *
    * @param fn The function to run
    * @param maxWaitTimeInMS The maximum amount of time to wait for the function to resolve
-   * @returns Promise that resolves to the resolved value of the function or null if it ran longer
-   *   than the specified wait time
+   * @returns Promise that resolves to the resolved value of the function or undefined if it ran
+   *   longer than the specified wait time
    */
   export function waitForDuration<TResult>(
     fn: () => Promise<TResult>,
     maxWaitTimeInMS: number,
-  ): Promise<Awaited<TResult> | null>;
+  ): Promise<Awaited<TResult> | undefined>;
   /**
    * Get all functions on an object and its prototype chain (so we don't miss any class methods or any
    * object methods). Note that the functions on the final item in the prototype chain (i.e., Object)
@@ -657,13 +657,60 @@ declare module 'shared/utils/papi-util' {
    */
   export function deepEqual(a: unknown, b: unknown): boolean;
   /**
-   * Check to see if the value is `JSON.stringify` serializable without losing information
+   * Converts a JavaScript value to a JSON string, changing `null` and `undefined` values to a moniker
+   * that deserializes to `undefined`.
+   *
+   * WARNING: `null` and `undefined` values are treated as the same thing by this function and will be
+   * dropped when passed to {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will
+   * become `{ a: 1 }` after passing through {@link serialize} then {@link deserialize}. If you are
+   * passing around user data that needs to retain `null` and/or `undefined` values, you should wrap
+   * them yourself in a string before using this function. Alternatively, you can write your own
+   * replacer that will preserve `null` and `undefined` values in a way that a custom reviver will
+   * understand when deserializing.
+   *
+   * @param value A JavaScript value, usually an object or array, to be converted.
+   * @param replacer A function that transforms the results. Note that all `null` and `undefined`
+   *   values returned by the replacer will be further transformed into a moniker that deserializes
+   *   into `undefined`.
+   * @param space Adds indentation, white space, and line break characters to the return-value JSON
+   *   text to make it easier to read. See the `space` parameter of `JSON.stringify` for more
+   *   details.
+   */
+  export function serialize(
+    value: unknown,
+    replacer?: (this: unknown, key: string, value: unknown) => unknown,
+    space?: string | number,
+  ): string;
+  /**
+   * Converts a JSON string into a value.
+   *
+   * WARNING: `null` and `undefined` values that were serialized by {@link serialize} will both be made
+   * into `undefined` values by this function. If those values are properties of objects, those
+   * properties will simply be dropped. For example, `{ a: 1, b: undefined, c: null }` will become `{
+   * a: 1 }` after passing through {@link serialize} then {@link deserialize}. If you are passing around
+   * user data that needs to retain `null` and/or `undefined` values, you should wrap them yourself in
+   * a string before using this function. Alternatively, you can write your own reviver that will
+   * preserve `null` and `undefined` values in a way that a custom replacer will encode when
+   * serializing.
+   *
+   * @param text A valid JSON string.
+   * @param reviver A function that transforms the results. This function is called for each member of
+   *   the object. If a member contains nested objects, the nested objects are transformed before the
+   *   parent object is.
+   */
+  export function deserialize(
+    value: string,
+    reviver?: (this: unknown, key: string, value: unknown) => unknown,
+  ): any;
+  /**
+   * Check to see if the value is serializable without losing information
    *
    * @param value Value to test
    * @returns True if serializable; false otherwise
    *
-   *   Note: the value `undefined` is not serializable as `JSON.parse` throws on it. `null` is
-   *   serializable. However, `undefined` or `null` on properties of objects is serializable.
+   *   Note: the values `undefined` and `null` are serializable (on their own or in an array), but
+   *   `undefined` and `null` properties of objects are dropped when serializing/deserializing. That
+   *   means `undefined` and `null` properties on a value passed in will cause it to fail.
    *
    *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
    *   Please only use this if you need to
@@ -981,7 +1028,7 @@ declare module 'shared/data/network-connector.model' {
      * unregister all requests on that client so the reconnecting client can register its request
      * handlers again.
      */
-    reconnectingClientGuid?: string | null;
+    reconnectingClientGuid?: string;
   };
   /** Request to do something and to respond */
   export type WebSocketRequest<TParam = unknown> = {
@@ -2379,7 +2426,7 @@ declare module 'papi-shared-types' {
   type CommandNames = keyof CommandHandlers;
   interface SettingTypes {
     'platform.verseRef': ScriptureReference;
-    placeholder: null;
+    placeholder: undefined;
   }
   type SettingNames = keyof SettingTypes;
   /** This is just a simple example so we have more than one. It's not intended to be real. */
@@ -3160,27 +3207,26 @@ declare module 'shared/services/project-data-provider.service' {
 declare module 'shared/services/settings.service' {
   import { Unsubscriber } from 'shared/utils/papi-util';
   import { SettingTypes } from 'papi-shared-types';
-  type Nullable<T> = T | null;
   /**
    * Retrieves the value of the specified setting
    *
    * @param key The string id of the setting for which the value is being retrieved
-   * @returns The value of the specified setting, parsed to an object. Returns `null` if setting is
-   *   not present or no value is available
+   * @returns The value of the specified setting, parsed to an object. Returns `undefined` if setting
+   *   is not present or no value is available
    */
   const getSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
-  ) => Nullable<SettingTypes[SettingName]>;
+  ) => SettingTypes[SettingName] | undefined;
   /**
    * Sets the value of the specified setting
    *
    * @param key The string id of the setting for which the value is being retrieved
-   * @param newSetting The value that is to be stored. Setting the new value to `null` is the
+   * @param newSetting The value that is to be stored. Setting the new value to `undefined` is the
    *   equivalent of deleting the setting
    */
   const setSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
-    newSetting: Nullable<SettingTypes[SettingName]>,
+    newSetting: SettingTypes[SettingName] | undefined,
   ) => void;
   /**
    * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
@@ -3192,7 +3238,7 @@ declare module 'shared/services/settings.service' {
    */
   const subscribeToSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
-    callback: (newSetting: Nullable<SettingTypes[SettingName]>) => void,
+    callback: (newSetting: SettingTypes[SettingName] | undefined) => void,
   ) => Unsubscriber;
   export interface SettingsService {
     get: typeof getSetting;
@@ -3272,7 +3318,7 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
      * @param data Data with which to resolve the request
      */
     submitDialog(data: TData): void;
-    /** Cancels the dialog request (resolves the response with `null`) and closes the dialog */
+    /** Cancels the dialog request (resolves the response with `undefined`) and closes the dialog */
     cancelDialog(): void;
     /**
      * Rejects the dialog request with the specified message and closes the dialog
@@ -3293,7 +3339,7 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
     resolveDialogRequest: resolve,
     rejectDialogRequest: reject,
   }: {
-    resolveDialogRequest: (id: string, data: unknown | null) => void;
+    resolveDialogRequest: (id: string, data: unknown | undefined) => void;
     rejectDialogRequest: (id: string, message: string) => void;
   }): void;
   /**
@@ -3397,22 +3443,19 @@ declare module 'shared/services/dialog.service-model' {
      * @type `TReturn` - The type of data the dialog responds with
      * @param dialogType The type of dialog to show the user
      * @param options Various options for configuring the dialog that shows
-     * @returns Returns the user's response or `null` if the user cancels
-     *
-     *   Note: canceling responds with `null` instead of `undefined` so that the dialog definition can
-     *   use `undefined` as a meaningful value if desired.
+     * @returns Returns the user's response or `undefined` if the user cancels
      */
     showDialog<DialogTabType extends DialogTabTypes>(
       dialogType: DialogTabType,
       options?: DialogTypes[DialogTabType]['options'],
-    ): Promise<DialogTypes[DialogTabType]['responseType'] | null>;
+    ): Promise<DialogTypes[DialogTabType]['responseType'] | undefined>;
     /**
      * Shows a select project dialog to the user and prompts the user to select a dialog
      *
      * @param options Various options for configuring the dialog that shows
-     * @returns Returns the user's selected project id or `null` if the user cancels
+     * @returns Returns the user's selected project id or `undefined` if the user cancels
      */
-    selectProject(options?: DialogOptions): Promise<string | null>;
+    selectProject(options?: DialogOptions): Promise<string | undefined>;
   }
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';
@@ -3427,9 +3470,9 @@ declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
    * Awaits a promise and returns a loading value while the promise is unresolved
    *
    * @param promiseFactoryCallback A function that returns the promise to await. If the promise
-   *   resolves to null, the value will not change. If this callback is undefined, the current value
-   *   will be returned (defaultValue unless it was previously changed and preserveValue is true), and
-   *   there will be no loading.
+   *   resolves to undefined, the value will not change. If this callback is undefined, the current
+   *   value will be returned (defaultValue unless it was previously changed and preserveValue is
+   *   true), and there will be no loading.
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
    *   every render
@@ -3447,7 +3490,7 @@ declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
    *   - `isLoading`: whether the promise is waiting to be resolved
    */
   const usePromise: <T>(
-    promiseFactoryCallback: (() => Promise<T | null>) | undefined,
+    promiseFactoryCallback: (() => Promise<T | undefined>) | undefined,
     defaultValue: T,
     preserveValue?: boolean,
   ) => [value: T, isLoading: boolean];
@@ -3718,7 +3761,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes and gets
    * updated when the setting is changed by others.
    *
-   * Setting the value to `null` is the equivalent of deleting the setting.
+   * Setting the value to `undefined` is the equivalent of deleting the setting.
    *
    * @param key The string id that is used to store the setting in local storage
    *
@@ -3884,8 +3927,8 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
    *
    * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
    * @type `TResponse` The type that the response can be. If you do not specify a `defaultResponse`,
-   *   this can be the dialog response type or `null`. If you specify a `defaultResponse`, this will
-   *   be just the dialog response type. Should be inferred by parameters.
+   *   this can be the dialog response type or `undefined`. If you specify a `defaultResponse`, this
+   *   will be just the dialog response type. Should be inferred by parameters.
    *
    *   - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse` then
    *       becomes that literal instead of being the dialog response type. You can type assert it to
@@ -3900,7 +3943,7 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
    *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
    *   updated every render
    * @param defaultResponse The starting value for the response. Once a response is received, this is
-   *   no longer used. Defaults to `null`
+   *   no longer used. Defaults to `undefined`
    * @returns `[response, showDialogCallback, errorMessage, isShowingDialog]`
    *
    *   - `response` - the response from the dialog or `defaultResponse` if a response has not been
@@ -3915,9 +3958,9 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
    */
   function useDialogCallback<
     DialogTabType extends DialogTabTypes,
-    TResponse extends DialogTypes[DialogTabType]['responseType'] | null =
+    TResponse extends DialogTypes[DialogTabType]['responseType'] | undefined =
       | DialogTypes[DialogTabType]['responseType']
-      | null,
+      | undefined,
   >(
     dialogType: DialogTabType,
     options?: DialogTypes[DialogTabType]['options'],
@@ -4780,9 +4823,9 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      * Path to the JavaScript file to run in the extension host. Relative to the extension's root
      * folder.
      *
-     * Must be specified. Can be `null` if the extension does not have any JavaScript to run.
+     * Must be specified. Can be an empty string if the extension does not have any JavaScript to run.
      */
-    main: string | null;
+    main: string;
     /**
      * Path to the TypeScript type declaration file that describes this extension and its interactions
      * on the PAPI. Relative to the extension's root folder.

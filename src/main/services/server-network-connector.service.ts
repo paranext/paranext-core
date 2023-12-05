@@ -13,7 +13,7 @@ import {
 } from '@shared/data/internal-connection.model';
 import INetworkConnector from '@shared/services/network-connector.interface';
 import logger from '@shared/services/logger.service';
-import { Unsubscriber } from '@shared/utils/papi-util';
+import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
 import {
   ClientConnect,
   InitClient,
@@ -265,7 +265,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * certain clientGuid as connecting clients will often supply old clientGuids.
    */
   private getClientSocketFromGuid = (
-    clientGuid: string | undefined | null,
+    clientGuid: string | undefined,
   ): WebSocketClient | undefined => {
     if (!this.webSocketServer) throw new Error('Trying to get client socket when not connected!');
     if (!clientGuid) return undefined;
@@ -312,7 +312,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
       );
     } else {
       // This message is for someone else. Send the message
-      this.getClientSocket(recipientId).webSocket.send(JSON.stringify(message));
+      this.getClientSocket(recipientId).webSocket.send(serialize(message));
     }
   };
 
@@ -327,7 +327,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
       ? // Assert our specific message type.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         (event.data as unknown as Message)
-      : JSON.parse(event.data.toString());
+      : deserialize(event.data.toString());
 
     // Make sure the client isn't impersonating another client
     // TODO: consider speeding up validation by passing in webSocket client id?

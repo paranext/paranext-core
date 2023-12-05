@@ -30,9 +30,9 @@ export type SnackbarProps = PropsWithChildren<{
   /**
    * The number of milliseconds to wait before automatically calling onClose()
    *
-   * @default null
+   * @default undefined
    */
-  autoHideDuration?: number | null;
+  autoHideDuration?: number;
 
   /** Additional css classes to help with unique styling of the snackbar, external */
   className?: string;
@@ -61,7 +61,7 @@ export type SnackbarProps = PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 function Snackbar({
-  autoHideDuration = null,
+  autoHideDuration = undefined,
   id,
   isOpen = false,
   className,
@@ -78,7 +78,7 @@ function Snackbar({
 
   return (
     <MuiSnackbar
-      autoHideDuration={autoHideDuration}
+      autoHideDuration={autoHideDuration ?? null}
       open={isOpen}
       onClose={onClose}
       anchorOrigin={anchorOrigin}

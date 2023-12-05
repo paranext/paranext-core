@@ -54,7 +54,7 @@ export type ClientConnect = {
    * unregister all requests on that client so the reconnecting client can register its request
    * handlers again.
    */
-  reconnectingClientGuid?: string | null;
+  reconnectingClientGuid?: string;
 };
 
 /** Request to do something and to respond */

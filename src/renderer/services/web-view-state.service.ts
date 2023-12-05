@@ -1,4 +1,4 @@
-import { isSerializable } from '@shared/utils/papi-util';
+import { deserialize, isSerializable, serialize } from '@shared/utils/papi-util';
 
 const WEBVIEW_STATE_KEY = 'web-view-state';
 const stateMap = new Map<string, Record<string, unknown>>();
@@ -11,7 +11,7 @@ function loadIfNeeded(): void {
   const serializedState = localStorage.getItem(WEBVIEW_STATE_KEY);
   if (!serializedState) return;
 
-  const entries: [[string, Record<string, unknown>]] = JSON.parse(serializedState);
+  const entries: [[string, Record<string, unknown>]] = deserialize(serializedState);
   entries.forEach(([key, value]) => {
     if (key && value) stateMap.set(key, value);
   });
@@ -21,7 +21,7 @@ function save(): void {
   // If no one looked anything up, don't overwrite anything
   if (idsLookedUp.size <= 0) return;
 
-  const stateToSave = JSON.stringify(Array.from(stateMap.entries()));
+  const stateToSave = serialize(Array.from(stateMap.entries()));
   localStorage.setItem(WEBVIEW_STATE_KEY, stateToSave);
 }
 
@@ -85,12 +85,12 @@ export function getWebViewStateById<T>(id: string, stateKey: string): T | undefi
  * @param id ID of the web view
  * @param stateKey Key for the associated state
  * @param stateValue Value of the state for the given key of the given web view - must work with
- *   JSON.stringify/parse
+ *   serialize/deserialize
  */
 export function setWebViewStateById<T>(id: string, stateKey: string, stateValue: T): void {
   if (!id || !stateKey) throw new Error('id and stateKey must be provided to set webview state');
   if (!isSerializable(stateValue))
-    throw new Error(`"${stateKey}" value cannot round trip with JSON.stringify and JSON.parse.`);
+    throw new Error(`"${stateKey}" value cannot round trip with serialize and deserialize.`);
 
   const state = getRecord(id);
   state[stateKey] = stateValue;

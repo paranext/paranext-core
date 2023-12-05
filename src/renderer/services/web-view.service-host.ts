@@ -5,7 +5,7 @@
  * for services in the renderer to call.
  */
 import cloneDeep from 'lodash/cloneDeep';
-import { Unsubscriber } from '@shared/utils/papi-util';
+import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
 import { isString, newGuid, newNonce } from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
@@ -494,7 +494,7 @@ async function loadLayout(layout?: LayoutBase): Promise<void> {
  */
 function getStorageValue<T>(key: string, defaultValue: T): T {
   const saved = localStorage.getItem(key);
-  const initial = saved ? JSON.parse(saved) : undefined;
+  const initial = saved ? deserialize(saved) : undefined;
   return initial || defaultValue;
 }
 
@@ -505,7 +505,7 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  */
 async function saveLayout(layout: LayoutBase): Promise<void> {
   const currentLayout = layout;
-  localStorage.setItem(DOCK_LAYOUT_KEY, JSON.stringify(currentLayout));
+  localStorage.setItem(DOCK_LAYOUT_KEY, serialize(currentLayout));
 }
 
 /**

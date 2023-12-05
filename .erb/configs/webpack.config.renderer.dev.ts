@@ -233,6 +233,8 @@ const configuration: webpack.Configuration = {
           childProcessInfo.process
             .on('close', (code: number) => {
               console.log(`${childProcessInfo.name} is closing!`);
+              // Null to interact with external API
+              // eslint-disable-next-line no-null/no-null
               childProcessInfo.process = null;
               // Close all other child processes and exit the main process
               childProcessInfos.forEach((otherProcessInfo, j) => {
