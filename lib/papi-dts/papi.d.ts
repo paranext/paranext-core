@@ -4827,7 +4827,7 @@ declare module '@papi/core' {
     ExtensionDataScope,
     MandatoryProjectDataType,
   } from 'shared/models/project-data-provider.model';
-  export { ProjectMetadata } from 'shared/models/project-metadata.model';
+  export type { ProjectMetadata } from 'shared/models/project-metadata.model';
   export type {
     GetWebViewOptions,
     SavedWebViewDefinition,
