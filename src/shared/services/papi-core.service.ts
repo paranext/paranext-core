@@ -23,13 +23,15 @@ export type {
   ExtensionDataScope,
   MandatoryProjectDataType,
 } from '@shared/models/project-data-provider.model';
-export type { Unsubscriber } from '@shared/utils/papi-util';
+export type { ProjectMetadata } from '@shared/models/project-metadata.model';
 export type {
   GetWebViewOptions,
+  SavedWebViewDefinition,
+  UseWebViewStateHook,
   WebViewContentType,
   WebViewDefinition,
   WebViewProps,
-  SavedWebViewDefinition,
 } from '@shared/models/web-view.model';
+export type { Unsubscriber } from '@shared/utils/papi-util';
 
 export type { IWebViewProvider } from '@shared/models/web-view-provider.model';
