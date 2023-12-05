@@ -9,10 +9,6 @@ jobs:
   publish-docs:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node_version: [18.x]
-
     steps:
       - name: Checkout git repo
         uses: actions/checkout@v3
@@ -20,7 +16,7 @@ jobs:
       - name: Install Node and NPM
         uses: actions/setup-node@v3
         with:
-          node-version: ${{ matrix.node_version }}
+          node-version: [18.x]
           cache: npm
 
       - name: Install and build
@@ -30,10 +26,10 @@ jobs:
 
       - name: Build documentation
         run: | # renaming the folders so that pages links at /{their name} instead of at /docs
-          cd ~/lib/papi-components
+          cd lib/papi-components
           npm run build:docs
           mv docs papi-components
-          cd ~/lib/papi-dts
+          cd ../papi-dts
           npm run build:docs
           mv docs papi-dts
 
