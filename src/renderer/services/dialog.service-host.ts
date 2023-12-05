@@ -1,7 +1,11 @@
 import { DialogData } from '@shared/models/dialog-options.model';
 import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service-model';
 import * as networkService from '@shared/services/network.service';
-import { aggregateUnsubscriberAsyncs, serializeRequestType } from '@shared/utils/papi-util';
+import {
+  aggregateUnsubscriberAsyncs,
+  serialize,
+  serializeRequestType,
+} from '@shared/utils/papi-util';
 import * as webViewService from '@renderer/services/web-view.service-host';
 import { newGuid } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
@@ -15,8 +19,8 @@ type DialogRequest<DialogTabType extends DialogTabTypes> = {
   id: string;
   resolve: (
     value:
-      | (DialogTypes[DialogTabType]['responseType'] | null)
-      | PromiseLike<DialogTypes[DialogTabType]['responseType'] | null>,
+      | (DialogTypes[DialogTabType]['responseType'] | undefined)
+      | PromiseLike<DialogTypes[DialogTabType]['responseType'] | undefined>,
   ) => void;
   reject: (reason?: unknown) => void;
 };
@@ -54,7 +58,7 @@ export function hasDialogRequest(id: string) {
  *
  * @param id The id of the dialog whose request to reject
  * @param data The data to resolve the request with. Either the user's response to the dialog or
- *   `null` if the user canceled
+ *   `undefined` if the user canceled
  * @param shouldCloseDialog Whether we should close the dialog in this function. Should probably
  *   only be `false` if the dialog is already being closed another way such as in
  *   `platform-dock-layout.component.tsx`. Defaults to true
@@ -62,7 +66,7 @@ export function hasDialogRequest(id: string) {
  */
 export function resolveDialogRequest<TReturn>(
   id: string,
-  data: TReturn | null,
+  data: TReturn | undefined,
   shouldCloseDialog = true,
 ) {
   const dialogRequest = dialogRequests.get(id);
@@ -81,13 +85,13 @@ export function resolveDialogRequest<TReturn>(
         const didClose = await webViewService.removeTab(id);
         if (!didClose)
           logger.error(
-            `DialogService error: dialog ${id} that was resolved with data ${JSON.stringify(
+            `DialogService error: dialog ${id} that was resolved with data ${serialize(
               data,
             )} was not found in the dock layout in order to close. Please investigate`,
           );
       } catch (e) {
         logger.error(
-          `DialogService error: dialog ${id} that was resolved with data ${JSON.stringify(
+          `DialogService error: dialog ${id} that was resolved with data ${serialize(
             data,
           )} did not successfully close! Please investigate. Error: ${e}`,
         );
@@ -98,7 +102,7 @@ export function resolveDialogRequest<TReturn>(
   // If we didn't find the request, throw
   if (!dialogRequest)
     throw new Error(
-      `DialogService error: request ${id} not found to resolve. data: ${JSON.stringify(data)}`,
+      `DialogService error: request ${id} not found to resolve. data: ${serialize(data)}`,
     );
 }
 
@@ -143,7 +147,7 @@ export function rejectDialogRequest(id: string, message: string) {
 async function showDialog<DialogTabType extends DialogTabTypes>(
   dialogType: DialogTabType,
   options?: DialogTypes[DialogTabType]['options'],
-): Promise<DialogTypes[DialogTabType]['responseType'] | null> {
+): Promise<DialogTypes[DialogTabType]['responseType'] | undefined> {
   await initialize();
 
   // Set up a DialogRequest
@@ -153,7 +157,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 
   let dialogRequest: DialogRequest<DialogTabType>;
 
-  const dialogPromise = new Promise<DialogTypes[DialogTabType]['responseType'] | null>(
+  const dialogPromise = new Promise<DialogTypes[DialogTabType]['responseType'] | undefined>(
     (resolve, reject) => {
       dialogRequest = {
         id: dialogId,
@@ -195,7 +199,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 // on the dialogService - see `dialog.service-model.ts` for JSDoc
 async function selectProject(
   options?: DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['options'],
-): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType'] | null> {
+): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType'] | undefined> {
   return showDialog(SELECT_PROJECT_DIALOG.tabType, options);
 }
 

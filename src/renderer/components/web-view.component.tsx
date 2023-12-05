@@ -15,6 +15,7 @@ import {
   WEBVIEW_IFRAME_SRCDOC_SANDBOX,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
+import { serialize } from '@shared/utils/papi-util';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -32,7 +33,7 @@ export default function WebView({
 }: WebViewTabProps) {
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const iframeRef = useRef<HTMLIFrameElement>(null!);
+  const iframeRef = useRef<HTMLIFrameElement>(undefined!);
 
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
   const shouldUseSrc = contentType === WebViewContentType.URL;
@@ -121,7 +122,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
           await retrieveWebViewContent(data);
         } catch (e) {
           logger.error(
-            `web-view.component failed to retrieve web view content for ${JSON.stringify(
+            `web-view.component failed to retrieve web view content for ${serialize(
               savedTabInfo,
             )}: ${e}`,
           );

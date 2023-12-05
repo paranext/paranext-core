@@ -12,9 +12,9 @@ export type ExtensionManifest = {
    * Path to the JavaScript file to run in the extension host. Relative to the extension's root
    * folder.
    *
-   * Must be specified. Can be `null` if the extension does not have any JavaScript to run.
+   * Must be specified. Can be an empty string if the extension does not have any JavaScript to run.
    */
-  main: string | null;
+  main: string;
   /**
    * Path to the TypeScript type declaration file that describes this extension and its interactions
    * on the PAPI. Relative to the extension's root folder.

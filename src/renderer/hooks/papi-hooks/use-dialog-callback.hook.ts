@@ -13,8 +13,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *
  * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
  * @type `TResponse` The type that the response can be. If you do not specify a `defaultResponse`,
- *   this can be the dialog response type or `null`. If you specify a `defaultResponse`, this will
- *   be just the dialog response type. Should be inferred by parameters.
+ *   this can be the dialog response type or `undefined`. If you specify a `defaultResponse`, this
+ *   will be just the dialog response type. Should be inferred by parameters.
  *
  *   - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse` then
  *       becomes that literal instead of being the dialog response type. You can type assert it to
@@ -29,7 +29,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
  *   updated every render
  * @param defaultResponse The starting value for the response. Once a response is received, this is
- *   no longer used. Defaults to `null`
+ *   no longer used. Defaults to `undefined`
  * @returns `[response, showDialogCallback, errorMessage, isShowingDialog]`
  *
  *   - `response` - the response from the dialog or `defaultResponse` if a response has not been
@@ -44,17 +44,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  */
 function useDialogCallback<
   DialogTabType extends DialogTabTypes,
-  TResponse extends DialogTypes[DialogTabType]['responseType'] | null =
+  TResponse extends DialogTypes[DialogTabType]['responseType'] | undefined =
     | DialogTypes[DialogTabType]['responseType']
-    | null,
+    | undefined,
 >(
   dialogType: DialogTabType,
   options?: DialogTypes[DialogTabType]['options'],
-  // Since `defaultResponse` could be unspecified which is equivalent to `null`, we need to
-  // type assert to tell TS that `null` will be part of `TResponse` if `defaultResponse` is not
+  // Since `defaultResponse` could be unspecified which is equivalent to `undefined`, we need to
+  // type assert to tell TS that `undefined` will be part of `TResponse` if `defaultResponse` is not
   // specified but is not otherwise
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  defaultResponse: TResponse = null as TResponse,
+  defaultResponse: TResponse = undefined as TResponse,
 ): [TResponse, () => Promise<void>, string | undefined, boolean] {
   // Keep track of whether we're mounted so we don't run stuff after unmount
   const mounted = useRef<boolean>(false);
@@ -76,12 +76,11 @@ function useDialogCallback<
         // Looks like we need to type assert here because it can't tell this is a TResponse. It can
         // just tell that it is the dialog response type, which does not include undefined
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const dialogResponse = (await dialogService.showDialog(
-          dialogType,
-          options,
-        )) as TResponse | null;
+        const dialogResponse = (await dialogService.showDialog(dialogType, options)) as
+          | TResponse
+          | undefined;
         if (mounted.current) {
-          if (dialogResponse !== null)
+          if (dialogResponse !== undefined)
             // For now, let's only set the response value if the user didn't cancel. Maybe we can
             // expose an option for configuring this hook later if people want to reset to
             // `defaultResponse` on canceling the dialog

@@ -58,7 +58,7 @@ declare module 'papi-shared-types' {
     // With only one key in this interface, `papi.d.ts` was baking in the literal string when
     // `SettingNames` was being used. Adding a placeholder key makes TypeScript generate `papi.d.ts`
     // correctly. When we add another setting, we can remove this placeholder.
-    placeholder: null;
+    placeholder: undefined;
   }
 
   export type SettingNames = keyof SettingTypes;

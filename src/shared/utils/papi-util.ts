@@ -74,6 +74,8 @@ export const createSafeRegisterFn = <TParam extends Array<unknown>>(
 
 // #endregion
 
+// #region Request/Response types
+
 /**
  * Type of object passed to a complex request handler that provides information about the request.
  * This type is used as the public-facing interface for requests
@@ -121,6 +123,10 @@ export enum RequestHandlerType {
   Complex = 'complex',
 }
 
+// #endregion
+
+// #region Equality checking functions
+
 /**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
@@ -148,14 +154,92 @@ export function deepEqual(a: unknown, b: unknown) {
   return isEqualDeep(a, b);
 }
 
+// #endregion
+
+// #region Serialization, deserialization, encoding, and decoding functions
+
+// Something to stand for both "undefined" and "null"
+const NIL_MONIKER: string = '__NIL__';
+
 /**
- * Check to see if the value is `JSON.stringify` serializable without losing information
+ * Converts a JavaScript value to a JSON string, changing `null` and `undefined` values to a moniker
+ * that deserializes to `undefined`.
+ *
+ * WARNING: `null` and `undefined` values are treated as the same thing by this function and will be
+ * dropped when passed to {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will
+ * become `{ a: 1 }` after passing through {@link serialize} then {@link deserialize}. If you are
+ * passing around user data that needs to retain `null` and/or `undefined` values, you should wrap
+ * them yourself in a string before using this function. Alternatively, you can write your own
+ * replacer that will preserve `null` and `undefined` values in a way that a custom reviver will
+ * understand when deserializing.
+ *
+ * @param value A JavaScript value, usually an object or array, to be converted.
+ * @param replacer A function that transforms the results. Note that all `null` and `undefined`
+ *   values returned by the replacer will be further transformed into a moniker that deserializes
+ *   into `undefined`.
+ * @param space Adds indentation, white space, and line break characters to the return-value JSON
+ *   text to make it easier to read. See the `space` parameter of `JSON.stringify` for more
+ *   details.
+ */
+export function serialize(
+  value: unknown,
+  replacer?: (this: unknown, key: string, value: unknown) => unknown,
+  space?: string | number,
+): string {
+  const undefinedReplacer = (replacerKey: string, replacerValue: unknown) => {
+    let newValue = replacerValue;
+    if (replacer) newValue = replacer(replacerKey, newValue);
+    // If a "null" slips into the data somehow, we need to deal with it
+    // eslint-disable-next-line no-null/no-null
+    if (newValue === undefined || newValue === null) newValue = NIL_MONIKER;
+    return newValue;
+  };
+  return JSON.stringify(value, undefinedReplacer, space);
+}
+
+/**
+ * Converts a JSON string into a value.
+ *
+ * WARNING: `null` and `undefined` values that were serialized by {@link serialize} will both be made
+ * into `undefined` values by this function. If those values are properties of objects, those
+ * properties will simply be dropped. For example, `{ a: 1, b: undefined, c: null }` will become `{
+ * a: 1 }` after passing through {@link serialize} then {@link deserialize}. If you are passing around
+ * user data that needs to retain `null` and/or `undefined` values, you should wrap them yourself in
+ * a string before using this function. Alternatively, you can write your own reviver that will
+ * preserve `null` and `undefined` values in a way that a custom replacer will encode when
+ * serializing.
+ *
+ * @param text A valid JSON string.
+ * @param reviver A function that transforms the results. This function is called for each member of
+ *   the object. If a member contains nested objects, the nested objects are transformed before the
+ *   parent object is.
+ */
+export function deserialize(
+  value: string,
+  reviver?: (this: unknown, key: string, value: unknown) => unknown,
+  // Need to use `any` instead of `unknown` here to match the signature of JSON.parse
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  const undefinedReviver = (replacerKey: string, replacerValue: unknown) => {
+    let newValue = replacerValue;
+    // If someone passes through a value with "null", we need to handle it
+    // eslint-disable-next-line no-null/no-null
+    if (newValue === NIL_MONIKER || newValue === null) newValue = undefined;
+    if (reviver) newValue = reviver(replacerKey, newValue);
+    return newValue;
+  };
+  return JSON.parse(value, undefinedReviver);
+}
+
+/**
+ * Check to see if the value is serializable without losing information
  *
  * @param value Value to test
  * @returns True if serializable; false otherwise
  *
- *   Note: the value `undefined` is not serializable as `JSON.parse` throws on it. `null` is
- *   serializable. However, `undefined` or `null` on properties of objects is serializable.
+ *   Note: the values `undefined` and `null` are serializable (on their own or in an array), but
+ *   `undefined` and `null` properties of objects are dropped when serializing/deserializing. That
+ *   means `undefined` and `null` properties on a value passed in will cause it to fail.
  *
  *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
  *   Please only use this if you need to
@@ -171,7 +255,8 @@ export function deepEqual(a: unknown, b: unknown) {
  */
 export function isSerializable(value: unknown): boolean {
   try {
-    return JSON.stringify(value) === JSON.stringify(JSON.parse(JSON.stringify(value)));
+    const serializedValue = serialize(value);
+    return serializedValue === serialize(deserialize(serializedValue));
   } catch (e) {
     return false;
   }
@@ -238,6 +323,10 @@ export const htmlEncode = (str: string): string =>
     .replace(/'/g, '&#x27;')
     .replace(/\//g, '&#x2F;');
 
+// #endregion
+
+// #region Module loading
+
 /**
  * Modules that someone might try to require in their extensions that we have similar apis for. When
  * an extension requires these modules, an error throws that lets them know about our similar api.
@@ -272,6 +361,8 @@ export function getModuleSimilarApiMessage(moduleName: string) {
     similarApiName ? ` using ${similarApiName} or` : ''
   } bundling the module into your code with a build tool like webpack`;
 }
+
+// #endregion
 
 /**
  * JSDOC SOURCE papiUtil

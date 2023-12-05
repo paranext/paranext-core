@@ -1,6 +1,4 @@
 import { createContext } from 'react';
 
-// This should always be defined, so non-null the value
-// eslint-disable-next-line no-type-assertion/no-type-assertion
-const TestContext = createContext<string>(undefined!);
+const TestContext = createContext<string>('');
 export default TestContext;

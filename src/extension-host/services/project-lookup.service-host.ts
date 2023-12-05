@@ -8,6 +8,7 @@ import { joinUriPaths } from '@node/utils/util';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import * as nodeFS from '@node/services/node-file-system.service';
+import { deserialize } from '@shared/utils/papi-util';
 
 /** This points to the directory where all of the project subdirectories live */
 const PROJECTS_ROOT_URI = joinUriPaths('file://', os.homedir(), '.platform.bible', 'projects');
@@ -26,7 +27,7 @@ async function getProjectUris(): Promise<string[]> {
  * expect
  */
 function convertToMetadata(jsonString: string): ProjectMetadata {
-  const md: ProjectMetadata = JSON.parse(jsonString);
+  const md: ProjectMetadata = deserialize(jsonString);
   if ('id' in md && 'name' in md && 'storageType' in md && 'projectType' in md) {
     return md;
   }
@@ -62,7 +63,7 @@ async function getProjectMetadata(projectId: string): Promise<ProjectMetadata> {
 
   const metadataPath = joinUriPaths(matches[0], METADATA_FILE);
   const metadataString = await nodeFS.readFileText(metadataPath);
-  return convertToMetadata(metadataString, projectId);
+  return convertToMetadata(metadataString);
 }
 
 // Map of project ID to 'meta.json' contents for that project
