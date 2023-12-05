@@ -759,7 +759,7 @@ async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<vo
     }
 
   // Save extensions that have JavaScript to run
-  // If main is am empty string, having no JavaScript is intentional. Do not load this extension
+  // If main is an empty string, having no JavaScript is intentional. Do not load this extension
   availableExtensions = allExtensions.filter((extension) => extension.main);
 
   // Store their base URIs in the extension storage service

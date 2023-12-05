@@ -158,9 +158,6 @@ export function deepEqual(a: unknown, b: unknown) {
 
 // #region Serialization, deserialization, encoding, and decoding functions
 
-// Something to stand for both "undefined" and "null"
-const NIL_MONIKER: string = '__NIL__';
-
 /**
  * Converts a JavaScript value to a JSON string, changing `null` and `undefined` values to a moniker
  * that deserializes to `undefined`.
@@ -189,9 +186,9 @@ export function serialize(
   const undefinedReplacer = (replacerKey: string, replacerValue: unknown) => {
     let newValue = replacerValue;
     if (replacer) newValue = replacer(replacerKey, newValue);
-    // If a "null" slips into the data somehow, we need to deal with it
+    // All `undefined` values become `null` on the way from JS objects into JSON strings
     // eslint-disable-next-line no-null/no-null
-    if (newValue === undefined || newValue === null) newValue = NIL_MONIKER;
+    if (newValue === undefined) newValue = null;
     return newValue;
   };
   return JSON.stringify(value, undefinedReplacer, space);
@@ -222,9 +219,9 @@ export function deserialize(
 ): any {
   const undefinedReviver = (replacerKey: string, replacerValue: unknown) => {
     let newValue = replacerValue;
-    // If someone passes through a value with "null", we need to handle it
+    // All `null` values become `undefined` on the way from JSON strings into JS objects
     // eslint-disable-next-line no-null/no-null
-    if (newValue === NIL_MONIKER || newValue === null) newValue = undefined;
+    if (newValue === null) newValue = undefined;
     if (reviver) newValue = reviver(replacerKey, newValue);
     return newValue;
   };

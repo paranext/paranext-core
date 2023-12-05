@@ -5,7 +5,7 @@ import { SettingNames, SettingTypes } from 'papi-shared-types';
 /** All message subscriptions - emitters that emit an event each time a setting is updated */
 const onDidUpdateSettingEmitters = new Map<
   SettingNames,
-  PapiEventEmitter<SettingTypes | undefined>
+  PapiEventEmitter<SettingTypes[SettingNames] | undefined>
 >();
 
 /**
@@ -68,7 +68,7 @@ const subscribeToSetting = <SettingName extends SettingNames>(
       key,
       // Assert type of the general SettingTypes of the emitter.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      emitter as unknown as PapiEventEmitter<SettingTypes | undefined>,
+      emitter as PapiEventEmitter<SettingTypes[SettingNames] | undefined>,
     );
   }
   return emitter.subscribe(callback);

@@ -19,7 +19,7 @@ class Stuff {
   }
 }
 
-describe('PAPI Utils', () => {
+describe('PAPI Util Functions: serializeRequestType and deserializeRequestType', () => {
   it('can serialize and deserialize request types', () => {
     const CATEGORY = 'myCategory';
     const DIRECTIVE = 'myDirective';
@@ -72,7 +72,7 @@ describe('PAPI Utils', () => {
   });
 });
 
-describe('deepEqual', () => {
+describe('PAPI Util Function: deepEqual', () => {
   it('is true for empty objects', () => {
     expect(deepEqual({}, {})).toBeTruthy();
   });
@@ -207,8 +207,8 @@ describe('deepEqual', () => {
   });
 });
 
-describe('serialize and deserialize', () => {
-  it('handles values without null or undefined the same as JSON.stringify/parse', () => {
+describe('PAPI Util Functions: serialize and deserialize', () => {
+  it('handle values without null or undefined the same as JSON.stringify/parse', () => {
     const testObject = { foo: 'fooValue', bar: 3, baz: { bazInternal: 'LOL' } };
     const serializedTestObject = JSON.stringify(testObject);
     expect(serialize(testObject)).toEqual(JSON.stringify(testObject));
@@ -222,21 +222,20 @@ describe('serialize and deserialize', () => {
     expect(serialize([3, 5, 7])).toEqual(JSON.stringify([3, 5, 7]));
     expect(deepEqual(deserialize('[3,5,7]'), JSON.parse('[3,5,7]'))).toBeTruthy();
   });
-  it('changes null and undefined to a moniker and removes them upon deserialization', () => {
-    const moniker = '__NIL__';
+  it('exclusively use null in JSON strings and exclusively uses undefined in JS objects', () => {
     const testObject = { foo: 'fooValue', bar: undefined, baz: null };
     expect(serialize(testObject)).toEqual(
-      JSON.stringify({ foo: 'fooValue', bar: moniker, baz: moniker }),
+      JSON.stringify({ foo: 'fooValue', bar: null, baz: null }),
     );
     expect(deepEqual({ foo: 'fooValue' }, deserialize(serialize(testObject)))).toBeTruthy();
     expect(deepEqual({ foo: 'fooValue' }, deserialize(JSON.stringify(testObject)))).toBeTruthy();
   });
-  it('handles deeply nested null/undefined values', () => {
+  it('handle deeply nested null/undefined values', () => {
     const deepNesting = { a: { b: { c: { d: { e: 'something', undef: undefined, nil: null } } } } };
     const roundTrip = { a: { b: { c: { d: { e: 'something' } } } } };
     expect(deepEqual(roundTrip, deserialize(serialize(deepNesting)))).toBeTruthy();
   });
-  it('works with custom replacers/revivers', () => {
+  it('work with custom replacers/revivers', () => {
     const testObject = { a: 5 };
     const replacer = (_key: string, value: unknown) => {
       if (value === 5) return 10;
@@ -253,7 +252,7 @@ describe('serialize and deserialize', () => {
     ).toBeTruthy();
     expect(deserialize(serialize({ lazarus: undefined }), reviver).lazarus).toEqual('resurrected');
   });
-  it('turns null values in an array into undefined when deserializing', () => {
+  it('turn null values in an array into undefined when deserializing', () => {
     // Type asserting after deserializing
     // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
     const transformedArray = deserialize(serialize([1, undefined, null, 4])) as Array<any>;
@@ -264,7 +263,7 @@ describe('serialize and deserialize', () => {
   });
 });
 
-describe('isSerializable', () => {
+describe('PAPI Util Function: isSerializable', () => {
   it('successfully determines empty object is serializable', () => {
     const objectToSerialize = {};
     expect(isSerializable(objectToSerialize)).toBeTruthy();

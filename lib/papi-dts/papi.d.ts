@@ -3469,10 +3469,9 @@ declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
   /**
    * Awaits a promise and returns a loading value while the promise is unresolved
    *
-   * @param promiseFactoryCallback A function that returns the promise to await. If the promise
-   *   resolves to undefined, the value will not change. If this callback is undefined, the current
-   *   value will be returned (defaultValue unless it was previously changed and preserveValue is
-   *   true), and there will be no loading.
+   * @param promiseFactoryCallback A function that returns the promise to await. If this callback is
+   *   undefined, the current value will be returned (defaultValue unless it was previously changed
+   *   and preserveValue is true), and there will be no loading.
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
    *   every render
@@ -3490,7 +3489,7 @@ declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
    *   - `isLoading`: whether the promise is waiting to be resolved
    */
   const usePromise: <T>(
-    promiseFactoryCallback: (() => Promise<T | undefined>) | undefined,
+    promiseFactoryCallback: (() => Promise<T>) | undefined,
     defaultValue: T,
     preserveValue?: boolean,
   ) => [value: T, isLoading: boolean];

@@ -583,9 +583,9 @@ function updateWebViewDefinition(
 // #endregion
 
 export default function PlatformDockLayout() {
-  // This ref will always be defined, and `undefined` doesn't work with `useRef` the same as `null`
-  // eslint-disable-next-line no-type-assertion/no-type-assertion, no-null/no-null
-  const dockLayoutRef = useRef<DockLayout>(null!);
+  // This ref will always be defined
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const dockLayoutRef = useRef<DockLayout>(undefined!);
 
   /**
    * OnLayoutChange function from `web-view.service.ts` once this docklayout is registered.
