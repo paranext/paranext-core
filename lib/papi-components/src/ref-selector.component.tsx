@@ -29,6 +29,9 @@ function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
   };
 
   const onSelectBook = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
+    // Asserting because value is type unknown, value is type unknown because combobox props aren't precise enough yet
+    // Issue https://github.com/paranext/paranext-core/issues/560
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const bookNum: number = Canon.bookIdToNumber((value as BookNameOption).bookId);
     const newRef: ScriptureReference = { bookNum, chapterNum: 1, verseNum: 1 };
 
