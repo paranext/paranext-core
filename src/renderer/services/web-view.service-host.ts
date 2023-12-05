@@ -737,15 +737,9 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
  */
 export const getWebView = async (
   webViewType: WebViewType,
-  layout?: Layout,
-  options?: GetWebViewOptions,
+  layout: Layout = { type: 'tab' },
+  options: GetWebViewOptions = {},
 ): Promise<WebViewId | undefined> => {
-  // Parameter defaulting doesn't work with network objects, so do it first thing here
-  /* eslint-disable no-param-reassign */
-  if (!layout) layout = { type: 'tab' };
-  if (!options) options = {};
-  /* eslint-enable no-param-reassign */
-
   const optionsDefaulted = getWebViewOptionsDefaults(options);
   // ENHANCEMENT: If they aren't looking for an existingId, we could get the webview without
   // searching for an existing webview and send it to the renderer, skipping the part where we send
