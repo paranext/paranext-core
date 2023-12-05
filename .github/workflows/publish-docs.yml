@@ -38,4 +38,3 @@ jobs:
           branch: github-pages
           folder: |
             lib/papi-components/papi-components
-            lib/papi-dts/papi-dts
