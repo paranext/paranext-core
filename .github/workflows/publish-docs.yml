@@ -24,6 +24,11 @@ jobs:
           npm install
           npm run build
 
+      - name: Debug
+        run: |
+          pwd
+          ls -la
+
       - name: Build documentation
         run: | # renaming the folders so that pages links at /{their name} instead of at /docs
           cd lib/papi-components
