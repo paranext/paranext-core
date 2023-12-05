@@ -25,19 +25,12 @@ jobs:
           npm install
           npm run build
 
-      - name: Debug
-        run: |
-          pwd
-          ls -la
-
       - name: Build documentation
         run: | # renaming the folders so that pages links at /{their name} instead of at /docs
           cd lib/papi-components
-          npm run build:docs
-          mv docs papi-components
+          npx typedoc --out papi-components
           cd ../papi-dts
-          npm run build:docs
-          mv docs papi-dts
+          npx typedoc --out papi-dts
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@4.1.4
