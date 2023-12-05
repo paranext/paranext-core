@@ -39,13 +39,15 @@ const configBase: webpack.Configuration = {
   // Modules that Paranext supplies to extensions https://webpack.js.org/configuration/externals/
   // All other dependencies must be bundled into the extension
   externals: [
+    'papi-shared-types',
     'react',
     'react/jsx-runtime',
     'react-dom',
     'react-dom/client',
-    'papi-frontend',
-    'papi-frontend/react',
-    'papi-backend',
+    '@papi/backend',
+    '@papi/core',
+    '@papi/frontend',
+    '@papi/frontend/react',
     '@sillsdev/scripture',
   ],
   module: {

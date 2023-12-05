@@ -2819,6 +2819,94 @@ declare module 'shared/services/web-view.service' {
   const webViewService: WebViewServiceType;
   export default webViewService;
 }
+declare module 'shared/models/web-view-provider.model' {
+  import {
+    GetWebViewOptions,
+    WebViewDefinition,
+    SavedWebViewDefinition,
+  } from 'shared/models/web-view.model';
+  import {
+    DisposableNetworkObject,
+    NetworkObject,
+    NetworkableObject,
+  } from 'shared/models/network-object.model';
+  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
+  export interface IWebViewProvider extends NetworkableObject {
+    /**
+     * @param savedWebView Filled out if an existing webview is being called for (matched by ID). Just
+     *   ID if this is a new request or if the web view with the existing ID was not found
+     * @param getWebViewOptions
+     */
+    getWebView(
+      savedWebView: SavedWebViewDefinition,
+      getWebViewOptions: GetWebViewOptions,
+    ): Promise<WebViewDefinition | undefined>;
+  }
+  export interface WebViewProvider
+    extends NetworkObject<NetworkableObject>,
+      CanHaveOnDidDispose<IWebViewProvider> {}
+  export interface DisposableWebViewProvider
+    extends DisposableNetworkObject<NetworkableObject>,
+      Omit<WebViewProvider, 'dispose'> {}
+}
+declare module 'shared/services/web-view-provider.service' {
+  /**
+   * Handles registering web view providers and serving web views around the papi. Exposed on the
+   * papi.
+   */
+  import {
+    DisposableWebViewProvider,
+    IWebViewProvider,
+    WebViewProvider,
+  } from 'shared/models/web-view-provider.model';
+  /** Sets up the service. Only runs once and always returns the same promise after that */
+  const initialize: () => Promise<void>;
+  /**
+   * Indicate if we are aware of an existing web view provider with the given type. If a web view
+   * provider with the given type is somewhere else on the network, this function won't tell you about
+   * it unless something else in the existing process is subscribed to it.
+   *
+   * @param webViewType Type of webView to check for
+   */
+  function hasKnown(webViewType: string): boolean;
+  /**
+   * Register a web view provider to serve webViews for a specified type of webViews
+   *
+   * @param webViewType Type of web view to provide
+   * @param webViewProvider Object to register as a webView provider including control over disposing
+   *   of it.
+   *
+   *   WARNING: setting a webView provider mutates the provided object.
+   * @returns `webViewProvider` modified to be a network object
+   */
+  function register(
+    webViewType: string,
+    webViewProvider: IWebViewProvider,
+  ): Promise<DisposableWebViewProvider>;
+  /**
+   * Get a web view provider that has previously been set up
+   *
+   * @param webViewType Type of webview provider to get
+   * @returns Web view provider with the given name if one exists, undefined otherwise
+   */
+  function get(webViewType: string): Promise<WebViewProvider | undefined>;
+  export interface WebViewProviderService {
+    initialize: typeof initialize;
+    hasKnown: typeof hasKnown;
+    register: typeof register;
+    get: typeof get;
+  }
+  export interface PapiWebViewProviderService {
+    register: typeof register;
+  }
+  const webViewProviderService: WebViewProviderService;
+  /**
+   *
+   * Interface for registering webView providers
+   */
+  export const papiWebViewProviderService: PapiWebViewProviderService;
+  export default webViewProviderService;
+}
 declare module 'shared/services/internet.service' {
   /** Our shim over fetch. Allows us to control internet access. */
   const papiFetch: typeof fetch;
@@ -3008,6 +3096,47 @@ declare module 'shared/services/data-provider.service' {
   const dataProviderService: DataProviderService;
   export default dataProviderService;
 }
+declare module 'shared/models/project-data-provider-engine.model' {
+  import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
+  import type IDataProvider from 'shared/models/data-provider.interface';
+  import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
+  /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
+  export type ProjectDataProviderEngineTypes = {
+    [ProjectType in ProjectTypes]: IDataProviderEngine<ProjectDataTypes[ProjectType]>;
+  };
+  /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
+  export type ProjectDataProvider = {
+    [ProjectType in ProjectTypes]: IDataProvider<ProjectDataTypes[ProjectType]>;
+  };
+  export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
+    createProjectDataProviderEngine(
+      projectId: string,
+      projectStorageInterpreterId: string,
+    ): ProjectDataProviderEngineTypes[ProjectType];
+  }
+}
+declare module 'shared/utils/unsubscriber-async-list' {
+  import { Dispose } from 'shared/models/disposal.model';
+  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
+  /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
+  export default class UnsubscriberAsyncList {
+    private name;
+    readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
+    constructor(name?: string);
+    /**
+     * Add unsubscribers to the list. Note that duplicates are not added twice.
+     *
+     * @param unsubscribers - Objects that were returned from a registration process.
+     */
+    add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
+    /**
+     * Run all unsubscribers added to this list and then clear the list.
+     *
+     * @returns `true` if all unsubscribers succeeded, `false` otherwise.
+     */
+    runAllUnsubscribers(): Promise<boolean>;
+  }
+}
 declare module 'shared/models/project-metadata.model' {
   import { ProjectTypes } from 'papi-shared-types';
   /**
@@ -3055,47 +3184,6 @@ declare module 'shared/services/project-lookup.service' {
   import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
   const projectLookupService: ProjectLookupServiceType;
   export default projectLookupService;
-}
-declare module 'shared/models/project-data-provider-engine.model' {
-  import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
-  import type IDataProvider from 'shared/models/data-provider.interface';
-  import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
-  export type ProjectDataProviderEngineTypes = {
-    [ProjectType in ProjectTypes]: IDataProviderEngine<ProjectDataTypes[ProjectType]>;
-  };
-  /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
-  export type ProjectDataProvider = {
-    [ProjectType in ProjectTypes]: IDataProvider<ProjectDataTypes[ProjectType]>;
-  };
-  export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
-    createProjectDataProviderEngine(
-      projectId: string,
-      projectStorageInterpreterId: string,
-    ): ProjectDataProviderEngineTypes[ProjectType];
-  }
-}
-declare module 'shared/utils/unsubscriber-async-list' {
-  import { Dispose } from 'shared/models/disposal.model';
-  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
-  export default class UnsubscriberAsyncList {
-    private name;
-    readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
-    constructor(name?: string);
-    /**
-     * Add unsubscribers to the list. Note that duplicates are not added twice.
-     *
-     * @param unsubscribers - Objects that were returned from a registration process.
-     */
-    add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
-    /**
-     * Run all unsubscribers added to this list and then clear the list.
-     *
-     * @returns `true` if all unsubscribers succeeded, `false` otherwise.
-     */
-    runAllUnsubscribers(): Promise<boolean>;
-  }
 }
 declare module 'shared/services/project-data-provider.service' {
   import { ProjectTypes } from 'papi-shared-types';
@@ -3157,54 +3245,284 @@ declare module 'shared/services/project-data-provider.service' {
     get: typeof get;
   };
 }
-declare module 'shared/services/settings.service' {
-  import { Unsubscriber } from 'shared/utils/papi-util';
-  import { SettingTypes } from 'papi-shared-types';
-  type Nullable<T> = T | null;
+declare module 'shared/data/file-system.model' {
+  /** Types to use with file system operations */
   /**
-   * Retrieves the value of the specified setting
+   * Represents a path in file system or other. Has a scheme followed by :// followed by a relative
+   * path. If no scheme is provided, the app scheme is used. Available schemes are as follows:
    *
-   * @param key The string id of the setting for which the value is being retrieved
-   * @returns The value of the specified setting, parsed to an object. Returns `null` if setting is
-   *   not present or no value is available
+   * - `app://` - goes to the app's home directory and into `.platform.bible` (platform-dependent)
+   * - `cache://` - goes to the app's temporary file cache at `app://cache`
+   * - `data://` - goes to the app's data storage location at `app://data`
+   * - `resources://` - goes to the resources directory installed in the app
+   * - `file://` - an absolute file path from root
    */
-  const getSetting: <SettingName extends keyof SettingTypes>(
-    key: SettingName,
-  ) => Nullable<SettingTypes[SettingName]>;
+  export type Uri = string;
+}
+declare module 'node/utils/util' {
+  import { Uri } from 'shared/data/file-system.model';
+  export const FILE_PROTOCOL: string;
+  export const RESOURCES_PROTOCOL: string;
+  export function resolveHtmlPath(htmlFileName: string): string;
   /**
-   * Sets the value of the specified setting
+   * Gets the platform-specific user Platform.Bible folder for this application
    *
-   * @param key The string id of the setting for which the value is being retrieved
-   * @param newSetting The value that is to be stored. Setting the new value to `null` is the
-   *   equivalent of deleting the setting
+   * When running in development: `<repo_directory>/dev-appdata`
+   *
+   * When packaged: `<user_home_directory>/.platform.bible`
    */
-  const setSetting: <SettingName extends keyof SettingTypes>(
-    key: SettingName,
-    newSetting: Nullable<SettingTypes[SettingName]>,
-  ) => void;
+  export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
   /**
-   * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
-   * callback function is executed.
+   * Resolves the uri to a path
    *
-   * @param key The string id of the setting for which the value is being subscribed to
-   * @param callback The function that will be called whenever the specified setting is updated
-   * @returns Unsubscriber that should be called whenever the subscription should be deleted
+   * @param uri The uri to resolve
+   * @returns Real path to the uri supplied
    */
-  const subscribeToSetting: <SettingName extends keyof SettingTypes>(
-    key: SettingName,
-    callback: (newSetting: Nullable<SettingTypes[SettingName]>) => void,
-  ) => Unsubscriber;
-  export interface SettingsService {
-    get: typeof getSetting;
-    set: typeof setSetting;
-    subscribe: typeof subscribeToSetting;
+  export function getPathFromUri(uri: Uri): string;
+  /**
+   * Combines the uri passed in with the paths passed in to make one uri
+   *
+   * @param uri Uri to start from
+   * @param paths Paths to combine into the uri
+   * @returns One uri that combines the uri and the paths in left-to-right order
+   */
+  export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
+}
+declare module 'node/services/node-file-system.service' {
+  /** File system calls from Node */
+  import fs, { BigIntStats } from 'fs';
+  import { Uri } from 'shared/data/file-system.model';
+  /**
+   * Read a text file
+   *
+   * @param uri URI of file
+   * @returns Promise that resolves to the contents of the file
+   */
+  export function readFileText(uri: Uri): Promise<string>;
+  /**
+   * Read a binary file
+   *
+   * @param uri URI of file
+   * @returns Promise that resolves to the contents of the file
+   */
+  export function readFileBinary(uri: Uri): Promise<Buffer>;
+  /**
+   * Write data to a file
+   *
+   * @param uri URI of file
+   * @param fileContents String or Buffer to write into the file
+   * @returns Promise that resolves after writing the file
+   */
+  export function writeFile(uri: Uri, fileContents: string | Buffer): Promise<void>;
+  /**
+   * Copies a file from one location to another. Creates the path to the destination if it does not
+   * exist
+   *
+   * @param sourceUri The location of the file to copy
+   * @param destinationUri The uri to the file to create as a copy of the source file
+   * @param mode Bitwise modifiers that affect how the copy works. See
+   *   [`fsPromises.copyFile`](https://nodejs.org/api/fs.html#fspromisescopyfilesrc-dest-mode) for
+   *   more information
+   */
+  export function copyFile(
+    sourceUri: Uri,
+    destinationUri: Uri,
+    mode?: Parameters<typeof fs.promises.copyFile>[2],
+  ): Promise<void>;
+  /**
+   * Delete a file if it exists
+   *
+   * @param uri URI of file
+   * @returns Promise that resolves when the file is deleted or determined to not exist
+   */
+  export function deleteFile(uri: Uri): Promise<void>;
+  /**
+   * Get stats about the file or directory. Note that BigInts are used instead of ints to avoid.
+   * https://en.wikipedia.org/wiki/Year_2038_problem
+   *
+   * @param uri URI of file or directory
+   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if
+   *   file or directory exists, undefined if it doesn't
+   */
+  export function getStats(uri: Uri): Promise<BigIntStats | undefined>;
+  /**
+   * Set the last modified and accessed times for the file or directory
+   *
+   * @param uri URI of file or directory
+   * @returns Promise that resolves once the touch operation finishes
+   */
+  export function touch(uri: Uri, date: Date): Promise<void>;
+  /** Type of file system item in a directory */
+  export enum EntryType {
+    File = 'file',
+    Directory = 'directory',
+    Unknown = 'unknown',
+  }
+  /** All entries in a directory, mapped from entry type to array of uris for the entries */
+  export type DirectoryEntries = Readonly<{
+    [entryType in EntryType]: Uri[];
+  }>;
+  /**
+   * Reads a directory and returns lists of entries in the directory by entry type.
+   *
+   * @param uri - URI of directory.
+   * @param entryFilter - Function to filter out entries in the directory based on their names.
+   * @returns Map of entry type to list of uris for each entry in the directory with that type.
+   */
+  export function readDir(
+    uri: Uri,
+    entryFilter?: (entryName: string) => boolean,
+  ): Promise<DirectoryEntries>;
+  /**
+   * Create a directory in the file system if it does not exist. Does not throw if it already exists.
+   *
+   * @param uri URI of directory
+   * @returns Promise that resolves once the directory has been created
+   */
+  export function createDir(uri: Uri): Promise<void>;
+  /**
+   * Remove a directory and all its contents recursively from the file system
+   *
+   * @param uri URI of directory
+   * @returns Promise that resolves when the delete operation finishes
+   */
+  export function deleteDir(uri: Uri): Promise<void>;
+}
+declare module 'node/utils/crypto-util' {
+  export function createUuid(): string;
+  /**
+   * Create a cryptographically secure nonce that is at least 128 bits long. See nonce spec at
+   * https://w3c.github.io/webappsec-csp/#security-nonces
+   *
+   * @param encoding: "base64url" (HTML safe, shorter string) or "hex" (longer string) From
+   *   https://base64.guru/standards/base64url, the purpose of this encoding is "the ability to use
+   *   the encoding result as filename or URL address"
+   * @param numberOfBytes: Number of bytes the resulting nonce should contain
+   * @returns Cryptographically secure, pseudo-randomly generated value encoded as a string
+   */
+  export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
+}
+declare module 'node/models/execution-token.model' {
+  /** For now this is just for extensions, but maybe we will want to expand this in the future */
+  export type ExecutionTokenType = 'extension';
+  /** Execution tokens can be passed into API calls to provide context about their identity */
+  export class ExecutionToken {
+    readonly type: ExecutionTokenType;
+    readonly name: string;
+    readonly nonce: string;
+    constructor(tokenType: ExecutionTokenType, name: string);
+    getHash(): string;
+  }
+}
+declare module 'node/services/execution-token.service' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  /**
+   * This should be called when extensions are being loaded
+   *
+   * @param extensionName Name of the extension to register
+   * @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers. It
+   *   is important that the token is not shared to avoid impersonation of API callers.
+   */
+  function registerExtension(extensionName: string): ExecutionToken;
+  /**
+   * Remove a registered token. Note that a hash of a token is what is needed to unregister, not the
+   * full token itself (notably not the nonce), so something can be delegated the ability to
+   * unregister a token without having been given the full token itself.
+   *
+   * @param extensionName Name of the extension that was originally registered
+   * @param tokenHash Value of `getHash()` of the token that was originally registered.
+   * @returns `true` if the token was successfully unregistered, `false` otherwise
+   */
+  function unregisterExtension(extensionName: string, tokenHash: string): boolean;
+  /**
+   * This should only be needed by services that need to contextualize the response for the caller
+   *
+   * @param executionToken Token that was previously registered.
+   * @returns `true` if the token matches a token that was previous registered, `false` otherwise.
+   */
+  function tokenIsValid(executionToken: ExecutionToken): boolean;
+  const executionTokenService: {
+    registerExtension: typeof registerExtension;
+    unregisterExtension: typeof unregisterExtension;
+    tokenIsValid: typeof tokenIsValid;
+  };
+  export default executionTokenService;
+}
+declare module 'extension-host/services/extension-storage.service' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  import { Buffer } from 'buffer';
+  /**
+   * This is only intended to be called by the extension service. This service cannot call into the
+   * extension service or it causes a circular dependency.
+   */
+  export function setExtensionUris(urisPerExtension: Map<string, string>): void;
+  /** Return a path to the specified file within the extension's installation directory */
+  export function buildExtensionPathFromName(extensionName: string, fileName: string): string;
+  /**
+   * Read a text file from the the extension's installation directory
+   *
+   * @param token ExecutionToken provided to the extension when `activate()` was called
+   * @param fileName Name of the file to be read
+   * @returns Promise for a string with the contents of the file
+   */
+  function readTextFileFromInstallDirectory(
+    token: ExecutionToken,
+    fileName: string,
+  ): Promise<string>;
+  /**
+   * Read a binary file from the the extension's installation directory
+   *
+   * @param token ExecutionToken provided to the extension when `activate()` was called
+   * @param fileName Name of the file to be read
+   * @returns Promise for a Buffer with the contents of the file
+   */
+  function readBinaryFileFromInstallDirectory(
+    token: ExecutionToken,
+    fileName: string,
+  ): Promise<Buffer>;
+  /**
+   * Read data specific to the user (as identified by the OS) and extension (as identified by the
+   * ExecutionToken)
+   *
+   * @param token ExecutionToken provided to the extension when `activate()` was called
+   * @param key Unique identifier of the data
+   * @returns Promise for a string containing the data
+   */
+  function readUserData(token: ExecutionToken, key: string): Promise<string>;
+  /**
+   * Write data specific to the user (as identified by the OS) and extension (as identified by the
+   * ExecutionToken)
+   *
+   * @param token ExecutionToken provided to the extension when `activate()` was called
+   * @param key Unique identifier of the data
+   * @param data Data to be written
+   * @returns Promise that will resolve if the data is written successfully
+   */
+  function writeUserData(token: ExecutionToken, key: string, data: string): Promise<void>;
+  /**
+   * Delete data previously written that is specific to the user (as identified by the OS) and
+   * extension (as identified by the ExecutionToken)
+   *
+   * @param token ExecutionToken provided to the extension when `activate()` was called
+   * @param key Unique identifier of the data
+   * @returns Promise that will resolve if the data is deleted successfully
+   */
+  function deleteUserData(token: ExecutionToken, key: string): Promise<void>;
+  export interface ExtensionStorageService {
+    readTextFileFromInstallDirectory: typeof readTextFileFromInstallDirectory;
+    readBinaryFileFromInstallDirectory: typeof readBinaryFileFromInstallDirectory;
+    readUserData: typeof readUserData;
+    writeUserData: typeof writeUserData;
+    deleteUserData: typeof deleteUserData;
   }
   /**
    *
-   * Service that allows to get and set settings in local storage
+   * This service provides extensions in the extension host the ability to read/write data based on
+   * the extension identity and current user (as identified by the OS). This service will not work
+   * within the renderer.
    */
-  const settingsService: SettingsService;
-  export default settingsService;
+  const extensionStorageService: ExtensionStorageService;
+  export default extensionStorageService;
 }
 declare module 'shared/models/dialog-options.model' {
   /** General options to adjust dialogs (created from `papi.dialogs`) */
@@ -3421,6 +3739,336 @@ declare module 'shared/services/dialog.service' {
   import { DialogService } from 'shared/services/dialog.service-model';
   const dialogService: DialogService;
   export default dialogService;
+}
+declare module '@papi/backend' {
+  /**
+   * Unified module for accessing API features in the extension host.
+   *
+   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
+   */
+  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+  import * as commandService from 'shared/services/command.service';
+  import * as papiUtil from 'shared/utils/papi-util';
+  import { PapiNetworkService } from 'shared/services/network.service';
+  import { WebViewServiceType } from 'shared/services/web-view.service-model';
+  import { PapiWebViewProviderService } from 'shared/services/web-view-provider.service';
+  import { InternetService } from 'shared/services/internet.service';
+  import {
+    DataProviderService,
+    DataProviderEngine as PapiDataProviderEngine,
+  } from 'shared/services/data-provider.service';
+  import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
+  import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
+  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
+  import { DialogService } from 'shared/services/dialog.service-model';
+  const papi: {
+    /**
+     *
+     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
+     * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
+     * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
+     * private, and its event should be public. That way, the emitter is not publicized, but anyone can
+     * subscribe to the event.
+     */
+    EventEmitter: typeof PapiEventEmitter;
+    /**
+     *
+     * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
+     * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
+     * function in order to use `notifyUpdate`.
+     *
+     * @see IDataProviderEngine for more information on extending this class.
+     */
+    DataProviderEngine: typeof PapiDataProviderEngine;
+    /** This is just an alias for internet.fetch */
+    fetch: typeof globalThis.fetch;
+    /**
+     *
+     * The command service allows you to exchange messages with other components in the platform. You
+     * can register a command that other services and extensions can send you. You can send commands to
+     * other services and extensions that have registered commands.
+     */
+    commands: typeof commandService;
+    /**
+     *
+     * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
+     * services. Extensions should not use or rely on anything in papiUtil unless some other service
+     * requires it.
+     */
+    utils: typeof papiUtil;
+    /**
+     *
+     * Service exposing various functions related to using webViews
+     *
+     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+     * HTML or React components.
+     */
+    webViews: WebViewServiceType;
+    /**
+     *
+     * Interface for registering webView providers
+     */
+    webViewProviders: PapiWebViewProviderService;
+    /**
+     *
+     * Prompt the user for responses with dialogs
+     */
+    dialogs: DialogService;
+    /**
+     *
+     * Service that provides a way to send and receive network events
+     */
+    network: PapiNetworkService;
+    /**
+     *
+     * All extensions and services should use this logger to provide a unified output of logs
+     */
+    logger: import('electron-log').MainLogger & {
+      default: import('electron-log').MainLogger;
+    };
+    /**
+     *
+     * Service that provides a way to call `fetch` since the original function is not available
+     */
+    internet: InternetService;
+    /**
+     *
+     * Service that allows extensions to send and receive data to/from other extensions
+     */
+    dataProviders: DataProviderService;
+    /**
+     *
+     * Service that registers and gets project data providers
+     */
+    projectDataProviders: PapiBackendProjectDataProviderService;
+    /**
+     *
+     * Provides metadata for projects known by the platform
+     */
+    projectLookup: ProjectLookupServiceType;
+    /**
+     *
+     * This service provides extensions in the extension host the ability to read/write data based on
+     * the extension identity and current user (as identified by the OS). This service will not work
+     * within the renderer.
+     */
+    storage: ExtensionStorageService;
+  };
+  export default papi;
+  /**
+   *
+   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
+   * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
+   * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
+   * private, and its event should be public. That way, the emitter is not publicized, but anyone can
+   * subscribe to the event.
+   */
+  export const EventEmitter: typeof PapiEventEmitter;
+  /**
+   *
+   * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
+   * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
+   * function in order to use `notifyUpdate`.
+   *
+   * @see IDataProviderEngine for more information on extending this class.
+   */
+  export const DataProviderEngine: typeof PapiDataProviderEngine;
+  /** This is just an alias for internet.fetch */
+  export const fetch: typeof globalThis.fetch;
+  /**
+   *
+   * The command service allows you to exchange messages with other components in the platform. You
+   * can register a command that other services and extensions can send you. You can send commands to
+   * other services and extensions that have registered commands.
+   */
+  export const commands: typeof commandService;
+  /**
+   *
+   * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
+   * services. Extensions should not use or rely on anything in papiUtil unless some other service
+   * requires it.
+   */
+  export const utils: typeof papiUtil;
+  /**
+   *
+   * Service exposing various functions related to using webViews
+   *
+   * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+   * HTML or React components.
+   */
+  export const webViews: WebViewServiceType;
+  /**
+   *
+   * Interface for registering webView providers
+   */
+  export const webViewProviders: PapiWebViewProviderService;
+  /**
+   *
+   * Prompt the user for responses with dialogs
+   */
+  export const dialogs: DialogService;
+  /**
+   *
+   * Service that provides a way to send and receive network events
+   */
+  export const network: PapiNetworkService;
+  /**
+   *
+   * All extensions and services should use this logger to provide a unified output of logs
+   */
+  export const logger: import('electron-log').MainLogger & {
+    default: import('electron-log').MainLogger;
+  };
+  /**
+   *
+   * Service that provides a way to call `fetch` since the original function is not available
+   */
+  export const internet: InternetService;
+  /**
+   *
+   * Service that allows extensions to send and receive data to/from other extensions
+   */
+  export const dataProviders: DataProviderService;
+  /**
+   *
+   * Service that registers and gets project data providers
+   */
+  export const projectDataProviders: PapiBackendProjectDataProviderService;
+  /**
+   *
+   * Provides metadata for projects known by the platform
+   */
+  export const projectLookup: ProjectLookupServiceType;
+  /**
+   *
+   * This service provides extensions in the extension host the ability to read/write data based on
+   * the extension identity and current user (as identified by the OS). This service will not work
+   * within the renderer.
+   */
+  export const storage: ExtensionStorageService;
+}
+declare module 'extension-host/extension-types/extension-activation-context.model' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  import UnsubscriberAsyncList from 'shared/utils/unsubscriber-async-list';
+  /** An object of this type is passed into `activate()` for each extension during initialization */
+  export type ExecutionActivationContext = {
+    /** Canonical name of the extension */
+    name: string;
+    /** Used to save and load data from the storage service. */
+    executionToken: ExecutionToken;
+    /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
+    registrations: UnsubscriberAsyncList;
+  };
+}
+declare module 'extension-host/extension-types/extension.interface' {
+  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+  /** Interface for all extensions to implement */
+  export interface IExtension {
+    /**
+     * Sets up this extension! Runs when paranext wants this extension to activate. For example,
+     * activate() should register commands for this extension
+     *
+     * @param context Data and utilities that are specific to this particular extension
+     */
+    activate: (context: ExecutionActivationContext) => Promise<void>;
+    /**
+     * Deactivate anything in this extension that is not covered by the registrations in the context
+     * object given to activate().
+     *
+     * @returns Promise that resolves to true if successfully deactivated
+     */
+    deactivate?: UnsubscriberAsync;
+  }
+}
+declare module 'extension-host/extension-types/extension-manifest.model' {
+  /** Information about an extension provided by the extension developer. */
+  export type ExtensionManifest = {
+    /** Name of the extension */
+    name: string;
+    /**
+     * Extension version - expected to be [semver](https://semver.org/) like `"0.1.3"`.
+     *
+     * Note: semver may become a hard requirement in the future, so we recommend using it now.
+     */
+    version: string;
+    /**
+     * Path to the JavaScript file to run in the extension host. Relative to the extension's root
+     * folder.
+     *
+     * Must be specified. Can be `null` if the extension does not have any JavaScript to run.
+     */
+    main: string | null;
+    /**
+     * Path to the TypeScript type declaration file that describes this extension and its interactions
+     * on the PAPI. Relative to the extension's root folder.
+     *
+     * If not provided, Platform.Bible will look in the following locations:
+     *
+     * 1. `<extension_name>.d.ts`
+     * 2. `<extension_name><other_stuff>.d.ts`
+     * 3. `index.d.ts`
+     *
+     * See [Extension Anatomy - Type Declaration
+     * Files](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#type-declaration-files-dts)
+     * for more information about extension type declaration files.
+     */
+    types?: string;
+    /**
+     * List of events that occur that should cause this extension to be activated. Not yet
+     * implemented.
+     */
+    activationEvents: string[];
+  };
+}
+declare module 'shared/services/settings.service' {
+  import { Unsubscriber } from 'shared/utils/papi-util';
+  import { SettingTypes } from 'papi-shared-types';
+  type Nullable<T> = T | null;
+  /**
+   * Retrieves the value of the specified setting
+   *
+   * @param key The string id of the setting for which the value is being retrieved
+   * @returns The value of the specified setting, parsed to an object. Returns `null` if setting is
+   *   not present or no value is available
+   */
+  const getSetting: <SettingName extends keyof SettingTypes>(
+    key: SettingName,
+  ) => Nullable<SettingTypes[SettingName]>;
+  /**
+   * Sets the value of the specified setting
+   *
+   * @param key The string id of the setting for which the value is being retrieved
+   * @param newSetting The value that is to be stored. Setting the new value to `null` is the
+   *   equivalent of deleting the setting
+   */
+  const setSetting: <SettingName extends keyof SettingTypes>(
+    key: SettingName,
+    newSetting: Nullable<SettingTypes[SettingName]>,
+  ) => void;
+  /**
+   * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
+   * callback function is executed.
+   *
+   * @param key The string id of the setting for which the value is being subscribed to
+   * @param callback The function that will be called whenever the specified setting is updated
+   * @returns Unsubscriber that should be called whenever the subscription should be deleted
+   */
+  const subscribeToSetting: <SettingName extends keyof SettingTypes>(
+    key: SettingName,
+    callback: (newSetting: Nullable<SettingTypes[SettingName]>) => void,
+  ) => Unsubscriber;
+  export interface SettingsService {
+    get: typeof getSetting;
+    set: typeof setSetting;
+    subscribe: typeof subscribeToSetting;
+  }
+  /**
+   *
+   * Service that allows to get and set settings in local storage
+   */
+  const settingsService: SettingsService;
+  export default settingsService;
 }
 declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
   /**
@@ -3971,10 +4619,10 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
 }
-declare module 'papi-frontend/react' {
+declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
 }
-declare module 'papi-frontend' {
+declare module '@papi/frontend' {
   /**
    * Unified module for accessing API features in the renderer.
    *
@@ -3991,7 +4639,7 @@ declare module 'papi-frontend' {
   import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { SettingsService } from 'shared/services/settings.service';
   import { DialogService } from 'shared/services/dialog.service-model';
-  import * as papiReact from 'papi-frontend/react';
+  import * as papiReact from '@papi/frontend/react';
   const papi: {
     /**
      *
@@ -4157,651 +4805,35 @@ declare module 'papi-frontend' {
   export const settings: SettingsService;
   export type Papi = typeof papi;
 }
-declare module 'shared/models/web-view-provider.model' {
-  import {
+declare module '@papi/core' {
+  /** Exporting empty object so people don't have to put 'type' in their import statements */
+  const core: {};
+  export default core;
+  export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+  export type { ExecutionToken } from 'node/models/execution-token.model';
+  export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  export { default as IDataProvider } from 'shared/models/data-provider.interface';
+  export type {
+    DataProviderUpdateInstructions,
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+  } from 'shared/models/data-provider.model';
+  export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
+  export { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
+  export type { DialogOptions } from 'shared/models/dialog-options.model';
+  export type { PapiEvent } from 'shared/models/papi-event.model';
+  export { default as PapiEventEmitter } from 'shared/models/papi-event-emitter.model';
+  export type {
+    ExtensionDataScope,
+    MandatoryProjectDataType,
+  } from 'shared/models/project-data-provider.model';
+  export type { Unsubscriber } from 'shared/utils/papi-util';
+  export type {
     GetWebViewOptions,
+    WebViewContentType,
     WebViewDefinition,
+    WebViewProps,
     SavedWebViewDefinition,
   } from 'shared/models/web-view.model';
-  import {
-    DisposableNetworkObject,
-    NetworkObject,
-    NetworkableObject,
-  } from 'shared/models/network-object.model';
-  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
-  export interface IWebViewProvider extends NetworkableObject {
-    /**
-     * @param savedWebView Filled out if an existing webview is being called for (matched by ID). Just
-     *   ID if this is a new request or if the web view with the existing ID was not found
-     * @param getWebViewOptions
-     */
-    getWebView(
-      savedWebView: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
-    ): Promise<WebViewDefinition | undefined>;
-  }
-  export interface WebViewProvider
-    extends NetworkObject<NetworkableObject>,
-      CanHaveOnDidDispose<IWebViewProvider> {}
-  export interface DisposableWebViewProvider
-    extends DisposableNetworkObject<NetworkableObject>,
-      Omit<WebViewProvider, 'dispose'> {}
-}
-declare module 'shared/services/web-view-provider.service' {
-  /**
-   * Handles registering web view providers and serving web views around the papi. Exposed on the
-   * papi.
-   */
-  import {
-    DisposableWebViewProvider,
-    IWebViewProvider,
-    WebViewProvider,
-  } from 'shared/models/web-view-provider.model';
-  /** Sets up the service. Only runs once and always returns the same promise after that */
-  const initialize: () => Promise<void>;
-  /**
-   * Indicate if we are aware of an existing web view provider with the given type. If a web view
-   * provider with the given type is somewhere else on the network, this function won't tell you about
-   * it unless something else in the existing process is subscribed to it.
-   *
-   * @param webViewType Type of webView to check for
-   */
-  function hasKnown(webViewType: string): boolean;
-  /**
-   * Register a web view provider to serve webViews for a specified type of webViews
-   *
-   * @param webViewType Type of web view to provide
-   * @param webViewProvider Object to register as a webView provider including control over disposing
-   *   of it.
-   *
-   *   WARNING: setting a webView provider mutates the provided object.
-   * @returns `webViewProvider` modified to be a network object
-   */
-  function register(
-    webViewType: string,
-    webViewProvider: IWebViewProvider,
-  ): Promise<DisposableWebViewProvider>;
-  /**
-   * Get a web view provider that has previously been set up
-   *
-   * @param webViewType Type of webview provider to get
-   * @returns Web view provider with the given name if one exists, undefined otherwise
-   */
-  function get(webViewType: string): Promise<WebViewProvider | undefined>;
-  export interface WebViewProviderService {
-    initialize: typeof initialize;
-    hasKnown: typeof hasKnown;
-    register: typeof register;
-    get: typeof get;
-  }
-  export interface PapiWebViewProviderService {
-    register: typeof register;
-  }
-  const webViewProviderService: WebViewProviderService;
-  /**
-   *
-   * Interface for registering webView providers
-   */
-  export const papiWebViewProviderService: PapiWebViewProviderService;
-  export default webViewProviderService;
-}
-declare module 'shared/data/file-system.model' {
-  /** Types to use with file system operations */
-  /**
-   * Represents a path in file system or other. Has a scheme followed by :// followed by a relative
-   * path. If no scheme is provided, the app scheme is used. Available schemes are as follows:
-   *
-   * - `app://` - goes to the app's home directory and into `.platform.bible` (platform-dependent)
-   * - `cache://` - goes to the app's temporary file cache at `app://cache`
-   * - `data://` - goes to the app's data storage location at `app://data`
-   * - `resources://` - goes to the resources directory installed in the app
-   * - `file://` - an absolute file path from root
-   */
-  export type Uri = string;
-}
-declare module 'node/utils/util' {
-  import { Uri } from 'shared/data/file-system.model';
-  export const FILE_PROTOCOL: string;
-  export const RESOURCES_PROTOCOL: string;
-  export function resolveHtmlPath(htmlFileName: string): string;
-  /**
-   * Gets the platform-specific user Platform.Bible folder for this application
-   *
-   * When running in development: `<repo_directory>/dev-appdata`
-   *
-   * When packaged: `<user_home_directory>/.platform.bible`
-   */
-  export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
-  /**
-   * Resolves the uri to a path
-   *
-   * @param uri The uri to resolve
-   * @returns Real path to the uri supplied
-   */
-  export function getPathFromUri(uri: Uri): string;
-  /**
-   * Combines the uri passed in with the paths passed in to make one uri
-   *
-   * @param uri Uri to start from
-   * @param paths Paths to combine into the uri
-   * @returns One uri that combines the uri and the paths in left-to-right order
-   */
-  export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
-}
-declare module 'node/services/node-file-system.service' {
-  /** File system calls from Node */
-  import fs, { BigIntStats } from 'fs';
-  import { Uri } from 'shared/data/file-system.model';
-  /**
-   * Read a text file
-   *
-   * @param uri URI of file
-   * @returns Promise that resolves to the contents of the file
-   */
-  export function readFileText(uri: Uri): Promise<string>;
-  /**
-   * Read a binary file
-   *
-   * @param uri URI of file
-   * @returns Promise that resolves to the contents of the file
-   */
-  export function readFileBinary(uri: Uri): Promise<Buffer>;
-  /**
-   * Write data to a file
-   *
-   * @param uri URI of file
-   * @param fileContents String or Buffer to write into the file
-   * @returns Promise that resolves after writing the file
-   */
-  export function writeFile(uri: Uri, fileContents: string | Buffer): Promise<void>;
-  /**
-   * Copies a file from one location to another. Creates the path to the destination if it does not
-   * exist
-   *
-   * @param sourceUri The location of the file to copy
-   * @param destinationUri The uri to the file to create as a copy of the source file
-   * @param mode Bitwise modifiers that affect how the copy works. See
-   *   [`fsPromises.copyFile`](https://nodejs.org/api/fs.html#fspromisescopyfilesrc-dest-mode) for
-   *   more information
-   */
-  export function copyFile(
-    sourceUri: Uri,
-    destinationUri: Uri,
-    mode?: Parameters<typeof fs.promises.copyFile>[2],
-  ): Promise<void>;
-  /**
-   * Delete a file if it exists
-   *
-   * @param uri URI of file
-   * @returns Promise that resolves when the file is deleted or determined to not exist
-   */
-  export function deleteFile(uri: Uri): Promise<void>;
-  /**
-   * Get stats about the file or directory. Note that BigInts are used instead of ints to avoid.
-   * https://en.wikipedia.org/wiki/Year_2038_problem
-   *
-   * @param uri URI of file or directory
-   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if
-   *   file or directory exists, undefined if it doesn't
-   */
-  export function getStats(uri: Uri): Promise<BigIntStats | undefined>;
-  /**
-   * Set the last modified and accessed times for the file or directory
-   *
-   * @param uri URI of file or directory
-   * @returns Promise that resolves once the touch operation finishes
-   */
-  export function touch(uri: Uri, date: Date): Promise<void>;
-  /** Type of file system item in a directory */
-  export enum EntryType {
-    File = 'file',
-    Directory = 'directory',
-    Unknown = 'unknown',
-  }
-  /** All entries in a directory, mapped from entry type to array of uris for the entries */
-  export type DirectoryEntries = Readonly<{
-    [entryType in EntryType]: Uri[];
-  }>;
-  /**
-   * Reads a directory and returns lists of entries in the directory by entry type.
-   *
-   * @param uri - URI of directory.
-   * @param entryFilter - Function to filter out entries in the directory based on their names.
-   * @returns Map of entry type to list of uris for each entry in the directory with that type.
-   */
-  export function readDir(
-    uri: Uri,
-    entryFilter?: (entryName: string) => boolean,
-  ): Promise<DirectoryEntries>;
-  /**
-   * Create a directory in the file system if it does not exist. Does not throw if it already exists.
-   *
-   * @param uri URI of directory
-   * @returns Promise that resolves once the directory has been created
-   */
-  export function createDir(uri: Uri): Promise<void>;
-  /**
-   * Remove a directory and all its contents recursively from the file system
-   *
-   * @param uri URI of directory
-   * @returns Promise that resolves when the delete operation finishes
-   */
-  export function deleteDir(uri: Uri): Promise<void>;
-}
-declare module 'node/utils/crypto-util' {
-  export function createUuid(): string;
-  /**
-   * Create a cryptographically secure nonce that is at least 128 bits long. See nonce spec at
-   * https://w3c.github.io/webappsec-csp/#security-nonces
-   *
-   * @param encoding: "base64url" (HTML safe, shorter string) or "hex" (longer string) From
-   *   https://base64.guru/standards/base64url, the purpose of this encoding is "the ability to use
-   *   the encoding result as filename or URL address"
-   * @param numberOfBytes: Number of bytes the resulting nonce should contain
-   * @returns Cryptographically secure, pseudo-randomly generated value encoded as a string
-   */
-  export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
-}
-declare module 'node/models/execution-token.model' {
-  /** For now this is just for extensions, but maybe we will want to expand this in the future */
-  export type ExecutionTokenType = 'extension';
-  /** Execution tokens can be passed into API calls to provide context about their identity */
-  export class ExecutionToken {
-    readonly type: ExecutionTokenType;
-    readonly name: string;
-    readonly nonce: string;
-    constructor(tokenType: ExecutionTokenType, name: string);
-    getHash(): string;
-  }
-}
-declare module 'node/services/execution-token.service' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
-  /**
-   * This should be called when extensions are being loaded
-   *
-   * @param extensionName Name of the extension to register
-   * @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers. It
-   *   is important that the token is not shared to avoid impersonation of API callers.
-   */
-  function registerExtension(extensionName: string): ExecutionToken;
-  /**
-   * Remove a registered token. Note that a hash of a token is what is needed to unregister, not the
-   * full token itself (notably not the nonce), so something can be delegated the ability to
-   * unregister a token without having been given the full token itself.
-   *
-   * @param extensionName Name of the extension that was originally registered
-   * @param tokenHash Value of `getHash()` of the token that was originally registered.
-   * @returns `true` if the token was successfully unregistered, `false` otherwise
-   */
-  function unregisterExtension(extensionName: string, tokenHash: string): boolean;
-  /**
-   * This should only be needed by services that need to contextualize the response for the caller
-   *
-   * @param executionToken Token that was previously registered.
-   * @returns `true` if the token matches a token that was previous registered, `false` otherwise.
-   */
-  function tokenIsValid(executionToken: ExecutionToken): boolean;
-  const executionTokenService: {
-    registerExtension: typeof registerExtension;
-    unregisterExtension: typeof unregisterExtension;
-    tokenIsValid: typeof tokenIsValid;
-  };
-  export default executionTokenService;
-}
-declare module 'extension-host/services/extension-storage.service' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
-  import { Buffer } from 'buffer';
-  /**
-   * This is only intended to be called by the extension service. This service cannot call into the
-   * extension service or it causes a circular dependency.
-   */
-  export function setExtensionUris(urisPerExtension: Map<string, string>): void;
-  /** Return a path to the specified file within the extension's installation directory */
-  export function buildExtensionPathFromName(extensionName: string, fileName: string): string;
-  /**
-   * Read a text file from the the extension's installation directory
-   *
-   * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param fileName Name of the file to be read
-   * @returns Promise for a string with the contents of the file
-   */
-  function readTextFileFromInstallDirectory(
-    token: ExecutionToken,
-    fileName: string,
-  ): Promise<string>;
-  /**
-   * Read a binary file from the the extension's installation directory
-   *
-   * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param fileName Name of the file to be read
-   * @returns Promise for a Buffer with the contents of the file
-   */
-  function readBinaryFileFromInstallDirectory(
-    token: ExecutionToken,
-    fileName: string,
-  ): Promise<Buffer>;
-  /**
-   * Read data specific to the user (as identified by the OS) and extension (as identified by the
-   * ExecutionToken)
-   *
-   * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param key Unique identifier of the data
-   * @returns Promise for a string containing the data
-   */
-  function readUserData(token: ExecutionToken, key: string): Promise<string>;
-  /**
-   * Write data specific to the user (as identified by the OS) and extension (as identified by the
-   * ExecutionToken)
-   *
-   * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param key Unique identifier of the data
-   * @param data Data to be written
-   * @returns Promise that will resolve if the data is written successfully
-   */
-  function writeUserData(token: ExecutionToken, key: string, data: string): Promise<void>;
-  /**
-   * Delete data previously written that is specific to the user (as identified by the OS) and
-   * extension (as identified by the ExecutionToken)
-   *
-   * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param key Unique identifier of the data
-   * @returns Promise that will resolve if the data is deleted successfully
-   */
-  function deleteUserData(token: ExecutionToken, key: string): Promise<void>;
-  export interface ExtensionStorageService {
-    readTextFileFromInstallDirectory: typeof readTextFileFromInstallDirectory;
-    readBinaryFileFromInstallDirectory: typeof readBinaryFileFromInstallDirectory;
-    readUserData: typeof readUserData;
-    writeUserData: typeof writeUserData;
-    deleteUserData: typeof deleteUserData;
-  }
-  /**
-   *
-   * This service provides extensions in the extension host the ability to read/write data based on
-   * the extension identity and current user (as identified by the OS). This service will not work
-   * within the renderer.
-   */
-  const extensionStorageService: ExtensionStorageService;
-  export default extensionStorageService;
-}
-declare module 'papi-backend' {
-  /**
-   * Unified module for accessing API features in the extension host.
-   *
-   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
-   */
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
-  import * as commandService from 'shared/services/command.service';
-  import * as papiUtil from 'shared/utils/papi-util';
-  import { PapiNetworkService } from 'shared/services/network.service';
-  import { WebViewServiceType } from 'shared/services/web-view.service-model';
-  import { PapiWebViewProviderService } from 'shared/services/web-view-provider.service';
-  import { InternetService } from 'shared/services/internet.service';
-  import {
-    DataProviderService,
-    DataProviderEngine as PapiDataProviderEngine,
-  } from 'shared/services/data-provider.service';
-  import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
-  import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
-  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
-  import { DialogService } from 'shared/services/dialog.service-model';
-  const papi: {
-    /**
-     *
-     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
-     * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
-     * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-     * private, and its event should be public. That way, the emitter is not publicized, but anyone can
-     * subscribe to the event.
-     */
-    EventEmitter: typeof PapiEventEmitter;
-    /**
-     *
-     * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
-     * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
-     * function in order to use `notifyUpdate`.
-     *
-     * @see IDataProviderEngine for more information on extending this class.
-     */
-    DataProviderEngine: typeof PapiDataProviderEngine;
-    /** This is just an alias for internet.fetch */
-    fetch: typeof globalThis.fetch;
-    /**
-     *
-     * The command service allows you to exchange messages with other components in the platform. You
-     * can register a command that other services and extensions can send you. You can send commands to
-     * other services and extensions that have registered commands.
-     */
-    commands: typeof commandService;
-    /**
-     *
-     * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
-     * services. Extensions should not use or rely on anything in papiUtil unless some other service
-     * requires it.
-     */
-    utils: typeof papiUtil;
-    /**
-     *
-     * Service exposing various functions related to using webViews
-     *
-     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
-     * HTML or React components.
-     */
-    webViews: WebViewServiceType;
-    /**
-     *
-     * Interface for registering webView providers
-     */
-    webViewProviders: PapiWebViewProviderService;
-    /**
-     *
-     * Prompt the user for responses with dialogs
-     */
-    dialogs: DialogService;
-    /**
-     *
-     * Service that provides a way to send and receive network events
-     */
-    network: PapiNetworkService;
-    /**
-     *
-     * All extensions and services should use this logger to provide a unified output of logs
-     */
-    logger: import('electron-log').MainLogger & {
-      default: import('electron-log').MainLogger;
-    };
-    /**
-     *
-     * Service that provides a way to call `fetch` since the original function is not available
-     */
-    internet: InternetService;
-    /**
-     *
-     * Service that allows extensions to send and receive data to/from other extensions
-     */
-    dataProviders: DataProviderService;
-    /**
-     *
-     * Service that registers and gets project data providers
-     */
-    projectDataProviders: PapiBackendProjectDataProviderService;
-    /**
-     *
-     * Provides metadata for projects known by the platform
-     */
-    projectLookup: ProjectLookupServiceType;
-    /**
-     *
-     * This service provides extensions in the extension host the ability to read/write data based on
-     * the extension identity and current user (as identified by the OS). This service will not work
-     * within the renderer.
-     */
-    storage: ExtensionStorageService;
-  };
-  export default papi;
-  /**
-   *
-   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
-   * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
-   * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-   * private, and its event should be public. That way, the emitter is not publicized, but anyone can
-   * subscribe to the event.
-   */
-  export const EventEmitter: typeof PapiEventEmitter;
-  /**
-   *
-   * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
-   * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
-   * function in order to use `notifyUpdate`.
-   *
-   * @see IDataProviderEngine for more information on extending this class.
-   */
-  export const DataProviderEngine: typeof PapiDataProviderEngine;
-  /** This is just an alias for internet.fetch */
-  export const fetch: typeof globalThis.fetch;
-  /**
-   *
-   * The command service allows you to exchange messages with other components in the platform. You
-   * can register a command that other services and extensions can send you. You can send commands to
-   * other services and extensions that have registered commands.
-   */
-  export const commands: typeof commandService;
-  /**
-   *
-   * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
-   * services. Extensions should not use or rely on anything in papiUtil unless some other service
-   * requires it.
-   */
-  export const utils: typeof papiUtil;
-  /**
-   *
-   * Service exposing various functions related to using webViews
-   *
-   * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
-   * HTML or React components.
-   */
-  export const webViews: WebViewServiceType;
-  /**
-   *
-   * Interface for registering webView providers
-   */
-  export const webViewProviders: PapiWebViewProviderService;
-  /**
-   *
-   * Prompt the user for responses with dialogs
-   */
-  export const dialogs: DialogService;
-  /**
-   *
-   * Service that provides a way to send and receive network events
-   */
-  export const network: PapiNetworkService;
-  /**
-   *
-   * All extensions and services should use this logger to provide a unified output of logs
-   */
-  export const logger: import('electron-log').MainLogger & {
-    default: import('electron-log').MainLogger;
-  };
-  /**
-   *
-   * Service that provides a way to call `fetch` since the original function is not available
-   */
-  export const internet: InternetService;
-  /**
-   *
-   * Service that allows extensions to send and receive data to/from other extensions
-   */
-  export const dataProviders: DataProviderService;
-  /**
-   *
-   * Service that registers and gets project data providers
-   */
-  export const projectDataProviders: PapiBackendProjectDataProviderService;
-  /**
-   *
-   * Provides metadata for projects known by the platform
-   */
-  export const projectLookup: ProjectLookupServiceType;
-  /**
-   *
-   * This service provides extensions in the extension host the ability to read/write data based on
-   * the extension identity and current user (as identified by the OS). This service will not work
-   * within the renderer.
-   */
-  export const storage: ExtensionStorageService;
-}
-declare module 'extension-host/extension-types/extension-activation-context.model' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
-  import UnsubscriberAsyncList from 'shared/utils/unsubscriber-async-list';
-  /** An object of this type is passed into `activate()` for each extension during initialization */
-  export type ExecutionActivationContext = {
-    /** Canonical name of the extension */
-    name: string;
-    /** Used to save and load data from the storage service. */
-    executionToken: ExecutionToken;
-    /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
-    registrations: UnsubscriberAsyncList;
-  };
-}
-declare module 'extension-host/extension-types/extension.interface' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
-  /** Interface for all extensions to implement */
-  export interface IExtension {
-    /**
-     * Sets up this extension! Runs when paranext wants this extension to activate. For example,
-     * activate() should register commands for this extension
-     *
-     * @param context Data and utilities that are specific to this particular extension
-     */
-    activate: (context: ExecutionActivationContext) => Promise<void>;
-    /**
-     * Deactivate anything in this extension that is not covered by the registrations in the context
-     * object given to activate().
-     *
-     * @returns Promise that resolves to true if successfully deactivated
-     */
-    deactivate?: UnsubscriberAsync;
-  }
-}
-declare module 'extension-host/extension-types/extension-manifest.model' {
-  /** Information about an extension provided by the extension developer. */
-  export type ExtensionManifest = {
-    /** Name of the extension */
-    name: string;
-    /**
-     * Extension version - expected to be [semver](https://semver.org/) like `"0.1.3"`.
-     *
-     * Note: semver may become a hard requirement in the future, so we recommend using it now.
-     */
-    version: string;
-    /**
-     * Path to the JavaScript file to run in the extension host. Relative to the extension's root
-     * folder.
-     *
-     * Must be specified. Can be `null` if the extension does not have any JavaScript to run.
-     */
-    main: string | null;
-    /**
-     * Path to the TypeScript type declaration file that describes this extension and its interactions
-     * on the PAPI. Relative to the extension's root folder.
-     *
-     * If not provided, Platform.Bible will look in the following locations:
-     *
-     * 1. `<extension_name>.d.ts`
-     * 2. `<extension_name><other_stuff>.d.ts`
-     * 3. `index.d.ts`
-     *
-     * See [Extension Anatomy - Type Declaration
-     * Files](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#type-declaration-files-dts)
-     * for more information about extension type declaration files.
-     */
-    types?: string;
-    /**
-     * List of events that occur that should cause this extension to be activated. Not yet
-     * implemented.
-     */
-    activationEvents: string[];
-  };
+  export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 }

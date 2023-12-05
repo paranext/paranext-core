@@ -4,13 +4,11 @@ declare module 'usfm-data-provider' {
     DataProviderDataType,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import type IDataProvider from 'shared/models/data-provider.interface';
-  import type {
     ExtensionDataScope,
+    IDataProvider,
     MandatoryProjectDataType,
-  } from 'shared/models/project-data-provider.model';
-  import type { Unsubscriber } from 'shared/utils/papi-util';
+    Unsubscriber,
+  } from '@papi/core';
 
   export type UsfmProviderDataTypes = {
     BookNames: DataProviderDataType<boolean, string[], never>;

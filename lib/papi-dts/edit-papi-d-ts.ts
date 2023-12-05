@@ -13,19 +13,23 @@ const PAPI_DTS_PATH = 'papi.d.ts';
 // Load the papi.d.ts file for editing
 let papiDTS = fs.readFileSync(PAPI_DTS_PATH, 'utf8');
 
-// Rename papi modules to 'papi-whatever' so extensions can import just 'papi-whatever'
+// Rename papi modules to '@papi/whatever' so extensions can import just '@papi/whatever'
 papiDTS = papiDTS
   .replace(
+    new RegExp(escapeStringRegexp("'shared/services/papi-core.service'"), 'g'),
+    "'@papi/core'",
+  )
+  .replace(
     new RegExp(escapeStringRegexp("'renderer/services/papi-frontend.service'"), 'g'),
-    "'papi-frontend'",
+    "'@papi/frontend'",
   )
   .replace(
     new RegExp(escapeStringRegexp("'renderer/services/papi-frontend-react.service'"), 'g'),
-    "'papi-frontend/react'",
+    "'@papi/frontend/react'",
   )
   .replace(
     new RegExp(escapeStringRegexp("'extension-host/services/papi-backend.service'"), 'g'),
-    "'papi-backend'",
+    "'@papi/backend'",
   );
 
 // #region Copy "JSDOC DESTINATION" blocks to "JSDOC SOURCE" blocks

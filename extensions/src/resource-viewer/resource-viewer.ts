@@ -1,12 +1,12 @@
-﻿import papi, { logger } from 'papi-backend';
-import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
-import type { DialogOptions } from 'shared/models/dialog-options.model';
+﻿import papi, { logger } from '@papi/backend';
 import type {
+  DialogOptions,
+  ExecutionActivationContext,
   GetWebViewOptions,
+  IWebViewProvider,
   SavedWebViewDefinition,
   WebViewDefinition,
-} from 'shared/models/web-view.model';
-import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+} from '@papi/core';
 import resourceViewerWebView from './resource-viewer.web-view?inline';
 import resourceViewerWebViewStyles from './resource-viewer.web-view.scss?inline';
 

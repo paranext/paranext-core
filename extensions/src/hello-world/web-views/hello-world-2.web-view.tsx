@@ -1,5 +1,5 @@
-import papi from 'papi-frontend';
-import { useEvent } from 'papi-frontend/react';
+import papi from '@papi/frontend';
+import { useEvent } from '@papi/frontend/react';
 import { useCallback, useState } from 'react';
 import { Button } from 'papi-components';
 import type { HelloWorldEvent } from 'hello-world';
