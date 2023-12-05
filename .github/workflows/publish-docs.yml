@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - fix-publish-docs
 
 jobs:
   publish-docs:
@@ -27,9 +28,9 @@ jobs:
       - name: Build documentation
         run: | # need to specify --out so pages links at /{their name} instead of at /docs
           cd lib/papi-components
-          npx typedoc --out papi-components
+          npm run build:docs -- --out papi-components
           cd ../papi-dts
-          npx typedoc --out papi-dts
+          npm run build:docs -- --out papi-dts
           cd ../../
           mkdir docs-for-pages
           mv lib/papi-components/papi-components docs-for-pages
