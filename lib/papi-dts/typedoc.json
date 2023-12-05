@@ -4,5 +4,5 @@
   "out": "docs",
   "readme": "README.md",
   "logLevel": "Verbose",
-  "sort": ["kind", "alphabetical", "instance-first"]
+  "sort": ["kind", "alphabetical"]
 }
