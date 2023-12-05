@@ -26,15 +26,18 @@ jobs:
           npm run build
 
       - name: Build documentation
-        run: | # renaming the folders so that pages links at /{their name} instead of at /docs
+        run: | # need to specify --out so pages links at /{their name} instead of at /docs
           cd lib/papi-components
           npx typedoc --out papi-components
           cd ../papi-dts
           npx typedoc --out papi-dts
+          cd ../../
+          mkdir docs-for-pages
+          mv lib/papi-components/papi-components docs-for-pages
+          mv lib/papi-dts/papi-dts docs-for-pages
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@4.1.4
         with:
           branch: github-pages
-          folder: |
-            lib/papi-components/papi-components
+          folder: docs-for-pages
