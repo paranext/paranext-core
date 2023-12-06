@@ -4275,16 +4275,20 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
     ): {
       [TDataType in keyof DataProviderTypes[DataProviderName]]: (
         // @ts-expect-error TypeScript pretends it can't find `selector`, but it works just fine
+        // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
         selector: DataProviderTypes[DataProviderName][TDataType]['selector'],
         // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
         defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
         DataProviderTypes[DataProviderName][TDataType]['getData'],
         (
           | ((
               // @ts-expect-error TypeScript pretends it can't find `setData`, but it works just fine
+              // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
               newData: DataProviderTypes[DataProviderName][TDataType]['setData'],
             ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
           | undefined
@@ -4431,16 +4435,20 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
     ): {
       [TDataType in keyof ProjectDataTypes[ProjectType]]: (
         // @ts-expect-error TypeScript pretends it can't find `selector`, but it works just fine
+        // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
         selector: ProjectDataTypes[ProjectType][TDataType]['selector'],
         // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
         defaultValue: ProjectDataTypes[ProjectType][TDataType]['getData'],
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
         ProjectDataTypes[ProjectType][TDataType]['getData'],
         (
           | ((
               // @ts-expect-error TypeScript pretends it can't find `setData`, but it works just fine
+              // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
               newData: ProjectDataTypes[ProjectType][TDataType]['setData'],
             ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
           | undefined
@@ -4812,17 +4820,17 @@ declare module '@papi/core' {
   export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
   export type { ExecutionToken } from 'node/models/execution-token.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
-  export { default as IDataProvider } from 'shared/models/data-provider.interface';
+  export type { default as IDataProvider } from 'shared/models/data-provider.interface';
   export type {
     DataProviderUpdateInstructions,
     DataProviderDataType,
     DataProviderSubscriberOptions,
   } from 'shared/models/data-provider.model';
   export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
-  export { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
+  export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
   export type { PapiEvent } from 'shared/models/papi-event.model';
-  export { default as PapiEventEmitter } from 'shared/models/papi-event-emitter.model';
+  export type { default as PapiEventEmitter } from 'shared/models/papi-event-emitter.model';
   export type {
     ExtensionDataScope,
     MandatoryProjectDataType,
