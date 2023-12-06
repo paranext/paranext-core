@@ -657,8 +657,8 @@ declare module 'shared/utils/papi-util' {
    */
   export function deepEqual(a: unknown, b: unknown): boolean;
   /**
-   * Converts a JavaScript value to a JSON string, changing `null` and `undefined` values to a moniker
-   * that deserializes to `undefined`.
+   * Converts a JavaScript value to a JSON string, changing `undefined` properties to `null`
+   * properties in the JSON string.
    *
    * WARNING: `null` and `undefined` values are treated as the same thing by this function and will be
    * dropped when passed to {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will

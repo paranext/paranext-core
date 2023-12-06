@@ -159,8 +159,8 @@ export function deepEqual(a: unknown, b: unknown) {
 // #region Serialization, deserialization, encoding, and decoding functions
 
 /**
- * Converts a JavaScript value to a JSON string, changing `null` and `undefined` values to a moniker
- * that deserializes to `undefined`.
+ * Converts a JavaScript value to a JSON string, changing `undefined` properties to `null`
+ * properties in the JSON string.
  *
  * WARNING: `null` and `undefined` values are treated as the same thing by this function and will be
  * dropped when passed to {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will
@@ -225,6 +225,8 @@ export function deserialize(
     if (reviver) newValue = reviver(replacerKey, newValue);
     return newValue;
   };
+  // TODO: Do something like drop our custom reviver and crawl the object tree to replace all null
+  // properties with undefined properties so that undefined properties don't disappear.
   return JSON.parse(value, undefinedReviver);
 }
 

@@ -326,12 +326,14 @@ describe('PAPI Util Function: isSerializable', () => {
     expect(isSerializable(objectToSerialize)).toBeTruthy();
   });
 
-  it('successfully determines object with `undefined` prop is not serializable', () => {
+  it('UNsuccessfully determines object with `undefined` prop is not serializable', () => {
+    // TODO: make a deserialization algorithm that does this properly. Not a huge deal for now
     const objectToSerialize = { stuff: undefined, things: true };
     expect(isSerializable(objectToSerialize)).toBeFalsy();
   });
 
-  it('successfully determines object with `null` prop is not serializable', () => {
+  it('UNsuccessfully determines object with `null` prop is not serializable', () => {
+    // TODO: make a deserialization algorithm that does this properly. Not a huge deal for now
     const objectToSerialize = { stuff: null, things: true };
     expect(isSerializable(objectToSerialize)).toBeFalsy();
   });
