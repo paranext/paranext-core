@@ -40,7 +40,9 @@ jobs:
         run: touch docs-for-pages/.nojekyll
 
       - name: Add landing page
-        run: cp README.md docs-for-pages
+        run: |
+          cp .github/assets/github-pages-index.html docs-for-pages
+          mv docs-for-pages/github-pages-index.html docs-for-pages/index.html
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@4.1.4
