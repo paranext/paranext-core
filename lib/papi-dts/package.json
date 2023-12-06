@@ -26,7 +26,7 @@
   "main": "",
   "types": "papi.d.ts",
   "scripts": {
-    "build:docs": "npx typedoc",
+    "build:docs": "typedoc",
     "build": "tsc && prettier --write papi.d.ts && ts-node edit-papi-d-ts.ts",
     "build:clean": "rimraf papi.tsbuildinfo",
     "build:fresh": "npm run build:clean && npm run build",

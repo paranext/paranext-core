@@ -9,10 +9,6 @@ jobs:
   publish-docs:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node_version: [18.x]
-
     steps:
       - name: Checkout git repo
         uses: actions/checkout@v3
@@ -20,7 +16,7 @@ jobs:
       - name: Install Node and NPM
         uses: actions/setup-node@v3
         with:
-          node-version: ${{ matrix.node_version }}
+          node-version: 18.x
           cache: npm
 
       - name: Install and build
@@ -29,18 +25,26 @@ jobs:
           npm run build
 
       - name: Build documentation
-        run: | # renaming the folders so that pages links at /{their name} instead of at /docs
-          cd ~/lib/papi-components
-          npm run build:docs
-          mv docs papi-components
-          cd ~/lib/papi-dts
-          npm run build:docs
-          mv docs papi-dts
+        run: | # need to specify --out so pages links at /{their name} instead of at /docs
+          cd lib/papi-components
+          npm run build:docs -- --out papi-components
+          cd ../papi-dts
+          npm run build:docs -- --out papi-dts
+          cd ../../
+          mkdir docs-for-pages
+          mv lib/papi-components/papi-components docs-for-pages
+          mv lib/papi-dts/papi-dts docs-for-pages
+
+      - name: Add nojekyll # needed so that HTML pages that start with _ do not cause 404
+        run: touch docs-for-pages/.nojekyll
+
+      - name: Add landing page
+        run: |
+          cp .github/assets/github-pages-index.html docs-for-pages
+          mv docs-for-pages/github-pages-index.html docs-for-pages/index.html
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@4.1.4
         with:
           branch: github-pages
-          folder: |
-            lib/papi-components/papi-components
-            lib/papi-dts/papi-dts
+          folder: docs-for-pages
