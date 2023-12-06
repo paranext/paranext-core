@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - fix-publish-docs
 
 jobs:
   publish-docs:
@@ -34,6 +35,7 @@ jobs:
           mkdir docs-for-pages
           mv lib/papi-components/papi-components docs-for-pages
           mv lib/papi-dts/papi-dts docs-for-pages
+          touch docs-for-pages/.nojekyll
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@4.1.4
