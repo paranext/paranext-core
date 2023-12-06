@@ -30,7 +30,7 @@ export default function ExtensionCard({
   const avatar = useMemo(
     () => (
       <Avatar variant="square" src={iconFilePath ?? undefined} alt={extensionDescription}>
-        {!iconFilePath ? extensionName[0] : null}
+        {!iconFilePath ? extensionName[0] : undefined}
       </Avatar>
     ),
     [extensionDescription, extensionName, iconFilePath],
@@ -49,14 +49,14 @@ export default function ExtensionCard({
         title={extensionName}
         titleTypographyProps={{ variant: 'h6' }}
         action={headerAction}
-        subheader={!isGallery ? extensionDescription : null}
+        subheader={!isGallery ? extensionDescription : undefined}
         subheaderTypographyProps={{ variant: 'body2' }}
       />
       {isGallery ? (
         <CardContent className="extension-card-description">
           <Typography variant="body2">{extensionDescription}</Typography>
         </CardContent>
-      ) : null}
+      ) : undefined}
       <CardActions className={isGallery ? 'card-action-square' : 'card-action-wide'}>
         {children}
       </CardActions>

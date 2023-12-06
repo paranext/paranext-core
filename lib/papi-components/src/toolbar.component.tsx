@@ -87,8 +87,8 @@ export default function Toolbar({
             >
               <MenuIcon />
             </IconButton>
-          ) : null}
-          {children ? <div className="papi-menu-children">{children}</div> : null}
+          ) : undefined}
+          {children ? <div className="papi-menu-children">{children}</div> : undefined}
           {menu ? (
             <Drawer
               className={`papi-menu-drawer ${className ?? ''}`}
@@ -105,7 +105,7 @@ export default function Toolbar({
             >
               <GridMenu commandHandler={toolbarCommandHandler} columns={menu.columns} />
             </Drawer>
-          ) : null}
+          ) : undefined}
         </MuiToolbar>
       </AppBar>
     </div>

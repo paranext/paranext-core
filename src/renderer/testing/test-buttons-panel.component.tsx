@@ -9,6 +9,7 @@ import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
+import { serialize } from '@shared/utils/papi-util';
 
 export const TAB_TYPE_BUTTONS = 'buttons';
 
@@ -86,7 +87,7 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
 export default function TestButtonsPanel() {
   const [promiseReturn, setPromiseReturn] = useState('Click a button.');
   const updatePromiseReturn = useCallback(
-    (state: unknown) => setPromiseReturn(isString(state) ? state : JSON.stringify(state)),
+    (state: unknown) => setPromiseReturn(isString(state) ? state : serialize(state)),
     [],
   );
 

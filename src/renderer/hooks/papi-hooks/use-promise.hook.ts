@@ -3,10 +3,9 @@ import { useEffect, useState } from 'react';
 /**
  * Awaits a promise and returns a loading value while the promise is unresolved
  *
- * @param promiseFactoryCallback A function that returns the promise to await. If the promise
- *   resolves to null, the value will not change. If this callback is undefined, the current value
- *   will be returned (defaultValue unless it was previously changed and preserveValue is true), and
- *   there will be no loading.
+ * @param promiseFactoryCallback A function that returns the promise to await. If this callback is
+ *   undefined, the current value will be returned (defaultValue unless it was previously changed
+ *   and preserveValue is true), and there will be no loading.
  *
  *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
  *   every render
@@ -24,7 +23,7 @@ import { useEffect, useState } from 'react';
  *   - `isLoading`: whether the promise is waiting to be resolved
  */
 const usePromise = <T>(
-  promiseFactoryCallback: (() => Promise<T | null>) | undefined,
+  promiseFactoryCallback: (() => Promise<T>) | undefined,
   defaultValue: T,
   preserveValue = true,
 ): [value: T, isLoading: boolean] => {
@@ -40,8 +39,7 @@ const usePromise = <T>(
         const result = await promiseFactoryCallback();
         // If the promise was not already replaced, update the value
         if (promiseIsCurrent) {
-          // If the promise returned null, it purposely did this to do nothing. Maybe its dependencies are not set up
-          if (result !== null) setValue(() => result);
+          setValue(() => result);
           setIsLoading(false);
         }
       }

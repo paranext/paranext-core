@@ -114,7 +114,7 @@
         // Update the 'people' display on load and on updates
         peopleDataProvider.subscribePeople(undefined, (people) => {
           const peopleData = document.getElementById('people-data');
-          const peopleString = JSON.stringify(people, null, 2);
+          const peopleString = papi.utils.serialize(people, undefined, 2);
           peopleData.textContent = papi.utils.htmlEncode(peopleString.replace(/"/g, '`'));
           print(peopleString);
         });

@@ -5,7 +5,7 @@
  * for services in the renderer to call.
  */
 import cloneDeep from 'lodash/cloneDeep';
-import { Unsubscriber } from '@shared/utils/papi-util';
+import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
 import { isString, newGuid, newNonce } from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
@@ -494,7 +494,7 @@ async function loadLayout(layout?: LayoutBase): Promise<void> {
  */
 function getStorageValue<T>(key: string, defaultValue: T): T {
   const saved = localStorage.getItem(key);
-  const initial = saved ? JSON.parse(saved) : undefined;
+  const initial = saved ? deserialize(saved) : undefined;
   return initial || defaultValue;
 }
 
@@ -505,7 +505,7 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  */
 async function saveLayout(layout: LayoutBase): Promise<void> {
   const currentLayout = layout;
-  localStorage.setItem(DOCK_LAYOUT_KEY, JSON.stringify(currentLayout));
+  localStorage.setItem(DOCK_LAYOUT_KEY, serialize(currentLayout));
 }
 
 /**
@@ -737,15 +737,9 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
  */
 export const getWebView = async (
   webViewType: WebViewType,
-  layout?: Layout,
-  options?: GetWebViewOptions,
+  layout: Layout = { type: 'tab' },
+  options: GetWebViewOptions = {},
 ): Promise<WebViewId | undefined> => {
-  // Parameter defaulting doesn't work with network objects, so do it first thing here
-  /* eslint-disable no-param-reassign */
-  if (!layout) layout = { type: 'tab' };
-  if (!options) options = {};
-  /* eslint-enable no-param-reassign */
-
   const optionsDefaulted = getWebViewOptionsDefaults(options);
   // ENHANCEMENT: If they aren't looking for an existingId, we could get the webview without
   // searching for an existing webview and send it to the renderer, skipping the part where we send

@@ -22,16 +22,14 @@ interface ResourceViewerOptions extends GetWebViewOptions {
  * Function to prompt for a project and open it in the resource viewer. Registered as a command
  * handler.
  */
-async function openResourceViewer(
-  projectId: string | undefined,
-): Promise<string | null | undefined> {
+async function openResourceViewer(projectId: string | undefined): Promise<string | undefined> {
   let projectIdForWebView = projectId;
   if (!projectIdForWebView) {
     const options: DialogOptions = {
       title: 'Select Resource',
       prompt: 'Choose the resource project to view:',
     };
-    projectIdForWebView = (await papi.dialogs.selectProject(options)) ?? undefined;
+    projectIdForWebView = await papi.dialogs.selectProject(options);
   }
   if (projectIdForWebView) {
     const options: ResourceViewerOptions = { projectId: projectIdForWebView };
@@ -39,7 +37,7 @@ async function openResourceViewer(
     // This matches the current behavior in P9, though it might not be what we want long-term.
     return papi.webViews.getWebView(resourceWebViewType, undefined, options);
   }
-  return null;
+  return undefined;
 }
 
 /** Simple web view provider that provides Resource web views when papi requests them */
@@ -58,7 +56,7 @@ const resourceWebViewProvider: IWebViewProvider = {
       getWebViewOptions.projectId ||
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       (savedWebView.state?.projectId as string) ||
-      null;
+      undefined;
     return {
       title: projectId
         ? `Resource Viewer : ${

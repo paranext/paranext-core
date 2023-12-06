@@ -129,7 +129,7 @@ export default function BasicList() {
               {headerGroup.headers.map((header) => {
                 return (
                   <th key={header.id} colSpan={header.colSpan}>
-                    {header.isPlaceholder ? null : (
+                    {header.isPlaceholder ? undefined : (
                       <div>{flexRender(header.column.columnDef.header, header.getContext())}</div>
                     )}
                   </th>

@@ -27,6 +27,8 @@ export function setExtensionUris(urisPerExtension: Map<string, string>) {
 
 /** Allow alphanumeric characters and the following: -_.()/\ */
 function isValidFileOrDirectoryName(name: string): boolean {
+  // Regex with no match returns null
+  // eslint-disable-next-line no-null/no-null
   return name.match(/^[\w\d-_.()/\\]*$/) !== null;
 }
 
