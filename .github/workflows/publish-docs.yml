@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - fix-publish-docs
 
 jobs:
   publish-docs:
@@ -36,7 +35,7 @@ jobs:
           mv lib/papi-components/papi-components docs-for-pages
           mv lib/papi-dts/papi-dts docs-for-pages
 
-      - name: Add nojekyll
+      - name: Add nojekyll # needed so that HTML pages that start with _ do not cause 404
         run: touch docs-for-pages/.nojekyll
 
       - name: Add landing page
