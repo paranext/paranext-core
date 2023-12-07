@@ -1,6 +1,6 @@
 import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
-import type IDataProvider from 'shared/models/data-provider.interface';
-import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
+import type IDataProvider from '@shared/models/data-provider.interface';
+import type IDataProviderEngine from '@shared/models/data-provider-engine.model';
 
 /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
 export type ProjectDataProviderEngineTypes = {
