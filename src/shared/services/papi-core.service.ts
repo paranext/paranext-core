@@ -32,6 +32,6 @@ export type {
   WebViewDefinition,
   WebViewProps,
 } from '@shared/models/web-view.model';
-export type { Unsubscriber } from '@shared/utils/papi-util';
+export type { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
 
 export type { IWebViewProvider } from '@shared/models/web-view-provider.model';

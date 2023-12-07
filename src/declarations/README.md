@@ -6,4 +6,4 @@ Files in this folder should only be `.ts` files that contain declarations of typ
 
 For example, `papi-shared-types.ts` contains an interface that defines command handlers. Core and extensions both define and use each others' command handlers, so they both `declare module 'papi-shared-types'` and extend the `CommandHandlers` interface. That way, both core and extensions can use each others' command handler types.
 
-All new type declaration names should start with `@papi` of `papi-` to inherit some ESLint rules that ignore unnecessary errors.
+All new type declaration names should start with `@papi` or `papi-` to inherit some ESLint rules that ignore unnecessary errors.
