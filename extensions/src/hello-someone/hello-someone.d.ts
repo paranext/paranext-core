@@ -1,6 +1,5 @@
 declare module 'hello-someone' {
-  import type IDataProvider from 'shared/models/data-provider.interface';
-  import type { DataProviderDataType } from 'shared/models/data-provider.model';
+  import { IDataProvider, DataProviderDataType } from '@papi/core';
 
   export type Person = {
     greeting?: string;

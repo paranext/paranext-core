@@ -616,7 +616,7 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   Module.prototype.require = ((moduleName: string) => {
     // Allow the extension to import papi and some other things
-    if (moduleName === 'papi-backend') return papi;
+    if (moduleName === '@papi/backend') return papi;
     if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
 
     // Figure out if we are doing the import for the extension file in activateExtension

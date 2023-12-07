@@ -1,12 +1,12 @@
-import papi, { logger } from 'papi-backend';
-import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+import papi, { logger } from '@papi/backend';
 import type {
+  ExecutionActivationContext,
   WebViewContentType,
   WebViewDefinition,
   SavedWebViewDefinition,
-} from 'shared/models/web-view.model';
-import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
-import type PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+  IWebViewProvider,
+  PapiEventEmitter,
+} from '@papi/core';
 import type { HelloWorldEvent } from 'hello-world';
 import helloWorldReactWebView from './web-views/hello-world.web-view?inline';
 import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?inline';

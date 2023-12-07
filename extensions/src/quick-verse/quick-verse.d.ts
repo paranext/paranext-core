@@ -1,6 +1,5 @@
 declare module 'quick-verse' {
-  import type { DataProviderDataType } from 'shared/models/data-provider.model';
-  import type IDataProvider from 'shared/models/data-provider.interface';
+  import { DataProviderDataType, IDataProvider } from '@papi/core';
 
   export type QuickVerseSetData = string | { text: string; isHeresy: boolean };
 

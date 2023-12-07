@@ -21,11 +21,12 @@
   },
   "include": [
     "../../src/declarations/*",
-    "../../src/renderer/services/papi-frontend.service.ts",
-    "../../src/renderer/services/papi-frontend-react.service.ts",
     "../../src/extension-host/services/papi-backend.service.ts",
     "../../src/extension-host/extension-types/extension.interface.ts",
-    "../../src/extension-host/extension-types/extension-manifest.model.ts"
+    "../../src/extension-host/extension-types/extension-manifest.model.ts",
+    "../../src/renderer/services/papi-frontend.service.ts",
+    "../../src/renderer/services/papi-frontend-react.service.ts",
+    "../../src/shared/services/papi-core.service.ts"
   ],
   "exclude": ["node_modules"],
   "ts-node": {

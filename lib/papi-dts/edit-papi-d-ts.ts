@@ -13,19 +13,23 @@ const PAPI_DTS_PATH = 'papi.d.ts';
 // Load the papi.d.ts file for editing
 let papiDTS = fs.readFileSync(PAPI_DTS_PATH, 'utf8');
 
-// Rename papi modules to 'papi-whatever' so extensions can import just 'papi-whatever'
+// Rename papi modules to '@papi/whatever' so extensions can import just '@papi/whatever'
 papiDTS = papiDTS
   .replace(
+    new RegExp(escapeStringRegexp("'shared/services/papi-core.service'"), 'g'),
+    "'@papi/core'",
+  )
+  .replace(
     new RegExp(escapeStringRegexp("'renderer/services/papi-frontend.service'"), 'g'),
-    "'papi-frontend'",
+    "'@papi/frontend'",
   )
   .replace(
     new RegExp(escapeStringRegexp("'renderer/services/papi-frontend-react.service'"), 'g'),
-    "'papi-frontend/react'",
+    "'@papi/frontend/react'",
   )
   .replace(
     new RegExp(escapeStringRegexp("'extension-host/services/papi-backend.service'"), 'g'),
-    "'papi-backend'",
+    "'@papi/backend'",
   );
 
 // #region Copy "JSDOC DESTINATION" blocks to "JSDOC SOURCE" blocks
@@ -100,12 +104,12 @@ papiDTS = papiDTS.replace(
 // Add ignore error messages to the `useData` and `useProjectData` signatures where TS pretends like
 // it doesn't know how to index the types but it works just fine
 papiDTS = papiDTS.replace(
-  /(?<!\/\/ @ts-expect-error.*)(\n(\s*).*DataProviderTypes\[DataProviderName\]\[TDataType\]\['(\w+)'\])/g,
-  "\n$2// @ts-expect-error TypeScript pretends it can't find `$3`, but it works just fine$1",
+  /(?<!\/\/ @ts-ignore.*)(\n(\s*).*DataProviderTypes\[DataProviderName\]\[TDataType\]\['(\w+)'\])/g,
+  "\n$2// @ts-ignore TypeScript pretends it can't find `$3`, but it works just fine$1",
 );
 papiDTS = papiDTS.replace(
-  /(?<!\/\/ @ts-expect-error.*)(\n(\s*).*ProjectDataTypes\[ProjectType\]\[TDataType\]\['(\w+)'\])/g,
-  "\n$2// @ts-expect-error TypeScript pretends it can't find `$3`, but it works just fine$1",
+  /(?<!\/\/ @ts-ignore.*)(\n(\s*).*ProjectDataTypes\[ProjectType\]\[TDataType\]\['(\w+)'\])/g,
+  "\n$2// @ts-ignore TypeScript pretends it can't find `$3`, but it works just fine$1",
 );
 
 // Fix all the path-aliased imports. For some reason, generating `papi.d.ts` removes the @ from path

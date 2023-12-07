@@ -1,10 +1,10 @@
 import { VerseRef } from '@sillsdev/scripture';
-import { logger } from 'papi-frontend';
-import { useProjectData, useSetting } from 'papi-frontend/react';
+import { logger } from '@papi/frontend';
+import { useProjectData, useSetting } from '@papi/frontend/react';
 import { ScriptureReference } from 'papi-components';
 import { JSX, useMemo } from 'react';
 import UsxEditor from 'usxeditor';
-import type { WebViewProps } from 'shared/models/web-view.model';
+import type { WebViewProps } from '@papi/core';
 
 /** Characteristics of a marker style */
 interface StyleInfo {

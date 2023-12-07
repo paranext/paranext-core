@@ -1,15 +1,15 @@
-import papi, { logger } from 'papi-backend';
-import type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
-import type {
+import papi, { logger } from '@papi/backend';
+import {
+  DataProviderUpdateInstructions,
+  ExecutionActivationContext,
+  IWebViewProvider,
+  SavedWebViewDefinition,
   WebViewContentType,
   WebViewDefinition,
-  SavedWebViewDefinition,
-} from 'shared/models/web-view.model';
+  WithNotifyUpdate,
+  IDataProviderEngine,
+} from '@papi/core';
 import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
-import type { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
-import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
-import type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
-import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 import helloSomeoneHtmlWebView from './hello-someone.web-view.html?inline';
 
 logger.info('Hello Someone is importing!');

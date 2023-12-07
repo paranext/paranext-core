@@ -2866,6 +2866,94 @@ declare module 'shared/services/web-view.service' {
   const webViewService: WebViewServiceType;
   export default webViewService;
 }
+declare module 'shared/models/web-view-provider.model' {
+  import {
+    GetWebViewOptions,
+    WebViewDefinition,
+    SavedWebViewDefinition,
+  } from 'shared/models/web-view.model';
+  import {
+    DisposableNetworkObject,
+    NetworkObject,
+    NetworkableObject,
+  } from 'shared/models/network-object.model';
+  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
+  export interface IWebViewProvider extends NetworkableObject {
+    /**
+     * @param savedWebView Filled out if an existing webview is being called for (matched by ID). Just
+     *   ID if this is a new request or if the web view with the existing ID was not found
+     * @param getWebViewOptions
+     */
+    getWebView(
+      savedWebView: SavedWebViewDefinition,
+      getWebViewOptions: GetWebViewOptions,
+    ): Promise<WebViewDefinition | undefined>;
+  }
+  export interface WebViewProvider
+    extends NetworkObject<NetworkableObject>,
+      CanHaveOnDidDispose<IWebViewProvider> {}
+  export interface DisposableWebViewProvider
+    extends DisposableNetworkObject<NetworkableObject>,
+      Omit<WebViewProvider, 'dispose'> {}
+}
+declare module 'shared/services/web-view-provider.service' {
+  /**
+   * Handles registering web view providers and serving web views around the papi. Exposed on the
+   * papi.
+   */
+  import {
+    DisposableWebViewProvider,
+    IWebViewProvider,
+    WebViewProvider,
+  } from 'shared/models/web-view-provider.model';
+  /** Sets up the service. Only runs once and always returns the same promise after that */
+  const initialize: () => Promise<void>;
+  /**
+   * Indicate if we are aware of an existing web view provider with the given type. If a web view
+   * provider with the given type is somewhere else on the network, this function won't tell you about
+   * it unless something else in the existing process is subscribed to it.
+   *
+   * @param webViewType Type of webView to check for
+   */
+  function hasKnown(webViewType: string): boolean;
+  /**
+   * Register a web view provider to serve webViews for a specified type of webViews
+   *
+   * @param webViewType Type of web view to provide
+   * @param webViewProvider Object to register as a webView provider including control over disposing
+   *   of it.
+   *
+   *   WARNING: setting a webView provider mutates the provided object.
+   * @returns `webViewProvider` modified to be a network object
+   */
+  function register(
+    webViewType: string,
+    webViewProvider: IWebViewProvider,
+  ): Promise<DisposableWebViewProvider>;
+  /**
+   * Get a web view provider that has previously been set up
+   *
+   * @param webViewType Type of webview provider to get
+   * @returns Web view provider with the given name if one exists, undefined otherwise
+   */
+  function get(webViewType: string): Promise<WebViewProvider | undefined>;
+  export interface WebViewProviderService {
+    initialize: typeof initialize;
+    hasKnown: typeof hasKnown;
+    register: typeof register;
+    get: typeof get;
+  }
+  export interface PapiWebViewProviderService {
+    register: typeof register;
+  }
+  const webViewProviderService: WebViewProviderService;
+  /**
+   *
+   * Interface for registering webView providers
+   */
+  export const papiWebViewProviderService: PapiWebViewProviderService;
+  export default webViewProviderService;
+}
 declare module 'shared/services/internet.service' {
   /** Our shim over fetch. Allows us to control internet access. */
   const papiFetch: typeof fetch;
@@ -3055,6 +3143,47 @@ declare module 'shared/services/data-provider.service' {
   const dataProviderService: DataProviderService;
   export default dataProviderService;
 }
+declare module 'shared/models/project-data-provider-engine.model' {
+  import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
+  import type IDataProvider from 'shared/models/data-provider.interface';
+  import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
+  /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
+  export type ProjectDataProviderEngineTypes = {
+    [ProjectType in ProjectTypes]: IDataProviderEngine<ProjectDataTypes[ProjectType]>;
+  };
+  /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
+  export type ProjectDataProvider = {
+    [ProjectType in ProjectTypes]: IDataProvider<ProjectDataTypes[ProjectType]>;
+  };
+  export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
+    createProjectDataProviderEngine(
+      projectId: string,
+      projectStorageInterpreterId: string,
+    ): ProjectDataProviderEngineTypes[ProjectType];
+  }
+}
+declare module 'shared/utils/unsubscriber-async-list' {
+  import { Dispose } from 'shared/models/disposal.model';
+  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
+  /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
+  export default class UnsubscriberAsyncList {
+    private name;
+    readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
+    constructor(name?: string);
+    /**
+     * Add unsubscribers to the list. Note that duplicates are not added twice.
+     *
+     * @param unsubscribers - Objects that were returned from a registration process.
+     */
+    add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
+    /**
+     * Run all unsubscribers added to this list and then clear the list.
+     *
+     * @returns `true` if all unsubscribers succeeded, `false` otherwise.
+     */
+    runAllUnsubscribers(): Promise<boolean>;
+  }
+}
 declare module 'shared/models/project-metadata.model' {
   import { ProjectTypes } from 'papi-shared-types';
   /**
@@ -3102,47 +3231,6 @@ declare module 'shared/services/project-lookup.service' {
   import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
   const projectLookupService: ProjectLookupServiceType;
   export default projectLookupService;
-}
-declare module 'shared/models/project-data-provider-engine.model' {
-  import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
-  import type IDataProvider from 'shared/models/data-provider.interface';
-  import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
-  export type ProjectDataProviderEngineTypes = {
-    [ProjectType in ProjectTypes]: IDataProviderEngine<ProjectDataTypes[ProjectType]>;
-  };
-  /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
-  export type ProjectDataProvider = {
-    [ProjectType in ProjectTypes]: IDataProvider<ProjectDataTypes[ProjectType]>;
-  };
-  export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
-    createProjectDataProviderEngine(
-      projectId: string,
-      projectStorageInterpreterId: string,
-    ): ProjectDataProviderEngineTypes[ProjectType];
-  }
-}
-declare module 'shared/utils/unsubscriber-async-list' {
-  import { Dispose } from 'shared/models/disposal.model';
-  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
-  export default class UnsubscriberAsyncList {
-    private name;
-    readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
-    constructor(name?: string);
-    /**
-     * Add unsubscribers to the list. Note that duplicates are not added twice.
-     *
-     * @param unsubscribers - Objects that were returned from a registration process.
-     */
-    add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
-    /**
-     * Run all unsubscribers added to this list and then clear the list.
-     *
-     * @returns `true` if all unsubscribers succeeded, `false` otherwise.
-     */
-    runAllUnsubscribers(): Promise<boolean>;
-  }
 }
 declare module 'shared/services/project-data-provider.service' {
   import { ProjectTypes } from 'papi-shared-types';
@@ -3203,1089 +3291,6 @@ declare module 'shared/services/project-data-provider.service' {
   export const papiFrontendProjectDataProviderService: {
     get: typeof get;
   };
-}
-declare module 'shared/services/settings.service' {
-  import { Unsubscriber } from 'shared/utils/papi-util';
-  import { SettingTypes } from 'papi-shared-types';
-  /**
-   * Retrieves the value of the specified setting
-   *
-   * @param key The string id of the setting for which the value is being retrieved
-   * @returns The value of the specified setting, parsed to an object. Returns `undefined` if setting
-   *   is not present or no value is available
-   */
-  const getSetting: <SettingName extends keyof SettingTypes>(
-    key: SettingName,
-  ) => SettingTypes[SettingName] | undefined;
-  /**
-   * Sets the value of the specified setting
-   *
-   * @param key The string id of the setting for which the value is being retrieved
-   * @param newSetting The value that is to be stored. Setting the new value to `undefined` is the
-   *   equivalent of deleting the setting
-   */
-  const setSetting: <SettingName extends keyof SettingTypes>(
-    key: SettingName,
-    newSetting: SettingTypes[SettingName] | undefined,
-  ) => void;
-  /**
-   * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
-   * callback function is executed.
-   *
-   * @param key The string id of the setting for which the value is being subscribed to
-   * @param callback The function that will be called whenever the specified setting is updated
-   * @returns Unsubscriber that should be called whenever the subscription should be deleted
-   */
-  const subscribeToSetting: <SettingName extends keyof SettingTypes>(
-    key: SettingName,
-    callback: (newSetting: SettingTypes[SettingName] | undefined) => void,
-  ) => Unsubscriber;
-  export interface SettingsService {
-    get: typeof getSetting;
-    set: typeof setSetting;
-    subscribe: typeof subscribeToSetting;
-  }
-  /**
-   *
-   * Service that allows to get and set settings in local storage
-   */
-  const settingsService: SettingsService;
-  export default settingsService;
-}
-declare module 'shared/models/dialog-options.model' {
-  /** General options to adjust dialogs (created from `papi.dialogs`) */
-  export type DialogOptions = {
-    /** Dialog title to display in the header. Default depends on the dialog */
-    title?: string;
-    /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
-    iconUrl?: string;
-    /** The message to show the user in the dialog. Default depends on the dialog */
-    prompt?: string;
-  };
-  /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
-  export type DialogData = DialogOptions & {
-    isDialog: true;
-  };
-}
-declare module 'renderer/components/dialogs/dialog-base.data' {
-  import { FloatSize, TabLoader, TabSaver } from 'shared/models/docking-framework.model';
-  import { DialogData } from 'shared/models/dialog-options.model';
-  import { ReactElement } from 'react';
-  /** Base type for DialogDefinition. Contains reasonable defaults for dialogs */
-  export type DialogDefinitionBase = Readonly<{
-    /** Overwritten in {@link DialogDefinition}. Must be specified by all DialogDefinitions */
-    tabType?: string;
-    /** Overwritten in {@link DialogDefinition}. Must be specified by all DialogDefinitions */
-    Component?: (props: DialogProps) => ReactElement;
-    /**
-     * The default icon for this dialog. This may be overridden by the `DialogOptions.iconUrl`
-     *
-     * Defaults to the Platform.Bible logo
-     */
-    defaultIconUrl?: string;
-    /**
-     * The default title for this dialog. This may be overridden by the `DialogOptions.title`
-     *
-     * Defaults to the DialogDefinition's `tabType`
-     */
-    defaultTitle?: string;
-    /** The width and height at which the dialog will be loaded in CSS `px` units */
-    initialSize: FloatSize;
-    /** The minimum width to which the dialog can be set in CSS `px` units */
-    minWidth?: number;
-    /** The minimum height to which the dialog can be set in CSS `px` units */
-    minHeight?: number;
-    /**
-     * The function used to load the dialog into the dock layout. Default uses the `Component` field
-     * and passes in the `DialogProps`
-     */
-    loadDialog: TabLoader;
-    /**
-     * The function used to save the dialog into the dock layout
-     *
-     * Default does not save the dialog as they cannot properly be restored yet.
-     *
-     * TODO: preserve requests between refreshes - save the dialog info in such a way that it works
-     * when loading again after refresh
-     */
-    saveDialog: TabSaver;
-  }>;
-  /** Props provided to the dialog component */
-  export type DialogProps<TData = unknown> = DialogData & {
-    /**
-     * Sends the data as a resolved response to the dialog request and closes the dialog
-     *
-     * @param data Data with which to resolve the request
-     */
-    submitDialog(data: TData): void;
-    /** Cancels the dialog request (resolves the response with `undefined`) and closes the dialog */
-    cancelDialog(): void;
-    /**
-     * Rejects the dialog request with the specified message and closes the dialog
-     *
-     * @param errorMessage Message to explain why the dialog request was rejected
-     */
-    rejectDialog(errorMessage: string): void;
-  };
-  /**
-   * Set the functionality of submitting and canceling dialogs. This should be called specifically by
-   * `dialog.service-host.ts` immediately on startup and by nothing else. This is only here to
-   * mitigate a dependency cycle
-   *
-   * @param dialogServiceFunctions Functions from the dialog service host for resolving and rejecting
-   *   dialogs
-   */
-  export function hookUpDialogService({
-    resolveDialogRequest: resolve,
-    rejectDialogRequest: reject,
-  }: {
-    resolveDialogRequest: (id: string, data: unknown | undefined) => void;
-    rejectDialogRequest: (id: string, message: string) => void;
-  }): void;
-  /**
-   * Static definition of a dialog that can be shown in Platform.Bible
-   *
-   * For good defaults, dialogs can include all the properties of this dialog. Dialogs must then
-   * specify `tabType` and `Component` in order to comply with `DialogDefinition`
-   *
-   * Note: this is not a class that can be inherited because all properties would be static but then
-   * we would not be able to use the default `loadDialog` because it would be using a static reference
-   * to a nonexistent `Component`. Instead of inheriting this as a class, any dialog definition can
-   * spread this `{ ...DIALOG_BASE }`
-   */
-  const DIALOG_BASE: DialogDefinitionBase;
-  export default DIALOG_BASE;
-}
-declare module 'renderer/components/dialogs/dialog-definition.model' {
-  import { DialogOptions } from 'shared/models/dialog-options.model';
-  import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
-  import { ReactElement } from 'react';
-  /** The tabType for the select project dialog in `select-project.dialog.tsx` */
-  export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
-  /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
-  export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
-  /** Options to provide when showing the Select Project dialog */
-  export type SelectProjectDialogOptions = DialogOptions & {
-    /** Project IDs to exclude from showing in the dialog */
-    excludeProjectIds?: string[];
-  };
-  /** Options to provide when showing the Select Multiple Project dialog */
-  export type SelectMultipleProjectsDialogOptions = DialogOptions & {
-    /** Project IDs to exclude from showing in the dialog */
-    excludeProjectIds?: string[];
-    /** Project IDs that should start selected in the dialog */
-    selectedProjectIds?: string[];
-  };
-  /**
-   * Mapped type for dialog functions to use in getting various types for dialogs
-   *
-   * Keys should be dialog names, and values should be {@link DialogDataTypes}
-   *
-   * If you add a dialog here, you must also add it on {@link DIALOGS}
-   */
-  export interface DialogTypes {
-    [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<SelectProjectDialogOptions, string>;
-    [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<
-      SelectMultipleProjectsDialogOptions,
-      string[]
-    >;
-  }
-  /** Each type of dialog. These are the tab types used in the dock layout */
-  export type DialogTabTypes = keyof DialogTypes;
-  /** Types related to a specific dialog */
-  export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
-    /**
-     * The dialog options to specify when calling the dialog. Passed into `loadDialog` as
-     * SavedTabInfo.data
-     *
-     * The default implementation of `loadDialog` passes all the options down to the dialog component
-     * as props
-     */
-    options: TOptions;
-    /** The type of the response to the dialog request */
-    responseType: TReturnType;
-    /** Props provided to the dialog component */
-    props: DialogProps<TReturnType> & TOptions;
-  };
-  export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<
-    DialogDefinitionBase & {
-      /**
-       * Type of tab - indicates what kind of built-in dock layout tab this dialog definition
-       * represents
-       */
-      tabType: DialogTabType;
-      /**
-       * React component to render for this dialog
-       *
-       * This must be specified only if you do not overwrite the default `loadDialog`
-       *
-       * @param props Props that will be passed through from the dialog tab's data
-       * @returns React element to render
-       */
-      Component: (
-        props: DialogProps<DialogTypes[DialogTabType]['responseType']> &
-          DialogTypes[DialogTabType]['options'],
-      ) => ReactElement;
-    }
-  >;
-}
-declare module 'shared/services/dialog.service-model' {
-  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
-  import { DialogOptions } from 'shared/models/dialog-options.model';
-  /**
-   *
-   * Prompt the user for responses with dialogs
-   */
-  export interface DialogService {
-    /**
-     * Shows a dialog to the user and prompts the user to respond
-     *
-     * @type `TReturn` - The type of data the dialog responds with
-     * @param dialogType The type of dialog to show the user
-     * @param options Various options for configuring the dialog that shows
-     * @returns Returns the user's response or `undefined` if the user cancels
-     */
-    showDialog<DialogTabType extends DialogTabTypes>(
-      dialogType: DialogTabType,
-      options?: DialogTypes[DialogTabType]['options'],
-    ): Promise<DialogTypes[DialogTabType]['responseType'] | undefined>;
-    /**
-     * Shows a select project dialog to the user and prompts the user to select a dialog
-     *
-     * @param options Various options for configuring the dialog that shows
-     * @returns Returns the user's selected project id or `undefined` if the user cancels
-     */
-    selectProject(options?: DialogOptions): Promise<string | undefined>;
-  }
-  /** Prefix on requests that indicates that the request is related to dialog operations */
-  export const CATEGORY_DIALOG = 'dialog';
-}
-declare module 'shared/services/dialog.service' {
-  import { DialogService } from 'shared/services/dialog.service-model';
-  const dialogService: DialogService;
-  export default dialogService;
-}
-declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
-  /**
-   * Awaits a promise and returns a loading value while the promise is unresolved
-   *
-   * @param promiseFactoryCallback A function that returns the promise to await. If this callback is
-   *   undefined, the current value will be returned (defaultValue unless it was previously changed
-   *   and preserveValue is true), and there will be no loading.
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   * @param defaultValue The initial value to return while first awaiting the promise. If
-   *   preserveValue is false, this value is also shown while awaiting the promise on subsequent
-   *   calls.
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param preserveValue Whether to leave the value as the most recent resolved promise value or set
-   *   it back to defaultValue while running the promise again. Default to true
-   * @returns `[value, isLoading]`
-   *
-   *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
-   *   - `isLoading`: whether the promise is waiting to be resolved
-   */
-  const usePromise: <T>(
-    promiseFactoryCallback: (() => Promise<T>) | undefined,
-    defaultValue: T,
-    preserveValue?: boolean,
-  ) => [value: T, isLoading: boolean];
-  export default usePromise;
-}
-declare module 'renderer/hooks/papi-hooks/use-event.hook' {
-  import { PapiEvent, PapiEventHandler } from 'shared/models/papi-event.model';
-  /**
-   * Adds an event handler to an event so the event handler runs when the event is emitted
-   *
-   * @param event The event to subscribe to. Can be either a string or an Event
-   *
-   *   - If event is a `string`, the network event associated with this type will automatically be used
-   *   - If event is a `PapiEvent`, that event will be used
-   *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
-   *       available for example
-   *
-   * @param eventHandler The callback to run when the event is emitted
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   */
-  const useEvent: <T>(
-    event: string | PapiEvent<T> | undefined,
-    eventHandler: PapiEventHandler<T>,
-  ) => void;
-  export default useEvent;
-}
-declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
-  import { PapiEvent, PapiEventAsync, PapiEventHandler } from 'shared/models/papi-event.model';
-  /**
-   * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
-   * runs when the event is emitted
-   *
-   * @param event The asynchronously (un)subscribing event to subscribe to. Can be either a string or
-   *   an Event
-   *
-   *   - If event is a `string`, the network event associated with this type will automatically be used
-   *   - If event is a `PapiEvent` or `PapiEventAsync`, that event will be used
-   *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
-   *       available for example
-   *
-   * @param eventHandler The callback to run when the event is emitted
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   */
-  const useEventAsync: <T>(
-    event: string | PapiEvent<T> | PapiEventAsync<T> | undefined,
-    eventHandler: PapiEventHandler<T>,
-  ) => void;
-  export default useEventAsync;
-}
-declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
-  import { NetworkObject } from 'shared/models/network-object.model';
-  /**
-   * This function takes in a getNetworkObject function and creates a hook with that function in it
-   * which will return a network object
-   *
-   * @param getNetworkObject A function that takes in an id string and returns a network object
-   * @param mapParametersToNetworkObjectSource Function that takes the parameters passed into the hook
-   *   and returns the `networkObjectSource` associated with those parameters. Defaults to taking the
-   *   first parameter passed into the hook and using that as the `networkObjectSource`.
-   *
-   *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
-   *       (result of this hook, if you want this hook to just return the network object again)
-   *
-   * @returns A function that takes in a networkObjectSource and returns a NetworkObject
-   */
-  function createUseNetworkObjectHook<THookParams extends unknown[]>(
-    getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
-    mapParametersToNetworkObjectSource?: (
-      ...args: THookParams
-    ) => string | NetworkObject<object> | undefined,
-  ): (...args: THookParams) => NetworkObject<object> | undefined;
-  export default createUseNetworkObjectHook;
-}
-declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
-  import { DataProviders } from 'papi-shared-types';
-  /**
-   * Gets a data provider with specified provider name
-   *
-   * @type `T` - The type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
-   *   specifying your own types, or provide a custom data provider type
-   * @param dataProviderSource String name of the data provider to get OR dataProvider (result of
-   *   useDataProvider, if you want this hook to just return the data provider again)
-   * @returns Undefined if the data provider has not been retrieved, data provider if it has been
-   *   retrieved and is not disposed, and undefined again if the data provider is disposed
-   */
-  const useDataProvider: <DataProviderName extends keyof DataProviders>(
-    dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
-  ) => DataProviders[DataProviderName] | undefined;
-  export default useDataProvider;
-}
-declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import IDataProvider from 'shared/models/data-provider.interface';
-  import ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
-  /**
-   * The final function called as part of the `useData` hook that is the actual React hook
-   *
-   * This is the `.Greeting(...)` part of `useData('helloSomeone.people').Greeting(...)`
-   */
-  type UseDataFunctionWithProviderType<
-    TDataProvider extends IDataProvider<any>,
-    TDataType extends keyof ExtractDataProviderDataTypes<TDataProvider>,
-  > = (
-    selector: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['selector'],
-    defaultValue: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ) => [
-    ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
-    (
-      | ((
-          newData: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['setData'],
-        ) => Promise<DataProviderUpdateInstructions<ExtractDataProviderDataTypes<TDataProvider>>>)
-      | undefined
-    ),
-    boolean,
-  ];
-  /**
-   * A proxy that serves the actual hooks for a single data provider
-   *
-   * This is the `useData('helloSomeone.people')` part of
-   * `useData('helloSomeone.people').Greeting(...)`
-   */
-  type UseDataProxy<TDataProvider extends IDataProvider<any>> = {
-    [TDataType in keyof ExtractDataProviderDataTypes<TDataProvider>]: UseDataFunctionWithProviderType<
-      TDataProvider,
-      TDataType
-    >;
-  };
-  /**
-   * React hook to use data provider data with various data types
-   *
-   * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
-   *
-   * @type `TDataProvider` - The type of data provider to get. Use
-   *   `IDataProvider<TDataProviderDataTypes>`, specifying your own types, or provide a custom data
-   *   provider type
-   */
-  type UseDataHookGeneric<TUseDataProviderParams extends unknown[]> = {
-    <TDataProvider extends IDataProvider<any>>(
-      ...args: TUseDataProviderParams
-    ): UseDataProxy<TDataProvider>;
-  };
-  /**
-   * Create a `useData(...).DataType(selector, defaultValue, options)` hook for a specific subset of
-   * data providers as supported by `useDataProviderHook`
-   *
-   * @param useDataProviderHook Hook that gets a data provider from a specific subset of data
-   *   providers
-   * @returns `useData` hook for getting data from a data provider
-   */
-  function createUseDataHook<TUseDataProviderParams extends unknown[]>(
-    useDataProviderHook: (...args: TUseDataProviderParams) => IDataProvider | undefined,
-  ): UseDataHookGeneric<TUseDataProviderParams>;
-  export default createUseDataHook;
-}
-declare module 'renderer/hooks/papi-hooks/use-data.hook' {
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { DataProviderNames, DataProviderTypes, DataProviders } from 'papi-shared-types';
-  /**
-   * React hook to use data from a data provider
-   *
-   * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
-   */
-  type UseDataHook = {
-    <DataProviderName extends DataProviderNames>(
-      dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
-    ): {
-      [TDataType in keyof DataProviderTypes[DataProviderName]]: (
-        // @ts-expect-error TypeScript pretends it can't find `selector`, but it works just fine
-        selector: DataProviderTypes[DataProviderName][TDataType]['selector'],
-        // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
-        defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
-        subscriberOptions?: DataProviderSubscriberOptions,
-      ) => [
-        // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
-        DataProviderTypes[DataProviderName][TDataType]['getData'],
-        (
-          | ((
-              // @ts-expect-error TypeScript pretends it can't find `setData`, but it works just fine
-              newData: DataProviderTypes[DataProviderName][TDataType]['setData'],
-            ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
-          | undefined
-        ),
-        boolean,
-      ];
-    };
-  };
-  /**
-   * ```typescript
-   * useData<DataProviderName extends DataProviderNames>(
-   *     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
-   *   ).DataType(
-   *       selector: DataProviderTypes[DataProviderName][DataType]['selector'],
-   *       defaultValue: DataProviderTypes[DataProviderName][DataType]['getData'],
-   *       subscriberOptions?: DataProviderSubscriberOptions,
-   *     ) => [
-   *       DataProviderTypes[DataProviderName][DataType]['getData'],
-   *       (
-   *         | ((
-   *             newData: DataProviderTypes[DataProviderName][DataType]['setData'],
-   *           ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
-   *         | undefined
-   *       ),
-   *       boolean,
-   *     ]
-   * ```
-   *
-   * React hook to use data from a data provider. Subscribes to run a callback on a data provider's
-   * data with specified selector on the specified data type that data provider serves.
-   *
-   * Usage: Specify the data provider and the data type on the data provider with
-   * `useData('<data_provider>').<data_type>` and use like any other React hook.
-   *
-   * _＠example_ Subscribing to Verse data at JHN 11:35 on the `'quickVerse.quickVerse'` data provider:
-   *
-   * ```typescript
-   * const [verseText, setVerseText, verseTextIsLoading] = useData('quickVerse.quickVerse').Verse(
-   *   'JHN 11:35',
-   *   'Verse text goes here',
-   * );
-   * ```
-   *
-   * _＠param_ `dataProviderSource` string name of data provider to get OR dataProvider (result of
-   * useDataProvider if you want to consolidate and only get the data provider once)
-   *
-   * _＠param_ `selector` tells the provider what data this listener is listening for
-   *
-   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   * updated every render
-   *
-   * _＠param_ `defaultValue` the initial value to return while first awaiting the data
-   *
-   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   * updated every render
-   *
-   * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
-   *
-   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
-   * must not be updated every render
-   *
-   * _＠returns_ `[data, setData, isLoading]`
-   *
-   * - `data`: the current value for the data from the data provider with the specified data type and
-   *   selector, either the defaultValue or the resolved data
-   * - `setData`: asynchronous function to request that the data provider update the data at this data
-   *   type and selector. Returns true if successful. Note that this function does not update the
-   *   data. The data provider sends out an update to this subscription if it successfully updates
-   *   data.
-   * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
-   *   provider
-   */
-  const useData: UseDataHook;
-  export default useData;
-}
-declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
-  import { SettingTypes } from 'papi-shared-types';
-  /**
-   * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes and gets
-   * updated when the setting is changed by others.
-   *
-   * Setting the value to `undefined` is the equivalent of deleting the setting.
-   *
-   * @param key The string id that is used to store the setting in local storage
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param defaultState The default state of the setting. If the setting already has a value set to
-   *   it in local storage, this parameter will be ignored.
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @returns `[setting, setSetting]`
-   *
-   *   - `setting`: The current state of the setting, either the defaultState or the stored state on the
-   *       papi, if any
-   *   - `setSetting`: Function that updates the setting to a new value
-   */
-  const useSetting: <SettingName extends keyof SettingTypes>(
-    key: SettingName,
-    defaultState: SettingTypes[SettingName],
-  ) => [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void];
-  export default useSetting;
-}
-declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
-  import { ProjectDataTypes } from 'papi-shared-types';
-  import IDataProvider from 'shared/models/data-provider.interface';
-  /**
-   * Gets a project data provider with specified provider name
-   *
-   * @param projectType Indicates what you expect the `projectType` to be for the project with the
-   *   specified id. The TypeScript type for the returned project data provider will have the project
-   *   data provider type associated with this project type. If this argument does not match the
-   *   project's actual `projectType` (according to its metadata), a warning will be logged
-   * @param projectDataProviderSource String name of the id of the project to get OR
-   *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
-   *   data provider again)
-   * @returns `undefined` if the project data provider has not been retrieved, the requested project
-   *   data provider if it has been retrieved and is not disposed, and undefined again if the project
-   *   data provider is disposed
-   */
-  const useProjectDataProvider: <ProjectType extends keyof ProjectDataTypes>(
-    projectType: ProjectType,
-    projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
-  ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
-  export default useProjectDataProvider;
-}
-declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import IDataProvider from 'shared/models/data-provider.interface';
-  import { ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
-  /**
-   * React hook to use data from a project data provider
-   *
-   * @example `useProjectData('ParatextStandard', 'project id').VerseUSFM(...);`
-   */
-  type UseProjectDataHook = {
-    <ProjectType extends ProjectTypes>(
-      projectType: ProjectType,
-      projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
-    ): {
-      [TDataType in keyof ProjectDataTypes[ProjectType]]: (
-        // @ts-expect-error TypeScript pretends it can't find `selector`, but it works just fine
-        selector: ProjectDataTypes[ProjectType][TDataType]['selector'],
-        // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
-        defaultValue: ProjectDataTypes[ProjectType][TDataType]['getData'],
-        subscriberOptions?: DataProviderSubscriberOptions,
-      ) => [
-        // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
-        ProjectDataTypes[ProjectType][TDataType]['getData'],
-        (
-          | ((
-              // @ts-expect-error TypeScript pretends it can't find `setData`, but it works just fine
-              newData: ProjectDataTypes[ProjectType][TDataType]['setData'],
-            ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
-          | undefined
-        ),
-        boolean,
-      ];
-    };
-  };
-  /**
-   * ```typescript
-   * useProjectData<ProjectType extends ProjectTypes>(
-   *     projectType: ProjectType,
-   *     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
-   *   ).DataType(
-   *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
-   *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
-   *       subscriberOptions?: DataProviderSubscriberOptions,
-   *     ) => [
-   *       ProjectDataTypes[ProjectType][DataType]['getData'],
-   *       (
-   *         | ((
-   *             newData: ProjectDataTypes[ProjectType][DataType]['setData'],
-   *           ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
-   *         | undefined
-   *       ),
-   *       boolean,
-   *     ]
-   * ```
-   *
-   * React hook to use data from a project data provider. Subscribes to run a callback on a project
-   * data provider's data with specified selector on the specified data type that the project data
-   * provider serves according to its `projectType`.
-   *
-   * Usage: Specify the project type, the project id, and the data type on the project data provider
-   * with `useProjectData('<project_type>', '<project_id>').<data_type>` and use like any other React
-   * hook.
-   *
-   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `ParatextStandard` project with
-   * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
-   *
-   * ```typescript
-   * const [verse, setVerse, verseIsLoading] = useProjectData(
-   *   'ParatextStandard',
-   *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
-   * ).VerseUSFM(
-   *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
-   *   'Loading verse ',
-   * );
-   * ```
-   *
-   * _＠param_ `projectType` Indicates what you expect the `projectType` to be for the project with the
-   * specified id. The TypeScript type for the returned project data provider will have the project
-   * data provider type associated with this project type. If this argument does not match the
-   * project's actual `projectType` (according to its metadata), a warning will be logged
-   *
-   * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
-   * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
-   * project data provider once)
-   *
-   * _＠param_ `selector` tells the provider what data this listener is listening for
-   *
-   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   * updated every render
-   *
-   * _＠param_ `defaultValue` the initial value to return while first awaiting the data
-   *
-   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   * updated every render
-   *
-   * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
-   *
-   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
-   * must not be updated every render
-   *
-   * _＠returns_ `[data, setData, isLoading]`
-   */
-  const useProjectData: UseProjectDataHook;
-  export default useProjectData;
-}
-declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
-  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
-  /**
-   * Enables using `papi.dialogs.showDialog` in React more easily. Provides a callback to run to get a
-   * response from a dialog as well as states that indicate the dialog's response and whether the
-   * dialog is open.
-   *
-   * Calling the dialog callback returned from this hook does nothing if you already previously opened
-   * the dialog and have not received a response
-   *
-   * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
-   * @type `TResponse` The type that the response can be. If you do not specify a `defaultResponse`,
-   *   this can be the dialog response type or `undefined`. If you specify a `defaultResponse`, this
-   *   will be just the dialog response type. Should be inferred by parameters.
-   *
-   *   - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse` then
-   *       becomes that literal instead of being the dialog response type. You can type assert it to
-   *       the appropriate type. Let us know if you run into an issue with this!
-   *
-   * @param dialogType Dialog type you want to show on the screen
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param options Various options for configuring the dialog that shows
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param defaultResponse The starting value for the response. Once a response is received, this is
-   *   no longer used. Defaults to `undefined`
-   * @returns `[response, showDialogCallback, errorMessage, isShowingDialog]`
-   *
-   *   - `response` - the response from the dialog or `defaultResponse` if a response has not been
-   *       received (does not reset to `defaultResponse` if the user cancels the dialog). DOES NOT
-   *       reset every time the callback is run
-   *   - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response. If
-   *       this callback is run while the dialog is open, nothing happens
-   *   - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
-   *       `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
-   *   - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not
-   *       responded)
-   */
-  function useDialogCallback<
-    DialogTabType extends DialogTabTypes,
-    TResponse extends DialogTypes[DialogTabType]['responseType'] | undefined =
-      | DialogTypes[DialogTabType]['responseType']
-      | undefined,
-  >(
-    dialogType: DialogTabType,
-    options?: DialogTypes[DialogTabType]['options'],
-    defaultResponse?: TResponse,
-  ): [TResponse, () => Promise<void>, string | undefined, boolean];
-  export default useDialogCallback;
-}
-declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
-  import { DataProviderNames, DataProviders } from 'papi-shared-types';
-  /**
-   * Gets an array of data providers based on an array of input sources
-   *
-   * @type `T` - The types of data providers to return. Use `IDataProvider<TDataProviderDataTypes>`,
-   *   specifying your own types, or provide a custom data provider type for each item in the array.
-   *   Note that if you provide more than one data type, each item in the returned array will be
-   *   considered to be any of those types. For example, if you call `useDataProviderMulti<Type1,
-   *   Type2>`, all items in the returned array will be considered to be of type `Type1 | Type2 |
-   *   undefined`. Although you can determine the actual type based on the array index, TypeScript
-   *   will not know, so you will need to type assert the array items for later type checking to
-   *   work.
-   * @param dataProviderSources Array containing string names of the data providers to get OR data
-   *   providers themselves (i.e., the results of useDataProvider/useDataProviderMulti) if you want
-   *   this hook to return the data providers again. It is fine to have a mix of strings and data
-   *   providers in the array.
-   *
-   *   WARNING: THE ARRAY MUST BE STABLE - const or wrapped in useState, useMemo, etc. It must not be
-   *   updated every render.
-   * @returns An array of data providers that correspond by index to the values in
-   *   `dataProviderSources`. Each item in the array will be (a) undefined if the data provider has
-   *   not been retrieved or has been disposed, or (b) a data provider if it has been retrieved and is
-   *   not disposed.
-   */
-  function useDataProviderMulti<EachDataProviderName extends DataProviderNames[]>(
-    dataProviderSources: (
-      | EachDataProviderName[number]
-      | DataProviders[EachDataProviderName[number]]
-      | undefined
-    )[],
-  ): (DataProviders[EachDataProviderName[number]] | undefined)[];
-  export default useDataProviderMulti;
-}
-declare module 'renderer/hooks/papi-hooks/index' {
-  export { default as usePromise } from 'renderer/hooks/papi-hooks/use-promise.hook';
-  export { default as useEvent } from 'renderer/hooks/papi-hooks/use-event.hook';
-  export { default as useEventAsync } from 'renderer/hooks/papi-hooks/use-event-async.hook';
-  export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
-  export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
-  export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';
-  export { default as useProjectData } from 'renderer/hooks/papi-hooks/use-project-data.hook';
-  export { default as useProjectDataProvider } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
-  export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
-  export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
-}
-declare module 'papi-frontend/react' {
-  export * from 'renderer/hooks/papi-hooks/index';
-}
-declare module 'papi-frontend' {
-  /**
-   * Unified module for accessing API features in the renderer.
-   *
-   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
-   */
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
-  import * as commandService from 'shared/services/command.service';
-  import * as papiUtil from 'shared/utils/papi-util';
-  import { PapiNetworkService } from 'shared/services/network.service';
-  import { WebViewServiceType } from 'shared/services/web-view.service-model';
-  import { InternetService } from 'shared/services/internet.service';
-  import { DataProviderService } from 'shared/services/data-provider.service';
-  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
-  import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
-  import { SettingsService } from 'shared/services/settings.service';
-  import { DialogService } from 'shared/services/dialog.service-model';
-  import * as papiReact from 'papi-frontend/react';
-  const papi: {
-    /**
-     *
-     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
-     * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
-     * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-     * private, and its event should be public. That way, the emitter is not publicized, but anyone can
-     * subscribe to the event.
-     */
-    EventEmitter: typeof PapiEventEmitter;
-    /** This is just an alias for internet.fetch */
-    fetch: typeof globalThis.fetch;
-    /**
-     *
-     * The command service allows you to exchange messages with other components in the platform. You
-     * can register a command that other services and extensions can send you. You can send commands to
-     * other services and extensions that have registered commands.
-     */
-    commands: typeof commandService;
-    /**
-     *
-     * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
-     * services. Extensions should not use or rely on anything in papiUtil unless some other service
-     * requires it.
-     */
-    utils: typeof papiUtil;
-    /**
-     *
-     * Service exposing various functions related to using webViews
-     *
-     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
-     * HTML or React components.
-     */
-    webViews: WebViewServiceType;
-    /**
-     *
-     * Prompt the user for responses with dialogs
-     */
-    dialogs: DialogService;
-    /**
-     *
-     * Service that provides a way to send and receive network events
-     */
-    network: PapiNetworkService;
-    /**
-     *
-     * All extensions and services should use this logger to provide a unified output of logs
-     */
-    logger: import('electron-log').MainLogger & {
-      default: import('electron-log').MainLogger;
-    };
-    /**
-     *
-     * Service that provides a way to call `fetch` since the original function is not available
-     */
-    internet: InternetService;
-    /**
-     *
-     * Service that allows extensions to send and receive data to/from other extensions
-     */
-    dataProviders: DataProviderService;
-    /**
-     *
-     * Service that gets project data providers
-     */
-    projectDataProviders: PapiFrontendProjectDataProviderService;
-    /**
-     *
-     * Provides metadata for projects known by the platform
-     */
-    projectLookup: ProjectLookupServiceType;
-    /**
-     *
-     * React hooks that enable interacting with the `papi` in React components more easily.
-     */
-    react: typeof papiReact;
-    /**
-     *
-     * Service that allows to get and set settings in local storage
-     */
-    settings: SettingsService;
-  };
-  export default papi;
-  /**
-   *
-   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
-   * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
-   * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-   * private, and its event should be public. That way, the emitter is not publicized, but anyone can
-   * subscribe to the event.
-   */
-  export const EventEmitter: typeof PapiEventEmitter;
-  /** This is just an alias for internet.fetch */
-  export const fetch: typeof globalThis.fetch;
-  /**
-   *
-   * The command service allows you to exchange messages with other components in the platform. You
-   * can register a command that other services and extensions can send you. You can send commands to
-   * other services and extensions that have registered commands.
-   */
-  export const commands: typeof commandService;
-  /**
-   *
-   * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
-   * services. Extensions should not use or rely on anything in papiUtil unless some other service
-   * requires it.
-   */
-  export const utils: typeof papiUtil;
-  /**
-   *
-   * Service exposing various functions related to using webViews
-   *
-   * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
-   * HTML or React components.
-   */
-  export const webViews: WebViewServiceType;
-  /**
-   *
-   * Prompt the user for responses with dialogs
-   */
-  export const dialogs: DialogService;
-  /**
-   *
-   * Service that provides a way to send and receive network events
-   */
-  export const network: PapiNetworkService;
-  /**
-   *
-   * All extensions and services should use this logger to provide a unified output of logs
-   */
-  export const logger: import('electron-log').MainLogger & {
-    default: import('electron-log').MainLogger;
-  };
-  /**
-   *
-   * Service that provides a way to call `fetch` since the original function is not available
-   */
-  export const internet: InternetService;
-  /**
-   *
-   * Service that allows extensions to send and receive data to/from other extensions
-   */
-  export const dataProviders: DataProviderService;
-  /**
-   *
-   * Service that registers and gets project data providers
-   */
-  export const projectDataProviders: PapiFrontendProjectDataProviderService;
-  /**
-   *
-   * Provides metadata for projects known by the platform
-   */
-  export const projectLookup: ProjectLookupServiceType;
-  /**
-   *
-   * React hooks that enable interacting with the `papi` in React components more easily.
-   */
-  export const react: typeof papiReact;
-  /**
-   *
-   * Service that allows to get and set settings in local storage
-   */
-  export const settings: SettingsService;
-  export type Papi = typeof papi;
-}
-declare module 'shared/models/web-view-provider.model' {
-  import {
-    GetWebViewOptions,
-    WebViewDefinition,
-    SavedWebViewDefinition,
-  } from 'shared/models/web-view.model';
-  import {
-    DisposableNetworkObject,
-    NetworkObject,
-    NetworkableObject,
-  } from 'shared/models/network-object.model';
-  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
-  export interface IWebViewProvider extends NetworkableObject {
-    /**
-     * @param savedWebView Filled out if an existing webview is being called for (matched by ID). Just
-     *   ID if this is a new request or if the web view with the existing ID was not found
-     * @param getWebViewOptions
-     */
-    getWebView(
-      savedWebView: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
-    ): Promise<WebViewDefinition | undefined>;
-  }
-  export interface WebViewProvider
-    extends NetworkObject<NetworkableObject>,
-      CanHaveOnDidDispose<IWebViewProvider> {}
-  export interface DisposableWebViewProvider
-    extends DisposableNetworkObject<NetworkableObject>,
-      Omit<WebViewProvider, 'dispose'> {}
-}
-declare module 'shared/services/web-view-provider.service' {
-  /**
-   * Handles registering web view providers and serving web views around the papi. Exposed on the
-   * papi.
-   */
-  import {
-    DisposableWebViewProvider,
-    IWebViewProvider,
-    WebViewProvider,
-  } from 'shared/models/web-view-provider.model';
-  /** Sets up the service. Only runs once and always returns the same promise after that */
-  const initialize: () => Promise<void>;
-  /**
-   * Indicate if we are aware of an existing web view provider with the given type. If a web view
-   * provider with the given type is somewhere else on the network, this function won't tell you about
-   * it unless something else in the existing process is subscribed to it.
-   *
-   * @param webViewType Type of webView to check for
-   */
-  function hasKnown(webViewType: string): boolean;
-  /**
-   * Register a web view provider to serve webViews for a specified type of webViews
-   *
-   * @param webViewType Type of web view to provide
-   * @param webViewProvider Object to register as a webView provider including control over disposing
-   *   of it.
-   *
-   *   WARNING: setting a webView provider mutates the provided object.
-   * @returns `webViewProvider` modified to be a network object
-   */
-  function register(
-    webViewType: string,
-    webViewProvider: IWebViewProvider,
-  ): Promise<DisposableWebViewProvider>;
-  /**
-   * Get a web view provider that has previously been set up
-   *
-   * @param webViewType Type of webview provider to get
-   * @returns Web view provider with the given name if one exists, undefined otherwise
-   */
-  function get(webViewType: string): Promise<WebViewProvider | undefined>;
-  export interface WebViewProviderService {
-    initialize: typeof initialize;
-    hasKnown: typeof hasKnown;
-    register: typeof register;
-    get: typeof get;
-  }
-  export interface PapiWebViewProviderService {
-    register: typeof register;
-  }
-  const webViewProviderService: WebViewProviderService;
-  /**
-   *
-   * Interface for registering webView providers
-   */
-  export const papiWebViewProviderService: PapiWebViewProviderService;
-  export default webViewProviderService;
 }
 declare module 'shared/data/file-system.model' {
   /** Types to use with file system operations */
@@ -4566,7 +3571,220 @@ declare module 'extension-host/services/extension-storage.service' {
   const extensionStorageService: ExtensionStorageService;
   export default extensionStorageService;
 }
-declare module 'papi-backend' {
+declare module 'shared/models/dialog-options.model' {
+  /** General options to adjust dialogs (created from `papi.dialogs`) */
+  export type DialogOptions = {
+    /** Dialog title to display in the header. Default depends on the dialog */
+    title?: string;
+    /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
+    iconUrl?: string;
+    /** The message to show the user in the dialog. Default depends on the dialog */
+    prompt?: string;
+  };
+  /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
+  export type DialogData = DialogOptions & {
+    isDialog: true;
+  };
+}
+declare module 'renderer/components/dialogs/dialog-base.data' {
+  import { FloatSize, TabLoader, TabSaver } from 'shared/models/docking-framework.model';
+  import { DialogData } from 'shared/models/dialog-options.model';
+  import { ReactElement } from 'react';
+  /** Base type for DialogDefinition. Contains reasonable defaults for dialogs */
+  export type DialogDefinitionBase = Readonly<{
+    /** Overwritten in {@link DialogDefinition}. Must be specified by all DialogDefinitions */
+    tabType?: string;
+    /** Overwritten in {@link DialogDefinition}. Must be specified by all DialogDefinitions */
+    Component?: (props: DialogProps) => ReactElement;
+    /**
+     * The default icon for this dialog. This may be overridden by the `DialogOptions.iconUrl`
+     *
+     * Defaults to the Platform.Bible logo
+     */
+    defaultIconUrl?: string;
+    /**
+     * The default title for this dialog. This may be overridden by the `DialogOptions.title`
+     *
+     * Defaults to the DialogDefinition's `tabType`
+     */
+    defaultTitle?: string;
+    /** The width and height at which the dialog will be loaded in CSS `px` units */
+    initialSize: FloatSize;
+    /** The minimum width to which the dialog can be set in CSS `px` units */
+    minWidth?: number;
+    /** The minimum height to which the dialog can be set in CSS `px` units */
+    minHeight?: number;
+    /**
+     * The function used to load the dialog into the dock layout. Default uses the `Component` field
+     * and passes in the `DialogProps`
+     */
+    loadDialog: TabLoader;
+    /**
+     * The function used to save the dialog into the dock layout
+     *
+     * Default does not save the dialog as they cannot properly be restored yet.
+     *
+     * TODO: preserve requests between refreshes - save the dialog info in such a way that it works
+     * when loading again after refresh
+     */
+    saveDialog: TabSaver;
+  }>;
+  /** Props provided to the dialog component */
+  export type DialogProps<TData = unknown> = DialogData & {
+    /**
+     * Sends the data as a resolved response to the dialog request and closes the dialog
+     *
+     * @param data Data with which to resolve the request
+     */
+    submitDialog(data: TData): void;
+    /** Cancels the dialog request (resolves the response with `undefined`) and closes the dialog */
+    cancelDialog(): void;
+    /**
+     * Rejects the dialog request with the specified message and closes the dialog
+     *
+     * @param errorMessage Message to explain why the dialog request was rejected
+     */
+    rejectDialog(errorMessage: string): void;
+  };
+  /**
+   * Set the functionality of submitting and canceling dialogs. This should be called specifically by
+   * `dialog.service-host.ts` immediately on startup and by nothing else. This is only here to
+   * mitigate a dependency cycle
+   *
+   * @param dialogServiceFunctions Functions from the dialog service host for resolving and rejecting
+   *   dialogs
+   */
+  export function hookUpDialogService({
+    resolveDialogRequest: resolve,
+    rejectDialogRequest: reject,
+  }: {
+    resolveDialogRequest: (id: string, data: unknown | undefined) => void;
+    rejectDialogRequest: (id: string, message: string) => void;
+  }): void;
+  /**
+   * Static definition of a dialog that can be shown in Platform.Bible
+   *
+   * For good defaults, dialogs can include all the properties of this dialog. Dialogs must then
+   * specify `tabType` and `Component` in order to comply with `DialogDefinition`
+   *
+   * Note: this is not a class that can be inherited because all properties would be static but then
+   * we would not be able to use the default `loadDialog` because it would be using a static reference
+   * to a nonexistent `Component`. Instead of inheriting this as a class, any dialog definition can
+   * spread this `{ ...DIALOG_BASE }`
+   */
+  const DIALOG_BASE: DialogDefinitionBase;
+  export default DIALOG_BASE;
+}
+declare module 'renderer/components/dialogs/dialog-definition.model' {
+  import { DialogOptions } from 'shared/models/dialog-options.model';
+  import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
+  import { ReactElement } from 'react';
+  /** The tabType for the select project dialog in `select-project.dialog.tsx` */
+  export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
+  /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
+  export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
+  /** Options to provide when showing the Select Project dialog */
+  export type SelectProjectDialogOptions = DialogOptions & {
+    /** Project IDs to exclude from showing in the dialog */
+    excludeProjectIds?: string[];
+  };
+  /** Options to provide when showing the Select Multiple Project dialog */
+  export type SelectMultipleProjectsDialogOptions = DialogOptions & {
+    /** Project IDs to exclude from showing in the dialog */
+    excludeProjectIds?: string[];
+    /** Project IDs that should start selected in the dialog */
+    selectedProjectIds?: string[];
+  };
+  /**
+   * Mapped type for dialog functions to use in getting various types for dialogs
+   *
+   * Keys should be dialog names, and values should be {@link DialogDataTypes}
+   *
+   * If you add a dialog here, you must also add it on {@link DIALOGS}
+   */
+  export interface DialogTypes {
+    [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<SelectProjectDialogOptions, string>;
+    [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<
+      SelectMultipleProjectsDialogOptions,
+      string[]
+    >;
+  }
+  /** Each type of dialog. These are the tab types used in the dock layout */
+  export type DialogTabTypes = keyof DialogTypes;
+  /** Types related to a specific dialog */
+  export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
+    /**
+     * The dialog options to specify when calling the dialog. Passed into `loadDialog` as
+     * SavedTabInfo.data
+     *
+     * The default implementation of `loadDialog` passes all the options down to the dialog component
+     * as props
+     */
+    options: TOptions;
+    /** The type of the response to the dialog request */
+    responseType: TReturnType;
+    /** Props provided to the dialog component */
+    props: DialogProps<TReturnType> & TOptions;
+  };
+  export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<
+    DialogDefinitionBase & {
+      /**
+       * Type of tab - indicates what kind of built-in dock layout tab this dialog definition
+       * represents
+       */
+      tabType: DialogTabType;
+      /**
+       * React component to render for this dialog
+       *
+       * This must be specified only if you do not overwrite the default `loadDialog`
+       *
+       * @param props Props that will be passed through from the dialog tab's data
+       * @returns React element to render
+       */
+      Component: (
+        props: DialogProps<DialogTypes[DialogTabType]['responseType']> &
+          DialogTypes[DialogTabType]['options'],
+      ) => ReactElement;
+    }
+  >;
+}
+declare module 'shared/services/dialog.service-model' {
+  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  import { DialogOptions } from 'shared/models/dialog-options.model';
+  /**
+   *
+   * Prompt the user for responses with dialogs
+   */
+  export interface DialogService {
+    /**
+     * Shows a dialog to the user and prompts the user to respond
+     *
+     * @type `TReturn` - The type of data the dialog responds with
+     * @param dialogType The type of dialog to show the user
+     * @param options Various options for configuring the dialog that shows
+     * @returns Returns the user's response or `undefined` if the user cancels
+     */
+    showDialog<DialogTabType extends DialogTabTypes>(
+      dialogType: DialogTabType,
+      options?: DialogTypes[DialogTabType]['options'],
+    ): Promise<DialogTypes[DialogTabType]['responseType'] | undefined>;
+    /**
+     * Shows a select project dialog to the user and prompts the user to select a dialog
+     *
+     * @param options Various options for configuring the dialog that shows
+     * @returns Returns the user's selected project id or `undefined` if the user cancels
+     */
+    selectProject(options?: DialogOptions): Promise<string | undefined>;
+  }
+  /** Prefix on requests that indicates that the request is related to dialog operations */
+  export const CATEGORY_DIALOG = 'dialog';
+}
+declare module 'shared/services/dialog.service' {
+  import { DialogService } from 'shared/services/dialog.service-model';
+  const dialogService: DialogService;
+  export default dialogService;
+}
+declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
    *
@@ -4846,4 +4064,820 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      */
     activationEvents: string[];
   };
+}
+declare module 'shared/services/settings.service' {
+  import { Unsubscriber } from 'shared/utils/papi-util';
+  import { SettingTypes } from 'papi-shared-types';
+  /**
+   * Retrieves the value of the specified setting
+   *
+   * @param key The string id of the setting for which the value is being retrieved
+   * @returns The value of the specified setting, parsed to an object. Returns `undefined` if setting
+   *   is not present or no value is available
+   */
+  const getSetting: <SettingName extends keyof SettingTypes>(
+    key: SettingName,
+  ) => SettingTypes[SettingName] | undefined;
+  /**
+   * Sets the value of the specified setting
+   *
+   * @param key The string id of the setting for which the value is being retrieved
+   * @param newSetting The value that is to be stored. Setting the new value to `undefined` is the
+   *   equivalent of deleting the setting
+   */
+  const setSetting: <SettingName extends keyof SettingTypes>(
+    key: SettingName,
+    newSetting: SettingTypes[SettingName] | undefined,
+  ) => void;
+  /**
+   * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
+   * callback function is executed.
+   *
+   * @param key The string id of the setting for which the value is being subscribed to
+   * @param callback The function that will be called whenever the specified setting is updated
+   * @returns Unsubscriber that should be called whenever the subscription should be deleted
+   */
+  const subscribeToSetting: <SettingName extends keyof SettingTypes>(
+    key: SettingName,
+    callback: (newSetting: SettingTypes[SettingName] | undefined) => void,
+  ) => Unsubscriber;
+  export interface SettingsService {
+    get: typeof getSetting;
+    set: typeof setSetting;
+    subscribe: typeof subscribeToSetting;
+  }
+  /**
+   *
+   * Service that allows to get and set settings in local storage
+   */
+  const settingsService: SettingsService;
+  export default settingsService;
+}
+declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
+  /**
+   * Awaits a promise and returns a loading value while the promise is unresolved
+   *
+   * @param promiseFactoryCallback A function that returns the promise to await. If this callback is
+   *   undefined, the current value will be returned (defaultValue unless it was previously changed
+   *   and preserveValue is true), and there will be no loading.
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
+   *   every render
+   * @param defaultValue The initial value to return while first awaiting the promise. If
+   *   preserveValue is false, this value is also shown while awaiting the promise on subsequent
+   *   calls.
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param preserveValue Whether to leave the value as the most recent resolved promise value or set
+   *   it back to defaultValue while running the promise again. Default to true
+   * @returns `[value, isLoading]`
+   *
+   *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
+   *   - `isLoading`: whether the promise is waiting to be resolved
+   */
+  const usePromise: <T>(
+    promiseFactoryCallback: (() => Promise<T>) | undefined,
+    defaultValue: T,
+    preserveValue?: boolean,
+  ) => [value: T, isLoading: boolean];
+  export default usePromise;
+}
+declare module 'renderer/hooks/papi-hooks/use-event.hook' {
+  import { PapiEvent, PapiEventHandler } from 'shared/models/papi-event.model';
+  /**
+   * Adds an event handler to an event so the event handler runs when the event is emitted
+   *
+   * @param event The event to subscribe to. Can be either a string or an Event
+   *
+   *   - If event is a `string`, the network event associated with this type will automatically be used
+   *   - If event is a `PapiEvent`, that event will be used
+   *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
+   *       available for example
+   *
+   * @param eventHandler The callback to run when the event is emitted
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
+   *   every render
+   */
+  const useEvent: <T>(
+    event: string | PapiEvent<T> | undefined,
+    eventHandler: PapiEventHandler<T>,
+  ) => void;
+  export default useEvent;
+}
+declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
+  import { PapiEvent, PapiEventAsync, PapiEventHandler } from 'shared/models/papi-event.model';
+  /**
+   * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
+   * runs when the event is emitted
+   *
+   * @param event The asynchronously (un)subscribing event to subscribe to. Can be either a string or
+   *   an Event
+   *
+   *   - If event is a `string`, the network event associated with this type will automatically be used
+   *   - If event is a `PapiEvent` or `PapiEventAsync`, that event will be used
+   *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
+   *       available for example
+   *
+   * @param eventHandler The callback to run when the event is emitted
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
+   *   every render
+   */
+  const useEventAsync: <T>(
+    event: string | PapiEvent<T> | PapiEventAsync<T> | undefined,
+    eventHandler: PapiEventHandler<T>,
+  ) => void;
+  export default useEventAsync;
+}
+declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
+  import { NetworkObject } from 'shared/models/network-object.model';
+  /**
+   * This function takes in a getNetworkObject function and creates a hook with that function in it
+   * which will return a network object
+   *
+   * @param getNetworkObject A function that takes in an id string and returns a network object
+   * @param mapParametersToNetworkObjectSource Function that takes the parameters passed into the hook
+   *   and returns the `networkObjectSource` associated with those parameters. Defaults to taking the
+   *   first parameter passed into the hook and using that as the `networkObjectSource`.
+   *
+   *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
+   *       (result of this hook, if you want this hook to just return the network object again)
+   *
+   * @returns A function that takes in a networkObjectSource and returns a NetworkObject
+   */
+  function createUseNetworkObjectHook<THookParams extends unknown[]>(
+    getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
+    mapParametersToNetworkObjectSource?: (
+      ...args: THookParams
+    ) => string | NetworkObject<object> | undefined,
+  ): (...args: THookParams) => NetworkObject<object> | undefined;
+  export default createUseNetworkObjectHook;
+}
+declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
+  import { DataProviders } from 'papi-shared-types';
+  /**
+   * Gets a data provider with specified provider name
+   *
+   * @type `T` - The type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
+   *   specifying your own types, or provide a custom data provider type
+   * @param dataProviderSource String name of the data provider to get OR dataProvider (result of
+   *   useDataProvider, if you want this hook to just return the data provider again)
+   * @returns Undefined if the data provider has not been retrieved, data provider if it has been
+   *   retrieved and is not disposed, and undefined again if the data provider is disposed
+   */
+  const useDataProvider: <DataProviderName extends keyof DataProviders>(
+    dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+  ) => DataProviders[DataProviderName] | undefined;
+  export default useDataProvider;
+}
+declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import IDataProvider from 'shared/models/data-provider.interface';
+  import ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
+  /**
+   * The final function called as part of the `useData` hook that is the actual React hook
+   *
+   * This is the `.Greeting(...)` part of `useData('helloSomeone.people').Greeting(...)`
+   */
+  type UseDataFunctionWithProviderType<
+    TDataProvider extends IDataProvider<any>,
+    TDataType extends keyof ExtractDataProviderDataTypes<TDataProvider>,
+  > = (
+    selector: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['selector'],
+    defaultValue: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
+    subscriberOptions?: DataProviderSubscriberOptions,
+  ) => [
+    ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
+    (
+      | ((
+          newData: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['setData'],
+        ) => Promise<DataProviderUpdateInstructions<ExtractDataProviderDataTypes<TDataProvider>>>)
+      | undefined
+    ),
+    boolean,
+  ];
+  /**
+   * A proxy that serves the actual hooks for a single data provider
+   *
+   * This is the `useData('helloSomeone.people')` part of
+   * `useData('helloSomeone.people').Greeting(...)`
+   */
+  type UseDataProxy<TDataProvider extends IDataProvider<any>> = {
+    [TDataType in keyof ExtractDataProviderDataTypes<TDataProvider>]: UseDataFunctionWithProviderType<
+      TDataProvider,
+      TDataType
+    >;
+  };
+  /**
+   * React hook to use data provider data with various data types
+   *
+   * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
+   *
+   * @type `TDataProvider` - The type of data provider to get. Use
+   *   `IDataProvider<TDataProviderDataTypes>`, specifying your own types, or provide a custom data
+   *   provider type
+   */
+  type UseDataHookGeneric<TUseDataProviderParams extends unknown[]> = {
+    <TDataProvider extends IDataProvider<any>>(
+      ...args: TUseDataProviderParams
+    ): UseDataProxy<TDataProvider>;
+  };
+  /**
+   * Create a `useData(...).DataType(selector, defaultValue, options)` hook for a specific subset of
+   * data providers as supported by `useDataProviderHook`
+   *
+   * @param useDataProviderHook Hook that gets a data provider from a specific subset of data
+   *   providers
+   * @returns `useData` hook for getting data from a data provider
+   */
+  function createUseDataHook<TUseDataProviderParams extends unknown[]>(
+    useDataProviderHook: (...args: TUseDataProviderParams) => IDataProvider | undefined,
+  ): UseDataHookGeneric<TUseDataProviderParams>;
+  export default createUseDataHook;
+}
+declare module 'renderer/hooks/papi-hooks/use-data.hook' {
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { DataProviderNames, DataProviderTypes, DataProviders } from 'papi-shared-types';
+  /**
+   * React hook to use data from a data provider
+   *
+   * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
+   */
+  type UseDataHook = {
+    <DataProviderName extends DataProviderNames>(
+      dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+    ): {
+      [TDataType in keyof DataProviderTypes[DataProviderName]]: (
+        // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
+        selector: DataProviderTypes[DataProviderName][TDataType]['selector'],
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
+        defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
+        subscriberOptions?: DataProviderSubscriberOptions,
+      ) => [
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
+        DataProviderTypes[DataProviderName][TDataType]['getData'],
+        (
+          | ((
+              // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
+              newData: DataProviderTypes[DataProviderName][TDataType]['setData'],
+            ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
+          | undefined
+        ),
+        boolean,
+      ];
+    };
+  };
+  /**
+   * ```typescript
+   * useData<DataProviderName extends DataProviderNames>(
+   *     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+   *   ).DataType(
+   *       selector: DataProviderTypes[DataProviderName][DataType]['selector'],
+   *       defaultValue: DataProviderTypes[DataProviderName][DataType]['getData'],
+   *       subscriberOptions?: DataProviderSubscriberOptions,
+   *     ) => [
+   *       DataProviderTypes[DataProviderName][DataType]['getData'],
+   *       (
+   *         | ((
+   *             newData: DataProviderTypes[DataProviderName][DataType]['setData'],
+   *           ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
+   *         | undefined
+   *       ),
+   *       boolean,
+   *     ]
+   * ```
+   *
+   * React hook to use data from a data provider. Subscribes to run a callback on a data provider's
+   * data with specified selector on the specified data type that data provider serves.
+   *
+   * Usage: Specify the data provider and the data type on the data provider with
+   * `useData('<data_provider>').<data_type>` and use like any other React hook.
+   *
+   * _＠example_ Subscribing to Verse data at JHN 11:35 on the `'quickVerse.quickVerse'` data provider:
+   *
+   * ```typescript
+   * const [verseText, setVerseText, verseTextIsLoading] = useData('quickVerse.quickVerse').Verse(
+   *   'JHN 11:35',
+   *   'Verse text goes here',
+   * );
+   * ```
+   *
+   * _＠param_ `dataProviderSource` string name of data provider to get OR dataProvider (result of
+   * useDataProvider if you want to consolidate and only get the data provider once)
+   *
+   * _＠param_ `selector` tells the provider what data this listener is listening for
+   *
+   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   * updated every render
+   *
+   * _＠param_ `defaultValue` the initial value to return while first awaiting the data
+   *
+   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   * updated every render
+   *
+   * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
+   *
+   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
+   * must not be updated every render
+   *
+   * _＠returns_ `[data, setData, isLoading]`
+   *
+   * - `data`: the current value for the data from the data provider with the specified data type and
+   *   selector, either the defaultValue or the resolved data
+   * - `setData`: asynchronous function to request that the data provider update the data at this data
+   *   type and selector. Returns true if successful. Note that this function does not update the
+   *   data. The data provider sends out an update to this subscription if it successfully updates
+   *   data.
+   * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
+   *   provider
+   */
+  const useData: UseDataHook;
+  export default useData;
+}
+declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
+  import { SettingTypes } from 'papi-shared-types';
+  /**
+   * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes and gets
+   * updated when the setting is changed by others.
+   *
+   * Setting the value to `undefined` is the equivalent of deleting the setting.
+   *
+   * @param key The string id that is used to store the setting in local storage
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param defaultState The default state of the setting. If the setting already has a value set to
+   *   it in local storage, this parameter will be ignored.
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @returns `[setting, setSetting]`
+   *
+   *   - `setting`: The current state of the setting, either the defaultState or the stored state on the
+   *       papi, if any
+   *   - `setSetting`: Function that updates the setting to a new value
+   */
+  const useSetting: <SettingName extends keyof SettingTypes>(
+    key: SettingName,
+    defaultState: SettingTypes[SettingName],
+  ) => [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void];
+  export default useSetting;
+}
+declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
+  import { ProjectDataTypes } from 'papi-shared-types';
+  import IDataProvider from 'shared/models/data-provider.interface';
+  /**
+   * Gets a project data provider with specified provider name
+   *
+   * @param projectType Indicates what you expect the `projectType` to be for the project with the
+   *   specified id. The TypeScript type for the returned project data provider will have the project
+   *   data provider type associated with this project type. If this argument does not match the
+   *   project's actual `projectType` (according to its metadata), a warning will be logged
+   * @param projectDataProviderSource String name of the id of the project to get OR
+   *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
+   *   data provider again)
+   * @returns `undefined` if the project data provider has not been retrieved, the requested project
+   *   data provider if it has been retrieved and is not disposed, and undefined again if the project
+   *   data provider is disposed
+   */
+  const useProjectDataProvider: <ProjectType extends keyof ProjectDataTypes>(
+    projectType: ProjectType,
+    projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+  ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
+  export default useProjectDataProvider;
+}
+declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import IDataProvider from 'shared/models/data-provider.interface';
+  import { ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
+  /**
+   * React hook to use data from a project data provider
+   *
+   * @example `useProjectData('ParatextStandard', 'project id').VerseUSFM(...);`
+   */
+  type UseProjectDataHook = {
+    <ProjectType extends ProjectTypes>(
+      projectType: ProjectType,
+      projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+    ): {
+      [TDataType in keyof ProjectDataTypes[ProjectType]]: (
+        // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
+        selector: ProjectDataTypes[ProjectType][TDataType]['selector'],
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
+        defaultValue: ProjectDataTypes[ProjectType][TDataType]['getData'],
+        subscriberOptions?: DataProviderSubscriberOptions,
+      ) => [
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
+        ProjectDataTypes[ProjectType][TDataType]['getData'],
+        (
+          | ((
+              // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
+              newData: ProjectDataTypes[ProjectType][TDataType]['setData'],
+            ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+          | undefined
+        ),
+        boolean,
+      ];
+    };
+  };
+  /**
+   * ```typescript
+   * useProjectData<ProjectType extends ProjectTypes>(
+   *     projectType: ProjectType,
+   *     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+   *   ).DataType(
+   *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
+   *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
+   *       subscriberOptions?: DataProviderSubscriberOptions,
+   *     ) => [
+   *       ProjectDataTypes[ProjectType][DataType]['getData'],
+   *       (
+   *         | ((
+   *             newData: ProjectDataTypes[ProjectType][DataType]['setData'],
+   *           ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+   *         | undefined
+   *       ),
+   *       boolean,
+   *     ]
+   * ```
+   *
+   * React hook to use data from a project data provider. Subscribes to run a callback on a project
+   * data provider's data with specified selector on the specified data type that the project data
+   * provider serves according to its `projectType`.
+   *
+   * Usage: Specify the project type, the project id, and the data type on the project data provider
+   * with `useProjectData('<project_type>', '<project_id>').<data_type>` and use like any other React
+   * hook.
+   *
+   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `ParatextStandard` project with
+   * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
+   *
+   * ```typescript
+   * const [verse, setVerse, verseIsLoading] = useProjectData(
+   *   'ParatextStandard',
+   *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+   * ).VerseUSFM(
+   *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
+   *   'Loading verse ',
+   * );
+   * ```
+   *
+   * _＠param_ `projectType` Indicates what you expect the `projectType` to be for the project with the
+   * specified id. The TypeScript type for the returned project data provider will have the project
+   * data provider type associated with this project type. If this argument does not match the
+   * project's actual `projectType` (according to its metadata), a warning will be logged
+   *
+   * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
+   * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
+   * project data provider once)
+   *
+   * _＠param_ `selector` tells the provider what data this listener is listening for
+   *
+   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   * updated every render
+   *
+   * _＠param_ `defaultValue` the initial value to return while first awaiting the data
+   *
+   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   * updated every render
+   *
+   * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
+   *
+   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
+   * must not be updated every render
+   *
+   * _＠returns_ `[data, setData, isLoading]`
+   */
+  const useProjectData: UseProjectDataHook;
+  export default useProjectData;
+}
+declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
+  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  /**
+   * Enables using `papi.dialogs.showDialog` in React more easily. Provides a callback to run to get a
+   * response from a dialog as well as states that indicate the dialog's response and whether the
+   * dialog is open.
+   *
+   * Calling the dialog callback returned from this hook does nothing if you already previously opened
+   * the dialog and have not received a response
+   *
+   * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
+   * @type `TResponse` The type that the response can be. If you do not specify a `defaultResponse`,
+   *   this can be the dialog response type or `undefined`. If you specify a `defaultResponse`, this
+   *   will be just the dialog response type. Should be inferred by parameters.
+   *
+   *   - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse` then
+   *       becomes that literal instead of being the dialog response type. You can type assert it to
+   *       the appropriate type. Let us know if you run into an issue with this!
+   *
+   * @param dialogType Dialog type you want to show on the screen
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param options Various options for configuring the dialog that shows
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param defaultResponse The starting value for the response. Once a response is received, this is
+   *   no longer used. Defaults to `undefined`
+   * @returns `[response, showDialogCallback, errorMessage, isShowingDialog]`
+   *
+   *   - `response` - the response from the dialog or `defaultResponse` if a response has not been
+   *       received (does not reset to `defaultResponse` if the user cancels the dialog). DOES NOT
+   *       reset every time the callback is run
+   *   - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response. If
+   *       this callback is run while the dialog is open, nothing happens
+   *   - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
+   *       `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
+   *   - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not
+   *       responded)
+   */
+  function useDialogCallback<
+    DialogTabType extends DialogTabTypes,
+    TResponse extends DialogTypes[DialogTabType]['responseType'] | undefined =
+      | DialogTypes[DialogTabType]['responseType']
+      | undefined,
+  >(
+    dialogType: DialogTabType,
+    options?: DialogTypes[DialogTabType]['options'],
+    defaultResponse?: TResponse,
+  ): [TResponse, () => Promise<void>, string | undefined, boolean];
+  export default useDialogCallback;
+}
+declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
+  import { DataProviderNames, DataProviders } from 'papi-shared-types';
+  /**
+   * Gets an array of data providers based on an array of input sources
+   *
+   * @type `T` - The types of data providers to return. Use `IDataProvider<TDataProviderDataTypes>`,
+   *   specifying your own types, or provide a custom data provider type for each item in the array.
+   *   Note that if you provide more than one data type, each item in the returned array will be
+   *   considered to be any of those types. For example, if you call `useDataProviderMulti<Type1,
+   *   Type2>`, all items in the returned array will be considered to be of type `Type1 | Type2 |
+   *   undefined`. Although you can determine the actual type based on the array index, TypeScript
+   *   will not know, so you will need to type assert the array items for later type checking to
+   *   work.
+   * @param dataProviderSources Array containing string names of the data providers to get OR data
+   *   providers themselves (i.e., the results of useDataProvider/useDataProviderMulti) if you want
+   *   this hook to return the data providers again. It is fine to have a mix of strings and data
+   *   providers in the array.
+   *
+   *   WARNING: THE ARRAY MUST BE STABLE - const or wrapped in useState, useMemo, etc. It must not be
+   *   updated every render.
+   * @returns An array of data providers that correspond by index to the values in
+   *   `dataProviderSources`. Each item in the array will be (a) undefined if the data provider has
+   *   not been retrieved or has been disposed, or (b) a data provider if it has been retrieved and is
+   *   not disposed.
+   */
+  function useDataProviderMulti<EachDataProviderName extends DataProviderNames[]>(
+    dataProviderSources: (
+      | EachDataProviderName[number]
+      | DataProviders[EachDataProviderName[number]]
+      | undefined
+    )[],
+  ): (DataProviders[EachDataProviderName[number]] | undefined)[];
+  export default useDataProviderMulti;
+}
+declare module 'renderer/hooks/papi-hooks/index' {
+  export { default as usePromise } from 'renderer/hooks/papi-hooks/use-promise.hook';
+  export { default as useEvent } from 'renderer/hooks/papi-hooks/use-event.hook';
+  export { default as useEventAsync } from 'renderer/hooks/papi-hooks/use-event-async.hook';
+  export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
+  export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
+  export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';
+  export { default as useProjectData } from 'renderer/hooks/papi-hooks/use-project-data.hook';
+  export { default as useProjectDataProvider } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
+  export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
+}
+declare module '@papi/frontend/react' {
+  export * from 'renderer/hooks/papi-hooks/index';
+}
+declare module '@papi/frontend' {
+  /**
+   * Unified module for accessing API features in the renderer.
+   *
+   * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
+   */
+  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+  import * as commandService from 'shared/services/command.service';
+  import * as papiUtil from 'shared/utils/papi-util';
+  import { PapiNetworkService } from 'shared/services/network.service';
+  import { WebViewServiceType } from 'shared/services/web-view.service-model';
+  import { InternetService } from 'shared/services/internet.service';
+  import { DataProviderService } from 'shared/services/data-provider.service';
+  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
+  import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
+  import { SettingsService } from 'shared/services/settings.service';
+  import { DialogService } from 'shared/services/dialog.service-model';
+  import * as papiReact from '@papi/frontend/react';
+  const papi: {
+    /**
+     *
+     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
+     * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
+     * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
+     * private, and its event should be public. That way, the emitter is not publicized, but anyone can
+     * subscribe to the event.
+     */
+    EventEmitter: typeof PapiEventEmitter;
+    /** This is just an alias for internet.fetch */
+    fetch: typeof globalThis.fetch;
+    /**
+     *
+     * The command service allows you to exchange messages with other components in the platform. You
+     * can register a command that other services and extensions can send you. You can send commands to
+     * other services and extensions that have registered commands.
+     */
+    commands: typeof commandService;
+    /**
+     *
+     * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
+     * services. Extensions should not use or rely on anything in papiUtil unless some other service
+     * requires it.
+     */
+    utils: typeof papiUtil;
+    /**
+     *
+     * Service exposing various functions related to using webViews
+     *
+     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+     * HTML or React components.
+     */
+    webViews: WebViewServiceType;
+    /**
+     *
+     * Prompt the user for responses with dialogs
+     */
+    dialogs: DialogService;
+    /**
+     *
+     * Service that provides a way to send and receive network events
+     */
+    network: PapiNetworkService;
+    /**
+     *
+     * All extensions and services should use this logger to provide a unified output of logs
+     */
+    logger: import('electron-log').MainLogger & {
+      default: import('electron-log').MainLogger;
+    };
+    /**
+     *
+     * Service that provides a way to call `fetch` since the original function is not available
+     */
+    internet: InternetService;
+    /**
+     *
+     * Service that allows extensions to send and receive data to/from other extensions
+     */
+    dataProviders: DataProviderService;
+    /**
+     *
+     * Service that gets project data providers
+     */
+    projectDataProviders: PapiFrontendProjectDataProviderService;
+    /**
+     *
+     * Provides metadata for projects known by the platform
+     */
+    projectLookup: ProjectLookupServiceType;
+    /**
+     *
+     * React hooks that enable interacting with the `papi` in React components more easily.
+     */
+    react: typeof papiReact;
+    /**
+     *
+     * Service that allows to get and set settings in local storage
+     */
+    settings: SettingsService;
+  };
+  export default papi;
+  /**
+   *
+   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
+   * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
+   * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
+   * private, and its event should be public. That way, the emitter is not publicized, but anyone can
+   * subscribe to the event.
+   */
+  export const EventEmitter: typeof PapiEventEmitter;
+  /** This is just an alias for internet.fetch */
+  export const fetch: typeof globalThis.fetch;
+  /**
+   *
+   * The command service allows you to exchange messages with other components in the platform. You
+   * can register a command that other services and extensions can send you. You can send commands to
+   * other services and extensions that have registered commands.
+   */
+  export const commands: typeof commandService;
+  /**
+   *
+   * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
+   * services. Extensions should not use or rely on anything in papiUtil unless some other service
+   * requires it.
+   */
+  export const utils: typeof papiUtil;
+  /**
+   *
+   * Service exposing various functions related to using webViews
+   *
+   * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+   * HTML or React components.
+   */
+  export const webViews: WebViewServiceType;
+  /**
+   *
+   * Prompt the user for responses with dialogs
+   */
+  export const dialogs: DialogService;
+  /**
+   *
+   * Service that provides a way to send and receive network events
+   */
+  export const network: PapiNetworkService;
+  /**
+   *
+   * All extensions and services should use this logger to provide a unified output of logs
+   */
+  export const logger: import('electron-log').MainLogger & {
+    default: import('electron-log').MainLogger;
+  };
+  /**
+   *
+   * Service that provides a way to call `fetch` since the original function is not available
+   */
+  export const internet: InternetService;
+  /**
+   *
+   * Service that allows extensions to send and receive data to/from other extensions
+   */
+  export const dataProviders: DataProviderService;
+  /**
+   *
+   * Service that registers and gets project data providers
+   */
+  export const projectDataProviders: PapiFrontendProjectDataProviderService;
+  /**
+   *
+   * Provides metadata for projects known by the platform
+   */
+  export const projectLookup: ProjectLookupServiceType;
+  /**
+   *
+   * React hooks that enable interacting with the `papi` in React components more easily.
+   */
+  export const react: typeof papiReact;
+  /**
+   *
+   * Service that allows to get and set settings in local storage
+   */
+  export const settings: SettingsService;
+  export type Papi = typeof papi;
+}
+declare module '@papi/core' {
+  /** Exporting empty object so people don't have to put 'type' in their import statements */
+  const core: {};
+  export default core;
+  export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+  export type { ExecutionToken } from 'node/models/execution-token.model';
+  export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  export type { default as IDataProvider } from 'shared/models/data-provider.interface';
+  export type {
+    DataProviderUpdateInstructions,
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+  } from 'shared/models/data-provider.model';
+  export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
+  export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
+  export type { DialogOptions } from 'shared/models/dialog-options.model';
+  export type { PapiEvent } from 'shared/models/papi-event.model';
+  export type { default as PapiEventEmitter } from 'shared/models/papi-event-emitter.model';
+  export type {
+    ExtensionDataScope,
+    MandatoryProjectDataType,
+  } from 'shared/models/project-data-provider.model';
+  export type { ProjectMetadata } from 'shared/models/project-metadata.model';
+  export type {
+    GetWebViewOptions,
+    SavedWebViewDefinition,
+    UseWebViewStateHook,
+    WebViewContentType,
+    WebViewDefinition,
+    WebViewProps,
+  } from 'shared/models/web-view.model';
+  export type { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
+  export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
 }
