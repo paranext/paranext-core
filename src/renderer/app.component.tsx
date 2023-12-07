@@ -1,5 +1,5 @@
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
-import './app.component.css';
+import './app.component.scss';
 import PlatformDockLayout from '@renderer/components/docking/platform-dock-layout.component';
 import TestContext from '@renderer/context/papi-context/test.context';
 import PlatformBibleToolbar from './components/platform-bible-toolbar';

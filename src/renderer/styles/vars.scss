@@ -9,19 +9,21 @@ $color--pt9-darkgray: #4c4c4c;
 $color--text: #191919;
 $color--text-dimmed: #aaa;
 
+$color--background: #bfbfbf;
 $color--active-tab: white;
-$color--inactive-tab: #dcdcdc;
-$color--background: #cfcfcf;
-$color--selected-background: $color--inactive-tab;
+$color--inactive-tab: #e0e0e0;
+$color--selected-background: var(--text-selected, rgba(0, 0, 0, 0.08));
 $color--selection-indicator: $color--platform-bible;
 
-$color--border: $color--background;
+$color--border: #bfbfbf;
 
 /* SPACING */
+$space--xxs: 2px;
 $space--xs: 4px;
 $space--s: 8px;
 $space--m: 16px;
 $space--l: 36px;
 
 /* OTHER */
-$border: 1px solid $color--border;
+$border-width: 1px;
+$font-family: 'Roboto medium', sans-serif;
