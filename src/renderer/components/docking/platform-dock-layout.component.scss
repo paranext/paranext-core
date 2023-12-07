@@ -1,14 +1,23 @@
-@import '../../../shared/styles';
+@import '../../styles/vars';
 
-$docking-grid-space: 3px;
+/************* GENERAL *********************/
 
+/* space around app and in between windows */
 .dock-divider {
-  flex: 0 0 $docking-grid-space;
+  flex: 0 0 1px;
+}
+
+.dock-hbox > .dock-divider {
+  transform: scaleX(6);
+}
+
+.dock-vbox > .dock-divider {
+  transform: scaleY(6);
 }
 
 .dock-layout {
   flex-grow: 1;
-  margin: $docking-grid-space;
+  margin-top: 1px;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible {
@@ -25,75 +34,36 @@ $docking-grid-space: 3px;
   background: none;
 }
 
-.dock-layout .dock-panel.dock-style-place-holder .dock-content-holder {
-  border: 0;
+/* global dock layout styles */
+.dock-layout > .dock-drop-indicator {
+  /* darken(#a6c9ff, 40%) = #0055d9 */
+  border: solid 1px #0055d9;
+  box-shadow: inset 0 0 10px #0055d9;
+  background: #a6c9ff;
 }
 
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
-  margin-right: 0;
-  border: $border;
-  border-top: 0;
-  background: $color--inactive-tab;
-  color: $color--text;
-  flex: 1 0 auto;
+/************* TAB-BAR *********************/
+
+/* tabs take all the space */
+.dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
+  flex-grow: 1;
 }
 
-/*
- * Close buttons
- */
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
-  padding-left: $space--s;
-  padding-right: calc($space--m + $space--xs + $space--xs / 2);
+/* overriding default style for the shadow indicating that not all tabs are shown */
+.dock-nav-more::after {
+  box-shadow: inset -10px 0 8px -8px $color--text-dimmed;
 }
 
-.dock-panel.dock-style-card .dock-tab-close-btn {
-  right: $space--xs;
-}
-
-.dock-dropdown-menu-item .dock-tab-close-btn {
-  right: $space--xs;
-  top: $space--xs;
-}
-
-.dock-dropdown-menu-item .title {
-  padding-right: calc($space--s + $space--xs);
-}
-
-/*
- * Show borders on the sides of the dock-nav, not on the very edges of the dock-tabs,
- * so the borders show even when the tabs don't fit in the space and you have to scroll
- */
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab:first-child {
-  border-left: 0;
-}
-
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
-  background: $color--active-tab;
-  color: $color--text;
-  border-bottom: 0;
-  box-shadow: 0 0 8px 2px $color--text-dimmed;
-  z-index: 1; // fix tab to show over the right next ribbon as well
-}
-
-/* Curved corners including on floating window */
-.dock-layout .dock-panel.dock-style-platform-bible,
-.dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
-.dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
-.dock-layout .dock-panel.dock-style-platform-bible .dock-nav-wrap,
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
-  border-radius: 0;
+/* expand the invisible dock-tab-hit-area a bit to cover the border area above it */
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab-hit-area {
+  left: -1px;
+  right: -1px;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
   background: $color--inactive-tab;
   padding: 0;
   border: 0;
-}
-
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab-hit-area {
-  /* expand the invisible dock-tab-hit-area a bit to cover the border area above it */
-  left: -1px;
-  right: -1px;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-wrap {
@@ -109,21 +79,101 @@ $docking-grid-space: 3px;
   transform: none;
 }
 
-/* tabs take all the space */
-.dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
-  flex-grow: 1;
+/************* TABS / RIBBONS *********************/
+
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
+  margin-right: 0;
+  border: 0;
+  border-right: $border-width solid $color--border;
+  background: $color--inactive-tab;
+  color: $color--text;
+  flex: 1 0 auto;
 }
 
-/* global dock layout styles */
-.dock-layout > .dock-drop-indicator {
-  /* darken(#a6c9ff, 40%) = #0055d9 */
-  border: solid 1px #0055d9;
-  box-shadow: inset 0 0 10px #0055d9;
-  background: #a6c9ff;
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
+  background: $color--active-tab;
+  color: $color--text;
+  border-bottom: 0;
+  //box-shadow: 0 4px 20px 0 $color--text-dimmed;
+  /* fix to show over the right next ribbon as well. needed for rounded bottom tab and box-shadow */
+  //z-index: 1;
 }
 
+/************* STRAIGHT CORNERS *********************/
+
+.dock-layout .dock-panel.dock-style-platform-bible,
+.dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
+.dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
+  border-radius: 0;
+}
+
+/************* ROUNDED CORNERS *********************/
+
+/*
+// Curved top corners, including on floating window
+// .dock-fbox > .dock-panel - would be for floating windows only
+$tab-top-rounding: $space--xs;
+.dock-layout .dock-panel.dock-style-platform-bible {
+  border-radius: $tab-top-rounding;
+}
+.dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
+.dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
+  border-radius: $tab-top-rounding $tab-top-rounding 0 0;
+}
+
+// Bottom outside corner rounding for active tab
+$tab-bottom-rounding: $space--s;
+.dock-tab.dock-tab-active:before,
+.dock-tab.dock-tab-active:after {
+  content: ' ';
+  height: $tab-bottom-rounding;
+  width: $tab-bottom-rounding;
+  position: absolute;
+  bottom: 0;
+  border-width: 0 $border-width $border-width 0;
+}
+.dock-tab.dock-tab-active:before {
+  left: -$tab-bottom-rounding;
+  border-bottom-right-radius: $tab-bottom-rounding - 2;
+  box-shadow: 2px 2px 0 #fff;
+}
+.dock-tab.dock-tab-active:after {
+  right: -$tab-bottom-rounding;
+  border-bottom-left-radius: $tab-bottom-rounding - 2;
+  box-shadow: -2px 2px 0 #fff;
+}
+*/
+
+/************* CONTROLS *********************/
+
+/* Close buttons */
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
+  padding-left: $space--s;
+  padding-right: $space--m + $space--xs + $space--xxs;
+}
+
+.dock-panel.dock-style-card .dock-tab-close-btn {
+  right: $space--xs;
+}
+
+.dock-dropdown-menu-item .dock-tab-close-btn {
+  right: $space--xs;
+  top: $space--xs + $space--xxs;
+}
+
+.dock-dropdown-menu-item .title {
+  padding-right: $space--s + $space--xs;
+}
+
+.dock-tab-close-btn {
+  font-family: $font-family;
+}
+
+/* maximize - minimize control */
 .dock-panel.dock-style-card .dock-extra-content {
-  height: 30px;
+  height: 0; // absolutely positioned, do not make this break anything else
 }
 
 .dock-panel-max-btn::before,
@@ -133,4 +183,9 @@ $docking-grid-space: 3px;
 
 .dock-panel-min-btn::before {
   border: 2px solid $color--text-dimmed;
+}
+
+.dock-panel.dock-style-card .dock-panel-max-btn,
+.dock-panel.dock-style-card .dock-panel-min-btn {
+  margin-top: 2px;
 }
