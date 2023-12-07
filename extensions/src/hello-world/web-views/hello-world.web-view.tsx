@@ -1,5 +1,5 @@
 ﻿import { ScrVers, VerseRef } from '@sillsdev/scripture';
-import papi, { logger } from 'papi-frontend';
+import papi, { logger } from '@papi/frontend';
 import {
   useData,
   useProjectData,
@@ -8,7 +8,7 @@ import {
   useSetting,
   useDialogCallback,
   useDataProvider,
-} from 'papi-frontend/react';
+} from '@papi/frontend/react';
 import {
   Button,
   Checkbox,
@@ -20,10 +20,9 @@ import {
   Table,
   ScriptureReference,
 } from 'papi-components';
+import type { DialogTypes, WebViewProps } from '@papi/core';
 import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
-import type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
-import type { WebViewProps } from 'shared/models/web-view.model';
 import Clock from './components/clock.component';
 import Logo from '../assets/offline.svg';
 

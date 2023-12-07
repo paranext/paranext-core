@@ -2,7 +2,7 @@
 
 'use strict';
 
-const papi = require('papi-backend');
+const papi = require('@papi/backend');
 
 const { logger } = papi;
 

@@ -1,6 +1,5 @@
 declare module 'c-sharp-provider-test' {
-  import type { DataProviderDataType } from 'shared/models/data-provider.model';
-  import type IDataProvider from 'shared/models/data-provider.interface';
+  import { IDataProvider, DataProviderDataType } from '@papi/core';
 
   type TimeDataTypes = {
     Time: DataProviderDataType<undefined, string | undefined, never>;

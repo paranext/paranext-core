@@ -2,10 +2,10 @@ import { VerseRef } from '@sillsdev/scripture';
 import type {
   DataProviderDataType,
   DataProviderSubscriberOptions,
-} from 'shared/models/data-provider.model';
-import type IDataProvider from 'shared/models/data-provider.interface';
-import type { PapiEvent } from 'shared/models/papi-event.model';
-import type { Unsubscriber } from 'shared/utils/papi-util';
+  PapiEvent,
+  Unsubscriber,
+  IDataProvider,
+} from '@papi/core';
 
 declare module 'project-notes-data-provider' {
   export type ProjectNotesProviderDataTypes = {

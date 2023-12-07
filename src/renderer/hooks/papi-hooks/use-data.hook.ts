@@ -17,17 +17,17 @@ type UseDataHook = {
     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
   ): {
     [TDataType in keyof DataProviderTypes[DataProviderName]]: (
-      // @ts-expect-error TypeScript pretends it can't find `selector`, but it works just fine
+      // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
       selector: DataProviderTypes[DataProviderName][TDataType]['selector'],
-      // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
+      // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
       defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
       subscriberOptions?: DataProviderSubscriberOptions,
     ) => [
-      // @ts-expect-error TypeScript pretends it can't find `getData`, but it works just fine
+      // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
       DataProviderTypes[DataProviderName][TDataType]['getData'],
       (
         | ((
-            // @ts-expect-error TypeScript pretends it can't find `setData`, but it works just fine
+            // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
             newData: DataProviderTypes[DataProviderName][TDataType]['setData'],
           ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
         | undefined

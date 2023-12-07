@@ -47,6 +47,17 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'error',
     'no-redeclare': 'off',
     '@typescript-eslint/no-redeclare': 'error',
+    'no-restricted-imports': [
+      'error',
+      {
+        patterns: [
+          {
+            group: ['shared/*', 'renderer/*', 'extension-host/*', 'node/*', 'client/*', 'main/*'],
+            message: `Importing from this path is not allowed. Try importing from @papi/core. Imports from paths like 'shared', 'renderer', 'node', 'client' and 'main' are not allowed to prevent unnecessary import break.`,
+          },
+        ],
+      },
+    ],
     'no-shadow': 'off',
     '@typescript-eslint/no-shadow': 'error',
     'no-use-before-define': 'off',

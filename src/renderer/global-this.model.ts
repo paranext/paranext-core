@@ -6,7 +6,8 @@ import * as ReactDOM from 'react-dom';
 import * as ReactDOMClient from 'react-dom/client';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import { ProcessType } from '@shared/global-this.model';
-import papi, { Papi } from '@renderer/services/papi-frontend.service';
+import * as papiCore from '@shared/services/papi-core.service';
+import papiFrontend, { Papi } from '@renderer/services/papi-frontend.service';
 import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
 import {
   getWebViewStateById,
@@ -28,8 +29,9 @@ declare const webpackRenderer: {
 // Module types aren't compatible with each other
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const moduleMap = new Map<string, any>();
-moduleMap.set('papi-frontend', papi);
-moduleMap.set('papi-frontend/react', papiReact);
+moduleMap.set('@papi/core', papiCore);
+moduleMap.set('@papi/frontend', papiFrontend);
+moduleMap.set('@papi/frontend/react', papiReact);
 moduleMap.set('react', React);
 moduleMap.set('react/jsx-runtime', ReactJsxRuntime);
 moduleMap.set('react-dom', ReactDOM);
@@ -91,7 +93,7 @@ globalThis.logLevel = globalThis.isPackaged ? 'error' : 'info';
 
 // Note: these items are used in `@shared\services\web-view.service.ts`. Putting them here breaks
 // the circular dependency since `papi` uses the webview service.
-globalThis.papi = papi;
+globalThis.papi = papiFrontend;
 globalThis.React = React;
 globalThis.ReactJsxRuntime = ReactJsxRuntime;
 globalThis.ReactDom = ReactDOM;

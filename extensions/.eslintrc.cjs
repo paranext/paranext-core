@@ -1,7 +1,18 @@
 module.exports = {
   extends: '../.eslintrc.js',
   rules: {
-    'import/no-unresolved': ['error', { ignore: ['papi'] }],
+    'import/no-unresolved': ['error', { ignore: ['@papi'] }],
+    'no-restricted-imports': [
+      'error',
+      {
+        patterns: [
+          {
+            group: ['shared/*', 'renderer/*', 'extension-host/*', 'node/*', 'client/*', 'main/*'],
+            message: `Importing from this path is not allowed. Try importing from @papi/core. Imports from paths like 'shared', 'renderer', 'node', 'client' and 'main' are not allowed to prevent unnecessary import break.`,
+          },
+        ],
+      },
+    ],
   },
   overrides: [
     {

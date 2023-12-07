@@ -1,5 +1,4 @@
-import type { DataProviderDataType } from 'shared/models/data-provider.model';
-import type { MandatoryProjectDataType } from 'shared/models/project-data-provider.model';
+import type { DataProviderDataType, MandatoryProjectDataType } from '@papi/core';
 
 declare module 'hello-world' {
   /** Event containing information about `helloWorld` */

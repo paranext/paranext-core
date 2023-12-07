@@ -43,9 +43,10 @@ const configBase: webpack.Configuration = {
     'react/jsx-runtime',
     'react-dom',
     'react-dom/client',
-    'papi-frontend',
-    'papi-frontend/react',
-    'papi-backend',
+    '@papi/backend',
+    '@papi/core',
+    '@papi/frontend',
+    '@papi/frontend/react',
     '@sillsdev/scripture',
   ],
   module: {
