@@ -6,6 +6,7 @@ build
 # dist # We want these commited so developers don't need to build the package.
 dist-ssr
 *.local
+docs
 
 # logs
 logs

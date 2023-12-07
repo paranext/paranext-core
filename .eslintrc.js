@@ -80,6 +80,7 @@ module.exports = {
     ],
     // Should use our logger anytime you want logs that persist. Otherwise use console only in testing
     'no-console': 'warn',
+    'no-null/no-null': 2,
     'no-plusplus': ['error', { allowForLoopAfterthoughts: true }],
     'no-type-assertion/no-type-assertion': 'error',
     'prettier/prettier': ['warn', { tabWidth: 2, trailingComma: 'all' }],
@@ -99,7 +100,7 @@ module.exports = {
     tsconfigRootDir: __dirname,
     createDefaultProgram: true,
   },
-  plugins: ['@typescript-eslint', 'no-type-assertion'],
+  plugins: ['@typescript-eslint', 'no-type-assertion', 'no-null'],
   settings: {
     'import/resolver': {
       // See https://github.com/benmosher/eslint-plugin-import/issues/1396#issuecomment-575727774 for line below

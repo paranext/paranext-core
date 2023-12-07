@@ -9,7 +9,7 @@ import {
   NetworkConnectorInfo,
   RequestRouter,
 } from '@shared/data/internal-connection.model';
-import { Unsubscriber } from '@shared/utils/papi-util';
+import { deserialize, serialize, Unsubscriber } from '@shared/utils/papi-util';
 import INetworkConnector from '@shared/services/network-connector.interface';
 import {
   InitClient,
@@ -222,7 +222,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     this.sendMessage({
       type: MessageType.ClientConnect,
       senderId: this.connectorInfo.clientId,
-      reconnectingClientGuid,
+      reconnectingClientGuid: reconnectingClientGuid ?? undefined,
     });
 
     // Save the new clientGuid so we can check it when reconnecting
@@ -329,7 +329,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
       );
     } else {
       // This message is for someone else. Send the message
-      this.webSocket.send(JSON.stringify(message));
+      this.webSocket.send(serialize(message));
     }
   };
 
@@ -342,7 +342,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
   private onMessage = (event: MessageEvent<string>, fromSelf = false) => {
     // Assert our specific message type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const data: Message = fromSelf ? (event.data as unknown as Message) : JSON.parse(event.data);
+    const data: Message = fromSelf ? (event.data as unknown as Message) : deserialize(event.data);
 
     const emitter = this.messageEmitters.get(data.type);
     emitter?.emit(data);

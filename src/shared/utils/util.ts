@@ -97,6 +97,8 @@ type ErrorWithMessage = {
 function isErrorWithMessage(error: unknown): error is ErrorWithMessage {
   return (
     typeof error === 'object' &&
+    // We're potentially dealing with objects we didn't create, so they might contain `null`
+    // eslint-disable-next-line no-null/no-null
     error !== null &&
     'message' in error &&
     // Type assert `error` to check it's `message`.
@@ -150,11 +152,11 @@ export function wait(ms: number) {
  *
  * @param fn The function to run
  * @param maxWaitTimeInMS The maximum amount of time to wait for the function to resolve
- * @returns Promise that resolves to the resolved value of the function or null if it ran longer
- *   than the specified wait time
+ * @returns Promise that resolves to the resolved value of the function or undefined if it ran
+ *   longer than the specified wait time
  */
 export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTimeInMS: number) {
-  const timeout = wait(maxWaitTimeInMS).then(() => null);
+  const timeout = wait(maxWaitTimeInMS).then(() => undefined);
   return Promise.any([timeout, fn()]);
 }
 

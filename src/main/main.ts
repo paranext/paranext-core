@@ -21,7 +21,7 @@ import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
 import { wait } from '@shared/utils/util';
 import { CommandNames } from 'papi-shared-types';
-import { SerializedRequestType } from '@shared/utils/papi-util';
+import { SerializedRequestType, serialize } from '@shared/utils/papi-util';
 import networkObjectStatusService from '@shared/services/network-object-status.service';
 import { startNetworkObjectStatusService } from './services/network-object-status.service-host';
 // Used with the commented out code at the bottom of this file to test the ParatextProjectDataProvider
@@ -102,7 +102,7 @@ async function main() {
 
   // Keep a global reference of the window object. If you don't, the window will
   // be closed automatically when the JavaScript object is garbage collected.
-  let mainWindow: BrowserWindow | null = null;
+  let mainWindow: BrowserWindow | undefined;
 
   if (process.env.NODE_ENV === 'production') {
     const sourceMapSupport = await import('source-map-support');
@@ -176,9 +176,11 @@ async function main() {
     });
 
     mainWindow.on('closed', () => {
-      mainWindow = null;
+      mainWindow = undefined;
     });
 
+    // 'null' to interact with external API
+    // eslint-disable-next-line no-null/no-null
     mainWindow.setMenu(null);
 
     // Open urls in the user's browser
@@ -250,7 +252,7 @@ async function main() {
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
-        if (mainWindow === null) createWindow();
+        if (!mainWindow) createWindow();
       });
 
       return undefined;
@@ -320,7 +322,7 @@ async function main() {
 
   setTimeout(async () => {
     logger.info(
-      `Available network objects after 30 seconds: ${JSON.stringify(
+      `Available network objects after 30 seconds: ${serialize(
         await networkObjectStatusService.getAllNetworkObjectDetails(),
       )}`,
     );

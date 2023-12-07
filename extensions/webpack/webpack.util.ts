@@ -207,9 +207,10 @@ type ExtensionManifest = {
   /**
    * The JavaScript file to run in the extension host.
    *
-   * Must be specified. Can be `null` if the extension does not have any JavaScript to run.
+   * Must be specified. Can be an empty string ('') if the extension does not have any JavaScript to
+   * run.
    */
-  main: string | null;
+  main: string;
   activationEvents: string[];
 };
 
@@ -224,8 +225,8 @@ export type ExtensionInfo = {
   /** The extension's version */
   version: string;
   /**
-   * Whether to skip this extension when building. If the manifest main is null, there is no
-   * JavaScript to build
+   * Whether to skip this extension when building. If the manifest main is an empty string, there is
+   * no JavaScript to build
    */
   skipBuildingJavaScript?: boolean;
 };
@@ -259,7 +260,7 @@ export async function getExtensions(): Promise<ExtensionInfo[]> {
       });
 
       // Get main file path from the manifest and return extension info
-      return extensionManifest.main !== null
+      return extensionManifest.main !== ''
         ? {
             dirName: extensionFolderName,
             entryFileName: path.parse(extensionManifest.main).name,

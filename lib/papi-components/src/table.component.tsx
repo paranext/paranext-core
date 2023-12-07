@@ -90,11 +90,13 @@ function TableTextEditor<R>({ onRowChange, row, column }: TableEditorProps<R>): 
     onRowChange({ ...row, [column.key]: e.target.value });
   };
 
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return <TextField defaultValue={row[column.key as keyof R]} onChange={changeHandler} />;
 }
 
 const renderCheckbox = ({ onChange, disabled, checked, ...props }: RenderCheckboxProps) => {
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     onChange(e.target.checked, (e.nativeEvent as MouseEvent).shiftKey);
   };
 
@@ -282,6 +284,7 @@ function Table<R>({
       if (typeof column.editable === 'function') {
         const editableFalsy = (row: R) => {
           // We've already confirmed that editable is a function
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
           return !!(column.editable as (row: R) => boolean)(row);
         };
         return {

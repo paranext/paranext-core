@@ -1,0 +1,50 @@
+name: Publish documentation
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout git repo
+        uses: actions/checkout@v3
+
+      - name: Install Node and NPM
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.x
+          cache: npm
+
+      - name: Install and build
+        run: |
+          npm install
+          npm run build
+
+      - name: Build documentation
+        run: | # need to specify --out so pages links at /{their name} instead of at /docs
+          cd lib/papi-components
+          npm run build:docs -- --out papi-components
+          cd ../papi-dts
+          npm run build:docs -- --out papi-dts
+          cd ../../
+          mkdir docs-for-pages
+          mv lib/papi-components/papi-components docs-for-pages
+          mv lib/papi-dts/papi-dts docs-for-pages
+
+      - name: Add nojekyll # needed so that HTML pages that start with _ do not cause 404
+        run: touch docs-for-pages/.nojekyll
+
+      - name: Add landing page
+        run: |
+          cp .github/assets/github-pages-index.html docs-for-pages
+          mv docs-for-pages/github-pages-index.html docs-for-pages/index.html
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@4.1.4
+        with:
+          branch: github-pages
+          folder: docs-for-pages

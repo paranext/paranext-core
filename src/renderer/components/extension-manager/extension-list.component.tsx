@@ -80,7 +80,7 @@ export default function ExtensionList({
                 <Button isDisabled={toggledExtensionNames.includes(ext.name)}>Remove</Button>
                 <Button isDisabled={!ext.hasUpdateAvailable}>Update</Button>
               </div>
-            ) : null}
+            ) : undefined}
             {children}
           </ExtensionToggle>
         ))}

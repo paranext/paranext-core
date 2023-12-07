@@ -4,6 +4,6 @@
   "description": "Project Notes Data Provider for Paranext - provided by C# data provider",
   "author": "Paranext",
   "license": "MIT",
-  "main": null,
+  "main": "",
   "activationEvents": []
 }

@@ -52,6 +52,8 @@ const jsdocDestinations = new Set<Destination>();
 const jsdocRegex = /\/\*\*(?: *\n[\s]*?\*)*?[\s]*?JSDOC (SOURCE|DESTINATION) (\w+)[\s\S]*?\*\//g;
 let hitFatalError = false;
 let match = jsdocRegex.exec(papiDTS);
+// When no regex match is found, null is returned
+// eslint-disable-next-line no-null/no-null
 while (match !== null) {
   const [block, sourceOrDestination, name] = match;
   if (sourceOrDestination === 'SOURCE') {

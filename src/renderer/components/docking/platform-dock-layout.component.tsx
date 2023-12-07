@@ -237,8 +237,8 @@ function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
  * @returns `true` if its a tab or `false` otherwise.
  */
 function isTab(tab: PanelData | TabData | BoxData | undefined): tab is TabData {
-  // Assert the more specific type.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  // Assert the more specific type. Null to work with the external API.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion, no-null/no-null
   if (!tab || (tab as TabData).title == null) return false;
   return true;
 }
@@ -380,6 +380,8 @@ export function addTabToDock(
         dockLayout.dockMove(
           tab,
           // Find the first thing (the dock box) and add the tab to it
+          // Null required by the external API
+          // eslint-disable-next-line no-null/no-null
           dockLayout.find(() => true) ?? null,
           'middle',
         );
@@ -397,6 +399,8 @@ export function addTabToDock(
         // Update the previous float position so the next cascading float layout will appear after it
         previousFloatPosition = floatPosition;
 
+      // Null required by the external API
+      // eslint-disable-next-line no-null/no-null
       dockLayout.dockMove(tab, null, 'float', floatPosition);
       break;
     }
@@ -419,6 +423,8 @@ export function addTabToDock(
         (targetTab?.parent as PanelData) ??
           // Otherwise find the first thing (the dock box) and add the tab to it
           dockLayout.find(() => true) ??
+          // Null required by the external API
+          // eslint-disable-next-line no-null/no-null
           null,
         // Defaults are added in `layoutDefaults`.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -579,7 +585,7 @@ function updateWebViewDefinition(
 export default function PlatformDockLayout() {
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const dockLayoutRef = useRef<DockLayout>(null!);
+  const dockLayoutRef = useRef<DockLayout>(undefined!);
 
   /**
    * OnLayoutChange function from `web-view.service.ts` once this docklayout is registered.
@@ -600,6 +606,8 @@ export default function PlatformDockLayout() {
         addWebViewToDock(webView, layout, dockLayoutRef.current),
       removeTabFromDock: (tabId: string) => {
         const tabToRemove = dockLayoutRef.current.find(tabId);
+        // Null required by the external API
+        // eslint-disable-next-line no-null/no-null
         if (isTab(tabToRemove)) dockLayoutRef.current.dockMove(tabToRemove, null, 'remove');
         // Return whether or not we found the tab to remove
         return !!tabToRemove;
@@ -639,7 +647,7 @@ export default function PlatformDockLayout() {
           const removedTab = dockLayoutRef.current.find(currentTabId) as RCDockTabInfo;
           if ((removedTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
             /* eslint-enable */
-            resolveDialogRequest(currentTabId, null, false);
+            resolveDialogRequest(currentTabId, undefined, false);
         }
 
         (async () => {

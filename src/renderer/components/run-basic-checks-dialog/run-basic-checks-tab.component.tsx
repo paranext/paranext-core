@@ -17,7 +17,7 @@ export const TAB_TYPE_RUN_BASIC_CHECKS = 'run-basic-checks';
 
 // Changing global scripture reference won't effect the dialog because reference is passed in once at the start.
 type RunBasicChecksTabProps = {
-  currentScriptureReference: ScriptureReference | null;
+  currentScriptureReference: ScriptureReference | undefined;
   currentProjectId: string | undefined;
 };
 

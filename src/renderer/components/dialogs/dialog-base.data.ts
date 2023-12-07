@@ -2,6 +2,7 @@ import { FloatSize, TabLoader, TabSaver } from '@shared/models/docking-framework
 import { DialogData } from '@shared/models/dialog-options.model';
 import logger from '@shared/services/logger.service';
 import { ReactElement, createElement } from 'react';
+import { serialize } from '@shared/utils/papi-util';
 
 /** Base type for DialogDefinition. Contains reasonable defaults for dialogs */
 export type DialogDefinitionBase = Readonly<{
@@ -51,7 +52,7 @@ export type DialogProps<TData = unknown> = DialogData & {
    * @param data Data with which to resolve the request
    */
   submitDialog(data: TData): void;
-  /** Cancels the dialog request (resolves the response with `null`) and closes the dialog */
+  /** Cancels the dialog request (resolves the response with `undefined`) and closes the dialog */
   cancelDialog(): void;
   /**
    * Rejects the dialog request with the specified message and closes the dialog
@@ -74,9 +75,9 @@ const DIALOG_DEFAULT_SIZE: FloatSize = { width: 300, height: 300 };
  * `resolveDialogRequest` in `hookUpDialogService` as soon as possible. This is written this way to
  * mitigate dependency cycles
  */
-let resolveDialogRequestInternal = (id: string, data: unknown | null): void => {
+let resolveDialogRequestInternal = (id: string, data: unknown | undefined): void => {
   throw new Error(
-    `Dialog ${id} tried to resolve before being hooked up to the dialog service! This may indicate that the dialog service started after a dialog was submitted. data: ${JSON.stringify(
+    `Dialog ${id} tried to resolve before being hooked up to the dialog service! This may indicate that the dialog service started after a dialog was submitted. data: ${serialize(
       data,
     )}`,
   );
@@ -87,7 +88,7 @@ let resolveDialogRequestInternal = (id: string, data: unknown | null): void => {
  *
  * This function should just run `dialog.service-host.ts`'s `resolveDialogRequest`
  */
-function resolveDialogRequest(id: string, data: unknown | null) {
+function resolveDialogRequest(id: string, data: unknown | undefined) {
   return resolveDialogRequestInternal(id, data);
 }
 
@@ -100,7 +101,7 @@ function resolveDialogRequest(id: string, data: unknown | null) {
  */
 let rejectDialogRequestInternal = (id: string, message: string): void => {
   throw new Error(
-    `Dialog ${id} tried to reject before being hooked up to the dialog service! This may indicate that the dialog service started after a dialog was canceled. message: ${JSON.stringify(
+    `Dialog ${id} tried to reject before being hooked up to the dialog service! This may indicate that the dialog service started after a dialog was canceled. message: ${serialize(
       message,
     )}`,
   );
@@ -127,7 +128,7 @@ export function hookUpDialogService({
   resolveDialogRequest: resolve,
   rejectDialogRequest: reject,
 }: {
-  resolveDialogRequest: (id: string, data: unknown | null) => void;
+  resolveDialogRequest: (id: string, data: unknown | undefined) => void;
   rejectDialogRequest: (id: string, message: string) => void;
 }) {
   resolveDialogRequestInternal = resolve;
@@ -155,7 +156,7 @@ const DIALOG_BASE: DialogDefinitionBase = {
       logger.error(
         `Dialog ${
           this.tabType
-        } received savedTabInfo without data.isDialog! Please investigate. This could be a sign of a problem, but we will try to move forward for now. savedTabInfo: ${JSON.stringify(
+        } received savedTabInfo without data.isDialog! Please investigate. This could be a sign of a problem, but we will try to move forward for now. savedTabInfo: ${serialize(
           savedTabInfo,
         )}`,
       );
@@ -175,7 +176,7 @@ const DIALOG_BASE: DialogDefinitionBase = {
       content: createElement(this.Component!, {
         ...tabData,
         submitDialog: (data) => resolveDialogRequest(savedTabInfo.id, data),
-        cancelDialog: () => resolveDialogRequest(savedTabInfo.id, null),
+        cancelDialog: () => resolveDialogRequest(savedTabInfo.id, undefined),
         rejectDialog: (errorMessage) => rejectDialogRequest(savedTabInfo.id, errorMessage),
       }),
     };

@@ -4,6 +4,7 @@ import projectLookupService from '@shared/services/project-lookup.service';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { ProjectDataProvider } from '@shared/models/project-data-provider-engine.model';
 import { get } from '@shared/services/project-data-provider.service';
+import { serialize } from '@shared/utils/papi-util';
 
 // TODO: figure out what to do with the schema. It's a baked in string just to get things rolling, not because it's optimal.
 const usfmSchema = buildSchema(`
@@ -118,7 +119,7 @@ async function runQuery<ReturnType = unknown>(query: string): Promise<ReturnType
     source: query,
   });
 
-  if (results.errors) throw new Error(JSON.stringify(results.errors));
+  if (results.errors) throw new Error(serialize(results.errors));
   // If there is only 1 result, just give it to the caller instead of making the use a map to get it
   if (results.data && Object.keys(results.data).length === 1)
     // Assert to specified generic type.
