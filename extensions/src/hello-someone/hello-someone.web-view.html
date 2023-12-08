@@ -36,7 +36,7 @@
       const { logger } = require('@papi/frontend');
 
       function print(input) {
-        logger.info(input);
+        logger.debug(input);
       }
 
       const dataProviderPromise = papi.dataProviders.get('helloSomeone.people');

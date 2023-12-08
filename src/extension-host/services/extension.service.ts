@@ -495,7 +495,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
       );
 
       // We found a dts file! Copy it to the appropriate destination
-      logger.info(
+      logger.debug(
         `Copying Extension ${extensionInfo.name}'s type declaration file ${getPathFromUri(
           extensionDtsInfo.uri,
         )} to ${getPathFromUri(extensionDtsUriDestination)}`,

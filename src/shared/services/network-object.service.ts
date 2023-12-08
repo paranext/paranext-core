@@ -1,4 +1,4 @@
-// #region imports
+﻿// #region imports
 
 import * as networkService from '@shared/services/network.service';
 import {
@@ -523,7 +523,7 @@ const set = async <T extends NetworkableObject>(
     // Notify that the network object was successfully registered
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const netObjDetails = createNetworkObjectDetails(id, objectToShare as Record<string, unknown>);
-    logger.info(`Network object registered: ${serialize(netObjDetails)}`);
+    logger.debug(`Network object registered: ${serialize(netObjDetails)}`);
     onDidCreateNetworkObjectEmitter.emit(netObjDetails);
 
     // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's

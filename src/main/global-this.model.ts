@@ -22,7 +22,7 @@ globalThis.resourcesPath = app.isPackaged ? process.resourcesPath : path.join(__
 globalThis.logLevel =
   // Assert the extracted type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  (getCommandLineArgument(ARG_LOG_LEVEL) as LogLevel) ?? (globalThis.isPackaged ? 'error' : 'info');
+  (getCommandLineArgument(ARG_LOG_LEVEL) as LogLevel) ?? (globalThis.isPackaged ? 'info' : 'debug');
 
 // #endregion
 
