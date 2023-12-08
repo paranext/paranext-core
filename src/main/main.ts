@@ -41,7 +41,7 @@ const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
   'test.echoRenderer': async (message: string) => {
     /* const start = performance.now(); */
     /* const result =  */ await commandService.sendCommand('test.addThree', 1, 4, 9);
-    /* logger.info(
+    /* logger.debug(
       `test.addThree(...) = ${result} took ${performance.now() - start} ms`,
     ); */
     return message;
@@ -85,7 +85,7 @@ async function main() {
 
   // Extension host test
   setTimeout(async () => {
-    logger.info(
+    logger.debug(
       `Add Many (from EH): ${await commandService.sendCommand('test.addMany', 2, 5, 9, 7)}`,
     );
   }, 20000);
@@ -287,11 +287,11 @@ async function main() {
   const testMain = {
     doStuff: (stuff: string) => {
       const result = `testMain did stuff: ${stuff}!`;
-      logger.info(result);
+      logger.debug(result);
       return result;
     },
     dispose: () => {
-      logger.info('testMain.dispose() ran in testMain');
+      logger.debug('testMain.dispose() ran in testMain');
       return Promise.resolve(true);
     },
   };
@@ -299,10 +299,10 @@ async function main() {
   const testMainDisposer = await networkObjectService.set('testMain', testMain);
   testMain.doStuff('main things');
   testMainDisposer.onDidDispose(() => {
-    logger.info('testMain disposed in main message #1');
+    logger.debug('testMain disposed in main message #1');
   });
   testMainDisposer.onDidDispose(() => {
-    logger.info('testMain disposed in main message #2');
+    logger.debug('testMain disposed in main message #2');
   });
 
   setTimeout(testMainDisposer.dispose, 20000);
@@ -312,9 +312,9 @@ async function main() {
       getVerse: () => Promise<string>;
     }>('testExtensionHost');
     if (testExtensionHost) {
-      logger.info(`get verse: ${await testExtensionHost.getVerse()}`);
+      logger.debug(`get verse: ${await testExtensionHost.getVerse()}`);
       testExtensionHost.onDidDispose(() => {
-        logger.info('testExtensionHost disposed in main');
+        logger.debug('testExtensionHost disposed in main');
         testExtensionHost = undefined;
       });
     } else logger.error('Could not get testExtensionHost from main');

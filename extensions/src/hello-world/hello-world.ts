@@ -146,7 +146,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     // Test subscribing to a data provider
     const unsubGreetings = await peopleDataProvider.subscribeGreeting(
       'Bill',
-      (billGreeting: string | undefined) => logger.info(`Bill's greeting: ${billGreeting}`),
+      (billGreeting: string | undefined) => logger.debug(`Bill's greeting: ${billGreeting}`),
     );
 
     context.registrations.add(unsubGreetings);

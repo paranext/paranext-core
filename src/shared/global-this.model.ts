@@ -25,7 +25,7 @@ declare global {
    * frontend
    */
   var resourcesPath: string;
-  /** How much logging should be recorded. Defaults to 'info' if not packaged, 'error' if packaged */
+  /** How much logging should be recorded. Defaults to 'debug' if not packaged, 'info' if packaged */
   var logLevel: LogLevel;
   /**
    * A function that each React WebView extension must provide for Paranext to display it. Only used

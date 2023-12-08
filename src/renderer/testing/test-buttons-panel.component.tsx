@@ -73,12 +73,12 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
     const avgResponseTime = requestTime.reduce((sum, time) => sum + time, 0) / numRequests;
     const maxTime = requestTime.reduce((max, time) => Math.max(max, time), 0);
     const minTime = requestTime.reduce((min, time) => Math.min(min, time), Number.MAX_VALUE);
-    logger.info(
+    logger.debug(
       `Of ${numRequests} requests:\n\tAvg response time: ${avgResponseTime} ms\n\tMax response time: ${maxTime} ms\n\tMin response time: ${minTime}\n\tTotal time: ${
         finish - start
       }`,
     );
-    logger.info(responses[responses.length - 1]);
+    logger.debug(responses[responses.length - 1]);
   } catch (e) {
     logger.error(e);
   }
@@ -97,7 +97,7 @@ export default function TestButtonsPanel() {
     async (asyncFn: () => Promise<unknown>) => {
       try {
         const result = await asyncFn();
-        logger.info(result);
+        logger.debug(result);
         updatePromiseReturn(result);
         return result;
       } catch (e) {
@@ -114,7 +114,7 @@ export default function TestButtonsPanel() {
     useCallback(
       ({ clientId, didReconnect }) => {
         const result = `Client with id ${clientId} ${didReconnect ? 're' : ''}connected!`;
-        logger.info(result);
+        logger.debug(result);
         updatePromiseReturn(result);
       },
       [updatePromiseReturn],
@@ -148,7 +148,7 @@ export default function TestButtonsPanel() {
     (async () => {
       try {
         const result = await peopleDataProvider.testRandomMethod('from test buttons panel');
-        logger.info(result);
+        logger.debug(result);
       } catch (e) {
         logger.error(e);
       }
@@ -195,7 +195,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echo('Echo Stuff'));
-            logger.info(`command:test.echo '${result}' took ${performance.now() - start} ms`);
+            logger.debug(`command:test.echo '${result}' took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -209,7 +209,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echoRenderer('Echo Renderer Stuff'));
-            logger.info(
+            logger.debug(
               `command:test.echoRenderer '${result}' took ${performance.now() - start} ms`,
             );
           }}
@@ -225,7 +225,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => echoExtensionHost('Echo Extension Host Stuff'));
-            logger.info(
+            logger.debug(
               `command:test.echoExtensionHost '${result}' took ${performance.now() - start} ms`,
             );
           }}
@@ -243,7 +243,7 @@ export default function TestButtonsPanel() {
             const result = await runPromise(() =>
               echoSomeoneRenderer('Echo Someone Renderer Stuff'),
             );
-            logger.info(
+            logger.debug(
               `command:helloSomeone.echoSomeoneRenderer '${result}' took ${
                 performance.now() - start
               } ms`,
@@ -261,7 +261,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addThree(1, 2, 3));
-            logger.info(`command:test.addThree ${result} took ${performance.now() - start} ms`);
+            logger.debug(`command:test.addThree ${result} took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -275,7 +275,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => addMany(1, 2, 3, 4, 5, 6));
-            logger.info(`command:test.addMany ${result} took ${performance.now() - start} ms`);
+            logger.debug(`command:test.addMany ${result} took ${performance.now() - start} ms`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -305,7 +305,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => helloWorld());
-            logger.info(
+            logger.debug(
               `command:helloWorld.helloWorld ${result} took ${performance.now() - start} ms`,
             );
           }}
@@ -321,7 +321,7 @@ export default function TestButtonsPanel() {
           onClick={async () => {
             const start = performance.now();
             const result = await runPromise(() => helloSomeone('Paranext user'));
-            logger.info(
+            logger.debug(
               `command:helloSomeone.helloSomeone ${result} took ${performance.now() - start} ms`,
             );
           }}
