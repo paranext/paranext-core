@@ -24,7 +24,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
         dotnet_version: [7.0.x]
-        node_version: [18.x]
+        node_version: [18.18.2]
 
     steps:
       - name: Check out Git repository
