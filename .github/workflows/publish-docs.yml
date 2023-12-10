@@ -13,10 +13,16 @@ jobs:
       - name: Checkout git repo
         uses: actions/checkout@v3
 
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@release
+        with:
+          file_path: 'package.json'
+
       - name: Install Node and NPM
         uses: actions/setup-node@v3
         with:
-          node-version: 18.18.2
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
 
       - name: Install and build

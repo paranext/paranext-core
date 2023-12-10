@@ -13,7 +13,7 @@ on:
 
 jobs:
   publish:
-    name: Main on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}, node ${{ matrix.node_version }}
+    name: Main on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}
 
     runs-on: ${{ matrix.os }}
 
@@ -21,7 +21,6 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
         dotnet_version: [7.0.x]
-        node_version: [18.18.2]
 
     steps:
       - name: Checkout git repo
@@ -30,12 +29,18 @@ jobs:
       - name: Install .NET
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: ${{matrix.dotnet_version}}
+          dotnet-version: ${{ matrix.dotnet_version }}
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@release
+        with:
+          file_path: 'package.json'
 
       - name: Install Node and NPM
         uses: actions/setup-node@v3
         with:
-          node-version: ${{ matrix.node_version }}
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
 
       - name: Install and build
