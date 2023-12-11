@@ -4,7 +4,7 @@
 
 /* space around app and in between windows */
 .dock-divider {
-  flex: 0 0 1px;
+  flex: 0 0 4px;
 }
 
 .dock-hbox > .dock-divider {
@@ -17,7 +17,7 @@
 
 .dock-layout {
   flex-grow: 1;
-  margin-top: 1px;
+  margin: 4px;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible {
@@ -84,7 +84,6 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   margin-right: 0;
   border: 0;
-  border-right: $border-width solid $color--border;
   background: $color--inactive-tab;
   color: $color--text;
   flex: 1 0 auto;
@@ -94,9 +93,19 @@
   background: $color--active-tab;
   color: $color--text;
   border-bottom: 0;
-  //box-shadow: 0 4px 20px 0 $color--text-dimmed;
-  /* fix to show over the right next ribbon as well. needed for rounded bottom tab and box-shadow */
-  //z-index: 1;
+  z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
+}
+
+/************* TABS SEPARATOR / DIVIDER *********************/
+
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab:not(.dock-tab-active)::before {
+  content: '';
+  width: 0.5px; // fix that renderer would sometimes used 2px instead of 1 for whatever reason
+  height: 20px;
+  background: $color--border;
+  position: absolute;
+  bottom: 6px;
+  left: -2px;
 }
 
 /************* STRAIGHT CORNERS *********************/
@@ -109,7 +118,10 @@
 }
 
 /************* ROUNDED CORNERS *********************/
-
+/*
+  Un-comment this section (instead of previous "STRAIGHT CORNER") for a rounded corner style.
+  It's currently not decided which one we will finally use
+*/
 /*
 // Curved top corners, including on floating window
 // .dock-fbox > .dock-panel - would be for floating windows only
@@ -144,7 +156,12 @@ $tab-bottom-rounding: $space--s;
   border-bottom-left-radius: $tab-bottom-rounding - 2;
   box-shadow: -2px 2px 0 #fff;
 }
-*/
+
+// Box shadow around active tab
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
+  box-shadow: 0 4px 20px 0 $color--text-dimmed;
+}
+//*/
 
 /************* CONTROLS *********************/
 
@@ -173,16 +190,15 @@ $tab-bottom-rounding: $space--s;
 
 /* maximize - minimize control */
 .dock-panel.dock-style-card .dock-extra-content {
-  height: 0; // absolutely positioned, do not make this break anything else
+  height: 0; // absolutely positioned with 0 height, to avoid influencing anything else
 }
 
-.dock-panel-max-btn::before,
-.dock-panel-min-btn::before {
-  border: 2px solid $color--text-dimmed;
+.dock-panel-max-btn::before {
+  border: 2px solid $color--border;
 }
 
 .dock-panel-min-btn::before {
-  border: 2px solid $color--text-dimmed;
+  color: $color--border;
 }
 
 .dock-panel.dock-style-card .dock-panel-max-btn,
