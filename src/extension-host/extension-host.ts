@@ -78,7 +78,7 @@ networkService
       try {
         const exampleData = await (await papiFetch('https://www.example.com')).text();
         const results = `testExtensionHost got data: ${exampleData.substring(0, 100)}`;
-        logger.info(results);
+        logger.debug(results);
         return results;
       } catch (e) {
         logger.error(`testExtensionHost.getVerse() threw ${e}`);
@@ -102,12 +102,12 @@ setTimeout(async () => {
   }>('testMain');
   if (testMain) {
     testMain?.onDidDispose(async () => {
-      logger.info('testMain disposed in extension-host');
+      logger.debug('testMain disposed in extension-host');
       testMain = undefined;
     });
   } else logger.error('Could not get testMain from extension host');
 
-  logger.info(`do stuff: ${await testMain?.doStuff('extension host things')}`);
+  logger.debug(`do stuff: ${await testMain?.doStuff('extension host things')}`);
 }, 5000);
 
 // This is just testing dispose on data providers
@@ -120,14 +120,14 @@ setTimeout(async () => {
       throw new Error('I am a bad data provider');
     },
     dispose: async () => {
-      logger.info('Inside testDP dispose');
+      logger.debug('Inside testDP dispose');
       return Promise.resolve(true);
     },
   };
 
   const realDP = await dataProviderService.registerEngine('testDP', testDP);
   realDP.onDidDispose(() => {
-    logger.info('testDP onDidDispose ran');
+    logger.debug('testDP onDidDispose ran');
   });
   setTimeout(realDP.dispose, 3000);
 })();

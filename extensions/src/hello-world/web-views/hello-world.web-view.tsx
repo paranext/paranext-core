@@ -82,7 +82,7 @@ globalThis.webViewComponent = function HelloWorld({
   );
 
   useEffect(() => {
-    logger.log(
+    logger.debug(
       `Hello World WebView previous title: ${getWebViewDefinitionUpdatableProperties()?.title}`,
     );
     updateWebViewDefinition({ title: `Hello World ${clicks}` });
