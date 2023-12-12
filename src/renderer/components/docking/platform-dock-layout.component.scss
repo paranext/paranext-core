@@ -1,7 +1,6 @@
 @import '../../styles/vars';
 
-/************* GENERAL *********************/
-
+// #region GENERAL //////////////////////////////////////////////
 /* space around app and in between windows */
 .dock-divider {
   flex: 0 0 4px;
@@ -41,9 +40,9 @@
   box-shadow: inset 0 0 10px #0055d9;
   background: #a6c9ff;
 }
+// #endregion
 
-/************* TAB-BAR *********************/
-
+// #region TAB-BAR //////////////////////////////////////////////
 /* tabs take all the space */
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
   flex-grow: 1;
@@ -78,9 +77,9 @@
    */
   transform: none;
 }
+// #endregion
 
-/************* TABS / RIBBONS *********************/
-
+// #region TABS / RIBBONS //////////////////////////////////////////////
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   margin-right: 0;
   border: 0;
@@ -95,9 +94,9 @@
   border-bottom: 0;
   z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
 }
+// #endregion
 
-/************* TABS SEPARATOR / DIVIDER *********************/
-
+// #region TAB SEPARATOR / DIVIDER //////////////////////////////////////////////
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab:not(.dock-tab-active)::before {
   content: '';
   width: 0.5px; // fix that renderer would sometimes used 2px instead of 1 for whatever reason
@@ -107,17 +106,18 @@
   bottom: 6px;
   left: -2px;
 }
+// #endregion
 
-/************* STRAIGHT CORNERS *********************/
-
+// #region STRAIGHT CORNERS //////////////////////////////////////////////
 .dock-layout .dock-panel.dock-style-platform-bible,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   border-radius: 0;
 }
+// #endregion
 
-/************* ROUNDED CORNERS *********************/
+// #region ROUNDED CORNERS //////////////////////////////////////////////
 /*
   Un-comment this section (instead of previous "STRAIGHT CORNER") for a rounded corner style.
   It's currently not decided which one we will finally use
@@ -162,9 +162,9 @@ $tab-bottom-rounding: $space--s;
   box-shadow: 0 4px 20px 0 $color--text-dimmed;
 }
 //*/
+// #endregion
 
-/************* CONTROLS *********************/
-
+// #region CONTROLS //////////////////////////////////////////////
 /* Close buttons */
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
   padding-left: $space--s;
@@ -205,3 +205,4 @@ $tab-bottom-rounding: $space--s;
 .dock-panel.dock-style-card .dock-panel-min-btn {
   margin-top: 2px;
 }
+// #endregion
