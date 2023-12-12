@@ -1,0 +1,29 @@
+/* COLOR */
+$color--platform-bible: #a70e13;
+$color--paratext-bible: #89ae26;
+
+$color--pt9-lightgreen: #b8d432;
+$color--pt9-darkgreen: #3f511e;
+$color--pt9-darkgray: #4c4c4c;
+
+$color--text: #191919;
+$color--text-dimmed: #aaa;
+
+$color--background: #eee;
+$color--active-tab: white;
+$color--inactive-tab: $color--background;
+$color--selected-background: var(--text-selected, rgba(0, 0, 0, 0.08));
+$color--selection-indicator: $color--platform-bible;
+
+$color--border: var(--divider, rgba(0, 0, 0, 0.12));
+
+/* SPACING */
+$space--xxs: 2px;
+$space--xs: 4px;
+$space--s: 8px;
+$space--m: 16px;
+$space--l: 36px;
+
+/* OTHER */
+$border-width: 1px;
+$font-family: 'Roboto medium', sans-serif;

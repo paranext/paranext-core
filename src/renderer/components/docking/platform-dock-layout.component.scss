@@ -1,0 +1,207 @@
+@import '../../styles/vars';
+
+/************* GENERAL *********************/
+
+/* space around app and in between windows */
+.dock-divider {
+  flex: 0 0 4px;
+}
+
+.dock-hbox > .dock-divider {
+  transform: scaleX(6);
+}
+
+.dock-vbox > .dock-divider {
+  transform: scaleY(6);
+}
+
+.dock-layout {
+  flex-grow: 1;
+  margin: 4px;
+}
+
+.dock-layout .dock-panel.dock-style-platform-bible {
+  border: 0;
+}
+
+/*
+ * There is a bug where this placeholder box can't receive float windows. If you close all windows
+ * but a float window, you will not be able to dock that float window. Submitted and tracking at
+ * https://github.com/ticlo/rc-dock/issues/199
+ */
+/* Hide the fake placeholder box that shows up if you have nothing but a floating window */
+.dock-layout .dock-panel.dock-style-place-holder {
+  background: none;
+}
+
+/* global dock layout styles */
+.dock-layout > .dock-drop-indicator {
+  /* darken(#a6c9ff, 40%) = #0055d9 */
+  border: solid 1px #0055d9;
+  box-shadow: inset 0 0 10px #0055d9;
+  background: #a6c9ff;
+}
+
+/************* TAB-BAR *********************/
+
+/* tabs take all the space */
+.dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
+  flex-grow: 1;
+}
+
+/* overriding default style for the shadow indicating that not all tabs are shown */
+.dock-nav-more::after {
+  box-shadow: inset -10px 0 8px -8px $color--text-dimmed;
+}
+
+/* expand the invisible dock-tab-hit-area a bit to cover the border area above it */
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab-hit-area {
+  left: -1px;
+  right: -1px;
+}
+
+.dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
+  background: $color--inactive-tab;
+  padding: 0;
+  border: 0;
+}
+
+.dock-layout .dock-panel.dock-style-platform-bible .dock-nav-wrap {
+  /*
+   * Remove the handle bar at the top of each dock-tab. Note: Now, the tab
+   * group can only be grabbed by grabbing the intersection between two tabs
+   */
+  padding-top: 0;
+  /*
+   * For some reason, by default, the tabs are moved down one pixel. That
+   * makes them blurry, so this removes that transform
+   */
+  transform: none;
+}
+
+/************* TABS / RIBBONS *********************/
+
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
+  margin-right: 0;
+  border: 0;
+  background: $color--inactive-tab;
+  color: $color--text;
+  flex: 1 0 auto;
+}
+
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
+  background: $color--active-tab;
+  color: $color--text;
+  border-bottom: 0;
+  z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
+}
+
+/************* TABS SEPARATOR / DIVIDER *********************/
+
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab:not(.dock-tab-active)::before {
+  content: '';
+  width: 0.5px; // fix that renderer would sometimes used 2px instead of 1 for whatever reason
+  height: 20px;
+  background: $color--border;
+  position: absolute;
+  bottom: 6px;
+  left: -2px;
+}
+
+/************* STRAIGHT CORNERS *********************/
+
+.dock-layout .dock-panel.dock-style-platform-bible,
+.dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
+.dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
+  border-radius: 0;
+}
+
+/************* ROUNDED CORNERS *********************/
+/*
+  Un-comment this section (instead of previous "STRAIGHT CORNER") for a rounded corner style.
+  It's currently not decided which one we will finally use
+*/
+/*
+// Curved top corners, including on floating window
+// .dock-fbox > .dock-panel - would be for floating windows only
+$tab-top-rounding: $space--xs;
+.dock-layout .dock-panel.dock-style-platform-bible {
+  border-radius: $tab-top-rounding;
+}
+.dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
+.dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
+  border-radius: $tab-top-rounding $tab-top-rounding 0 0;
+}
+
+// Bottom outside corner rounding for active tab
+$tab-bottom-rounding: $space--s;
+.dock-tab.dock-tab-active:before,
+.dock-tab.dock-tab-active:after {
+  content: ' ';
+  height: $tab-bottom-rounding;
+  width: $tab-bottom-rounding;
+  position: absolute;
+  bottom: 0;
+  border-width: 0 $border-width $border-width 0;
+}
+.dock-tab.dock-tab-active:before {
+  left: -$tab-bottom-rounding;
+  border-bottom-right-radius: $tab-bottom-rounding - 2;
+  box-shadow: 2px 2px 0 #fff;
+}
+.dock-tab.dock-tab-active:after {
+  right: -$tab-bottom-rounding;
+  border-bottom-left-radius: $tab-bottom-rounding - 2;
+  box-shadow: -2px 2px 0 #fff;
+}
+
+// Box shadow around active tab
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
+  box-shadow: 0 4px 20px 0 $color--text-dimmed;
+}
+//*/
+
+/************* CONTROLS *********************/
+
+/* Close buttons */
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
+  padding-left: $space--s;
+  padding-right: $space--m + $space--xs + $space--xxs;
+}
+
+.dock-panel.dock-style-card .dock-tab-close-btn {
+  right: $space--xs;
+}
+
+.dock-dropdown-menu-item .dock-tab-close-btn {
+  right: $space--xs;
+  top: $space--xs + $space--xxs;
+}
+
+.dock-dropdown-menu-item .title {
+  padding-right: $space--s + $space--xs;
+}
+
+.dock-tab-close-btn {
+  font-family: $font-family;
+}
+
+/* maximize - minimize control */
+.dock-panel.dock-style-card .dock-extra-content {
+  height: 0; // absolutely positioned with 0 height, to avoid influencing anything else
+}
+
+.dock-panel-max-btn::before {
+  border: 2px solid $color--border;
+}
+
+.dock-panel-min-btn::before {
+  color: $color--border;
+}
+
+.dock-panel.dock-style-card .dock-panel-max-btn,
+.dock-panel.dock-style-card .dock-panel-min-btn {
+  margin-top: 2px;
+}
