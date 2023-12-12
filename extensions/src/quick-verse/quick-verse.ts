@@ -290,7 +290,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     const loadedData = await papi.storage.readUserData(token, 'heresy-count');
     if (loadedData) storedHeresyCount = Number(loadedData);
   } catch (error) {
-    logger.debug(error);
+    logger.error(error);
   }
   engine.heresyCount = storedHeresyCount;
 

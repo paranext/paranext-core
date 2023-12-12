@@ -157,7 +157,7 @@ globalThis.webViewComponent = function ResourceViewer({
 }: WebViewProps): JSX.Element {
   const [projectId] = useWebViewState<string>('projectId', '');
 
-  logger.info(`Resource Viewer project ID: ${projectId}`);
+  logger.debug(`Resource Viewer project ID: ${projectId}`);
 
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 

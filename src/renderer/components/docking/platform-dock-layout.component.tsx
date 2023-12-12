@@ -1,5 +1,5 @@
 import 'rc-dock/dist/rc-dock.css';
-import './platform-dock-layout.component.css';
+import './platform-dock-layout.component.scss';
 import { useRef, useEffect } from 'react';
 import DockLayout, {
   BoxData,
