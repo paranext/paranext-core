@@ -550,7 +550,7 @@ declare module 'shared/utils/util' {
     objId?: string,
   ): Set<string>;
   /**
-   * Run an array of promises, and either return an array of the outcomes if them all were fulfilled
+   * Run an array of promises, and either return an array of the outcomes if they all were fulfilled
    * or throw if at least one of them was rejected
    *
    * @param promises Array of promises to resolve
