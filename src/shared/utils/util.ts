@@ -202,3 +202,24 @@ export function getAllObjectFunctionNames(
 
   return objectFunctionNames;
 }
+
+/**
+ * Run an array of promises, and either return an array of the outcomes if them all were fulfilled
+ * or throw if at least one of them was rejected
+ *
+ * @param promises Array of promises to resolve
+ * @returns Array of `PromiseSettledResult` values from each promise if all promises were fulfilled.
+ *   Otherwise an exception will be thrown.
+ */
+export async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
+  const resolutions = await Promise.allSettled(promises);
+  const rejections = resolutions.filter((resolution) => resolution.status === 'rejected');
+  if (rejections.length > 0) {
+    const reasons = rejections.map((rejection, index) => {
+      if (rejection.status !== 'rejected') return "Why doesn't TS know we already checked this?";
+      return `[${index}]: ${rejection.reason}`;
+    });
+    throw new Error(`${reasons}`);
+  }
+  return resolutions;
+}

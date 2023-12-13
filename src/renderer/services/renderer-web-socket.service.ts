@@ -24,6 +24,7 @@ function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
     hostname === '127.0.0.1' ||
     hostname === '::1' ||
     hostname.endsWith('.local') ||
+    hostname.endsWith('.localhost') ||
     parseInt(port, 10) === parseInt(`${WEBSOCKET_PORT}`, 10)
   );
 }

@@ -45,9 +45,9 @@ const papi = {
 
   // Classes
   /** JSDOC DESTINATION PapiRendererWebSocket */
-  webSocket: PapiRendererWebSocket,
+  WebSocket: PapiRendererWebSocket,
   /** JSDOC DESTINATION PapiRendererXMLHttpRequest */
-  xmlHttpRequest: PapiRendererXMLHttpRequest,
+  XMLHttpRequest: PapiRendererXMLHttpRequest,
 
   // Services/modules
   /** JSDOC DESTINATION commandService */

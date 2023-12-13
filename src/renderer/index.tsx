@@ -6,30 +6,12 @@ import { startWebViewService } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
 import webViewProviderService from '@shared/services/web-view-provider.service';
 import { startDialogService } from '@renderer/services/dialog.service-host';
+import { runPromisesAndThrowIfRejected } from '@shared/utils/util';
 import App from './app.component';
 import { cleanupOldWebViewState } from './services/web-view-state.service';
 import { blockWebSocketsToPapiNetwork } from './services/renderer-web-socket.service';
 
 logger.info('Starting renderer');
-
-window.onerror = (message, source, lineno, colno, error): void => {
-  logger.error(`An error occurred: ${message}`);
-  logger.error(`Source file: ${source}`);
-  logger.error(`Line number: ${lineno}`);
-  logger.error(`Column number: ${colno}`);
-  logger.error(`Error object: ${error}`);
-};
-
-if (window.process) {
-  window.process.on('uncaughtException', (error) => {
-    const { dialog } = window.require('electron');
-    dialog.showMessageBoxSync({
-      type: 'error',
-      message: `Unexpected error occurred: ${error}`,
-      title: 'Error',
-    });
-  });
-}
 
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
@@ -44,12 +26,12 @@ if (window.process) {
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();
 
-    await Promise.allSettled([
+    await runPromisesAndThrowIfRejected(
       commandService.initialize(),
       webViewProviderService.initialize(),
       startWebViewService(),
       startDialogService(),
-    ]);
+    );
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
   }

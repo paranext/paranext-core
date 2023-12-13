@@ -549,6 +549,17 @@ declare module 'shared/utils/util' {
     },
     objId?: string,
   ): Set<string>;
+  /**
+   * Run an array of promises, and either return an array of the outcomes if them all were fulfilled
+   * or throw if at least one of them was rejected
+   *
+   * @param promises Array of promises to resolve
+   * @returns Array of `PromiseSettledResult` values from each promise if all promises were fulfilled.
+   *   Otherwise an exception will be thrown.
+   */
+  export function runPromisesAndThrowIfRejected(
+    ...promises: Promise<unknown>[]
+  ): Promise<PromiseSettledResult<unknown>[]>;
 }
 declare module 'shared/utils/papi-util' {
   import { ProcessType } from 'shared/global-this.model';
@@ -4794,14 +4805,14 @@ declare module '@papi/frontend' {
      *
      * Note that the Node WebSocket implementation is different and not wrapped here.
      */
-    webSocket: typeof PapiRendererWebSocket;
+    WebSocket: typeof PapiRendererWebSocket;
     /** This wraps the browser's XMLHttpRequest implementation to
      * provide better control over internet access. It is isomorphic with the standard XMLHttpRequest,
      * so it should act as a drop-in replacement.
      *
      * Note that Node doesn't have a native implementation, so this is only for the renderer.
      */
-    xmlHttpRequest: typeof PapiRendererXMLHttpRequest;
+    XMLHttpRequest: typeof PapiRendererXMLHttpRequest;
     /**
      *
      * The command service allows you to exchange messages with other components in the platform. You
