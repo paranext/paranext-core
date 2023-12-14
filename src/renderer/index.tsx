@@ -6,12 +6,25 @@ import { startWebViewService } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
 import webViewProviderService from '@shared/services/web-view-provider.service';
 import { startDialogService } from '@renderer/services/dialog.service-host';
-import { runPromisesAndThrowIfRejected } from '@shared/utils/util';
 import App from './app.component';
 import { cleanupOldWebViewState } from './services/web-view-state.service';
 import { blockWebSocketsToPapiNetwork } from './services/renderer-web-socket.service';
 
 logger.info('Starting renderer');
+
+// This is a little different than Promise.all in that the error message will have all the reasons
+// that all promises were rejected (if they didn't resolve).
+async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
+  const resolutions = await Promise.allSettled(promises);
+  const rejections = resolutions.filter((resolution) => resolution.status === 'rejected');
+  if (rejections.length === 0) return;
+
+  const reasons = rejections.map((rejection, index) => {
+    if (rejection.status !== 'rejected') return "Why doesn't TS know we already checked this?";
+    return `[${index}]: ${rejection.reason}`;
+  });
+  throw new Error(`${reasons}`);
+}
 
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
