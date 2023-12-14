@@ -864,11 +864,11 @@ export const getWebView = async (
   var updateWebViewDefinitionById = window.parent.updateWebViewDefinitionById;
   window.updateWebViewDefinition = (webViewDefinitionUpdateInfo) => { return updateWebViewDefinitionById('${webView.id}', webViewDefinitionUpdateInfo)}
   window.fetch = papi.fetch;
+  window.WebSocket = papi.WebSocket;
+  window.XMLHttpRequest = papi.XMLHttpRequest;
   delete window.parent;
   delete window.top;
   delete window.frameElement;
-  delete window.XMLHttpRequest;
-  delete window.WebSocket;
   `;
 
   /** Nonce used to allow scripts and styles to run */

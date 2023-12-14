@@ -8,8 +8,23 @@ import webViewProviderService from '@shared/services/web-view-provider.service';
 import { startDialogService } from '@renderer/services/dialog.service-host';
 import App from './app.component';
 import { cleanupOldWebViewState } from './services/web-view-state.service';
+import { blockWebSocketsToPapiNetwork } from './services/renderer-web-socket.service';
 
 logger.info('Starting renderer');
+
+// This is a little different than Promise.all in that the error message will have all the reasons
+// that all promises were rejected (if they didn't resolve).
+async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
+  const resolutions = await Promise.allSettled(promises);
+  const rejections = resolutions.filter((resolution) => resolution.status === 'rejected');
+  if (rejections.length === 0) return;
+
+  const reasons = rejections.map((rejection, index) => {
+    if (rejection.status !== 'rejected') return "Why doesn't TS know we already checked this?";
+    return `[${index}]: ${rejection.reason}`;
+  });
+  throw new Error(`${reasons}`);
+}
 
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
@@ -20,36 +35,18 @@ logger.info('Starting renderer');
 (async () => {
   try {
     await networkService.initialize();
+
+    // This needs to run before web views start running and after the network service is running
+    blockWebSocketsToPapiNetwork();
+
+    await runPromisesAndThrowIfRejected(
+      commandService.initialize(),
+      webViewProviderService.initialize(),
+      startWebViewService(),
+      startDialogService(),
+    );
   } catch (e) {
-    logger.error(`Network service failed to initialize! Error: ${e}`);
-  }
-})();
-(async () => {
-  try {
-    await commandService.initialize();
-  } catch (e) {
-    logger.error(`Command service failed to initialize! Error: ${e}`);
-  }
-})();
-(async () => {
-  try {
-    await webViewProviderService.initialize();
-  } catch (e) {
-    logger.error(`WebView Provider service failed to initialize! Error: ${e}`);
-  }
-})();
-(async () => {
-  try {
-    await startWebViewService();
-  } catch (e) {
-    logger.error(`WebView service failed to initialize! Error: ${e}`);
-  }
-})();
-(async () => {
-  try {
-    await startDialogService();
-  } catch (e) {
-    logger.error(`Dialog service failed to start! Error: ${e}`);
+    logger.error(`Service(s) failed to initialize! Error: ${e}`);
   }
 })();
 

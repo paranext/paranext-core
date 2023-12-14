@@ -1151,12 +1151,45 @@ declare module 'client/services/web-socket.interface' {
    */
   export type IWebSocket = WebSocket;
 }
-declare module 'renderer/services/renderer-web-socket.model' {
-  /**
-   * The renderer's implementation of WebSocket is the browser-supplied WebSocket, which doesn't work
-   * in Node
+declare module 'renderer/services/renderer-web-socket.service' {
+  /** Once our network is running, run this to stop extensions from connecting to it directly */
+  export const blockWebSocketsToPapiNetwork: () => void;
+  /** This wraps the browser's WebSocket implementation to provide
+   * better control over internet access. It is isomorphic with the standard WebSocket, so it should
+   * act as a drop-in replacement.
+   *
+   * Note that the Node WebSocket implementation is different and not wrapped here.
    */
-  export default WebSocket;
+  export default class PapiRendererWebSocket implements WebSocket {
+    readonly CONNECTING: 0;
+    readonly OPEN: 1;
+    readonly CLOSING: 2;
+    readonly CLOSED: 3;
+    addEventListener: <K extends keyof WebSocketEventMap>(
+      type: K,
+      listener: (this: WebSocket, ev: WebSocketEventMap[K]) => any,
+      options?: boolean | AddEventListenerOptions,
+    ) => void;
+    binaryType: BinaryType;
+    bufferedAmount: number;
+    close: (code?: number, reason?: string) => void;
+    dispatchEvent: (event: Event) => boolean;
+    extensions: string;
+    onclose: ((this: WebSocket, ev: CloseEvent) => any) | null;
+    onerror: ((this: WebSocket, ev: Event) => any) | null;
+    onmessage: ((this: WebSocket, ev: MessageEvent) => any) | null;
+    onopen: ((this: WebSocket, ev: Event) => any) | null;
+    protocol: string;
+    readyState: number;
+    removeEventListener: <K extends keyof WebSocketEventMap>(
+      type: K,
+      listener: (this: WebSocket, ev: WebSocketEventMap[K]) => any,
+      options?: boolean | EventListenerOptions,
+    ) => void;
+    send: (data: string | ArrayBufferLike | Blob | ArrayBufferView) => void;
+    url: string;
+    constructor(url: string | URL, protocols?: string | string[]);
+  }
 }
 declare module 'extension-host/services/extension-host-web-socket.model' {
   import ws from 'ws';
@@ -4664,6 +4697,65 @@ declare module 'renderer/hooks/papi-hooks/index' {
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
 }
+declare module 'renderer/services/renderer-xml-http-request.service' {
+  /** This wraps the browser's XMLHttpRequest implementation to
+   * provide better control over internet access. It is isomorphic with the standard XMLHttpRequest,
+   * so it should act as a drop-in replacement.
+   *
+   * Note that Node doesn't have a native implementation, so this is only for the renderer.
+   */
+  export default class PapiRendererXMLHttpRequest implements XMLHttpRequest {
+    readonly DONE: 4;
+    readonly HEADERS_RECEIVED: 2;
+    readonly LOADING: 3;
+    readonly OPENED: 1;
+    readonly UNSENT: 0;
+    abort: () => void;
+    addEventListener: <K extends keyof XMLHttpRequestEventMap>(
+      type: K,
+      listener: (this: XMLHttpRequest, ev: XMLHttpRequestEventMap[K]) => any,
+      options?: boolean | AddEventListenerOptions,
+    ) => void;
+    dispatchEvent: (event: Event) => boolean;
+    getAllResponseHeaders: () => string;
+    getResponseHeader: (name: string) => string | null;
+    open: (
+      method: string,
+      url: string,
+      async?: boolean,
+      username?: string | null,
+      password?: string | null,
+    ) => void;
+    onabort: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null;
+    onerror: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null;
+    onload: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null;
+    onloadend: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null;
+    onloadstart: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null;
+    onprogress: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null;
+    onreadystatechange: ((this: XMLHttpRequest, ev: Event) => any) | null;
+    ontimeout: ((this: XMLHttpRequest, ev: ProgressEvent) => any) | null;
+    overrideMimeType: (mime: string) => void;
+    readyState: number;
+    removeEventListener: <K extends keyof XMLHttpRequestEventMap>(
+      type: K,
+      listener: (this: XMLHttpRequest, ev: XMLHttpRequestEventMap[K]) => any,
+      options?: boolean | EventListenerOptions,
+    ) => void;
+    response: any;
+    responseText: string;
+    responseType: XMLHttpRequestResponseType;
+    responseURL: string;
+    responseXML: Document | null;
+    send: (body?: Document | XMLHttpRequestBodyInit | null) => void;
+    setRequestHeader: (name: string, value: string) => void;
+    status: number;
+    statusText: string;
+    timeout: number;
+    upload: XMLHttpRequestUpload;
+    withCredentials: boolean;
+    constructor();
+  }
+}
 declare module '@papi/frontend' {
   /**
    * Unified module for accessing API features in the renderer.
@@ -4682,6 +4774,8 @@ declare module '@papi/frontend' {
   import { SettingsService } from 'shared/services/settings.service';
   import { DialogService } from 'shared/services/dialog.service-model';
   import * as papiReact from '@papi/frontend/react';
+  import PapiRendererWebSocket from 'renderer/services/renderer-web-socket.service';
+  import PapiRendererXMLHttpRequest from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
     /**
      *
@@ -4694,6 +4788,20 @@ declare module '@papi/frontend' {
     EventEmitter: typeof PapiEventEmitter;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
+    /** This wraps the browser's WebSocket implementation to provide
+     * better control over internet access. It is isomorphic with the standard WebSocket, so it should
+     * act as a drop-in replacement.
+     *
+     * Note that the Node WebSocket implementation is different and not wrapped here.
+     */
+    WebSocket: typeof PapiRendererWebSocket;
+    /** This wraps the browser's XMLHttpRequest implementation to
+     * provide better control over internet access. It is isomorphic with the standard XMLHttpRequest,
+     * so it should act as a drop-in replacement.
+     *
+     * Note that Node doesn't have a native implementation, so this is only for the renderer.
+     */
+    XMLHttpRequest: typeof PapiRendererXMLHttpRequest;
     /**
      *
      * The command service allows you to exchange messages with other components in the platform. You
