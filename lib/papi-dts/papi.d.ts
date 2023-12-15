@@ -4884,6 +4884,20 @@ declare module '@papi/frontend' {
   export const EventEmitter: typeof PapiEventEmitter;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
+  /** This wraps the browser's WebSocket implementation to provide
+   * better control over internet access. It is isomorphic with the standard WebSocket, so it should
+   * act as a drop-in replacement.
+   *
+   * Note that the Node WebSocket implementation is different and not wrapped here.
+   */
+  export const WebSocket: typeof PapiRendererWebSocket;
+  /** This wraps the browser's XMLHttpRequest implementation to
+   * provide better control over internet access. It is isomorphic with the standard XMLHttpRequest,
+   * so it should act as a drop-in replacement.
+   *
+   * Note that Node doesn't have a native implementation, so this is only for the renderer.
+   */
+  export const XMLHttpRequest: typeof PapiRendererXMLHttpRequest;
   /**
    *
    * The command service allows you to exchange messages with other components in the platform. You
