@@ -28,6 +28,13 @@ module.exports = {
         'import/prefer-default-export': 'off',
       },
     },
+    {
+      files: ['./lib/*', './webpack/*'],
+      rules: {
+        // These files are scripts not running in Platform.Bible, so they can't use the logger
+        'no-console': 'off',
+      },
+    },
   ],
   settings: {
     'import/resolver': {

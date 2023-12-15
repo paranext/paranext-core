@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import path from 'path';
 import fs from 'fs';
 import zipFolder from 'zip-folder-promise';

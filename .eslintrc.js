@@ -23,7 +23,7 @@ module.exports = {
 
     // #endregion
 
-    // #region Paranext rules
+    // #region Platform.Bible rules
 
     // Rules in each section are generally in alphabetical order. However, several
     // `@typescript-eslint` rules require disabling the equivalent ESLint rule. So in these cases

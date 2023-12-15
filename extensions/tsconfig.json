@@ -13,7 +13,7 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    // Paranext requires modules to be CommonJS
+    // Platform.Bible requires modules to be CommonJS
     // Running webpack.config.ts also requires CommonJS
     // https://webpack.js.org/configuration/configuration-languages/#typescript
     "module": "CommonJS",

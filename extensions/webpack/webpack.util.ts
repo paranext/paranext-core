@@ -97,7 +97,7 @@ const staticFiles = [
   'assets',
   // Distribute the extension manifest
   'manifest.json',
-  // We need to distribute the package.json for Paranext to read the extension properly
+  // We need to distribute the package.json for Platform.Bible to read the extension properly
   'package.json',
   // If the extension declares its types as an index.d.ts, copy that into the output
   'index.d.ts',
@@ -114,15 +114,17 @@ function getStaticFileName(staticFile: string, extensionInfo: ExtensionInfo) {
 
 /** Get CopyFile plugin patterns for copying static files for an extension */
 function getCopyFilePatternsForExtension(extension: ExtensionInfo) {
-  return staticFiles.map((staticFile): Pattern => {
-    // If the extension should just be copied over, not bundled, copy the whole folder
-    if (extensionsNotBundled.includes(extension.dirName)) {
-      return {
+  // If the extension should just be copied over, not bundled, copy the whole folder
+  if (extensionsNotBundled.includes(extension.dirName)) {
+    return [
+      {
         from: path.join(sourceFolder, extension.dirName),
         to: extension.dirName,
-      };
-    }
+      },
+    ];
+  }
 
+  return staticFiles.map((staticFile): Pattern => {
     // The extension should be bundled normally
     /** The path to the file to copy but without the source or the output folder */
     const internalFilePath = path.join(extension.dirName, getStaticFileName(staticFile, extension));
@@ -170,7 +172,7 @@ export function getMainEntries(extensions: ExtensionInfo[]): webpack.EntryObject
       // Don't bundle extensions with no main and and extensions that should just be copied over
       .filter(
         (extension) =>
-          !extension.skipBuildingJavaScript && !extensionsNotBundled.includes(extension.dirName),
+          !extension.shouldCopyOnly && !extensionsNotBundled.includes(extension.dirName),
       )
       .map((extension) => [
         extension.entryFileName,
@@ -205,7 +207,8 @@ type ExtensionManifest = {
   name: string;
   version: string;
   /**
-   * The JavaScript file to run in the extension host.
+   * Path to the JavaScript file to run in the extension host. Relative to the extension's root
+   * folder.
    *
    * Must be specified. Can be an empty string ('') if the extension does not have any JavaScript to
    * run.
@@ -225,10 +228,11 @@ export type ExtensionInfo = {
   /** The extension's version */
   version: string;
   /**
-   * Whether to skip this extension when building. If the manifest main is an empty string, there is
-   * no JavaScript to build
+   * Whether to skip this extension when building and just copy all of its contents into the dist
+   * folder. If the manifest main is an empty string or if the extension is listed as not bundled,
+   * do not build anything but just copy the folder
    */
-  skipBuildingJavaScript?: boolean;
+  shouldCopyOnly?: boolean;
 };
 
 /**
@@ -236,7 +240,6 @@ export type ExtensionInfo = {
  *
  * Note that this does not transform the main file .ts into .js unlike extension.service
  */
-// TODO: figure out if we can share this code with extension.service.ts.
 export async function getExtensions(): Promise<ExtensionInfo[]> {
   // Get names of each folder in the source folder
   const extensionFolderNames = (
@@ -248,32 +251,52 @@ export async function getExtensions(): Promise<ExtensionInfo[]> {
     .map((dirEntry) => dirEntry.name);
 
   // Return extension info for each extension folder
-  return Promise.all(
-    extensionFolderNames.map(async (extensionFolderName) => {
-      const extensionManifestJson = await fs.promises.readFile(
-        path.join(sourceFolder, extensionFolderName, 'manifest.json'),
-        'utf8',
-      );
-      const extensionManifest: Readonly<ExtensionManifest> = Object.freeze({
-        // Note that this does not transform the main file .ts into .js unlike extension.service
-        ...JSON.parse(extensionManifestJson),
-      });
+  // We're filtering out the `undefined` entries, so assert that there is no `undefined`
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return (
+    await Promise.all(
+      extensionFolderNames.map(async (extensionFolderName): Promise<ExtensionInfo | undefined> => {
+        let extensionManifestJson: string;
+        try {
+          extensionManifestJson = await fs.promises.readFile(
+            path.join(sourceFolder, extensionFolderName, 'manifest.json'),
+            'utf8',
+          );
+        } catch {
+          // This folder doesn't have a manifest.json, so it must not be an extension. Skip it
+          return undefined;
+        }
+        let extensionManifest: Readonly<ExtensionManifest>;
+        try {
+          extensionManifest = Object.freeze({
+            // Note that this does not transform the main file .ts into .js unlike extension.service
+            ...JSON.parse(extensionManifestJson),
+          });
+        } catch (e) {
+          console.error(
+            `manifest.json for extension folder ${extensionFolderName} failed to parse. Error: ${e}`,
+          );
+          return undefined;
+        }
 
-      // Get main file path from the manifest and return extension info
-      return extensionManifest.main !== ''
-        ? {
-            dirName: extensionFolderName,
-            entryFileName: path.parse(extensionManifest.main).name,
-            entryFilePath: path.join(sourceFolder, extensionFolderName, extensionManifest.main),
-            version: extensionManifest.version,
-          }
-        : {
-            dirName: extensionFolderName,
-            entryFileName: '',
-            entryFilePath: '',
-            version: extensionManifest.version,
-            skipBuildingJavaScript: true,
-          };
-    }),
-  );
+        // Get main file path from the manifest and return extension info
+        return extensionManifest.main !== ''
+          ? {
+              ...extensionManifest,
+              dirName: extensionFolderName,
+              entryFileName: path.parse(extensionManifest.main).name,
+              entryFilePath: path.join(sourceFolder, extensionFolderName, extensionManifest.main),
+              version: extensionManifest.version,
+            }
+          : {
+              ...extensionManifest,
+              dirName: extensionFolderName,
+              entryFileName: '',
+              entryFilePath: '',
+              version: extensionManifest.version,
+              shouldCopyOnly: true,
+            };
+      }),
+    )
+  ).filter((extensionInfo) => extensionInfo) as ExtensionInfo[];
 }

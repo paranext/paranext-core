@@ -1,4 +1,4 @@
-// Please keep this file in sync with the .prettierrc.js file in the paranext-extension-template repo
+// Please keep this file in sync with the .prettierrc.js file in the paranext-extension-template and paranext-multi-extension-template repos
 module.exports = {
   tabWidth: 2,
   trailingComma: 'all',
