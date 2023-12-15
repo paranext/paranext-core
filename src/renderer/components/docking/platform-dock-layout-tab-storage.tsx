@@ -41,7 +41,7 @@ import {
   loadSettingsDialog,
 } from '../settings-dialog/settings-tab.component';
 import { TAB_TYPE_WEBVIEW, loadWebViewTab, saveWebViewTab } from '../web-view.component';
-import { createRCDockTabFromTabInfo } from './dock-layout-create-tab';
+import createRCDockTabFromTabInfo from './platform-dock-layout-tab';
 
 /** Tab loader functions for each Platform tab type */
 const tabLoaderMap = new Map<TabType, TabLoader>([

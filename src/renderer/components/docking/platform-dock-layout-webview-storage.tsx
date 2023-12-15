@@ -3,7 +3,7 @@ import { RCDockTabInfo, isTab } from '@shared/models/docking-framework.model';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
 import DockLayout from 'rc-dock';
 import { TAB_TYPE_WEBVIEW, updateWebViewTab } from '../web-view.component';
-import { createRCDockTabFromTabInfo } from './dock-layout-create-tab';
+import createRCDockTabFromTabInfo from './platform-dock-layout-tab';
 
 /**
  * Gets the web view definition (data on the TabInfo) for the web view with the specified id

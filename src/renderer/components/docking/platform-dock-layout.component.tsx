@@ -15,11 +15,13 @@ import {
 import { registerDockLayout } from '@renderer/services/web-view.service-host';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
 import { DialogData } from '@shared/models/dialog-options.model';
-import DockLayoutWrapper from './dock-layout-wrapper.component';
-import { getWebViewDefinition, updateWebViewDefinition } from './dock-layout-webview-storage';
-import { loadTab, saveTab } from './dock-layout-tab-storage';
-import { addTabToDock, addWebViewToDock } from './dock-layout-create-tab';
-import { AnyAaaaRecord } from 'dns';
+import DockLayoutWrapper from './platform-dock-layout-wrapper.component';
+import {
+  getWebViewDefinition,
+  updateWebViewDefinition,
+} from './platform-dock-layout-webview-storage';
+import { loadTab, saveTab } from './platform-dock-layout-tab-storage';
+import { addTabToDock, addWebViewToDock } from './platform-dock-layout-update';
 
 export default function PlatformDockLayout() {
   // This ref will always be defined

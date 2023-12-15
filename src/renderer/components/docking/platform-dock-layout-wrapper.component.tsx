@@ -1,7 +1,7 @@
 import { RCDockTabInfo, SavedTabInfo } from '@shared/models/docking-framework.model';
 import DockLayout, { DropDirection, LayoutBase, LayoutData } from 'rc-dock';
 import { CSSProperties, LegacyRef, PropsWithChildren, forwardRef } from 'react';
-import { GROUPS } from './dock-layout-layout';
+import { GROUPS } from './platform-dock-layout-sizing';
 
 export type DockLayoutWrapperProps = PropsWithChildren<{
   loadTab: (savedTabInfo: SavedTabInfo) => RCDockTabInfo;
