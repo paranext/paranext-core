@@ -18,6 +18,7 @@ const config: Config = {
     ...pathsToModuleNameMapper(compilerOptions.paths, {
       prefix: '<rootDir>/src',
     }),
+    '^papi-components$': '<rootDir>/node_modules/papi-components/dist/index.es.js',
   },
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {
