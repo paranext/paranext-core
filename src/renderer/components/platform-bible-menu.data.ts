@@ -27,12 +27,12 @@ const standardMenuLayout: GridMenuInfo = {
         },
         {
           name: 'Open Text Collection...',
-          command: 'paratextTextCollection.open',
+          command: 'paratextDotBibleTextCollection.open',
           hasDivider: true,
         },
         {
           name: 'Open Word List...',
-          command: 'paratextWordList.open',
+          command: 'paratextDotBibleWordList.open',
           hasDivider: true,
         },
         {
@@ -100,7 +100,12 @@ export const supportAndDevelopmentMenuLayout: GridMenuInfo = {
         },
         {
           name: 'Open Text Collection...',
-          command: 'platform.openTextCollection',
+          command: 'paratextDotBibleTextCollection.open',
+          hasDivider: true,
+        },
+        {
+          name: 'Open Word List...',
+          command: 'paratextDotBibleWordList.open',
           hasDivider: true,
         },
         {
