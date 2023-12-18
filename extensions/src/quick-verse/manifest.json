@@ -1,9 +1,0 @@
-{
-  "name": "quick-verse",
-  "version": "0.0.1",
-  "description": "Simple quick verse extension for Paranext",
-  "author": "Paranext",
-  "license": "MIT",
-  "main": "quick-verse.ts",
-  "activationEvents": []
-}

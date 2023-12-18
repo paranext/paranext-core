@@ -1,9 +1,0 @@
-{
-  "name": "resource-viewer",
-  "version": "0.0.1",
-  "description": "Simple resource viewer extension for Paranext",
-  "author": "Paranext",
-  "license": "MIT",
-  "main": "resource-viewer.ts",
-  "activationEvents": []
-}
