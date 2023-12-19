@@ -48,8 +48,6 @@ internal class LocalParatextProjects
 
         if (!allProjectDetails.Any())
         {
-            Console.WriteLine("Rolf: Sample project set up");
-
             SetUpSampleProject();
 
             allProjectDetails = LoadAllProjectDetails();
@@ -206,12 +204,9 @@ internal class LocalParatextProjects
     /// <returns>Enumeration of (ProjectMetadata, project directory) tuples for all projects</returns>
     private IEnumerable<ProjectDetails> LoadAllProjectDetails()
     {
-        Console.WriteLine("Rolf: Loading projects");
         Console.WriteLine(ProjectRootFolder);
         foreach (var dir in Directory.EnumerateDirectories(ProjectRootFolder))
         {
-            Console.WriteLine("Rolf: Loading project");
-
             ProjectMetadata? projectMetadata;
             string errorMessage;
             try
