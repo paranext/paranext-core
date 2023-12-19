@@ -104,10 +104,6 @@ internal class LocalParatextProjects
                 )
             );
         }
-
-        // is this required? Don't think so
-        // ProjectDetails projectDetails = new(metadata, Path.Join(projectFolder));
-        // AddProjectToMaps(projectDetails);
     }
 
     public IList<ProjectDetails> GetAllProjectDetails()
