@@ -7,7 +7,7 @@ namespace Paranext.DataProvider.MessageHandlers;
 /// </summary>
 internal class MessageHandlerInitClient : IMessageHandler
 {
-    Action<int> _clientIdCallback;
+    private readonly Action<int> _clientIdCallback;
 
     public MessageHandlerInitClient(Action<int> clientIdCallback)
     {
@@ -19,10 +19,9 @@ internal class MessageHandlerInitClient : IMessageHandler
         if (message == null)
             throw new ArgumentNullException(nameof(message));
 
-        if (message.Type != MessageType.InitClient)
+        if (message is not MessageInitClient initClientMsg)
             throw new ArgumentException("Incorrect message type", nameof(message));
 
-        var initClientMsg = (MessageInitClient)message;
         int clientId = initClientMsg.ConnectorInfo.ClientId;
         _clientIdCallback(clientId);
         yield return new MessageClientConnect(clientId);

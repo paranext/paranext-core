@@ -1,7 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
-using Paranext.DataProvider.Messages;
 
 namespace Paranext.DataProvider.JsonUtils;
 
@@ -21,10 +20,6 @@ internal static class SerializationOptions
                 WriteIndented = false, // No need to waste bytes with nice formatting
                 IgnoreReadOnlyProperties = false, // Need types to be serialized
             };
-
-        options.Converters.Add(new EnumConverter<EventType>());
-        options.Converters.Add(new EnumConverter<MessageType>());
-        options.Converters.Add(new EnumConverter<RequestType>());
         return options;
     }
 }

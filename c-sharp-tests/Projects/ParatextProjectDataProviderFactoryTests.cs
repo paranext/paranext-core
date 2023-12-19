@@ -2,14 +2,13 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
-using PtxUtils;
 
 namespace TestParanextDataProvider.Projects
 {
     [ExcludeFromCodeCoverage]
     internal class ParatextProjectDataProviderFactoryTests : PsiTestBase
     {
-        private const string PdbFactoryGetRequest =
+        private const string PDB_FACTORY_GET_REQUEST =
             "object:platform.pdpFactory-ParatextStandard.function";
 
         [Test]
@@ -28,15 +27,11 @@ namespace TestParanextDataProvider.Projects
 
             Message result = Client
                 .FakeMessageFromServer(
-                    new MessageRequest(
-                        new Enum<RequestType>(PdbFactoryGetRequest),
-                        requesterId,
-                        serverMessage
-                    )
+                    new MessageRequest(PDB_FACTORY_GET_REQUEST, requesterId, serverMessage)
                 )
                 .First();
 
-            Assert.That(result.Type, Is.EqualTo(MessageType.Response));
+            Assert.That(result.Type, Is.EqualTo(MessageType.RESPONSE));
             MessageResponse response = (MessageResponse)result;
             Assert.That(response.ErrorMessage, Is.EqualTo("Unknown project ID: unknownProj"));
             Assert.That(response.RequestId, Is.EqualTo(requesterId));
@@ -58,15 +53,11 @@ namespace TestParanextDataProvider.Projects
 
             Message result = Client
                 .FakeMessageFromServer(
-                    new MessageRequest(
-                        new Enum<RequestType>(PdbFactoryGetRequest),
-                        requesterId,
-                        serverMessage
-                    )
+                    new MessageRequest(PDB_FACTORY_GET_REQUEST, requesterId, serverMessage)
                 )
                 .First();
 
-            Assert.That(result.Type, Is.EqualTo(MessageType.Response));
+            Assert.That(result.Type, Is.EqualTo(MessageType.RESPONSE));
             MessageResponse response = (MessageResponse)result;
             Assert.That(
                 response.ErrorMessage,
@@ -97,15 +88,11 @@ namespace TestParanextDataProvider.Projects
 
             Message result = Client
                 .FakeMessageFromServer(
-                    new MessageRequest(
-                        new Enum<RequestType>(PdbFactoryGetRequest),
-                        requesterId,
-                        serverMessage
-                    )
+                    new MessageRequest(PDB_FACTORY_GET_REQUEST, requesterId, serverMessage)
                 )
                 .First();
 
-            Assert.That(result.Type, Is.EqualTo(MessageType.Response));
+            Assert.That(result.Type, Is.EqualTo(MessageType.RESPONSE));
             MessageResponse response = (MessageResponse)result;
             Assert.That(
                 response.ErrorMessage,
@@ -134,15 +121,11 @@ namespace TestParanextDataProvider.Projects
 
             Message result = Client
                 .FakeMessageFromServer(
-                    new MessageRequest(
-                        new Enum<RequestType>(PdbFactoryGetRequest),
-                        requesterId,
-                        serverMessage
-                    )
+                    new MessageRequest(PDB_FACTORY_GET_REQUEST, requesterId, serverMessage)
                 )
                 .First();
 
-            Assert.That(result.Type, Is.EqualTo(MessageType.Response));
+            Assert.That(result.Type, Is.EqualTo(MessageType.RESPONSE));
             MessageResponse response = (MessageResponse)result;
             Assert.That(
                 response.ErrorMessage,
@@ -172,15 +155,11 @@ namespace TestParanextDataProvider.Projects
 
             Message result1 = Client
                 .FakeMessageFromServer(
-                    new MessageRequest(
-                        new Enum<RequestType>(PdbFactoryGetRequest),
-                        requesterId1,
-                        serverMessage
-                    )
+                    new MessageRequest(PDB_FACTORY_GET_REQUEST, requesterId1, serverMessage)
                 )
                 .First();
 
-            Assert.That(result1.Type, Is.EqualTo(MessageType.Response));
+            Assert.That(result1.Type, Is.EqualTo(MessageType.RESPONSE));
             MessageResponse response1 = (MessageResponse)result1;
             Assert.That(response1.ErrorMessage, Is.Null);
             Assert.That(response1.RequestId, Is.EqualTo(requesterId1));
@@ -191,15 +170,11 @@ namespace TestParanextDataProvider.Projects
             // Make sure another request for the same provider gets the same ID
             Message result2 = Client
                 .FakeMessageFromServer(
-                    new MessageRequest(
-                        new Enum<RequestType>(PdbFactoryGetRequest),
-                        requesterId2,
-                        serverMessage
-                    )
+                    new MessageRequest(PDB_FACTORY_GET_REQUEST, requesterId2, serverMessage)
                 )
                 .First();
 
-            Assert.That(result2.Type, Is.EqualTo(MessageType.Response));
+            Assert.That(result2.Type, Is.EqualTo(MessageType.RESPONSE));
             MessageResponse response2 = (MessageResponse)result2;
             Assert.That(response2.ErrorMessage, Is.Null);
             Assert.That(response2.RequestId, Is.EqualTo(requesterId2));

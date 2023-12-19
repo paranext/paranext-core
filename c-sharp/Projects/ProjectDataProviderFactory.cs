@@ -32,7 +32,7 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
     // The first item in the array is the name of the function to call.
     // All remaining items are arguments to pass to the function.
     // Data providers must provide "get" and "set" functions.
-    private ResponseToRequest FunctionHandler(dynamic? request)
+    private ResponseToRequest FunctionHandler(JsonElement request)
     {
         string functionName;
         JsonArray jsonArray;

@@ -13,7 +13,7 @@ internal class PrivateConstructorResolver : DefaultJsonTypeInfoResolver
     {
         JsonTypeInfo jsonTypeInfo = base.GetTypeInfo(type, options);
 
-        if (jsonTypeInfo.Kind == JsonTypeInfoKind.Object && jsonTypeInfo.CreateObject is null)
+        if (jsonTypeInfo is { Kind: JsonTypeInfoKind.Object, CreateObject: null })
         {
             if (
                 jsonTypeInfo.Type
