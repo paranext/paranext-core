@@ -94,20 +94,20 @@ internal class LocalParatextProjects
 
         File.WriteAllText(Path.Join(projectFolder, PROJECT_METADATA_FILE), metadataString);
 
-        foreach (string newPath in Directory.GetFiles("assets/" + projectName, "*.*"))
+        foreach (string filePath in Directory.GetFiles("assets/" + projectName, "*.*"))
         {
             File.Copy(
-                newPath,
-                newPath.Replace(
+                filePath,
+                filePath.Replace(
                     "assets/" + projectName,
                     Path.Join(projectFolder, PROJECT_SUBDIRECTORY, PARATEXT_DATA_SUBDIRECTORY)
                 )
             );
         }
 
-        // is this required?
-        ProjectDetails projectDetails = new(metadata, Path.Join(projectFolder));
-        AddProjectToMaps(projectDetails);
+        // is this required? Don't think so
+        // ProjectDetails projectDetails = new(metadata, Path.Join(projectFolder));
+        // AddProjectToMaps(projectDetails);
     }
 
     public IList<ProjectDetails> GetAllProjectDetails()
