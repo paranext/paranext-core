@@ -17,7 +17,15 @@ const METADATA_FILE = 'meta.json';
 /** Get URIs to all projects stored locally on the file system */
 async function getProjectUris(): Promise<string[]> {
   // Get all the directories in the projects root
+  console.log('Rolf: ', PROJECTS_ROOT_URI);
+
+  const stats = await nodeFS.getStats(PROJECTS_ROOT_URI);
+
+  console.log('Rolf Stats: ', stats);
+
   const entries = await nodeFS.readDir(PROJECTS_ROOT_URI);
+
+  console.log('Rolf: Entries: ', entries);
 
   return entries.directory;
 }
@@ -37,6 +45,7 @@ function convertToMetadata(jsonString: string): ProjectMetadata {
 /** Load the contents of all 'meta.json' files from disk */
 async function loadAllProjectsMetadata(): Promise<Set<ProjectMetadata>> {
   const retVal = new Set<ProjectMetadata>();
+  console.log('Rolf: Trigger1');
   const uris = await getProjectUris();
 
   await Promise.all(
@@ -71,6 +80,7 @@ const localProjects = new Map<string, ProjectMetadata>();
 
 /** Refresh the map of all project 'meta.json' data */
 async function reloadMetadata(): Promise<void> {
+  console.log('Rolf: Trigger2');
   const allMetadata = await loadAllProjectsMetadata();
   localProjects.clear();
   allMetadata.forEach((metadata) => {
@@ -84,6 +94,8 @@ async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
+          // This is unreached when opening Resource Viewer select project dialog
+          console.log('Rolf: Trigger3');
           await reloadMetadata();
           resolve();
         } catch (error) {
@@ -97,6 +109,7 @@ async function initialize(): Promise<void> {
 }
 
 async function getMetadataForAllProjects(): Promise<ProjectMetadata[]> {
+  console.log('Rolf: Trigger4');
   await initialize();
   return [...localProjects.values()];
 }
