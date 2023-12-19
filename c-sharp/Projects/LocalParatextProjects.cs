@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.ComponentModel.DataAnnotations;
 using Paranext.DataProvider.JsonUtils;
 using Paratext.Data;
 using Paratext.Data.Users;
