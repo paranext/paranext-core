@@ -83,6 +83,16 @@ export async function getWebViewEntries(): Promise<webpack.EntryObject> {
 
 /** Folder containing the source files for the extensions */
 export const sourceFolder = 'src';
+/** Folder from repo root to this extensions folder git subtree */
+export const subtreeRootFolder = 'extensions';
+/**
+ * Folder containing the source files for the extensions. Directory from repo root and independent
+ * of OS.
+ *
+ * WARNING: This does not use the operating system's path separator because it needs to be
+ * consistent for use in git commands. If you need an OS-dependent path separator, make a new path
+ */
+const subtreeSourceFolder = `${subtreeRootFolder}/${sourceFolder}`;
 
 /**
  * `dirNames` of extensions that should be copied to the output folder but not bundled
@@ -227,7 +237,7 @@ export function getMainEntries(extensions: ExtensionInfo[]): webpack.EntryObject
  *   path
  */
 export function getExtensionPathOSIndependent(extensionDirName: string) {
-  return `${sourceFolder}/${extensionDirName}`;
+  return `${subtreeSourceFolder}/${extensionDirName}`;
 }
 
 // #endregion

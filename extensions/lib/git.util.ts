@@ -83,7 +83,7 @@ export async function execGitCommand(
   if (!quiet) console.log(`\n> ${command}`);
   try {
     const result = await execAsync(command, {
-      cwd: path.resolve(path.join(__dirname, '..')),
+      cwd: path.resolve(path.join(__dirname, '..', '..')),
       ...execOptions,
     });
     if (!quiet && result.stdout) console.log(result.stdout);

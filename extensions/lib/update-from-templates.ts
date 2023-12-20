@@ -9,7 +9,7 @@ import {
   fetchFromSingleTemplate,
   formatExtensionFolder,
 } from './git.util';
-import { ExtensionInfo, getExtensions } from '../webpack/webpack.util';
+import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webpack.util';
 
 (async () => {
   // Make sure there are not working changes as this will not work with working changes
@@ -26,7 +26,7 @@ import { ExtensionInfo, getExtensions } from '../webpack/webpack.util';
   // Merge changes from MULTI_TEMPLATE_REMOTE_NAME into this repo
   try {
     await execGitCommand(
-      `git merge ${MULTI_TEMPLATE_NAME}/${MULTI_TEMPLATE_BRANCH} --allow-unrelated-histories`,
+      `git subtree pull --prefix ${subtreeRootFolder} ${MULTI_TEMPLATE_NAME} ${MULTI_TEMPLATE_BRANCH} --squash`,
     );
   } catch (e) {
     console.error(`Error merging from ${MULTI_TEMPLATE_NAME}: ${e}`);
