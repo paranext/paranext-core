@@ -131,6 +131,9 @@ module.exports = {
     tsconfigRootDir: __dirname,
     createDefaultProgram: true,
   },
+  // Note: this folder's package.json does not contain these plugins or any other eslint packages
+  // because eslint was finding multiple copies of plugins and failing. So we use the packages from
+  // repo root instead
   plugins: ['@typescript-eslint', 'no-type-assertion', 'no-null'],
   settings: {
     'import/resolver': {

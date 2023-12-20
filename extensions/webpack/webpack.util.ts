@@ -93,7 +93,7 @@ export const sourceFolder = 'src';
  * Webpack wouldn't leave the requires alone even with webpackIgnore: true. Apparently webpack
  * catches errors and returns {} when it can't find a module :(
  */
-const extensionsNotBundled: string[] = [];
+const extensionsNotBundled: string[] = ['evil'];
 
 /** List of static files to copy from each extension's source directory */
 const staticFiles: {

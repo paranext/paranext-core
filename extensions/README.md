@@ -1,50 +1,10 @@
-# paranext-multi-extension-template
+# paranext-core/extensions
 
-Template for creating multiple Platform.Bible extensions in one repo
-
-## Template Info
-
-This is a webpack project template pre-configured to build an arbitrary number of Platform.Bible extensions. It contains the bare minimum of what a multi-extension repo needs. Note that many of the files mentioned in [Summary](#summary) are not present in this template because they describe extension code which must be added to this template. For inspiration on what extensions in a multi-extension repo could look like, refer to any repo forked from this template. An example would be the [paranext-sample-extensions]() [MISSING! PLEASE ADD WHEN AVAILABLE].
-
-### Customize repo details
-
-Follow these instructions to customize the template to be your own Platform.Bible extension repo.
-
-#### Install and hook up to the template
-
-To make the process of customizing from the template as smooth as possible, we recommend you do the following before anything else:
-
-- [Install and set up this repo](#to-install)
-- [Update this repo from the template](#to-update-this-repo-and-extensions-from-the-templates) to hook everything up for smooth updates in the future
-
-#### Replace placeholders
-
-- At the top of this `README.md`:
-
-  - Replace the first line `# paranext-multi-extension-template` with `# your-extension-repo-name`
-  - Below the first line, replace the repo description with your own description
-
-- In `package.json`:
-
-  - Replace `"paranext-multi-extension-template"` with `"your-extension-repo-name"`
-  - Update ownership information and other relevant fields as desired
-
-- In `LICENSE`:
-
-  - Adjust as desired (feel free to choose a different license)
-  - If you choose to stay with the current license, update the copyright statement
-
-#### Create your first extension in this repo
-
-Follow the steps in [To create a new extension in this repo](#to-create-a-new-extension-in-this-repo) to create your first extension in this repo! You can follow the same steps to create new extensions as desired.
-
-#### Remove Template Info
-
-Once finished customizing this template to be your own, you can remove the [Template Info](#template-info) section and sub-sections of this readme.
+Official extensions provided by Paranext
 
 ## Summary
 
-This is a webpack project configured to build Platform.Bible extensions. The general file structure is as follows:
+This is a webpack project configured to build Paranext's official extensions included in the product. The general file structure is as follows:
 
 - `src/` contains the source code for all extensions
   - Each sub-folder in `src/` with a `manifest.json` in it is an extension
@@ -65,7 +25,7 @@ This is a webpack project configured to build Platform.Bible extensions. The gen
 ### Install dependencies:
 
 1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install).
-2. In this repo, run `npm install` to install local and published dependencies
+2. In `paranext-core/extensions`, run `npm install` to install local and published dependencies
 
 Note: running `npm install` automatically adds remotes that help with [updating from the templates](#to-update-this-repo-and-extensions-from-the-templates).
 
@@ -84,22 +44,15 @@ git remote add paranext-extension-template https://github.com/paranext/paranext-
 
 </details>
 
-### Configure paths to `paranext-core` repo
-
-In order to interact with `paranext-core`, you must point `package.json` to your installed `paranext-core` repository:
-
-1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install). We recommend you clone `paranext-core` in the same parent directory in which you cloned this repository so you do not have to reconfigure paths to `paranext-core`.
-2. If you cloned `paranext-core` anywhere other than in the same parent directory in which you cloned this repository, update the paths to `paranext-core` in this repository's `package.json` to point to the correct `paranext-core` directory.
-
 ## To run
 
 ### Running Platform.Bible with these extensions
 
-To run Platform.Bible with these extensions:
+To run Platform.Bible with these extensions (these extensions are automatically included when running `paranext-core`):
 
 `npm start`
 
-Note: The built extensions will be the `dist` folder. In order for Platform.Bible to run these extensions, you must provide the directory to these built extensions to Platform.Bible via a command-line argument. This command-line argument is already provided in this `package.json`'s `start` script. If you want to start Platform.Bible and use these extensions any other way, you must provide this command-line argument or put the `dist` folder into Platform.Bible's `extensions` folder.
+Note: The built extensions will be the `dist` folder. These extension files will be watched automatically for changes if you run `npm start` in `paranext-core` or `npm start` from this folder. There is no need to run `npm start` in both directories.
 
 ### Building these extensions independently
 
@@ -113,7 +66,7 @@ To build the extensions once:
 
 ## To package for distribution
 
-To package this extension into a zip file for distribution:
+To package these extensions into a zip file for distribution:
 
 `npm run package`
 
@@ -139,16 +92,16 @@ Alternatively, you can create a new extension manually:
 ```bash
 git fetch paranext-extension-template main
 
-git subtree add --prefix src/<extension_name> paranext-extension-template main --squash
+git subtree add --prefix extensions/src/<extension_name> paranext-extension-template main --squash
 ```
 
 </details>
 
-## To update this repo and extensions from the templates
+## To update this folder and extensions from the templates
 
-This project is forked from [`paranext-multi-extension-template`](https://github.com/paranext/paranext-multi-extension-template), and its extensions are derived from [`paranext-extension-template`](https://github.com/paranext/paranext-extension-template). Both are updated periodically and will sometimes receive updates that help with breaking changes on [`paranext-core`](https://github.com/paranext/paranext-core). We recommend you periodically update your repo and extensions by merging the latest template updates into them.
+This folder is forked from [`paranext-multi-extension-template`](https://github.com/paranext/paranext-multi-extension-template), and its extensions are derived from [`paranext-extension-template`](https://github.com/paranext/paranext-extension-template). Both are updated periodically and will sometimes receive updates that help with breaking changes on [`paranext-core`](https://github.com/paranext/paranext-core). We recommend you periodically update this folder and extensions by merging the latest template updates into them.
 
-To update this repo including all extensions to have the latest updates and upgrades from the templates, make sure your repo has no working changes, then run the following `npm` script:
+To update this folder including all extensions to have the latest updates and upgrades from the templates, make sure this repo has no working changes, then run the following `npm` script:
 
 ```bash
 npm run update-from-templates
@@ -170,7 +123,7 @@ Alternatively, you can update from the templates manually.
 ```bash
 git fetch paranext-multi-extension-template main
 
-git merge paranext-multi-extension-template/main --allow-unrelated-histories
+git subtree pull --prefix extensions paranext-multi-extension-template main --squash
 ```
 
 #### Manually update extensions from `paranext-extension-template`
