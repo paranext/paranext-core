@@ -9,6 +9,7 @@ import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import * as nodeFS from '@node/services/node-file-system.service';
 import { deserialize } from '@shared/utils/papi-util';
+import { wait } from '@shared/utils/util';
 
 /** This points to the directory where all of the project subdirectories live */
 const PROJECTS_ROOT_URI = joinUriPaths('file://', os.homedir(), '.platform.bible', 'projects');
@@ -17,7 +18,11 @@ const METADATA_FILE = 'meta.json';
 /** Get URIs to all projects stored locally on the file system */
 async function getProjectUris(): Promise<string[]> {
   // Get all the directories in the projects root
-  const entries = await nodeFS.readDir(PROJECTS_ROOT_URI);
+  let entries = await nodeFS.readDir(PROJECTS_ROOT_URI);
+  if (entries.directory.length === 0) {
+    await wait(5000);
+    entries = await nodeFS.readDir(PROJECTS_ROOT_URI);
+  }
   return entries.directory;
 }
 
@@ -96,8 +101,7 @@ async function initialize(): Promise<void> {
 }
 
 async function getMetadataForAllProjects(): Promise<ProjectMetadata[]> {
-  // await initialize();
-  await reloadMetadata();
+  await initialize();
   return [...localProjects.values()];
 }
 

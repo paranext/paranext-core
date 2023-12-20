@@ -69,40 +69,6 @@ internal class LocalParatextProjects
         }
     }
 
-    private void SetUpSampleProject()
-    {
-        string projectName = "WEB";
-        string projectId = "32664dc3288a28df2e2bb75ded887fc8f17a15fb";
-        string projectFolderName = projectName + "_" + projectId;
-        string projectFolder = Path.Join(ProjectRootFolder, projectFolderName);
-        ProjectMetadata metadata =
-            new(projectId, projectName, "paratextFolders", "ParatextStandard");
-        string metadataString = ProjectMetadataConverter.ToJsonString(
-            metadata.ID,
-            metadata.Name,
-            metadata.ProjectStorageType,
-            metadata.ProjectType
-        );
-
-        CreateDirectory(projectFolder);
-        CreateDirectory(Path.Join(projectFolder, PROJECT_SUBDIRECTORY));
-        CreateDirectory(Path.Join(projectFolder, PROJECT_SUBDIRECTORY, EXTENSIONS_SUBDIRECTORY));
-        CreateDirectory(Path.Join(projectFolder, PROJECT_SUBDIRECTORY, PARATEXT_DATA_SUBDIRECTORY));
-
-        File.WriteAllText(Path.Join(projectFolder, PROJECT_METADATA_FILE), metadataString);
-
-        foreach (string filePath in Directory.GetFiles("assets/" + projectName, "*.*"))
-        {
-            File.Copy(
-                filePath,
-                filePath.Replace(
-                    "assets/" + projectName,
-                    Path.Join(projectFolder, PROJECT_SUBDIRECTORY, PARATEXT_DATA_SUBDIRECTORY)
-                )
-            );
-        }
-    }
-
     public IList<ProjectDetails> GetAllProjectDetails()
     {
         return _projectDetailsMap.Values.ToList();
@@ -203,7 +169,6 @@ internal class LocalParatextProjects
     /// <returns>Enumeration of (ProjectMetadata, project directory) tuples for all projects</returns>
     private IEnumerable<ProjectDetails> LoadAllProjectDetails()
     {
-        Console.WriteLine(ProjectRootFolder);
         foreach (var dir in Directory.EnumerateDirectories(ProjectRootFolder))
         {
             ProjectMetadata? projectMetadata;
@@ -252,6 +217,38 @@ internal class LocalParatextProjects
 
         errorMessage = "";
         return metadata;
+    }
+
+    private void SetUpSampleProject()
+    {
+        string projectName = "WEB";
+        string projectId = "32664dc3288a28df2e2bb75ded887fc8f17a15fb";
+        string projectFolderName = projectName + "_" + projectId;
+        string projectFolder = Path.Join(ProjectRootFolder, projectFolderName);
+        ProjectMetadata metadata =
+            new(projectId, projectName, "paratextFolders", "ParatextStandard");
+        string metadataString = ProjectMetadataConverter.ToJsonString(
+            metadata.ID,
+            metadata.Name,
+            metadata.ProjectStorageType,
+            metadata.ProjectType
+        );
+
+        CreateDirectory(Path.Join(projectFolder, PROJECT_SUBDIRECTORY, EXTENSIONS_SUBDIRECTORY));
+        CreateDirectory(Path.Join(projectFolder, PROJECT_SUBDIRECTORY, PARATEXT_DATA_SUBDIRECTORY));
+
+        File.WriteAllText(Path.Join(projectFolder, PROJECT_METADATA_FILE), metadataString);
+
+        foreach (string filePath in Directory.GetFiles("assets/" + projectName, "*.*"))
+        {
+            File.Copy(
+                filePath,
+                filePath.Replace(
+                    "assets/" + projectName,
+                    Path.Join(projectFolder, PROJECT_SUBDIRECTORY, PARATEXT_DATA_SUBDIRECTORY)
+                )
+            );
+        }
     }
 
     #endregion
