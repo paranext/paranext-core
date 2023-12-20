@@ -1,13 +1,13 @@
-using PtxUtils;
-
 namespace Paranext.DataProvider.Messages;
 
-public sealed class EventType : EnumType
+/// <summary>
+/// These are well known event types, but there isn't a fixed set of all possible event types
+/// </summary>
+public static class EventType
 {
-    public static readonly Enum<EventType> ClientConnect = new("network:onDidClientConnect");
-    public static readonly Enum<EventType> ClientDisconnect = new("network:onDidClientDisconnect");
-    public static readonly Enum<EventType> ObjectDispose = new("object:onDidDisposeNetworkObject");
-    public static readonly Enum<EventType> ObjectCreate = new("object:onDidCreateNetworkObject");
-
-    private EventType() { } // Can't create an instance
+    public const string UNKNOWN = "UNKNOWN";
+    public const string CLIENT_CONNECT = "network:onDidClientConnect";
+    public const string CLIENT_DISCONNECT = "network:onDidClientDisconnect";
+    public const string OBJECT_DISPOSE = "object:onDidDisposeNetworkObject";
+    public const string OBJECT_CREATE = "object:onDidCreateNetworkObject";
 }

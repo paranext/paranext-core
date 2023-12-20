@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
@@ -25,7 +24,7 @@ public static class Program
             }
 
             //TODO: Delete this once we stop including test objects in the builds
-            if (!await papi.RegisterRequestHandler(RequestType.AddOne, RequestAddOne))
+            if (!await papi.RegisterRequestHandler("command:test.addOne", RequestAddOne))
             {
                 Console.WriteLine("Paranext data provider could not register request handler");
                 return;
@@ -60,10 +59,10 @@ public static class Program
 
     #region Request handlers
 
-    private static ResponseToRequest RequestAddOne(dynamic val)
+    private static ResponseToRequest RequestAddOne(JsonElement element)
     {
-        if (val is not JsonElement element || element.GetArrayLength() != 1)
-            return ResponseToRequest.Failed("Unexpected data in request: " + val);
+        if (element.GetArrayLength() != 1)
+            return ResponseToRequest.Failed("Unexpected data in request: " + element);
 
         int intVal = ErrorUtils.IgnoreErrors(
             "Trying to parse data from server",

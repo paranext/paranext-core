@@ -1,20 +1,26 @@
-using PtxUtils;
-
 namespace Paranext.DataProvider.Messages;
 
 /// <summary>
 /// Base class for messages sent over the websocket connection
 /// </summary>
-public abstract class Message
+public class Message
 {
-    protected Message(int senderId)
-    {
-        SenderId = senderId;
-    }
-
-    protected Message()
+    private Message()
     {
         SenderId = UNKNOWN_SENDER_ID;
+        Type = MessageType.UNKNOWN;
+    }
+
+    protected Message(string messageType)
+    {
+        SenderId = UNKNOWN_SENDER_ID;
+        Type = messageType;
+    }
+
+    protected Message(string messageType, int senderId)
+    {
+        SenderId = senderId;
+        Type = messageType;
     }
 
     public const int UNKNOWN_SENDER_ID = -1;
@@ -22,7 +28,7 @@ public abstract class Message
     /// <summary>
     /// Message type
     /// </summary>
-    public abstract Enum<MessageType> Type { get; }
+    public string Type { get; protected set; }
 
     /// <summary>
     /// ID (as assigned by the server) of the original sender of this message
@@ -31,6 +37,6 @@ public abstract class Message
 
     public override string ToString()
     {
-        return $"Type: {Type} from {SenderId}";
+        return $"MessageType: {Type} from {SenderId}";
     }
 }

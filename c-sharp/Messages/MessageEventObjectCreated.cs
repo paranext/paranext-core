@@ -1,5 +1,13 @@
+using Paranext.DataProvider.JsonUtils;
+
 namespace Paranext.DataProvider.Messages;
 
+[JsonMessageDeserialization(
+    MessageField.MESSAGE_TYPE,
+    MessageType.EVENT,
+    MessageField.EVENT_TYPE,
+    Messages.EventType.OBJECT_CREATE
+)]
 public sealed class MessageEventObjectCreated
     : MessageEventGeneric<MessageEventObjectCreatedContents>
 {
@@ -7,10 +15,13 @@ public sealed class MessageEventObjectCreated
     /// ONLY FOR DESERIALIZATION
     /// </summary>
     private MessageEventObjectCreated()
-        : base(Messages.EventType.ObjectCreate) { }
+        : base(Messages.EventType.OBJECT_CREATE, null!) { }
 
-    public MessageEventObjectCreated(MessageEventObjectCreatedContents eventContents)
-        : base(Messages.EventType.ObjectCreate, eventContents) { }
+    public MessageEventObjectCreated(string id, string[] functions)
+        : base(
+            Messages.EventType.OBJECT_CREATE,
+            new MessageEventObjectCreatedContents { Id = id, Functions = functions }
+        ) { }
 }
 
 public sealed record MessageEventObjectCreatedContents

@@ -5,21 +5,19 @@ namespace Paranext.DataProvider.MessageHandlers;
 /// </summary>
 public sealed record ResponseToRequest
 {
-    private ResponseToRequest(bool success, dynamic? details)
+    private ResponseToRequest(bool success, object? contents, string? errorMessage)
     {
         Success = success;
-        if (success)
-            Contents = details;
-        else
-            ErrorMessage = details;
+        Contents = contents;
+        ErrorMessage = errorMessage;
     }
 
     /// <summary>
     /// Response when successful
     /// </summary>
-    public static ResponseToRequest Succeeded(dynamic? contents = null)
+    public static ResponseToRequest Succeeded(object? contents = null)
     {
-        return new ResponseToRequest(true, contents);
+        return new ResponseToRequest(true, contents, null);
     }
 
     /// <summary>
@@ -27,12 +25,12 @@ public sealed record ResponseToRequest
     /// </summary>
     public static ResponseToRequest Failed(string errorMessage)
     {
-        return new ResponseToRequest(false, errorMessage);
+        return new ResponseToRequest(false, null, errorMessage);
     }
 
     public bool Success { get; }
 
     public string? ErrorMessage { get; }
 
-    public dynamic? Contents { get; }
+    public object? Contents { get; }
 }

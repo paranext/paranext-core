@@ -1,22 +1,19 @@
 using Paranext.DataProvider.Messages;
-using PtxUtils;
 using System.Collections.Concurrent;
+using System.Text.Json;
 
 namespace Paranext.DataProvider.MessageHandlers;
 
-using RequestHandler = Func<dynamic, ResponseToRequest>;
+using RequestHandler = Func<JsonElement, ResponseToRequest>;
 
 /// <summary>
 /// Handler for "Request" messages that assumes there should be 1 way to respond to each RequestType
 /// </summary>
 internal class MessageHandlerRequestByRequestType : IMessageHandler
 {
-    private readonly ConcurrentDictionary<
-        Enum<RequestType>,
-        RequestHandler
-    > _handlersByRequestType = new();
+    private readonly ConcurrentDictionary<string, RequestHandler> _handlersByRequestType = new();
 
-    public void SetHandlerForRequestType(Enum<RequestType> requestType, RequestHandler handler)
+    public void SetHandlerForRequestType(string requestType, RequestHandler handler)
     {
         _handlersByRequestType[requestType] = handler;
     }
@@ -26,10 +23,9 @@ internal class MessageHandlerRequestByRequestType : IMessageHandler
         if (message == null)
             throw new ArgumentNullException(nameof(message));
 
-        if (message.Type != MessageType.Request)
+        if (message is not MessageRequest request)
             throw new ArgumentException("Incorrect message type", nameof(message));
 
-        var request = (MessageRequest)message;
         if (!_handlersByRequestType.TryGetValue(request.RequestType, out RequestHandler? handler))
         {
             Console.Error.WriteLine($"Unable to process request type: {request.RequestType}");
@@ -52,7 +48,7 @@ internal class MessageHandlerRequestByRequestType : IMessageHandler
                 request.RequestType,
                 request.RequestId,
                 request.SenderId,
-                response.ErrorMessage
+                response.ErrorMessage ?? "Unspecified error"
             );
         }
     }
