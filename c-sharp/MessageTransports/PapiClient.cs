@@ -253,7 +253,7 @@ internal class PapiClient : IDisposable
     /// Configure PapiClient to call <paramref name="eventHandler"/> whenever an event of type <paramref name="eventType"/> is received.
     /// </summary>
     /// <param name="eventType">Event type to monitor</param>
-    /// <param name="eventHandler">Function that accepts and event message and optionally returns messages to send</param>
+    /// <param name="eventHandler">Function that accepts an event message and optionally returns messages to send</param>
     public virtual void RegisterEventHandler(
         string eventType,
         Func<MessageEvent, Message?> eventHandler
