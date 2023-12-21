@@ -3,23 +3,52 @@
 // a shared file.
 // TODO: please move these utility functions with #203
 
+import DockLayout, { FloatPosition, TabData, PanelData } from 'rc-dock';
+
 import { getErrorMessage } from '@shared/utils/util';
 import {
   Layout,
-  RCDockTabInfo,
   SavedTabInfo,
   TabInfo,
   TabLoader,
   TabSaver,
-  TabType,
   WebViewTabProps,
-  isTab,
 } from '@shared/models/docking-framework.model';
+import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
 import LogError from '@shared/log-error.model';
+
 import {
   mergeUpdatablePropertiesIntoWebViewDefinition,
   saveTabInfoBase,
 } from '@renderer/services/web-view.service-host';
+import {
+  TAB_TYPE_BASIC_LIST,
+  loadBasicListTab,
+} from '@renderer/components/basic-list/basic-list.component';
+import DIALOGS from '@renderer/components/dialogs';
+import {
+  TAB_TYPE_EXTENSION_MANAGER,
+  loadExtensionManagerTab,
+} from '@renderer/components/extension-manager/extension-manager-tab.component';
+import {
+  TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
+  loadDownloadUpdateProjectTab,
+} from '@renderer/components/projects/download-update-project-tab.component';
+import {
+  TAB_TYPE_RUN_BASIC_CHECKS,
+  loadRunBasicChecksTab,
+} from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
+import {
+  TAB_TYPE_SETTINGS_DIALOG,
+  loadSettingsDialog,
+} from '@renderer/components/settings-dialog/settings-tab.component';
+import {
+  TAB_TYPE_WEBVIEW,
+  loadWebViewTab,
+  saveWebViewTab,
+  updateWebViewTab,
+} from '@renderer/components/web-view.component';
+
 import { TAB_TYPE_ABOUT, loadAboutTab } from '@renderer/testing/about-panel.component';
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';
@@ -27,40 +56,11 @@ import {
   TAB_TYPE_QUICK_VERSE_HERESY,
   loadQuickVerseHeresyTab,
 } from '@renderer/testing/test-quick-verse-heresy-panel.component';
-import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
-import DockLayout, { FloatPosition, TabData, PanelData } from 'rc-dock';
+
+import { layoutDefaults, getFloatPosition } from './platform-dock-layout-positioning.util';
+import { TabType, RCDockTabInfo, isTab } from './docking-framework-internal.model';
+import createRCDockTabFromTabInfo from './platform-dock-tab.component';
 import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './error-tab.component';
-import { TAB_TYPE_BASIC_LIST, loadBasicListTab } from '../basic-list/basic-list.component';
-import DIALOGS from '../dialogs';
-import {
-  TAB_TYPE_EXTENSION_MANAGER,
-  loadExtensionManagerTab,
-} from '../extension-manager/extension-manager-tab.component';
-import {
-  TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
-  loadDownloadUpdateProjectTab,
-} from '../projects/download-update-project-tab.component';
-import {
-  TAB_TYPE_RUN_BASIC_CHECKS,
-  loadRunBasicChecksTab,
-} from '../run-basic-checks-dialog/run-basic-checks-tab.component';
-import {
-  TAB_TYPE_SETTINGS_DIALOG,
-  loadSettingsDialog,
-} from '../settings-dialog/settings-tab.component';
-import {
-  TAB_TYPE_WEBVIEW,
-  loadWebViewTab,
-  saveWebViewTab,
-  updateWebViewTab,
-} from '../web-view.component';
-import {
-  layoutDefaults,
-  getFloatPosition,
-  TAB_GROUP,
-} from './platform-dock-layout-positioning.util';
-import PlatformPanel from './platform-panel.component';
-import PlatformTabTitle from './platform-tab-title.component';
 
 /** Tab loader functions for each Platform tab type */
 const tabLoaderMap = new Map<TabType, TabLoader>([
@@ -414,30 +414,5 @@ export function addWebViewToDock(
       `platform-dock-layout error: WebView of type ${webView.webViewType} has no id!`,
     );
   return addTabToDock({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView }, layout, dockLayout);
-}
-// #endregion
-
-// #region tab html
-/**
- * Creates a tab ready to go into rc-dock from platform tab info
- *
- * @param tabInfo Data used to create the rc-dock tab
- * @returns Rc-dock tab created from `tabInfo`
- */
-export default function createRCDockTabFromTabInfo(tabInfo: TabInfo) {
-  // Translate the data from the loaded tab to be in the form needed by rc-dock
-  return {
-    ...tabInfo,
-    title: (
-      <PlatformTabTitle
-        iconUrl={tabInfo.tabIconUrl}
-        text={tabInfo.tabTitle}
-        tooltip={tabInfo.tabTooltip}
-      />
-    ),
-    content: <PlatformPanel>{tabInfo.content}</PlatformPanel>,
-    group: TAB_GROUP,
-    closable: true,
-  };
 }
 // #endregion

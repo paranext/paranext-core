@@ -1,18 +1,19 @@
-import { useRef, useEffect, MutableRefObject } from 'react';
+import { useRef, useEffect } from 'react';
 import DockLayout from 'rc-dock';
-import testLayout from '@renderer/testing/test-layout.data';
+
 import { WebViewDefinitionUpdatableProperties } from '@shared/models/web-view.model';
 import {
   SavedTabInfo,
   Layout,
   OnLayoutChangeRCDock,
   WebViewTabProps,
-  isTab,
-  RCDockTabInfo,
 } from '@shared/models/docking-framework.model';
+import { DialogData } from '@shared/models/dialog-options.model';
+
+import testLayout from '@renderer/testing/test-layout.data';
 import { registerDockLayout } from '@renderer/services/web-view.service-host';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
-import { DialogData } from '@shared/models/dialog-options.model';
+
 import DockLayoutWrapper from './dock-layout-wrapper.component';
 import {
   addTabToDock,
@@ -22,6 +23,7 @@ import {
   saveTab,
   updateWebViewDefinition,
 } from './platform-dock-layout-storage.util';
+import { isTab, RCDockTabInfo } from './docking-framework-internal.model';
 
 export default function PlatformDockLayout() {
   // This ref will always be defined
@@ -72,38 +74,30 @@ export default function PlatformDockLayout() {
       ref={dockLayoutRef}
       loadTab={loadTab}
       saveTab={saveTab}
-      onLayoutChange={onLayoutChange(dockLayoutRef, onLayoutChangeRef)}
+      onLayoutChange={(...args) => {
+        const [, currentTabId, direction] = args;
+        // If a dialog was closed, tell the dialog service
+        if (currentTabId && direction === 'remove') {
+          // Assert the more specific type.
+          /* eslint-disable no-type-assertion/no-type-assertion */
+          const removedTab = dockLayoutRef.current.find(currentTabId) as RCDockTabInfo;
+          if ((removedTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
+            /* eslint-enable */
+            resolveDialogRequest(currentTabId, undefined, false);
+        }
+
+        (async () => {
+          if (onLayoutChangeRef.current) {
+            try {
+              await onLayoutChangeRef.current(...args);
+            } catch (e) {
+              throw new Error(
+                `platform-dock-layout.component error: Failed to run onLayoutChangeRef.current! currentTabId: ${currentTabId}, direction: ${direction}`,
+              );
+            }
+          }
+        })();
+      }}
     />
   );
-}
-
-function onLayoutChange(
-  dockLayoutRef: MutableRefObject<DockLayout>,
-  onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>,
-) {
-  /* eslint-disable-next-line */
-  return (...args: any[]) => {
-    const [, currentTabId, direction] = args;
-    // If a dialog was closed, tell the dialog service
-    if (currentTabId && direction === 'remove') {
-      // Assert the more specific type.
-      /* eslint-disable no-type-assertion/no-type-assertion */
-      const removedTab = dockLayoutRef.current.find(currentTabId) as RCDockTabInfo;
-      if ((removedTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
-        /* eslint-enable */
-        resolveDialogRequest(currentTabId, undefined, false);
-    }
-
-    (async () => {
-      if (onLayoutChangeRef.current) {
-        try {
-          await onLayoutChangeRef.current(...args);
-        } catch (e) {
-          throw new Error(
-            `platform-dock-layout.component error: Failed to run onLayoutChangeRef.current! currentTabId: ${currentTabId}, direction: ${direction}`,
-          );
-        }
-      }
-    })();
-  };
 }

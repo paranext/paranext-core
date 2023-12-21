@@ -1,13 +1,13 @@
+import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
+import cloneDeep from 'lodash/cloneDeep';
 import {
   PanelDirection,
-  TabType,
   Layout,
   SavedTabInfo,
   FloatLayout,
 } from '@shared/models/docking-framework.model';
-import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
-import cloneDeep from 'lodash/cloneDeep';
-import DIALOGS from '../dialogs';
+import DIALOGS from '@renderer/components/dialogs';
+import { TabType } from './docking-framework-internal.model';
 
 /**
  * The default initial size for floating tabs in CSS `px` units. Can be overridden by tabTypes'
