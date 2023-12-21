@@ -1,9 +1,12 @@
 import 'rc-dock/dist/rc-dock.css';
 import './dock-layout-wrapper.component.scss';
 
-import { RCDockTabInfo, SavedTabInfo } from '@shared/models/docking-framework.model';
+import { CSSProperties, ForwardedRef, PropsWithChildren, forwardRef } from 'react';
 import DockLayout, { DropDirection, LayoutBase, LayoutData } from 'rc-dock';
-import { CSSProperties, LegacyRef, PropsWithChildren, forwardRef } from 'react';
+
+import { SavedTabInfo } from '@shared/models/docking-framework.model';
+
+import { RCDockTabInfo } from './docking-framework-internal.model';
 import { GROUPS } from './platform-dock-layout-positioning.util';
 
 export type DockLayoutWrapperProps = PropsWithChildren<{
@@ -20,7 +23,7 @@ export type DockLayoutWrapperProps = PropsWithChildren<{
 
 const DockLayoutWrapper = forwardRef(function DockLayoutWrapper(
   { loadTab, saveTab, onLayoutChange, defaultLayout, style }: DockLayoutWrapperProps,
-  ref: LegacyRef<DockLayout> | undefined,
+  ref: ForwardedRef<DockLayout> | undefined,
 ) {
   return (
     <DockLayout
