@@ -2,7 +2,7 @@ import 'rc-dock/dist/rc-dock.css';
 import './dock-layout-wrapper.component.scss';
 
 import { CSSProperties, ForwardedRef, PropsWithChildren, forwardRef } from 'react';
-import DockLayout, { DropDirection, LayoutBase, LayoutData } from 'rc-dock';
+import DockLayout, { LayoutProps, LayoutData, LayoutBase } from 'rc-dock';
 
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 
@@ -12,12 +12,8 @@ import { GROUPS } from './platform-dock-layout-positioning.util';
 export type DockLayoutWrapperProps = PropsWithChildren<{
   loadTab: (savedTabInfo: SavedTabInfo) => RCDockTabInfo;
   saveTab: (dockTabInfo: RCDockTabInfo) => SavedTabInfo | undefined;
-  onLayoutChange: (
-    newLayout: LayoutBase,
-    currentTabId?: string | undefined,
-    direction?: DropDirection | undefined,
-  ) => void;
-  defaultLayout?: LayoutData;
+  onLayoutChange: LayoutProps['onLayoutChange'];
+  defaultLayout?: LayoutBase;
   style?: CSSProperties;
 }>;
 
@@ -29,7 +25,11 @@ const DockLayoutWrapper = forwardRef(function DockLayoutWrapper(
     <DockLayout
       ref={ref}
       groups={GROUPS}
-      defaultLayout={defaultLayout || { dockbox: { mode: 'horizontal', children: [] } }}
+      // DockLayout requires LayoutData, but it needs to be LayoutBase in case we use loadTab
+      /* eslint-disable no-type-assertion/no-type-assertion */
+      defaultLayout={
+        (defaultLayout as LayoutData) || { dockbox: { mode: 'horizontal', children: [] } }
+      }
       style={style}
       dropMode="edge"
       loadTab={loadTab}
