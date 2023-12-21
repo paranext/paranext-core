@@ -1,5 +1,3 @@
-import 'rc-dock/dist/rc-dock.css';
-import './platform-dock-layout.component.scss';
 import { useRef, useEffect, MutableRefObject } from 'react';
 import DockLayout from 'rc-dock';
 import testLayout from '@renderer/testing/test-layout.data';
@@ -15,13 +13,15 @@ import {
 import { registerDockLayout } from '@renderer/services/web-view.service-host';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
 import { DialogData } from '@shared/models/dialog-options.model';
-import DockLayoutWrapper from './platform-dock-layout-wrapper.component';
+import DockLayoutWrapper from './dock-layout-wrapper.component';
 import {
+  addTabToDock,
+  addWebViewToDock,
   getWebViewDefinition,
+  loadTab,
+  saveTab,
   updateWebViewDefinition,
-} from './platform-dock-layout-webview-storage';
-import { loadTab, saveTab } from './platform-dock-layout-tab-storage';
-import { addTabToDock, addWebViewToDock } from './platform-dock-layout-update';
+} from './platform-dock-layout-storage.util';
 
 export default function PlatformDockLayout() {
   // This ref will always be defined
