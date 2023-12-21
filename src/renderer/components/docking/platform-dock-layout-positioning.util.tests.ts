@@ -1,18 +1,5 @@
 /* eslint-disable import/first */
 jest.mock('../../../shared/services/logger.service');
-// Mock all of the papi-components because they should test themselves
-jest.mock(
-  'papi-components',
-  () =>
-    new Proxy(
-      {},
-      {
-        get() {
-          return function MockComponent() {};
-        },
-      },
-    ),
-);
 
 import { FloatPosition } from 'rc-dock';
 import { FloatLayout } from '@shared/models/docking-framework.model';
