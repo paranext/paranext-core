@@ -137,12 +137,7 @@ export const loadRunBasicChecksTab = (savedTabInfo: SavedTabInfo): TabInfo => {
     content: (
       <RunBasicChecksTab
         // #region Test a .NET data provider
-        // TODO: Uncomment this or similar sample code once https://github.com/paranext/paranext-core/issues/440 is resolved
-        // In the meantime, if you want to try this, copy an existing project into
-        //   <home_dir>/.platform.bible/<project_short_name>_<project_ID_from_settings.xml>/project/paratext
-        // For example: "~/.platform.bible/projects/TPKJ_b4c501ad2538989d6fb723518e92408406e232d3/project/paratext"
-        // Then create a file named "meta.json" in the "<short_name>_<project_ID>" directory with this JSON:
-        currentProjectId="INSERT YOUR PROJECT ID HERE"
+        currentProjectId="32664dc3288a28df2e2bb75ded887fc8f17a15fb"
         currentScriptureReference={settingsService.get('platform.verseRef')}
       />
     ),

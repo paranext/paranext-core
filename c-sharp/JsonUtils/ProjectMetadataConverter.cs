@@ -57,5 +57,21 @@ namespace Paranext.DataProvider.JsonUtils
                 [PROJECT_TYPE] = projectMetadata.ProjectType
             }.ToString();
         }
+
+        public static string ToJsonString(
+            string id,
+            string name,
+            string storageType,
+            string projectType
+        )
+        {
+            return new JObject
+            {
+                [ID] = id,
+                [NAME] = name,
+                [STORAGE_TYPE] = storageType,
+                [PROJECT_TYPE] = projectType
+            }.ToString();
+        }
     }
 }
