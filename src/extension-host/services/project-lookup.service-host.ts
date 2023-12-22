@@ -20,6 +20,10 @@ async function getProjectUris(): Promise<string[]> {
   // Get all the directories in the projects root
   let entries = await nodeFS.readDir(PROJECTS_ROOT_URI);
   if (entries.directory.length === 0) {
+    // TODO: This is a temporary solution that waits for a project directory when none are found.
+    // Ideally we would want to run `reloadMetadata()` whenever
+    // a project is added to or removed from the projects directory.
+    // https://github.com/paranext/paranext-core/issues/691
     await wait(5000);
     entries = await nodeFS.readDir(PROJECTS_ROOT_URI);
   }
