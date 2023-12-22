@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Paratext.Data;
-using PtxUtils;
 using Paranext.DataProvider.Messages;
 using System.Web;
 using System.Diagnostics.CodeAnalysis;
@@ -34,8 +33,9 @@ namespace TestParanextDataProvider
         [TearDown]
         public virtual void TestTearDown()
         {
-            List<ScrText> projects =
-                ScrTextCollection.ScrTexts(IncludeProjects.Everything).ToList();
+            List<ScrText> projects = ScrTextCollection
+                .ScrTexts(IncludeProjects.Everything)
+                .ToList();
 
             foreach (ScrText project in projects)
                 ScrTextCollection.Remove(project, false);
@@ -48,7 +48,9 @@ namespace TestParanextDataProvider
             get
             {
                 if (_client == null)
-                    throw new InvalidOperationException("Can not access Client before test setup is run");
+                    throw new InvalidOperationException(
+                        "Can not access Client before test setup is run"
+                    );
                 return _client;
             }
         }
@@ -58,7 +60,9 @@ namespace TestParanextDataProvider
             get
             {
                 if (_projects == null)
-                    throw new InvalidOperationException("Can not access Projects before test setup is run");
+                    throw new InvalidOperationException(
+                        "Can not access Projects before test setup is run"
+                    );
                 return _projects;
             }
         }
@@ -87,7 +91,11 @@ namespace TestParanextDataProvider
         /// Creates fake project details to fake the existence of a project
         /// </summary>
         /// <seealso cref="DummyLocalParatextProjects.FakeAddProject"/>
-        protected static ProjectDetails CreateProjectDetails(string id, string name, string projectType = "")
+        protected static ProjectDetails CreateProjectDetails(
+            string id,
+            string name,
+            string projectType = ""
+        )
         {
             ProjectMetadata metadata = new(id, name, "ParatextFolders", projectType);
             return new ProjectDetails(metadata, "testDirectoryThatDoesNotExist");
@@ -98,8 +106,10 @@ namespace TestParanextDataProvider
         /// </summary>
         protected static JsonNode CreateVerseRefNode(int bookNum, int chapterNum, int verseNum)
         {
-            return JsonNode.Parse("{ \"versification\":\"English\", " +
-                                  $"\"_bookNum\":{bookNum}, \"_chapterNum\":{chapterNum}, \"_verseNum\":{verseNum} }}")!;
+            return JsonNode.Parse(
+                "{ \"versification\":\"English\", "
+                    + $"\"_bookNum\":{bookNum}, \"_chapterNum\":{chapterNum}, \"_verseNum\":{verseNum} }}"
+            )!;
         }
 
         /// <summary>
@@ -107,7 +117,9 @@ namespace TestParanextDataProvider
         /// </summary>
         protected static JsonNode CreateJsonString(string data)
         {
-            JsonNode node = JsonNode.Parse($"{{ \"data\":\"{HttpUtility.JavaScriptStringEncode(data)}\" }}")!;
+            JsonNode node = JsonNode.Parse(
+                $"{{ \"data\":\"{HttpUtility.JavaScriptStringEncode(data)}\" }}"
+            )!;
             return node.Root["data"]!;
         }
 
@@ -115,7 +127,10 @@ namespace TestParanextDataProvider
         /// Replicates the creation of the JsonElement that is given to requests when
         /// coming from the server.
         /// </summary>
-        protected static JsonElement CreateRequestMessage(string function, params object[] parameters)
+        protected static JsonElement CreateRequestMessage(
+            string function,
+            params object[] parameters
+        )
         {
             StringBuilder jsonBldr = new StringBuilder();
             jsonBldr.Append("{ \"value\":[");
@@ -132,7 +147,10 @@ namespace TestParanextDataProvider
                 switch (param)
                 {
                     case string str:
-                        jsonBldr.Append("\"").Append(HttpUtility.JavaScriptStringEncode(str)).Append("\"");
+                        jsonBldr
+                            .Append("\"")
+                            .Append(HttpUtility.JavaScriptStringEncode(str))
+                            .Append("\"");
                         break;
                     case JsonNode node:
                         jsonBldr.Append(node.ToJsonString());
@@ -153,13 +171,19 @@ namespace TestParanextDataProvider
         /// Creates a Data Scope node that is given to requests when
         /// coming from the server.
         /// </summary>
-        protected static JsonNode CreateDataScope(string extensionName, string dataQualifier, string? dataType = null)
+        protected static JsonNode CreateDataScope(
+            string extensionName,
+            string dataQualifier,
+            string? dataType = null
+        )
         {
             // NOTE: projectId and projectName are usually automatically supplied
 
-            return JsonNode.Parse($"{{ \"extensionName\":\"{extensionName}\", " +
-                                  $"\"dataQualifier\":\"{dataQualifier}\" }}" +
-                                  (dataType != null ? $"\"dataType\":\"{dataType}\"" : ""))!;
+            return JsonNode.Parse(
+                $"{{ \"extensionName\":\"{extensionName}\", "
+                    + $"\"dataQualifier\":\"{dataQualifier}\" }}"
+                    + (dataType != null ? $"\"dataType\":\"{dataType}\"" : "")
+            )!;
         }
         #endregion
 
@@ -168,7 +192,12 @@ namespace TestParanextDataProvider
         /// Asserts that the two snippets of USFM are the same. This function normalizes both snippets
         /// to ensure maximum compatibility between them.
         /// </summary>
-        protected static void VerifyUsfmSame(string usfm1, string usfm2, ScrText scrText, int bookNum)
+        protected static void VerifyUsfmSame(
+            string usfm1,
+            string usfm2,
+            ScrText scrText,
+            int bookNum
+        )
         {
             usfm1 = UsfmToken.NormalizeUsfm(scrText, bookNum, usfm1);
             usfm2 = UsfmToken.NormalizeUsfm(scrText, bookNum, usfm2);
@@ -190,20 +219,31 @@ namespace TestParanextDataProvider
             using (TextReader reader2 = new StringReader(usx2))
                 doc2 = XDocument.Load(reader2);
 
-            Assert.That(doc1.Root!.ToString().Replace("\r", "").Replace("\n", ""),
-                Is.EqualTo(doc2.Root!.ToString().Replace("\r", "").Replace("\n", "")));
+            Assert.That(
+                doc1.Root!.ToString().Replace("\r", "").Replace("\n", ""),
+                Is.EqualTo(doc2.Root!.ToString().Replace("\r", "").Replace("\n", ""))
+            );
         }
 
         /// <summary>
         /// Verifies the contents of a server response message
         /// </summary>
-        protected static void VerifyResponse(Message message, string? expectedErrorMessage,
-            Enum<RequestType> expectedResponseType,
-            int expectedRequestId, object? expectedContents)
+        protected static void VerifyResponse(
+            Message message,
+            string? expectedErrorMessage,
+            string expectedResponseType,
+            int expectedRequestId,
+            object? expectedContents
+        )
         {
             Assert.Multiple(() =>
             {
-                VerifyResponseExceptContents(message, expectedErrorMessage, expectedResponseType, expectedRequestId);
+                VerifyResponseExceptContents(
+                    message,
+                    expectedErrorMessage,
+                    expectedResponseType,
+                    expectedRequestId
+                );
                 Assert.That(((MessageResponse)message).Contents, Is.EqualTo(expectedContents));
             });
         }
@@ -211,17 +251,23 @@ namespace TestParanextDataProvider
         /// <summary>
         /// Verifies the contents of a server response message ignoring the contents
         /// </summary>
-        protected static void VerifyResponseExceptContents(Message message, string? expectedErrorMessage,
-            Enum<RequestType> expectedResponseType,
-            int expectedRequestId)
+        protected static void VerifyResponseExceptContents(
+            Message message,
+            string? expectedErrorMessage,
+            string expectedResponseType,
+            int expectedRequestId
+        )
         {
             Assert.Multiple(() =>
             {
-                Assert.That(message.Type, Is.EqualTo(MessageType.Response));
+                Assert.That(message.Type, Is.EqualTo(MessageType.RESPONSE));
 
                 MessageResponse response = (MessageResponse)message;
                 Assert.That(response.ErrorMessage ?? "", Does.Contain(expectedErrorMessage ?? ""));
-                Assert.That(response.Success, Is.EqualTo(string.IsNullOrEmpty(expectedErrorMessage)));
+                Assert.That(
+                    response.Success,
+                    Is.EqualTo(string.IsNullOrEmpty(expectedErrorMessage))
+                );
                 Assert.That(response.RequestType, Is.EqualTo(expectedResponseType));
                 Assert.That(response.RequestId, Is.EqualTo(expectedRequestId));
             });

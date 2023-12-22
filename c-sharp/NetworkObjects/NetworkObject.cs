@@ -1,7 +1,7 @@
+using System.Text.Json;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
-using PtxUtils;
 
 namespace Paranext.DataProvider.NetworkObjects;
 
@@ -27,7 +27,7 @@ internal abstract class NetworkObject
     protected async Task RegisterNetworkObject(
         string networkObjectName,
         List<string> functionNames,
-        Func<dynamic, ResponseToRequest> requestHandler
+        Func<JsonElement, ResponseToRequest> requestHandler
     )
     {
         if (_networkObjectFunctionNames.Length > 0)
@@ -36,8 +36,8 @@ internal abstract class NetworkObject
             throw new ArgumentException($"Must provide function names for {networkObjectName}");
 
         // PAPI requires network objects to expose "get" and "function" requests
-        var getReqType = new Enum<RequestType>($"object:{networkObjectName}.get");
-        var functionReqType = new Enum<RequestType>($"object:{networkObjectName}.function");
+        var getReqType = $"object:{networkObjectName}.get";
+        var functionReqType = $"object:{networkObjectName}.function";
 
         if (!await PapiClient.RegisterRequestHandler(getReqType, HandleGet))
             throw new Exception($"Could not register GET for {networkObjectName}");
@@ -48,15 +48,12 @@ internal abstract class NetworkObject
         // Notify the network that we registered this network object
         functionNames.Sort();
         _networkObjectFunctionNames = functionNames.ToArray();
-        var newObjectCreationDetails = new MessageEventObjectCreatedContents()
-        {
-            Id = networkObjectName,
-            Functions = _networkObjectFunctionNames
-        };
-        PapiClient.SendEvent(new MessageEventObjectCreated(newObjectCreationDetails));
+        PapiClient.SendEvent(
+            new MessageEventObjectCreated(networkObjectName, _networkObjectFunctionNames)
+        );
     }
 
-    private ResponseToRequest HandleGet(dynamic getRequest)
+    private ResponseToRequest HandleGet(JsonElement getRequest)
     {
         // Respond that this network object exists along with its function list
         return ResponseToRequest.Succeeded(new List<string>(_networkObjectFunctionNames));

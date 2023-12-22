@@ -1,6 +1,5 @@
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
-using PtxUtils;
 using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider.MessageHandlers;
@@ -53,15 +52,16 @@ public class MessageHandlerEventTests
 
     private static void VerifyResults(IEnumerable<Message> messages, int expectedCount)
     {
-        Assert.That(messages.Count(), Is.EqualTo(expectedCount));
+        var messageList = new List<Message>(messages);
+        Assert.That(messageList, Has.Count.EqualTo(expectedCount));
 
         if (expectedCount == 0)
             return;
 
         List<string> messageContents = new();
-        foreach (var msg in messages)
+        foreach (var msg in messageList)
         {
-            messageContents.Add(((MessageEvent)msg).Event);
+            messageContents.Add(((MessageEvent)msg).Event!.ToString()!);
         }
         messageContents.Sort();
         for (int i = 0; i < expectedCount; i++)
@@ -70,21 +70,21 @@ public class MessageHandlerEventTests
         }
     }
 
-    private static Enum<EventType> TestEventType => EventType.ObjectDispose;
+    private static string TestEventType => EventType.OBJECT_DISPOSE;
 
     private static MessageEvent TestMessage => new MessageEventObjectDisposed("test");
 
-    private Message? ProcessEvent1(MessageEvent messageEvent)
+    private static Message ProcessEvent1(MessageEvent messageEvent)
     {
         return new MessageEventObjectDisposed("1");
     }
 
-    private Message? ProcessEvent2(MessageEvent messageEvent)
+    private static Message ProcessEvent2(MessageEvent messageEvent)
     {
         return new MessageEventObjectDisposed("2");
     }
 
-    private Message? ProcessEvent3(MessageEvent messageEvent)
+    private static Message ProcessEvent3(MessageEvent messageEvent)
     {
         return new MessageEventObjectDisposed("3");
     }

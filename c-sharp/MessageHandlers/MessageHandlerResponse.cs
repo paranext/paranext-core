@@ -8,9 +8,9 @@ namespace Paranext.DataProvider.MessageHandlers;
 internal class MessageHandlerResponse : IMessageHandler
 {
     private readonly MessageRequest _originalRequest;
-    private readonly Action<bool, dynamic?> _messageProcessingCallback;
+    private readonly Action<bool, object?> _messageProcessingCallback;
 
-    public MessageHandlerResponse(MessageRequest originalRequest, Action<bool, dynamic?> callback)
+    public MessageHandlerResponse(MessageRequest originalRequest, Action<bool, object?> callback)
     {
         _originalRequest = originalRequest;
         _messageProcessingCallback = callback;
@@ -19,22 +19,19 @@ internal class MessageHandlerResponse : IMessageHandler
     public MessageHandlerResponse(MessageRequest originalRequest)
         : this(originalRequest, DoNothing) { }
 
-    private static void DoNothing(bool success, dynamic? message) { }
+    private static void DoNothing(bool success, object? message) { }
 
     public IEnumerable<Message> HandleMessage(Message message)
     {
         if (message == null)
             throw new ArgumentNullException(nameof(message));
 
-        if (message.Type != MessageType.Response)
+        if (message is not MessageResponse response)
             throw new ArgumentException("Incorrect message type", nameof(message));
 
-        var response = (MessageResponse)message;
         if (!response.Success)
             Console.Error.WriteLine(
-                "Request failed: \"{0}\" with error message \"{1}\"",
-                _originalRequest,
-                response.ErrorMessage ?? "<none>"
+                $"Request failed: \"{_originalRequest}\" with error message \"{response.ErrorMessage ?? "<none>"}\""
             );
 
         _messageProcessingCallback(response.Success, response.Contents);
