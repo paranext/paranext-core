@@ -1,10 +1,10 @@
 {
-  "name": "paranext-extension-template",
+  "name": "hello-world",
   "version": "0.0.1",
-  "description": "Extension template for Paranext. Powered by webpack",
+  "description": "Simple hello world extension for Paranext",
   "author": "Paranext",
   "license": "MIT",
   "main": "src/main.ts",
-  "types": "src/types/paranext-extension-template.d.ts",
-  "activationEvents": []
+  "types": "src/types/hello-world.d.ts",
+  "activationEvents": ["onCommand:helloWorld.helloWorld", "onCommand:helloWorld.helloException"]
 }
