@@ -1,10 +1,13 @@
 {
-  "name": "paranext-extension-template",
+  "name": "hello-someone",
   "version": "0.0.1",
-  "description": "Extension template for Paranext. Powered by webpack",
+  "description": "Simple hello someone extension for Paranext",
   "author": "Paranext",
   "license": "MIT",
   "main": "src/main.ts",
-  "types": "src/types/paranext-extension-template.d.ts",
-  "activationEvents": []
+  "types": "src/types/hello-someone.d.ts",
+  "activationEvents": [
+    "onCommand:helloSomeone.helloSomeone",
+    "onCommand:helloSomeone.echoSomeoneRenderer"
+  ]
 }
