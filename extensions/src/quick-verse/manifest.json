@@ -1,10 +1,10 @@
 {
-  "name": "paranext-extension-template",
+  "name": "quick-verse",
   "version": "0.0.1",
-  "description": "Extension template for Paranext. Powered by webpack",
+  "description": "Simple quick verse extension for Paranext",
   "author": "Paranext",
   "license": "MIT",
   "main": "src/main.ts",
-  "types": "src/types/paranext-extension-template.d.ts",
+  "types": "src/types/quick-verse.d.ts",
   "activationEvents": []
 }
