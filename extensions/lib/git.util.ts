@@ -2,6 +2,7 @@ import { exec, ExecOptions } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import replaceInFile from 'replace-in-file';
+import { subtreeRootFolder } from '../webpack/webpack.util';
 
 const execAsync = promisify(exec);
 
@@ -136,6 +137,17 @@ export async function fetchFromSingleTemplate() {
   return true;
 }
 
+/** Globs to ignore when replacing stuff while formatting extensions */
+const replaceInFileIgnoreGlobs = [
+  '**/node_modules/**/*',
+  '**/temp-build/**/*',
+  '**/logs/**/*',
+  '**/*.log',
+  '**/.eslintcache',
+  '**/dist/**/*',
+  '**/release/**/*',
+];
+
 /**
  * Format an extension folder to make the extension template folder work as a subfolder of this repo
  *
@@ -145,23 +157,41 @@ export async function fetchFromSingleTemplate() {
  * @param extensionFolderPath Path to the extension to format relative to root
  */
 export async function formatExtensionFolder(extensionFolderPath: string) {
-  // Replace ../paranext-core with ../../../paranext-core to fix ts-config and package.json and such
-  const results = await replaceInFile({
-    files: `${extensionFolderPath}/**/*`,
-    ignore: [
-      '**/node_modules/**/*',
-      '**/temp-build/**/*',
-      '**/logs/**/*',
-      '**/*.log',
-      '**/.eslintcache',
-      '**/dist/**/*',
-      '**/release/**/*',
-    ],
-    from: /([^/])\.\.\/paranext-core/g,
-    to: '$1../../../paranext-core',
-    countMatches: true,
-    allowEmptyPaths: true,
-  });
+  /**
+   * Path to the extension to format relative to the extensions folder (where the npm script is
+   * running).
+   *
+   * We need to take out the path from root to where npm is running its script because replaceInFile
+   * works relative to the npm folder. Setting `cwd` and `glob.cwd` did not work because
+   * replaceInFile was not properly offsetting the path before passing to fs
+   */
+  const extensionFolderPathFromExtensions = extensionFolderPath.replace(
+    `${subtreeRootFolder}/`,
+    '',
+  );
+  const results =
+    // Replace ../paranext-core with ../../../paranext-core to fix ts-config and package.json and such
+    (
+      await replaceInFile({
+        files: `${extensionFolderPathFromExtensions}/**/*`,
+        ignore: replaceInFileIgnoreGlobs,
+        from: /([^/])\.\.\/paranext-core/g,
+        to: '$1../../..',
+        countMatches: true,
+        allowEmptyPaths: true,
+      })
+    ).concat(
+      // Remove the type reference to external extensions since bundled extensions shouldn't use them
+      await replaceInFile({
+        files: `${extensionFolderPathFromExtensions}/tsconfig.json`,
+        ignore: replaceInFileIgnoreGlobs,
+        from: /("src\/types"),\n\n[\w\W]+dev-appdata\/cache\/extension-types"/g,
+        to: '$1',
+        countMatches: true,
+        allowEmptyPaths: true,
+      }),
+    );
+
   const replaceStats = results.reduce(
     (replacements, replaceResult) => ({
       totalReplacements: replacements.totalReplacements + (replaceResult.numReplacements ?? 0),
