@@ -59,14 +59,11 @@ export enum ConnectionStatus {
 
 /** Request to do something and to respond */
 export type InternalRequest<TParam = unknown> = {
-  senderId: number;
   requestId: number;
 } & ComplexRequest<TParam>;
 
 /** Response to a request */
 export type InternalResponse<TReturn = unknown> = {
-  /** The process that sent this Response */
-  senderId: number;
   requestId: number;
   /** The process that originally sent the Request that matches to this response */
   requesterId: number;

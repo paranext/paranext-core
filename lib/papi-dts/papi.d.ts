@@ -596,9 +596,13 @@ declare module 'shared/utils/papi-util' {
    * This type is used as the public-facing interface for requests
    */
   export type ComplexRequest<TParam = unknown> = {
+    /** The one who sent the request */
+    senderId: number;
     contents: TParam;
   };
   type ComplexResponseSuccess<TReturn = unknown> = {
+    /** The one who sent the response */
+    senderId: number;
     /** Whether the handler that created this response was successful in handling the request */
     success: true;
     /**
@@ -608,6 +612,8 @@ declare module 'shared/utils/papi-util' {
     contents: TReturn;
   };
   type ComplexResponseFailure = {
+    /** The one who sent the response */
+    senderId: number;
     /** Whether the handler that created this response was successful in handling the request */
     success: false;
     /**
@@ -856,13 +862,10 @@ declare module 'shared/data/internal-connection.model' {
   }
   /** Request to do something and to respond */
   export type InternalRequest<TParam = unknown> = {
-    senderId: number;
     requestId: number;
   } & ComplexRequest<TParam>;
   /** Response to a request */
   export type InternalResponse<TReturn = unknown> = {
-    /** The process that sent this Response */
-    senderId: number;
     requestId: number;
     /** The process that originally sent the Request that matches to this response */
     requesterId: number;
