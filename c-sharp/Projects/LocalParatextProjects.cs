@@ -17,7 +17,9 @@ internal class LocalParatextProjects
     protected const string PROJECT_METADATA_FILE = "meta.json";
 
     // Inside of the project subdirectory, this is the subdirectory for Paratext projects
+    // A subdirectory for extensions is also located here
     protected const string PARATEXT_DATA_SUBDIRECTORY = "paratext";
+    protected const string EXTENSIONS_SUBDIRECTORY = "extensions";
 
     protected readonly ConcurrentDictionary<string, ProjectDetails> _projectDetailsMap = new();
 
@@ -41,7 +43,16 @@ internal class LocalParatextProjects
 
         CreateDirectory(ProjectRootFolder);
 
-        foreach (var projectDetails in LoadAllProjectDetails())
+        IEnumerable<ProjectDetails> allProjectDetails = LoadAllProjectDetails();
+
+        if (!allProjectDetails.Any())
+        {
+            SetUpSampleProject();
+
+            allProjectDetails = LoadAllProjectDetails();
+        }
+
+        foreach (ProjectDetails projectDetails in allProjectDetails)
         {
             if (projectDetails.Metadata.ProjectStorageType != ProjectStorageType.ParatextFolders)
                 continue;
@@ -206,6 +217,38 @@ internal class LocalParatextProjects
 
         errorMessage = "";
         return metadata;
+    }
+
+    private void SetUpSampleProject()
+    {
+        string projectName = "WEB";
+        string projectId = "32664dc3288a28df2e2bb75ded887fc8f17a15fb";
+        string projectFolderName = projectName + "_" + projectId;
+        string projectFolder = Path.Join(ProjectRootFolder, projectFolderName);
+        ProjectMetadata metadata =
+            new(projectId, projectName, "paratextFolders", "ParatextStandard");
+        string metadataString = ProjectMetadataConverter.ToJsonString(
+            metadata.ID,
+            metadata.Name,
+            metadata.ProjectStorageType,
+            metadata.ProjectType
+        );
+
+        CreateDirectory(Path.Join(projectFolder, PROJECT_SUBDIRECTORY, EXTENSIONS_SUBDIRECTORY));
+        CreateDirectory(Path.Join(projectFolder, PROJECT_SUBDIRECTORY, PARATEXT_DATA_SUBDIRECTORY));
+
+        File.WriteAllText(Path.Join(projectFolder, PROJECT_METADATA_FILE), metadataString);
+
+        foreach (string filePath in Directory.GetFiles("assets/" + projectName, "*.*"))
+        {
+            File.Copy(
+                filePath,
+                filePath.Replace(
+                    "assets/" + projectName,
+                    Path.Join(projectFolder, PROJECT_SUBDIRECTORY, PARATEXT_DATA_SUBDIRECTORY)
+                )
+            );
+        }
     }
 
     #endregion

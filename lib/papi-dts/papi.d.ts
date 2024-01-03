@@ -2184,7 +2184,21 @@ declare module 'shared/models/project-data-provider.model' {
      */
     dataQualifier: string;
   };
-  /** All Project Data Provider data types must extend from this */
+  /**
+   * All Project Data Provider data types must have an `ExtensionData` type. We strongly recommend all
+   * Project Data Provider data types extend from this type in order to standardize the
+   * `ExtensionData` types.
+   *
+   * Benefits of following this standard:
+   *
+   * - All PSIs that support this `projectType` can use a standardized `ExtensionData` interface
+   * - If an extension uses the `ExtensionData` endpoint for any project, it will likely use this
+   *   standardized interface, so using this interface on your Project Data Provider data types
+   *   enables your PDP to support generic extension data
+   * - In the future, we may enforce that callers to `ExtensionData` endpoints include `extensionName`,
+   *   so following this interface ensures your PDP will not break if such a requirement is
+   *   implemented.
+   */
   export type MandatoryProjectDataType = {
     ExtensionData: DataProviderDataType<ExtensionDataScope, string | undefined, string>;
   };
@@ -4884,6 +4898,20 @@ declare module '@papi/frontend' {
   export const EventEmitter: typeof PapiEventEmitter;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
+  /** This wraps the browser's WebSocket implementation to provide
+   * better control over internet access. It is isomorphic with the standard WebSocket, so it should
+   * act as a drop-in replacement.
+   *
+   * Note that the Node WebSocket implementation is different and not wrapped here.
+   */
+  export const WebSocket: typeof PapiRendererWebSocket;
+  /** This wraps the browser's XMLHttpRequest implementation to
+   * provide better control over internet access. It is isomorphic with the standard XMLHttpRequest,
+   * so it should act as a drop-in replacement.
+   *
+   * Note that Node doesn't have a native implementation, so this is only for the renderer.
+   */
+  export const XMLHttpRequest: typeof PapiRendererXMLHttpRequest;
   /**
    *
    * The command service allows you to exchange messages with other components in the platform. You

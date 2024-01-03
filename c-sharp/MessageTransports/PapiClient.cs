@@ -5,7 +5,6 @@ using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
-using PtxUtils;
 
 namespace Paranext.DataProvider.MessageTransports;
 
@@ -22,10 +21,7 @@ internal class PapiClient : IDisposable
     private static readonly Uri s_connectionUri = new("ws://localhost:8876");
     private static readonly JsonSerializerOptions s_serializationOptions;
 
-    protected readonly Dictionary<
-        Enum<MessageType>,
-        IMessageHandler
-    > _messageHandlersByMessageType = new();
+    protected readonly Dictionary<string, IMessageHandler> _messageHandlersByMessageType = new();
     protected readonly ConcurrentDictionary<int, IMessageHandler> _messageHandlersForMyRequests =
         new();
     private readonly ClientWebSocket _webSocket = new();
@@ -58,8 +54,8 @@ internal class PapiClient : IDisposable
         _incomingMessageTask = new Task(HandleIncomingMessages, _cancellationToken);
         _outgoingMessageTask = new Task(HandleOutgoingMessages, _cancellationToken);
 
-        _messageHandlersByMessageType[MessageType.Event] = new MessageHandlerEvent();
-        _messageHandlersByMessageType[MessageType.InitClient] = new MessageHandlerInitClient(
+        _messageHandlersByMessageType[MessageType.EVENT] = new MessageHandlerEvent();
+        _messageHandlersByMessageType[MessageType.INIT_CLIENT] = new MessageHandlerInitClient(
             (int clientId) =>
             {
                 if (_clientInitializationComplete.Task.IsCompletedSuccessfully)
@@ -69,7 +65,7 @@ internal class PapiClient : IDisposable
                 _clientInitializationComplete.TrySetResult(true);
             }
         );
-        _messageHandlersByMessageType[MessageType.Request] =
+        _messageHandlersByMessageType[MessageType.REQUEST] =
             new MessageHandlerRequestByRequestType();
     }
 
@@ -197,8 +193,8 @@ internal class PapiClient : IDisposable
     /// <param name="responseTimeoutInMs">Number of milliseconds to wait for the registration response to be received</param>
     /// <returns><see cref="Task"/> that will resolve to true if registration was successful, false otherwise</returns>
     public virtual async Task<bool> RegisterRequestHandler(
-        Enum<RequestType> requestType,
-        Func<dynamic, ResponseToRequest> requestHandler,
+        string requestType,
+        Func<JsonElement, ResponseToRequest> requestHandler,
         int responseTimeoutInMs = 5000
     )
     {
@@ -210,14 +206,14 @@ internal class PapiClient : IDisposable
         using Task registrationTask = registrationSource.Task;
 
         var requestMessage = new MessageRequest(
-            RequestType.RegisterRequest,
+            "server:registerRequest",
             Interlocked.Increment(ref _nextRequestId),
-            new dynamic[] { requestType.ToString(), _clientId }
+            new object[] { requestType, _clientId }
         );
 
         _messageHandlersForMyRequests[requestMessage.RequestId] = new MessageHandlerResponse(
             requestMessage,
-            (bool success, dynamic? _) =>
+            (bool success, object? _) =>
             {
                 if (!success)
                 {
@@ -228,7 +224,7 @@ internal class PapiClient : IDisposable
                 else
                 {
                     var responder = (MessageHandlerRequestByRequestType)
-                        _messageHandlersByMessageType[MessageType.Request];
+                        _messageHandlersByMessageType[MessageType.REQUEST];
                     responder.SetHandlerForRequestType(requestType, requestHandler);
                     Console.WriteLine(
                         $"Request type \"{requestType}\" successfully registered with the server"
@@ -257,15 +253,15 @@ internal class PapiClient : IDisposable
     /// Configure PapiClient to call <paramref name="eventHandler"/> whenever an event of type <paramref name="eventType"/> is received.
     /// </summary>
     /// <param name="eventType">Event type to monitor</param>
-    /// <param name="eventHandler">Function that optionally returns messages to send when an event is received</param>
+    /// <param name="eventHandler">Function that accepts an event message and optionally returns messages to send</param>
     public virtual void RegisterEventHandler(
-        Enum<EventType> eventType,
-        Func<dynamic?, Message?> eventHandler
+        string eventType,
+        Func<MessageEvent, Message?> eventHandler
     )
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        var msgHandler = (MessageHandlerEvent)_messageHandlersByMessageType[MessageType.Event];
+        var msgHandler = (MessageHandlerEvent)_messageHandlersByMessageType[MessageType.EVENT];
         msgHandler.RegisterEventHandler(eventType, eventHandler);
         Console.WriteLine($"Handler for event type \"{eventType}\" successfully registered");
     }
@@ -276,13 +272,13 @@ internal class PapiClient : IDisposable
     /// <param name="eventType">Event type to monitor</param>
     /// <param name="eventHandler">Same function reference previously passed to RegisterEventHandler</param>
     public virtual void UnregisterEventHandler(
-        Enum<EventType> eventType,
-        Func<dynamic?, Message?> eventHandler
+        string eventType,
+        Func<MessageEvent, Message?> eventHandler
     )
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        var msgHandler = (MessageHandlerEvent)_messageHandlersByMessageType[MessageType.Event];
+        var msgHandler = (MessageHandlerEvent)_messageHandlersByMessageType[MessageType.EVENT];
         msgHandler.UnregisterEventHandler(eventType, eventHandler);
         Console.WriteLine($"Handler for event type \"{eventType}\" successfully unregistered");
     }

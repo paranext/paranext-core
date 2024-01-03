@@ -23,10 +23,9 @@ import { wait } from '@shared/utils/util';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType, serialize } from '@shared/utils/papi-util';
 import networkObjectStatusService from '@shared/services/network-object-status.service';
+import { get } from '@shared/services/project-data-provider.service';
+import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from './services/network-object-status.service-host';
-// Used with the commented out code at the bottom of this file to test the ParatextProjectDataProvider
-// import { get } from '@shared/services/project-data-provider.service';
-// import { VerseRef } from '@sillsdev/scripture';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 
@@ -331,20 +330,9 @@ async function main() {
   // #endregion
 
   // #region Test a .NET data provider
-  // TODO: Uncomment this or similar sample code once https://github.com/paranext/paranext-core/issues/440 is resolved
-  // In the meantime, if you want to try this, copy an existing project into
-  //   <home_dir>/.platform.bible/<project_short_name>_<project_ID_from_settings.xml>/project/paratext
-  // For example: "~/.platform.bible/projects/TPKJ_b4c501ad2538989d6fb723518e92408406e232d3/project/paratext"
-  // Then create a file named "meta.json" in the "<short_name>_<project_ID>" directory with this JSON:
-  //  {
-  //    "id": "REPLACE_THIS_WITH_PROJECT_ID_FROM_SETTINGS_XML",
-  //    "name": "REPLACE_THIS_WITH_PROJECT_SHORT_NAME",
-  //    "storageType": "paratextFolders",
-  //    "projectType": "ParatextStandard"
-  //  }
-  /*
   setTimeout(async () => {
-    const paratextPdp = await get<'ParatextStandard'>('ParatextStandard',
+    const paratextPdp = await get<'ParatextStandard'>(
+      'ParatextStandard',
       '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
     );
     const verse = await paratextPdp.getChapterUSX(new VerseRef('JHN', '1', '1'));
@@ -357,7 +345,6 @@ async function main() {
       'This is the data from extension foo',
     );
   }, 10000);
-  */
   // #endregion
 }
 

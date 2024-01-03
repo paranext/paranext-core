@@ -1,16 +1,16 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
-using PtxUtils;
 
 namespace TestParanextDataProvider
 {
     [ExcludeFromCodeCoverage]
     internal class DummyPapiClient : PapiClient
     {
-        private readonly Dictionary<Enum<EventType>, Func<dynamic?, Message?>> _eventHandlers = new();
+        private readonly Dictionary<string, Func<MessageEvent, Message?>> _eventHandlers = new();
 
         public Stack<Message?> EventMessages { get; } = new();
 
@@ -42,28 +42,34 @@ namespace TestParanextDataProvider
             return Task.CompletedTask;
         }
 
-        public override Task<bool> RegisterRequestHandler(Enum<RequestType> requestType,
-            Func<dynamic, ResponseToRequest> requestHandler, int responseTimeoutInMs = 1000)
+        public override Task<bool> RegisterRequestHandler(
+            string requestType,
+            Func<JsonElement, ResponseToRequest> requestHandler,
+            int responseTimeoutInMs = 5000
+        )
         {
             var responder = (MessageHandlerRequestByRequestType)
-                _messageHandlersByMessageType[MessageType.Request];
+                _messageHandlersByMessageType[MessageType.REQUEST];
             responder.SetHandlerForRequestType(requestType, requestHandler);
 
             return Task.FromResult(true);
         }
 
-        public override void RegisterEventHandler(Enum<EventType> eventType, Func<dynamic?, Message?> eventHandler)
+        public override void RegisterEventHandler(
+            string eventType,
+            Func<MessageEvent, Message?> eventHandler
+        )
         {
-           _eventHandlers.Add(eventType, eventHandler);
+            _eventHandlers.Add(eventType, eventHandler);
         }
 
         public override void SendEvent(MessageEvent message)
         {
-           if (!_eventHandlers.TryGetValue(message.EventType, out var handler))
-               return;
+            if (!_eventHandlers.TryGetValue(message.EventType, out var handler))
+                return;
 
-           Message? result = handler(message.Event);
-           EventMessages.Push(result);
+            Message? result = handler(message);
+            EventMessages.Push(result);
         }
         #endregion
     }

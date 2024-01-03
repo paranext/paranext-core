@@ -25,8 +25,8 @@ public class MessageConverterTests
             {"type":"event","eventType":"network:onDidClientConnect","senderId":0,"event":{"clientId":3,"didReconnect":false}}
             """;
         var msg = DeserializeMessageEvent<MessageEventClientConnect>(messageToDecode);
-        Assert.That(msg.EventContents!.ClientId, Is.EqualTo(3));
-        Assert.That(msg.EventContents!.DidReconnect, Is.False);
+        Assert.That(msg.Event.ClientId, Is.EqualTo(3));
+        Assert.That(msg.Event.DidReconnect, Is.False);
     }
 
     [Test]
@@ -36,7 +36,7 @@ public class MessageConverterTests
             {"type":"event","eventType":"network:onDidClientDisconnect","senderId":0,"event":{"clientId":123}}
             """;
         var msg = DeserializeMessageEvent<MessageEventClientDisconnect>(messageToDecode);
-        Assert.That(msg.EventContents!.ClientId, Is.EqualTo(123));
+        Assert.That(msg.Event.ClientId, Is.EqualTo(123));
     }
 
     [Test]
@@ -46,7 +46,7 @@ public class MessageConverterTests
             {"type":"event","eventType":"object:onDidDisposeNetworkObject","senderId":0,"event":"test-main"}
             """;
         var msg = DeserializeMessageEvent<MessageEventObjectDisposed>(messageToDecode);
-        Assert.That(msg.EventContents!, Is.EqualTo("test-main"));
+        Assert.That(msg.Event, Is.EqualTo("test-main"));
     }
 
     [Test]

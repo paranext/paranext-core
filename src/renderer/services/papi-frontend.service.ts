@@ -90,6 +90,10 @@ export default papi;
 export const { EventEmitter } = papi;
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
+/** JSDOC DESTINATION PapiRendererWebSocket */
+export const { WebSocket } = papi;
+/** JSDOC DESTINATION PapiRendererXMLHttpRequest */
+export const { XMLHttpRequest } = papi;
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 /** JSDOC DESTINATION papiUtil */

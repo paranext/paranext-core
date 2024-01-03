@@ -1,38 +1,39 @@
-using PtxUtils;
+using Paranext.DataProvider.JsonUtils;
 
 namespace Paranext.DataProvider.Messages;
 
 /// <summary>
 /// Message events to/from the server.
 /// </summary>
+[JsonMessageDeserialization(MessageField.MESSAGE_TYPE, MessageType.EVENT)]
 public class MessageEvent : Message
 {
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
-    protected MessageEvent()
+    private MessageEvent()
+        : base(MessageType.EVENT)
     {
-        // Default for new events that don't have a custom class
-        EventContentsType = typeof(System.Text.Json.JsonElement);
+        EventType = Messages.EventType.UNKNOWN;
+        Event = null;
     }
 
-    public override Enum<MessageType> Type => MessageType.Event;
+    public MessageEvent(string eventType, object? eventContents)
+        : base(MessageType.EVENT)
+    {
+        EventType = eventType;
+        Event = eventContents;
+    }
 
-    public virtual Enum<EventType> EventType { get; set; }
+    public string EventType { get; set; }
 
     /// <summary>
-    /// Weakly typed contents of the event message. See also <seealso cref="MessageEventGeneric{ContentsType}.EventContents"/>
+    /// Weakly typed event contents - subclasses hide this with a strongly typed property
     /// </summary>
-    public dynamic? Event { get; set; }
-
-    /// <summary>
-    /// The intended type of the data stored in <see cref="Event"/>. This is used during deserialization.
-    /// </summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public Type EventContentsType { get; protected set; }
+    public object? Event { get; set; }
 
     public override string ToString()
     {
-        return $"Event: {EventType} from {SenderId} is \"{Event}\"";
+        return base.ToString() + $", EventType = {EventType}";
     }
 }
