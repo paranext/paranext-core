@@ -1,7 +1,7 @@
 {
   "name": "hello-someone",
   "version": "0.0.1",
-  "description": "Simple hello someone extension for Paranext",
+  "description": "Simple hello someone extension for Platform.Bible",
   "author": "Paranext",
   "license": "MIT",
   "main": "src/main.ts",

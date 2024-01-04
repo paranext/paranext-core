@@ -11,6 +11,8 @@ module.exports = {
   ],
 
   rules: {
+    // #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.eslintrc.cjs and https://github.com/paranext/paranext-extension-template/blob/main/.eslintrc.js except certain overrides
+
     // #region ERB rules
 
     'import/extensions': 'off',
@@ -45,6 +47,7 @@ module.exports = {
       },
     ],
     '@typescript-eslint/no-explicit-any': 'error',
+    '@typescript-eslint/no-non-null-assertion': 'error',
     'no-redeclare': 'off',
     '@typescript-eslint/no-redeclare': 'error',
     'no-restricted-imports': [
@@ -87,6 +90,8 @@ module.exports = {
     'react/jsx-indent-props': ['warn', 2],
     'react/jsx-props-no-spreading': ['error', { custom: 'ignore' }],
     'react/require-default-props': 'off',
+
+    // #endregion
 
     // #endregion
   },

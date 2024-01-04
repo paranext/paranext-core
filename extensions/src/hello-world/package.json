@@ -1,7 +1,7 @@
 {
   "name": "hello-world",
   "version": "0.0.1",
-  "description": "Simple hello world extension for Paranext",
+  "description": "Simple hello world extension for Platform.Bible",
   "main": "src/main.js",
   "types": "src/types/hello-world.d.ts",
   "author": "Paranext",

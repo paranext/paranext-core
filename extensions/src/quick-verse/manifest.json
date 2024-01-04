@@ -1,7 +1,7 @@
 {
   "name": "quick-verse",
   "version": "0.0.1",
-  "description": "Simple quick verse extension for Paranext",
+  "description": "Simple quick verse extension for Platform.Bible",
   "author": "Paranext",
   "license": "MIT",
   "main": "src/main.ts",

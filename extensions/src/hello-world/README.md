@@ -1,64 +1,6 @@
-# paranext-extension-template
+# hello-world
 
-Basic extension template for Platform.Bible
-
-## Template Info
-
-This is a webpack project template pre-configured to build a Platform.Bible extension. It contains the bare minimum of what an extension needs. Note that the `*.web-view.*` files and the `public/assets` folder mentioned in [Summary](#summary) are not present in this template. For inspiration on what these could look like, refer to any extension that is built using this template. An example would be the [Text Collection extension](https://github.com/paranext/paranext-extension-text-collection).
-
-There is also [a template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template).
-
-### Customize extension details
-
-Follow these instructions to customize the template to be your own Platform.Bible extension. This section is a more compact version of the [`Your first extension` guide](https://github.com/paranext/paranext-extension-template/wiki/Your-First-Extension).
-
-#### Install and hook up to the template
-
-Note: please skip this section and continue with [Replace placeholders](#replace-placeholders) if you are following these instructions as part of [creating an extension within `paranext-multi-extension-template`](https://github.com/paranext/paranext-multi-extension-template#to-create-a-new-extension-in-this-repo).
-
-To make the process of customizing from the template as smooth as possible, we recommend you do the following before anything else:
-
-- [Install and set up this repo](#to-install)
-- [Update this extension from the template](#to-update-this-extension-from-the-template)
-
-#### Replace placeholders
-
-- At the top of this `README.md`:
-
-  - Replace the first line `# paranext-extension-template` with `# your-extension-name`
-  - Below the first line, replace the extension description with your own description
-  - In the [Summary](#summary) section, replace `src/types/paranext-extension-template.d.ts` with `src/types/<your_extension_name>.d.ts`
-
-- In `manifest.json`:
-
-  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences)
-  - Replace the description with your own description
-  - Update ownership information and other relevant fields as desired
-
-- In `package.json`:
-
-  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences)
-  - Replace the description with your own description
-  - Update ownership information and other relevant fields as desired
-
-- In `LICENSE`:
-
-  - Adjust as desired (feel free to choose a different license)
-  - If you choose to stay with the current license, update the copyright statement
-
-- Rename `src/types/paranext-extension-template.d.ts` to `src/types/<your_extension_name>.d.ts`
-
-  - In this renamed file, replace `paranext-extension-template` with `your-extension-name`
-
-- In `src/main.ts`, replace `Extension template` with `Your Extension Name` (2 occurrences)
-
-#### Customize the extension manifest and package information
-
-The `manifest.json` and `package.json` files contain information specific to your extension. Add your extension's details in these two files as needed. See more information on the `manifest.json` and `package.json` files in [Extension Anatomy](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#extension-manifest).
-
-#### Remove Template Info
-
-Once finished customizing this template to be your own, you can remove the [Template Info](#template-info) section and sub-sections of this readme.
+Simple hello world extension for Platform.Bible
 
 ## Summary
 

@@ -1,7 +1,7 @@
 {
   "name": "hello-someone",
   "version": "0.0.1",
-  "description": "Simple hello someone extension for Paranext",
+  "description": "Simple hello someone extension for Platform.Bible",
   "main": "src/main.js",
   "types": "src/types/hello-someone.d.ts",
   "author": "Paranext",

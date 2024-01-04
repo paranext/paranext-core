@@ -2,7 +2,7 @@
   "name": "quick-verse",
   "private": true,
   "version": "0.0.1",
-  "description": "Simple quick verse extension for Paranext",
+  "description": "Simple quick verse extension for Platform.Bible",
   "main": "src/main.js",
   "types": "src/types/quick-verse.d.ts",
   "author": "Paranext",
