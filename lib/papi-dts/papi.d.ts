@@ -4218,23 +4218,36 @@ declare module 'shared/services/settings.service' {
   export default settingsService;
 }
 declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
+  export type UsePromiseOptions = {
+    /**
+     * Whether to leave the value as the most recent resolved promise value or set it back to
+     * defaultValue while running the promise again. Defaults to true
+     */
+    preserveValue?: boolean;
+  };
   /**
    * Awaits a promise and returns a loading value while the promise is unresolved
    *
    * @param promiseFactoryCallback A function that returns the promise to await. If this callback is
    *   undefined, the current value will be returned (defaultValue unless it was previously changed
-   *   and preserveValue is true), and there will be no loading.
+   *   and `options.preserveValue` is true), and there will be no loading.
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
    *   every render
    * @param defaultValue The initial value to return while first awaiting the promise. If
-   *   preserveValue is false, this value is also shown while awaiting the promise on subsequent
-   *   calls.
+   *   `options.preserveValue` is false, this value is also shown while awaiting the promise on
+   *   subsequent calls.
    *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param preserveValue Whether to leave the value as the most recent resolved promise value or set
-   *   it back to defaultValue while running the promise again. Default to true
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that, if the `promiseFactoryCallback` changes and
+   *   `options.preserveValue` is `false`, the returned value will be set to the current
+   *   `defaultValue`. However, the returned value will not be updated if`defaultValue` changes.
+   * @param options Various options for adjusting how this hook runs the `promiseFactoryCallback`
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. However, the latest `options.preserveValue` will always be used
+   *   appropriately to determine whether to preserve the returned value when changing the
+   *   `promiseFactoryCallback`
    * @returns `[value, isLoading]`
    *
    *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
@@ -4243,7 +4256,7 @@ declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
   const usePromise: <T>(
     promiseFactoryCallback: (() => Promise<T>) | undefined,
     defaultValue: T,
-    preserveValue?: boolean,
+    options?: UsePromiseOptions,
   ) => [value: T, isLoading: boolean];
   export default usePromise;
 }
@@ -4484,13 +4497,12 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *
    * _＠param_ `defaultValue` the initial value to return while first awaiting the data
    *
-   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   * updated every render
-   *
    * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
    *
-   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
-   * must not be updated every render
+   * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   * to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   * provider's `subscribe<data_type>` method as soon as possible and will not be updated again until
+   * `dataProviderSource` or `selector` changes.
    *
    * _＠returns_ `[data, setData, isLoading]`
    *
@@ -4651,13 +4663,12 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *
    * _＠param_ `defaultValue` the initial value to return while first awaiting the data
    *
-   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   * updated every render
-   *
    * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
    *
-   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
-   * must not be updated every render
+   * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   * to re-run with its new value. This means that `subscriberOptions` will be passed to the project
+   * data provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   * until `projectDataProviderSource` or `selector` changes.
    *
    * _＠returns_ `[data, setData, isLoading]`
    */
@@ -5045,6 +5056,7 @@ declare module '@papi/core' {
   export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
   export type { ExecutionToken } from 'node/models/execution-token.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  export type { UsePromiseOptions } from 'renderer/hooks/papi-hooks/use-promise.hook';
   export type { default as IDataProvider } from 'shared/models/data-provider.interface';
   export type {
     DataProviderUpdateInstructions,

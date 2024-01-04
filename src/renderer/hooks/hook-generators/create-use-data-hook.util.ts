@@ -7,7 +7,7 @@ import {
 } from '@shared/models/data-provider.model';
 import IDataProvider from '@shared/models/data-provider.interface';
 import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.model';
 import { isString } from '@shared/utils/util';
 import ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
@@ -107,6 +107,10 @@ function createUseDataHook<TUseDataProviderParams extends unknown[]>(
       ),
       boolean,
     ] => {
+      // Use subscriberOptions as a ref so it doesn't update dependency arrays
+      const subscriberOptionsRef = useRef(subscriberOptions);
+      subscriberOptionsRef.current = subscriberOptions;
+
       // The data from the data provider at this selector
       const [data, setDataInternal] = useState<TDataTypes[TDataType]['getData']>(defaultValue);
 
@@ -138,7 +142,7 @@ function createUseDataHook<TUseDataProviderParams extends unknown[]>(
                         // When we receive updated data, mark that we are not loading
                         setIsLoading(false);
                       },
-                      subscriberOptions,
+                      subscriberOptionsRef.current,
                     );
 
                   return async () => {
@@ -148,7 +152,7 @@ function createUseDataHook<TUseDataProviderParams extends unknown[]>(
                   };
                 }
               : undefined,
-          [dataProvider, selector, subscriberOptions],
+          [dataProvider, selector],
         );
 
       // Subscribe to the data provider
