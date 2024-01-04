@@ -59,7 +59,6 @@ export enum ConnectionStatus {
 
 /** Request to do something and to respond */
 export type InternalRequest<TParam = unknown> = {
-  senderId: number;
   requestId: number;
 } & ComplexRequest<TParam>;
 
