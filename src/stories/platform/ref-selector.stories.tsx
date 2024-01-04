@@ -23,7 +23,7 @@ function RefSelectorDecorator(
 }
 
 const meta: Meta<typeof RefSelector> = {
-  title: 'Scripture/RefSelector',
+  title: 'Platform/RefSelector',
   component: RefSelector,
   tags: ['autodocs'],
   argTypes: {},
