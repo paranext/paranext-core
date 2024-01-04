@@ -4,7 +4,7 @@
  * over this.
  */
 // TODO: Refactor into a class and an interface
-// TODO: Combine with NetworkSerice?
+// TODO: Combine with NetworkService?
 
 import {
   CLIENT_ID_UNASSIGNED,

@@ -424,21 +424,24 @@ const createNetworkEventEmitterUnsafe = <T>(
  * Unregisters a client connection's request handler SERVER-ONLY. This should not be needed on the
  * client
  *
- * @param requestType The type of request on which to unregister the handler
- * @param clientId ClientId of the client who wants to unregister the handler
- * @returns True if successfully unregistered, false otherwise
+ * @param request An array of values, the first of which is the `SerializedRequestType` value that
+ *   defines what request type is being unregistered. Note that the value is an array even though we
+ *   only ever look at the first value because all requests come over the network with an array of
+ *   arguments. Technically if there is more than 1 argument passed to the function, values after
+ *   the first they might not be `SerializedRequestType` values.
+ * @returns `ComplexResponse` with `success` = True if successfully unregistered, otherwise False
+ *   along with an error message
  */
 const unregisterRemoteRequestHandler = async (
-  request: ComplexRequest<SerializedRequestType[]>,
+  request: ComplexRequest<[SerializedRequestType]>,
 ): Promise<ComplexResponse<undefined>> => {
-  const requestType = request.contents[0];
+  const [requestType] = request.contents;
   const requestRegistration = requestRegistrations.get(requestType);
 
   if (!requestRegistration)
     return {
       success: false,
       errorMessage: `Cannot unregister ${requestType} because it was not registered`,
-      senderId: connectionService.getClientId(),
     };
 
   if (
@@ -448,7 +451,6 @@ const unregisterRemoteRequestHandler = async (
     return {
       success: false,
       errorMessage: `Cannot unregister ${requestType} unless the owner requests it`,
-      senderId: connectionService.getClientId(),
     };
 
   // We can unregister this handler! Remove it from the registrations
@@ -456,7 +458,6 @@ const unregisterRemoteRequestHandler = async (
   return {
     contents: undefined,
     success: true,
-    senderId: connectionService.getClientId(),
   };
 };
 
@@ -464,17 +465,25 @@ const unregisterRemoteRequestHandler = async (
  * Registers a client connection's request handler SERVER-ONLY. This should not be needed on the
  * client
  *
- * @param requestType The type of request on which to register the handler
- * @param clientId ClientId of the client who wants to register the handler
+ * @param request An array of values, the first of which is the `SerializedRequestType` value that
+ *   defines what request type is being registered. Note that the value is an array even though we
+ *   only ever look at the first value because all requests come over the network with an array of
+ *   arguments. Technically if there is more than 1 argument passed to the function, values after
+ *   the first they might not be `SerializedRequestType` values.
+ * @returns `ComplexResponse` with `success` = True if successfully registered, otherwise False
+ *   along with an error message
  */
 const registerRemoteRequestHandler = async (
-  request: ComplexRequest<SerializedRequestType[]>,
+  request: ComplexRequest<[SerializedRequestType]>,
 ): Promise<ComplexResponse<undefined>> => {
-  const requestType = request.contents[0];
+  const [requestType] = request.contents;
 
   // Check to see if there is already a handler for this requestType
   if (requestRegistrations.has(requestType)) {
-    throw new Error(`requestType ${requestType} already has a remote handler registered`);
+    return {
+      errorMessage: `requestType ${requestType} already has a remote handler registered`,
+      success: false,
+    };
   }
 
   validateRequestTypeFormatting(requestType);
@@ -490,7 +499,6 @@ const registerRemoteRequestHandler = async (
   return {
     contents: undefined,
     success: true,
-    senderId: connectionService.getClientId(),
   };
 };
 
@@ -619,7 +627,6 @@ const handleRequestLocal: RequestHandler = async <TParam, TReturn>(
   }
 
   return {
-    senderId: connectionService.getClientId(),
     contents: result,
     success,
     errorMessage,

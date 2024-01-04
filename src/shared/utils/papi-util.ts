@@ -87,8 +87,6 @@ export type ComplexRequest<TParam = unknown> = {
 };
 
 type ComplexResponseSuccess<TReturn = unknown> = {
-  /** The one who sent the response */
-  senderId: number;
   /** Whether the handler that created this response was successful in handling the request */
   success: true;
   /**
@@ -99,8 +97,6 @@ type ComplexResponseSuccess<TReturn = unknown> = {
 };
 
 type ComplexResponseFailure = {
-  /** The one who sent the response */
-  senderId: number;
   /** Whether the handler that created this response was successful in handling the request */
   success: false;
   /**
