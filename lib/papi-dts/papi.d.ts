@@ -4678,54 +4678,83 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
 declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   /**
-   * Enables using `papi.dialogs.showDialog` in React more easily. Provides a callback to run to get a
-   * response from a dialog as well as states that indicate the dialog's response and whether the
-   * dialog is open.
+   * Enables using `papi.dialogs.showDialog` in React more easily. Returns a callback to run that will
+   * open a dialog with the provided `dialogType` and `options` then run the `resolveCallback` with
+   * the dialog response or `rejectCallback` if there is an error.
    *
-   * Calling the dialog callback returned from this hook does nothing if you already previously opened
-   * the dialog and have not received a response
+   * Calling the dialog callback returned from this hook multiple times opens multiple dialogs. If you
+   * need to open multiple dialogs and track which dialog is which, you can add a counter to the
+   * `options` when calling the callback, and `resolveCallback` will be resolved with that options
+   * object including your counter.
    *
    * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
-   * @type `TResponse` The type that the response can be. If you do not specify a `defaultResponse`,
-   *   this can be the dialog response type or `undefined`. If you specify a `defaultResponse`, this
-   *   will be just the dialog response type. Should be inferred by parameters.
-   *
-   *   - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse` then
-   *       becomes that literal instead of being the dialog response type. You can type assert it to
-   *       the appropriate type. Let us know if you run into an issue with this!
-   *
    * @param dialogType Dialog type you want to show on the screen
    *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param options Various options for configuring the dialog that shows
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. Calling the callback will always use the latest
+   *   `dialogType`.
+   * @param options Various options for configuring the dialog that shows. If an `options` parameter
+   *   is also provided to the returned `showDialog` callback, those callback-provided `options` merge
+   *   over these hook-provided `options`
    *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param defaultResponse The starting value for the response. Once a response is received, this is
-   *   no longer used. Defaults to `undefined`
-   * @returns `[response, showDialogCallback, errorMessage, isShowingDialog]`
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. Calling the callback will always use the latest
+   *   `options`.
+   * @param resolveCallback `(response, dialogType, options)` The function that will be called if the
+   *   dialog request resolves properly
    *
-   *   - `response` - the response from the dialog or `defaultResponse` if a response has not been
-   *       received (does not reset to `defaultResponse` if the user cancels the dialog). DOES NOT
-   *       reset every time the callback is run
-   *   - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response. If
-   *       this callback is run while the dialog is open, nothing happens
-   *   - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
-   *       `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
-   *   - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not
-   *       responded)
+   *   - `response` - the resolved value of the dialog call. Either the user's response or `undefined` if
+   *       the user cancels
+   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+   *       consists of the `options` provided to the returned `showDialog` callback merged over the
+   *       `options` provided to the hook
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. When the dialog resolves, it will always call the
+   *   latest `resolveCallback`.
+   * @param rejectCallback `(error, dialogType, options)` The function that will be called if the
+   *   dialog request throws an error
+   *
+   *   - `error` - the error thrown while calling the dialog
+   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+   *       consists of the `options` provided to the returned `showDialog` callback merged over the
+   *       `options` provided to the hook
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. If the dialog throws an error, it will always call
+   *   the latest `rejectCallback`.
+   * @returns `showDialog(options?)` - callback to run to show the dialog to prompt the user for a
+   *   response
+   *
+   *   - `options?` - `options` object you may specify that will merge over the `options` you provide to
+   *       the hook before passing to the dialog. All properties are optional, so you may specify as
+   *       many or as few properties here as you want to overwrite the properties in the `options` you
+   *       provide to the hook
    */
-  function useDialogCallback<
-    DialogTabType extends DialogTabTypes,
-    TResponse extends DialogTypes[DialogTabType]['responseType'] | undefined =
-      | DialogTypes[DialogTabType]['responseType']
-      | undefined,
-  >(
+  function useDialogCallback<DialogTabType extends DialogTabTypes>(
     dialogType: DialogTabType,
-    options?: DialogTypes[DialogTabType]['options'],
-    defaultResponse?: TResponse,
-  ): [TResponse, () => Promise<void>, string | undefined, boolean];
+    options: DialogTypes[DialogTabType]['options'],
+    resolveCallback: (
+      response: DialogTypes[DialogTabType]['responseType'] | undefined,
+      dialogType: DialogTabType,
+      options: DialogTypes[DialogTabType]['options'],
+    ) => void,
+    rejectCallback?: (
+      error: unknown,
+      dialogType: DialogTabType,
+      options: DialogTypes[DialogTabType]['options'],
+    ) => void,
+  ): (options?: Partial<DialogTypes[DialogTabType]['options']>) => Promise<void>;
   export default useDialogCallback;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {

@@ -1,61 +1,110 @@
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 import dialogService from '@shared/services/dialog.service';
+import logger from '@shared/services/logger.service';
 import { getErrorMessage } from '@shared/utils/util';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 /**
- * Enables using `papi.dialogs.showDialog` in React more easily. Provides a callback to run to get a
- * response from a dialog as well as states that indicate the dialog's response and whether the
- * dialog is open.
+ * Default callback to run when using useDialogCallback - just logs the error message and nothing
+ * more
  *
- * Calling the dialog callback returned from this hook does nothing if you already previously opened
- * the dialog and have not received a response
+ * @param error Error thrown while showing the dialog
+ */
+function logDialogError(error: unknown) {
+  logger.error(getErrorMessage(error));
+}
+
+/**
+ * Enables using `papi.dialogs.showDialog` in React more easily. Returns a callback to run that will
+ * open a dialog with the provided `dialogType` and `options` then run the `resolveCallback` with
+ * the dialog response or `rejectCallback` if there is an error.
+ *
+ * Calling the dialog callback returned from this hook multiple times opens multiple dialogs. If you
+ * need to open multiple dialogs and track which dialog is which, you can add a counter to the
+ * `options` when calling the callback, and `resolveCallback` will be resolved with that options
+ * object including your counter.
  *
  * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
- * @type `TResponse` The type that the response can be. If you do not specify a `defaultResponse`,
- *   this can be the dialog response type or `undefined`. If you specify a `defaultResponse`, this
- *   will be just the dialog response type. Should be inferred by parameters.
- *
- *   - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse` then
- *       becomes that literal instead of being the dialog response type. You can type assert it to
- *       the appropriate type. Let us know if you run into an issue with this!
- *
  * @param dialogType Dialog type you want to show on the screen
  *
- *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
- *   updated every render
- * @param options Various options for configuring the dialog that shows
+ *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+ *   to re-run with its new value. This means that updating this parameter will not cause a new
+ *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+ *   effect on the functionality of this hook. Calling the callback will always use the latest
+ *   `dialogType`.
+ * @param options Various options for configuring the dialog that shows. If an `options` parameter
+ *   is also provided to the returned `showDialog` callback, those callback-provided `options` merge
+ *   over these hook-provided `options`
  *
- *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
- *   updated every render
- * @param defaultResponse The starting value for the response. Once a response is received, this is
- *   no longer used. Defaults to `undefined`
- * @returns `[response, showDialogCallback, errorMessage, isShowingDialog]`
+ *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+ *   to re-run with its new value. This means that updating this parameter will not cause a new
+ *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+ *   effect on the functionality of this hook. Calling the callback will always use the latest
+ *   `options`.
+ * @param resolveCallback `(response, dialogType, options)` The function that will be called if the
+ *   dialog request resolves properly
  *
- *   - `response` - the response from the dialog or `defaultResponse` if a response has not been
- *       received (does not reset to `defaultResponse` if the user cancels the dialog). DOES NOT
- *       reset every time the callback is run
- *   - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response. If
- *       this callback is run while the dialog is open, nothing happens
- *   - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
- *       `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
- *   - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not
- *       responded)
+ *   - `response` - the resolved value of the dialog call. Either the user's response or `undefined` if
+ *       the user cancels
+ *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+ *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+ *       consists of the `options` provided to the returned `showDialog` callback merged over the
+ *       `options` provided to the hook
+ *
+ *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+ *   to re-run with its new value. This means that updating this parameter will not cause a new
+ *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+ *   effect on the functionality of this hook. When the dialog resolves, it will always call the
+ *   latest `resolveCallback`.
+ * @param rejectCallback `(error, dialogType, options)` The function that will be called if the
+ *   dialog request throws an error
+ *
+ *   - `error` - the error thrown while calling the dialog
+ *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+ *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+ *       consists of the `options` provided to the returned `showDialog` callback merged over the
+ *       `options` provided to the hook
+ *
+ *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+ *   to re-run with its new value. This means that updating this parameter will not cause a new
+ *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+ *   effect on the functionality of this hook. If the dialog throws an error, it will always call
+ *   the latest `rejectCallback`.
+ * @returns `showDialog(options?)` - callback to run to show the dialog to prompt the user for a
+ *   response
+ *
+ *   - `options?` - `options` object you may specify that will merge over the `options` you provide to
+ *       the hook before passing to the dialog. All properties are optional, so you may specify as
+ *       many or as few properties here as you want to overwrite the properties in the `options` you
+ *       provide to the hook
  */
-function useDialogCallback<
-  DialogTabType extends DialogTabTypes,
-  TResponse extends DialogTypes[DialogTabType]['responseType'] | undefined =
-    | DialogTypes[DialogTabType]['responseType']
-    | undefined,
->(
+function useDialogCallback<DialogTabType extends DialogTabTypes>(
   dialogType: DialogTabType,
-  options?: DialogTypes[DialogTabType]['options'],
-  // Since `defaultResponse` could be unspecified which is equivalent to `undefined`, we need to
-  // type assert to tell TS that `undefined` will be part of `TResponse` if `defaultResponse` is not
-  // specified but is not otherwise
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  defaultResponse: TResponse = undefined as TResponse,
-): [TResponse, () => Promise<void>, string | undefined, boolean] {
+  options: DialogTypes[DialogTabType]['options'],
+  resolveCallback: (
+    response: DialogTypes[DialogTabType]['responseType'] | undefined,
+    dialogType: DialogTabType,
+    options: DialogTypes[DialogTabType]['options'],
+  ) => void,
+  rejectCallback: (
+    error: unknown,
+    dialogType: DialogTabType,
+    options: DialogTypes[DialogTabType]['options'],
+  ) => void = logDialogError,
+): (options?: Partial<DialogTypes[DialogTabType]['options']>) => Promise<void> {
+  // Use dialogType as a ref so it doesn't update dependency arrays
+  const dialogTypeRef = useRef(dialogType);
+  dialogTypeRef.current = dialogType;
+  // Use options as a ref so it doesn't update dependency arrays
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+  // Use resolveCallback as a ref so it doesn't update dependency arrays
+  const resolveCallbackRef = useRef(resolveCallback);
+  resolveCallbackRef.current = resolveCallback;
+  // Use rejectCallback as a ref so it doesn't update dependency arrays
+  const rejectCallbackRef = useRef(rejectCallback);
+  rejectCallbackRef.current = rejectCallback;
+
   // Keep track of whether we're mounted so we don't run stuff after unmount
   const mounted = useRef<boolean>(false);
   useEffect(() => {
@@ -65,38 +114,41 @@ function useDialogCallback<
     };
   }, []);
 
-  const [response, setResponse] = useState(defaultResponse);
-  const [isShowingDialog, setIsShowingDialog] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+  const showDialog = useCallback(
+    async (showDialogOptions?: Partial<DialogTypes[DialogTabType]['options']>) => {
+      // Save the current values of the dialog parameters from when the dialog was called so we can
+      // pass the same values to the callbacks.
+      // We could alternatively just use the parameters and put them in the hook deps, but that would
+      // then cause this to return a different `showDialog` every time one of those updates, and that
+      // is not as user-friendly. This way has basically zero downsides since neither of these
+      // variables does anything that would need them to stay up-to-date within this callback like
+      // updating the dialog's options while it is already showing or something
+      const dialogTypeForCurrentDialog = dialogTypeRef.current;
+      // Merge the options provided in this callback with the options provided in the hook, overwriting the hook's options with the callback's options
+      const optionsForCurrentDialog = { ...optionsRef.current, ...showDialogOptions };
 
-  const showDialog = useCallback(async () => {
-    if (!isShowingDialog) {
-      setIsShowingDialog(true);
       try {
-        // Looks like we need to type assert here because it can't tell this is a TResponse. It can
-        // just tell that it is the dialog response type, which does not include undefined
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const dialogResponse = (await dialogService.showDialog(dialogType, options)) as
-          | TResponse
-          | undefined;
+        const dialogResponse = await dialogService.showDialog(
+          dialogTypeForCurrentDialog,
+          optionsForCurrentDialog,
+        );
         if (mounted.current) {
-          if (dialogResponse !== undefined)
-            // For now, let's only set the response value if the user didn't cancel. Maybe we can
-            // expose an option for configuring this hook later if people want to reset to
-            // `defaultResponse` on canceling the dialog
-            setResponse(dialogResponse);
-          setIsShowingDialog(false);
+          resolveCallbackRef.current(
+            dialogResponse,
+            dialogTypeForCurrentDialog,
+            optionsForCurrentDialog,
+          );
         }
       } catch (e) {
         if (mounted.current) {
-          setErrorMessage(getErrorMessage(e));
-          setIsShowingDialog(false);
+          rejectCallbackRef.current(e, dialogTypeForCurrentDialog, optionsForCurrentDialog);
         }
       }
-    }
-  }, [dialogType, options, isShowingDialog]);
+    },
+    [],
+  );
 
-  return [response, showDialog, errorMessage, isShowingDialog];
+  return showDialog;
 }
 
 export default useDialogCallback;
