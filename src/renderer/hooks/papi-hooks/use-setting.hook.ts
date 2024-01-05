@@ -21,6 +21,9 @@ import { SettingNames, SettingTypes } from 'papi-shared-types';
  *       papi, if any
  *   - `setSetting`: Function that updates the setting to a new value
  *   - `resetSetting`: Function that removes the setting
+ *
+ * @throws When subscription callback function is called with an update that has an unexpected
+ *   message type
  */
 const useSetting = <SettingName extends SettingNames>(
   key: SettingName,
