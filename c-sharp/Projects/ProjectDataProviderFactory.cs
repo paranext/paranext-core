@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Paranext.DataProvider.MessageHandlers;
+using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.NetworkObjects;
 
@@ -21,9 +22,14 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
 
     public async Task Initialize()
     {
+        var name = $"platform.pdpFactory-{_projectType}";
         await RegisterNetworkObject(
-            $"platform.pdpFactory-{_projectType}",
-            new List<string>() { "getProjectDataProviderId" },
+            name,
+            new MessageEventProjectDataProviderFactoryCreated(
+                name,
+                new[] { "getProjectDataProviderId" },
+                _projectType
+            ),
             FunctionHandler
         );
     }
@@ -38,7 +44,7 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
         JsonArray jsonArray;
         try
         {
-            jsonArray = ((JsonElement)request!).Deserialize<JsonNode>()!.AsArray();
+            jsonArray = request.Deserialize<JsonNode>()!.AsArray();
             if (jsonArray.Count == 0)
                 return ResponseToRequest.Failed(
                     $"No function name provided when calling PDP Factory for {_projectType}"

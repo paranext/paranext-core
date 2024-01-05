@@ -76,5 +76,7 @@ Partial<NetworkableObject>;
  */
 export type NetworkObjectDetails = {
   id: string;
+  objectType: string;
   functionNames: string[];
+  attributes?: Record<string, unknown>;
 };
