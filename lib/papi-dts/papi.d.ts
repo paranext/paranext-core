@@ -4492,6 +4492,9 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *       papi, if any
    *   - `setSetting`: Function that updates the setting to a new value
    *   - `resetSetting`: Function that removes the setting
+   *
+   * @throws When subscription callback function is called with an update that has an unexpected
+   *   message type
    */
   const useSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
