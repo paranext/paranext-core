@@ -1,4 +1,5 @@
-// Please keep this file in sync with the .prettierrc.js file in the paranext-extension-template repo
+// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.prettierrc.js and https://github.com/paranext/paranext-extension-template/blob/main/.prettierrc.js
+
 module.exports = {
   tabWidth: 2,
   trailingComma: 'all',
@@ -14,3 +15,5 @@ module.exports = {
     },
   ],
 };
+
+// #endregion

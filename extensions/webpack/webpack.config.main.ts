@@ -18,7 +18,7 @@ const configMain: () => Promise<webpack.Configuration> = async () => {
   return merge(configBase, {
     // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.config.main.ts
 
-    // Build for node since Paranext loads this in node https://webpack.js.org/concepts/targets/
+    // Build for node since Platform.Bible loads this in node https://webpack.js.org/concepts/targets/
     target: 'node',
     // configuration name
     name: 'main',

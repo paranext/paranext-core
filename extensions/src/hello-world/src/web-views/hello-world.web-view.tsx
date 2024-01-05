@@ -24,7 +24,7 @@ import type { DialogTypes, WebViewProps } from '@papi/core';
 import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
 import Clock from './components/clock.component';
-import Logo from '../assets/offline.svg';
+import Logo from '../../assets/offline.svg';
 
 type Row = {
   id: string;
