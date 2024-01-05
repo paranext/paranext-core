@@ -1,3 +1,5 @@
+// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/.eslintrc.js
+
 module.exports = {
   extends: [
     // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
@@ -9,8 +11,8 @@ module.exports = {
   ],
 
   rules: {
-    // #region From paranext-core root .eslintrc.js
-    // Some rules are commented out since they have overrides in following regions
+    // Some rules in this following shared region are not applied since they are overridden in subsequent regions
+    // #region shared with https://github.com/paranext/paranext-core/blob/main/.eslintrc.js except certain overrides
 
     // #region ERB rules
 
@@ -18,7 +20,7 @@ module.exports = {
     // A temporary hack related to IDE not resolving correct package.json
     'import/no-extraneous-dependencies': 'off',
     'import/no-import-module-exports': 'off',
-    // 'import/no-unresolved': 'error',
+    'import/no-unresolved': 'error',
     'react/jsx-filename-extension': 'off',
     'react/react-in-jsx-scope': 'off',
 
@@ -67,6 +69,7 @@ module.exports = {
       'error',
       { functions: false, allowNamedExports: true, typedefs: false, ignoreTypeReferences: true },
     ],
+    '@typescript-eslint/no-unnecessary-type-assertion': 'error',
     'no-unused-vars': 'off',
     '@typescript-eslint/no-unused-vars': 'error',
     'no-useless-constructor': 'off',
@@ -93,7 +96,7 @@ module.exports = {
 
     // #endregion
 
-    // #region Overrides shared with paranext-extension-template .eslintrc.cjs
+    // #region Overrides to rules from paranext-core
 
     'import/no-unresolved': ['error', { ignore: ['@papi'] }],
 
@@ -103,6 +106,13 @@ module.exports = {
     globalThis: 'readonly',
   },
   overrides: [
+    {
+      // Allow this file to have overrides to rules from paranext-core
+      files: ['.eslintrc.*js'],
+      rules: {
+        'no-dupe-keys': 'off',
+      },
+    },
     {
       files: ['*.js'],
       rules: {
@@ -151,3 +161,5 @@ module.exports = {
     },
   },
 };
+
+// #endregion
