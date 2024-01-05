@@ -3,10 +3,8 @@ import settingsService from '@shared/services/settings.service';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 
 /**
- * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes and gets
- * updated when the setting is changed by others.
- *
- * Setting the value to `undefined` is the equivalent of deleting the setting.
+ * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
+ * and gets updated when the setting is changed by others.
  *
  * @param key The string id that is used to store the setting in local storage
  *
@@ -17,31 +15,25 @@ import { SettingNames, SettingTypes } from 'papi-shared-types';
  *
  *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
  *   updated every render
- * @returns `[setting, setSetting]`
+ * @returns `[setting, setSetting, resetSetting]`
  *
  *   - `setting`: The current state of the setting, either the defaultState or the stored state on the
  *       papi, if any
  *   - `setSetting`: Function that updates the setting to a new value
+ *   - `resetSetting`: Function that removes the setting
  */
 const useSetting = <SettingName extends SettingNames>(
   key: SettingName,
   defaultState: SettingTypes[SettingName],
-): [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void] => {
-  const [setting, setSettingInternal] = useState(() => {
-    const initialSetting = settingsService.get(key);
-    return initialSetting !== undefined ? initialSetting : defaultState;
-  });
+): [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void, () => void] => {
+  const [setting, setSettingInternal] = useState(settingsService.get(key, defaultState));
 
   useEffect(() => {
-    const updateSettingFromService = (newSetting: SettingTypes[SettingName] | undefined) => {
-      if (newSetting !== undefined) {
-        setSettingInternal(newSetting);
-      } else {
-        setSettingInternal(defaultState);
-      }
+    const updateSettingFromService = (newSetting: SettingTypes[SettingName]) => {
+      setSettingInternal(newSetting);
     };
 
-    const initialSetting = settingsService.get(key);
+    const initialSetting = settingsService.get(key, defaultState);
     updateSettingFromService(initialSetting);
 
     const unsubscriber = settingsService.subscribe(key, (newSetting) => {
@@ -51,16 +43,21 @@ const useSetting = <SettingName extends SettingNames>(
     return () => {
       unsubscriber();
     };
-  }, [key, defaultState]);
+  }, [defaultState, key]);
 
   const setSetting = useCallback(
-    (newSetting: SettingTypes[SettingName] | undefined) => {
+    (newSetting: SettingTypes[SettingName]) => {
       settingsService.set(key, newSetting);
-      setSettingInternal(newSetting !== undefined ? newSetting : defaultState);
+      setSettingInternal(newSetting);
     },
-    [key, defaultState],
+    [key],
   );
 
-  return [setting, setSetting];
+  const resetSetting = useCallback(() => {
+    settingsService.reset(key);
+    setSettingInternal(defaultState);
+  }, [defaultState, key]);
+
+  return [setting, setSetting, resetSetting];
 };
 export default useSetting;
