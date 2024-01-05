@@ -1,3 +1,5 @@
+// #region shared with https://github.com/paranext/paranext-core/blob/main/.stylelintrc.js and https://github.com/paranext/paranext-extension-template/blob/main/.stylelintrc.js
+
 module.exports = {
   extends: ['stylelint-config-recommended', 'stylelint-config-sass-guidelines'],
   overrides: [
@@ -15,3 +17,5 @@ module.exports = {
     'selector-max-id': 1,
   },
 };
+
+// #endregion

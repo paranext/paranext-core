@@ -113,7 +113,7 @@ To build the extensions once:
 
 ## To package for distribution
 
-To package this extension into a zip file for distribution:
+To package these extensions into a zip file for distribution:
 
 `npm run package`
 
