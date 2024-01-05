@@ -327,11 +327,7 @@ async function registerRequestHandlerUnsafe(
   // Check with the server if it already has a handler for this requestType
   if (isClient()) {
     // If we are the client, try to register with the server because server has all registrations
-    await requestUnsafe(
-      serializeRequestType(CATEGORY_SERVER, 'registerRequest'),
-      requestType,
-      connectionService.getClientId(),
-    );
+    await requestUnsafe(serializeRequestType(CATEGORY_SERVER, 'registerRequest'), requestType);
   }
 
   // We have successfully checked that this is the first registration for this requestType. Set up
@@ -428,47 +424,66 @@ const createNetworkEventEmitterUnsafe = <T>(
  * Unregisters a client connection's request handler SERVER-ONLY. This should not be needed on the
  * client
  *
- * @param requestType The type of request on which to unregister the handler
- * @param clientId ClientId of the client who wants to unregister the handler
- * @returns True if successfully unregistered, false otherwise
+ * @param request An array of values, the first of which is the `SerializedRequestType` value that
+ *   defines what request type is being unregistered. Note that the value is an array even though we
+ *   only ever look at the first value because all requests come over the network with an array of
+ *   arguments. Technically if there is more than 1 argument passed to the function, values after
+ *   the first they might not be `SerializedRequestType` values.
+ * @returns `ComplexResponse` with `success` = True if successfully unregistered, otherwise False
+ *   along with an error message
  */
 const unregisterRemoteRequestHandler = async (
-  requestType: SerializedRequestType,
-  clientId: number,
-): Promise<boolean> => {
+  request: ComplexRequest<[SerializedRequestType]>,
+): Promise<ComplexResponse<undefined>> => {
+  const [requestType] = request.contents;
   const requestRegistration = requestRegistrations.get(requestType);
 
   if (!requestRegistration)
-    // The request isn't registered
-    return false;
+    return {
+      success: false,
+      errorMessage: `Cannot unregister ${requestType} because it was not registered`,
+    };
 
-  if (requestRegistration.registrationType === 'local' || requestRegistration.clientId !== clientId)
-    // The request handler is not theirs to unregister. Is this egregious enough that we should
-    // throw here?
-    return false;
+  if (
+    requestRegistration.registrationType === 'local' ||
+    requestRegistration.clientId !== request.senderId
+  )
+    return {
+      success: false,
+      errorMessage: `Cannot unregister ${requestType} unless the owner requests it`,
+    };
 
   // We can unregister this handler! Remove it from the registrations
   requestRegistrations.delete(requestType);
-  return true;
+  return {
+    contents: undefined,
+    success: true,
+  };
 };
 
 /**
  * Registers a client connection's request handler SERVER-ONLY. This should not be needed on the
  * client
  *
- * @param requestType The type of request on which to register the handler
- * @param clientId ClientId of the client who wants to register the handler
+ * @param request An array of values, the first of which is the `SerializedRequestType` value that
+ *   defines what request type is being registered. Note that the value is an array even though we
+ *   only ever look at the first value because all requests come over the network with an array of
+ *   arguments. Technically if there is more than 1 argument passed to the function, values after
+ *   the first they might not be `SerializedRequestType` values.
+ * @returns `ComplexResponse` with `success` = True if successfully registered, otherwise False
+ *   along with an error message
  */
 const registerRemoteRequestHandler = async (
-  requestType: SerializedRequestType,
-  clientId: number,
-): Promise<void> => {
-  // TODO: Consider a good way to expose senderId in this scenario instead of just passing it as an argument.
-  // Maybe create a registerRequestHandlerInternal function that uses InternalRequest and InternalResponse?
+  request: ComplexRequest<[SerializedRequestType]>,
+): Promise<ComplexResponse<undefined>> => {
+  const [requestType] = request.contents;
 
   // Check to see if there is already a handler for this requestType
   if (requestRegistrations.has(requestType)) {
-    throw new Error(`requestType ${requestType} already has a remote handler registered`);
+    return {
+      errorMessage: `requestType ${requestType} already has a remote handler registered`,
+      success: false,
+    };
   }
 
   validateRequestTypeFormatting(requestType);
@@ -478,8 +493,13 @@ const registerRemoteRequestHandler = async (
   requestRegistrations.set(requestType, {
     registrationType: 'remote',
     requestType,
-    clientId,
+    clientId: request.senderId,
   });
+
+  return {
+    contents: undefined,
+    success: true,
+  };
 };
 
 /**
@@ -504,7 +524,10 @@ const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
   // Remove registrations for this clientId
   logger.info(`Client ${clientId} disconnected! Unregistering ${requestTypesToRemove.join(', ')}`);
   requestTypesToRemove.forEach((requestType) =>
-    unregisterRemoteRequestHandler(requestType, clientId),
+    unregisterRemoteRequestHandler({
+      contents: [requestType],
+      senderId: clientId,
+    }),
   );
 };
 
@@ -689,9 +712,13 @@ export const initialize = () => {
 
       const registrationUnsubscribers = Object.entries(serverRequestHandlers).map(
         ([requestType, handler]) =>
-          // Re-assert type after passing through `map`.
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          registerRequestHandlerUnsafe(requestType as SerializedRequestType, handler),
+          registerRequestHandlerUnsafe(
+            // Re-assert type after passing through `map`.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            requestType as SerializedRequestType,
+            handler,
+            RequestHandlerType.Complex,
+          ),
       );
       // Wait to successfully register all requests
       unsubscribeServerRequestHandlers = aggregateUnsubscriberAsyncs(

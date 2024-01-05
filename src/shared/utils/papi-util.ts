@@ -81,6 +81,8 @@ export const createSafeRegisterFn = <TParam extends Array<unknown>>(
  * This type is used as the public-facing interface for requests
  */
 export type ComplexRequest<TParam = unknown> = {
+  /** The one who sent the request */
+  senderId: number;
   contents: TParam;
 };
 
@@ -300,7 +302,7 @@ export function deserializeRequestType(requestType: SerializedRequestType): Requ
   const colonIndex = requestType.indexOf(REQUEST_TYPE_SEPARATOR);
   if (colonIndex <= 0 || colonIndex >= requestType.length - 1)
     throw new Error(
-      `deserializeRequestType: Must have two parts divided by a ${REQUEST_TYPE_SEPARATOR}`,
+      `deserializeRequestType: Must have two parts divided by a ${REQUEST_TYPE_SEPARATOR} (${requestType})`,
     );
   const category = requestType.substring(0, colonIndex);
   const directive = requestType.substring(colonIndex + 1);
