@@ -29,15 +29,23 @@ const useSetting = <SettingName extends SettingNames>(
   const [setting, setSettingInternal] = useState(settingsService.get(key, defaultState));
 
   useEffect(() => {
-    const updateSettingFromService = (newSetting: SettingTypes[SettingName]) => {
-      setSettingInternal(newSetting);
+    const updateSettingFromService = (newSettingState: SettingTypes[SettingName]) => {
+      setSettingInternal(newSettingState);
     };
 
     const initialSetting = settingsService.get(key, defaultState);
     updateSettingFromService(initialSetting);
 
     const unsubscriber = settingsService.subscribe(key, (newSetting) => {
-      updateSettingFromService(newSetting);
+      if (newSetting.type === 'set-setting') {
+        // For some reason the function expects a `ScriptureReference | undefined` here, instead of the general `SettingTypes[SettingName]`
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        updateSettingFromService(newSetting.setting as SettingTypes[SettingName]);
+      } else if (newSetting.type === 'reset-setting') {
+        setSettingInternal(defaultState);
+      } else {
+        throw new Error('Unexpected message type used for updating setting');
+      }
     });
 
     return () => {

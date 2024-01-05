@@ -2,11 +2,22 @@ import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 
+/** Message sent to the client to give it NetworkConnectorInfo */
+export type SetSettingMessage = {
+  type: 'set-setting';
+  setting: SettingTypes[SettingNames];
+};
+
+/** Message responding to the server to let it know this connection is ready to receive messages */
+export type ResetSettingMessage = {
+  type: 'reset-setting';
+};
+
+/** Messages send by the WebSocket */
+export type SettingMessage = SetSettingMessage | ResetSettingMessage;
+
 /** All message subscriptions - emitters that emit an event each time a setting is updated */
-const onDidUpdateSettingEmitters = new Map<
-  SettingNames,
-  PapiEventEmitter<SettingTypes[SettingNames]>
->();
+const onDidUpdateSettingEmitters = new Map<SettingNames, PapiEventEmitter<SettingMessage>>();
 
 /**
  * Retrieves the value of the specified setting
@@ -47,10 +58,10 @@ const setSetting = <SettingName extends SettingNames>(
   localStorage.setItem(key, serialize(newSetting));
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const emitter = onDidUpdateSettingEmitters.get(key) as
-    | PapiEventEmitter<SettingTypes[SettingName]>
-    | undefined;
-  emitter?.emit(newSetting);
+  const emitter = onDidUpdateSettingEmitters.get(key);
+  // TODO: Why do I still need to specify `type` here? It's hardcoded in the SetSettingMessage type, right?
+  const setMessage: SetSettingMessage = { type: 'set-setting', setting: newSetting };
+  emitter?.emit(setMessage);
 };
 
 /**
@@ -62,10 +73,10 @@ const resetSetting = <SettingName extends SettingNames>(key: SettingName) => {
   localStorage.removeItem(key);
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  // const emitter = onDidUpdateSettingEmitters.get(key) as
-  // | PapiEventEmitter<SettingTypes[SettingName]>
-  // | undefined;
-  // emitter?.emit(); // TODO: What do we emit to let subscribers know that setting was removed?
+  const emitter = onDidUpdateSettingEmitters.get(key);
+  // TODO: Why do I still need to specify `type` here? It's hardcoded in the ResetSettingMessage type, right?
+  const resetMessage: ResetSettingMessage = { type: 'reset-setting' };
+  emitter?.emit(resetMessage);
 };
 
 /**
@@ -78,21 +89,14 @@ const resetSetting = <SettingName extends SettingNames>(key: SettingName) => {
  */
 const subscribeToSetting = <SettingName extends SettingNames>(
   key: SettingName,
-  callback: (newSetting: SettingTypes[SettingName]) => void,
+  callback: (newSetting: SettingMessage) => void,
 ): Unsubscriber => {
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  let emitter = onDidUpdateSettingEmitters.get(key) as
-    | PapiEventEmitter<SettingTypes[SettingName]>
-    | undefined;
+  let emitter = onDidUpdateSettingEmitters.get(key);
   if (!emitter) {
-    emitter = new PapiEventEmitter<SettingTypes[SettingName]>();
-    onDidUpdateSettingEmitters.set(
-      key,
-      // Assert type of the general SettingTypes of the emitter.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      emitter as unknown as PapiEventEmitter<SettingTypes[SettingNames]>,
-    );
+    emitter = new PapiEventEmitter<SettingMessage>();
+    onDidUpdateSettingEmitters.set(key, emitter);
   }
   return emitter.subscribe(callback);
 };
