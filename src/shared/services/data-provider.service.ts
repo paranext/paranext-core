@@ -582,6 +582,8 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
 async function registerEngine<DataProviderName extends DataProviderNames>(
   providerName: DataProviderName,
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
+  dataProviderType: string = 'dataProvider',
+  dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
 ): Promise<DisposableDataProviders[DataProviderName]> {
   await initialize();
 
@@ -621,6 +623,8 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   const disposableDataProvider = (await networkObjectService.set(
     dataProviderObjectId,
     dataProviderInternal,
+    dataProviderType,
+    dataProviderAttributes,
   )) as unknown as DisposableDataProviders[DataProviderName];
 
   // Get the local network object proxy for the data provider so the provider can't be disposed

@@ -86,7 +86,12 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
 ): Promise<Dispose> {
   const factoryId = getProjectDataProviderFactoryId(projectType);
   const factory = new ProjectDataProviderFactory(projectType, pdpEngineFactory);
-  return networkObjectService.set<ProjectDataProviderFactory<ProjectType>>(factoryId, factory);
+  return networkObjectService.set<ProjectDataProviderFactory<ProjectType>>(
+    factoryId,
+    factory,
+    'pdpFactory',
+    { projectType },
+  );
 }
 
 /**

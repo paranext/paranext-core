@@ -1835,6 +1835,12 @@ declare module 'shared/services/network-object.service' {
   const set: <T extends NetworkableObject>(
     id: string,
     objectToShare: T,
+    objectType?: string,
+    objectAttributes?:
+      | {
+          [property: string]: unknown;
+        }
+      | undefined,
   ) => Promise<DisposableNetworkObject<T>>;
   interface NetworkObjectService {
     initialize: typeof initialize;
@@ -1939,7 +1945,9 @@ declare module 'shared/models/network-object.model' {
    */
   export type NetworkObjectDetails = {
     id: string;
+    objectType: string;
     functionNames: string[];
+    attributes?: Record<string, unknown>;
   };
 }
 declare module 'shared/models/data-provider.model' {
@@ -3125,6 +3133,12 @@ declare module 'shared/services/data-provider.service' {
   function registerEngine<DataProviderName extends DataProviderNames>(
     providerName: DataProviderName,
     dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
+    dataProviderType?: string,
+    dataProviderAttributes?:
+      | {
+          [property: string]: unknown;
+        }
+      | undefined,
   ): Promise<DisposableDataProviders[DataProviderName]>;
   /**
    * Create a mock local data provider object for connecting to the remote data provider
