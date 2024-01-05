@@ -10,5 +10,5 @@ const foldersToRemove = [
 ];
 
 foldersToRemove.forEach((folder) => {
-  if (fs.existsSync(folder)) rimrafSync(folder);
+  if (fs.existsSync(folder)) rimrafSync(folder, { glob: true });
 });
