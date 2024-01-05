@@ -138,7 +138,11 @@ export const loadRunBasicChecksTab = (savedTabInfo: SavedTabInfo): TabInfo => {
       <RunBasicChecksTab
         // #region Test a .NET data provider
         currentProjectId="32664dc3288a28df2e2bb75ded887fc8f17a15fb"
-        currentScriptureReference={settingsService.get('platform.verseRef')}
+        currentScriptureReference={settingsService.get('platform.verseRef', {
+          bookNum: 1,
+          chapterNum: 1,
+          verseNum: 1,
+        })}
       />
     ),
   };
