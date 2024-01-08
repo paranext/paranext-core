@@ -69,38 +69,66 @@ declare module 'papi-shared-types' {
   };
 
   /**
-   * Data types for each project data provider supported by PAPI. Extensions can add more data types
-   * with corresponding project data provider IDs by adding details to their `.d.ts` file. Note that
-   * all project data types should extend `MandatoryProjectDataTypes` like the following example.
+   * `IDataProvider` types for each project data provider supported by PAPI. Extensions can add more
+   * project data providers with corresponding data provider IDs by adding details to their `.d.ts`
+   * file. Note that all project data types should extend `MandatoryProjectDataTypes` like the
+   * following example.
+   *
+   * Note: Project Data Provider names must consist of two string separated by at least one period.
+   * We recommend one period and lower camel case in case we expand the api in the future to allow
+   * dot notation.
+   *
+   * An extension can extend this interface to add types for the project data provider it registers
+   * by adding the following to its `.d.ts` file (in this example, we are adding the
+   * `MyExtensionProjectTypeName` data provider types):
    *
    * @example
    *
    * ```typescript
    * declare module 'papi-shared-types' {
-   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
-   *     MyProjectData1: DataProviderDataType<string, string, string>;
-   *     MyProjectData2: DataProviderDataType<string, string, string>;
+   *   export type MyProjectDataType = MandatoryProjectDataType & {
+   *     MyProjectData: DataProviderDataType<string, string, string>;
    *   };
    *
-   *   export interface ProjectDataTypes {
-   *     MyExtensionProjectTypeName: MyProjectDataTypes;
+   *   export interface ProjectDataProviders {
+   *     MyExtensionProjectTypeName: MyProjectDataType;
    *   }
    * }
    * ```
    */
-  export interface ProjectDataTypes {
-    NotesOnly: NotesOnlyProjectDataTypes;
-    // With only one key in this interface, `papi.d.ts` was baking in the literal string when
-    // `ProjectTypes` was being used. Adding a placeholder key makes TypeScript generate `papi.d.ts`
-    // correctly. When we add another project data type, we can remove this placeholder.
-    placeholder: MandatoryProjectDataType;
+  export interface ProjectDataProviders {
+    'platform.notesOnly': IDataProvider<NotesOnlyProjectDataTypes & MandatoryProjectDataType>;
+    'platform.placeholder': IDataProvider<PlaceholderDataTypes & MandatoryProjectDataType>;
   }
 
   /**
-   * Identifiers for all project types supported by PAPI. These are not intended to correspond 1:1
-   * to the set of project types available in Paratext.
+   * Names for each project data provider available on the papi.
+   *
+   * Automatically includes all extensions' project data providers that are added to
+   * {@link ProjectDataProviders}.
+   *
+   * @example 'platform.placeholder'
    */
-  export type ProjectTypes = keyof ProjectDataTypes;
+  export type ProjectTypes = keyof ProjectDataProviders;
+
+  /**
+   * `ProjectDataTypes` for each project data provider supported by PAPI. These are the data types
+   * served by each project data provider.
+   *
+   * Automatically includes all extensions' project data providers that are added to
+   * {@link ProjectDataProviders}.
+   *
+   * @example
+   *
+   * ```typescript
+   * ProjectDataTypes['MyExtensionProjectTypeName'] => {
+   *     MyProjectData: DataProviderDataType<string, string, string>;
+   *   }
+   * ```
+   */
+  export type ProjectDataTypes = {
+    [ProjectType in ProjectTypes]: ExtractDataProviderDataTypes<ProjectDataProviders[ProjectType]>;
+  };
 
   type StuffDataTypes = { Stuff: DataProviderDataType<string, number, never> };
 

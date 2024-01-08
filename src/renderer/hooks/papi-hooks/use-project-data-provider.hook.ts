@@ -1,7 +1,6 @@
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
-import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
+import { ProjectTypes, ProjectDataProviders } from 'papi-shared-types';
 import createUseNetworkObjectHook from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
-import IDataProvider from '@shared/models/data-provider.interface';
 
 /**
  * Takes the parameters passed into the hook and returns the `projectDataProviderSource` associated
@@ -18,7 +17,7 @@ import IDataProvider from '@shared/models/data-provider.interface';
  */
 function mapParametersToProjectDataProviderSource<ProjectType extends ProjectTypes>(
   _projectType: ProjectType,
-  projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+  projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
 ) {
   return projectDataProviderSource;
 }
@@ -45,7 +44,7 @@ const useProjectDataProvider = createUseNetworkObjectHook(
   mapParametersToProjectDataProviderSource,
 ) as <ProjectType extends ProjectTypes>(
   projectType: ProjectType,
-  projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
-) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
+  projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+) => ProjectDataProviders[ProjectType] | undefined;
 
 export default useProjectDataProvider;

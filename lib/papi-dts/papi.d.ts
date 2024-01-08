@@ -2482,34 +2482,64 @@ declare module 'papi-shared-types' {
     Notes: DataProviderDataType<string, string | undefined, string>;
   };
   /**
-   * Data types for each project data provider supported by PAPI. Extensions can add more data types
-   * with corresponding project data provider IDs by adding details to their `.d.ts` file. Note that
-   * all project data types should extend `MandatoryProjectDataTypes` like the following example.
+   * `IDataProvider` types for each project data provider supported by PAPI. Extensions can add more
+   * project data providers with corresponding data provider IDs by adding details to their `.d.ts`
+   * file. Note that all project data types should extend `MandatoryProjectDataTypes` like the
+   * following example.
+   *
+   * Note: Project Data Provider names must consist of two string separated by at least one period.
+   * We recommend one period and lower camel case in case we expand the api in the future to allow
+   * dot notation.
+   *
+   * An extension can extend this interface to add types for the project data provider it registers
+   * by adding the following to its `.d.ts` file (in this example, we are adding the
+   * `MyExtensionProjectTypeName` data provider types):
    *
    * @example
    *
    * ```typescript
    * declare module 'papi-shared-types' {
-   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
-   *     MyProjectData1: DataProviderDataType<string, string, string>;
-   *     MyProjectData2: DataProviderDataType<string, string, string>;
+   *   export type MyProjectDataType = MandatoryProjectDataType & {
+   *     MyProjectData: DataProviderDataType<string, string, string>;
    *   };
    *
-   *   export interface ProjectDataTypes {
-   *     MyExtensionProjectTypeName: MyProjectDataTypes;
+   *   export interface ProjectDataProviders {
+   *     MyExtensionProjectTypeName: MyProjectDataType;
    *   }
    * }
    * ```
    */
-  interface ProjectDataTypes {
-    NotesOnly: NotesOnlyProjectDataTypes;
-    placeholder: MandatoryProjectDataType;
+  interface ProjectDataProviders {
+    'platform.notesOnly': IDataProvider<NotesOnlyProjectDataTypes & MandatoryProjectDataType>;
+    'platform.placeholder': IDataProvider<PlaceholderDataTypes & MandatoryProjectDataType>;
   }
   /**
-   * Identifiers for all project types supported by PAPI. These are not intended to correspond 1:1
-   * to the set of project types available in Paratext.
+   * Names for each project data provider available on the papi.
+   *
+   * Automatically includes all extensions' project data providers that are added to
+   * {@link ProjectDataProviders}.
+   *
+   * @example 'platform.placeholder'
    */
-  type ProjectTypes = keyof ProjectDataTypes;
+  type ProjectTypes = keyof ProjectDataProviders;
+  /**
+   * `ProjectDataTypes` for each project data provider supported by PAPI. These are the data types
+   * served by each project data provider.
+   *
+   * Automatically includes all extensions' project data providers that are added to
+   * {@link ProjectDataProviders}.
+   *
+   * @example
+   *
+   * ```typescript
+   * ProjectDataTypes['MyExtensionProjectTypeName'] => {
+   *     MyProjectData: DataProviderDataType<string, string, string>;
+   *   }
+   * ```
+   */
+  type ProjectDataTypes = {
+    [ProjectType in ProjectTypes]: ExtractDataProviderDataTypes<ProjectDataProviders[ProjectType]>;
+  };
   type StuffDataTypes = {
     Stuff: DataProviderDataType<string, number, never>;
   };
@@ -3193,15 +3223,10 @@ declare module 'shared/services/data-provider.service' {
 }
 declare module 'shared/models/project-data-provider-engine.model' {
   import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
-  import type IDataProvider from 'shared/models/data-provider.interface';
   import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
   /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
   export type ProjectDataProviderEngineTypes = {
     [ProjectType in ProjectTypes]: IDataProviderEngine<ProjectDataTypes[ProjectType]>;
-  };
-  /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
-  export type ProjectDataProvider = {
-    [ProjectType in ProjectTypes]: IDataProvider<ProjectDataTypes[ProjectType]>;
   };
   export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
     createProjectDataProviderEngine(
@@ -3281,11 +3306,8 @@ declare module 'shared/services/project-lookup.service' {
   export default projectLookupService;
 }
 declare module 'shared/services/project-data-provider.service' {
-  import { ProjectTypes } from 'papi-shared-types';
-  import {
-    ProjectDataProvider,
-    ProjectDataProviderEngineFactory,
-  } from 'shared/models/project-data-provider-engine.model';
+  import { ProjectTypes, ProjectDataProviders } from 'papi-shared-types';
+  import { ProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
   import { Dispose } from 'shared/models/disposal.model';
   /**
    * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
@@ -3319,7 +3341,7 @@ declare module 'shared/services/project-data-provider.service' {
   export function get<ProjectType extends ProjectTypes>(
     projectType: ProjectType,
     projectId: string,
-  ): Promise<ProjectDataProvider[ProjectType]>;
+  ): Promise<ProjectDataProviders[ProjectType]>;
   export interface PapiBackendProjectDataProviderService {
     registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
     get: typeof get;
@@ -4480,8 +4502,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
-  import { ProjectDataTypes } from 'papi-shared-types';
-  import IDataProvider from 'shared/models/data-provider.interface';
+  import { ProjectDataProviders } from 'papi-shared-types';
   /**
    * Gets a project data provider with specified provider name
    *
@@ -4496,10 +4517,10 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    *   data provider if it has been retrieved and is not disposed, and undefined again if the project
    *   data provider is disposed
    */
-  const useProjectDataProvider: <ProjectType extends keyof ProjectDataTypes>(
+  const useProjectDataProvider: <ProjectType extends keyof ProjectDataProviders>(
     projectType: ProjectType,
-    projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
-  ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
+    projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+  ) => ProjectDataProviders[ProjectType] | undefined;
   export default useProjectDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
@@ -4507,8 +4528,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
-  import IDataProvider from 'shared/models/data-provider.interface';
-  import { ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
+  import { ProjectDataProviders, ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
   /**
    * React hook to use data from a project data provider
    *
@@ -4517,7 +4537,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   type UseProjectDataHook = {
     <ProjectType extends ProjectTypes>(
       projectType: ProjectType,
-      projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+      projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
     ): {
       [TDataType in keyof ProjectDataTypes[ProjectType]]: (
         // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
@@ -4543,7 +4563,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * ```typescript
    * useProjectData<ProjectType extends ProjectTypes>(
    *     projectType: ProjectType,
-   *     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+   *     projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
    *   ).DataType(
    *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
    *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
