@@ -1,15 +1,4 @@
 declare module 'hello-world' {
-  /** Event containing information about `helloWorld` */
-  type HelloWorldEvent = {
-    /**
-     * How many times the `helloWorld` function has been run (called by `helloWorld.helloWorld`
-     * command)
-     */
-    times: number;
-  };
-}
-
-declare module 'papi-shared-types' {
   import type { DataProviderDataType, IDataProvider, MandatoryProjectDataType } from '@papi/core';
 
   export type MyProjectDataType = MandatoryProjectDataType & {
@@ -21,6 +10,19 @@ declare module 'papi-shared-types' {
   };
 
   export type MyProjectDataProvider = IDataProvider<MyProjectDataType> & MyProjectDataMethods;
+
+  /** Event containing information about `helloWorld` */
+  type HelloWorldEvent = {
+    /**
+     * How many times the `helloWorld` function has been run (called by `helloWorld.helloWorld`
+     * command)
+     */
+    times: number;
+  };
+}
+
+declare module 'papi-shared-types' {
+  import type { MyProjectDataProvider } from 'hello-world';
 
   export interface CommandHandlers {
     'helloWorld.helloWorld': () => string;
