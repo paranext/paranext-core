@@ -30,6 +30,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return Task.CompletedTask;
     }
 
+    protected override string GetProjectStorageInterpreterId()
+    {
+        return _paratextPsi.DataProviderName;
+    }
+
     protected override ResponseToRequest GetExtensionData(ProjectDataScope dataScope)
     {
         return _paratextPsi.GetExtensionData(dataScope);

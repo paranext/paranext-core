@@ -41,8 +41,14 @@ internal abstract class DataProvider : NetworkObject
         _eventType = $"{DataProviderName}:onDidUpdate";
     }
 
+    /// <summary>
+    /// Name/ID of the data provider as registered on the network
+    /// </summary>
     public string DataProviderName { get; }
 
+    /// <summary>
+    /// Data provider type to be shared on the network
+    /// </summary>
     public string DataProviderType { get; }
 
     /// <summary>

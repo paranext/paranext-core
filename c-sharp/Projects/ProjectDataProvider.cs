@@ -70,8 +70,8 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
             DataProviderName,
             functionNames.ToArray(),
             ProjectDetails.Metadata.ID,
-            ProjectDetails.Metadata.ProjectStorageType,
-            ProjectDetails.Metadata.ProjectType
+            ProjectDetails.Metadata.ProjectType,
+            GetProjectStorageInterpreterId()
         );
     }
 
@@ -124,6 +124,11 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
             return ResponseToRequest.Failed(ex.ToString());
         }
     }
+
+    /// <summary>
+    /// Get the name/ID of the ProjectStorageInterpreter that provides data to this ProjectDataProvider
+    /// </summary>
+    protected abstract string GetProjectStorageInterpreterId();
 
     /// <summary>
     /// Get an extension's data in a project identified by <param name="scope"></param>.
