@@ -1,6 +1,5 @@
-import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
+import { ProjectTypes, ProjectDataTypes, ProjectDataProviders } from 'papi-shared-types';
 import {
-  ProjectDataProvider,
   ProjectDataProviderEngineTypes,
   ProjectDataProviderEngineFactory,
 } from '@shared/models/project-data-provider-engine.model';
@@ -109,7 +108,7 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
 export async function get<ProjectType extends ProjectTypes>(
   projectType: ProjectType,
   projectId: string,
-): Promise<ProjectDataProvider[ProjectType]> {
+): Promise<ProjectDataProviders[ProjectType]> {
   const metadata = await projectLookupService.getMetadataForProject(projectId);
   const { projectType: projectTypeFromMetadata } = metadata;
   if (projectType && projectType !== projectTypeFromMetadata)
@@ -127,7 +126,7 @@ export async function get<ProjectType extends ProjectTypes>(
   // of the storageType. https://github.com/paranext/paranext-core/issues/367
   const { storageType } = metadata;
   const pdpId = await pdpFactory.getProjectDataProviderId(projectId, storageType);
-  const pdp = await getByType<ProjectDataProvider[ProjectType]>(pdpId);
+  const pdp = await getByType<ProjectDataProviders[ProjectType]>(pdpId);
   if (!pdp) throw new Error(`Cannot create project data provider for project ID ${projectId}`);
   return pdp;
 }
