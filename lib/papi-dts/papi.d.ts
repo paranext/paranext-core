@@ -2504,7 +2504,7 @@ declare module 'papi-shared-types' {
    *   };
    *
    *   export interface ProjectDataProviders {
-   *     MyExtensionProjectTypeName: MyProjectDataType;
+   *     MyExtensionProjectTypeName: IDataProvider<MyProjectDataType>;
    *   }
    * }
    * ```
@@ -2523,8 +2523,8 @@ declare module 'papi-shared-types' {
    */
   type ProjectTypes = keyof ProjectDataProviders;
   /**
-   * `ProjectDataTypes` for each project data provider supported by PAPI. These are the data types
-   * served by each project data provider.
+   * `DataProviderDataTypes` for each project data provider supported by PAPI. These are the data
+   * types served by each project data provider.
    *
    * Automatically includes all extensions' project data providers that are added to
    * {@link ProjectDataProviders}.
