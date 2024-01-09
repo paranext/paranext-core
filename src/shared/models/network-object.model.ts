@@ -72,7 +72,14 @@ Partial<NetworkableObject>;
  * Data about an object shared on the network
  *
  * @param id ID of the network object that processes use to reference it
+ * @param objectType Name of the type of this network object. Note this isn't about TypeScript
+ *   types, but instead focused on the platform data model. Names of types for the same logical
+ *   thing (e.g., Project Data Providers => `pdp`) should be the same across all process on the
+ *   network regardless of what programming language they use. For generic network objects,
+ *   `networkObject` is appropriate.
  * @param functionNames Array of strings with the function names exposed on this network object
+ * @param attributes Optional object containing properties that describe this network object. The
+ *   properties associated with this network object depend on the `objectType`.
  */
 export type NetworkObjectDetails = {
   id: string;
