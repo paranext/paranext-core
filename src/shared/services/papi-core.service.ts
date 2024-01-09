@@ -7,6 +7,7 @@ export type { ExecutionActivationContext } from '@extension-host/extension-types
 export type { ExecutionToken } from '@node/models/execution-token.model';
 
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
+export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 export type { UsePromiseOptions } from '@renderer/hooks/papi-hooks/use-promise.hook';
 
 export type { default as IDataProvider } from '@shared/models/data-provider.interface';
