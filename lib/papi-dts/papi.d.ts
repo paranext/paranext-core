@@ -1835,6 +1835,12 @@ declare module 'shared/services/network-object.service' {
   const set: <T extends NetworkableObject>(
     id: string,
     objectToShare: T,
+    objectType?: string,
+    objectAttributes?:
+      | {
+          [property: string]: unknown;
+        }
+      | undefined,
   ) => Promise<DisposableNetworkObject<T>>;
   interface NetworkObjectService {
     initialize: typeof initialize;
@@ -1931,15 +1937,25 @@ declare module 'shared/models/network-object.model' {
     id: string,
     networkObjectPromise: Promise<NetworkObject<T>>,
   ) => Partial<NetworkableObject>;
-  /**
-   * Data about an object shared on the network
-   *
-   * @param id ID of the network object that processes use to reference it
-   * @param functionNames Array of strings with the function names exposed on this network object
-   */
+  /** Data about an object shared on the network */
   export type NetworkObjectDetails = {
+    /** ID of the network object that processes use to reference it */
     id: string;
+    /**
+     * Name of the type of this network object. Note this isn't about TypeScript types, but instead
+     * focused on the platform data model. Names of types for the same logical thing (e.g., Project
+     * Data Providers => `pdp`) should be the same across all process on the network regardless of
+     * what programming language they use. For generic network objects, `networkObject` is
+     * appropriate.
+     */
+    objectType: string;
+    /** Array of strings with the function names exposed on this network object */
     functionNames: string[];
+    /**
+     * Optional object containing properties that describe this network object. The properties
+     * associated with this network object depend on the `objectType`.
+     */
+    attributes?: Record<string, unknown>;
   };
 }
 declare module 'shared/models/data-provider.model' {
@@ -3146,6 +3162,12 @@ declare module 'shared/services/data-provider.service' {
    *
    * @param providerName Name this data provider should be called on the network
    * @param dataProviderEngine The object to layer over with a new data provider object
+   * @param dataProviderType String to send in a network event to clarify what type of data provider
+   *   is represented by this engine. For generic data providers, the default value of `dataProvider`
+   *   can be used. For data provider types that have multiple instances (e.g., project data
+   *   providers), a unique type name should be used to distinguish from generic data providers.
+   * @param dataProviderAttributes Optional object that will be sent in a network event to provide
+   *   additional metadata about the data provider represented by this engine.
    *
    *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
    *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -3155,33 +3177,45 @@ declare module 'shared/services/data-provider.service' {
   function registerEngine<DataProviderName extends DataProviderNames>(
     providerName: DataProviderName,
     dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
+    dataProviderType?: string,
+    dataProviderAttributes?:
+      | {
+          [property: string]: unknown;
+        }
+      | undefined,
   ): Promise<DisposableDataProviders[DataProviderName]>;
   /**
-   * Create a mock local data provider object for connecting to the remote data provider
+   * Creates a data provider to be shared on the network layering over the provided data provider
+   * engine.
    *
    * @type `TDataTypes` - The data provider data types served by the data provider to create.
    *
    *   This is not exposed on the papi as it is a helper function to enable other services to layer over
    *   this service and create their own subsets of data providers with other types than
    *   `DataProviders` types using this function and {@link getByType}
-   * @param dataProviderObjectId Network object id corresponding to this data provider
-   * @param dataProviderContainer Container that holds a reference to the data provider so this
-   *   subscribe function can reference the data provider
    * @param providerName Name this data provider should be called on the network
    * @param dataProviderEngine The object to layer over with a new data provider object
+   * @param dataProviderType String to send in a network event to clarify what type of data provider
+   *   is represented by this engine. For generic data providers, the default value of `dataProvider`
+   *   can be used. For data provider types that have multiple instances (e.g., project data
+   *   providers), a unique type name should be used to distinguish from generic data providers.
+   * @param dataProviderAttributes Optional object that will be sent in a network event to provide
+   *   additional metadata about the data provider represented by this engine.
    *
    *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
    *   `set` methods are layered over to facilitate data provider subscriptions.
-   * @returns Local data provider object that represents a remote data provider
-   *
-   *   Creates a data provider to be shared on the network layering over the provided data provider
-   *   engine.
    * @returns The data provider including control over disposing of it. Note that this data provider
    *   is a new object distinct from the data provider engine passed in.
    */
   export function registerEngineByType<TDataTypes extends DataProviderDataTypes>(
     providerName: string,
     dataProviderEngine: IDataProviderEngine<TDataTypes>,
+    dataProviderType?: string,
+    dataProviderAttributes?:
+      | {
+          [property: string]: unknown;
+        }
+      | undefined,
   ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>>;
   /**
    * Get a data provider that has previously been set up

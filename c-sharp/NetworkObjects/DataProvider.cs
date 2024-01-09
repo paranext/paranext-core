@@ -25,24 +25,42 @@ internal abstract class DataProvider : NetworkObject
     private readonly ConcurrentDictionary<string, MessageEventDataUpdated> _updateEventsByScope =
         new();
 
-    protected DataProvider(string name, PapiClient papiClient)
+    protected DataProvider(
+        string name,
+        PapiClient papiClient,
+        string dataProviderType = NetworkObjectType.DATA_PROVIDER
+    )
         : base(papiClient)
     {
         // "-data" is the suffix used by PAPI for data provider names
         DataProviderName = name + "-data";
 
+        DataProviderType = dataProviderType;
+
         // "onDidUpdate" is the event name used by PAPI for data providers to notify consumers of updates
         _eventType = $"{DataProviderName}:onDidUpdate";
     }
 
+    /// <summary>
+    /// Name/ID of the data provider as registered on the network
+    /// </summary>
     public string DataProviderName { get; }
+
+    /// <summary>
+    /// Data provider type to be shared on the network
+    /// </summary>
+    public string DataProviderType { get; }
 
     /// <summary>
     /// Register this data provider on the network so that other services can use it
     /// </summary>
     public async Task RegisterDataProvider()
     {
-        await RegisterNetworkObject(DataProviderName, GetFunctionNames(), FunctionHandler);
+        await RegisterNetworkObject(
+            DataProviderName,
+            GetDataProviderCreatedEvent(),
+            FunctionHandler
+        );
         await StartDataProvider();
     }
 
@@ -71,6 +89,20 @@ internal abstract class DataProvider : NetworkObject
         }
 
         return HandleRequest(functionName, jsonArray);
+    }
+
+    /// <summary>
+    /// Create an event that tells the network details about the data provider that is being created
+    /// </summary>
+    protected virtual MessageEvent GetDataProviderCreatedEvent()
+    {
+        var functionNames = GetFunctionNames();
+        functionNames.Sort();
+        return new MessageEventObjectCreated(
+            DataProviderName,
+            DataProviderType,
+            functionNames.ToArray()
+        );
     }
 
     /// <summary>
