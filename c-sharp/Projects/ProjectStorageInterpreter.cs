@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
+using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
 
 namespace Paranext.DataProvider.Projects;
@@ -30,7 +31,11 @@ internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
         PapiClient papiClient
     )
         // TODO: Register one network object per (storage type, project type) pair or come up with a better approach
-        : base($"platform.{storageType}-{projectTypes[0]}-psi", papiClient)
+        : base(
+            $"platform.{storageType}-{projectTypes[0]}-psi",
+            papiClient,
+            NetworkObjectType.PROJECT_STORAGE_INTERPRETER
+        )
     {
         StorageType = storageType;
         ProjectTypes = projectTypes;
@@ -39,6 +44,18 @@ internal abstract class ProjectStorageInterpreter : NetworkObjects.DataProvider
     protected override List<string> GetFunctionNames()
     {
         return _functionNames;
+    }
+
+    protected override MessageEvent GetDataProviderCreatedEvent()
+    {
+        var functionNames = GetFunctionNames();
+        functionNames.Sort();
+        return new MessageEventProjectStorageInterpreterCreated(
+            DataProviderName,
+            functionNames.ToArray(),
+            StorageType,
+            ProjectTypes.ToArray()
+        );
     }
 
     protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)

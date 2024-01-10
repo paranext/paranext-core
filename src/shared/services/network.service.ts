@@ -235,10 +235,12 @@ const requestUnsafe = async <TParam extends Array<unknown>, TReturn>(
  *
  * @param requestType The type of request from which to unregister the handler
  * @param handler Function to unregister from running on requests
- * @returns True if successfully unregistered, false if registration not found or trying to
+ * @returns True if successfully unregistered, false if registration not found locally or trying to
  *   unregister a handler that is not local. Throws if provided handler is not the correct handler
- *   Likely will never need to be exported from this file. Just use registerRequestHandler, which
- *   returns a matching unsubscriber function that runs this.
+ *   or server rejects request to unregister the request for some reason.
+ *
+ *   This function likely will never need to be exported from this file. Just use
+ *   registerRequestHandler, which returns a matching unsubscriber function that runs this.
  */
 async function unregisterRequestHandlerUnsafe(
   requestType: SerializedRequestType,
@@ -264,18 +266,20 @@ async function unregisterRequestHandlerUnsafe(
     // directly which shouldn't happen. Is this egregious enough that we should throw? I guess...?
     throw new Error(`Handler to unsubscribe from ${requestType} does not match registered handler`);
 
-  // Check with the server to make sure we can unregister this registration
-  const remoteUnregisterSuccessful = isClient()
-    ? await requestUnsafe(
-        serializeRequestType(CATEGORY_SERVER, 'unregisterRequest'),
-        requestType,
-        connectionService.getClientId(),
-      )
-    : true;
-
-  if (!remoteUnregisterSuccessful)
-    // The server did not allow us to unregister
-    return false;
+  // If we're a client, check with the server to make sure we can unregister this registration
+  if (isClient()) {
+    try {
+      // Ask the server to unregister this registration. We are not checking the contents of the
+      // response for now because the contents of a successful response is always undefined.
+      // We can change this later if needed
+      await requestUnsafe(serializeRequestType(CATEGORY_SERVER, 'unregisterRequest'), requestType);
+    } catch (error) {
+      // The server did not allow us to unregister
+      throw new Error(
+        `Unregistering request handler for ${requestType} failed at the server! ${error}`,
+      );
+    }
+  }
 
   // We can unregister this handler! Remove it from the registrations
   requestRegistrations.delete(requestType);

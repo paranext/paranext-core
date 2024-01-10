@@ -269,7 +269,9 @@ const createLocalProxy = (
 /** Construct details about an object that is becoming a network object */
 function createNetworkObjectDetails(
   id: string,
+  objectType: string,
   objectToShare: { [property: string]: unknown },
+  objectAttributes: { [property: string]: unknown } | undefined,
 ): NetworkObjectDetails {
   const objectFunctionNames = getAllObjectFunctionNames(objectToShare, id);
 
@@ -282,7 +284,9 @@ function createNetworkObjectDetails(
   });
   return {
     id,
+    objectType,
     functionNames: [...objectFunctionNames].sort(),
+    attributes: objectAttributes,
   };
 }
 
@@ -435,6 +439,8 @@ const get = async <T extends object>(
 const set = async <T extends NetworkableObject>(
   id: string,
   objectToShare: T,
+  objectType: string = 'object',
+  objectAttributes: { [property: string]: unknown } | undefined = undefined,
 ): Promise<DisposableNetworkObject<T>> => {
   await initialize();
 
@@ -522,8 +528,14 @@ const set = async <T extends NetworkableObject>(
     });
 
     // Notify that the network object was successfully registered
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const netObjDetails = createNetworkObjectDetails(id, objectToShare as Record<string, unknown>);
+    const netObjDetails = createNetworkObjectDetails(
+      id,
+      objectType,
+      // NetworkableObject isn't specific enough and changing it is painful
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      objectToShare as Record<string, unknown>,
+      objectAttributes,
+    );
     logger.debug(`Network object registered: ${serialize(netObjDetails)}`);
     onDidCreateNetworkObjectEmitter.emit(netObjDetails);
 

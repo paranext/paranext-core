@@ -17,20 +17,26 @@ public sealed class MessageEventObjectCreated
     private MessageEventObjectCreated()
         : base(Messages.EventType.OBJECT_CREATE, null!) { }
 
-    public MessageEventObjectCreated(string id, string[] functions)
+    public MessageEventObjectCreated(string id, string objectType, string[] functions)
         : base(
             Messages.EventType.OBJECT_CREATE,
-            new MessageEventObjectCreatedContents { Id = id, Functions = functions }
+            new MessageEventObjectCreatedContents
+            {
+                Id = id,
+                ObjectType = objectType,
+                Functions = functions
+            }
         ) { }
 }
 
 public sealed record MessageEventObjectCreatedContents
 {
     public string? Id { get; set; }
+    public string? ObjectType { get; set; }
     public string[]? Functions { get; set; }
 
     public override string ToString()
     {
-        return $"Id = {Id}, Functions = {(Functions != null ? string.Join(',', Functions) : "[null]")}";
+        return $"Id = {Id}, ObjectType = {ObjectType}, Functions = {(Functions != null ? string.Join(',', Functions) : "[null]")}";
     }
 }
