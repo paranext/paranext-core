@@ -10,6 +10,10 @@ import App from './app.component';
 import { cleanupOldWebViewState } from './services/web-view-state.service';
 import { blockWebSocketsToPapiNetwork } from './services/renderer-web-socket.service';
 
+window.onerror = (_, source?: string, lineno?: number, colno?: number, error?: Error) => {
+  logger.error(`Unhandled error in renderer from ${source}:${lineno}:${colno}, '${error}'`);
+};
+
 logger.info('Starting renderer');
 
 // This is a little different than Promise.all in that the error message will have all the reasons
