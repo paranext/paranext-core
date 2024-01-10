@@ -261,6 +261,29 @@ export type IconButtonProps = PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
+/** Function to run to dispose of something. Returns true if successfully unsubscribed */
+export type Unsubscriber = () => boolean;
+/**
+ * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
+ * successfully unsubscribed
+ */
+export type UnsubscriberAsync = () => Promise<boolean>;
+/** Callback function that accepts an event and should run when an event is emitted */
+export type PlatformEventHandler<T> = (event: T) => void;
+/**
+ * Function that subscribes the provided callback to run when this event is emitted.
+ *
+ * @param callback Function to run with the event when it is emitted
+ * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
+ *   emitted
+ */
+export type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
+/**
+ * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
+ *
+ * Note: The callback itself is not asynchronous.
+ */
+export type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
 export interface ScriptureReference {
 	bookNum: number;
 	chapterNum: number;
@@ -725,6 +748,39 @@ export type ToolbarProps = PropsWithChildren<{
 	className?: string;
 }>;
 export function Toolbar({ menu: propsMenu, dataHandler, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Adds an event handler to an event so the event handler runs when the event is emitted. Use
+ * `papi.network.getNetworkEvent` to use a networked event with this hook.
+ *
+ * @param event The event to subscribe to.
+ *
+ *   - If event is a `PlatformEvent`, that event will be used
+ *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
+ *       available for example
+ *
+ * @param eventHandler The callback to run when the event is emitted
+ *
+ *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
+ *   every render
+ */
+export declare const useEvent: <T>(event: PlatformEvent<T> | undefined, eventHandler: PlatformEventHandler<T>) => void;
+/**
+ * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
+ * runs when the event is emitted. Use `papi.network.getNetworkEvent` to use a networked event with
+ * this hook.
+ *
+ * @param event The asynchronously (un)subscribing event to subscribe to.
+ *
+ *   - If event is a `PlatformEvent` or `PlatformEventAsync`, that event will be used
+ *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
+ *       available for example
+ *
+ * @param eventHandler The callback to run when the event is emitted
+ *
+ *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
+ *   every render
+ */
+export declare const useEventAsync: <T>(event: PlatformEvent<T> | PlatformEventAsync<T> | undefined, eventHandler: PlatformEventHandler<T>) => void;
 /**
  * Awaits a promise and returns a loading value while the promise is unresolved
  *

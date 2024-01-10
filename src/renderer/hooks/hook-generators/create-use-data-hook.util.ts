@@ -6,7 +6,7 @@ import {
   DataTypeNames,
 } from '@shared/models/data-provider.model';
 import IDataProvider from '@shared/models/data-provider.interface';
-import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
+import { useEventAsync } from 'platform-bible-react';
 import { useMemo, useState } from 'react';
 import { PlatformEventAsync, PlatformEventHandler, isString } from 'platform-bible-utils';
 import ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';

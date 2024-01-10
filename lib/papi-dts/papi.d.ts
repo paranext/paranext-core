@@ -3799,54 +3799,6 @@ declare module 'shared/services/settings.service' {
   const settingsService: SettingsService;
   export default settingsService;
 }
-declare module 'renderer/hooks/papi-hooks/use-event.hook' {
-  import { PlatformEvent, PlatformEventHandler } from 'platform-bible-utils';
-  /**
-   * Adds an event handler to an event so the event handler runs when the event is emitted
-   *
-   * @param event The event to subscribe to. Can be either a string or an Event
-   *
-   *   - If event is a `string`, the network event associated with this type will automatically be used
-   *   - If event is a `PapiEvent`, that event will be used
-   *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
-   *       available for example
-   *
-   * @param eventHandler The callback to run when the event is emitted
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   */
-  const useEvent: <T>(
-    event: string | PlatformEvent<T> | undefined,
-    eventHandler: PlatformEventHandler<T>,
-  ) => void;
-  export default useEvent;
-}
-declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
-  import { PlatformEvent, PlatformEventAsync, PlatformEventHandler } from 'platform-bible-utils';
-  /**
-   * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
-   * runs when the event is emitted
-   *
-   * @param event The asynchronously (un)subscribing event to subscribe to. Can be either a string or
-   *   an Event
-   *
-   *   - If event is a `string`, the network event associated with this type will automatically be used
-   *   - If event is a `PapiEvent` or `PapiEventAsync`, that event will be used
-   *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
-   *       available for example
-   *
-   * @param eventHandler The callback to run when the event is emitted
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   */
-  const useEventAsync: <T>(
-    event: string | PlatformEvent<T> | PlatformEventAsync<T> | undefined,
-    eventHandler: PlatformEventHandler<T>,
-  ) => void;
-  export default useEventAsync;
-}
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
   import { NetworkObject } from 'shared/models/network-object.model';
   /**
@@ -4304,8 +4256,6 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   export default useDataProviderMulti;
 }
 declare module 'renderer/hooks/papi-hooks/index' {
-  export { default as useEvent } from 'renderer/hooks/papi-hooks/use-event.hook';
-  export { default as useEventAsync } from 'renderer/hooks/papi-hooks/use-event-async.hook';
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
   export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';

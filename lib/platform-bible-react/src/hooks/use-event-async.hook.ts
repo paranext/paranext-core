@@ -1,24 +1,17 @@
-import { useCallback, useEffect, useMemo } from 'react';
-import { usePromise } from 'platform-bible-react';
-import {
-  PlatformEvent,
-  PlatformEventAsync,
-  PlatformEventHandler,
-  isString,
-} from 'platform-bible-utils';
-import { getNetworkEvent } from '@shared/services/network.service';
+import { useCallback, useEffect } from 'react';
+import { PlatformEvent, PlatformEventAsync, PlatformEventHandler } from 'platform-bible-utils';
+import usePromise from './use-promise.hook';
 
 const noopUnsubscriber = () => false;
 
 /**
  * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
- * runs when the event is emitted
+ * runs when the event is emitted. Use `papi.network.getNetworkEvent` to use a networked event with
+ * this hook.
  *
- * @param event The asynchronously (un)subscribing event to subscribe to. Can be either a string or
- *   an Event
+ * @param event The asynchronously (un)subscribing event to subscribe to.
  *
- *   - If event is a `string`, the network event associated with this type will automatically be used
- *   - If event is a `PapiEvent` or `PapiEventAsync`, that event will be used
+ *   - If event is a `PlatformEvent` or `PlatformEventAsync`, that event will be used
  *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
  *       available for example
  *
@@ -28,21 +21,19 @@ const noopUnsubscriber = () => false;
  *   every render
  */
 const useEventAsync = <T>(
-  event: PlatformEvent<T> | PlatformEventAsync<T> | string | undefined,
+  event: PlatformEvent<T> | PlatformEventAsync<T> | undefined,
   eventHandler: PlatformEventHandler<T>,
 ) => {
-  const onEvent = useMemo(() => (isString(event) ? getNetworkEvent<T>(event) : event), [event]);
-
   // Subscribe to the event asynchronously
   const [unsubscribe] = usePromise(
     useCallback(async () => {
       // Do nothing if the event is not provided (in case the event is not yet available, for example)
-      if (!onEvent) return noopUnsubscriber;
+      if (!event) return noopUnsubscriber;
 
       // Wrap subscribe and unsubscribe in promises to allow normal events to be used as well
-      const unsub = await Promise.resolve(onEvent(eventHandler));
+      const unsub = await Promise.resolve(event(eventHandler));
       return async () => unsub();
-    }, [eventHandler, onEvent]),
+    }, [eventHandler, event]),
     noopUnsubscriber,
     // We want the unsubscriber to return to default value immediately upon changing subscription
     // So the useEffect below will unsubscribe asap

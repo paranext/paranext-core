@@ -1,8 +1,7 @@
 import { NetworkObject } from '@shared/models/network-object.model';
 import { useMemo, useState, useCallback } from 'react';
 import { isString } from 'platform-bible-utils';
-import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
-import { usePromise } from 'platform-bible-react';
+import { usePromise, useEvent } from 'platform-bible-react';
 
 /**
  * Takes the parameters passed into the hook and returns the `networkObjectSource` associated with

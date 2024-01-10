@@ -1,14 +1,13 @@
-import { getNetworkEvent } from '@shared/services/network.service';
-import { PlatformEvent, PlatformEventHandler, isString } from 'platform-bible-utils';
+import { PlatformEvent, PlatformEventHandler } from 'platform-bible-utils';
 import { useEffect } from 'react';
 
 /**
- * Adds an event handler to an event so the event handler runs when the event is emitted
+ * Adds an event handler to an event so the event handler runs when the event is emitted. Use
+ * `papi.network.getNetworkEvent` to use a networked event with this hook.
  *
- * @param event The event to subscribe to. Can be either a string or an Event
+ * @param event The event to subscribe to.
  *
- *   - If event is a `string`, the network event associated with this type will automatically be used
- *   - If event is a `PapiEvent`, that event will be used
+ *   - If event is a `PlatformEvent`, that event will be used
  *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
  *       available for example
  *
@@ -18,15 +17,14 @@ import { useEffect } from 'react';
  *   every render
  */
 const useEvent = <T>(
-  event: PlatformEvent<T> | string | undefined,
+  event: PlatformEvent<T> | undefined,
   eventHandler: PlatformEventHandler<T>,
 ) => {
   useEffect(() => {
     // Do nothing if the event is not provided (in case the event is not yet available, for example)
     if (!event) return () => {};
 
-    const onEvent = isString(event) ? getNetworkEvent<T>(event) : event;
-    const unsubscriber = onEvent(eventHandler);
+    const unsubscriber = event(eventHandler);
     return () => {
       unsubscriber();
     };

@@ -36,4 +36,6 @@ export type { ToolbarProps } from './components/toolbar.component';
 export { default as Toolbar } from './components/toolbar.component';
 
 // Hooks
+export { default as useEvent } from './hooks/use-event.hook';
+export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';

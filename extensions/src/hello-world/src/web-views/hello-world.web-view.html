@@ -24,7 +24,7 @@
     <script>
       // Test React component to render in the root
       const { createElement, useCallback, useState } = require('react');
-      const { usePromise, useEvent } = require('@papi/frontend/react');
+      const { usePromise, useEvent } = require('platform-bible-react');
       const papi = require('@papi/frontend');
       const { logger } = require('@papi/frontend');
 
@@ -40,7 +40,7 @@
 
         // Update the clicks when we are informed helloWorld has been run
         useEvent(
-          'helloWorld.onHelloWorld',
+          papi.network.getNetworkEvent('helloWorld.onHelloWorld'),
           useCallback(({ times }) => setClicks(times), []),
         );
 

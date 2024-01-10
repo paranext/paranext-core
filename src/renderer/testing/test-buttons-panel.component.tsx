@@ -1,12 +1,11 @@
 import './test-buttons-panel.component.css';
-import { Button, TextField } from 'platform-bible-react';
+import { Button, TextField, useEvent } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
 import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
 import { debounce, getErrorMessage, isString, serialize } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import useEvent from '@renderer/hooks/papi-hooks/use-event.hook';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 
