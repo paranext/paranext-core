@@ -216,18 +216,19 @@ function useDialogCallback<
       }
     }
 
-    if (didSuccessfullyCallDialog) {
-      if (mounted.current) {
-        numDialogsShowing.current -= 1;
-        resolveCallbackRef.current(
-          dialogResponse,
-          dialogTypeForCurrentDialog,
-          // We merged `DialogOptions` with `Partial<DialogOptions>`, which should just be
-          // `DialogOptions` unless someone didn't follow type rules elsewhere
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          optionsForCurrentDialog as DialogOptions,
-        );
-      }
+    // `didSuccessfullyCallDialog` exists and is in this `if` to avoid
+    // `numDialogsShowing.current -= 1` being run twice if `resolveCallbackRef.current` throws
+    // (we don't want to run the above `catch` block if this throws)
+    if (didSuccessfullyCallDialog && mounted.current) {
+      numDialogsShowing.current -= 1;
+      resolveCallbackRef.current(
+        dialogResponse,
+        dialogTypeForCurrentDialog,
+        // We merged `DialogOptions` with `Partial<DialogOptions>`, which should just be
+        // `DialogOptions` unless someone didn't follow type rules elsewhere
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        optionsForCurrentDialog as DialogOptions,
+      );
     }
   }, []);
 
