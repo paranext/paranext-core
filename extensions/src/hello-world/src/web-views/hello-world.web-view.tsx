@@ -153,11 +153,15 @@ globalThis.webViewComponent = function HelloWorld({
 
   const selectProjects = useDialogCallback(
     'platform.selectMultipleProjects',
-    useRef({
-      prompt: 'Please select one or more projects for Hello World WebView:',
-      iconUrl: 'papi-extension://hello-world/assets/offline.svg',
-      title: 'Select List of Hello World Projects',
-    }).current,
+    useMemo(
+      () => ({
+        prompt: 'Please select one or more projects for Hello World WebView:',
+        iconUrl: 'papi-extension://hello-world/assets/offline.svg',
+        title: 'Select List of Hello World Projects',
+        selectedProjectIds: projects,
+      }),
+      [projects],
+    ),
     useCallback(
       (selectedProjects) => {
         if (selectedProjects) setProjects(selectedProjects);
