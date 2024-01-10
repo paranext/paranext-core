@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { isString } from '@shared/utils/util';
+import { isString } from 'platform-bible-utils';
 import dataProviderService from '@shared/services/data-provider.service';
 import logger from '@shared/services/logger.service';
 import { DataProviderNames, DataProviders } from 'papi-shared-types';

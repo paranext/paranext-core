@@ -1,5 +1,5 @@
 import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
-import { Toolbar, RefSelector, ScriptureReference } from 'papi-components';
+import { Toolbar, RefSelector, ScriptureReference } from 'platform-bible-react';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import { handleMenuData } from './platform-bible-menu.data';
 

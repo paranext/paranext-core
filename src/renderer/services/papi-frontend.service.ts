@@ -4,9 +4,7 @@
  * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
  */
 
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as commandService from '@shared/services/command.service';
-import * as papiUtil from '@shared/utils/papi-util';
 import papiLogger from '@shared/services/logger.service';
 import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
@@ -35,10 +33,6 @@ import PapiRendererXMLHttpRequest from './renderer-xml-http-request.service';
 // Please add to all properties you add.
 // 4) Anytime you add anything to PAPI also add it to the destructured export below
 const papi = {
-  // Classes
-  /** JSDOC DESTINATION PapiEventEmitter */
-  EventEmitter: PapiEventEmitter,
-
   // Functions
   /** This is just an alias for internet.fetch */
   fetch: internetService.fetch,
@@ -52,8 +46,6 @@ const papi = {
   // Services/modules
   /** JSDOC DESTINATION commandService */
   commands: commandService,
-  /** JSDOC DESTINATION papiUtil */
-  utils: papiUtil,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: webViewService as WebViewServiceType,
   /** JSDOC DESTINATION dialogService */
@@ -86,8 +78,6 @@ export default papi;
 
 // If you add to the PAPI you need to add to this
 
-/** JSDOC DESTINATION PapiEventEmitter */
-export const { EventEmitter } = papi;
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 /** JSDOC DESTINATION PapiRendererWebSocket */
@@ -96,8 +86,6 @@ export const { WebSocket } = papi;
 export const { XMLHttpRequest } = papi;
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
-/** JSDOC DESTINATION papiUtil */
-export const { utils } = papi;
 /** JSDOC DESTINATION papiWebViewService */
 export const { webViews } = papi;
 /** JSDOC DESTINATION dialogService */

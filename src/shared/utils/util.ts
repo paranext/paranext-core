@@ -1,13 +1,5 @@
-import logger from '@shared/services/logger.service';
-
-// Thanks to blubberdiblub at https://stackoverflow.com/a/68141099/217579
-export function newGuid(): string {
-  return '00-0-4-1-000'.replace(/[^-]/g, (s) =>
-    // @ts-expect-error ts(2363) this works fine
-    // eslint-disable-next-line no-bitwise
-    (((Math.random() + ~~s) * 0x10000) >> s).toString(16).padStart(4, '0'),
-  );
-}
+import { ProcessType } from '@shared/global-this.model';
+import { UnsubscriberAsync, isString } from 'platform-bible-utils';
 
 const NONCE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const NONCE_CHARS_LENGTH = NONCE_CHARS.length;
@@ -19,186 +11,177 @@ const NONCE_CHARS_LENGTH = NONCE_CHARS.length;
  * random! Use some polymorphic library that works in all contexts?
  * https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues only works in browser
  */
-export function newNonce(): string {
+export default function newNonce(): string {
   let nonce = '';
   for (let i = 0; i < 32; i++)
     nonce += NONCE_CHARS.charAt(Math.floor(Math.random() * NONCE_CHARS_LENGTH));
   return nonce;
 }
 
-// thanks to DRAX at https://stackoverflow.com/a/9436948
-/**
- * Determine whether the object is a string
- *
- * @param o Object to determine if it is a string
- * @returns True if the object is a string; false otherwise
- */
-export function isString(o: unknown): o is string {
-  return typeof o === 'string' || o instanceof String;
-}
+// #region Unsubscriber stuff
 
 /**
- * Get a function that reduces calls to the function passed in
+ * Creates a safe version of a register function that returns a Promise<UnsubscriberAsync>.
  *
- * @param fn The function to debounce
- * @param delay How much delay in milliseconds after the most recent call to the debounced function
- *   to call the function
- * @returns Function that, when called, only calls the function passed in at maximum every delay ms
+ * @param unsafeRegisterFn Function that does some kind of async registration and returns an
+ *   unsubscriber and a promise that resolves when the registration is finished
+ * @param isInitialized Whether the service associated with this safe UnsubscriberAsync function is
+ *   initialized
+ * @param initialize Promise that resolves when the service is finished initializing
+ * @returns Safe version of an unsafe function that returns a promise to an UnsubscriberAsync
+ *   (meaning it will wait to register until the service is initialized)
  */
-// We don't know the parameter types since this function can be anything
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function debounce<T extends (...args: any[]) => void>(fn: T, delay = 300): T {
-  if (isString(fn)) throw new Error('Tried to debounce a string! Could be XSS');
-  let timeout: ReturnType<typeof setTimeout>;
-  // Ensure the right return type.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return ((...args) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => fn(...args), delay);
-  }) as T;
-}
-
-/**
- * Groups each item in the array of items into a map according to the keySelector
- *
- * @param items Array of items to group by
- * @param keySelector Function to run on each item to get the key for the group to which it belongs
- * @param valueSelector Function to run on each item to get the value it should have in the group
- *   (like map function). If not provided, uses the item itself
- * @returns Map of keys to groups of values corresponding to each item
- */
-export function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
-export function groupBy<T, K, V>(
-  items: T[],
-  keySelector: (item: T) => K,
-  valueSelector: (item: T, key: K) => V,
-): Map<K, Array<V>>;
-export function groupBy<T, K, V = T>(
-  items: T[],
-  keySelector: (item: T) => K,
-  valueSelector?: (item: T, key: K) => V,
-): Map<K, Array<V | T>> {
-  const map = new Map<K, Array<V | T>>();
-  items.forEach((item) => {
-    const key = keySelector(item);
-    const group = map.get(key);
-    const value = valueSelector ? valueSelector(item, key) : item;
-    if (group) group.push(value);
-    else map.set(key, [value]);
-  });
-  return map;
-}
-
-// From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
-type ErrorWithMessage = {
-  message: string;
+export const createSafeRegisterFn = <TParam extends Array<unknown>>(
+  unsafeRegisterFn: (...args: TParam) => Promise<UnsubscriberAsync>,
+  isInitialized: boolean,
+  initialize: () => Promise<void>,
+): ((...args: TParam) => Promise<UnsubscriberAsync>) => {
+  return async (...args: TParam) => {
+    if (!isInitialized) await initialize();
+    return unsafeRegisterFn(...args);
+  };
 };
-// From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
-function isErrorWithMessage(error: unknown): error is ErrorWithMessage {
-  return (
-    typeof error === 'object' &&
-    // We're potentially dealing with objects we didn't create, so they might contain `null`
-    // eslint-disable-next-line no-null/no-null
-    error !== null &&
-    'message' in error &&
-    // Type assert `error` to check it's `message`.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    typeof (error as Record<string, unknown>).message === 'string'
-  );
-}
-// From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
-/**
- * Function to get an error from the object (useful for getting an error in a catch block)
- *
- * @param error Error object whose message to get
- * @returns Message of the error - if object has message, returns message. Otherwise tries to
- *   stringify
- */
-function toErrorWithMessage(maybeError: unknown): ErrorWithMessage {
-  if (isErrorWithMessage(maybeError)) return maybeError;
 
-  try {
-    return new Error(JSON.stringify(maybeError));
-  } catch {
-    // fallback in case there's an error stringifying the maybeError
-    // like with circular references for example.
-    return new Error(String(maybeError));
-  }
-}
+// #endregion
 
-// From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
-/**
- * Function to get an error message from the object (useful for getting error message in a catch
- * block)
- *
- * @example `try {...} catch (e) { logger.info(getErrorMessage(e)) }`
- *
- * @param error Error object whose message to get
- * @returns Message of the error - if object has message, returns message. Otherwise tries to
- *   stringify
- */
-export function getErrorMessage(error: unknown) {
-  return toErrorWithMessage(error).message;
-}
-
-/** Asynchronously waits for the specified number of milliseconds. (wraps setTimeout in a promise) */
-export function wait(ms: number) {
-  // eslint-disable-next-line no-promise-executor-return
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
+// #region Request/Response types
 
 /**
- * Runs the specified function and will timeout if it takes longer than the specified wait time
- *
- * @param fn The function to run
- * @param maxWaitTimeInMS The maximum amount of time to wait for the function to resolve
- * @returns Promise that resolves to the resolved value of the function or undefined if it ran
- *   longer than the specified wait time
+ * Type of object passed to a complex request handler that provides information about the request.
+ * This type is used as the public-facing interface for requests
  */
-export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTimeInMS: number) {
-  const timeout = wait(maxWaitTimeInMS).then(() => undefined);
-  return Promise.any([timeout, fn()]);
-}
+export type ComplexRequest<TParam = unknown> = {
+  /** The one who sent the request */
+  senderId: number;
+  contents: TParam;
+};
+
+type ComplexResponseSuccess<TReturn = unknown> = {
+  /** Whether the handler that created this response was successful in handling the request */
+  success: true;
+  /**
+   * Content with which to respond to the request. Must be provided unless the response failed or
+   * TReturn is undefined
+   */
+  contents: TReturn;
+};
+
+type ComplexResponseFailure = {
+  /** Whether the handler that created this response was successful in handling the request */
+  success: false;
+  /**
+   * Content with which to respond to the request. Must be provided unless the response failed or
+   * TReturn is undefined Removed from failure so we do not change the type of contents for type
+   * safety. We could add errorContents one day if we really need it
+   */
+  /* contents?: TReturn; */
+  /** Error explaining the problem that is only populated if success is false */
+  errorMessage: string;
+};
 
 /**
- * Get all functions on an object and its prototype chain (so we don't miss any class methods or any
- * object methods). Note that the functions on the final item in the prototype chain (i.e., Object)
- * are skipped to avoid including functions like `__defineGetter__`, `__defineSetter__`, `toString`,
- * etc.
- *
- * @param obj Object whose functions to get
- * @param objId Optional ID of the object to use for debug logging
- * @returns Array of all function names on an object
+ * Type of object to create when handling a complex request where you desire to provide additional
+ * information beyond the contents of the response This type is used as the public-facing interface
+ * for responses
  */
-// Note: lodash has something that MIGHT do the same thing as this. Investigate for https://github.com/paranext/paranext-core/issues/134
-export function getAllObjectFunctionNames(
-  obj: { [property: string]: unknown },
-  objId: string = 'obj',
-): Set<string> {
-  const objectFunctionNames = new Set<string>();
+export type ComplexResponse<TReturn = unknown> =
+  | ComplexResponseSuccess<TReturn>
+  | ComplexResponseFailure;
 
-  // Get all function properties directly defined on the object
-  Object.getOwnPropertyNames(obj).forEach((property) => {
-    try {
-      if (typeof obj[property] === 'function') objectFunctionNames.add(property);
-    } catch (error) {
-      logger.debug(`Skipping ${property} on ${objId} due to error: ${error}`);
+/** Type of request handler - indicates what type of parameters and what return type the handler has */
+export enum RequestHandlerType {
+  Args = 'args',
+  Contents = 'contents',
+  Complex = 'complex',
+}
+
+// #endregion
+
+// #region Module loading
+
+/**
+ * Modules that someone might try to require in their extensions that we have similar apis for. When
+ * an extension requires these modules, an error throws that lets them know about our similar api.
+ */
+export const MODULE_SIMILAR_APIS: Readonly<{
+  [moduleName: string]: string | { [process in ProcessType | 'default']?: string } | undefined;
+}> = Object.freeze({
+  http: 'fetch',
+  https: 'fetch',
+  fs: {
+    [ProcessType.Renderer]: 'the papi-extension: protocol',
+    [ProcessType.ExtensionHost]: 'papi.storage',
+  },
+});
+
+/**
+ * Get a message that says the module import was rejected and to try a similar api if available.
+ *
+ * @param moduleName Name of `require`d module that was rejected
+ * @returns String that says the import was rejected and a similar api to try
+ */
+export function getModuleSimilarApiMessage(moduleName: string) {
+  const similarApi = MODULE_SIMILAR_APIS[moduleName] || MODULE_SIMILAR_APIS[`node:${moduleName}`];
+  let similarApiName: string | undefined;
+  if (similarApi)
+    if (isString(similarApi)) {
+      similarApiName = similarApi;
+    } else {
+      similarApiName = similarApi[globalThis.processType] || similarApi.default;
     }
-  });
-
-  // Walk up the prototype chain and get additional function properties, skipping the functions
-  // provided by the final (Object) prototype
-  let objectPrototype = Object.getPrototypeOf(obj);
-  while (objectPrototype && Object.getPrototypeOf(objectPrototype)) {
-    Object.getOwnPropertyNames(objectPrototype).forEach((property) => {
-      try {
-        if (typeof obj[property] === 'function') objectFunctionNames.add(property);
-      } catch (error) {
-        logger.debug(`Skipping ${property} on ${objId}'s prototype due to error: ${error}`);
-      }
-    });
-    objectPrototype = Object.getPrototypeOf(objectPrototype);
-  }
-
-  return objectFunctionNames;
+  return `Rejected require('${moduleName}'). Try${
+    similarApiName ? ` using ${similarApiName} or` : ''
+  } bundling the module into your code with a build tool like webpack`;
 }
+
+// #endregion
+
+// #region Serialization, deserialization, encoding, and decoding functions
+
+/** Separator between parts of a serialized request */
+const REQUEST_TYPE_SEPARATOR = ':';
+
+/** Information about a request that tells us what to do with it */
+export type RequestType = {
+  /** The general category of request */
+  category: string;
+  /** Specific identifier for this type of request */
+  directive: string;
+};
+
+/**
+ * String version of a request type that tells us what to do with a request.
+ *
+ * Consists of two strings concatenated by a colon
+ */
+export type SerializedRequestType = `${string}${typeof REQUEST_TYPE_SEPARATOR}${string}`;
+
+/**
+ * Create a request message requestType string from a category and a directive
+ *
+ * @param category The general category of request
+ * @param directive Specific identifier for this type of request
+ * @returns Full requestType for use in network calls
+ */
+export function serializeRequestType(category: string, directive: string): SerializedRequestType {
+  if (!category) throw new Error('serializeRequestType: "category" is not defined or empty.');
+  if (!directive) throw new Error('serializeRequestType: "directive" is not defined or empty.');
+
+  return `${category}${REQUEST_TYPE_SEPARATOR}${directive}`;
+}
+
+/** Split a request message requestType string into its parts */
+export function deserializeRequestType(requestType: SerializedRequestType): RequestType {
+  if (!requestType) throw new Error('deserializeRequestType: must be a non-empty string');
+
+  const colonIndex = requestType.indexOf(REQUEST_TYPE_SEPARATOR);
+  if (colonIndex <= 0 || colonIndex >= requestType.length - 1)
+    throw new Error(
+      `deserializeRequestType: Must have two parts divided by a ${REQUEST_TYPE_SEPARATOR} (${requestType})`,
+    );
+  const category = requestType.substring(0, colonIndex);
+  const directive = requestType.substring(colonIndex + 1);
+  return { category, directive };
+}
+
+// #endregion

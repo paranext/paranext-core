@@ -5,8 +5,15 @@
  * for services in the renderer to call.
  */
 import cloneDeep from 'lodash/cloneDeep';
-import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
-import { isString, newGuid, newNonce } from '@shared/utils/util';
+import {
+  AsyncVariable,
+  Unsubscriber,
+  deserialize,
+  serialize,
+  isString,
+  newGuid,
+} from 'platform-bible-utils';
+import newNonce from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   GetWebViewOptions,
@@ -30,7 +37,6 @@ import {
 } from '@shared/models/docking-framework.model';
 import webViewProviderService from '@shared/services/web-view-provider.service';
 import { LayoutBase } from 'rc-dock';
-import AsyncVariable from '@shared/utils/async-variable';
 import logger from '@shared/services/logger.service';
 import LogError from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';

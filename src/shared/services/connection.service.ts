@@ -22,7 +22,7 @@ import {
 import INetworkConnector from '@shared/services/network-connector.interface';
 import { createNetworkConnector } from '@shared/services/network-connector.factory';
 import logger from '@shared/services/logger.service';
-import { ComplexResponse, SerializedRequestType } from '@shared/utils/papi-util';
+import { ComplexResponse, SerializedRequestType } from '@shared/utils/util';
 
 /**
  * Whether this connector is setting up or has finished setting up its connection and is ready to

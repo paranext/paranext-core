@@ -1,4 +1,4 @@
-import { GridMenuInfo } from 'papi-components';
+import { GridMenuInfo } from 'platform-bible-react';
 
 const standardMenuLayout: GridMenuInfo = {
   columns: [

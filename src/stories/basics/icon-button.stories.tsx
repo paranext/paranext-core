@@ -1,7 +1,7 @@
 ﻿import type { Meta, StoryObj } from '@storybook/react';
 import DangerousIcon from '@mui/icons-material/Dangerous';
 import ArrowCircleUp from '@mui/icons-material/ArrowCircleUp';
-import { IconButton } from 'papi-components';
+import { IconButton } from 'platform-bible-react';
 
 const meta: Meta<typeof IconButton> = {
   title: 'Basics/IconButton',

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useArgs } from '@storybook/client-api';
-import { RefSelector, ScrRefSelectorProps, ScriptureReference } from 'papi-components';
+import { RefSelector, ScrRefSelectorProps, ScriptureReference } from 'platform-bible-react';
 import { ReactElement } from 'react';
 
 function RefSelectorDecorator(

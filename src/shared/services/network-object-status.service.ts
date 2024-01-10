@@ -7,7 +7,7 @@ import {
 import networkObjectService, {
   onDidCreateNetworkObject,
 } from '@shared/services/network-object.service';
-import AsyncVariable from '@shared/utils/async-variable';
+import { AsyncVariable } from 'platform-bible-utils';
 
 let networkObject: NetworkObjectStatusRemoteServiceType;
 let initializationPromise: Promise<void>;

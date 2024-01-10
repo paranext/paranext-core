@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
-import { PapiEvent, PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.model';
+import { usePromise } from 'platform-bible-react';
+import {
+  PlatformEvent,
+  PlatformEventAsync,
+  PlatformEventHandler,
+  isString,
+} from 'platform-bible-utils';
 import { getNetworkEvent } from '@shared/services/network.service';
-import { isString } from '@shared/utils/util';
 
 const noopUnsubscriber = () => false;
 
@@ -24,8 +28,8 @@ const noopUnsubscriber = () => false;
  *   every render
  */
 const useEventAsync = <T>(
-  event: PapiEvent<T> | PapiEventAsync<T> | string | undefined,
-  eventHandler: PapiEventHandler<T>,
+  event: PlatformEvent<T> | PlatformEventAsync<T> | string | undefined,
+  eventHandler: PlatformEventHandler<T>,
 ) => {
   const onEvent = useMemo(() => (isString(event) ? getNetworkEvent<T>(event) : event), [event]);
 

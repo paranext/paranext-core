@@ -2,11 +2,10 @@ import { ListItemIcon } from '@mui/material';
 import { useCallback, useMemo, useState } from 'react';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import DoneIcon from '@mui/icons-material/Done';
-import { Button } from 'papi-components';
 import ProjectList from '@renderer/components/projects/project-list.component';
 import './select-multiple-projects-dialog.component.scss';
 import projectLookupService from '@shared/services/project-lookup.service';
-import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
+import usePromise, { Button } from 'platform-bible-react';
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,

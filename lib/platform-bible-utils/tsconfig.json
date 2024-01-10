@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig",
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "rootDir": "./src",
+    "target": "ESNext",
+    "module": "ESNext",
+    "typeRoots": ["./node_modules/@types"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "forceConsistentCasingInFileNames": true,
+    "incremental": false,
+    "isolatedModules": true,
+    "noEmit": true,
+    "noImplicitReturns": false,
+    "skipLibCheck": false,
+    "useDefineForClassFields": true,
+    "outDir": "",
+    "paths": {}
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

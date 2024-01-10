@@ -1,4 +1,4 @@
-import { UnsubscriberAsync } from '@shared/utils/papi-util';
+import { UnsubscriberAsync } from 'platform-bible-utils';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 
 /** Interface for all extensions to implement */

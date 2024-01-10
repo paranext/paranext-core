@@ -14,16 +14,21 @@ import DataProviderInternal, {
 import IDataProviderEngine, {
   DataProviderEngineNotifyUpdate,
 } from '@shared/models/data-provider-engine.model';
-import { PapiEvent } from '@shared/models/papi-event.model';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+import {
+  PlatformEvent,
+  PlatformEventEmitter,
+  deepEqual,
+  getAllObjectFunctionNames,
+  groupBy,
+  isString,
+  CannotHaveOnDidDispose,
+  AsyncVariable,
+} from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
-import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
-import { getAllObjectFunctionNames, groupBy, isString } from '@shared/utils/util';
+import { serializeRequestType } from '@shared/utils/util';
 import { LocalObjectToProxyCreator } from '@shared/models/network-object.model';
 import networkObjectService, { overrideDispose } from '@shared/services/network-object.service';
-import { CannotHaveOnDidDispose } from '@shared/models/disposal.model';
 import logger from '@shared/services/logger.service';
-import AsyncVariable from '@shared/utils/async-variable';
 import {
   DataProviderNames,
   DataProviderTypes,
@@ -112,7 +117,7 @@ function hasKnown(providerName: string): boolean {
  */
 function createDataProviderSubscriber<DataProviderName extends DataProviderNames>(
   dataProviderPromise: Promise<DataProviders[DataProviderName]>,
-  onDidUpdate: PapiEvent<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>,
+  onDidUpdate: PlatformEvent<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>,
   dataType: DataTypeNames<DataProviderTypes[DataProviderName]>,
   // Sadly `DataProviderSubscriber<DataProviderTypes[DataProviderName][typeof dataType]>` did not
   // work. Maybe TypeScript refuses to look at all properties in each member of `DataProviderTypes`
@@ -235,7 +240,7 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
 function createDataProviderProxy<DataProviderName extends DataProviderNames>(
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]> | undefined,
   dataProviderPromise: Promise<DataProviders[DataProviderName]>,
-  onDidUpdate: PapiEvent<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>,
+  onDidUpdate: PlatformEvent<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>,
 ): DataProviderInternal<DataProviderTypes[DataProviderName]> {
   // Object whose methods to run first when the data provider's method is called if they exist here
   // before falling back to the dataProviderEngine's methods. Caches subscribe functions and bound
@@ -467,7 +472,7 @@ const decorators = {
 function buildDataProvider<DataProviderName extends DataProviderNames>(
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
   dataProviderPromise: Promise<DataProviders[DataProviderName]>,
-  onDidUpdateEmitter: PapiEventEmitter<
+  onDidUpdateEmitter: PlatformEventEmitter<
     DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
   >,
 ): DataProviderInternal<DataProviderTypes[DataProviderName]> {

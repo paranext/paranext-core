@@ -8,8 +8,7 @@ import {
 import IDataProvider from '@shared/models/data-provider.interface';
 import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
 import { useMemo, useState } from 'react';
-import { PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.model';
-import { isString } from '@shared/utils/util';
+import { PlatformEventAsync, PlatformEventHandler, isString } from 'platform-bible-utils';
 import ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
 
 /**
@@ -117,39 +116,40 @@ function createUseDataHook<TUseDataProviderParams extends unknown[]>(
       const [isLoading, setIsLoading] = useState<boolean>(true);
 
       // Wrap subscribe so we can call it as a normal PapiEvent in useEvent
-      const wrappedSubscribeEvent: PapiEventAsync<TDataTypes[TDataType]['getData']> | undefined =
-        useMemo(
-          () =>
-            dataProvider
-              ? async (eventCallback: PapiEventHandler<TDataTypes[TDataType]['getData']>) => {
-                  const unsub =
-                    // We need any here because for some reason IDataProvider loses its ability to
-                    // index subscribe. Assert to specified generic type.
-                    /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
-                    await (
-                      (dataProvider as any)[
-                        `subscribe${dataType as DataTypeNames<TDataTypes>}`
-                      ] as DataProviderSubscriber<TDataTypes[TDataType]>
-                    )(
-                      /* eslint-enable */
-                      selector,
-                      (subscriptionData: TDataTypes[TDataType]['getData']) => {
-                        eventCallback(subscriptionData);
-                        // When we receive updated data, mark that we are not loading
-                        setIsLoading(false);
-                      },
-                      subscriberOptions,
-                    );
+      const wrappedSubscribeEvent:
+        | PlatformEventAsync<TDataTypes[TDataType]['getData']>
+        | undefined = useMemo(
+        () =>
+          dataProvider
+            ? async (eventCallback: PlatformEventHandler<TDataTypes[TDataType]['getData']>) => {
+                const unsub =
+                  // We need any here because for some reason IDataProvider loses its ability to
+                  // index subscribe. Assert to specified generic type.
+                  /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
+                  await (
+                    dataProvider[
+                      `subscribe${dataType as DataTypeNames<TDataTypes>}`
+                    ] as DataProviderSubscriber<TDataTypes[TDataType]>
+                  )(
+                    /* eslint-enable */
+                    selector,
+                    (subscriptionData: TDataTypes[TDataType]['getData']) => {
+                      eventCallback(subscriptionData);
+                      // When we receive updated data, mark that we are not loading
+                      setIsLoading(false);
+                    },
+                    subscriberOptions,
+                  );
 
-                  return async () => {
-                    // When we change data type or selector, mark that we are loading
-                    setIsLoading(true);
-                    return unsub();
-                  };
-                }
-              : undefined,
-          [dataProvider, selector, subscriberOptions],
-        );
+                return async () => {
+                  // When we change data type or selector, mark that we are loading
+                  setIsLoading(true);
+                  return unsub();
+                };
+              }
+            : undefined,
+        [dataProvider, selector, subscriberOptions],
+      );
 
       // Subscribe to the data provider
       useEventAsync(wrappedSubscribeEvent, setDataInternal);
@@ -167,9 +167,10 @@ function createUseDataHook<TUseDataProviderParams extends unknown[]>(
                 // subscribe. Assert to specified generic type.
                 /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
                 (
-                  (dataProvider as any)[
-                    `set${dataType as DataTypeNames<TDataTypes>}`
-                  ] as DataProviderSetter<TDataTypes, typeof dataType>
+                  dataProvider[`set${dataType as DataTypeNames<TDataTypes>}`] as DataProviderSetter<
+                    TDataTypes,
+                    typeof dataType
+                  >
                 )(
                   /* eslint-enable */
                   selector,

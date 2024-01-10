@@ -1,6 +1,5 @@
 import { getNetworkEvent } from '@shared/services/network.service';
-import { PapiEvent, PapiEventHandler } from '@shared/models/papi-event.model';
-import { isString } from '@shared/utils/util';
+import { PlatformEvent, PlatformEventHandler, isString } from 'platform-bible-utils';
 import { useEffect } from 'react';
 
 /**
@@ -19,8 +18,8 @@ import { useEffect } from 'react';
  *   every render
  */
 const useEvent = <T>(
-  event: PapiEvent<T> | string | undefined,
-  eventHandler: PapiEventHandler<T>,
+  event: PlatformEvent<T> | string | undefined,
+  eventHandler: PlatformEventHandler<T>,
 ) => {
   useEffect(() => {
     // Do nothing if the event is not provided (in case the event is not yet available, for example)

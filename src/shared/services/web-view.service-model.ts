@@ -1,7 +1,7 @@
 import { GetWebViewOptions, WebViewId, WebViewType } from '@shared/models/web-view.model';
 import { AddWebViewEvent, Layout } from '@shared/models/docking-framework.model';
-import { PapiEvent } from '@shared/models/papi-event.model';
-import { serializeRequestType } from '@shared/utils/papi-util';
+import { PlatformEvent } from 'platform-bible-utils';
+import { serializeRequestType } from '@shared/utils/util';
 
 /**
  * JSDOC SOURCE papiWebViewService
@@ -13,7 +13,7 @@ import { serializeRequestType } from '@shared/utils/papi-util';
  */
 export interface WebViewServiceType {
   /** Event that emits with webView info when a webView is added */
-  onDidAddWebView: PapiEvent<AddWebViewEvent>;
+  onDidAddWebView: PlatformEvent<AddWebViewEvent>;
 
   /**
    * Creates a new web view or gets an existing one depending on if you request an existing one and

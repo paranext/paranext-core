@@ -17,8 +17,12 @@ export type {
 export type { WithNotifyUpdate } from '@shared/models/data-provider-engine.model';
 export type { default as IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 export type { DialogOptions } from '@shared/models/dialog-options.model';
-export type { PapiEvent } from '@shared/models/papi-event.model';
-export type { default as PapiEventEmitter } from '@shared/models/papi-event-emitter.model';
+export type {
+  Unsubscriber,
+  UnsubscriberAsync,
+  PlatformEvent,
+  default as PlatformEventEmitter,
+} from 'platform-bible-utils';
 export type {
   ExtensionDataScope,
   MandatoryProjectDataType,
@@ -32,6 +36,5 @@ export type {
   WebViewDefinition,
   WebViewProps,
 } from '@shared/models/web-view.model';
-export type { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
 
 export type { IWebViewProvider } from '@shared/models/web-view-provider.model';

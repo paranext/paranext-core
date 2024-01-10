@@ -2,7 +2,7 @@ import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { useMemo, useState } from 'react';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
-import { Button } from 'papi-components';
+import { Button } from 'platform-bible-react';
 import ExtensionList, { Extension } from './extension-list.component';
 import './extension-manager-tab.component.scss';
 

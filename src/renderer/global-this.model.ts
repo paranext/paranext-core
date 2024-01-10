@@ -8,7 +8,7 @@ import * as SillsdevScripture from '@sillsdev/scripture';
 import { ProcessType } from '@shared/global-this.model';
 import * as papiCore from '@shared/services/papi-core.service';
 import papiFrontend, { Papi } from '@renderer/services/papi-frontend.service';
-import { getModuleSimilarApiMessage } from '@shared/utils/papi-util';
+import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import {
   getWebViewStateById,
   setWebViewStateById,

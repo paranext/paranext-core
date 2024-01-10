@@ -1,5 +1,4 @@
-import { UnsubscriberAsync } from '@shared/utils/papi-util';
-import { PapiEventHandler } from '@shared/models/papi-event.model';
+import { UnsubscriberAsync, PlatformEventHandler } from 'platform-bible-utils';
 import { NetworkableObject } from '@shared/models/network-object.model';
 
 /** Various options to adjust how the data provider subscriber emits updates */
@@ -103,7 +102,7 @@ export type DataProviderGetter<TDataType extends DataProviderDataType> = (
  */
 export type DataProviderSubscriber<TDataType extends DataProviderDataType> = (
   selector: TDataType['selector'],
-  callback: PapiEventHandler<TDataType['getData']>,
+  callback: PlatformEventHandler<TDataType['getData']>,
   options?: DataProviderSubscriberOptions,
 ) => Promise<UnsubscriberAsync>;
 

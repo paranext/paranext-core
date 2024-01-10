@@ -1,4 +1,3 @@
-export { default as usePromise } from '@renderer/hooks/papi-hooks/use-promise.hook';
 export { default as useEvent } from '@renderer/hooks/papi-hooks/use-event.hook';
 export { default as useEventAsync } from '@renderer/hooks/papi-hooks/use-event-async.hook';
 export { default as useDataProvider } from '@renderer/hooks/papi-hooks/use-data-provider.hook';

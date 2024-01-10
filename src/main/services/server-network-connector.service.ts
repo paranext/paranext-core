@@ -13,7 +13,13 @@ import {
 } from '@shared/data/internal-connection.model';
 import INetworkConnector from '@shared/services/network-connector.interface';
 import logger from '@shared/services/logger.service';
-import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
+import {
+  Unsubscriber,
+  deserialize,
+  serialize,
+  newGuid,
+  PlatformEventEmitter,
+} from 'platform-bible-utils';
 import {
   ClientConnect,
   InitClient,
@@ -24,8 +30,6 @@ import {
   WebSocketResponse,
   WEBSOCKET_PORT,
 } from '@shared/data/network-connector.model';
-import { newGuid } from '@shared/utils/util';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 
 // #region local variables
 
@@ -75,7 +79,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
    * All message subscriptions - emitters that emit an event each time a message with a specific
    * message type comes in
    */
-  private messageEmitters = new Map<MessageType, PapiEventEmitter<WebSocketMessageEvent>>();
+  private messageEmitters = new Map<MessageType, PlatformEventEmitter<WebSocketMessageEvent>>();
 
   /**
    * Promise that resolves when finished starting the server or rejects if disconnected before the
@@ -360,7 +364,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
   ): Unsubscriber => {
     let emitter = this.messageEmitters.get(messageType);
     if (!emitter) {
-      emitter = new PapiEventEmitter<WebSocketMessageEvent>();
+      emitter = new PlatformEventEmitter<WebSocketMessageEvent>();
       this.messageEmitters.set(messageType, emitter);
     }
     return emitter.subscribe(({ data, clientId }) => callback(data, clientId));

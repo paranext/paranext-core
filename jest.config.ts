@@ -18,7 +18,8 @@ const config: Config = {
     ...pathsToModuleNameMapper(compilerOptions.paths, {
       prefix: '<rootDir>/src',
     }),
-    '^papi-components$': '<rootDir>/node_modules/papi-components/dist/index.es.js',
+    '^platform-bible-react$': '<rootDir>/node_modules/platform-bible-react/dist/index.es.js',
+    '^platform-bible-utils$': '<rootDir>/node_modules/platform-bible-utils/dist/index.es.js',
   },
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {

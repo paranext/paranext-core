@@ -1,6 +1,6 @@
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 import dialogService from '@shared/services/dialog.service';
-import { getErrorMessage } from '@shared/utils/util';
+import { getErrorMessage } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**

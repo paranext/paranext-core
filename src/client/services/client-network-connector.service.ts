@@ -9,7 +9,13 @@ import {
   NetworkConnectorInfo,
   RequestRouter,
 } from '@shared/data/internal-connection.model';
-import { deserialize, serialize, Unsubscriber } from '@shared/utils/papi-util';
+import {
+  deserialize,
+  serialize,
+  Unsubscriber,
+  getErrorMessage,
+  PlatformEventEmitter,
+} from 'platform-bible-utils';
 import INetworkConnector from '@shared/services/network-connector.interface';
 import {
   InitClient,
@@ -22,9 +28,7 @@ import {
   WEBSOCKET_ATTEMPTS_WAIT,
   WEBSOCKET_PORT,
 } from '@shared/data/network-connector.model';
-import { getErrorMessage } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
 import { IWebSocket } from '@client/services/web-socket.interface';
 
@@ -61,7 +65,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
    * All message subscriptions - emitters that emit an event each time a message with a specific
    * message type comes in
    */
-  private messageEmitters = new Map<MessageType, PapiEventEmitter<Message>>();
+  private messageEmitters = new Map<MessageType, PlatformEventEmitter<Message>>();
 
   /**
    * Promise that resolves when the connection is finished or rejects if disconnected before the
@@ -365,7 +369,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
   ): Unsubscriber => {
     let emitter = this.messageEmitters.get(messageType);
     if (!emitter) {
-      emitter = new PapiEventEmitter<Message>();
+      emitter = new PlatformEventEmitter<Message>();
       this.messageEmitters.set(messageType, emitter);
     }
     return emitter.subscribe(callback);

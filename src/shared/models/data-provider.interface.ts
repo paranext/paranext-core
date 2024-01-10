@@ -4,7 +4,7 @@ import {
   DataProviderSetters,
   DataProviderSubscribers,
 } from '@shared/models/data-provider.model';
-import { Dispose, OnDidDispose } from './disposal.model';
+import { Dispose, OnDidDispose } from 'platform-bible-utils';
 
 /**
  * An object on the papi that manages data and has methods for interacting with that data. Created

@@ -1,11 +1,10 @@
-import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+import { Unsubscriber, deserialize, serialize, PlatformEventEmitter } from 'platform-bible-utils';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 
 /** All message subscriptions - emitters that emit an event each time a setting is updated */
 const onDidUpdateSettingEmitters = new Map<
   SettingNames,
-  PapiEventEmitter<SettingTypes[SettingNames] | undefined>
+  PlatformEventEmitter<SettingTypes[SettingNames] | undefined>
 >();
 
 /**
@@ -40,7 +39,7 @@ const setSetting = <SettingName extends SettingNames>(
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const emitter = onDidUpdateSettingEmitters.get(key) as
-    | PapiEventEmitter<SettingTypes[SettingName] | undefined>
+    | PlatformEventEmitter<SettingTypes[SettingName] | undefined>
     | undefined;
   emitter?.emit(newSetting);
 };
@@ -60,15 +59,15 @@ const subscribeToSetting = <SettingName extends SettingNames>(
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   let emitter = onDidUpdateSettingEmitters.get(key) as
-    | PapiEventEmitter<SettingTypes[SettingName] | undefined>
+    | PlatformEventEmitter<SettingTypes[SettingName] | undefined>
     | undefined;
   if (!emitter) {
-    emitter = new PapiEventEmitter<SettingTypes[SettingName] | undefined>();
+    emitter = new PlatformEventEmitter<SettingTypes[SettingName] | undefined>();
     onDidUpdateSettingEmitters.set(
       key,
       // Assert type of the general SettingTypes of the emitter.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      emitter as PapiEventEmitter<SettingTypes[SettingNames] | undefined>,
+      emitter as PlatformEventEmitter<SettingTypes[SettingNames] | undefined>,
     );
   }
   return emitter.subscribe(callback);

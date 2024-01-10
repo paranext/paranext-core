@@ -11,7 +11,7 @@ import {
 import networkObjectService from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import logger from '@shared/services/logger.service';
-import { isSerializable } from '@shared/utils/papi-util';
+import { isSerializable } from 'platform-bible-utils';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const WEB_VIEW_PROVIDER_LABEL = 'webViewProvider';

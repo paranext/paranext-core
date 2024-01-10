@@ -1,7 +1,7 @@
 import papi from '@papi/frontend';
 import { useEvent } from '@papi/frontend/react';
 import { useCallback, useState } from 'react';
-import { Button } from 'papi-components';
+import { Button } from 'platform-bible-react';
 import type { HelloWorldEvent } from 'hello-world';
 
 globalThis.webViewComponent = function HelloWorld2() {

@@ -1,6 +1,6 @@
 import { List, ListItem, ListItemButton, ListItemText, ListSubheader } from '@mui/material';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
-import { Checkbox } from 'papi-components';
+import { Checkbox } from 'platform-bible-react';
 import { ProjectTypes } from 'papi-shared-types';
 import { PropsWithChildren, useCallback, JSX } from 'react';
 

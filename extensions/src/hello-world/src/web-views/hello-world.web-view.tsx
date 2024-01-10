@@ -3,7 +3,6 @@ import papi, { logger } from '@papi/frontend';
 import {
   useData,
   useProjectData,
-  usePromise,
   useEvent,
   useSetting,
   useDialogCallback,
@@ -19,7 +18,8 @@ import {
   TextField,
   Table,
   ScriptureReference,
-} from 'papi-components';
+  usePromise,
+} from 'platform-bible-react';
 import type { DialogTypes, WebViewProps } from '@papi/core';
 import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';

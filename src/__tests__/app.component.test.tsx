@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
 import { ProcessType } from '@shared/global-this.model';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+import { PlatformEventEmitter } from 'platform-bible-utils';
 import App from '@renderer/app.component';
 
 // #region globalThis setup
@@ -18,13 +18,13 @@ jest.mock('@shared/services/network.service', () => ({
     async (...args: unknown[]) =>
       `Mocked ${requestType} request with args ${args.join(', ')}`,
   createNetworkEventEmitter: () => {
-    return new PapiEventEmitter();
+    return new PlatformEventEmitter();
   },
   papiNetworkService: {
     createNetworkEventEmitter: () => {
-      return new PapiEventEmitter();
+      return new PlatformEventEmitter();
     },
-    onDidClientConnect: new PapiEventEmitter().event,
+    onDidClientConnect: new PlatformEventEmitter().event,
   },
 }));
 jest.mock('@renderer/hooks/papi-hooks/use-promise.hook', () => ({

@@ -15,6 +15,13 @@ import {
 } from '@shared/data/internal-connection.model';
 import {
   aggregateUnsubscriberAsyncs,
+  UnsubscriberAsync,
+  getErrorMessage,
+  wait,
+  PlatformEventEmitter,
+  PlatformEvent,
+} from 'platform-bible-utils';
+import {
   ComplexRequest,
   ComplexResponse,
   createSafeRegisterFn,
@@ -22,15 +29,11 @@ import {
   RequestHandlerType,
   SerializedRequestType,
   serializeRequestType,
-  UnsubscriberAsync,
-} from '@shared/utils/papi-util';
-import { getErrorMessage, wait } from '@shared/utils/util';
+} from '@shared/utils/util';
 import * as connectionService from '@shared/services/connection.service';
 import { isClient, isRenderer, isServer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
 import PapiNetworkEventEmitter from '@shared/models/papi-network-event-emitter.model';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
-import { PapiEvent } from '@shared/models/papi-event.model';
 
 /** Prefix on requests that indicates that the request is related to server operations */
 const CATEGORY_SERVER = 'server';
@@ -393,7 +396,7 @@ const createNetworkEventEmitterUnsafe = <T>(
   eventType: string,
   emitOnNetwork = emitEventOnNetworkUnsafe,
   register = true,
-): PapiEventEmitter<T> => {
+): PlatformEventEmitter<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
   if (existingEmitter) {
     if (existingEmitter.isRegistered)
@@ -401,7 +404,7 @@ const createNetworkEventEmitterUnsafe = <T>(
     existingEmitter.isRegistered = register;
     // Assert as emitter with this generic type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return existingEmitter.emitter as PapiEventEmitter<T>;
+    return existingEmitter.emitter as PlatformEventEmitter<T>;
   }
   const newNetworkEventEmitter = new PapiNetworkEventEmitter<T>(
     (event) => emitOnNetwork(eventType, event),
@@ -820,7 +823,7 @@ const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
  * @param eventType Unique network event type for coordinating between connections
  * @returns Event emitter whose event works between connections
  */
-export const createNetworkEventEmitter = <T>(eventType: string): PapiEventEmitter<T> =>
+export const createNetworkEventEmitter = <T>(eventType: string): PlatformEventEmitter<T> =>
   // Note: running createNetworkEventEmitterUnsafe without initializing is not technically an
   // initialization problem. However, emitting a network event before initializing is. As such, we
   // create an emitter here without awaiting initialization, but we pass in emitEventOnNetwork,
@@ -833,17 +836,17 @@ export const createNetworkEventEmitter = <T>(eventType: string): PapiEventEmitte
  * @param eventType Unique network event type for coordinating between connections
  * @returns Event for the event type that runs the callback provided when the event is emitted
  */
-export const getNetworkEvent = <T>(eventType: string): PapiEvent<T> => {
+export const getNetworkEvent = <T>(eventType: string): PlatformEvent<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
   // Return event with the generic type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  if (existingEmitter) return existingEmitter.emitter.event as PapiEvent<T>;
+  if (existingEmitter) return existingEmitter.emitter.event as PlatformEvent<T>;
   // We didn't find an existing emitter, so create one but don't mark it as registered because you
   // can't emit the event from this function.
   // Return event with the generic type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork, false)
-    .event as PapiEvent<T>;
+    .event as PlatformEvent<T>;
 };
 
 // #endregion

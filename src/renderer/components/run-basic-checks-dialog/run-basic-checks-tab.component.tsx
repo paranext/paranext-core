@@ -1,5 +1,5 @@
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import { Button, ScriptureReference, getChaptersForBook } from 'papi-components';
+import usePromise, { Button, ScriptureReference, getChaptersForBook } from 'platform-bible-react';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
 import { useState, useMemo } from 'react';
@@ -11,7 +11,6 @@ import BasicChecks, {
 import './run-basic-checks-tab.component.scss';
 import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
 import { VerseRef } from '@sillsdev/scripture';
-import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
 
 export const TAB_TYPE_RUN_BASIC_CHECKS = 'run-basic-checks';
 
