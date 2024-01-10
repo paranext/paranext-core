@@ -184,7 +184,7 @@ export type WebViewDefinitionUpdatableProperties = Pick<
 // `web-view.service.ts` -> `getUpdatablePropertiesFromWebViewDefinition`
 export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
 
-// This hook is found in `use-webview-state.hook.ts`
+// This hook is found in `use-web-view-state.hook.ts`
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
 // destructured members of object types, so using WebViewProps as
