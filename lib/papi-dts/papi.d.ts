@@ -659,21 +659,18 @@ declare module 'shared/utils/papi-util' {
    */
   export function deepEqual(a: unknown, b: unknown): boolean;
   /**
-   * Converts a JavaScript value to a JSON string, changing `undefined` properties to `null`
-   * properties in the JSON string.
+   * Converts a JavaScript value to a JSON string, changing `undefined` properties in the JavaScript
+   * object to `null` properties in the JSON string.
    *
-   * WARNING: `null` and `undefined` values are treated as the same thing by this function and will be
-   * dropped when passed to {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will
-   * become `{ a: 1 }` after passing through {@link serialize} then {@link deserialize}. If you are
-   * passing around user data that needs to retain `null` and/or `undefined` values, you should wrap
-   * them yourself in a string before using this function. Alternatively, you can write your own
-   * replacer that will preserve `null` and `undefined` values in a way that a custom reviver will
-   * understand when deserializing.
+   * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
+   * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
+   * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
+   * values, you should wrap them yourself in a string before using this function. Alternatively, you
+   * can write your own replacer that will preserve `null` in a way that you can recover later.
    *
    * @param value A JavaScript value, usually an object or array, to be converted.
-   * @param replacer A function that transforms the results. Note that all `null` and `undefined`
-   *   values returned by the replacer will be further transformed into a moniker that deserializes
-   *   into `undefined`.
+   * @param replacer A function that transforms the results. Note that all `undefined` values returned
+   *   by the replacer will be further transformed into `null` in the JSON string.
    * @param space Adds indentation, white space, and line break characters to the return-value JSON
    *   text to make it easier to read. See the `space` parameter of `JSON.stringify` for more
    *   details.
@@ -684,21 +681,20 @@ declare module 'shared/utils/papi-util' {
     space?: string | number,
   ): string;
   /**
-   * Converts a JSON string into a value.
+   * Converts a JSON string into a value, converting all `null` properties from JSON into `undefined`
+   * in the returned JavaScript value/object.
    *
-   * WARNING: `null` and `undefined` values that were serialized by {@link serialize} will both be made
-   * into `undefined` values by this function. If those values are properties of objects, those
-   * properties will simply be dropped. For example, `{ a: 1, b: undefined, c: null }` will become `{
-   * a: 1 }` after passing through {@link serialize} then {@link deserialize}. If you are passing around
-   * user data that needs to retain `null` and/or `undefined` values, you should wrap them yourself in
-   * a string before using this function. Alternatively, you can write your own reviver that will
-   * preserve `null` and `undefined` values in a way that a custom replacer will encode when
-   * serializing.
+   * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
+   * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
+   * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
+   * values, you should wrap them yourself in a string before using this function. Alternatively, you
+   * can write your own replacer that will preserve `null` in a way that you can recover later.
    *
    * @param text A valid JSON string.
    * @param reviver A function that transforms the results. This function is called for each member of
    *   the object. If a member contains nested objects, the nested objects are transformed before the
-   *   parent object is.
+   *   parent object is. Note that `null` values are converted into `undefined` values after the
+   *   reviver has run.
    */
   export function deserialize(
     value: string,
@@ -711,8 +707,7 @@ declare module 'shared/utils/papi-util' {
    * @returns True if serializable; false otherwise
    *
    *   Note: the values `undefined` and `null` are serializable (on their own or in an array), but
-   *   `undefined` and `null` properties of objects are dropped when serializing/deserializing. That
-   *   means `undefined` and `null` properties on a value passed in will cause it to fail.
+   *   `null` values get transformed into `undefined` when serializing/deserializing.
    *
    *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
    *   Please only use this if you need to
