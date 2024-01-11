@@ -1,5 +1,6 @@
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import usePromise, { Button, ScriptureReference, getChaptersForBook } from 'platform-bible-react';
+import { Button, ScriptureReference, usePromise } from 'platform-bible-react';
+import { getChaptersForBook } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
 import { useState, useMemo } from 'react';

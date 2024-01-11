@@ -1,14 +1,7 @@
 // When making tests, we need to explicitly use null many times
 /* eslint-disable no-null/no-null */
-import {
-  SerializedRequestType,
-  deepEqual,
-  serialize,
-  deserialize,
-  deserializeRequestType,
-  isSerializable,
-  serializeRequestType,
-} from './papi-util';
+import { deepEqual, serialize, deserialize, isSerializable } from 'platform-bible-utils';
+import { SerializedRequestType, deserializeRequestType, serializeRequestType } from './util';
 
 class Stuff {
   thing = 3;
