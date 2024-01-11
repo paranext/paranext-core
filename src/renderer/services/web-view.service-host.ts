@@ -13,7 +13,7 @@ import {
   isString,
   newGuid,
 } from 'platform-bible-utils';
-import newNonce from '@shared/utils/util';
+import { newNonce } from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   GetWebViewOptions,
