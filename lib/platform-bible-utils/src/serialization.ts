@@ -1,19 +1,16 @@
 /**
- * Converts a JavaScript value to a JSON string, changing `undefined` properties to `null`
- * properties in the JSON string.
+ * Converts a JavaScript value to a JSON string, changing `undefined` properties in the JavaScript
+ * object to `null` properties in the JSON string.
  *
- * WARNING: `null` and `undefined` values are treated as the same thing by this function and will be
- * dropped when passed to {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will
- * become `{ a: 1 }` after passing through {@link serialize} then {@link deserialize}. If you are
- * passing around user data that needs to retain `null` and/or `undefined` values, you should wrap
- * them yourself in a string before using this function. Alternatively, you can write your own
- * replacer that will preserve `null` and `undefined` values in a way that a custom reviver will
- * understand when deserializing.
+ * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
+ * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
+ * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
+ * values, you should wrap them yourself in a string before using this function. Alternatively, you
+ * can write your own replacer that will preserve `null` in a way that you can recover later.
  *
  * @param value A JavaScript value, usually an object or array, to be converted.
- * @param replacer A function that transforms the results. Note that all `null` and `undefined`
- *   values returned by the replacer will be further transformed into a moniker that deserializes
- *   into `undefined`.
+ * @param replacer A function that transforms the results. Note that all `undefined` values returned
+ *   by the replacer will be further transformed into `null` in the JSON string.
  * @param space Adds indentation, white space, and line break characters to the return-value JSON
  *   text to make it easier to read. See the `space` parameter of `JSON.stringify` for more
  *   details.
@@ -35,21 +32,20 @@ export function serialize(
 }
 
 /**
- * Converts a JSON string into a value.
+ * Converts a JSON string into a value, converting all `null` properties from JSON into `undefined`
+ * in the returned JavaScript value/object.
  *
- * WARNING: `null` and `undefined` values that were serialized by {@link serialize} will both be made
- * into `undefined` values by this function. If those values are properties of objects, those
- * properties will simply be dropped. For example, `{ a: 1, b: undefined, c: null }` will become `{
- * a: 1 }` after passing through {@link serialize} then {@link deserialize}. If you are passing around
- * user data that needs to retain `null` and/or `undefined` values, you should wrap them yourself in
- * a string before using this function. Alternatively, you can write your own reviver that will
- * preserve `null` and `undefined` values in a way that a custom replacer will encode when
- * serializing.
+ * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
+ * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
+ * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
+ * values, you should wrap them yourself in a string before using this function. Alternatively, you
+ * can write your own replacer that will preserve `null` in a way that you can recover later.
  *
  * @param text A valid JSON string.
  * @param reviver A function that transforms the results. This function is called for each member of
  *   the object. If a member contains nested objects, the nested objects are transformed before the
- *   parent object is.
+ *   parent object is. Note that `null` values are converted into `undefined` values after the
+ *   reviver has run.
  */
 export function deserialize(
   value: string,
@@ -57,17 +53,28 @@ export function deserialize(
   // Need to use `any` instead of `unknown` here to match the signature of JSON.parse
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): any {
-  const undefinedReviver = (replacerKey: string, replacerValue: unknown) => {
-    let newValue = replacerValue;
-    // All `null` values become `undefined` on the way from JSON strings into JS objects
-    // eslint-disable-next-line no-null/no-null
-    if (newValue === null) newValue = undefined;
-    if (reviver) newValue = reviver(replacerKey, newValue);
-    return newValue;
-  };
-  // TODO: Do something like drop our custom reviver and crawl the object tree to replace all null
-  // properties with undefined properties so that undefined properties don't disappear.
-  return JSON.parse(value, undefinedReviver);
+  // Helper function to replace `null` with `undefined` on a per property basis. This can't be done
+  // with our own reviver because `JSON.parse` removes `undefined` properties from the return value.
+  function replaceNull(obj: Record<string | number, unknown>): Record<string | number, unknown> {
+    Object.keys(obj).forEach((key: string | number) => {
+      // We only want to replace `null`, not other falsy values
+      // eslint-disable-next-line no-null/no-null
+      if (obj[key] === null) obj[key] = undefined;
+      // If the property is an object, recursively call the helper function on it
+      else if (typeof obj[key] === 'object')
+        // Since the object came from a string, we know the keys will not be symbols
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        obj[key] = replaceNull(obj[key] as Record<string | number, unknown>);
+    });
+    return obj;
+  }
+
+  const parsedObject = JSON.parse(value, reviver);
+  // Explicitly convert the value 'null' that isn't stored as a property on an object to 'undefined'
+  // eslint-disable-next-line no-null/no-null
+  if (parsedObject === null) return undefined;
+  if (typeof parsedObject === 'object') return replaceNull(parsedObject);
+  return parsedObject;
 }
 
 /**
@@ -77,8 +84,7 @@ export function deserialize(
  * @returns True if serializable; false otherwise
  *
  *   Note: the values `undefined` and `null` are serializable (on their own or in an array), but
- *   `undefined` and `null` properties of objects are dropped when serializing/deserializing. That
- *   means `undefined` and `null` properties on a value passed in will cause it to fail.
+ *   `null` values get transformed into `undefined` when serializing/deserializing.
  *
  *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
  *   Please only use this if you need to

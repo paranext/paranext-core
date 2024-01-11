@@ -8,7 +8,7 @@ import {
 import IDataProvider from '@shared/models/data-provider.interface';
 import { useEventAsync } from 'platform-bible-react';
 import { useMemo, useRef, useState } from 'react';
-import { PlatformEventAsync, PlatformEventHandler, isString } from 'platform-bible-utils';
+import { isString, PlatformEventAsync, PlatformEventHandler } from 'platform-bible-utils';
 import ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
 
 /**
@@ -131,7 +131,7 @@ function createUseDataHook<TUseDataProviderParams extends unknown[]>(
                   // index subscribe. Assert to specified generic type.
                   /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
                   await (
-                    dataProvider[
+                    (dataProvider as any)[
                       `subscribe${dataType as DataTypeNames<TDataTypes>}`
                     ] as DataProviderSubscriber<TDataTypes[TDataType]>
                   )(
@@ -142,7 +142,7 @@ function createUseDataHook<TUseDataProviderParams extends unknown[]>(
                       // When we receive updated data, mark that we are not loading
                       setIsLoading(false);
                     },
-                    subscriberOptions,
+                    subscriberOptionsRef.current,
                   );
 
                 return async () => {
@@ -152,7 +152,7 @@ function createUseDataHook<TUseDataProviderParams extends unknown[]>(
                 };
               }
             : undefined,
-        [dataProvider, selector, subscriberOptions],
+        [dataProvider, selector],
       );
 
       // Subscribe to the data provider
@@ -171,10 +171,9 @@ function createUseDataHook<TUseDataProviderParams extends unknown[]>(
                 // subscribe. Assert to specified generic type.
                 /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
                 (
-                  dataProvider[`set${dataType as DataTypeNames<TDataTypes>}`] as DataProviderSetter<
-                    TDataTypes,
-                    typeof dataType
-                  >
+                  (dataProvider as any)[
+                    `set${dataType as DataTypeNames<TDataTypes>}`
+                  ] as DataProviderSetter<TDataTypes, typeof dataType>
                 )(
                   /* eslint-enable */
                   selector,
