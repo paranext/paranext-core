@@ -422,7 +422,7 @@ declare module 'shared/utils/util' {
    * random! Use some polymorphic library that works in all contexts?
    * https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues only works in browser
    */
-  export default function newNonce(): string;
+  export function newNonce(): string;
   /**
    * Creates a safe version of a register function that returns a Promise<UnsubscriberAsync>.
    *
@@ -3798,97 +3798,6 @@ declare module 'shared/services/settings.service' {
    */
   const settingsService: SettingsService;
   export default settingsService;
-}
-declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
-  export type UsePromiseOptions = {
-    /**
-     * Whether to leave the value as the most recent resolved promise value or set it back to
-     * defaultValue while running the promise again. Defaults to true
-     */
-    preserveValue?: boolean;
-  };
-  /**
-   * Awaits a promise and returns a loading value while the promise is unresolved
-   *
-   * @param promiseFactoryCallback A function that returns the promise to await. If this callback is
-   *   undefined, the current value will be returned (defaultValue unless it was previously changed
-   *   and `options.preserveValue` is true), and there will be no loading.
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   * @param defaultValue The initial value to return while first awaiting the promise. If
-   *   `options.preserveValue` is false, this value is also shown while awaiting the promise on
-   *   subsequent calls.
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that, if the `promiseFactoryCallback` changes and
-   *   `options.preserveValue` is `false`, the returned value will be set to the current
-   *   `defaultValue`. However, the returned value will not be updated if`defaultValue` changes.
-   * @param options Various options for adjusting how this hook runs the `promiseFactoryCallback`
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. However, the latest `options.preserveValue` will always be used
-   *   appropriately to determine whether to preserve the returned value when changing the
-   *   `promiseFactoryCallback`
-   * @returns `[value, isLoading]`
-   *
-   *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
-   *   - `isLoading`: whether the promise is waiting to be resolved
-   */
-  const usePromise: <T>(
-    promiseFactoryCallback: (() => Promise<T>) | undefined,
-    defaultValue: T,
-    options?: UsePromiseOptions,
-  ) => [value: T, isLoading: boolean];
-  export default usePromise;
-}
-declare module 'renderer/hooks/papi-hooks/use-event.hook' {
-  import { PapiEvent, PapiEventHandler } from 'shared/models/papi-event.model';
-  /**
-   * Adds an event handler to an event so the event handler runs when the event is emitted
-   *
-   * @param event The event to subscribe to. Can be either a string or an Event
-   *
-   *   - If event is a `string`, the network event associated with this type will automatically be used
-   *   - If event is a `PapiEvent`, that event will be used
-   *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
-   *       available for example
-   *
-   * @param eventHandler The callback to run when the event is emitted
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   */
-  const useEvent: <T>(
-    event: string | PapiEvent<T> | undefined,
-    eventHandler: PapiEventHandler<T>,
-  ) => void;
-  export default useEvent;
-}
-declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
-  import { PapiEvent, PapiEventAsync, PapiEventHandler } from 'shared/models/papi-event.model';
-  /**
-   * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
-   * runs when the event is emitted
-   *
-   * @param event The asynchronously (un)subscribing event to subscribe to. Can be either a string or
-   *   an Event
-   *
-   *   - If event is a `string`, the network event associated with this type will automatically be used
-   *   - If event is a `PapiEvent` or `PapiEventAsync`, that event will be used
-   *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
-   *       available for example
-   *
-   * @param eventHandler The callback to run when the event is emitted
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   */
-  const useEventAsync: <T>(
-    event: string | PapiEvent<T> | PapiEventAsync<T> | undefined,
-    eventHandler: PapiEventHandler<T>,
-  ) => void;
-  export default useEventAsync;
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
   import { NetworkObject } from 'shared/models/network-object.model';

@@ -210,13 +210,7 @@ export declare const getChaptersForBook: (bookNum: number) => number;
 export declare const offsetBook: (scrRef: ScriptureReference, offset: number) => ScriptureReference;
 export declare const offsetChapter: (scrRef: ScriptureReference, offset: number) => ScriptureReference;
 export declare const offsetVerse: (scrRef: ScriptureReference, offset: number) => ScriptureReference;
-/**
- * JSDOC SOURCE platformUtil
- *
- * PlatformUtil is a collection of functions, objects, and types that are used as helpers in other
- * services. Extensions should not use or rely on anything in papiUtil unless some other service
- * requires it.
- */
+/** Collection of functions, objects, and types that are used as helpers in other services. */
 export type moduleSummaryComments = {};
 export declare function newGuid(): string;
 /**

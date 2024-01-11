@@ -1,11 +1,5 @@
-// #region platformUtil
-/**
- * JSDOC SOURCE platformUtil
- *
- * PlatformUtil is a collection of functions, objects, and types that are used as helpers in other
- * services. Extensions should not use or rely on anything in papiUtil unless some other service
- * requires it.
- */
+/** Collection of functions, objects, and types that are used as helpers in other services. */
+
 export type moduleSummaryComments = {};
 
 // Thanks to blubberdiblub at https://stackoverflow.com/a/68141099/217579
@@ -84,6 +78,7 @@ export function groupBy<T, K, V = T>(
 type ErrorWithMessage = {
   message: string;
 };
+
 // From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
 function isErrorWithMessage(error: unknown): error is ErrorWithMessage {
   return (
@@ -97,6 +92,7 @@ function isErrorWithMessage(error: unknown): error is ErrorWithMessage {
     typeof (error as Record<string, unknown>).message === 'string'
   );
 }
+
 // From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
 /**
  * Function to get an error from the object (useful for getting an error in a catch block)
@@ -193,5 +189,3 @@ export function getAllObjectFunctionNames(
 
   return objectFunctionNames;
 }
-
-// #endregion

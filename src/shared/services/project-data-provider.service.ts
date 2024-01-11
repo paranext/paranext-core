@@ -5,7 +5,7 @@ import {
 } from '@shared/models/project-data-provider-engine.model';
 import networkObjectService from '@shared/services/network-object.service';
 import { getByType, registerEngineByType } from '@shared/services/data-provider.service';
-import newNonce from '@shared/utils/util';
+import { newNonce } from '@shared/utils/util';
 import { Dispose, UnsubscriberAsyncList } from 'platform-bible-utils';
 import projectLookupService from '@shared/services/project-lookup.service';
 import logger from '@shared/services/logger.service';

@@ -1,6 +1,6 @@
-# PAPI Components
+# Platform.Bible React
 
-These components allow developers of Platform.Bible extensions to have the same look and feel as the main application.
+A set of React hooks and components that allow developers of Platform.Bible extensions to have the same look and feel as the main application.
 
 ## Development
 
@@ -12,4 +12,3 @@ TODO:
 
 - [ ] Decide if this package will be public, if not it will probably need an NPM organization setup to publish it to privately.
 - [ ] What NPM user login will we use to publish it (each developer or an app-wide user)?
-- [ ] Currently the package is called `platform-bible-react`, perhaps we need to namespace it, e.g. `sil-platform-bible-react` or `ubs-components`?

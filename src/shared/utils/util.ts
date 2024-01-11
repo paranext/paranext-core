@@ -11,7 +11,7 @@ const NONCE_CHARS_LENGTH = NONCE_CHARS.length;
  * random! Use some polymorphic library that works in all contexts?
  * https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues only works in browser
  */
-export default function newNonce(): string {
+export function newNonce(): string {
   let nonce = '';
   for (let i = 0; i < 32; i++)
     nonce += NONCE_CHARS.charAt(Math.floor(Math.random() * NONCE_CHARS_LENGTH));
@@ -136,7 +136,7 @@ export function getModuleSimilarApiMessage(moduleName: string) {
 
 // #endregion
 
-// #region Serialization, deserialization, encoding, and decoding functions
+// #region Serialization and deserialization functions
 
 /** Separator between parts of a serialized request */
 const REQUEST_TYPE_SEPARATOR = ':';

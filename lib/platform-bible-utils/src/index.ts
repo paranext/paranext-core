@@ -1,14 +1,9 @@
-// import AsyncVariable from 'async-variable';
-// import UnsubscriberAsyncList from 'unsubscriber-async-list';
-// import PlatformEventEmitter from 'platform-event-emitter.model';
-
 // Classes
 export { default as AsyncVariable } from './async-variable';
 export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 export { default as PlatformEventEmitter } from './platform-event-emitter.model';
 
-// Const
-// Why won't this export without type
+// Consts
 export {
   getBookNameOptions,
   getChaptersForBook,
