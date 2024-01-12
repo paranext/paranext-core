@@ -1,4 +1,4 @@
-import { Dispose } from 'disposal.model';
+import { Dispose } from './disposal.model';
 import { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
 
 /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */

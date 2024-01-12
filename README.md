@@ -88,7 +88,7 @@ Paranext Core extensions are found in the `extensions` folder. Please follow the
 
 **[Platform.Bible React Components and Hooks Documentation](https://paranext.github.io/paranext-core/platform-bible-react)**
 
-- Check out the React components and hooks available on the PAPI.
+- Check out the React components and hooks available to use.
 
 **[Platform.Bible Utilities Documentation](https://paranext.github.io/paranext-core/platform-bible-utils)**
 

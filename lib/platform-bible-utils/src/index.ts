@@ -5,7 +5,6 @@ export { default as PlatformEventEmitter } from './platform-event-emitter.model'
 
 // Consts
 export {
-  getBookNameOptions,
   getChaptersForBook,
   offsetBook,
   offsetChapter,
@@ -40,6 +39,4 @@ export type {
 } from './disposal.model';
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
 export type { ScriptureReference, BookInfo } from './scripture.model';
-export type { BookNameOption } from './scripture-util';
 export type { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
-export type { moduleSummaryComments } from './util';

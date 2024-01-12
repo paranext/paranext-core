@@ -1,7 +1,5 @@
 /** Collection of functions, objects, and types that are used as helpers in other services. */
 
-export type moduleSummaryComments = {};
-
 // Thanks to blubberdiblub at https://stackoverflow.com/a/68141099/217579
 export function newGuid(): string {
   return '00-0-4-1-000'.replace(/[^-]/g, (s) =>

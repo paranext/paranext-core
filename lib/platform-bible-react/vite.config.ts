@@ -29,6 +29,7 @@ const config = defineConfig({
         '@mui/material',
         '@mui/styled-engine-sc',
         '@mui/styled-engine',
+        'platform-bible-utils',
       ],
       output: {
         globals: {

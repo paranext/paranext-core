@@ -12,7 +12,7 @@ export type {
   ComboBoxLabelOption,
   ComboBoxProps,
   ComboBoxOption,
-  ComboBoxValue
+  ComboBoxValue,
 } from './components/combo-box.component';
 export { default as GridMenu } from './components/grid-menu.component';
 export type {
@@ -24,7 +24,12 @@ export { default as IconButton } from './components/icon-button.component';
 export type { IconButtonProps } from './components/icon-button.component';
 export { default as LabelPosition } from './components/label-position.model';
 export { default as MenuItem } from './components/menu-item.component';
-export type { MenuItemInfo, MenuItemProps, Command, CommandHandler } from './components/menu-item.component';
+export type {
+  MenuItemInfo,
+  MenuItemProps,
+  Command,
+  CommandHandler,
+} from './components/menu-item.component';
 export { default as RefSelector } from './components/ref-selector.component';
 export type { ScrRefSelectorProps } from './components/ref-selector.component';
 export { default as SearchBar } from './components/search-bar.component';
@@ -32,7 +37,12 @@ export type { SearchBarProps } from './components/search-bar.component';
 export { default as Slider } from './components/slider.component';
 export type { SliderProps } from './components/slider.component';
 export { default as Snackbar } from './components/snackbar.component';
-export type { AnchorOrigin,CloseReason, SnackbarContentProps, SnackbarProps } from './components/snackbar.component';
+export type {
+  AnchorOrigin,
+  CloseReason,
+  SnackbarContentProps,
+  SnackbarProps,
+} from './components/snackbar.component';
 export { default as Switch } from './components/switch.component';
 export type { SwitchProps } from './components/switch.component';
 export { default as Table } from './components/table.component';

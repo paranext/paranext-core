@@ -1,4 +1,4 @@
-import { Unsubscriber, UnsubscriberAsync } from 'unsubscriber';
+import { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
 
 /** Callback function that accepts an event and should run when an event is emitted */
 export type PlatformEventHandler<T> = (event: T) => void;

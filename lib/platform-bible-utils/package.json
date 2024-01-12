@@ -25,7 +25,9 @@
   "main": "dist/index.cjs.js",
   "module": "dist/index.es.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "start": "vite --host --open",
     "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
@@ -38,22 +40,9 @@
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,csj}\" && npm run lint:scripts",
     "postinstall": "cd ../.. && npm install --ignore-scripts"
   },
-  "peerDependencies": {
-    "@emotion/react": ">=11.11.1",
-    "@emotion/styled": ">=11.11.0",
-    "@mui/material": ">=5.14.1",
-    "react": ">=18.2.0",
-    "react-data-grid": ">=7.0.0-beta.34",
-    "react-dom": ">=18.2.0"
-  },
   "devDependencies": {
-    "@mui/icons-material": "^5.13.7",
-    "@senojs/rollup-plugin-style-inject": "^0.2.3",
-    "@types/react": "^18.2.15",
-    "@types/react-dom": "^18.2.7",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
-    "@vitejs/plugin-react": "^4.0.3",
     "dts-bundle-generator": "^8.0.1",
     "eslint": "^8.45.0",
     "eslint-config-prettier": "^8.8.0",

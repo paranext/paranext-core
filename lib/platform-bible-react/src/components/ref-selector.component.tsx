@@ -1,8 +1,6 @@
 import { Canon } from '@sillsdev/scripture';
 import { SyntheticEvent, useMemo } from 'react';
 import {
-  BookNameOption,
-  getBookNameOptions,
   offsetBook,
   offsetChapter,
   offsetVerse,
@@ -13,7 +11,7 @@ import {
   ScriptureReference,
 } from 'platform-bible-utils';
 import './ref-selector.component.css';
-import ComboBox from './combo-box.component';
+import ComboBox, { ComboBoxLabelOption } from './combo-box.component';
 import Button from './button.component';
 import TextField from './text-field.component';
 
@@ -22,6 +20,30 @@ export interface ScrRefSelectorProps {
   handleSubmit: (scrRef: ScriptureReference) => void;
   id?: string;
 }
+
+export interface BookNameOption extends ComboBoxLabelOption {
+  bookId: string;
+}
+
+let bookNameOptions: BookNameOption[];
+
+/**
+ * Gets ComboBox options for book names. Use the _bookId_ for reference rather than the _label_ to
+ * aid in localization.
+ *
+ * @remarks
+ * This can be localized by loading _label_ with the localized book name.
+ * @returns An array of ComboBox options for book names.
+ */
+export const getBookNameOptions = () => {
+  if (!bookNameOptions) {
+    bookNameOptions = Canon.allBookIds.map((bookId) => ({
+      bookId,
+      label: Canon.bookIdToEnglishName(bookId),
+    }));
+  }
+  return bookNameOptions;
+};
 
 function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
   const onChangeBook = (newRef: ScriptureReference) => {

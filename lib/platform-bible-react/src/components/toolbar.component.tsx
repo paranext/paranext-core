@@ -52,9 +52,9 @@ export default function Toolbar({
     });
   }, []);
 
-  // useRef requires null, so cannot use undefined
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement>(null);
+  // This ref will always be defined
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const containerRef = useRef<HTMLDivElement>(undefined!);
 
   const [toolbarHeight, setToolbarHeight] = useState(0);
 
