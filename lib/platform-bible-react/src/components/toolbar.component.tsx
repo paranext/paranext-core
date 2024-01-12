@@ -5,7 +5,7 @@ import GridMenu, { GridMenuInfo } from './grid-menu.component';
 import './toolbar.component.css';
 import { Command, CommandHandler } from './menu-item.component';
 
-export interface DataHandler {
+export interface ToolbarDataHandler {
   (isSupportAndDevelopment: boolean): GridMenuInfo;
 }
 
@@ -14,7 +14,7 @@ export type ToolbarProps = PropsWithChildren<{
   commandHandler: CommandHandler;
 
   /** The handler to use for menu data if there is no menu provided. */
-  dataHandler?: DataHandler;
+  dataHandler?: ToolbarDataHandler;
 
   /** Optional unique identifier */
   id?: string;

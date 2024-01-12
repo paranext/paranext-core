@@ -732,14 +732,14 @@ export type TextFieldProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function TextField({ variant, id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
-export interface DataHandler {
+export interface ToolbarDataHandler {
 	(isSupportAndDevelopment: boolean): GridMenuInfo;
 }
 export type ToolbarProps = PropsWithChildren<{
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	commandHandler: CommandHandler;
 	/** The handler to use for menu data if there is no menu provided. */
-	dataHandler?: DataHandler;
+	dataHandler?: ToolbarDataHandler;
 	/** Optional unique identifier */
 	id?: string;
 	/** The optional grid menu to display. If not specified, the "hamburger" menu will not display. */
