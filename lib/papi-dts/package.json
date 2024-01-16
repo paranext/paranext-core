@@ -45,6 +45,6 @@
     "typescript": "^5.1.6"
   },
   "dependencies": {
-    "platform-bible-utils": "file:./lib/platform-bible-utils"
+    "platform-bible-utils": "file:../platform-bible-utils"
   }
 }

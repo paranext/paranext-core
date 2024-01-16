@@ -21,7 +21,7 @@ export interface ScrRefSelectorProps {
   id?: string;
 }
 
-export interface BookNameOption extends ComboBoxLabelOption {
+interface BookNameOption extends ComboBoxLabelOption {
   bookId: string;
 }
 
@@ -35,7 +35,7 @@ let bookNameOptions: BookNameOption[];
  * This can be localized by loading _label_ with the localized book name.
  * @returns An array of ComboBox options for book names.
  */
-export const getBookNameOptions = () => {
+const getBookNameOptions = () => {
   if (!bookNameOptions) {
     bookNameOptions = Canon.allBookIds.map((bookId) => ({
       bookId,

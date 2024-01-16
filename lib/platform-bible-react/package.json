@@ -70,6 +70,6 @@
     "vite": "^4.4.12"
   },
   "dependencies": {
-    "platform-bible-utils": "file:./lib/platform-bible-utils"
+    "platform-bible-utils": "file:../platform-bible-utils"
   }
 }
