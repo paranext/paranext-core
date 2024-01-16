@@ -33,3 +33,5 @@ export type {
 } from '@shared/models/web-view.model';
 
 export type { IWebViewProvider } from '@shared/models/web-view-provider.model';
+
+export type { SettingEvent } from '@shared/services/settings.service';

@@ -3753,17 +3753,33 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
 }
 declare module 'shared/services/settings.service' {
   import { Unsubscriber } from 'platform-bible-utils';
-  import { SettingTypes } from 'papi-shared-types';
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  /** Event to set or update a setting */
+  export type UpdateSettingEvent<SettingName extends SettingNames> = {
+    type: 'update-setting';
+    setting: SettingTypes[SettingName];
+  };
+  /** Event to remove a setting */
+  export type ResetSettingEvent = {
+    type: 'reset-setting';
+  };
+  /** All supported setting events */
+  export type SettingEvent<SettingName extends SettingNames> =
+    | UpdateSettingEvent<SettingName>
+    | ResetSettingEvent;
   /**
    * Retrieves the value of the specified setting
    *
    * @param key The string id of the setting for which the value is being retrieved
+   * @param defaultSetting The default value used for the setting if no value is available for the key
    * @returns The value of the specified setting, parsed to an object. Returns `undefined` if setting
    *   is not present or no value is available
+   * @throws When defaultSetting is required but not provided
    */
   const getSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
-  ) => SettingTypes[SettingName] | undefined;
+    defaultSetting: SettingTypes[SettingName],
+  ) => SettingTypes[SettingName];
   /**
    * Sets the value of the specified setting
    *
@@ -3773,8 +3789,14 @@ declare module 'shared/services/settings.service' {
    */
   const setSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
-    newSetting: SettingTypes[SettingName] | undefined,
+    newSetting: SettingTypes[SettingName],
   ) => void;
+  /**
+   * Removes the setting from memory
+   *
+   * @param key The string id of the setting for which the value is being removed
+   */
+  const resetSetting: <SettingName extends keyof SettingTypes>(key: SettingName) => void;
   /**
    * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
    * callback function is executed.
@@ -3785,11 +3807,12 @@ declare module 'shared/services/settings.service' {
    */
   const subscribeToSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
-    callback: (newSetting: SettingTypes[SettingName] | undefined) => void,
+    callback: (newSetting: SettingEvent<SettingName>) => void,
   ) => Unsubscriber;
   export interface SettingsService {
     get: typeof getSetting;
     set: typeof setSetting;
+    reset: typeof resetSetting;
     subscribe: typeof subscribeToSetting;
   }
   /**
@@ -4012,10 +4035,8 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   import { SettingTypes } from 'papi-shared-types';
   /**
-   * Gets and sets a setting on the papi. Also notifies subscribers when the setting changes and gets
-   * updated when the setting is changed by others.
-   *
-   * Setting the value to `undefined` is the equivalent of deleting the setting.
+   * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
+   * and gets updated when the setting is changed by others.
    *
    * @param key The string id that is used to store the setting in local storage
    *
@@ -4026,16 +4047,20 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
    *   updated every render
-   * @returns `[setting, setSetting]`
+   * @returns `[setting, setSetting, resetSetting]`
    *
    *   - `setting`: The current state of the setting, either the defaultState or the stored state on the
    *       papi, if any
    *   - `setSetting`: Function that updates the setting to a new value
+   *   - `resetSetting`: Function that removes the setting
+   *
+   * @throws When subscription callback function is called with an update that has an unexpected
+   *   message type
    */
   const useSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
     defaultState: SettingTypes[SettingName],
-  ) => [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void];
+  ) => [SettingTypes[SettingName], (newSetting: SettingTypes[SettingName]) => void, () => void];
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
@@ -4654,4 +4679,5 @@ declare module '@papi/core' {
     WebViewProps,
   } from 'shared/models/web-view.model';
   export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+  export type { SettingEvent } from 'shared/services/settings.service';
 }
