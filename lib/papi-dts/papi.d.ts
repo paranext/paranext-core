@@ -4116,17 +4116,19 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
 declare module 'shared/services/settings.service' {
   import { Unsubscriber } from 'shared/utils/papi-util';
   import { SettingNames, SettingTypes } from 'papi-shared-types';
-  /** Message sent to the client to give it NetworkConnectorInfo */
-  export type SetSettingMessage = {
-    type: 'set-setting';
-    setting: SettingTypes[SettingNames];
+  /** Event to set or update a setting */
+  export type UpdateSettingEvent<SettingName extends SettingNames> = {
+    type: 'update-setting';
+    setting: SettingTypes[SettingName];
   };
-  /** Message responding to the server to let it know this connection is ready to receive messages */
-  export type ResetSettingMessage = {
+  /** Event to remove a setting */
+  export type ResetSettingEvent = {
     type: 'reset-setting';
   };
-  /** Messages send by the WebSocket */
-  export type SettingMessage = SetSettingMessage | ResetSettingMessage;
+  /** All supported setting events */
+  export type SettingEvent<SettingName extends SettingNames> =
+    | UpdateSettingEvent<SettingName>
+    | ResetSettingEvent;
   /**
    * Retrieves the value of the specified setting
    *
@@ -4167,7 +4169,7 @@ declare module 'shared/services/settings.service' {
    */
   const subscribeToSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
-    callback: (newSetting: SettingMessage) => void,
+    callback: (newSetting: SettingEvent<SettingName>) => void,
   ) => Unsubscriber;
   export interface SettingsService {
     get: typeof getSetting;
@@ -5040,4 +5042,5 @@ declare module '@papi/core' {
   } from 'shared/models/web-view.model';
   export type { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
   export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+  export type { SettingEvent as SettingMessage } from 'shared/services/settings.service';
 }
