@@ -20,11 +20,11 @@ import {
   Table,
   ScriptureReference,
 } from 'papi-components';
-import type { DialogTypes, WebViewProps } from '@papi/core';
+import type { WebViewProps } from '@papi/core';
 import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
 import Clock from './components/clock.component';
-import Logo from '../assets/offline.svg';
+import Logo from '../../assets/offline.svg';
 
 type Row = {
   id: string;
@@ -98,30 +98,76 @@ globalThis.webViewComponent = function HelloWorld({
     'retrieving',
   );
 
-  const [project, selectProject] = useDialogCallback(
+  const [project, setProject] = useWebViewState<string>('project', '');
+
+  const currentRender = useRef(-1);
+  currentRender.current += 1;
+
+  const showProjectDialog = useDialogCallback(
     'platform.selectProject',
-    useRef({
-      prompt: 'Please select a project for Hello World WebView:',
+    // This is intentionally not a stable reference like `useMemo` or something because we are
+    // testing below to make sure `useDialogCallback` returns the same callback every time
+    {
+      prompt: `Please select a project for Hello World WebView: (Render ${currentRender.current})`,
       iconUrl: 'papi-extension://hello-world/assets/offline.svg',
       title: 'Select Hello World Project',
-    }).current,
+      maximumOpenDialogs: 2,
+      // Test ref parameter properly getting latest value
+      currentRender: currentRender.current,
+      optionsSource: 'hook',
+    },
+    useCallback(
+      (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
+        if (selectedProject) setProject(selectedProject);
+
+        logger.info(
+          `Show project dialog resolved to ${selectedProject}. Dialog was shown at render ${dialogRender} with options from ${optionsSource}`,
+        );
+      },
+      [setProject],
+    ),
   );
+
+  const selectProject = useCallback(() => {
+    showProjectDialog({
+      // Testing having options provided in show dialog function overwrite options in hook
+      optionsSource: 'showDialogCallback',
+    });
+  }, [showProjectDialog]);
+
+  // Test to make sure useDialogCallback is properly returning the same callback every time even
+  // though `options` parameter is not a stable reference
+  useEffect(() => {
+    if (currentRender.current > 0)
+      logger.error(
+        "showProjectDialog updated! This should not have happened. Maybe useDialogCallback's parameters are improperly being listed in dependency arrays",
+      );
+  }, [showProjectDialog]);
 
   const [latestVerseText] = useData('quickVerse.quickVerse').Verse(
     'latest',
     'Loading latest Scripture text...',
   );
 
-  const [projects, selectProjects] = useDialogCallback(
+  const [projects, setProjects] = useWebViewState('projects', ['None']);
+
+  const selectProjects = useDialogCallback(
     'platform.selectMultipleProjects',
-    useRef({
-      prompt: 'Please select one or more projects for Hello World WebView:',
-      iconUrl: 'papi-extension://hello-world/assets/offline.svg',
-      title: 'Select List of Hello World Projects',
-    }).current,
-    // Assert as string type rather than string literal type.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    ['None'] as DialogTypes['platform.selectMultipleProjects']['responseType'],
+    useMemo(
+      () => ({
+        prompt: 'Please select one or more projects for Hello World WebView:',
+        iconUrl: 'papi-extension://hello-world/assets/offline.svg',
+        title: 'Select List of Hello World Projects',
+        selectedProjectIds: projects,
+      }),
+      [projects],
+    ),
+    useCallback(
+      (selectedProjects) => {
+        if (selectedProjects) setProjects(selectedProjects);
+      },
+      [setProjects],
+    ),
   );
 
   const [name, setName] = useState('Bill');
@@ -203,7 +249,7 @@ globalThis.webViewComponent = function HelloWorld({
       <h3>List of Selected Project Id(s):</h3>
       <div>{projects.join(', ')}</div>
       <div>
-        <Button onClick={selectProjects}>Select Projects</Button>
+        <Button onClick={() => selectProjects()}>Select Projects</Button>
       </div>
       <br />
       <div>

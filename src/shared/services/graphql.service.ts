@@ -2,9 +2,9 @@ import { graphql, buildSchema } from 'graphql';
 import { VerseRef, ScrVers } from '@sillsdev/scripture';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
-import { ProjectDataProvider } from '@shared/models/project-data-provider-engine.model';
 import { get } from '@shared/services/project-data-provider.service';
 import { serialize } from '@shared/utils/papi-util';
+import { ProjectDataProviders } from 'papi-shared-types';
 
 // TODO: figure out what to do with the schema. It's a baked in string just to get things rolling, not because it's optimal.
 const usfmSchema = buildSchema(`
@@ -54,13 +54,13 @@ function extractVerseRef(maybeVerseRef: MaybeVerseRef): VerseRef {
 
 // Caching some objects so we don't have to keep making network calls for every GraphQL query
 const projectMap = new Map<string, ProjectMetadata>();
-const paratextProjectMap = new Map<string, ProjectDataProvider['ParatextStandard']>();
+const paratextProjectMap = new Map<string, ProjectDataProviders['ParatextStandard']>();
 
 /** Transform the GraphQL inputs into objects we can work with */
 async function preparePdpCall(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   inputs: any,
-): Promise<{ pdp: ProjectDataProvider['ParatextStandard']; verseRef: VerseRef }> {
+): Promise<{ pdp: ProjectDataProviders['ParatextStandard']; verseRef: VerseRef }> {
   const { projectId, verseRef }: { projectId: string; verseRef: Object } = inputs;
   const parsedVerseRef = extractVerseRef(verseRef);
   const existingPdp = paratextProjectMap.get(projectId);

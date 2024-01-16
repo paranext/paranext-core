@@ -1,9 +1,10 @@
 {
   "name": "resource-viewer",
   "version": "0.0.1",
-  "description": "Simple resource viewer extension for Paranext",
+  "description": "Simple resource viewer extension for Platform.Bible",
   "author": "Paranext",
   "license": "MIT",
-  "main": "resource-viewer.ts",
+  "main": "src/main.ts",
+  "types": "src/types/resource-viewer.d.ts",
   "activationEvents": []
 }

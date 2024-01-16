@@ -85,13 +85,12 @@ type UseDataHook = {
  *
  * _＠param_ `defaultValue` the initial value to return while first awaiting the data
  *
- * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
- * updated every render
- *
  * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
  *
- * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
- * must not be updated every render
+ * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+ * to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+ * provider's `subscribe<data_type>` method as soon as possible and will not be updated again until
+ * `dataProviderSource` or `selector` changes.
  *
  * _＠returns_ `[data, setData, isLoading]`
  *

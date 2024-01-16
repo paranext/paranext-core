@@ -1,15 +1,12 @@
 {
   "name": "resource-viewer",
   "version": "0.0.1",
-  "description": "Simple resource viewer extension for Paranext",
-  "main": "resource-viewer.js",
-  "types": "resource-viewer.d.ts",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "description": "Simple resource viewer extension for Platform.Bible",
+  "main": "src/main.js",
+  "types": "src/types/resource-viewer.d.ts",
   "author": "Katherine Jensen",
   "license": "MIT",
-  "devDependencies": {
-    "usxeditor": "^0.0.9-alpha"
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
   }
 }

@@ -659,21 +659,18 @@ declare module 'shared/utils/papi-util' {
    */
   export function deepEqual(a: unknown, b: unknown): boolean;
   /**
-   * Converts a JavaScript value to a JSON string, changing `undefined` properties to `null`
-   * properties in the JSON string.
+   * Converts a JavaScript value to a JSON string, changing `undefined` properties in the JavaScript
+   * object to `null` properties in the JSON string.
    *
-   * WARNING: `null` and `undefined` values are treated as the same thing by this function and will be
-   * dropped when passed to {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will
-   * become `{ a: 1 }` after passing through {@link serialize} then {@link deserialize}. If you are
-   * passing around user data that needs to retain `null` and/or `undefined` values, you should wrap
-   * them yourself in a string before using this function. Alternatively, you can write your own
-   * replacer that will preserve `null` and `undefined` values in a way that a custom reviver will
-   * understand when deserializing.
+   * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
+   * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
+   * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
+   * values, you should wrap them yourself in a string before using this function. Alternatively, you
+   * can write your own replacer that will preserve `null` in a way that you can recover later.
    *
    * @param value A JavaScript value, usually an object or array, to be converted.
-   * @param replacer A function that transforms the results. Note that all `null` and `undefined`
-   *   values returned by the replacer will be further transformed into a moniker that deserializes
-   *   into `undefined`.
+   * @param replacer A function that transforms the results. Note that all `undefined` values returned
+   *   by the replacer will be further transformed into `null` in the JSON string.
    * @param space Adds indentation, white space, and line break characters to the return-value JSON
    *   text to make it easier to read. See the `space` parameter of `JSON.stringify` for more
    *   details.
@@ -684,21 +681,20 @@ declare module 'shared/utils/papi-util' {
     space?: string | number,
   ): string;
   /**
-   * Converts a JSON string into a value.
+   * Converts a JSON string into a value, converting all `null` properties from JSON into `undefined`
+   * in the returned JavaScript value/object.
    *
-   * WARNING: `null` and `undefined` values that were serialized by {@link serialize} will both be made
-   * into `undefined` values by this function. If those values are properties of objects, those
-   * properties will simply be dropped. For example, `{ a: 1, b: undefined, c: null }` will become `{
-   * a: 1 }` after passing through {@link serialize} then {@link deserialize}. If you are passing around
-   * user data that needs to retain `null` and/or `undefined` values, you should wrap them yourself in
-   * a string before using this function. Alternatively, you can write your own reviver that will
-   * preserve `null` and `undefined` values in a way that a custom replacer will encode when
-   * serializing.
+   * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
+   * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
+   * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
+   * values, you should wrap them yourself in a string before using this function. Alternatively, you
+   * can write your own replacer that will preserve `null` in a way that you can recover later.
    *
    * @param text A valid JSON string.
    * @param reviver A function that transforms the results. This function is called for each member of
    *   the object. If a member contains nested objects, the nested objects are transformed before the
-   *   parent object is.
+   *   parent object is. Note that `null` values are converted into `undefined` values after the
+   *   reviver has run.
    */
   export function deserialize(
     value: string,
@@ -711,8 +707,7 @@ declare module 'shared/utils/papi-util' {
    * @returns True if serializable; false otherwise
    *
    *   Note: the values `undefined` and `null` are serializable (on their own or in an array), but
-   *   `undefined` and `null` properties of objects are dropped when serializing/deserializing. That
-   *   means `undefined` and `null` properties on a value passed in will cause it to fail.
+   *   `null` values get transformed into `undefined` when serializing/deserializing.
    *
    *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
    *   Please only use this if you need to
@@ -1835,6 +1830,12 @@ declare module 'shared/services/network-object.service' {
   const set: <T extends NetworkableObject>(
     id: string,
     objectToShare: T,
+    objectType?: string,
+    objectAttributes?:
+      | {
+          [property: string]: unknown;
+        }
+      | undefined,
   ) => Promise<DisposableNetworkObject<T>>;
   interface NetworkObjectService {
     initialize: typeof initialize;
@@ -1931,15 +1932,25 @@ declare module 'shared/models/network-object.model' {
     id: string,
     networkObjectPromise: Promise<NetworkObject<T>>,
   ) => Partial<NetworkableObject>;
-  /**
-   * Data about an object shared on the network
-   *
-   * @param id ID of the network object that processes use to reference it
-   * @param functionNames Array of strings with the function names exposed on this network object
-   */
+  /** Data about an object shared on the network */
   export type NetworkObjectDetails = {
+    /** ID of the network object that processes use to reference it */
     id: string;
+    /**
+     * Name of the type of this network object. Note this isn't about TypeScript types, but instead
+     * focused on the platform data model. Names of types for the same logical thing (e.g., Project
+     * Data Providers => `pdp`) should be the same across all process on the network regardless of
+     * what programming language they use. For generic network objects, `networkObject` is
+     * appropriate.
+     */
+    objectType: string;
+    /** Array of strings with the function names exposed on this network object */
     functionNames: string[];
+    /**
+     * Optional object containing properties that describe this network object. The properties
+     * associated with this network object depend on the `objectType`.
+     */
+    attributes?: Record<string, unknown>;
   };
 }
 declare module 'shared/models/data-provider.model' {
@@ -2482,34 +2493,64 @@ declare module 'papi-shared-types' {
     Notes: DataProviderDataType<string, string | undefined, string>;
   };
   /**
-   * Data types for each project data provider supported by PAPI. Extensions can add more data types
-   * with corresponding project data provider IDs by adding details to their `.d.ts` file. Note that
-   * all project data types should extend `MandatoryProjectDataTypes` like the following example.
+   * `IDataProvider` types for each project data provider supported by PAPI. Extensions can add more
+   * project data providers with corresponding data provider IDs by adding details to their `.d.ts`
+   * file. Note that all project data types should extend `MandatoryProjectDataTypes` like the
+   * following example.
+   *
+   * Note: Project Data Provider names must consist of two string separated by at least one period.
+   * We recommend one period and lower camel case in case we expand the api in the future to allow
+   * dot notation.
+   *
+   * An extension can extend this interface to add types for the project data provider it registers
+   * by adding the following to its `.d.ts` file (in this example, we are adding the
+   * `MyExtensionProjectTypeName` data provider types):
    *
    * @example
    *
    * ```typescript
    * declare module 'papi-shared-types' {
-   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
-   *     MyProjectData1: DataProviderDataType<string, string, string>;
-   *     MyProjectData2: DataProviderDataType<string, string, string>;
+   *   export type MyProjectDataType = MandatoryProjectDataType & {
+   *     MyProjectData: DataProviderDataType<string, string, string>;
    *   };
    *
-   *   export interface ProjectDataTypes {
-   *     MyExtensionProjectTypeName: MyProjectDataTypes;
+   *   export interface ProjectDataProviders {
+   *     MyExtensionProjectTypeName: IDataProvider<MyProjectDataType>;
    *   }
    * }
    * ```
    */
-  interface ProjectDataTypes {
-    NotesOnly: NotesOnlyProjectDataTypes;
-    placeholder: MandatoryProjectDataType;
+  interface ProjectDataProviders {
+    'platform.notesOnly': IDataProvider<NotesOnlyProjectDataTypes & MandatoryProjectDataType>;
+    'platform.placeholder': IDataProvider<PlaceholderDataTypes & MandatoryProjectDataType>;
   }
   /**
-   * Identifiers for all project types supported by PAPI. These are not intended to correspond 1:1
-   * to the set of project types available in Paratext.
+   * Names for each project data provider available on the papi.
+   *
+   * Automatically includes all extensions' project data providers that are added to
+   * {@link ProjectDataProviders}.
+   *
+   * @example 'platform.placeholder'
    */
-  type ProjectTypes = keyof ProjectDataTypes;
+  type ProjectTypes = keyof ProjectDataProviders;
+  /**
+   * `DataProviderDataTypes` for each project data provider supported by PAPI. These are the data
+   * types served by each project data provider.
+   *
+   * Automatically includes all extensions' project data providers that are added to
+   * {@link ProjectDataProviders}.
+   *
+   * @example
+   *
+   * ```typescript
+   * ProjectDataTypes['MyExtensionProjectTypeName'] => {
+   *     MyProjectData: DataProviderDataType<string, string, string>;
+   *   }
+   * ```
+   */
+  type ProjectDataTypes = {
+    [ProjectType in ProjectTypes]: ExtractDataProviderDataTypes<ProjectDataProviders[ProjectType]>;
+  };
   type StuffDataTypes = {
     Stuff: DataProviderDataType<string, number, never>;
   };
@@ -3116,6 +3157,12 @@ declare module 'shared/services/data-provider.service' {
    *
    * @param providerName Name this data provider should be called on the network
    * @param dataProviderEngine The object to layer over with a new data provider object
+   * @param dataProviderType String to send in a network event to clarify what type of data provider
+   *   is represented by this engine. For generic data providers, the default value of `dataProvider`
+   *   can be used. For data provider types that have multiple instances (e.g., project data
+   *   providers), a unique type name should be used to distinguish from generic data providers.
+   * @param dataProviderAttributes Optional object that will be sent in a network event to provide
+   *   additional metadata about the data provider represented by this engine.
    *
    *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
    *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -3125,33 +3172,45 @@ declare module 'shared/services/data-provider.service' {
   function registerEngine<DataProviderName extends DataProviderNames>(
     providerName: DataProviderName,
     dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
+    dataProviderType?: string,
+    dataProviderAttributes?:
+      | {
+          [property: string]: unknown;
+        }
+      | undefined,
   ): Promise<DisposableDataProviders[DataProviderName]>;
   /**
-   * Create a mock local data provider object for connecting to the remote data provider
+   * Creates a data provider to be shared on the network layering over the provided data provider
+   * engine.
    *
    * @type `TDataTypes` - The data provider data types served by the data provider to create.
    *
    *   This is not exposed on the papi as it is a helper function to enable other services to layer over
    *   this service and create their own subsets of data providers with other types than
    *   `DataProviders` types using this function and {@link getByType}
-   * @param dataProviderObjectId Network object id corresponding to this data provider
-   * @param dataProviderContainer Container that holds a reference to the data provider so this
-   *   subscribe function can reference the data provider
    * @param providerName Name this data provider should be called on the network
    * @param dataProviderEngine The object to layer over with a new data provider object
+   * @param dataProviderType String to send in a network event to clarify what type of data provider
+   *   is represented by this engine. For generic data providers, the default value of `dataProvider`
+   *   can be used. For data provider types that have multiple instances (e.g., project data
+   *   providers), a unique type name should be used to distinguish from generic data providers.
+   * @param dataProviderAttributes Optional object that will be sent in a network event to provide
+   *   additional metadata about the data provider represented by this engine.
    *
    *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
    *   `set` methods are layered over to facilitate data provider subscriptions.
-   * @returns Local data provider object that represents a remote data provider
-   *
-   *   Creates a data provider to be shared on the network layering over the provided data provider
-   *   engine.
    * @returns The data provider including control over disposing of it. Note that this data provider
    *   is a new object distinct from the data provider engine passed in.
    */
   export function registerEngineByType<TDataTypes extends DataProviderDataTypes>(
     providerName: string,
     dataProviderEngine: IDataProviderEngine<TDataTypes>,
+    dataProviderType?: string,
+    dataProviderAttributes?:
+      | {
+          [property: string]: unknown;
+        }
+      | undefined,
   ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>>;
   /**
    * Get a data provider that has previously been set up
@@ -3193,15 +3252,10 @@ declare module 'shared/services/data-provider.service' {
 }
 declare module 'shared/models/project-data-provider-engine.model' {
   import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
-  import type IDataProvider from 'shared/models/data-provider.interface';
   import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
   /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
   export type ProjectDataProviderEngineTypes = {
     [ProjectType in ProjectTypes]: IDataProviderEngine<ProjectDataTypes[ProjectType]>;
-  };
-  /** All possible types for ProjectDataProviders: IDataProvider<ProjectDataType> */
-  export type ProjectDataProvider = {
-    [ProjectType in ProjectTypes]: IDataProvider<ProjectDataTypes[ProjectType]>;
   };
   export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
     createProjectDataProviderEngine(
@@ -3281,11 +3335,8 @@ declare module 'shared/services/project-lookup.service' {
   export default projectLookupService;
 }
 declare module 'shared/services/project-data-provider.service' {
-  import { ProjectTypes } from 'papi-shared-types';
-  import {
-    ProjectDataProvider,
-    ProjectDataProviderEngineFactory,
-  } from 'shared/models/project-data-provider-engine.model';
+  import { ProjectTypes, ProjectDataProviders } from 'papi-shared-types';
+  import { ProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
   import { Dispose } from 'shared/models/disposal.model';
   /**
    * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
@@ -3319,7 +3370,7 @@ declare module 'shared/services/project-data-provider.service' {
   export function get<ProjectType extends ProjectTypes>(
     projectType: ProjectType,
     projectId: string,
-  ): Promise<ProjectDataProvider[ProjectType]>;
+  ): Promise<ProjectDataProviders[ProjectType]>;
   export interface PapiBackendProjectDataProviderService {
     registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
     get: typeof get;
@@ -4185,23 +4236,36 @@ declare module 'shared/services/settings.service' {
   export default settingsService;
 }
 declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
+  export type UsePromiseOptions = {
+    /**
+     * Whether to leave the value as the most recent resolved promise value or set it back to
+     * defaultValue while running the promise again. Defaults to true
+     */
+    preserveValue?: boolean;
+  };
   /**
    * Awaits a promise and returns a loading value while the promise is unresolved
    *
    * @param promiseFactoryCallback A function that returns the promise to await. If this callback is
    *   undefined, the current value will be returned (defaultValue unless it was previously changed
-   *   and preserveValue is true), and there will be no loading.
+   *   and `options.preserveValue` is true), and there will be no loading.
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
    *   every render
    * @param defaultValue The initial value to return while first awaiting the promise. If
-   *   preserveValue is false, this value is also shown while awaiting the promise on subsequent
-   *   calls.
+   *   `options.preserveValue` is false, this value is also shown while awaiting the promise on
+   *   subsequent calls.
    *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param preserveValue Whether to leave the value as the most recent resolved promise value or set
-   *   it back to defaultValue while running the promise again. Default to true
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that, if the `promiseFactoryCallback` changes and
+   *   `options.preserveValue` is `false`, the returned value will be set to the current
+   *   `defaultValue`. However, the returned value will not be updated if`defaultValue` changes.
+   * @param options Various options for adjusting how this hook runs the `promiseFactoryCallback`
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. However, the latest `options.preserveValue` will always be used
+   *   appropriately to determine whether to preserve the returned value when changing the
+   *   `promiseFactoryCallback`
    * @returns `[value, isLoading]`
    *
    *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
@@ -4210,7 +4274,7 @@ declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
   const usePromise: <T>(
     promiseFactoryCallback: (() => Promise<T>) | undefined,
     defaultValue: T,
-    preserveValue?: boolean,
+    options?: UsePromiseOptions,
   ) => [value: T, isLoading: boolean];
   export default usePromise;
 }
@@ -4451,13 +4515,12 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *
    * _＠param_ `defaultValue` the initial value to return while first awaiting the data
    *
-   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   * updated every render
-   *
    * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
    *
-   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
-   * must not be updated every render
+   * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   * to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   * provider's `subscribe<data_type>` method as soon as possible and will not be updated again until
+   * `dataProviderSource` or `selector` changes.
    *
    * _＠returns_ `[data, setData, isLoading]`
    *
@@ -4505,8 +4568,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
-  import { ProjectDataTypes } from 'papi-shared-types';
-  import IDataProvider from 'shared/models/data-provider.interface';
+  import { ProjectDataProviders } from 'papi-shared-types';
   /**
    * Gets a project data provider with specified provider name
    *
@@ -4521,10 +4583,10 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    *   data provider if it has been retrieved and is not disposed, and undefined again if the project
    *   data provider is disposed
    */
-  const useProjectDataProvider: <ProjectType extends keyof ProjectDataTypes>(
+  const useProjectDataProvider: <ProjectType extends keyof ProjectDataProviders>(
     projectType: ProjectType,
-    projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
-  ) => IDataProvider<ProjectDataTypes[ProjectType]> | undefined;
+    projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+  ) => ProjectDataProviders[ProjectType] | undefined;
   export default useProjectDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
@@ -4532,8 +4594,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
-  import IDataProvider from 'shared/models/data-provider.interface';
-  import { ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
+  import { ProjectDataProviders, ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
   /**
    * React hook to use data from a project data provider
    *
@@ -4542,7 +4603,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   type UseProjectDataHook = {
     <ProjectType extends ProjectTypes>(
       projectType: ProjectType,
-      projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+      projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
     ): {
       [TDataType in keyof ProjectDataTypes[ProjectType]]: (
         // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
@@ -4568,7 +4629,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * ```typescript
    * useProjectData<ProjectType extends ProjectTypes>(
    *     projectType: ProjectType,
-   *     projectDataProviderSource: string | IDataProvider<ProjectDataTypes[ProjectType]> | undefined,
+   *     projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
    *   ).DataType(
    *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
    *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
@@ -4622,13 +4683,12 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *
    * _＠param_ `defaultValue` the initial value to return while first awaiting the data
    *
-   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   * updated every render
-   *
    * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
    *
-   * WARNING: If provided, MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference
-   * must not be updated every render
+   * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   * to re-run with its new value. This means that `subscriberOptions` will be passed to the project
+   * data provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   * until `projectDataProviderSource` or `selector` changes.
    *
    * _＠returns_ `[data, setData, isLoading]`
    */
@@ -4637,55 +4697,175 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
 }
 declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  export type UseDialogCallbackOptions = {
+    /**
+     * How many dialogs are allowed to be open at once from this dialog callback. Calling the callback
+     * when this number of maximum open dialogs has been reached does nothing. Set to -1 for
+     * unlimited. Defaults to 1.
+     */
+    maximumOpenDialogs?: number;
+  };
   /**
-   * Enables using `papi.dialogs.showDialog` in React more easily. Provides a callback to run to get a
-   * response from a dialog as well as states that indicate the dialog's response and whether the
-   * dialog is open.
    *
-   * Calling the dialog callback returned from this hook does nothing if you already previously opened
-   * the dialog and have not received a response
+   * Enables using `papi.dialogs.showDialog` in React more easily. Returns a callback to run that will
+   * open a dialog with the provided `dialogType` and `options` then run the `resolveCallback` with
+   * the dialog response or `rejectCallback` if there is an error. By default, only one dialog can be
+   * open at a time.
+   *
+   * If you need to open multiple dialogs and track which dialog is which, you can set
+   * `options.shouldOpenMultipleDialogs` to `true` and add a counter to the `options` when calling the
+   * callback. Then `resolveCallback` will be resolved with that options object including your
+   * counter.
    *
    * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
-   * @type `TResponse` The type that the response can be. If you do not specify a `defaultResponse`,
-   *   this can be the dialog response type or `undefined`. If you specify a `defaultResponse`, this
-   *   will be just the dialog response type. Should be inferred by parameters.
-   *
-   *   - This mostly works. Unfortunately, if you specify a literal as `defaultResponse`, `TResponse` then
-   *       becomes that literal instead of being the dialog response type. You can type assert it to
-   *       the appropriate type. Let us know if you run into an issue with this!
-   *
    * @param dialogType Dialog type you want to show on the screen
    *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param options Various options for configuring the dialog that shows
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. Calling the callback will always use the latest
+   *   `dialogType`.
+   * @param options Various options for configuring the dialog that shows and this hook. If an
+   *   `options` parameter is also provided to the returned `showDialog` callback, those
+   *   callback-provided `options` merge over these hook-provided `options`
    *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param defaultResponse The starting value for the response. Once a response is received, this is
-   *   no longer used. Defaults to `undefined`
-   * @returns `[response, showDialogCallback, errorMessage, isShowingDialog]`
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. Calling the callback will always use the latest
+   *   `options`.
+   * @param resolveCallback `(response, dialogType, options)` The function that will be called if the
+   *   dialog request resolves properly
    *
-   *   - `response` - the response from the dialog or `defaultResponse` if a response has not been
-   *       received (does not reset to `defaultResponse` if the user cancels the dialog). DOES NOT
-   *       reset every time the callback is run
-   *   - `showDialogCallback` - callback to run to show the dialog to prompt the user for a response. If
-   *       this callback is run while the dialog is open, nothing happens
-   *   - `errorMessage` - the error from the dialog if there is an error while calling the dialog or
-   *       `undefined` if there is no error. DOES reset to `undefined` every time the callback is run
-   *   - `isShowingDialog` - whether this dialog is showing (the callback has been run but has not
-   *       responded)
+   *   - `response` - the resolved value of the dialog call. Either the user's response or `undefined` if
+   *       the user cancels
+   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+   *       consists of the `options` provided to the returned `showDialog` callback merged over the
+   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
+   *       properties
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. When the dialog resolves, it will always call the
+   *   latest `resolveCallback`.
+   * @param rejectCallback `(error, dialogType, options)` The function that will be called if the
+   *   dialog request throws an error
+   *
+   *   - `error` - the error thrown while calling the dialog
+   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+   *       consists of the `options` provided to the returned `showDialog` callback merged over the
+   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
+   *       properties
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. If the dialog throws an error, it will always call
+   *   the latest `rejectCallback`.
+   * @returns `showDialog(options?)` - callback to run to show the dialog to prompt the user for a
+   *   response
+   *
+   *   - `optionsOverrides?` - `options` object you may specify that will merge over the `options` you
+   *       provide to the hook before passing to the dialog. All properties are optional, so you may
+   *       specify as many or as few properties here as you want to overwrite the properties in the
+   *       `options` you provide to the hook
    */
   function useDialogCallback<
     DialogTabType extends DialogTabTypes,
-    TResponse extends DialogTypes[DialogTabType]['responseType'] | undefined =
-      | DialogTypes[DialogTabType]['responseType']
-      | undefined,
+    DialogOptions extends DialogTypes[DialogTabType]['options'],
   >(
     dialogType: DialogTabType,
-    options?: DialogTypes[DialogTabType]['options'],
-    defaultResponse?: TResponse,
-  ): [TResponse, () => Promise<void>, string | undefined, boolean];
+    options: DialogOptions & UseDialogCallbackOptions,
+    resolveCallback: (
+      response: DialogTypes[DialogTabType]['responseType'] | undefined,
+      dialogType: DialogTabType,
+      options: DialogOptions,
+    ) => void,
+    rejectCallback: (error: unknown, dialogType: DialogTabType, options: DialogOptions) => void,
+  ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
+  /**
+   *
+   * Enables using `papi.dialogs.showDialog` in React more easily. Returns a callback to run that will
+   * open a dialog with the provided `dialogType` and `options` then run the `resolveCallback` with
+   * the dialog response or `rejectCallback` if there is an error. By default, only one dialog can be
+   * open at a time.
+   *
+   * If you need to open multiple dialogs and track which dialog is which, you can set
+   * `options.shouldOpenMultipleDialogs` to `true` and add a counter to the `options` when calling the
+   * callback. Then `resolveCallback` will be resolved with that options object including your
+   * counter.
+   *
+   * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
+   * @param dialogType Dialog type you want to show on the screen
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. Calling the callback will always use the latest
+   *   `dialogType`.
+   * @param options Various options for configuring the dialog that shows and this hook. If an
+   *   `options` parameter is also provided to the returned `showDialog` callback, those
+   *   callback-provided `options` merge over these hook-provided `options`
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. Calling the callback will always use the latest
+   *   `options`.
+   * @param resolveCallback `(response, dialogType, options)` The function that will be called if the
+   *   dialog request resolves properly
+   *
+   *   - `response` - the resolved value of the dialog call. Either the user's response or `undefined` if
+   *       the user cancels
+   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+   *       consists of the `options` provided to the returned `showDialog` callback merged over the
+   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
+   *       properties
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. When the dialog resolves, it will always call the
+   *   latest `resolveCallback`.
+   * @param rejectCallback `(error, dialogType, options)` The function that will be called if the
+   *   dialog request throws an error
+   *
+   *   - `error` - the error thrown while calling the dialog
+   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+   *       consists of the `options` provided to the returned `showDialog` callback merged over the
+   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
+   *       properties
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. If the dialog throws an error, it will always call
+   *   the latest `rejectCallback`.
+   * @returns `showDialog(options?)` - callback to run to show the dialog to prompt the user for a
+   *   response
+   *
+   *   - `optionsOverrides?` - `options` object you may specify that will merge over the `options` you
+   *       provide to the hook before passing to the dialog. All properties are optional, so you may
+   *       specify as many or as few properties here as you want to overwrite the properties in the
+   *       `options` you provide to the hook
+   */
+  function useDialogCallback<
+    DialogTabType extends DialogTabTypes,
+    DialogOptions extends DialogTypes[DialogTabType]['options'],
+  >(
+    dialogType: DialogTabType,
+    options: DialogOptions & UseDialogCallbackOptions,
+    resolveCallback: (
+      response: DialogTypes[DialogTabType]['responseType'] | undefined,
+      dialogType: DialogTabType,
+      options: DialogOptions,
+    ) => void,
+  ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
   export default useDialogCallback;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
@@ -5016,6 +5196,8 @@ declare module '@papi/core' {
   export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
   export type { ExecutionToken } from 'node/models/execution-token.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  export type { UsePromiseOptions } from 'renderer/hooks/papi-hooks/use-promise.hook';
   export type { default as IDataProvider } from 'shared/models/data-provider.interface';
   export type {
     DataProviderUpdateInstructions,

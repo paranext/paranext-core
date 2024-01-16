@@ -42,7 +42,7 @@ const useEventAsync = <T>(
     noopUnsubscriber,
     // We want the unsubscriber to return to default value immediately upon changing subscription
     // So the useEffect below will unsubscribe asap
-    false,
+    { preserveValue: false },
   );
 
   // Unsubscribe from the event asynchronously (but we aren't awaiting the unsub)

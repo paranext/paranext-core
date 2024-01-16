@@ -11,6 +11,8 @@ module.exports = {
   ],
 
   rules: {
+    // #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.eslintrc.cjs and https://github.com/paranext/paranext-extension-template/blob/main/.eslintrc.js except certain overrides
+
     // #region ERB rules
 
     'import/extensions': 'off',
@@ -23,7 +25,7 @@ module.exports = {
 
     // #endregion
 
-    // #region Paranext rules
+    // #region Platform.Bible rules
 
     // Rules in each section are generally in alphabetical order. However, several
     // `@typescript-eslint` rules require disabling the equivalent ESLint rule. So in these cases
@@ -87,6 +89,8 @@ module.exports = {
     'react/jsx-indent-props': ['warn', 2],
     'react/jsx-props-no-spreading': ['error', { custom: 'ignore' }],
     'react/require-default-props': 'off',
+
+    // #endregion
 
     // #endregion
   },

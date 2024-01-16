@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
+using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
 
 namespace Paranext.DataProvider.Projects;
@@ -14,7 +15,7 @@ namespace Paranext.DataProvider.Projects;
 internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
 {
     protected ProjectDataProvider(string name, PapiClient papiClient, ProjectDetails projectDetails)
-        : base(name + "-pdp", papiClient)
+        : base(name + "-pdp", papiClient, NetworkObjectType.PROJECT_DATA_PROVIDER)
     {
         ProjectDetails = projectDetails;
         Getters.Add("getExtensionData", GetExtensionData);
@@ -59,6 +60,19 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
         functionNames.AddRange(Getters.Keys);
         functionNames.AddRange(Setters.Keys);
         return functionNames;
+    }
+
+    protected override MessageEvent GetDataProviderCreatedEvent()
+    {
+        var functionNames = GetFunctionNames();
+        functionNames.Sort();
+        return new MessageEventProjectDataProviderCreated(
+            DataProviderName,
+            functionNames.ToArray(),
+            ProjectDetails.Metadata.ID,
+            ProjectDetails.Metadata.ProjectType,
+            GetProjectStorageInterpreterId()
+        );
     }
 
     protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
@@ -110,6 +124,11 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
             return ResponseToRequest.Failed(ex.ToString());
         }
     }
+
+    /// <summary>
+    /// Get the name/ID of the ProjectStorageInterpreter that provides data to this ProjectDataProvider
+    /// </summary>
+    protected abstract string GetProjectStorageInterpreterId();
 
     /// <summary>
     /// Get an extension's data in a project identified by <param name="scope"></param>.

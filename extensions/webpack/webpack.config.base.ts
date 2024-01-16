@@ -33,10 +33,10 @@ const configBase: webpack.Configuration = {
   watchOptions: {
     ignored: ['**/node_modules'],
   },
-  // Use require for externals as it is the only type of importing that Paranext supports
+  // Use require for externals as it is the only type of importing that Platform.Bible supports
   // https://webpack.js.org/configuration/externals/#externalstypecommonjs
   externalsType: LIBRARY_TYPE,
-  // Modules that Paranext supplies to extensions https://webpack.js.org/configuration/externals/
+  // Modules that Platform.Bible supplies to extensions https://webpack.js.org/configuration/externals/
   // All other dependencies must be bundled into the extension
   externals: [
     'react',

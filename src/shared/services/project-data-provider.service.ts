@@ -1,6 +1,5 @@
-import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
+import { ProjectTypes, ProjectDataTypes, ProjectDataProviders } from 'papi-shared-types';
 import {
-  ProjectDataProvider,
   ProjectDataProviderEngineTypes,
   ProjectDataProviderEngineFactory,
 } from '@shared/models/project-data-provider-engine.model';
@@ -14,6 +13,7 @@ import logger from '@shared/services/logger.service';
 
 class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
   private readonly pdpIds: Map<string, string> = new Map();
+  private readonly projectType: ProjectType;
   private readonly pdpCleanupList: UnsubscriberAsyncList;
   private readonly pdpEngineFactory: ProjectDataProviderEngineFactory<ProjectType>;
 
@@ -21,6 +21,7 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
     projectType: ProjectType,
     pdpEngineFactory: ProjectDataProviderEngineFactory<ProjectType>,
   ) {
+    this.projectType = projectType;
     this.pdpCleanupList = new UnsubscriberAsyncList(`PDP Factory for ${projectType}`);
     this.pdpEngineFactory = pdpEngineFactory;
   }
@@ -44,6 +45,8 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
           projectId,
           projectStorageInterpreterId,
         ),
+        projectId,
+        projectStorageInterpreterId,
       );
       if (!pdpId) throw new Error(`Could get register project data provider for ${projectId} `);
       this.pdpIds.set(key, pdpId);
@@ -54,6 +57,8 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
   /** Convert the PDP engine into a PDP using the data provider service */
   private async registerProjectDataProvider(
     projectDataProviderEngine: ProjectDataProviderEngineTypes[ProjectType],
+    projectId: string,
+    projectStorageInterpreterId: string,
   ): Promise<string> {
     // Add a check for extensions that provide new project types
     if (!('getExtensionData' in projectDataProviderEngine))
@@ -62,6 +67,12 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
     const pdp = await registerEngineByType<ProjectDataTypes[ProjectType]>(
       pdpId,
       projectDataProviderEngine,
+      'pdp',
+      {
+        projectId,
+        projectType: this.projectType,
+        projectStorageInterpreterId,
+      },
     );
     this.pdpCleanupList.add(pdp);
     return pdpId;
@@ -86,7 +97,12 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
 ): Promise<Dispose> {
   const factoryId = getProjectDataProviderFactoryId(projectType);
   const factory = new ProjectDataProviderFactory(projectType, pdpEngineFactory);
-  return networkObjectService.set<ProjectDataProviderFactory<ProjectType>>(factoryId, factory);
+  return networkObjectService.set<ProjectDataProviderFactory<ProjectType>>(
+    factoryId,
+    factory,
+    'pdpFactory',
+    { projectType },
+  );
 }
 
 /**
@@ -109,7 +125,7 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
 export async function get<ProjectType extends ProjectTypes>(
   projectType: ProjectType,
   projectId: string,
-): Promise<ProjectDataProvider[ProjectType]> {
+): Promise<ProjectDataProviders[ProjectType]> {
   const metadata = await projectLookupService.getMetadataForProject(projectId);
   const { projectType: projectTypeFromMetadata } = metadata;
   if (projectType && projectType !== projectTypeFromMetadata)
@@ -127,7 +143,7 @@ export async function get<ProjectType extends ProjectTypes>(
   // of the storageType. https://github.com/paranext/paranext-core/issues/367
   const { storageType } = metadata;
   const pdpId = await pdpFactory.getProjectDataProviderId(projectId, storageType);
-  const pdp = await getByType<ProjectDataProvider[ProjectType]>(pdpId);
+  const pdp = await getByType<ProjectDataProviders[ProjectType]>(pdpId);
   if (!pdp) throw new Error(`Cannot create project data provider for project ID ${projectId}`);
   return pdp;
 }

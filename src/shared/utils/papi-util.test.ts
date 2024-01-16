@@ -219,20 +219,28 @@ describe('PAPI Util Functions: serialize and deserialize', () => {
     expect(deepEqual(deserialize('5'), JSON.parse('5'))).toBeTruthy();
     expect(serialize('X')).toEqual(JSON.stringify('X'));
     expect(deepEqual(deserialize('"X"'), JSON.parse('"X"'))).toBeTruthy();
-    expect(serialize([3, 5, 7])).toEqual(JSON.stringify([3, 5, 7]));
-    expect(deepEqual(deserialize('[3,5,7]'), JSON.parse('[3,5,7]'))).toBeTruthy();
+    expect(serialize(true)).toEqual(JSON.stringify(true));
+    expect(deepEqual(deserialize('true'), JSON.parse('true'))).toBeTruthy();
+    expect(serialize(false)).toEqual(JSON.stringify(false));
+    expect(deepEqual(deserialize('false'), JSON.parse('false'))).toBeTruthy();
+    expect(serialize([0, 3, 5, 7])).toEqual(JSON.stringify([0, 3, 5, 7]));
+    expect(deepEqual(deserialize('[0,3,5,7]'), JSON.parse('[0,3,5,7]'))).toBeTruthy();
+    expect(serialize({ 1: 'one' })).toEqual(JSON.stringify({ 1: 'one' }));
+    expect(deepEqual(deserialize('{"1":"one"}'), JSON.parse('{"1":"one"}'))).toBeTruthy();
   });
-  it('exclusively use null in JSON strings and exclusively uses undefined in JS objects', () => {
-    const testObject = { foo: 'fooValue', bar: undefined, baz: null };
-    expect(serialize(testObject)).toEqual(
-      JSON.stringify({ foo: 'fooValue', bar: null, baz: null }),
-    );
-    expect(deepEqual({ foo: 'fooValue' }, deserialize(serialize(testObject)))).toBeTruthy();
-    expect(deepEqual({ foo: 'fooValue' }, deserialize(JSON.stringify(testObject)))).toBeTruthy();
+  it('exclusively use null in JSON strings and exclusively use undefined in JS objects', () => {
+    const testObject = { foo: 'val', bar: undefined, baz: null };
+    expect(serialize(testObject)).toEqual(JSON.stringify({ foo: 'val', bar: null, baz: null }));
+    expect(
+      deepEqual({ foo: 'val', bar: undefined, baz: undefined }, deserialize(serialize(testObject))),
+    ).toBeTruthy();
+    expect(
+      deepEqual({ foo: 'val', baz: undefined }, deserialize(JSON.stringify(testObject))),
+    ).toBeTruthy();
   });
   it('handle deeply nested null/undefined values', () => {
-    const deepNesting = { a: { b: { c: { d: { e: 'something', undef: undefined, nil: null } } } } };
-    const roundTrip = { a: { b: { c: { d: { e: 'something' } } } } };
+    const deepNesting = { a: { b: { c: { d: 'something', undef: undefined, nil: null } } } };
+    const roundTrip = { a: { b: { c: { d: 'something', undef: undefined, nil: undefined } } } };
     expect(deepEqual(roundTrip, deserialize(serialize(deepNesting)))).toBeTruthy();
   });
   it('work with custom replacers/revivers', () => {
@@ -243,14 +251,14 @@ describe('PAPI Util Functions: serialize and deserialize', () => {
     };
     const reviver = (_key: string, value: unknown) => {
       if (value === 10) return 5;
-      if (value === undefined) return 'resurrected';
+      if (value === null) return 'resurrected';
       return value;
     };
     expect(serialize(testObject, replacer)).toEqual(serialize({ a: 10 }));
     expect(
       deepEqual(testObject, deserialize(serialize(testObject, replacer), reviver)),
     ).toBeTruthy();
-    expect(deserialize(serialize({ lazarus: undefined }), reviver).lazarus).toEqual('resurrected');
+    expect(deserialize(serialize({ lazarus: null }), reviver).lazarus).toEqual('resurrected');
   });
   it('turn null values in an array into undefined when deserializing', () => {
     // Type asserting after deserializing
@@ -326,16 +334,14 @@ describe('PAPI Util Function: isSerializable', () => {
     expect(isSerializable(objectToSerialize)).toBeTruthy();
   });
 
-  it('UNsuccessfully determines object with `undefined` prop is not serializable', () => {
-    // TODO: make a deserialization algorithm that does this properly. Not a huge deal for now
+  it('Successfully determines object with `undefined` prop is serializable', () => {
     const objectToSerialize = { stuff: undefined, things: true };
-    expect(isSerializable(objectToSerialize)).toBeFalsy();
+    expect(isSerializable(objectToSerialize)).toBeTruthy();
   });
 
-  it('UNsuccessfully determines object with `null` prop is not serializable', () => {
-    // TODO: make a deserialization algorithm that does this properly. Not a huge deal for now
+  it('Successfully determines object with `null` prop is serializable', () => {
     const objectToSerialize = { stuff: null, things: true };
-    expect(isSerializable(objectToSerialize)).toBeFalsy();
+    expect(isSerializable(objectToSerialize)).toBeTruthy();
   });
 
   it('UNsuccessfully thinks object with a Map prop is serializable - it should not be', () => {

@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import path from 'path';
 import fs from 'fs';
 import zipFolder from 'zip-folder-promise';
@@ -12,7 +10,6 @@ const releaseFolder = path.join(rootDir, 'release');
 /** Creates a zip for each extension and puts them in the release folder */
 async function zipExtensions() {
   // Get all the extensions (this is technically based on source files, not on the output files)
-  // TODO: make this based on output files
   const extensions = await getExtensions();
 
   // Delete the release folder if it exists

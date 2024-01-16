@@ -124,7 +124,7 @@ if (isClient()) {
         ),
       };
     });
-  if (isExtensionHost())
+  else if (isExtensionHost())
     // Add a tag for warnings so we can recognize them outside the process.
     log.hooks.push((message) => {
       const caller = identifyCaller();
@@ -136,6 +136,10 @@ if (isClient()) {
         ),
       };
     });
+  else {
+    // eslint-disable-next-line no-console
+    console.warn(chalk.yellow(`Unexpected process type: ${globalThis.processType}`));
+  }
 } else {
   log.initialize();
   log.transports.console.level = globalThis.logLevel;

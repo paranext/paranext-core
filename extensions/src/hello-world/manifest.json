@@ -1,9 +1,10 @@
 {
   "name": "hello-world",
   "version": "0.0.1",
-  "description": "Simple hello world extension for Paranext",
+  "description": "Simple hello world extension for Platform.Bible",
   "author": "Paranext",
   "license": "MIT",
-  "main": "hello-world.ts",
+  "main": "src/main.ts",
+  "types": "src/types/hello-world.d.ts",
   "activationEvents": ["onCommand:helloWorld.helloWorld", "onCommand:helloWorld.helloException"]
 }
