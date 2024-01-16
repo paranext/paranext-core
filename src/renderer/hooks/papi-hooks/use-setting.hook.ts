@@ -40,10 +40,8 @@ const useSetting = <SettingName extends SettingNames>(
     updateSettingFromService(initialSetting);
 
     const unsubscriber = settingsService.subscribe(key, (newSetting) => {
-      if (newSetting.type === 'set-setting') {
-        // For some reason the function expects a `ScriptureReference | undefined` here, instead of the general `SettingTypes[SettingName]`
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        updateSettingFromService(newSetting.setting as SettingTypes[SettingName]);
+      if (newSetting.type === 'update-setting') {
+        updateSettingFromService(newSetting.setting);
       } else if (newSetting.type === 'reset-setting') {
         setSettingInternal(defaultState);
       } else {

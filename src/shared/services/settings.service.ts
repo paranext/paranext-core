@@ -2,22 +2,27 @@ import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
 import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 
-/** Message sent to the client to give it NetworkConnectorInfo */
-export type SetSettingMessage = {
-  type: 'set-setting';
-  setting: SettingTypes[SettingNames];
+/** Event to set or update a setting */
+export type UpdateSettingEvent<SettingName extends SettingNames> = {
+  type: 'update-setting';
+  setting: SettingTypes[SettingName];
 };
 
-/** Message responding to the server to let it know this connection is ready to receive messages */
-export type ResetSettingMessage = {
+/** Event to remove a setting */
+export type ResetSettingEvent = {
   type: 'reset-setting';
 };
 
-/** Messages send by the WebSocket */
-export type SettingMessage = SetSettingMessage | ResetSettingMessage;
+/** All supported setting events */
+export type SettingEvent<SettingName extends SettingNames> =
+  | UpdateSettingEvent<SettingName>
+  | ResetSettingEvent;
 
 /** All message subscriptions - emitters that emit an event each time a setting is updated */
-const onDidUpdateSettingEmitters = new Map<SettingNames, PapiEventEmitter<SettingMessage>>();
+const onDidUpdateSettingEmitters = new Map<
+  SettingNames,
+  PapiEventEmitter<SettingEvent<SettingNames>>
+>();
 
 /**
  * Retrieves the value of the specified setting
@@ -59,8 +64,10 @@ const setSetting = <SettingName extends SettingNames>(
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const emitter = onDidUpdateSettingEmitters.get(key);
-  // TODO: Why do I still need to specify `type` here? It's hardcoded in the SetSettingMessage type, right?
-  const setMessage: SetSettingMessage = { type: 'set-setting', setting: newSetting };
+  const setMessage: UpdateSettingEvent<SettingName> = {
+    setting: newSetting,
+    type: 'update-setting',
+  };
   emitter?.emit(setMessage);
 };
 
@@ -74,8 +81,7 @@ const resetSetting = <SettingName extends SettingNames>(key: SettingName) => {
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const emitter = onDidUpdateSettingEmitters.get(key);
-  // TODO: Why do I still need to specify `type` here? It's hardcoded in the ResetSettingMessage type, right?
-  const resetMessage: ResetSettingMessage = { type: 'reset-setting' };
+  const resetMessage: ResetSettingEvent = { type: 'reset-setting' };
   emitter?.emit(resetMessage);
 };
 
@@ -89,14 +95,18 @@ const resetSetting = <SettingName extends SettingNames>(key: SettingName) => {
  */
 const subscribeToSetting = <SettingName extends SettingNames>(
   key: SettingName,
-  callback: (newSetting: SettingMessage) => void,
+  callback: (newSetting: SettingEvent<SettingName>) => void,
 ): Unsubscriber => {
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  let emitter = onDidUpdateSettingEmitters.get(key);
+  let emitter = onDidUpdateSettingEmitters.get(key) as
+    | PapiEventEmitter<SettingEvent<SettingName>>
+    | undefined;
   if (!emitter) {
-    emitter = new PapiEventEmitter<SettingMessage>();
-    onDidUpdateSettingEmitters.set(key, emitter);
+    emitter = new PapiEventEmitter<SettingEvent<SettingName>>();
+    // Assert type of the general SettingNames of the emitter.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    onDidUpdateSettingEmitters.set(key, emitter as PapiEventEmitter<SettingEvent<SettingNames>>);
   }
   return emitter.subscribe(callback);
 };

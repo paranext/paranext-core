@@ -36,5 +36,4 @@ export type { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
 
 export type { IWebViewProvider } from '@shared/models/web-view-provider.model';
 
-// TODO: Do we really need to export? These types are only used internally in the useSettingHook
-// export type { SettingMessage } from '@shared/services/settings.service.ts';
+export type { SettingEvent as SettingMessage } from '@shared/services/settings.service.ts';
