@@ -1,5 +1,4 @@
-import { PapiEventHandler } from '@shared/models/papi-event.model';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
 
 /**
  * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
@@ -14,7 +13,7 @@ import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
  *
  * WARNING: You cannot emit events with complex types on the network.
  */
-export default class PapiNetworkEventEmitter<T> extends PapiEventEmitter<T> {
+export default class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
   /**
    * Creates a NetworkEventEmitter
    *
@@ -23,7 +22,7 @@ export default class PapiNetworkEventEmitter<T> extends PapiEventEmitter<T> {
    */
   constructor(
     /** Callback that sends the event to other processes on the network when it is emitted */
-    private networkSubscriber: PapiEventHandler<T>,
+    private networkSubscriber: PlatformEventHandler<T>,
     /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
     private networkDisposer: () => void,
   ) {
@@ -52,7 +51,7 @@ export default class PapiNetworkEventEmitter<T> extends PapiEventEmitter<T> {
     const retVal = super.disposeFn();
     // TODO: Do we need to set networkSubscriber to undefined? Had to remove readonly from it to do this
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    this.networkSubscriber = undefined as unknown as PapiEventHandler<T>;
+    this.networkSubscriber = undefined as unknown as PlatformEventHandler<T>;
     this.networkDisposer();
     return retVal;
   };

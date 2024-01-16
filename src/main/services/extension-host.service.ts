@@ -9,7 +9,7 @@ import {
   getCommandLineArgumentsGroup,
 } from '@node/utils/command-line.util';
 import logger, { formatLog, WARN_TAG } from '@shared/services/logger.service';
-import { waitForDuration } from '@shared/utils/util';
+import { waitForDuration } from 'platform-bible-utils';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
 import path from 'path';

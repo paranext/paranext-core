@@ -1,5 +1,5 @@
 import { render, fireEvent } from '@testing-library/react';
-import { Button } from 'papi-components';
+import { Button } from 'platform-bible-react';
 import '@testing-library/jest-dom/extend-expect';
 
 describe('Button', () => {

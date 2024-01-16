@@ -4,9 +4,7 @@
  * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
  */
 
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as commandService from '@shared/services/command.service';
-import * as papiUtil from '@shared/utils/papi-util';
 import papiLogger from '@shared/services/logger.service';
 import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
@@ -42,8 +40,6 @@ import { DialogService } from '@shared/services/dialog.service-model';
 // 4) Anytime you add anything to PAPI also add it to the destructured export below
 const papi = {
   // Classes
-  /** JSDOC DESTINATION PapiEventEmitter */
-  EventEmitter: PapiEventEmitter,
   /** JSDOC DESTINATION DataProviderEngine */
   DataProviderEngine: PapiDataProviderEngine,
 
@@ -54,8 +50,6 @@ const papi = {
   // Services/modules
   /** JSDOC DESTINATION commandService */
   commands: commandService,
-  /** JSDOC DESTINATION papiUtil */
-  utils: papiUtil,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: webViewService as WebViewServiceType,
   /** JSDOC DESTINATION papiWebViewProviderService */
@@ -87,9 +81,6 @@ export default papi;
 
 // This is the destructured export, if you add to the PAPI you need to add to this
 
-/** JSDOC DESTINATION PapiEventEmitter */
-export const { EventEmitter } = papi;
-Object.freeze(papi.EventEmitter);
 /** JSDOC DESTINATION DataProviderEngine */
 export const { DataProviderEngine } = papi;
 Object.freeze(papi.DataProviderEngine);
@@ -99,9 +90,6 @@ Object.freeze(papi.fetch);
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 Object.freeze(papi.commands);
-/** JSDOC DESTINATION papiUtil */
-export const { utils } = papi;
-Object.freeze(papi.utils);
 /** JSDOC DESTINATION papiWebViewService */
 export const { webViews } = papi;
 Object.freeze(papi.webViews);

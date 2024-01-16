@@ -1,13 +1,9 @@
 import { DialogData } from '@shared/models/dialog-options.model';
 import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service-model';
 import * as networkService from '@shared/services/network.service';
-import {
-  aggregateUnsubscriberAsyncs,
-  serialize,
-  serializeRequestType,
-} from '@shared/utils/papi-util';
+import { aggregateUnsubscriberAsyncs, serialize, newGuid } from 'platform-bible-utils';
 import * as webViewService from '@renderer/services/web-view.service-host';
-import { newGuid } from '@shared/utils/util';
+import { serializeRequestType } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';

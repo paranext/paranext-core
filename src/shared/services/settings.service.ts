@@ -1,5 +1,4 @@
-import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+import { Unsubscriber, deserialize, serialize, PlatformEventEmitter } from 'platform-bible-utils';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 
 /** Event to set or update a setting */
@@ -21,7 +20,7 @@ export type SettingEvent<SettingName extends SettingNames> =
 /** All message subscriptions - emitters that emit an event each time a setting is updated */
 const onDidUpdateSettingEmitters = new Map<
   SettingNames,
-  PapiEventEmitter<SettingEvent<SettingNames>>
+  PlatformEventEmitter<SettingEvent<SettingNames>>
 >();
 
 /**
@@ -100,13 +99,16 @@ const subscribeToSetting = <SettingName extends SettingNames>(
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   let emitter = onDidUpdateSettingEmitters.get(key) as
-    | PapiEventEmitter<SettingEvent<SettingName>>
+    | PlatformEventEmitter<SettingEvent<SettingName>>
     | undefined;
   if (!emitter) {
-    emitter = new PapiEventEmitter<SettingEvent<SettingName>>();
-    // Assert type of the general SettingNames of the emitter.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    onDidUpdateSettingEmitters.set(key, emitter as PapiEventEmitter<SettingEvent<SettingNames>>);
+    emitter = new PlatformEventEmitter<SettingEvent<SettingName>>();
+    onDidUpdateSettingEmitters.set(
+      key,
+      // Assert type of the general SettingNames of the emitter.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      emitter as PlatformEventEmitter<SettingEvent<SettingNames>>,
+    );
   }
   return emitter.subscribe(callback);
 };

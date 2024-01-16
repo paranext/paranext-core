@@ -18,7 +18,7 @@ import {
   useCallback,
   useMemo,
 } from 'react';
-import { Checkbox, SearchBar, TextField } from 'papi-components';
+import { Checkbox, SearchBar, TextField } from 'platform-bible-react';
 import TabPanel from '@renderer/components/tab-panel.component';
 import './settings-tab.component.scss';
 import logger from '@shared/services/logger.service';

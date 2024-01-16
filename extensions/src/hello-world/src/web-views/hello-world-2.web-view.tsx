@@ -1,7 +1,6 @@
 import papi from '@papi/frontend';
-import { useEvent } from '@papi/frontend/react';
+import { useEvent, Button } from 'platform-bible-react';
 import { useCallback, useState } from 'react';
-import { Button } from 'papi-components';
 import type { HelloWorldEvent } from 'hello-world';
 
 globalThis.webViewComponent = function HelloWorld2() {
@@ -9,7 +8,7 @@ globalThis.webViewComponent = function HelloWorld2() {
 
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
-    'helloWorld.onHelloWorld',
+    papi.network.getNetworkEvent('helloWorld.onHelloWorld'),
     useCallback(({ times }: HelloWorldEvent) => setClicks(times), []),
   );
 

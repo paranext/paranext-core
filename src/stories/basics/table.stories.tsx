@@ -11,7 +11,7 @@ import {
   TableProps,
   TableSortColumn,
   TableEditorProps,
-} from 'papi-components';
+} from 'platform-bible-react';
 import { ChangeEvent, Key, ReactElement, UIEvent } from 'react';
 
 type Row = {

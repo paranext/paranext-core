@@ -3,7 +3,7 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import './select-project.dialog.scss';
 import { useCallback, useMemo } from 'react';
 import ProjectList from '@renderer/components/projects/project-list.component';
-import usePromise from '@renderer/hooks/papi-hooks/use-promise.hook';
+import { usePromise } from 'platform-bible-react';
 import projectLookupService from '@shared/services/project-lookup.service';
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
 import {

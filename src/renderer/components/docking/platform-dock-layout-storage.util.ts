@@ -5,7 +5,7 @@
 
 import DockLayout, { FloatPosition, TabData, PanelData } from 'rc-dock';
 
-import { getErrorMessage } from '@shared/utils/util';
+import { getErrorMessage } from 'platform-bible-utils';
 import {
   Layout,
   SavedTabInfo,

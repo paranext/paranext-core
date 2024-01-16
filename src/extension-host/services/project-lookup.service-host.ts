@@ -8,8 +8,7 @@ import { joinUriPaths } from '@node/utils/util';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import * as nodeFS from '@node/services/node-file-system.service';
-import { deserialize } from '@shared/utils/papi-util';
-import { wait } from '@shared/utils/util';
+import { deserialize, wait } from 'platform-bible-utils';
 
 /** This points to the directory where all of the project subdirectories live */
 const PROJECTS_ROOT_URI = joinUriPaths('file://', os.homedir(), '.platform.bible', 'projects');

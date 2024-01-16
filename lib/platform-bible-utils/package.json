@@ -1,0 +1,57 @@
+{
+  "name": "platform-bible-utils",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Utilities to use in Paranext.",
+  "license": "MIT",
+  "homepage": "https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils",
+  "bugs": {
+    "url": "https://github.com/paranext/paranext-core/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paranext/paranext-core.git"
+  },
+  "author": {
+    "name": "Paranext",
+    "url": "https://github.com/paranext/"
+  },
+  "contributors": [
+    {
+      "name": "Ira J Hopkinson",
+      "url": "https://github.com/irahopkinson"
+    }
+  ],
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.es.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "start": "vite --host --open",
+    "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
+    "build:docs": "typedoc",
+    "build": "npm run build:basic && npm run lint-fix",
+    "watch": "tsc && vite build --watch",
+    "lint": "npm run lint:scripts",
+    "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
+    "lint-fix": "npm run lint-fix:scripts",
+    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,csj}\" && npm run lint:scripts",
+    "postinstall": "cd ../.. && npm install --ignore-scripts"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "dts-bundle-generator": "^8.0.1",
+    "eslint": "^8.45.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "prettier": "^2.8.8",
+    "prettier-plugin-jsdoc": "^0.4.2",
+    "ts-node": "^10.9.1",
+    "tslib": "^2.6.0",
+    "typescript": "^5.1.6",
+    "vite": "^4.4.12"
+  }
+}

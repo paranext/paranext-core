@@ -1,4 +1,4 @@
-import { PapiEvent } from '@shared/models/papi-event.model';
+import { PlatformEvent } from 'platform-bible-utils';
 import { GetWebViewOptions, WebViewType } from '@shared/models/web-view.model';
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
@@ -10,7 +10,7 @@ import { AddWebViewEvent, Layout } from '@shared/models/docking-framework.model'
 import networkObjectService from '@shared/services/network-object.service';
 import networkObjectStatusService from './network-object-status.service';
 
-const onDidAddWebView: PapiEvent<AddWebViewEvent> = getNetworkEvent<AddWebViewEvent>(
+const onDidAddWebView: PlatformEvent<AddWebViewEvent> = getNetworkEvent<AddWebViewEvent>(
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
 );
 

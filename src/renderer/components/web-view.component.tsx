@@ -15,7 +15,7 @@ import {
   WEBVIEW_IFRAME_SRCDOC_SANDBOX,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
-import { serialize } from '@shared/utils/papi-util';
+import { serialize } from 'platform-bible-utils';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 

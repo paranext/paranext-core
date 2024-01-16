@@ -5,8 +5,8 @@ import type {
   WebViewDefinition,
   SavedWebViewDefinition,
   IWebViewProvider,
-  PapiEventEmitter,
 } from '@papi/core';
+import { PlatformEventEmitter } from 'platform-bible-utils';
 import type { HelloWorldEvent } from 'hello-world';
 import helloWorldReactWebView from './web-views/hello-world.web-view?inline';
 import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?inline';
@@ -79,7 +79,7 @@ const reactWebView2Provider: IWebViewProviderWithType = {
 /** Number of times the `helloWorld` function has been called */
 let helloWorldCount = 0;
 /** Emitter to inform subscribers when `helloWorld` is called */
-let onHelloWorldEmitter: PapiEventEmitter<HelloWorldEvent>;
+let onHelloWorldEmitter: PlatformEventEmitter<HelloWorldEvent>;
 const onHelloWorldEventType = 'helloWorld.onHelloWorld';
 
 /**

@@ -1,4 +1,4 @@
-import { deserialize, isSerializable, serialize } from '@shared/utils/papi-util';
+import { deserialize, isSerializable, serialize } from 'platform-bible-utils';
 
 const WEBVIEW_STATE_KEY = 'web-view-state';
 const stateMap = new Map<string, Record<string, unknown>>();

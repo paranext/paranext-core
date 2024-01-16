@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Snackbar, Button } from 'papi-components';
+import { Snackbar, Button } from 'platform-bible-react';
 
 const defaultSnackbarAction = <Button>Close</Button>;
 

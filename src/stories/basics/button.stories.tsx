@@ -1,5 +1,5 @@
 ﻿import type { Meta, StoryObj } from '@storybook/react';
-import { Button } from 'papi-components';
+import { Button } from 'platform-bible-react';
 
 const meta: Meta<typeof Button> = {
   title: 'Basics/Button',

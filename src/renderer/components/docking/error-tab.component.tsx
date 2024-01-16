@@ -1,5 +1,5 @@
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import { newGuid } from '@shared/utils/util';
+import { newGuid } from 'platform-bible-utils';
 
 export type ErrorTabData = { errorMessage: string };
 

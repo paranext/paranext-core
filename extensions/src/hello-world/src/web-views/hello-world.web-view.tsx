@@ -3,8 +3,6 @@ import papi, { logger } from '@papi/frontend';
 import {
   useData,
   useProjectData,
-  usePromise,
-  useEvent,
   useSetting,
   useDialogCallback,
   useDataProvider,
@@ -19,7 +17,9 @@ import {
   TextField,
   Table,
   ScriptureReference,
-} from 'papi-components';
+  usePromise,
+  useEvent,
+} from 'platform-bible-react';
 import type { WebViewProps } from '@papi/core';
 import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
@@ -72,7 +72,7 @@ globalThis.webViewComponent = function HelloWorld({
 
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
-    'helloWorld.onHelloWorld',
+    papi.network.getNetworkEvent('helloWorld.onHelloWorld'),
     useCallback(
       ({ times }: HelloWorldEvent) => {
         if (times > clicks) setClicks(times);

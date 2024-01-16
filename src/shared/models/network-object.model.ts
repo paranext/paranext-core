@@ -6,7 +6,7 @@ import {
   OnDidDispose,
   CannotHaveOnDidDispose,
   CanHaveOnDidDispose,
-} from './disposal.model';
+} from 'platform-bible-utils';
 
 /**
  * An object of this type is returned from {@link networkObjectService.get}.

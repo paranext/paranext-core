@@ -8,7 +8,7 @@ import {
   NetworkObject,
   NetworkableObject,
 } from '@shared/models/network-object.model';
-import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
+import { CanHaveOnDidDispose } from 'platform-bible-utils';
 
 // What the developer registers
 export interface IWebViewProvider extends NetworkableObject {

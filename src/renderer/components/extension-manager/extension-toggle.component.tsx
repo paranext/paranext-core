@@ -1,5 +1,5 @@
 import { PropsWithChildren } from 'react';
-import { Switch } from 'papi-components';
+import { Switch } from 'platform-bible-react';
 import ExtensionCard, { ExtensionCardProps } from './extension-card.component';
 import './extension-toggle.component.scss';
 

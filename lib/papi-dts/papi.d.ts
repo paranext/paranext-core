@@ -411,63 +411,9 @@ declare module 'shared/global-this.model' {
     ExtensionHost = 'extension-host',
   }
 }
-declare module 'shared/utils/internal-util' {
-  /** Utility functions specific to the internal technologies we are using. */
-  import { ProcessType } from 'shared/global-this.model';
-  /**
-   * Determine if running on a client process (renderer, extension-host) or on the server.
-   *
-   * @returns Returns true if running on a client, false otherwise
-   */
-  export const isClient: () => boolean;
-  /**
-   * Determine if running on the server process (main)
-   *
-   * @returns Returns true if running on the server, false otherwise
-   */
-  export const isServer: () => boolean;
-  /**
-   * Determine if running on the renderer process
-   *
-   * @returns Returns true if running on the renderer, false otherwise
-   */
-  export const isRenderer: () => boolean;
-  /**
-   * Determine if running on the extension host
-   *
-   * @returns Returns true if running on the extension host, false otherwise
-   */
-  export const isExtensionHost: () => boolean;
-  /**
-   * Gets which kind of process this is (main, renderer, extension-host)
-   *
-   * @returns ProcessType for this process
-   */
-  export const getProcessType: () => ProcessType;
-}
-declare module 'shared/services/logger.service' {
-  import log from 'electron-log';
-  export const WARN_TAG = '<WARN>';
-  /**
-   * Format a string of a service message
-   *
-   * @param message Message from the service
-   * @param serviceName Name of the service to show in the log
-   * @param tag Optional tag at the end of the service name
-   * @returns Formatted string of a service message
-   */
-  export function formatLog(message: string, serviceName: string, tag?: string): string;
-  /**
-   *
-   * All extensions and services should use this logger to provide a unified output of logs
-   */
-  const logger: log.MainLogger & {
-    default: log.MainLogger;
-  };
-  export default logger;
-}
 declare module 'shared/utils/util' {
-  export function newGuid(): string;
+  import { ProcessType } from 'shared/global-this.model';
+  import { UnsubscriberAsync } from 'platform-bible-utils';
   /**
    * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
    * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
@@ -477,104 +423,6 @@ declare module 'shared/utils/util' {
    * https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues only works in browser
    */
   export function newNonce(): string;
-  /**
-   * Determine whether the object is a string
-   *
-   * @param o Object to determine if it is a string
-   * @returns True if the object is a string; false otherwise
-   */
-  export function isString(o: unknown): o is string;
-  /**
-   * Get a function that reduces calls to the function passed in
-   *
-   * @param fn The function to debounce
-   * @param delay How much delay in milliseconds after the most recent call to the debounced function
-   *   to call the function
-   * @returns Function that, when called, only calls the function passed in at maximum every delay ms
-   */
-  export function debounce<T extends (...args: any[]) => void>(fn: T, delay?: number): T;
-  /**
-   * Groups each item in the array of items into a map according to the keySelector
-   *
-   * @param items Array of items to group by
-   * @param keySelector Function to run on each item to get the key for the group to which it belongs
-   * @param valueSelector Function to run on each item to get the value it should have in the group
-   *   (like map function). If not provided, uses the item itself
-   * @returns Map of keys to groups of values corresponding to each item
-   */
-  export function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
-  export function groupBy<T, K, V>(
-    items: T[],
-    keySelector: (item: T) => K,
-    valueSelector: (item: T, key: K) => V,
-  ): Map<K, Array<V>>;
-  /**
-   * Function to get an error message from the object (useful for getting error message in a catch
-   * block)
-   *
-   * @example `try {...} catch (e) { logger.info(getErrorMessage(e)) }`
-   *
-   * @param error Error object whose message to get
-   * @returns Message of the error - if object has message, returns message. Otherwise tries to
-   *   stringify
-   */
-  export function getErrorMessage(error: unknown): string;
-  /** Asynchronously waits for the specified number of milliseconds. (wraps setTimeout in a promise) */
-  export function wait(ms: number): Promise<void>;
-  /**
-   * Runs the specified function and will timeout if it takes longer than the specified wait time
-   *
-   * @param fn The function to run
-   * @param maxWaitTimeInMS The maximum amount of time to wait for the function to resolve
-   * @returns Promise that resolves to the resolved value of the function or undefined if it ran
-   *   longer than the specified wait time
-   */
-  export function waitForDuration<TResult>(
-    fn: () => Promise<TResult>,
-    maxWaitTimeInMS: number,
-  ): Promise<Awaited<TResult> | undefined>;
-  /**
-   * Get all functions on an object and its prototype chain (so we don't miss any class methods or any
-   * object methods). Note that the functions on the final item in the prototype chain (i.e., Object)
-   * are skipped to avoid including functions like `__defineGetter__`, `__defineSetter__`, `toString`,
-   * etc.
-   *
-   * @param obj Object whose functions to get
-   * @param objId Optional ID of the object to use for debug logging
-   * @returns Array of all function names on an object
-   */
-  export function getAllObjectFunctionNames(
-    obj: {
-      [property: string]: unknown;
-    },
-    objId?: string,
-  ): Set<string>;
-}
-declare module 'shared/utils/papi-util' {
-  import { ProcessType } from 'shared/global-this.model';
-  /** Function to run to dispose of something. Returns true if successfully unsubscribed */
-  export type Unsubscriber = () => boolean;
-  /**
-   * Returns an Unsubscriber function that combines all the unsubscribers passed in.
-   *
-   * @param unsubscribers All unsubscribers to aggregate into one unsubscriber
-   * @returns Function that unsubscribes from all passed in unsubscribers when run
-   */
-  export const aggregateUnsubscribers: (unsubscribers: Unsubscriber[]) => Unsubscriber;
-  /**
-   * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
-   * successfully unsubscribed
-   */
-  export type UnsubscriberAsync = () => Promise<boolean>;
-  /**
-   * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
-   *
-   * @param unsubscribers - All unsubscribers to aggregate into one unsubscriber.
-   * @returns Function that unsubscribes from all passed in unsubscribers when run
-   */
-  export const aggregateUnsubscriberAsyncs: (
-    unsubscribers: (UnsubscriberAsync | Unsubscriber)[],
-  ) => UnsubscriberAsync;
   /**
    * Creates a safe version of a register function that returns a Promise<UnsubscriberAsync>.
    *
@@ -635,93 +483,24 @@ declare module 'shared/utils/papi-util' {
     Complex = 'complex',
   }
   /**
-   * Check that two objects are deeply equal, comparing members of each object and such
-   *
-   * @param a The first object to compare
-   * @param b The second object to compare
-   *
-   *   WARNING: Objects like arrays from different iframes have different constructor function
-   *   references even if they do the same thing, so this deep equality comparison fails objects that
-   *   look the same but have different constructors because different constructors could produce
-   *   false positives in [a few specific
-   *   situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
-   *   This means that two objects like arrays from different iframes that look the same will fail
-   *   this check. Please use some other means to check deep equality in those situations.
-   *
-   *   Note: This deep equality check considers `undefined` values on keys of objects NOT to be equal to
-   *   not specifying the key at all. For example, `{ stuff: 3, things: undefined }` and `{ stuff: 3
-   *   }` are not considered equal in this case
-   *
-   *   - For more information and examples, see [this
-   *       CodeSandbox](https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs).
-   *
-   * @returns True if a and b are deeply equal; false otherwise
+   * Modules that someone might try to require in their extensions that we have similar apis for. When
+   * an extension requires these modules, an error throws that lets them know about our similar api.
    */
-  export function deepEqual(a: unknown, b: unknown): boolean;
+  export const MODULE_SIMILAR_APIS: Readonly<{
+    [moduleName: string]:
+      | string
+      | {
+          [process in ProcessType | 'default']?: string;
+        }
+      | undefined;
+  }>;
   /**
-   * Converts a JavaScript value to a JSON string, changing `undefined` properties in the JavaScript
-   * object to `null` properties in the JSON string.
+   * Get a message that says the module import was rejected and to try a similar api if available.
    *
-   * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
-   * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
-   * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
-   * values, you should wrap them yourself in a string before using this function. Alternatively, you
-   * can write your own replacer that will preserve `null` in a way that you can recover later.
-   *
-   * @param value A JavaScript value, usually an object or array, to be converted.
-   * @param replacer A function that transforms the results. Note that all `undefined` values returned
-   *   by the replacer will be further transformed into `null` in the JSON string.
-   * @param space Adds indentation, white space, and line break characters to the return-value JSON
-   *   text to make it easier to read. See the `space` parameter of `JSON.stringify` for more
-   *   details.
+   * @param moduleName Name of `require`d module that was rejected
+   * @returns String that says the import was rejected and a similar api to try
    */
-  export function serialize(
-    value: unknown,
-    replacer?: (this: unknown, key: string, value: unknown) => unknown,
-    space?: string | number,
-  ): string;
-  /**
-   * Converts a JSON string into a value, converting all `null` properties from JSON into `undefined`
-   * in the returned JavaScript value/object.
-   *
-   * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
-   * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
-   * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
-   * values, you should wrap them yourself in a string before using this function. Alternatively, you
-   * can write your own replacer that will preserve `null` in a way that you can recover later.
-   *
-   * @param text A valid JSON string.
-   * @param reviver A function that transforms the results. This function is called for each member of
-   *   the object. If a member contains nested objects, the nested objects are transformed before the
-   *   parent object is. Note that `null` values are converted into `undefined` values after the
-   *   reviver has run.
-   */
-  export function deserialize(
-    value: string,
-    reviver?: (this: unknown, key: string, value: unknown) => unknown,
-  ): any;
-  /**
-   * Check to see if the value is serializable without losing information
-   *
-   * @param value Value to test
-   * @returns True if serializable; false otherwise
-   *
-   *   Note: the values `undefined` and `null` are serializable (on their own or in an array), but
-   *   `null` values get transformed into `undefined` when serializing/deserializing.
-   *
-   *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
-   *   Please only use this if you need to
-   *
-   *   DISCLAIMER: this does not successfully detect that values are not serializable in some cases:
-   *
-   *   - Losses of removed properties like functions and `Map`s
-   *   - Class instances (not deserializable into class instances without special code)
-   *
-   *   We intend to improve this in the future if it becomes important to do so. See [`JSON.stringify`
-   *   documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#description)
-   *   for more information.
-   */
-  export function isSerializable(value: unknown): boolean;
+  export function getModuleSimilarApiMessage(moduleName: string): string;
   /** Separator between parts of a serialized request */
   const REQUEST_TYPE_SEPARATOR = ':';
   /** Information about a request that tells us what to do with it */
@@ -747,65 +526,13 @@ declare module 'shared/utils/papi-util' {
   export function serializeRequestType(category: string, directive: string): SerializedRequestType;
   /** Split a request message requestType string into its parts */
   export function deserializeRequestType(requestType: SerializedRequestType): RequestType;
-  /**
-   * HTML Encodes the provided string. Thanks to ChatGPT
-   *
-   * @param str String to HTML encode
-   * @returns HTML-encoded string
-   */
-  export const htmlEncode: (str: string) => string;
-  /**
-   * Modules that someone might try to require in their extensions that we have similar apis for. When
-   * an extension requires these modules, an error throws that lets them know about our similar api.
-   */
-  export const MODULE_SIMILAR_APIS: Readonly<{
-    [moduleName: string]:
-      | string
-      | {
-          [process in ProcessType | 'default']?: string;
-        }
-      | undefined;
-  }>;
-  /**
-   * Get a message that says the module import was rejected and to try a similar api if available.
-   *
-   * @param moduleName Name of `require`d module that was rejected
-   * @returns String that says the import was rejected and a similar api to try
-   */
-  export function getModuleSimilarApiMessage(moduleName: string): string;
-  /**
-   *
-   * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
-   * services. Extensions should not use or rely on anything in papiUtil unless some other service
-   * requires it.
-   */
-  export type moduleSummaryComments = {};
-}
-declare module 'shared/models/papi-event.model' {
-  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Callback function that accepts an event and should run when an event is emitted */
-  export type PapiEventHandler<T> = (event: T) => void;
-  /**
-   * Function that subscribes the provided callback to run when this event is emitted.
-   *
-   * @param callback Function to run with the event when it is emitted
-   * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
-   *   emitted
-   */
-  export type PapiEvent<T> = (callback: PapiEventHandler<T>) => Unsubscriber;
-  /**
-   * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
-   *
-   * Note: The callback itself is not asynchronous.
-   */
-  export type PapiEventAsync<T> = (callback: PapiEventHandler<T>) => Promise<UnsubscriberAsync>;
 }
 declare module 'shared/data/internal-connection.model' {
   /**
    * Types that are internal to the communication we do through WebSocket. These types should not need
    * to be used outside of NetworkConnectors and ConnectionService.ts
    */
-  import { ComplexRequest, ComplexResponse, SerializedRequestType } from 'shared/utils/papi-util';
+  import { ComplexRequest, ComplexResponse, SerializedRequestType } from 'shared/utils/util';
   /** Represents when the client id has not been assigned by the server */
   export const CLIENT_ID_UNASSIGNED = -1;
   /** "Client id" for the server */
@@ -977,6 +704,40 @@ declare module 'shared/services/network-connector.interface' {
     emitEventOnNetwork: <T>(eventType: string, event: InternalEvent<T>) => Promise<void>;
   }
 }
+declare module 'shared/utils/internal-util' {
+  /** Utility functions specific to the internal technologies we are using. */
+  import { ProcessType } from 'shared/global-this.model';
+  /**
+   * Determine if running on a client process (renderer, extension-host) or on the server.
+   *
+   * @returns Returns true if running on a client, false otherwise
+   */
+  export const isClient: () => boolean;
+  /**
+   * Determine if running on the server process (main)
+   *
+   * @returns Returns true if running on the server, false otherwise
+   */
+  export const isServer: () => boolean;
+  /**
+   * Determine if running on the renderer process
+   *
+   * @returns Returns true if running on the renderer, false otherwise
+   */
+  export const isRenderer: () => boolean;
+  /**
+   * Determine if running on the extension host
+   *
+   * @returns Returns true if running on the extension host, false otherwise
+   */
+  export const isExtensionHost: () => boolean;
+  /**
+   * Gets which kind of process this is (main, renderer, extension-host)
+   *
+   * @returns ProcessType for this process
+   */
+  export const getProcessType: () => ProcessType;
+}
 declare module 'shared/data/network-connector.model' {
   /**
    * Types that are relevant particularly to the implementation of communication on
@@ -1052,90 +813,26 @@ declare module 'shared/data/network-connector.model' {
     | WebSocketResponse
     | WebSocketEvent<unknown>;
 }
-declare module 'shared/models/disposal.model' {
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Require a `dispose` function */
-  export interface Dispose {
-    /** Release resources and notify dependent services when tearing down an object */
-    dispose: UnsubscriberAsync;
-  }
-  /** Require an `onDidDispose` event */
-  export interface OnDidDispose {
-    /** Event that emits when `dispose` is called on an object */
-    onDidDispose: PapiEvent<void>;
-  }
+declare module 'shared/services/logger.service' {
+  import log from 'electron-log';
+  export const WARN_TAG = '<WARN>';
   /**
-   * Indicates than an object cannot have an `onDidDispose` event. Also allows an object to include a
-   * `dispose` function.
+   * Format a string of a service message
+   *
+   * @param message Message from the service
+   * @param serviceName Name of the service to show in the log
+   * @param tag Optional tag at the end of the service name
+   * @returns Formatted string of a service message
    */
-  export interface CannotHaveOnDidDispose {
-    /** Release resources and notify dependent services when tearing down an object */
-    dispose?: UnsubscriberAsync;
-    /** Event that emits when `dispose` is called on an object */
-    onDidDispose?: undefined;
-  }
-  /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
-  export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, 'onDidDispose'>;
-}
-declare module 'shared/models/papi-event-emitter.model' {
-  /** Interfaces, classes, and functions related to events and event emitters */
-  import { PapiEvent } from 'shared/models/papi-event.model';
-  import { Dispose } from 'shared/models/disposal.model';
+  export function formatLog(message: string, serviceName: string, tag?: string): string;
   /**
    *
-   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
-   * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
-   * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-   * private, and its event should be public. That way, the emitter is not publicized, but anyone can
-   * subscribe to the event.
+   * All extensions and services should use this logger to provide a unified output of logs
    */
-  export default class PapiEventEmitter<T> implements Dispose {
-    /**
-     * Subscribes a function to run when this event is emitted.
-     *
-     * @param callback Function to run with the event when it is emitted
-     * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
-     *   emitted
-     * @alias event
-     */
-    subscribe: PapiEvent<T>;
-    /** All callback functions that will run when this event is emitted. Lazy loaded */
-    private subscriptions?;
-    /** Event for listeners to subscribe to. Lazy loaded */
-    private lazyEvent?;
-    /** Whether this emitter has been disposed */
-    private isDisposed;
-    /**
-     * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
-     * Use like `const unsubscriber = event(callback)`
-     *
-     * @param callback Function to run with the event when it is emitted
-     * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
-     *   emitted
-     */
-    get event(): PapiEvent<T>;
-    /** Disposes of this event, preparing it to release from memory */
-    dispose: () => Promise<boolean>;
-    /**
-     * Runs the subscriptions for the event
-     *
-     * @param event Event data to provide to subscribed callbacks
-     */
-    emit: (event: T) => void;
-    /**
-     * Function that runs the subscriptions for the event. Added here so children can override emit
-     * and still call the base functionality. See NetworkEventEmitter.emit for example
-     */
-    protected emitFn(event: T): void;
-    /** Check to make sure this emitter is not disposed. Throw if it is */
-    protected assertNotDisposed(): void;
-    /**
-     * Disposes of this event, preparing it to release from memory. Added here so children can
-     * override emit and still call the base functionality.
-     */
-    protected disposeFn(): Promise<boolean>;
-  }
+  const logger: log.MainLogger & {
+    default: log.MainLogger;
+  };
+  export default logger;
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -1499,7 +1196,7 @@ declare module 'shared/services/connection.service' {
     RequestHandler,
     RequestRouter,
   } from 'shared/data/internal-connection.model';
-  import { ComplexResponse } from 'shared/utils/papi-util';
+  import { ComplexResponse } from 'shared/utils/util';
   /**
    * Send a request to the server and resolve after receiving a response
    *
@@ -1544,8 +1241,7 @@ declare module 'shared/services/connection.service' {
   export const getClientId: () => number;
 }
 declare module 'shared/models/papi-network-event-emitter.model' {
-  import { PapiEventHandler } from 'shared/models/papi-event.model';
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
+  import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
   /**
    * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
    * callbacks when the event is emitted. Events on NetworkEventEmitters can be emitted across
@@ -1559,7 +1255,7 @@ declare module 'shared/models/papi-network-event-emitter.model' {
    *
    * WARNING: You cannot emit events with complex types on the network.
    */
-  export default class PapiNetworkEventEmitter<T> extends PapiEventEmitter<T> {
+  export default class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
     /** Callback that sends the event to other processes on the network when it is emitted */
     private networkSubscriber;
     /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
@@ -1572,7 +1268,7 @@ declare module 'shared/models/papi-network-event-emitter.model' {
      */
     constructor(
       /** Callback that sends the event to other processes on the network when it is emitted */
-      networkSubscriber: PapiEventHandler<T>,
+      networkSubscriber: PlatformEventHandler<T>,
       /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
       networkDisposer: () => void,
     );
@@ -1593,15 +1289,13 @@ declare module 'shared/services/network.service' {
    * papiNetworkService
    */
   import { ClientConnectEvent, ClientDisconnectEvent } from 'shared/data/internal-connection.model';
+  import { UnsubscriberAsync, PlatformEventEmitter, PlatformEvent } from 'platform-bible-utils';
   import {
     ComplexRequest,
     ComplexResponse,
     RequestHandlerType,
     SerializedRequestType,
-    UnsubscriberAsync,
-  } from 'shared/utils/papi-util';
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
-  import { PapiEvent } from 'shared/models/papi-event.model';
+  } from 'shared/utils/util';
   /**
    * Args handler function for a request. Called when a request is handled. The function should accept
    * the spread of the contents array of the request as its parameters. The function should return an
@@ -1627,9 +1321,9 @@ declare module 'shared/services/network.service' {
     request: ComplexRequest<TParam>,
   ) => Promise<ComplexResponse<TReturn>>;
   /** Event that emits with clientId when a client connects */
-  export const onDidClientConnect: PapiEvent<ClientConnectEvent>;
+  export const onDidClientConnect: PlatformEvent<ClientConnectEvent>;
   /** Event that emits with clientId when a client disconnects */
-  export const onDidClientDisconnect: PapiEvent<ClientDisconnectEvent>;
+  export const onDidClientDisconnect: PlatformEvent<ClientDisconnectEvent>;
   /** Closes the network services gracefully */
   export const shutdown: () => void;
   /** Sets up the NetworkService. Runs only once */
@@ -1682,14 +1376,14 @@ declare module 'shared/services/network.service' {
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event emitter whose event works between connections
    */
-  export const createNetworkEventEmitter: <T>(eventType: string) => PapiEventEmitter<T>;
+  export const createNetworkEventEmitter: <T>(eventType: string) => PlatformEventEmitter<T>;
   /**
    * Gets the network event with the specified type. Creates the emitter if it does not exist
    *
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event for the event type that runs the callback provided when the event is emitted
    */
-  export const getNetworkEvent: <T>(eventType: string) => PapiEvent<T>;
+  export const getNetworkEvent: <T>(eventType: string) => PlatformEvent<T>;
   /**
    * Creates a function that is a request function with a baked requestType. This is also nice because
    * you get TypeScript type support using this function.
@@ -1713,58 +1407,8 @@ declare module 'shared/services/network.service' {
    */
   export const papiNetworkService: PapiNetworkService;
 }
-declare module 'shared/utils/async-variable' {
-  /** This class provides a convenient way for one task to wait on a variable that another task sets. */
-  export default class AsyncVariable<T> {
-    private readonly variableName;
-    private readonly promiseToValue;
-    private resolver;
-    private rejecter;
-    /**
-     * Creates an instance of the class
-     *
-     * @param variableName Name to use when logging about this variable
-     * @param rejectIfNotSettledWithinMS Milliseconds to wait before verifying if the promise was
-     *   settled (resolved or rejected); will reject if it has not settled by that time. Use -1 if you
-     *   do not want a timeout at all.
-     */
-    constructor(variableName: string, rejectIfNotSettledWithinMS?: number);
-    /**
-     * Get this variable's promise to a value. This always returns the same promise even after the
-     * value has been resolved or rejected.
-     *
-     * @returns The promise for the value to be set
-     */
-    get promise(): Promise<T>;
-    /**
-     * A simple way to see if this variable's promise was resolved or rejected already
-     *
-     * @returns Whether the variable was already resolved or rejected
-     */
-    get hasSettled(): boolean;
-    /**
-     * Resolve this variable's promise to the given value
-     *
-     * @param value This variable's promise will resolve to this value
-     * @param throwIfAlreadySettled Determines whether to throw if the variable was already resolved
-     *   or rejected
-     */
-    resolveToValue(value: T, throwIfAlreadySettled?: boolean): void;
-    /**
-     * Reject this variable's promise for the value with the given reason
-     *
-     * @param reason This variable's promise will be rejected with this reason
-     * @param throwIfAlreadySettled Determines whether to throw if the variable was already resolved
-     *   or rejected
-     */
-    rejectWithReason(reason: string, throwIfAlreadySettled?: boolean): void;
-    /** Prevent any further updates to this variable */
-    private complete;
-  }
-}
 declare module 'shared/services/network-object.service' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import { PapiEvent } from 'shared/models/papi-event.model';
+  import { PlatformEvent, UnsubscriberAsync } from 'platform-bible-utils';
   import {
     NetworkObject,
     DisposableNetworkObject,
@@ -1786,9 +1430,9 @@ declare module 'shared/services/network-object.service' {
    * Event that fires when a new object has been created on the network (locally or remotely). The
    * event contains information about the new network object.
    */
-  export const onDidCreateNetworkObject: PapiEvent<NetworkObjectDetails>;
+  export const onDidCreateNetworkObject: PlatformEvent<NetworkObjectDetails>;
   /** Event that fires with a network object ID when that object is disposed locally or remotely */
-  export const onDidDisposeNetworkObject: PapiEvent<string>;
+  export const onDidDisposeNetworkObject: PlatformEvent<string>;
   interface IDisposableObject {
     dispose?: UnsubscriberAsync;
   }
@@ -1880,7 +1524,7 @@ declare module 'shared/models/network-object.model' {
     OnDidDispose,
     CannotHaveOnDidDispose,
     CanHaveOnDidDispose,
-  } from 'shared/models/disposal.model';
+  } from 'platform-bible-utils';
   /**
    * An object of this type is returned from {@link networkObjectService.get}.
    *
@@ -1954,8 +1598,7 @@ declare module 'shared/models/network-object.model' {
   };
 }
 declare module 'shared/models/data-provider.model' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
-  import { PapiEventHandler } from 'shared/models/papi-event.model';
+  import { UnsubscriberAsync, PlatformEventHandler } from 'platform-bible-utils';
   import { NetworkableObject } from 'shared/models/network-object.model';
   /** Various options to adjust how the data provider subscriber emits updates */
   export type DataProviderSubscriberOptions = {
@@ -2054,7 +1697,7 @@ declare module 'shared/models/data-provider.model' {
    */
   export type DataProviderSubscriber<TDataType extends DataProviderDataType> = (
     selector: TDataType['selector'],
-    callback: PapiEventHandler<TDataType['getData']>,
+    callback: PlatformEventHandler<TDataType['getData']>,
     options?: DataProviderSubscriberOptions,
   ) => Promise<UnsubscriberAsync>;
   /**
@@ -2222,7 +1865,7 @@ declare module 'shared/models/data-provider.interface' {
     DataProviderSetters,
     DataProviderSubscribers,
   } from 'shared/models/data-provider.model';
-  import { Dispose, OnDidDispose } from 'shared/models/disposal.model';
+  import { Dispose, OnDidDispose } from 'platform-bible-utils';
   /**
    * An object on the papi that manages data and has methods for interacting with that data. Created
    * by the papi and layers over an IDataProviderEngine provided by an extension. Returned from
@@ -2438,7 +2081,7 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
   export default ExtractDataProviderDataTypes;
 }
 declare module 'papi-shared-types' {
-  import type { ScriptureReference } from 'papi-components';
+  import type { ScriptureReference } from 'platform-bible-utils';
   import type { DataProviderDataType } from 'shared/models/data-provider.model';
   import type { MandatoryProjectDataType } from 'shared/models/project-data-provider.model';
   import type { IDisposableDataProvider } from 'shared/models/data-provider.interface';
@@ -2647,7 +2290,7 @@ declare module 'papi-shared-types' {
   };
 }
 declare module 'shared/services/command.service' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import { UnsubscriberAsync } from 'platform-bible-utils';
   import { CommandHandlers, CommandNames } from 'papi-shared-types';
   module 'papi-shared-types' {
     interface CommandHandlers {
@@ -2888,7 +2531,7 @@ declare module 'shared/models/docking-framework.model' {
 declare module 'shared/services/web-view.service-model' {
   import { GetWebViewOptions, WebViewId, WebViewType } from 'shared/models/web-view.model';
   import { AddWebViewEvent, Layout } from 'shared/models/docking-framework.model';
-  import { PapiEvent } from 'shared/models/papi-event.model';
+  import { PlatformEvent } from 'platform-bible-utils';
   /**
    *
    * Service exposing various functions related to using webViews
@@ -2898,7 +2541,7 @@ declare module 'shared/services/web-view.service-model' {
    */
   export interface WebViewServiceType {
     /** Event that emits with webView info when a webView is added */
-    onDidAddWebView: PapiEvent<AddWebViewEvent>;
+    onDidAddWebView: PlatformEvent<AddWebViewEvent>;
     /**
      * Creates a new web view or gets an existing one depending on if you request an existing one and
      * if the web view provider decides to give that existing one to you (it is up to the provider).
@@ -2966,7 +2609,7 @@ declare module 'shared/models/web-view-provider.model' {
     NetworkObject,
     NetworkableObject,
   } from 'shared/models/network-object.model';
-  import { CanHaveOnDidDispose } from 'shared/models/disposal.model';
+  import { CanHaveOnDidDispose } from 'platform-bible-utils';
   export interface IWebViewProvider extends NetworkableObject {
     /**
      * @param savedWebView Filled out if an existing webview is being called for (matched by ID). Just
@@ -3264,28 +2907,6 @@ declare module 'shared/models/project-data-provider-engine.model' {
     ): ProjectDataProviderEngineTypes[ProjectType];
   }
 }
-declare module 'shared/utils/unsubscriber-async-list' {
-  import { Dispose } from 'shared/models/disposal.model';
-  import { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
-  /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
-  export default class UnsubscriberAsyncList {
-    private name;
-    readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
-    constructor(name?: string);
-    /**
-     * Add unsubscribers to the list. Note that duplicates are not added twice.
-     *
-     * @param unsubscribers - Objects that were returned from a registration process.
-     */
-    add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
-    /**
-     * Run all unsubscribers added to this list and then clear the list.
-     *
-     * @returns `true` if all unsubscribers succeeded, `false` otherwise.
-     */
-    runAllUnsubscribers(): Promise<boolean>;
-  }
-}
 declare module 'shared/models/project-metadata.model' {
   import { ProjectTypes } from 'papi-shared-types';
   /**
@@ -3337,7 +2958,7 @@ declare module 'shared/services/project-lookup.service' {
 declare module 'shared/services/project-data-provider.service' {
   import { ProjectTypes, ProjectDataProviders } from 'papi-shared-types';
   import { ProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
-  import { Dispose } from 'shared/models/disposal.model';
+  import { Dispose } from 'platform-bible-utils';
   /**
    * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
    * existing factory already that handles the same project type or this operation will fail.
@@ -3889,9 +3510,7 @@ declare module '@papi/backend' {
    *
    * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
    */
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
   import * as commandService from 'shared/services/command.service';
-  import * as papiUtil from 'shared/utils/papi-util';
   import { PapiNetworkService } from 'shared/services/network.service';
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiWebViewProviderService } from 'shared/services/web-view-provider.service';
@@ -3905,15 +3524,6 @@ declare module '@papi/backend' {
   import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
   import { DialogService } from 'shared/services/dialog.service-model';
   const papi: {
-    /**
-     *
-     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
-     * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
-     * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-     * private, and its event should be public. That way, the emitter is not publicized, but anyone can
-     * subscribe to the event.
-     */
-    EventEmitter: typeof PapiEventEmitter;
     /**
      *
      * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
@@ -3932,13 +3542,6 @@ declare module '@papi/backend' {
      * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
-    /**
-     *
-     * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
-     * services. Extensions should not use or rely on anything in papiUtil unless some other service
-     * requires it.
-     */
-    utils: typeof papiUtil;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -4000,15 +3603,6 @@ declare module '@papi/backend' {
   export default papi;
   /**
    *
-   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
-   * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
-   * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-   * private, and its event should be public. That way, the emitter is not publicized, but anyone can
-   * subscribe to the event.
-   */
-  export const EventEmitter: typeof PapiEventEmitter;
-  /**
-   *
    * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
    * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
    * function in order to use `notifyUpdate`.
@@ -4025,13 +3619,6 @@ declare module '@papi/backend' {
    * other services and extensions that have registered commands.
    */
   export const commands: typeof commandService;
-  /**
-   *
-   * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
-   * services. Extensions should not use or rely on anything in papiUtil unless some other service
-   * requires it.
-   */
-  export const utils: typeof papiUtil;
   /**
    *
    * Service exposing various functions related to using webViews
@@ -4092,7 +3679,7 @@ declare module '@papi/backend' {
 }
 declare module 'extension-host/extension-types/extension-activation-context.model' {
   import { ExecutionToken } from 'node/models/execution-token.model';
-  import UnsubscriberAsyncList from 'shared/utils/unsubscriber-async-list';
+  import { UnsubscriberAsyncList } from 'platform-bible-utils';
   /** An object of this type is passed into `activate()` for each extension during initialization */
   export type ExecutionActivationContext = {
     /** Canonical name of the extension */
@@ -4104,7 +3691,7 @@ declare module 'extension-host/extension-types/extension-activation-context.mode
   };
 }
 declare module 'extension-host/extension-types/extension.interface' {
-  import { UnsubscriberAsync } from 'shared/utils/papi-util';
+  import { UnsubscriberAsync } from 'platform-bible-utils';
   import { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
   /** Interface for all extensions to implement */
   export interface IExtension {
@@ -4165,7 +3752,7 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
   };
 }
 declare module 'shared/services/settings.service' {
-  import { Unsubscriber } from 'shared/utils/papi-util';
+  import { Unsubscriber } from 'platform-bible-utils';
   import { SettingNames, SettingTypes } from 'papi-shared-types';
   /** Event to set or update a setting */
   export type UpdateSettingEvent<SettingName extends SettingNames> = {
@@ -4234,97 +3821,6 @@ declare module 'shared/services/settings.service' {
    */
   const settingsService: SettingsService;
   export default settingsService;
-}
-declare module 'renderer/hooks/papi-hooks/use-promise.hook' {
-  export type UsePromiseOptions = {
-    /**
-     * Whether to leave the value as the most recent resolved promise value or set it back to
-     * defaultValue while running the promise again. Defaults to true
-     */
-    preserveValue?: boolean;
-  };
-  /**
-   * Awaits a promise and returns a loading value while the promise is unresolved
-   *
-   * @param promiseFactoryCallback A function that returns the promise to await. If this callback is
-   *   undefined, the current value will be returned (defaultValue unless it was previously changed
-   *   and `options.preserveValue` is true), and there will be no loading.
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   * @param defaultValue The initial value to return while first awaiting the promise. If
-   *   `options.preserveValue` is false, this value is also shown while awaiting the promise on
-   *   subsequent calls.
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that, if the `promiseFactoryCallback` changes and
-   *   `options.preserveValue` is `false`, the returned value will be set to the current
-   *   `defaultValue`. However, the returned value will not be updated if`defaultValue` changes.
-   * @param options Various options for adjusting how this hook runs the `promiseFactoryCallback`
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. However, the latest `options.preserveValue` will always be used
-   *   appropriately to determine whether to preserve the returned value when changing the
-   *   `promiseFactoryCallback`
-   * @returns `[value, isLoading]`
-   *
-   *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
-   *   - `isLoading`: whether the promise is waiting to be resolved
-   */
-  const usePromise: <T>(
-    promiseFactoryCallback: (() => Promise<T>) | undefined,
-    defaultValue: T,
-    options?: UsePromiseOptions,
-  ) => [value: T, isLoading: boolean];
-  export default usePromise;
-}
-declare module 'renderer/hooks/papi-hooks/use-event.hook' {
-  import { PapiEvent, PapiEventHandler } from 'shared/models/papi-event.model';
-  /**
-   * Adds an event handler to an event so the event handler runs when the event is emitted
-   *
-   * @param event The event to subscribe to. Can be either a string or an Event
-   *
-   *   - If event is a `string`, the network event associated with this type will automatically be used
-   *   - If event is a `PapiEvent`, that event will be used
-   *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
-   *       available for example
-   *
-   * @param eventHandler The callback to run when the event is emitted
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   */
-  const useEvent: <T>(
-    event: string | PapiEvent<T> | undefined,
-    eventHandler: PapiEventHandler<T>,
-  ) => void;
-  export default useEvent;
-}
-declare module 'renderer/hooks/papi-hooks/use-event-async.hook' {
-  import { PapiEvent, PapiEventAsync, PapiEventHandler } from 'shared/models/papi-event.model';
-  /**
-   * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
-   * runs when the event is emitted
-   *
-   * @param event The asynchronously (un)subscribing event to subscribe to. Can be either a string or
-   *   an Event
-   *
-   *   - If event is a `string`, the network event associated with this type will automatically be used
-   *   - If event is a `PapiEvent` or `PapiEventAsync`, that event will be used
-   *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
-   *       available for example
-   *
-   * @param eventHandler The callback to run when the event is emitted
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
-   *   every render
-   */
-  const useEventAsync: <T>(
-    event: string | PapiEvent<T> | PapiEventAsync<T> | undefined,
-    eventHandler: PapiEventHandler<T>,
-  ) => void;
-  export default useEventAsync;
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
   import { NetworkObject } from 'shared/models/network-object.model';
@@ -4903,9 +4399,6 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   export default useDataProviderMulti;
 }
 declare module 'renderer/hooks/papi-hooks/index' {
-  export { default as usePromise } from 'renderer/hooks/papi-hooks/use-promise.hook';
-  export { default as useEvent } from 'renderer/hooks/papi-hooks/use-event.hook';
-  export { default as useEventAsync } from 'renderer/hooks/papi-hooks/use-event-async.hook';
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
   export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';
@@ -4982,9 +4475,7 @@ declare module '@papi/frontend' {
    *
    * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
    */
-  import PapiEventEmitter from 'shared/models/papi-event-emitter.model';
   import * as commandService from 'shared/services/command.service';
-  import * as papiUtil from 'shared/utils/papi-util';
   import { PapiNetworkService } from 'shared/services/network.service';
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { InternetService } from 'shared/services/internet.service';
@@ -4997,15 +4488,6 @@ declare module '@papi/frontend' {
   import PapiRendererWebSocket from 'renderer/services/renderer-web-socket.service';
   import PapiRendererXMLHttpRequest from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
-    /**
-     *
-     * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
-     * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
-     * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-     * private, and its event should be public. That way, the emitter is not publicized, but anyone can
-     * subscribe to the event.
-     */
-    EventEmitter: typeof PapiEventEmitter;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
     /** This wraps the browser's WebSocket implementation to provide
@@ -5029,13 +4511,6 @@ declare module '@papi/frontend' {
      * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
-    /**
-     *
-     * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
-     * services. Extensions should not use or rely on anything in papiUtil unless some other service
-     * requires it.
-     */
-    utils: typeof papiUtil;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -5093,15 +4568,6 @@ declare module '@papi/frontend' {
     settings: SettingsService;
   };
   export default papi;
-  /**
-   *
-   * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
-   * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
-   * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
-   * private, and its event should be public. That way, the emitter is not publicized, but anyone can
-   * subscribe to the event.
-   */
-  export const EventEmitter: typeof PapiEventEmitter;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
   /** This wraps the browser's WebSocket implementation to provide
@@ -5125,13 +4591,6 @@ declare module '@papi/frontend' {
    * other services and extensions that have registered commands.
    */
   export const commands: typeof commandService;
-  /**
-   *
-   * PapiUtil is a collection of functions, objects, and types that are used as helpers in other
-   * services. Extensions should not use or rely on anything in papiUtil unless some other service
-   * requires it.
-   */
-  export const utils: typeof papiUtil;
   /**
    *
    * Service exposing various functions related to using webViews
@@ -5197,7 +4656,7 @@ declare module '@papi/core' {
   export type { ExecutionToken } from 'node/models/execution-token.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
-  export type { UsePromiseOptions } from 'renderer/hooks/papi-hooks/use-promise.hook';
+  export type { UsePromiseOptions } from 'platform-bible-react';
   export type { default as IDataProvider } from 'shared/models/data-provider.interface';
   export type {
     DataProviderUpdateInstructions,
@@ -5207,8 +4666,12 @@ declare module '@papi/core' {
   export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
   export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
-  export type { PapiEvent } from 'shared/models/papi-event.model';
-  export type { default as PapiEventEmitter } from 'shared/models/papi-event-emitter.model';
+  export type {
+    Unsubscriber,
+    UnsubscriberAsync,
+    PlatformEvent,
+    default as PlatformEventEmitter,
+  } from 'platform-bible-utils';
   export type {
     ExtensionDataScope,
     MandatoryProjectDataType,
@@ -5222,7 +4685,6 @@ declare module '@papi/core' {
     WebViewDefinition,
     WebViewProps,
   } from 'shared/models/web-view.model';
-  export type { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
   export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
   export type { SettingEvent } from 'shared/services/settings.service';
 }

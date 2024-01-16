@@ -1,7 +1,7 @@
 import { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio, spawn } from 'child_process';
 import path from 'path';
 import logger, { formatLog } from '@shared/services/logger.service';
-import { waitForDuration } from '@shared/utils/util';
+import { waitForDuration } from 'platform-bible-utils';
 
 /** Pretty name for the process this service manages. Used in logs */
 const DOTNET_DATA_PROVIDER_NAME = 'dotnet data provider';

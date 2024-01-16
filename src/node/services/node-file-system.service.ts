@@ -4,7 +4,7 @@ import fs, { BigIntStats } from 'fs';
 import path from 'path';
 import { Uri } from '@shared/data/file-system.model';
 import { getPathFromUri, joinUriPaths } from '@node/utils/util';
-import { groupBy } from '@shared/utils/util';
+import { groupBy } from 'platform-bible-utils';
 
 /**
  * Read a text file

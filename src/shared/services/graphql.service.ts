@@ -3,7 +3,7 @@ import { VerseRef, ScrVers } from '@sillsdev/scripture';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { get } from '@shared/services/project-data-provider.service';
-import { serialize } from '@shared/utils/papi-util';
+import { serialize } from 'platform-bible-utils';
 import { ProjectDataProviders } from 'papi-shared-types';
 
 // TODO: figure out what to do with the schema. It's a baked in string just to get things rolling, not because it's optimal.

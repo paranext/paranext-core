@@ -1,16 +1,18 @@
 ﻿// #region imports
 
 import * as networkService from '@shared/services/network.service';
+import { serializeRequestType } from '@shared/utils/util';
 import {
+  AsyncVariable,
+  PlatformEvent,
+  PlatformEventEmitter,
   aggregateUnsubscriberAsyncs,
   serialize,
-  serializeRequestType,
   UnsubscriberAsync,
-} from '@shared/utils/papi-util';
-import { PapiEvent } from '@shared/models/papi-event.model';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
-import { getAllObjectFunctionNames, isString } from '@shared/utils/util';
-import AsyncVariable from '@shared/utils/async-variable';
+  getAllObjectFunctionNames,
+  isString,
+  CanHaveOnDidDispose,
+} from 'platform-bible-utils';
 import {
   NetworkObject,
   DisposableNetworkObject,
@@ -19,7 +21,6 @@ import {
   NetworkObjectDetails,
 } from '@shared/models/network-object.model';
 import { Mutex } from 'async-mutex';
-import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
 import logger from './logger.service';
 
 // #endregion
@@ -104,7 +105,7 @@ type NetworkObjectRegistration = {
    * Emitter that indicates locally when the network object was disposed. Run when the network
    * disposal emitter runs for this registration's ID.
    */
-  onDidDisposeEmitter: PapiEventEmitter<void>;
+  onDidDisposeEmitter: PlatformEventEmitter<void>;
   /** Function to make the proxy stop working. Should be run on disposing this network object. */
   revokeProxy: () => void;
 };
@@ -290,14 +291,14 @@ function createNetworkObjectDetails(
 }
 
 interface IOnDidDisposableObject {
-  onDidDispose?: PapiEvent<void>;
+  onDidDispose?: PlatformEvent<void>;
 }
 
 /** Set an `onDidDispose` property on the object to mutate. Throw if one already exists. */
 const overrideOnDidDispose = (
   objectId: string,
   objectToMutate: IOnDidDisposableObject,
-  newOnDidDispose: PapiEvent<void>,
+  newOnDidDispose: PlatformEvent<void>,
 ): void => {
   if (objectToMutate.onDidDispose) {
     throw new Error(
@@ -394,7 +395,7 @@ const get = async <T extends object>(
     const remoteProxy = createRemoteProxy(id, baseObject);
 
     // Setup onDidDispose so that services will know when the proxy is dead
-    const eventEmitter = new PapiEventEmitter<void>();
+    const eventEmitter = new PlatformEventEmitter<void>();
     overrideOnDidDispose(id, remoteProxy.proxy, eventEmitter.event);
 
     // The network object is finished! Rename it so we know it is finished.
@@ -498,7 +499,7 @@ const set = async <T extends NetworkableObject>(
     const localProxy = createLocalProxy(objectToShare);
 
     // Setup onDidDispose so that services will know when the proxy is dead
-    const onDidDisposeLocalEmitter = new PapiEventEmitter<void>();
+    const onDidDisposeLocalEmitter = new PlatformEventEmitter<void>();
     overrideOnDidDispose(id, objectToShare, onDidDisposeLocalEmitter.event);
 
     // Override dispose on the object passed in to clean up the network object

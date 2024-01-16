@@ -1,5 +1,5 @@
 declare module 'papi-shared-types' {
-  import type { ScriptureReference } from 'papi-components';
+  import type { ScriptureReference } from 'platform-bible-utils';
   import type { DataProviderDataType } from '@shared/models/data-provider.model';
   import type { MandatoryProjectDataType } from '@shared/models/project-data-provider.model';
   import type { IDisposableDataProvider } from '@shared/models/data-provider.interface';

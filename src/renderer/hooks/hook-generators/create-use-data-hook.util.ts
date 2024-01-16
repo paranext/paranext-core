@@ -6,10 +6,9 @@ import {
   DataTypeNames,
 } from '@shared/models/data-provider.model';
 import IDataProvider from '@shared/models/data-provider.interface';
-import useEventAsync from '@renderer/hooks/papi-hooks/use-event-async.hook';
+import { useEventAsync } from 'platform-bible-react';
 import { useMemo, useRef, useState } from 'react';
-import { PapiEventAsync, PapiEventHandler } from '@shared/models/papi-event.model';
-import { isString } from '@shared/utils/util';
+import { isString, PlatformEventAsync, PlatformEventHandler } from 'platform-bible-utils';
 import ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
 
 /**
@@ -121,39 +120,40 @@ function createUseDataHook<TUseDataProviderParams extends unknown[]>(
       const [isLoading, setIsLoading] = useState<boolean>(true);
 
       // Wrap subscribe so we can call it as a normal PapiEvent in useEvent
-      const wrappedSubscribeEvent: PapiEventAsync<TDataTypes[TDataType]['getData']> | undefined =
-        useMemo(
-          () =>
-            dataProvider
-              ? async (eventCallback: PapiEventHandler<TDataTypes[TDataType]['getData']>) => {
-                  const unsub =
-                    // We need any here because for some reason IDataProvider loses its ability to
-                    // index subscribe. Assert to specified generic type.
-                    /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
-                    await (
-                      (dataProvider as any)[
-                        `subscribe${dataType as DataTypeNames<TDataTypes>}`
-                      ] as DataProviderSubscriber<TDataTypes[TDataType]>
-                    )(
-                      /* eslint-enable */
-                      selector,
-                      (subscriptionData: TDataTypes[TDataType]['getData']) => {
-                        eventCallback(subscriptionData);
-                        // When we receive updated data, mark that we are not loading
-                        setIsLoading(false);
-                      },
-                      subscriberOptionsRef.current,
-                    );
+      const wrappedSubscribeEvent:
+        | PlatformEventAsync<TDataTypes[TDataType]['getData']>
+        | undefined = useMemo(
+        () =>
+          dataProvider
+            ? async (eventCallback: PlatformEventHandler<TDataTypes[TDataType]['getData']>) => {
+                const unsub =
+                  // We need any here because for some reason IDataProvider loses its ability to
+                  // index subscribe. Assert to specified generic type.
+                  /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
+                  await (
+                    (dataProvider as any)[
+                      `subscribe${dataType as DataTypeNames<TDataTypes>}`
+                    ] as DataProviderSubscriber<TDataTypes[TDataType]>
+                  )(
+                    /* eslint-enable */
+                    selector,
+                    (subscriptionData: TDataTypes[TDataType]['getData']) => {
+                      eventCallback(subscriptionData);
+                      // When we receive updated data, mark that we are not loading
+                      setIsLoading(false);
+                    },
+                    subscriberOptionsRef.current,
+                  );
 
-                  return async () => {
-                    // When we change data type or selector, mark that we are loading
-                    setIsLoading(true);
-                    return unsub();
-                  };
-                }
-              : undefined,
-          [dataProvider, selector],
-        );
+                return async () => {
+                  // When we change data type or selector, mark that we are loading
+                  setIsLoading(true);
+                  return unsub();
+                };
+              }
+            : undefined,
+        [dataProvider, selector],
+      );
 
       // Subscribe to the data provider
       useEventAsync(wrappedSubscribeEvent, setDataInternal);

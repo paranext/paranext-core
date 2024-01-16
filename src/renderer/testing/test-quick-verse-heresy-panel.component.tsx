@@ -1,9 +1,9 @@
 import './test-buttons-panel.component.css';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import { debounce } from '@shared/utils/util';
+import { debounce } from 'platform-bible-utils';
 import { useState, useMemo, useCallback } from 'react';
-import { TextField } from 'papi-components';
+import { TextField } from 'platform-bible-react';
 
 export const TAB_TYPE_QUICK_VERSE_HERESY = 'quick-verse-heresy';
 

@@ -1,5 +1,5 @@
 import { Typography } from '@mui/material';
-import { Button } from 'papi-components';
+import { Button } from 'platform-bible-react';
 import './extension-list.component.scss';
 import { PropsWithChildren, useMemo } from 'react';
 import ExtensionToggle, { ExtensionToggleProps } from './extension-toggle.component';
