@@ -7,8 +7,8 @@ declare module 'usfm-data-provider' {
     ExtensionDataScope,
     IDataProvider,
     MandatoryProjectDataType,
-    Unsubscriber,
   } from '@papi/core';
+  import { Unsubscriber } from 'platform-bible-utils';
 
   export type UsfmProviderDataTypes = {
     BookNames: DataProviderDataType<boolean, string[], never>;
