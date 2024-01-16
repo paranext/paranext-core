@@ -5042,5 +5042,5 @@ declare module '@papi/core' {
   } from 'shared/models/web-view.model';
   export type { Unsubscriber, UnsubscriberAsync } from 'shared/utils/papi-util';
   export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
-  export type { SettingEvent as SettingMessage } from 'shared/services/settings.service';
+  export type { SettingEvent } from 'shared/services/settings.service';
 }
