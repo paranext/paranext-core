@@ -5,8 +5,8 @@ import type { HelloWorldEvent } from 'hello-world';
 import { WebViewProps } from '@papi/core';
 
 globalThis.webViewComponent = function HelloWorld2({ useWebViewState }: WebViewProps) {
-  const [clicks, setClicks] = useState<number>(0);
-  const [clicks2, setClicks2, resetClicks2] = useWebViewState<number>('newClicks', 0);
+  const [clicks, setClicks] = useState(0);
+  const [clicks2, setClicks2, resetClicks2] = useWebViewState('newClicks', 0);
 
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
