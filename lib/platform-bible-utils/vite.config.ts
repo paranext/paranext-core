@@ -8,7 +8,7 @@ const config = defineConfig({
     lib: {
       entry: path.resolve(__dirname, 'src/index.ts'),
       formats: ['es', 'cjs'],
-      fileName: (format) => `index.${format}.js`,
+      fileName: (format) => `index.${format === 'es' ? 'js' : format}`,
     },
     rollupOptions: {
       external: [
