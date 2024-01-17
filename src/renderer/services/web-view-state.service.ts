@@ -98,6 +98,19 @@ export function setWebViewStateById<T>(id: string, stateKey: string, stateValue:
 }
 
 /**
+ * Remove the web view state object associated with the given ID
+ *
+ * @param id ID of the web view
+ * @param stateKey Key for the associated state
+ */
+export function resetWebViewStateById(id: string, stateKey: string): void {
+  if (!id || !stateKey) throw new Error('id and stateKey must be provided to remove webview state');
+  const state = getRecord(id);
+  delete state[stateKey];
+  save();
+}
+
+/**
  * Purge any web view state that hasn't been touched since the process has been running. Only call
  * this once all web views have been loaded.
  */

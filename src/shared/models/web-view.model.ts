@@ -221,7 +221,11 @@ export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProp
 export type UseWebViewStateHook = <T>(
   stateKey: string,
   defaultStateValue: NonNullable<T>,
-) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+) => [
+  webViewState: NonNullable<T>,
+  setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>,
+  resetWebViewState: () => void,
+];
 
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this type. It seem that, for some reason, JSDoc does not carry these annotations on

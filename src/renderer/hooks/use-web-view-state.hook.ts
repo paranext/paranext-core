@@ -6,16 +6,27 @@ export default function useWebViewState<T>(
   this: {
     getWebViewState: (stateKey: string) => T | undefined;
     setWebViewState: (stateKey: string, stateValue: NonNullable<T>) => void;
+    resetWebViewState: (stateKey: string) => void;
   },
   stateKey: string,
   defaultStateValue: NonNullable<T>,
-): [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>] {
+): [
+  webViewState: NonNullable<T>,
+  setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>,
+  resetWebViewState: () => void,
+] {
   const [state, setState] = useState(() => this.getWebViewState(stateKey) ?? defaultStateValue);
 
   // Whenever the state changes, save the updated value
   useEffect(() => {
+    if (state === defaultStateValue) return;
     this.setWebViewState(stateKey, state);
-  }, [stateKey, state]);
+  }, [defaultStateValue, state, stateKey]);
 
-  return [state, setState];
+  const resetState = () => {
+    setState(defaultStateValue);
+    this.resetWebViewState(stateKey);
+  };
+
+  return [state, setState, resetState];
 }

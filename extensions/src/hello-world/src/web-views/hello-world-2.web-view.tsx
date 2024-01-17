@@ -1,15 +1,17 @@
 import papi from '@papi/frontend';
 import { useEvent, Button } from 'platform-bible-react';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
+import { WebViewProps } from '@papi/core';
 
-globalThis.webViewComponent = function HelloWorld2() {
-  const [clicks, setClicks] = useState(0);
+globalThis.webViewComponent = function HelloWorld2({ useWebViewState }: WebViewProps) {
+  const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
+  const [clicks2, setClicks2, resetClicks2] = useWebViewState<number>('newClicks', 0);
 
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
     papi.network.getNetworkEvent('helloWorld.onHelloWorld'),
-    useCallback(({ times }: HelloWorldEvent) => setClicks(times), []),
+    useCallback(({ times }: HelloWorldEvent) => setClicks(times), [setClicks]),
   );
 
   return (
@@ -26,6 +28,16 @@ globalThis.webViewComponent = function HelloWorld2() {
         >
           Hello World {clicks}
         </Button>
+      </div>
+      <div>
+        <Button
+          onClick={() => {
+            setClicks2(clicks2 + 1);
+          }}
+        >
+          Hello World {clicks2}
+        </Button>
+        <Button onClick={() => resetClicks2()}>Reset counter</Button>
       </div>
     </>
   );

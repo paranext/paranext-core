@@ -38,6 +38,8 @@ declare global {
   var getWebViewState: <T>(stateKey: string) => T | undefined;
   /** Set the value for a given key in the web view state. */
   var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
+  /** Remove the value for a given key in the web view state */
+  var resetWebViewState: (stateKey: string) => void;
   // Web view "by id" functions are used in the default imports for each webview in web-view.service.ts
   // but probably wouldn't be used in a webview
   // TODO: Find a way to move this to `@renderer/global-this.model.ts` without causing an error on
