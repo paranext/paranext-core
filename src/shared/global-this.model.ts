@@ -37,7 +37,7 @@ declare global {
   /** Retrieve the value from web view state with the given 'stateKey', if it exists. */
   var getWebViewState: <T>(stateKey: string) => T | undefined;
   /** Set the value for a given key in the web view state. */
-  var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
+  var setWebViewState: <T>(stateKey: string, stateValue: T) => void;
   /** Remove the value for a given key in the web view state */
   var resetWebViewState: (stateKey: string) => void;
   // Web view "by id" functions are used in the default imports for each webview in web-view.service.ts

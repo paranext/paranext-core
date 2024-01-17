@@ -5,16 +5,12 @@ import { useState, useEffect, Dispatch, SetStateAction } from 'react';
 export default function useWebViewState<T>(
   this: {
     getWebViewState: (stateKey: string) => T | undefined;
-    setWebViewState: (stateKey: string, stateValue: NonNullable<T>) => void;
+    setWebViewState: (stateKey: string, stateValue: T) => void;
     resetWebViewState: (stateKey: string) => void;
   },
   stateKey: string,
-  defaultStateValue: NonNullable<T>,
-): [
-  webViewState: NonNullable<T>,
-  setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>,
-  resetWebViewState: () => void,
-] {
+  defaultStateValue: T,
+): [webViewState: T, setWebViewState: Dispatch<SetStateAction<T>>, resetWebViewState: () => void] {
   const [state, setState] = useState(() => this.getWebViewState(stateKey) ?? defaultStateValue);
 
   // Whenever the state changes, save the updated value

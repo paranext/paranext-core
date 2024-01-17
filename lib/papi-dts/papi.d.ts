@@ -200,10 +200,10 @@ declare module 'shared/models/web-view.model' {
    */
   export type UseWebViewStateHook = <T>(
     stateKey: string,
-    defaultStateValue: NonNullable<T>,
+    defaultStateValue: T,
   ) => [
-    webViewState: NonNullable<T>,
-    setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>,
+    webViewState: T,
+    setWebViewState: Dispatch<SetStateAction<T>>,
     resetWebViewState: () => void,
   ];
   /**
@@ -375,7 +375,7 @@ declare module 'shared/global-this.model' {
     /** Retrieve the value from web view state with the given 'stateKey', if it exists. */
     var getWebViewState: <T>(stateKey: string) => T | undefined;
     /** Set the value for a given key in the web view state. */
-    var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
+    var setWebViewState: <T>(stateKey: string, stateValue: T) => void;
     /** Remove the value for a given key in the web view state */
     var resetWebViewState: (stateKey: string) => void;
     var getWebViewDefinitionUpdatablePropertiesById: (
