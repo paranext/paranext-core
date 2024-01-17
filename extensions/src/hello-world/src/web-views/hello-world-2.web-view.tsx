@@ -1,11 +1,11 @@
 import papi from '@papi/frontend';
 import { useEvent, Button } from 'platform-bible-react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
 import { WebViewProps } from '@papi/core';
 
 globalThis.webViewComponent = function HelloWorld2({ useWebViewState }: WebViewProps) {
-  const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
+  const [clicks, setClicks] = useState<number>(0);
   const [clicks2, setClicks2, resetClicks2] = useWebViewState<number>('newClicks', 0);
 
   // Update the clicks when we are informed helloWorld has been run
