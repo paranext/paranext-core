@@ -8,7 +8,6 @@ export type { ExecutionToken } from '@node/models/execution-token.model';
 
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
-export type { UsePromiseOptions } from 'platform-bible-react';
 
 export type { default as IDataProvider } from '@shared/models/data-provider.interface';
 export type {
@@ -19,12 +18,6 @@ export type {
 export type { WithNotifyUpdate } from '@shared/models/data-provider-engine.model';
 export type { default as IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 export type { DialogOptions } from '@shared/models/dialog-options.model';
-export type {
-  Unsubscriber,
-  UnsubscriberAsync,
-  PlatformEvent,
-  default as PlatformEventEmitter,
-} from 'platform-bible-utils';
 export type {
   ExtensionDataScope,
   MandatoryProjectDataType,

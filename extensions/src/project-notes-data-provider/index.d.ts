@@ -2,10 +2,9 @@ import { VerseRef } from '@sillsdev/scripture';
 import type {
   DataProviderDataType,
   DataProviderSubscriberOptions,
-  Unsubscriber,
   IDataProvider,
 } from '@papi/core';
-import { PlatformEvent } from 'platform-bible-utils';
+import { PlatformEvent, Unsubscriber } from 'platform-bible-utils';
 
 declare module 'project-notes-data-provider' {
   export type ProjectNotesProviderDataTypes = {

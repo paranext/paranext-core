@@ -34,6 +34,7 @@
     <script>
       const papi = require('@papi/frontend');
       const { logger } = require('@papi/frontend');
+      const { htmlEncode, serialize } = require('platform-bible-utils');
 
       function print(input) {
         logger.debug(input);
@@ -50,7 +51,7 @@
           const nameInput = document.getElementById('name-input');
           const greeting = await peopleDataProvider.getGreeting(nameInput.value.toLowerCase());
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.textContent = papi.utils.htmlEncode(greeting || '');
+          helloSomeoneOutput.textContent = htmlEncode(greeting || '');
           print(greeting);
         });
         greetingsButton.addEventListener('contextmenu', async (e) => {
@@ -69,7 +70,7 @@
           const nameInput = document.getElementById('name-input');
           const success = await peopleDataProvider.deletePerson(nameInput.value.toLowerCase());
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.textContent = papi.utils.htmlEncode(
+          helloSomeoneOutput.textContent = htmlEncode(
             `${success ? 'Successfully' : 'Unsuccessfully'} deleted ${nameInput.value}.${
               success ? ' RIP ⚰️' : ''
             }`.replace(/'/g, '`'),
@@ -87,7 +88,7 @@
             setGreetingsInput.value,
           );
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.textContent = papi.utils.htmlEncode(
+          helloSomeoneOutput.textContent = htmlEncode(
             `${success ? 'Successfully' : 'Unsuccessfully'} set ${name}'s greeting!`.replace(
               /'/g,
               '`',
@@ -106,7 +107,7 @@
             parseInt(setAgeInput.value),
           );
           const helloSomeoneOutput = document.getElementById('greetings-button-output');
-          helloSomeoneOutput.textContent = papi.utils.htmlEncode(
+          helloSomeoneOutput.textContent = htmlEncode(
             `${success ? 'Successfully' : 'Unsuccessfully'} set ${name}'s age!`.replace(/'/g, '`'),
           );
         });
@@ -114,8 +115,8 @@
         // Update the 'people' display on load and on updates
         peopleDataProvider.subscribePeople(undefined, (people) => {
           const peopleData = document.getElementById('people-data');
-          const peopleString = papi.utils.serialize(people, undefined, 2);
-          peopleData.textContent = papi.utils.htmlEncode(peopleString.replace(/"/g, '`'));
+          const peopleString = serialize(people, undefined, 2);
+          peopleData.textContent = htmlEncode(peopleString.replace(/"/g, '`'));
           print(peopleString);
         });
 
@@ -126,9 +127,7 @@
           () => {
             peopleUpdateCount += 1;
             const peopleUpdateCountDiv = document.getElementById('people-update-count');
-            peopleUpdateCountDiv.textContent = papi.utils.htmlEncode(
-              `People Updates: ${peopleUpdateCount}`,
-            );
+            peopleUpdateCountDiv.textContent = htmlEncode(`People Updates: ${peopleUpdateCount}`);
           },
           { retrieveDataImmediately: false },
         );
@@ -142,7 +141,7 @@
             const billAnyGreetingsUpdateCountDiv = document.getElementById(
               'bill-any-greetings-update-count',
             );
-            billAnyGreetingsUpdateCountDiv.textContent = papi.utils.htmlEncode(
+            billAnyGreetingsUpdateCountDiv.textContent = htmlEncode(
               `Any Greetings Updates (via Bill): ${billAnyGreetingsUpdateCount}`,
             );
           },
@@ -156,7 +155,7 @@
           const billGreetingsUpdateCountDiv = document.getElementById(
             'bill-greetings-update-count',
           );
-          billGreetingsUpdateCountDiv.textContent = papi.utils.htmlEncode(
+          billGreetingsUpdateCountDiv.textContent = htmlEncode(
             `Bill Greetings Updates: ${billGreetingsUpdateCount}`,
           );
         });
@@ -168,7 +167,7 @@
           () => {
             billAnyAgeUpdateCount += 1;
             const billAnyAgeUpdateCountDiv = document.getElementById('bill-any-age-update-count');
-            billAnyAgeUpdateCountDiv.textContent = papi.utils.htmlEncode(
+            billAnyAgeUpdateCountDiv.textContent = htmlEncode(
               `Any Age Updates (via Bill): ${billAnyAgeUpdateCount}`,
             );
           },
@@ -180,9 +179,7 @@
         peopleDataProvider.subscribeAge('bIlL', () => {
           billAgeUpdateCount += 1;
           const billAgeUpdateCountDiv = document.getElementById('bill-age-update-count');
-          billAgeUpdateCountDiv.textContent = papi.utils.htmlEncode(
-            `Bill Age Updates: ${billAgeUpdateCount}`,
-          );
+          billAgeUpdateCountDiv.textContent = htmlEncode(`Bill Age Updates: ${billAgeUpdateCount}`);
         });
 
         // Attach handler for new-web-view-button

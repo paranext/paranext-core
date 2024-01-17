@@ -15,6 +15,8 @@ import {
 } from '@renderer/services/web-view-state.service';
 import useWebViewState from '@renderer/hooks/use-web-view-state.hook';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
+import * as platformBibleReact from 'platform-bible-react';
+import * as platformBibleUtils from 'platform-bible-utils';
 
 // #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
 
@@ -37,6 +39,8 @@ moduleMap.set('react/jsx-runtime', ReactJsxRuntime);
 moduleMap.set('react-dom', ReactDOM);
 moduleMap.set('react-dom/client', ReactDOMClient);
 moduleMap.set('@sillsdev/scripture', SillsdevScripture);
+moduleMap.set('platform-bible-react', platformBibleReact);
+moduleMap.set('platform-bible-utils', platformBibleUtils);
 
 const registeredModuleList = [...moduleMap]
   .map(([key]) => `${key}`)

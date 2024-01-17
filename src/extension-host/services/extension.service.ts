@@ -20,9 +20,10 @@ import { setExtensionUris } from '@extension-host/services/extension-storage.ser
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
-import UnsubscriberAsyncList, {
+import {
   debounce,
   UnsubscriberAsync,
+  UnsubscriberAsyncList,
   deserialize,
 } from 'platform-bible-utils';
 import LogError from '@shared/log-error.model';
