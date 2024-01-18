@@ -1,21 +1,40 @@
-import { useState, useEffect, Dispatch, SetStateAction } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 // We don't add this to PAPI directly like other hooks because `this` has to be bound to a web view's iframe context
 /** See `web-view.model.ts` for normal hook documentation */
 export default function useWebViewState<T>(
   this: {
-    getWebViewState: (stateKey: string) => T | undefined;
-    setWebViewState: (stateKey: string, stateValue: NonNullable<T>) => void;
+    getWebViewState: (stateKey: string, defaultValue: T) => T;
+    setWebViewState: (stateKey: string, stateValue: T) => void;
+    resetWebViewState: (stateKey: string) => void;
   },
   stateKey: string,
-  defaultStateValue: NonNullable<T>,
-): [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>] {
-  const [state, setState] = useState(() => this.getWebViewState(stateKey) ?? defaultStateValue);
+  defaultStateValue: T,
+): [webViewState: T, setWebViewState: (newStateValue: T) => void, resetWebViewState: () => void] {
+  const [state, setStateInternal] = useState(() =>
+    this.getWebViewState(stateKey, defaultStateValue),
+  );
 
-  // Whenever the state changes, save the updated value
   useEffect(() => {
-    this.setWebViewState(stateKey, state);
-  }, [stateKey, state]);
+    if (
+      this.getWebViewState(stateKey, defaultStateValue) === defaultStateValue &&
+      state !== defaultStateValue
+    )
+      setStateInternal(defaultStateValue);
+  }, [defaultStateValue, state, stateKey]);
 
-  return [state, setState];
+  const setState = useCallback(
+    (newStateValue: T) => {
+      setStateInternal(newStateValue);
+      this.setWebViewState(stateKey, newStateValue);
+    },
+    [stateKey],
+  );
+
+  const resetState = useCallback(() => {
+    setStateInternal(defaultStateValue);
+    this.resetWebViewState(stateKey);
+  }, [defaultStateValue, stateKey]);
+
+  return [state, setState, resetState];
 }

@@ -1,5 +1,3 @@
-import { Dispatch, SetStateAction } from 'react';
-
 /** The type of code that defines a webview's content */
 export enum WebViewContentType {
   /**
@@ -220,8 +218,8 @@ export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProp
  */
 export type UseWebViewStateHook = <T>(
   stateKey: string,
-  defaultStateValue: NonNullable<T>,
-) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+  defaultStateValue: T,
+) => [webViewState: T, setWebViewState: (stateValue: T) => void, resetWebViewState: () => void];
 
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this type. It seem that, for some reason, JSDoc does not carry these annotations on

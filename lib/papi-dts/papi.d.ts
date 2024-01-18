@@ -2,7 +2,6 @@
 /// <reference types="node" />
 /// <reference types="node" />
 declare module 'shared/models/web-view.model' {
-  import { Dispatch, SetStateAction } from 'react';
   /** The type of code that defines a webview's content */
   export enum WebViewContentType {
     /**
@@ -200,8 +199,8 @@ declare module 'shared/models/web-view.model' {
    */
   export type UseWebViewStateHook = <T>(
     stateKey: string,
-    defaultStateValue: NonNullable<T>,
-  ) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+    defaultStateValue: T,
+  ) => [webViewState: T, setWebViewState: (stateValue: T) => void, resetWebViewState: () => void];
   /**
    *
    * Gets the updatable properties on this WebView's WebView definition
@@ -368,10 +367,15 @@ declare module 'shared/global-this.model' {
      * ```
      */
     var useWebViewState: UseWebViewStateHook;
-    /** Retrieve the value from web view state with the given 'stateKey', if it exists. */
-    var getWebViewState: <T>(stateKey: string) => T | undefined;
+    /**
+     * Retrieve the value from web view state with the given 'stateKey', if it exists. Otherwise
+     * return default value
+     */
+    var getWebViewState: <T>(stateKey: string, defaultValue: T) => T;
     /** Set the value for a given key in the web view state. */
-    var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
+    var setWebViewState: <T>(stateKey: string, stateValue: T) => void;
+    /** Remove the value for a given key in the web view state */
+    var resetWebViewState: (stateKey: string) => void;
     var getWebViewDefinitionUpdatablePropertiesById: (
       webViewId: string,
     ) => WebViewDefinitionUpdatableProperties | undefined;
@@ -3772,9 +3776,8 @@ declare module 'shared/services/settings.service' {
    *
    * @param key The string id of the setting for which the value is being retrieved
    * @param defaultSetting The default value used for the setting if no value is available for the key
-   * @returns The value of the specified setting, parsed to an object. Returns `undefined` if setting
-   *   is not present or no value is available
-   * @throws When defaultSetting is required but not provided
+   * @returns The value of the specified setting, parsed to an object. Returns default setting if
+   *   setting does not exist
    */
   const getSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,

@@ -839,7 +839,7 @@ export const getWebView = async (
     // The web view provider might have updated the web view state, so save it
     setFullWebViewStateById(webView.id, webView.state);
 
-  // `webViewRequire`, `getWebViewStateById`, and `setWebViewStateById` below are defined in `src\renderer\global-this.model.ts`
+  // `webViewRequire`, `getWebViewStateById`, `setWebViewStateById` and `resetWebViewStateById` below are defined in `src\renderer\global-this.model.ts`
   // `useWebViewState` below is defined in `src\shared\global-this.model.ts`
   // We have to bind `useWebViewState` to the current `window` context because calls within PAPI don't have access to a webview's `window` context
   /**
@@ -862,8 +862,10 @@ export const getWebView = async (
   var require = window.parent.webViewRequire;
   var getWebViewStateById = window.parent.getWebViewStateById;
   var setWebViewStateById = window.parent.setWebViewStateById;
-  window.getWebViewState = (stateKey) => { return getWebViewStateById('${webView.id}', stateKey) };
+  var resetWebViewStateById = window.parent.resetWebViewStateById;
+  window.getWebViewState = (stateKey, defaultValue) => { return getWebViewStateById('${webView.id}', stateKey, defaultValue) };
   window.setWebViewState = (stateKey, stateValue) => { setWebViewStateById('${webView.id}', stateKey, stateValue) };
+  window.resetWebViewState = (stateKey) => { resetWebViewStateById('${webView.id}', stateKey) };
   window.useWebViewState = window.parent.useWebViewState.bind(window);
   var getWebViewDefinitionUpdatablePropertiesById = window.parent.getWebViewDefinitionUpdatablePropertiesById;
   window.getWebViewDefinitionUpdatableProperties = () => { return getWebViewDefinitionUpdatablePropertiesById('${webView.id}')}

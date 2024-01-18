@@ -12,6 +12,7 @@ import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import {
   getWebViewStateById,
   setWebViewStateById,
+  resetWebViewStateById,
 } from '@renderer/services/web-view-state.service';
 import useWebViewState from '@renderer/hooks/use-web-view-state.hook';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
@@ -79,8 +80,9 @@ declare global {
   var SillsdevScripture: SillsdevScriptureType;
   var webViewRequire: WebViewRequire;
   // Web view state functions are used in the default imports for each webview in web-view.service.ts
-  var getWebViewStateById: <T>(id: string, stateKey: string) => T | undefined;
-  var setWebViewStateById: <T>(id: string, stateKey: string, stateValue: NonNullable<T>) => void;
+  var getWebViewStateById: <T>(id: string, stateKey: string, defaultValue: T) => T;
+  var setWebViewStateById: <T>(id: string, stateKey: string, stateValue: T) => void;
+  var resetWebViewStateById: (id: string, stateKey: string) => void;
 }
 /* eslint-enable */
 
@@ -105,9 +107,10 @@ globalThis.ReactDOMClient = ReactDOMClient;
 globalThis.createRoot = ReactDOMClient.createRoot;
 globalThis.SillsdevScripture = SillsdevScripture;
 globalThis.webViewRequire = webViewRequire;
-// We don't expose get/setWebViewStateById in PAPI because web views don't have access to IDs
+// We don't expose get/setWebViewStateById/resetWebViewStateById in PAPI because web views don't have access to IDs
 globalThis.getWebViewStateById = getWebViewStateById;
 globalThis.setWebViewStateById = setWebViewStateById;
+globalThis.resetWebViewStateById = resetWebViewStateById;
 // We store the hook reference because we need it to bind it to the webview's iframe 'window' context
 globalThis.useWebViewState = useWebViewState;
 
