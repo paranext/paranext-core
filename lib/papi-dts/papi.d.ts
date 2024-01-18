@@ -2,7 +2,6 @@
 /// <reference types="node" />
 /// <reference types="node" />
 declare module 'shared/models/web-view.model' {
-  import { Dispatch, SetStateAction } from 'react';
   /** The type of code that defines a webview's content */
   export enum WebViewContentType {
     /**
@@ -201,11 +200,7 @@ declare module 'shared/models/web-view.model' {
   export type UseWebViewStateHook = <T>(
     stateKey: string,
     defaultStateValue: T,
-  ) => [
-    webViewState: T,
-    setWebViewState: Dispatch<SetStateAction<T>>,
-    resetWebViewState: () => void,
-  ];
+  ) => [webViewState: T, setWebViewState: (stateValue: T) => void, resetWebViewState: () => void];
   /**
    *
    * Gets the updatable properties on this WebView's WebView definition
