@@ -80,7 +80,7 @@ declare global {
   var SillsdevScripture: SillsdevScriptureType;
   var webViewRequire: WebViewRequire;
   // Web view state functions are used in the default imports for each webview in web-view.service.ts
-  var getWebViewStateById: <T>(id: string, stateKey: string) => T | undefined;
+  var getWebViewStateById: <T>(id: string, stateKey: string, defaultValue: T) => T;
   var setWebViewStateById: <T>(id: string, stateKey: string, stateValue: T) => void;
   var resetWebViewStateById: (id: string, stateKey: string) => void;
 }

@@ -34,8 +34,11 @@ declare global {
   var webViewComponent: FunctionComponent<WebViewProps>;
   /** JSDOC DESTINATION UseWebViewStateHook */
   var useWebViewState: UseWebViewStateHook;
-  /** Retrieve the value from web view state with the given 'stateKey', if it exists. */
-  var getWebViewState: <T>(stateKey: string) => T | undefined;
+  /**
+   * Retrieve the value from web view state with the given 'stateKey', if it exists. Otherwise
+   * return default value
+   */
+  var getWebViewState: <T>(stateKey: string, defaultValue: T) => T;
   /** Set the value for a given key in the web view state. */
   var setWebViewState: <T>(stateKey: string, stateValue: T) => void;
   /** Remove the value for a given key in the web view state */

@@ -69,14 +69,15 @@ export function setFullWebViewStateById(id: string, state: Record<string, unknow
  *
  * @param id ID of the web view
  * @param stateKey Key used to retrieve the state value
- * @returns String (if it exists) containing the state for the given key of the given web view
+ * @returns String (if it exists) containing the state for the given key of the given web view.
+ *   Otherwise default value is returned.
  */
-export function getWebViewStateById<T>(id: string, stateKey: string): T | undefined {
+export function getWebViewStateById<T>(id: string, stateKey: string, defaultValue: T): T {
   if (!id || !stateKey) throw new Error('id and stateKey must be provided to get webview state');
   const state = getRecord(id);
   // We don't have any way to know what type this is, so just type assert for convenience
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return state[stateKey] as T | undefined;
+  return stateKey in state ? (state[stateKey] as T) : defaultValue;
 }
 
 /**

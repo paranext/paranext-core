@@ -863,7 +863,7 @@ export const getWebView = async (
   var getWebViewStateById = window.parent.getWebViewStateById;
   var setWebViewStateById = window.parent.setWebViewStateById;
   var resetWebViewStateById = window.parent.resetWebViewStateById;
-  window.getWebViewState = (stateKey) => { return getWebViewStateById('${webView.id}', stateKey) };
+  window.getWebViewState = (stateKey, defaultValue) => { return getWebViewStateById('${webView.id}', stateKey, defaultValue) };
   window.setWebViewState = (stateKey, stateValue) => { setWebViewStateById('${webView.id}', stateKey, stateValue) };
   window.resetWebViewState = (stateKey) => { resetWebViewStateById('${webView.id}', stateKey) };
   window.useWebViewState = window.parent.useWebViewState.bind(window);

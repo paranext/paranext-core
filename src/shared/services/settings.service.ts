@@ -28,9 +28,8 @@ const onDidUpdateSettingEmitters = new Map<
  *
  * @param key The string id of the setting for which the value is being retrieved
  * @param defaultSetting The default value used for the setting if no value is available for the key
- * @returns The value of the specified setting, parsed to an object. Returns `undefined` if setting
- *   is not present or no value is available
- * @throws When defaultSetting is required but not provided
+ * @returns The value of the specified setting, parsed to an object. Returns default setting if
+ *   setting does not exist
  */
 const getSetting = <SettingName extends SettingNames>(
   key: SettingName,
@@ -42,10 +41,7 @@ const getSetting = <SettingName extends SettingNames>(
   if (settingString !== null) {
     return deserialize(settingString);
   }
-  if (defaultSetting) {
-    return defaultSetting;
-  }
-  throw new Error(`No default value provided for setting '${key}'`);
+  return defaultSetting;
 };
 
 /**
