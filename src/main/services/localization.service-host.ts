@@ -1,12 +1,12 @@
 import {
   LocalizationServiceType,
   localizationServiceNetworkObjectName,
+  LocalizationData,
 } from '@shared/services/localization.service-model';
 import networkObjectService from '@shared/services/network-object.service';
 import * as nodeFS from '@node/services/node-file-system.service';
 import { deserialize } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
-import { LocalizationData } from '@shared/models/localization-data.model';
 import { joinUriPaths } from '@node/utils/util';
 
 const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
@@ -20,9 +20,10 @@ function getLanguageCodeFromUri(uriToMatch: string): string {
 }
 
 /** Convert contents of a specific localization json file to an object */
-function convertToLocalizationData(jsonString: string): LocalizationData {
+function convertToLocalizationData(jsonString: string, languageCode: string): LocalizationData {
   const ld: LocalizationData = deserialize(jsonString);
-  // Missing validity check
+  if (typeof ld !== 'object')
+    throw new Error(`Localization data for language '${languageCode}' is invalid`);
   return ld;
 }
 
@@ -44,13 +45,11 @@ async function loadAllLocalizationData(): Promise<Map<string, LocalizationData>>
     localizeFileUris.map(async (uri) => {
       try {
         const localizeFileString = await nodeFS.readFileText(uri);
-        /**
-         * This line needs some work- I wanted to get the ISO code from the file name so that we can
-         * store each set of data with the appropriate language. EXAMPLE: uri =
-         * 'app://localization/eng.json'; languageCode = 'eng'
-         */
         const languageCode = getLanguageCodeFromUri(uri);
-        languageLocalizedData.set(languageCode, convertToLocalizationData(localizeFileString));
+        languageLocalizedData.set(
+          languageCode,
+          convertToLocalizationData(localizeFileString, languageCode),
+        );
       } catch (error) {
         logger.warn(error);
       }
@@ -77,7 +76,9 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-async function getLocalizedValueForKey(localizeKey: string, language: string) {
+const DEFAULT_LANGUAGE = 'eng';
+
+async function getLocalizedValueForKey(localizeKey: string, language: string = DEFAULT_LANGUAGE) {
   await initialize();
   const languageData = languageLocalizedData?.get(language);
 
@@ -87,7 +88,10 @@ async function getLocalizedValueForKey(localizeKey: string, language: string) {
   throw new Error('Missing/invalid localization data');
 }
 
-async function getLocalizedValuesForKeys(localizeKeys: string[], language: string) {
+async function getLocalizedValuesForKeys(
+  localizeKeys: string[],
+  language: string = DEFAULT_LANGUAGE,
+) {
   await initialize();
   const retVal: LocalizationData = {};
   const languageData = languageLocalizedData?.get(language);
