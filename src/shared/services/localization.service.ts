@@ -1,25 +1,24 @@
 import {
-  projectLookupServiceNetworkObjectName,
-  ProjectLookupServiceType,
-} from '@shared/services/project-lookup.service-model';
+  localizationServiceNetworkObjectName,
+  LocalizationServiceType,
+} from '@shared/services/localization.service-model';
 import networkObjectService from '@shared/services/network-object.service';
 
-let networkObject: ProjectLookupServiceType;
+let networkObject: LocalizationServiceType;
 let initializationPromise: Promise<void>;
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          const localProjectLookupService =
-            await networkObjectService.get<ProjectLookupServiceType>(
-              projectLookupServiceNetworkObjectName,
-            );
-          if (!localProjectLookupService)
+          const localLocalizationService = await networkObjectService.get<LocalizationServiceType>(
+            localizationServiceNetworkObjectName,
+          );
+          if (!localLocalizationService)
             throw new Error(
-              `${projectLookupServiceNetworkObjectName} is not available as a network object`,
+              `${localizationServiceNetworkObjectName} is not available as a network object`,
             );
-          networkObject = localProjectLookupService;
+          networkObject = localLocalizationService;
           resolve();
         } catch (error) {
           reject(error);
@@ -31,15 +30,15 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const projectLookupService: ProjectLookupServiceType = {
-  getMetadataForAllProjects: async () => {
+const localizationService: LocalizationServiceType = {
+  getLocalizedValueForKey: async (localizeKey: string, language: string) => {
     await initialize();
-    return networkObject.getMetadataForAllProjects();
+    return networkObject.getLocalizedValueForKey(localizeKey, language);
   },
-  getMetadataForProject: async (projectId: string) => {
+  getLocalizedValuesForKeys: async (localizeKeys: string[], language: string) => {
     await initialize();
-    return networkObject.getMetadataForProject(projectId);
+    return networkObject.getLocalizedValuesForKeys(localizeKeys, language);
   },
 };
 
-export default projectLookupService;
+export default localizationService;

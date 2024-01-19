@@ -5,11 +5,24 @@
  */
 export interface LocalizationServiceType {
   /**
-   * Provide localization data for UI
+   * Look up localized string for specific localizeKey
    *
-   * @returns Localization data for UI
+   * @param localizeKey String key that corresponds to a localized value
+   * @param language ISO 639-2 code for the language
+   * @returns Localized string
    */
-  getLocalizedValues: (obj: {}) => Promise<{}>;
+  getLocalizedValueForKey: (localizeKey: string, language: string) => Promise<string>;
+  /**
+   * Look up localized strings for all localizeKeys provided
+   *
+   * @param localizeKeys Array of localize keys that correspond to localized values
+   * @param language ISO 639-2 code for the language
+   * @returns Object whose keys are localizeKeys and values are localized strings
+   */
+  getLocalizedValuesForKeys: (
+    localizeKeys: string[],
+    language: string,
+  ) => Promise<{ [localizeKey: string]: string }>;
 }
 
 export const localizationServiceNetworkObjectName = 'LocalizationService';
