@@ -7,19 +7,16 @@ import * as nodeFS from '@node/services/node-file-system.service';
 import { deserialize } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { LocalizationData } from '@shared/models/localization-data.model';
+import { joinUriPaths } from '@node/utils/util';
 
-const LANGUAGE_CODE_REGEX = /\/([^/.]+)\.json$/;
-const LOCALIZATION_FOLDER = 'localization';
-/**
- * I manually copied the localization folder into dev-appdata because I could not figure out the
- * correct path and building the app would not populate dev-appdata with the assets
- */
+const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
+const LANGUAGE_CODE_REGEX = /\\([a-zA-Z]+)\.json/;
 
 function getLanguageCodeFromUri(uriToMatch: string): string {
   const isMatch = LANGUAGE_CODE_REGEX.test(uriToMatch);
   const match = isMatch ? uriToMatch.match(LANGUAGE_CODE_REGEX) : undefined;
   if (match) return match[1];
-  throw new Error('Localization service- No match for language code');
+  throw new Error('Localization service - No match for language code');
 }
 
 /** Convert contents of a specific localization json file to an object */
@@ -29,8 +26,8 @@ function convertToLocalizationData(jsonString: string): LocalizationData {
   return ld;
 }
 
-async function getlocalizedFileUris(): Promise<string[]> {
-  const entries = await nodeFS.readDir(LOCALIZATION_FOLDER);
+async function getLocalizedFileUris(): Promise<string[]> {
+  const entries = await nodeFS.readDir(LOCALIZATION_ROOT_URI);
   if (entries) return entries.file;
   throw new Error('No entries found in localization folder');
 }
@@ -41,7 +38,7 @@ const languageLocalizedData = new Map<string, LocalizationData>();
 /** Load the contents of all localization files from disk */
 async function loadAllLocalizationData(): Promise<Map<string, LocalizationData>> {
   languageLocalizedData.clear();
-  const localizeFileUris = await getlocalizedFileUris();
+  const localizeFileUris = await getLocalizedFileUris();
 
   await Promise.all(
     localizeFileUris.map(async (uri) => {
