@@ -11,29 +11,29 @@ import { joinUriPaths } from '@node/utils/util';
 
 const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
 const LANGUAGE_CODE_REGEX = /\\([a-zA-Z]+)\.json/;
+const DEFAULT_LANGUAGE = 'eng';
 
 function getLanguageCodeFromUri(uriToMatch: string): string {
-  const isMatch = LANGUAGE_CODE_REGEX.test(uriToMatch);
-  const match = isMatch ? uriToMatch.match(LANGUAGE_CODE_REGEX) : undefined;
-  if (match) return match[1];
-  throw new Error('Localization service - No match for language code');
+  const match = uriToMatch.match(LANGUAGE_CODE_REGEX);
+  if (!match) throw new Error('Localization service - No match for language code');
+  return match[1];
 }
 
 /** Convert contents of a specific localization json file to an object */
 function convertToLocalizationData(jsonString: string, languageCode: string): LocalizationData {
-  const ld: LocalizationData = deserialize(jsonString);
-  if (typeof ld !== 'object')
+  const locationData: LocalizationData = deserialize(jsonString);
+  if (typeof locationData !== 'object')
     throw new Error(`Localization data for language '${languageCode}' is invalid`);
-  return ld;
+  return locationData;
 }
 
 async function getLocalizedFileUris(): Promise<string[]> {
   const entries = await nodeFS.readDir(LOCALIZATION_ROOT_URI);
-  if (entries) return entries.file;
-  throw new Error('No entries found in localization folder');
+  if (!entries) throw new Error('No entries found in localization folder');
+  return entries.file;
 }
 
-// Map of ISO 639-2 code to localized values for that language
+/** Map of ISO 639-2 code to localized values for that language */
 const languageLocalizedData = new Map<string, LocalizationData>();
 
 /** Load the contents of all localization files from disk */
@@ -76,38 +76,26 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const DEFAULT_LANGUAGE = 'eng';
-
-async function getLocalizedValueForKey(localizeKey: string, language: string = DEFAULT_LANGUAGE) {
+async function getLocalizedString(localizeKey: string, language: string = DEFAULT_LANGUAGE) {
   await initialize();
   const languageData = languageLocalizedData?.get(language);
 
-  if (languageData && languageData[localizeKey]) {
-    return languageData[localizeKey];
-  }
-  throw new Error('Missing/invalid localization data');
+  if (!languageData || !languageData[localizeKey])
+    throw new Error('Missing/invalid localization data');
+  return languageData[localizeKey];
 }
 
-async function getLocalizedValuesForKeys(
-  localizeKeys: string[],
-  language: string = DEFAULT_LANGUAGE,
-) {
+async function getLocalizedStrings(localizeKeys: string[], language: string = DEFAULT_LANGUAGE) {
   await initialize();
-  const retVal: LocalizationData = {};
-  const languageData = languageLocalizedData?.get(language);
+  const languageData = languageLocalizedData.get(language);
 
-  if (languageData) {
-    localizeKeys.forEach((key) => {
-      retVal[key] = languageData[key];
-    });
-    return retVal;
-  }
-  throw new Error('Missing/invalid localization data');
+  if (!languageData) throw new Error('Missing/invalid localization data');
+  return Object.fromEntries(localizeKeys.map((key) => [key, languageData[key]]));
 }
 
 const localizationService: LocalizationServiceType = {
-  getLocalizedValueForKey,
-  getLocalizedValuesForKeys,
+  getLocalizedString,
+  getLocalizedStrings,
 };
 
 /** Register the network object that backs the PAPI localization service */

@@ -11,7 +11,7 @@ export interface LocalizationServiceType {
    * @param language ISO 639-2 code for the language, defaults to 'eng' if unspecified
    * @returns Localized string
    */
-  getLocalizedValueForKey: (localizeKey: string, language?: string) => Promise<string>;
+  getLocalizedString: (localizeKey: string, language?: string) => Promise<string>;
   /**
    * Look up localized strings for all localizeKeys provided
    *
@@ -19,7 +19,7 @@ export interface LocalizationServiceType {
    * @param language ISO 639-2 code for the language, defaults to 'eng' if unspecified
    * @returns Object whose keys are localizeKeys and values are localized strings
    */
-  getLocalizedValuesForKeys: (
+  getLocalizedStrings: (
     localizeKeys: string[],
     language?: string,
   ) => Promise<{ [localizeKey: string]: string }>;
