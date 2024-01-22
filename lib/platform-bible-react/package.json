@@ -25,7 +25,9 @@
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "start": "vite --host --open",
     "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
@@ -40,11 +42,7 @@
     "postinstall": "cd ../.. && npm install --ignore-scripts"
   },
   "peerDependencies": {
-    "@emotion/react": ">=11.11.1",
-    "@emotion/styled": ">=11.11.0",
-    "@mui/material": ">=5.14.1",
     "react": ">=18.2.0",
-    "react-data-grid": ">=7.0.0-beta.34",
     "react-dom": ">=18.2.0"
   },
   "devDependencies": {
@@ -70,6 +68,10 @@
     "vite": "^4.5.2"
   },
   "dependencies": {
-    "platform-bible-utils": "file:../platform-bible-utils"
+    "@emotion/react": ">=11.11.1",
+    "@emotion/styled": ">=11.11.0",
+    "@mui/material": ">=5.14.1",
+    "platform-bible-utils": "file:../platform-bible-utils",
+    "react-data-grid": ">=7.0.0-beta.34"
   }
 }
