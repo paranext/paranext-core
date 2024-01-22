@@ -10,7 +10,7 @@ import logger from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
 
 const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
-const LANGUAGE_CODE_REGEX = /\\([a-zA-Z]+)\.json/;
+const LANGUAGE_CODE_REGEX = /\/([a-zA-Z]+)\.json$/;
 const DEFAULT_LANGUAGE = 'eng';
 
 function getLanguageCodeFromUri(uriToMatch: string): string {
@@ -64,7 +64,7 @@ async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          loadAllLocalizationData();
+          await loadAllLocalizationData();
           resolve();
         } catch (error) {
           reject(error);
@@ -78,7 +78,7 @@ async function initialize(): Promise<void> {
 
 async function getLocalizedString(localizeKey: string, language: string = DEFAULT_LANGUAGE) {
   await initialize();
-  const languageData = languageLocalizedData?.get(language);
+  const languageData = languageLocalizedData.get(language);
 
   if (!languageData || !languageData[localizeKey])
     throw new Error('Missing/invalid localization data');
@@ -90,12 +90,21 @@ async function getLocalizedStrings(localizeKeys: string[], language: string = DE
   const languageData = languageLocalizedData.get(language);
 
   if (!languageData) throw new Error('Missing/invalid localization data');
-  return Object.fromEntries(localizeKeys.map((key) => [key, languageData[key]]));
+  return Object.fromEntries(
+    localizeKeys.map((key) => {
+      if (!languageData[key]) throw new Error('Missing/invalid localization data');
+      return [key, languageData[key]];
+    }),
+  );
 }
 
 const localizationService: LocalizationServiceType = {
   getLocalizedString,
   getLocalizedStrings,
+};
+
+export const testingLocalizationService = {
+  localizationService,
 };
 
 /** Register the network object that backs the PAPI localization service */
