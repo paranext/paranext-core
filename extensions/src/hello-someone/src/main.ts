@@ -11,6 +11,7 @@ import {
 } from '@papi/core';
 import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
 import helloSomeoneHtmlWebView from './hello-someone.web-view.html?inline';
+import helloSomeoneHtmlWebView2 from './hello-someone-2.web-view?inline';
 
 logger.info('Hello Someone is importing!');
 
@@ -260,6 +261,23 @@ const peopleWebViewProvider: IWebViewProvider = {
   },
 };
 
+const peopleWebViewType2 = 'helloSomeone.peopleViewer2';
+
+/** Simple web view provider that provides People web views when papi requests them */
+const peopleWebViewProvider2: IWebViewProvider = {
+  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== peopleWebViewType2)
+      throw new Error(
+        `${peopleWebViewType2} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+    return {
+      ...savedWebView,
+      title: 'People',
+      content: helloSomeoneHtmlWebView2,
+    };
+  },
+};
+
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello Someone is activating!');
 
@@ -271,6 +289,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const peopleWebViewProviderPromise = papi.webViewProviders.register(
     peopleWebViewType,
     peopleWebViewProvider,
+  );
+
+  const peopleWebViewProviderPromise2 = papi.webViewProviders.register(
+    peopleWebViewType2,
+    peopleWebViewProvider2,
   );
 
   const helloSomeoneCommandPromise = papi.commands.registerCommand(
@@ -324,10 +347,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     peopleWebViewId || '',
   );
 
+  await papi.webViews.getWebView(peopleWebViewType2, undefined, { existingId: '?' });
+
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await peopleDataProviderPromise,
     await peopleWebViewProviderPromise,
+    await peopleWebViewProviderPromise2,
     await helloSomeoneCommandPromise,
     await echoSomeoneRendererPromise,
     papi.webViews.onDidAddWebView((addWebViewEvent) => {
