@@ -11,7 +11,7 @@ import DataGrid, {
   SelectColumn,
   SortColumn,
 } from 'react-data-grid';
-import { ChangeEvent, Key, ReactElement, ReactNode, UIEvent, useMemo } from 'react';
+import React, { ChangeEvent, Key, ReactElement, ReactNode, useMemo } from 'react';
 import Checkbox from './checkbox.component';
 import TextField from './text-field.component';
 
@@ -222,7 +222,7 @@ export type TableProps<R> = {
    *
    * @param event The event source of the callback
    */
-  onScroll?: (event: UIEvent<HTMLDivElement>) => void;
+  onScroll?: (event: React.UIEvent<HTMLDivElement>) => void;
   /**
    * A callback function that is called when the user copies data from the table.
    *
