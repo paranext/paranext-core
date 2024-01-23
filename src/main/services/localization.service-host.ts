@@ -103,6 +103,7 @@ const localizationService: LocalizationServiceType = {
   getLocalizedStrings,
 };
 
+/** This is an internal-only export for testing purposes, and should not be used in development */
 export const testingLocalizationService = {
   localizationService,
 };
