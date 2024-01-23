@@ -26,6 +26,7 @@ import networkObjectStatusService from '@shared/services/network-object-status.s
 import { get } from '@shared/services/project-data-provider.service';
 import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from './services/network-object-status.service-host';
+import { startLocalizationService } from './services/localization.service-host';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 
@@ -78,6 +79,8 @@ async function main() {
   // The renderer relies on the extension host, so something has to break the dependency loop.
   // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
   await extensionHostService.start();
+
+  await startLocalizationService();
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
