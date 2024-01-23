@@ -21,10 +21,10 @@ function getLanguageCodeFromUri(uriToMatch: string): string {
 
 /** Convert contents of a specific localization json file to an object */
 function convertToLocalizationData(jsonString: string, languageCode: string): LocalizationData {
-  const locationData: LocalizationData = deserialize(jsonString);
-  if (typeof locationData !== 'object')
+  const localizationData: LocalizationData = deserialize(jsonString);
+  if (typeof localizationData !== 'object')
     throw new Error(`Localization data for language '${languageCode}' is invalid`);
-  return locationData;
+  return localizationData;
 }
 
 async function getLocalizedFileUris(): Promise<string[]> {
