@@ -29,95 +29,77 @@ jest.mock('@node/services/node-file-system.service', () => ({
   },
 }));
 
-test('Correct localized value returned to match single localizeKey', () => {
+test('Correct localized value returned to match single localizeKey', async () => {
   const LOCALIZE_KEY: string = 'submitButton';
-  (async () => {
-    const response = await testingLocalizationService.localizationService.getLocalizedString(
-      LOCALIZE_KEY,
-      'fre',
-    );
-    expect(response).toEqual('Soumettre');
-  })();
+  const response = await testingLocalizationService.localizationService.getLocalizedString(
+    LOCALIZE_KEY,
+    'fre',
+  );
+  expect(response).toEqual('Soumettre');
 });
 
-test('Correct localized values returned to match array of localizeKeys', () => {
+test('Correct localized values returned to match array of localizeKeys', async () => {
   const LOCALIZE_KEYS: string[] = ['submitButton', 'some_localization_key'];
-  (async () => {
-    const response = await testingLocalizationService.localizationService.getLocalizedStrings(
-      LOCALIZE_KEYS,
-      'fre',
-    );
-    expect(response).toEqual({
-      submitButton: 'Soumettre',
-      some_localization_key: 'Ceci est le texte en français pour %some_localization_key%.',
-    });
-  })();
+  const response = await testingLocalizationService.localizationService.getLocalizedStrings(
+    LOCALIZE_KEYS,
+    'fre',
+  );
+  expect(response).toEqual({
+    submitButton: 'Soumettre',
+    some_localization_key: 'Ceci est le texte en français pour %some_localization_key%.',
+  });
 });
 
-test('Error returned with localizeKey that does not exist', () => {
+test('Error returned with localizeKey that does not exist', async () => {
   const LOCALIZE_KEY = 'the_wrong_key';
-  (async () => {
-    await expect(
-      testingLocalizationService.localizationService.getLocalizedString(LOCALIZE_KEY, 'fre'),
-    ).rejects.toThrow('Missing/invalid localization data');
-  })();
+  await expect(
+    testingLocalizationService.localizationService.getLocalizedString(LOCALIZE_KEY, 'fre'),
+  ).rejects.toThrow('Missing/invalid localization data');
 });
 
-test('Error returned with localizeKeys that do not exist', () => {
+test('Error returned with localizeKeys that do not exist', async () => {
   const LOCALIZE_KEYS = ['the_wrong_key', 'the_other_wrong_key'];
-  (async () => {
-    await expect(
-      testingLocalizationService.localizationService.getLocalizedStrings(LOCALIZE_KEYS, 'fre'),
-    ).rejects.toThrow('Missing/invalid localization data');
-  })();
+  await expect(
+    testingLocalizationService.localizationService.getLocalizedStrings(LOCALIZE_KEYS, 'fre'),
+  ).rejects.toThrow('Missing/invalid localization data');
 });
 
-test('Error returned with localizeKeys where one exists but the other does not', () => {
+test('Error returned with localizeKeys where one exists but the other does not', async () => {
   const LOCALIZE_KEYS = ['submitButton', 'the_wrong_key'];
-  (async () => {
-    await expect(
-      testingLocalizationService.localizationService.getLocalizedStrings(LOCALIZE_KEYS, 'fre'),
-    ).rejects.toThrow('Missing/invalid localization data');
-  })();
+  await expect(
+    testingLocalizationService.localizationService.getLocalizedStrings(LOCALIZE_KEYS, 'fre'),
+  ).rejects.toThrow('Missing/invalid localization data');
 });
 
 test('Error returned with localizeKey and incorrect language code', async () => {
   const LOCALIZE_KEY = 'submitButton'; // irrelevant because it will throw for language code before it accesses key/value pairs
-  (async () => {
-    await expect(
-      testingLocalizationService.localizationService.getLocalizedString(LOCALIZE_KEY, 'XXX'),
-    ).rejects.toThrow('Missing/invalid localization data');
-  })();
+  await expect(
+    testingLocalizationService.localizationService.getLocalizedString(LOCALIZE_KEY, 'XXX'),
+  ).rejects.toThrow('Missing/invalid localization data');
 });
 
 test('Error returned with localizeKeys and incorrect language code', async () => {
   const LOCALIZE_KEYS = ['submitButton', 'some_localization_key']; // irrelevant because it will throw for language code before it accesses key/value pairs
-  (async () => {
-    await expect(
-      testingLocalizationService.localizationService.getLocalizedStrings(LOCALIZE_KEYS, 'XXX'),
-    ).rejects.toThrow('Missing/invalid localization data');
-  })();
+  await expect(
+    testingLocalizationService.localizationService.getLocalizedStrings(LOCALIZE_KEYS, 'XXX'),
+  ).rejects.toThrow('Missing/invalid localization data');
 });
 
 test('Default language is english when no language provided with localizeKey', async () => {
   const LOCALIZE_KEY = 'submitButton';
-  (async () => {
-    const response = await testingLocalizationService.localizationService.getLocalizedString(
-      LOCALIZE_KEY,
-    );
-    await expect(response).toEqual('Submit');
-  })();
+  const response = await testingLocalizationService.localizationService.getLocalizedString(
+    LOCALIZE_KEY,
+  );
+  await expect(response).toEqual('Submit');
 });
 
 test('Default language is english when no language provided with localizeKeys', async () => {
   const LOCALIZE_KEYS = ['submitButton', 'some_localization_key'];
-  (async () => {
-    const response = await testingLocalizationService.localizationService.getLocalizedStrings(
-      LOCALIZE_KEYS,
-    );
-    expect(response).toEqual({
-      some_localization_key: 'This is the English text for %some_localization_key%.',
-      submitButton: 'Submit',
-    });
-  })();
+  const response = await testingLocalizationService.localizationService.getLocalizedStrings(
+    LOCALIZE_KEYS,
+  );
+  expect(response).toEqual({
+    some_localization_key: 'This is the English text for %some_localization_key%.',
+    submitButton: 'Submit',
+  });
 });
