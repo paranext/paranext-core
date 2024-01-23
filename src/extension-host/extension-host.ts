@@ -60,6 +60,8 @@ networkService
     // Make sure project lookups are available before extensions look for them on PAPI
     await startProjectLookupService();
 
+    // TODO: Start new service
+
     // The extension service locks down importing other modules, so be careful what runs after it
     await extensionService.initialize();
 
