@@ -5,7 +5,6 @@ Electron client, extension host, and C# library for Paranext
 <div align="center">
   <img src="doc-meta/doc-icon.png" />
 </div>
-
 <div align="center">
 
 [![Build Status][github-actions-status]][github-actions-url]
