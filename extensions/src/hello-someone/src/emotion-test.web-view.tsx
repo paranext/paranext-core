@@ -8,10 +8,13 @@ import { Button as MuiButton } from '@mui/material';
  * renderer indicating `@emotion/react` was loaded twice.
  */
 
-globalThis.webViewComponent = function HelloSomeoneWebViewReact() {
+globalThis.webViewComponent = function EmotionTestWebView() {
   return (
     <div>
-      <div>Hello Someones</div>
+      <div>
+        @emotion/react test - you should not see a console warning about @emotion/react being loaded
+        twice
+      </div>
       <Button onClick={() => logger.info('platform-bible-react button ')}>
         platform-bible-react
       </Button>

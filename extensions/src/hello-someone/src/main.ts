@@ -11,7 +11,7 @@ import {
 } from '@papi/core';
 import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
 import helloSomeoneHtmlWebView from './hello-someone.web-view.html?inline';
-import helloSomeoneHtmlWebView2 from './hello-someone-2.web-view?inline';
+import emotionTestWebView from './emotion-test.web-view?inline';
 
 logger.info('Hello Someone is importing!');
 
@@ -261,19 +261,19 @@ const peopleWebViewProvider: IWebViewProvider = {
   },
 };
 
-const peopleWebViewType2 = 'helloSomeone.peopleViewer2';
+const emotionTestWebViewType = 'helloSomeone.emotionTest';
 
-/** Simple web view provider that provides People web views when papi requests them */
-const peopleWebViewProvider2: IWebViewProvider = {
+/** Simple web view provider that provides `@emotion/react` test web views when papi requests them */
+const emotionTestWebViewProvider: IWebViewProvider = {
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== peopleWebViewType2)
+    if (savedWebView.webViewType !== emotionTestWebViewType)
       throw new Error(
-        `${peopleWebViewType2} provider received request to provide a ${savedWebView.webViewType} web view`,
+        `${emotionTestWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     return {
       ...savedWebView,
-      title: 'People',
-      content: helloSomeoneHtmlWebView2,
+      title: 'Emotion Test',
+      content: emotionTestWebView,
     };
   },
 };
@@ -291,9 +291,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     peopleWebViewProvider,
   );
 
-  const peopleWebViewProviderPromise2 = papi.webViewProviders.register(
-    peopleWebViewType2,
-    peopleWebViewProvider2,
+  const emotionTestWebViewProviderPromise = papi.webViewProviders.register(
+    emotionTestWebViewType,
+    emotionTestWebViewProvider,
   );
 
   const helloSomeoneCommandPromise = papi.commands.registerCommand(
@@ -347,13 +347,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     peopleWebViewId || '',
   );
 
-  await papi.webViews.getWebView(peopleWebViewType2, undefined, { existingId: '?' });
+  await papi.webViews.getWebView(emotionTestWebViewType, undefined, { existingId: '?' });
 
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await peopleDataProviderPromise,
     await peopleWebViewProviderPromise,
-    await peopleWebViewProviderPromise2,
+    await emotionTestWebViewProviderPromise,
     await helloSomeoneCommandPromise,
     await echoSomeoneRendererPromise,
     papi.webViews.onDidAddWebView((addWebViewEvent) => {
