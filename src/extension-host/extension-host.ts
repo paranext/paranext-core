@@ -11,7 +11,7 @@ import { getErrorMessage } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { startProjectLookupService } from '@extension-host/services/project-lookup.service-host';
 import { registerCommand } from '@shared/services/command.service';
-import { startMenuStoreService } from './services/menu-store.service-host';
+import { initialize as initializeMenuDataStore } from './services/menu-store.service-host';
 
 // #region Test logs
 
@@ -61,7 +61,7 @@ networkService
     // Make sure project lookups are available before extensions look for them on PAPI
     await startProjectLookupService();
 
-    await startMenuStoreService();
+    await initializeMenuDataStore();
 
     // The extension service locks down importing other modules, so be careful what runs after it
     await extensionService.initialize();

@@ -1,8 +1,12 @@
 import networkObjectService from '@shared/services/network-object.service';
 import {
+  MenuContent,
   MenuStoreServiceType,
-  menuStoreServiceNetworkObjectName,
+  menuStoreServiceProviderName,
 } from './menu-store.service-model';
+
+// TODO: Similar proxy-ing as in the service-host, create utility function to use in both
+// places that accepts what you want to proxy over and a handler
 
 let networkObject: MenuStoreServiceType;
 let initializationPromise: Promise<void>;
@@ -12,12 +16,10 @@ async function initialize(): Promise<void> {
       const executor = async () => {
         try {
           const localMenuStoreService = await networkObjectService.get<MenuStoreServiceType>(
-            menuStoreServiceNetworkObjectName,
+            menuStoreServiceProviderName,
           );
           if (!localMenuStoreService)
-            throw new Error(
-              `${menuStoreServiceNetworkObjectName} is not available as a network object`,
-            );
+            throw new Error(`${menuStoreServiceProviderName} is not available as a network object`);
           networkObject = localMenuStoreService;
           resolve();
         } catch (error) {
@@ -31,14 +33,14 @@ async function initialize(): Promise<void> {
 }
 
 const menuStoreService: MenuStoreServiceType = {
-  getMenuData: async (menuKey: string) => {
+  getMenuData: async (menuType: string) => {
     await initialize();
-    return networkObject.getMenuData(menuKey);
+    return networkObject.getMenuData(menuType);
   },
-  // subscribe: async (menuKey: string) => {
-  //   await initialize();
-  //   return networkObject.subscribe(menuKey);
-  // },
+  setMenuData: async (menuType: string, menuContent: MenuContent) => {
+    await initialize();
+    return networkObject.setMenuData(menuType, menuContent);
+  },
 };
 
 export default menuStoreService;

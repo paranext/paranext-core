@@ -42,12 +42,14 @@
     "localizeKey": {
       "description": "Identifier for a string that will be localized in a menu based on the user's UI language",
       "type": "string",
-      "pattern": "^%[\\w-\\.]+%$"
+      "pattern": "^%[\\w-\\.]+%$",
+      "tsType": "LocalizeKey"
     },
     "referencedItem": {
       "description": "Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command)",
       "type": "string",
-      "pattern": "^[\\w-]+\\.[\\w-]+$"
+      "pattern": "^[\\w-]+\\.[\\w-]+$",
+      "tsType": "ReferencedItem"
     },
     "columnsWithHeaders": {
       "description": "Group of columns that can be combined with other columns to form a multi-column menu",

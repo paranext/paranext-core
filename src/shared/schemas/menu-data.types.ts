@@ -6,16 +6,24 @@
  */
 
 /**
- * Notes about things found when transforming
+ * Things changed in the schema:
  *
- * 1. Descriptions from PlatformBibleMenus are put on the resulting type
- * 2. Error: Property 'isExtensible' of type 'boolean | undefined' is not assignable to 'string' index
- *    type '{ label: string; localizeNotes?: string | undefined; order: number; isExtensible?:
- *    boolean | undefined; }'. TODO: Resolve
+ * 1. Added "allOf": [ { "$ref": "#/$defs/multiColumnMenu" } ] where multiColumnMenu is used because
+ *    otherwise it generates multiple of them. Did the same for singleColumnMenu
+ * 2. Added tsType property for LocalizeKey and ReferencedItem because they use pattern and those types
+ *    were generated as string
  *
- * Things changes: Added "allOf": [ { "$ref": "#/$defs/multiColumnMenu" } ] where multiColumnMenu is
- * used because otherwise it generates multiple of them. Did the same for singleColumnMenu
+ * Things changed in the types manually:
+ *
+ * 1. Changed types that are referenced via patternProperties to their respective type- LocalizeKey or
+ *    ReferencedItem
  */
+
+/** Identifier for a string that will be localized in a menu based on the user's UI language */
+export type LocalizeKey = `%${string}%`;
+
+/** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
+export type ReferencedItem = `${string}.${string}`;
 
 /** Menu that can contain multiple columns with headers */
 export type MultiColumnMenu = GroupsAndItems & {
@@ -25,18 +33,18 @@ export type MultiColumnMenu = GroupsAndItems & {
 /** Single item in a menu that can be clicked on to take an action or can be the parent of a submenu */
 export type MenuItem = {
   /** Key that represents the text of this menu item to display */
-  label: string;
+  label: LocalizeKey;
   /** Key that represents the text to display if a mouse pointer hovers over the menu item */
-  tooltip?: string;
+  tooltip?: LocalizeKey;
   /**
    * Key that represents additional words the platform should reference when users are searching for
    * menu items
    */
-  searchTerms?: string;
+  searchTerms?: LocalizeKey;
   /** Additional information provided by developers to help people who perform localization */
   localizeNotes?: string;
   /** Group to which this menu item belongs */
-  group: string;
+  group: ReferencedItem;
   /**
    * Relative order of this menu item compared to other menu items in the same group (sorted
    * ascending)
@@ -47,12 +55,12 @@ export type MenuItem = {
 export type MenuItem1 =
   | {
       /** ID for this menu item that holds a submenu */
-      id: string;
+      id: ReferencedItem;
       [k: string]: unknown;
     }
   | {
       /** Name of the PAPI command to run when this menu item is selected. */
-      command: string;
+      command: ReferencedItem;
       /** Path to the icon to display on the left side of the menu text */
       iconPathBefore?: string;
       /** Path to the icon to display on the right side of the menu text */
@@ -71,7 +79,7 @@ export interface PlatformBibleMenus {
   defaultWebViewContextMenu?: SingleColumnMenu;
   /** Menus that apply per web view in the application */
   webViewMenus?: {
-    [k: string]: MenusForOneWebView;
+    [k: ReferencedItem]: MenusForOneWebView;
   };
 }
 /** Core schema for a column */
@@ -89,10 +97,10 @@ export interface MenuGroups {
    * This interface was referenced by `MenuGroups`'s JSON-Schema definition via the
    * `patternProperty` "^[\w-]+.[\w-]+$".
    */
-  [k: string]:
+  [k: ReferencedItem]:
     | {
         /** Column where this group belongs, not required for single column menus */
-        column?: string;
+        column?: ReferencedItem;
         /**
          * Relative order of this group compared to other groups in the same column or submenu
          * (sorted ascending)
@@ -103,7 +111,7 @@ export interface MenuGroups {
       }
     | {
         /** Menu item that anchors the submenu where this group belongs */
-        menuItem: string;
+        menuItem: ReferencedItem;
         /**
          * Relative order of this group compared to other groups in the same column or submenu
          * (sorted ascending)
@@ -123,9 +131,9 @@ export interface ColumnsWithHeaders {
    * This interface was referenced by `ColumnsWithHeaders`'s JSON-Schema definition via the
    * `patternProperty` "^[\w-]+.[\w-]+$".
    */
-  [k: string]: {
+  [k: ReferencedItem]: {
     /** Header text for this this column in the UI */
-    label: string;
+    label: LocalizeKey;
     /** Additional information provided by developers to help people who perform localization */
     localizeNotes?: string;
     /** Relative order of this column compared to other columns (sorted ascending) */
