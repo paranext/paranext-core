@@ -10,14 +10,16 @@ export interface MenuStoreServiceType {
    * @param menuKey String key that corresponds to a specific menu
    * @returns Menu data object
    */
-  get: (menuKey: string) => Promise<{}>;
+  getMenuData: (menuKey: string) => Promise<{}>;
   /**
    * Subscribe to updates to the menu for the specific menu key
    *
    * @param menuKey String key that corresponds to a specific menu
    * @returns Unsubscriber function
    */
-  subscribe: (menuKey: string) => Promise<void>; // TODO: Update return type
+  // subscribe: (menuKey: string) => Promise<void>; // TODO: Update return type
 }
+
+export type MenuDataType = { [menuType: string]: {} };
 
 export const menuStoreServiceNetworkObjectName = 'MenuStoreService';

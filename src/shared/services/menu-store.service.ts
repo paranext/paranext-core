@@ -31,14 +31,14 @@ async function initialize(): Promise<void> {
 }
 
 const menuStoreService: MenuStoreServiceType = {
-  get: async (menuKey: string) => {
+  getMenuData: async (menuKey: string) => {
     await initialize();
-    return networkObject.get(menuKey);
+    return networkObject.getMenuData(menuKey);
   },
-  subscribe: async (menuKey: string) => {
-    await initialize();
-    return networkObject.subscribe(menuKey);
-  },
+  // subscribe: async (menuKey: string) => {
+  //   await initialize();
+  //   return networkObject.subscribe(menuKey);
+  // },
 };
 
 export default menuStoreService;
