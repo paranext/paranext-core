@@ -6,7 +6,7 @@ import {
   OnDidDispose,
   CannotHaveOnDidDispose,
   CanHaveOnDidDispose,
-} from './disposal.model';
+} from 'platform-bible-utils';
 
 /**
  * An object of this type is returned from {@link networkObjectService.get}.
@@ -68,13 +68,26 @@ export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
 // and extends NetworkableObject in both cases.
 Partial<NetworkableObject>;
 
-/**
- * Data about an object shared on the network
- *
- * @param id ID of the network object that processes use to reference it
- * @param functionNames Array of strings with the function names exposed on this network object
- */
+/** Data about an object shared on the network */
 export type NetworkObjectDetails = {
+  /** ID of the network object that processes use to reference it */
   id: string;
+
+  /**
+   * Name of the type of this network object. Note this isn't about TypeScript types, but instead
+   * focused on the platform data model. Names of types for the same logical thing (e.g., Project
+   * Data Providers => `pdp`) should be the same across all process on the network regardless of
+   * what programming language they use. For generic network objects, `networkObject` is
+   * appropriate.
+   */
+  objectType: string;
+
+  /** Array of strings with the function names exposed on this network object */
   functionNames: string[];
+
+  /**
+   * Optional object containing properties that describe this network object. The properties
+   * associated with this network object depend on the `objectType`.
+   */
+  attributes?: Record<string, unknown>;
 };

@@ -4,9 +4,7 @@
  * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
  */
 
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
 import * as commandService from '@shared/services/command.service';
-import * as papiUtil from '@shared/utils/papi-util';
 import papiLogger from '@shared/services/logger.service';
 import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
@@ -23,6 +21,8 @@ import settingsService, { SettingsService } from '@shared/services/settings.serv
 import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
+import PapiRendererWebSocket from '@renderer/services/renderer-web-socket.service';
+import PapiRendererXMLHttpRequest from './renderer-xml-http-request.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-backend.service.ts.
@@ -33,19 +33,19 @@ import * as papiReact from '@renderer/services/papi-frontend-react.service';
 // Please add to all properties you add.
 // 4) Anytime you add anything to PAPI also add it to the destructured export below
 const papi = {
-  // Classes
-  /** JSDOC DESTINATION PapiEventEmitter */
-  EventEmitter: PapiEventEmitter,
-
   // Functions
   /** This is just an alias for internet.fetch */
   fetch: internetService.fetch,
 
+  // Classes
+  /** JSDOC DESTINATION PapiRendererWebSocket */
+  WebSocket: PapiRendererWebSocket,
+  /** JSDOC DESTINATION PapiRendererXMLHttpRequest */
+  XMLHttpRequest: PapiRendererXMLHttpRequest,
+
   // Services/modules
   /** JSDOC DESTINATION commandService */
   commands: commandService,
-  /** JSDOC DESTINATION papiUtil */
-  utils: papiUtil,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: webViewService as WebViewServiceType,
   /** JSDOC DESTINATION dialogService */
@@ -74,37 +74,54 @@ const papi = {
 };
 /* eslint-enable */
 
+// The PAPI object should not change at this point
+Object.freeze(papi);
+
 export default papi;
 
 // If you add to the PAPI you need to add to this
 
-/** JSDOC DESTINATION PapiEventEmitter */
-export const { EventEmitter } = papi;
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
+Object.freeze(papi.fetch);
+/** JSDOC DESTINATION PapiRendererWebSocket */
+export const { WebSocket } = papi;
+Object.freeze(papi.WebSocket);
+/** JSDOC DESTINATION PapiRendererXMLHttpRequest */
+export const { XMLHttpRequest } = papi;
+Object.freeze(papi.XMLHttpRequest);
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
-/** JSDOC DESTINATION papiUtil */
-export const { utils } = papi;
+Object.freeze(papi.commands);
 /** JSDOC DESTINATION papiWebViewService */
 export const { webViews } = papi;
+Object.freeze(papi.webViews);
 /** JSDOC DESTINATION dialogService */
 export const { dialogs } = papi;
+Object.freeze(papi.dialogs);
 /** JSDOC DESTINATION papiNetworkService */
 export const { network } = papi;
+Object.freeze(papi.network);
 /** JSDOC DESTINATION logger */
 export const { logger } = papi;
+Object.freeze(papi.logger);
 /** JSDOC DESTINATION internetService */
 export const { internet } = papi;
+Object.freeze(papi.internet);
 /** JSDOC DESTINATION dataProviderService */
 export const { dataProviders } = papi;
+Object.freeze(papi.dataProviders);
 /** JSDOC DESTINATION papiBackendProjectDataProviderService */
 export const { projectDataProviders } = papi;
+Object.freeze(papi.projectDataProviders);
 /** JSDOC DESTINATION projectLookupService */
 export const { projectLookup } = papi;
+Object.freeze(papi.projectLookup);
 /** JSDOC DESTINATION papiReact */
 export const { react } = papi;
+Object.freeze(papi.react);
 /** JSDOC DESTINATION settingsService */
 export const { settings } = papi;
+Object.freeze(papi.settings);
 
 export type Papi = typeof papi;

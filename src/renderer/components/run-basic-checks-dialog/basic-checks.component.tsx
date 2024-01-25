@@ -1,4 +1,4 @@
-import { Checkbox } from 'papi-components';
+import { Checkbox } from 'platform-bible-react';
 import './basic-checks.component.scss';
 
 export type BasicCheck = {

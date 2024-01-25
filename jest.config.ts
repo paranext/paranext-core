@@ -18,6 +18,8 @@ const config: Config = {
     ...pathsToModuleNameMapper(compilerOptions.paths, {
       prefix: '<rootDir>/src',
     }),
+    '^platform-bible-react$': '<rootDir>/node_modules/platform-bible-react/dist/index.js',
+    '^platform-bible-utils$': '<rootDir>/node_modules/platform-bible-utils/dist/index.js',
   },
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {

@@ -1,6 +1,6 @@
 import * as commandService from '@shared/services/command.service';
 import logger from '@shared/services/logger.service';
-import { Command } from 'papi-components';
+import { Command } from 'platform-bible-react';
 import { CommandNames } from 'papi-shared-types';
 
 export function VisitPage(url: string) {

@@ -10,10 +10,10 @@ using PapiEventHandler = Func<MessageEvent, Message?>;
 /// </summary>
 internal class MessageHandlerEvent : IMessageHandler
 {
-    private readonly Dictionary<Enum<EventType>, PapiEventHandler> _handlers = new();
+    private readonly Dictionary<string, PapiEventHandler> _handlers = new();
     private readonly object _handlersLock = new();
 
-    public void RegisterEventHandler(Enum<EventType> eventType, PapiEventHandler handler)
+    public void RegisterEventHandler(string eventType, PapiEventHandler handler)
     {
         lock (_handlersLock)
         {
@@ -34,7 +34,7 @@ internal class MessageHandlerEvent : IMessageHandler
         }
     }
 
-    public void UnregisterEventHandler(Enum<EventType> eventType, PapiEventHandler handler)
+    public void UnregisterEventHandler(string eventType, PapiEventHandler handler)
     {
         lock (_handlersLock)
         {
@@ -54,13 +54,12 @@ internal class MessageHandlerEvent : IMessageHandler
         if (message == null)
             throw new ArgumentNullException(nameof(message));
 
-        if (message.Type != MessageType.Event)
+        if (message is not MessageEvent evt)
             throw new ArgumentException("Incorrect message type", nameof(message));
 
-        Console.WriteLine($"Event received: {StringUtils.LimitLength(message.ToString(), 180)}");
+        Console.WriteLine($"Event received: {StringUtils.LimitLength(evt.ToString(), 180)}");
 
-        MessageEvent evt = (MessageEvent)message;
-        Delegate[]? handlersToRun = null;
+        Delegate[]? handlersToRun;
         lock (_handlersLock)
         {
             if (!_handlers.TryGetValue(evt.EventType, out PapiEventHandler? handlersForEventType))

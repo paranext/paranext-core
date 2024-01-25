@@ -4,7 +4,7 @@
  * over this.
  */
 // TODO: Refactor into a class and an interface
-// TODO: Combine with NetworkSerice?
+// TODO: Combine with NetworkService?
 
 import {
   CLIENT_ID_UNASSIGNED,
@@ -22,7 +22,7 @@ import {
 import INetworkConnector from '@shared/services/network-connector.interface';
 import { createNetworkConnector } from '@shared/services/network-connector.factory';
 import logger from '@shared/services/logger.service';
-import { ComplexResponse, SerializedRequestType } from '@shared/utils/papi-util';
+import { ComplexResponse, SerializedRequestType } from '@shared/utils/util';
 
 /**
  * Whether this connector is setting up or has finished setting up its connection and is ready to

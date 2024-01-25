@@ -1,27 +1,47 @@
-import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+import { Unsubscriber, deserialize, serialize, PlatformEventEmitter } from 'platform-bible-utils';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
+
+/** Event to set or update a setting */
+export type UpdateSettingEvent<SettingName extends SettingNames> = {
+  type: 'update-setting';
+  setting: SettingTypes[SettingName];
+};
+
+/** Event to remove a setting */
+export type ResetSettingEvent = {
+  type: 'reset-setting';
+};
+
+/** All supported setting events */
+export type SettingEvent<SettingName extends SettingNames> =
+  | UpdateSettingEvent<SettingName>
+  | ResetSettingEvent;
 
 /** All message subscriptions - emitters that emit an event each time a setting is updated */
 const onDidUpdateSettingEmitters = new Map<
   SettingNames,
-  PapiEventEmitter<SettingTypes[SettingNames] | undefined>
+  PlatformEventEmitter<SettingEvent<SettingNames>>
 >();
 
 /**
  * Retrieves the value of the specified setting
  *
  * @param key The string id of the setting for which the value is being retrieved
- * @returns The value of the specified setting, parsed to an object. Returns `undefined` if setting
- *   is not present or no value is available
+ * @param defaultSetting The default value used for the setting if no value is available for the key
+ * @returns The value of the specified setting, parsed to an object. Returns default setting if
+ *   setting does not exist
  */
 const getSetting = <SettingName extends SettingNames>(
   key: SettingName,
-): SettingTypes[SettingName] | undefined => {
+  defaultSetting: SettingTypes[SettingName],
+): SettingTypes[SettingName] => {
   const settingString = localStorage.getItem(key);
   // Null is used by the external API
   // eslint-disable-next-line no-null/no-null
-  return settingString !== null ? deserialize(settingString) : undefined;
+  if (settingString !== null) {
+    return deserialize(settingString);
+  }
+  return defaultSetting;
 };
 
 /**
@@ -33,16 +53,31 @@ const getSetting = <SettingName extends SettingNames>(
  */
 const setSetting = <SettingName extends SettingNames>(
   key: SettingName,
-  newSetting: SettingTypes[SettingName] | undefined,
+  newSetting: SettingTypes[SettingName],
 ) => {
-  if (newSetting === undefined) localStorage.removeItem(key);
-  else localStorage.setItem(key, serialize(newSetting));
+  localStorage.setItem(key, serialize(newSetting));
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const emitter = onDidUpdateSettingEmitters.get(key) as
-    | PapiEventEmitter<SettingTypes[SettingName] | undefined>
-    | undefined;
-  emitter?.emit(newSetting);
+  const emitter = onDidUpdateSettingEmitters.get(key);
+  const setMessage: UpdateSettingEvent<SettingName> = {
+    setting: newSetting,
+    type: 'update-setting',
+  };
+  emitter?.emit(setMessage);
+};
+
+/**
+ * Removes the setting from memory
+ *
+ * @param key The string id of the setting for which the value is being removed
+ */
+const resetSetting = <SettingName extends SettingNames>(key: SettingName) => {
+  localStorage.removeItem(key);
+  // Assert type of the particular SettingName of the emitter.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const emitter = onDidUpdateSettingEmitters.get(key);
+  const resetMessage: ResetSettingEvent = { type: 'reset-setting' };
+  emitter?.emit(resetMessage);
 };
 
 /**
@@ -55,20 +90,20 @@ const setSetting = <SettingName extends SettingNames>(
  */
 const subscribeToSetting = <SettingName extends SettingNames>(
   key: SettingName,
-  callback: (newSetting: SettingTypes[SettingName] | undefined) => void,
+  callback: (newSetting: SettingEvent<SettingName>) => void,
 ): Unsubscriber => {
   // Assert type of the particular SettingName of the emitter.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   let emitter = onDidUpdateSettingEmitters.get(key) as
-    | PapiEventEmitter<SettingTypes[SettingName] | undefined>
+    | PlatformEventEmitter<SettingEvent<SettingName>>
     | undefined;
   if (!emitter) {
-    emitter = new PapiEventEmitter<SettingTypes[SettingName] | undefined>();
+    emitter = new PlatformEventEmitter<SettingEvent<SettingName>>();
     onDidUpdateSettingEmitters.set(
       key,
-      // Assert type of the general SettingTypes of the emitter.
+      // Assert type of the general SettingNames of the emitter.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      emitter as PapiEventEmitter<SettingTypes[SettingNames] | undefined>,
+      emitter as PlatformEventEmitter<SettingEvent<SettingNames>>,
     );
   }
   return emitter.subscribe(callback);
@@ -78,6 +113,7 @@ const subscribeToSetting = <SettingName extends SettingNames>(
 export interface SettingsService {
   get: typeof getSetting;
   set: typeof setSetting;
+  reset: typeof resetSetting;
   subscribe: typeof subscribeToSetting;
 }
 
@@ -89,6 +125,7 @@ export interface SettingsService {
 const settingsService: SettingsService = {
   get: getSetting,
   set: setSetting,
+  reset: resetSetting,
   subscribe: subscribeToSetting,
 };
 export default settingsService;

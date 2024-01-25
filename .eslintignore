@@ -23,6 +23,7 @@ node_modules
 release/app/dist
 release/build
 .erb/dll
+dev-appdata
 
 .idea
 npm-debug.log.*
@@ -41,7 +42,8 @@ dist
 storybook-static
 
 # directories that have separate eslint project
-lib/papi-components
+lib/platform-bible-react
+lib/platform-bible-utils
 lib/papi-dts
 extensions
 

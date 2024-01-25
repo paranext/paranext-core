@@ -1,5 +1,3 @@
-import { Dispatch, SetStateAction } from 'react';
-
 /** The type of code that defines a webview's content */
 export enum WebViewContentType {
   /**
@@ -184,7 +182,7 @@ export type WebViewDefinitionUpdatableProperties = Pick<
 // `web-view.service.ts` -> `getUpdatablePropertiesFromWebViewDefinition`
 export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
 
-// This hook is found in `use-webview-state.hook.ts`
+// This hook is found in `use-web-view-state.hook.ts`
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
 // destructured members of object types, so using WebViewProps as
@@ -201,16 +199,26 @@ export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProp
  * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
  * key.
  *
- * NOTE: `stateKey` needs to be a constant string, not something that could change during execution.
+ * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+ * updated every render
  *
  * _＠param_ `defaultStateValue` Value to use if the web view state didn't contain a value for the
  * given 'stateKey'
  *
- * _＠returns_ `[stateValue, setStateValue]`
+ * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+ * to re-run with its new value. Running `resetWebViewState()` will always update the state value
+ * returned to the latest `defaultStateValue`, and changing the `stateKey` will use the latest
+ * `defaultStateValue`. However, if `defaultStateValue` is changed while a state is
+ * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
+ * updated to the new `defaultStateValue`.
  *
- * - `stateValue`: the current value for the web view state at the key specified or
+ * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
+ *
+ * - `webViewStateValue`: The current value for the web view state at the key specified or
  *   `defaultStateValue` if a state was not found
- * - `setStateValue`: function to use to update the web view state value at the key specified
+ * - `setWebViewState`: Function to use to update the web view state value at the key specified
+ * - `resetWebViewState`: Function that removes the web view state and resets the value to
+ *   `defaultStateValue`
  *
  * _＠example_
  *
@@ -220,8 +228,12 @@ export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProp
  */
 export type UseWebViewStateHook = <T>(
   stateKey: string,
-  defaultStateValue: NonNullable<T>,
-) => [webViewState: NonNullable<T>, setWebViewState: Dispatch<SetStateAction<NonNullable<T>>>];
+  defaultStateValue: T,
+) => [
+  webViewStateValue: T,
+  setWebViewState: (stateValue: T) => void,
+  resetWebViewState: () => void,
+];
 
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this type. It seem that, for some reason, JSDoc does not carry these annotations on

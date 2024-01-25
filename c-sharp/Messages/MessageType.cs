@@ -1,14 +1,14 @@
-using PtxUtils;
-
 namespace Paranext.DataProvider.Messages;
 
-public sealed class MessageType : EnumType
+/// <summary>
+/// This should represent all possible message types
+/// </summary>
+public static class MessageType
 {
-    public static readonly Enum<MessageType> InitClient = new("init-client");
-    public static readonly Enum<MessageType> ClientConnect = new("client-connect");
-    public static readonly Enum<MessageType> Request = new("request");
-    public static readonly Enum<MessageType> Response = new("response");
-    public static readonly Enum<MessageType> Event = new("event");
-
-    private MessageType() { } // Can't create an instance
+    public const string UNKNOWN = "UNKNOWN";
+    public const string INIT_CLIENT = "init-client";
+    public const string CLIENT_CONNECT = "client-connect";
+    public const string REQUEST = "request";
+    public const string RESPONSE = "response";
+    public const string EVENT = "event";
 }

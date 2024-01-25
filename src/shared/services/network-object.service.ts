@@ -1,16 +1,18 @@
 ﻿// #region imports
 
 import * as networkService from '@shared/services/network.service';
+import { serializeRequestType } from '@shared/utils/util';
 import {
+  AsyncVariable,
+  PlatformEvent,
+  PlatformEventEmitter,
   aggregateUnsubscriberAsyncs,
   serialize,
-  serializeRequestType,
   UnsubscriberAsync,
-} from '@shared/utils/papi-util';
-import { PapiEvent } from '@shared/models/papi-event.model';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
-import { getAllObjectFunctionNames, isString } from '@shared/utils/util';
-import AsyncVariable from '@shared/utils/async-variable';
+  getAllObjectFunctionNames,
+  isString,
+  CanHaveOnDidDispose,
+} from 'platform-bible-utils';
 import {
   NetworkObject,
   DisposableNetworkObject,
@@ -19,7 +21,6 @@ import {
   NetworkObjectDetails,
 } from '@shared/models/network-object.model';
 import { Mutex } from 'async-mutex';
-import { CanHaveOnDidDispose } from '@shared/models/disposal.model';
 import logger from './logger.service';
 
 // #endregion
@@ -104,7 +105,7 @@ type NetworkObjectRegistration = {
    * Emitter that indicates locally when the network object was disposed. Run when the network
    * disposal emitter runs for this registration's ID.
    */
-  onDidDisposeEmitter: PapiEventEmitter<void>;
+  onDidDisposeEmitter: PlatformEventEmitter<void>;
   /** Function to make the proxy stop working. Should be run on disposing this network object. */
   revokeProxy: () => void;
 };
@@ -268,7 +269,9 @@ const createLocalProxy = (
 /** Construct details about an object that is becoming a network object */
 function createNetworkObjectDetails(
   id: string,
+  objectType: string,
   objectToShare: { [property: string]: unknown },
+  objectAttributes: { [property: string]: unknown } | undefined,
 ): NetworkObjectDetails {
   const objectFunctionNames = getAllObjectFunctionNames(objectToShare, id);
 
@@ -281,19 +284,21 @@ function createNetworkObjectDetails(
   });
   return {
     id,
+    objectType,
     functionNames: [...objectFunctionNames].sort(),
+    attributes: objectAttributes,
   };
 }
 
 interface IOnDidDisposableObject {
-  onDidDispose?: PapiEvent<void>;
+  onDidDispose?: PlatformEvent<void>;
 }
 
 /** Set an `onDidDispose` property on the object to mutate. Throw if one already exists. */
 const overrideOnDidDispose = (
   objectId: string,
   objectToMutate: IOnDidDisposableObject,
-  newOnDidDispose: PapiEvent<void>,
+  newOnDidDispose: PlatformEvent<void>,
 ): void => {
   if (objectToMutate.onDidDispose) {
     throw new Error(
@@ -390,7 +395,7 @@ const get = async <T extends object>(
     const remoteProxy = createRemoteProxy(id, baseObject);
 
     // Setup onDidDispose so that services will know when the proxy is dead
-    const eventEmitter = new PapiEventEmitter<void>();
+    const eventEmitter = new PlatformEventEmitter<void>();
     overrideOnDidDispose(id, remoteProxy.proxy, eventEmitter.event);
 
     // The network object is finished! Rename it so we know it is finished.
@@ -434,6 +439,8 @@ const get = async <T extends object>(
 const set = async <T extends NetworkableObject>(
   id: string,
   objectToShare: T,
+  objectType: string = 'object',
+  objectAttributes: { [property: string]: unknown } | undefined = undefined,
 ): Promise<DisposableNetworkObject<T>> => {
   await initialize();
 
@@ -492,7 +499,7 @@ const set = async <T extends NetworkableObject>(
     const localProxy = createLocalProxy(objectToShare);
 
     // Setup onDidDispose so that services will know when the proxy is dead
-    const onDidDisposeLocalEmitter = new PapiEventEmitter<void>();
+    const onDidDisposeLocalEmitter = new PlatformEventEmitter<void>();
     overrideOnDidDispose(id, objectToShare, onDidDisposeLocalEmitter.event);
 
     // Override dispose on the object passed in to clean up the network object
@@ -521,8 +528,14 @@ const set = async <T extends NetworkableObject>(
     });
 
     // Notify that the network object was successfully registered
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const netObjDetails = createNetworkObjectDetails(id, objectToShare as Record<string, unknown>);
+    const netObjDetails = createNetworkObjectDetails(
+      id,
+      objectType,
+      // NetworkableObject isn't specific enough and changing it is painful
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      objectToShare as Record<string, unknown>,
+      objectAttributes,
+    );
     logger.debug(`Network object registered: ${serialize(netObjDetails)}`);
     onDidCreateNetworkObjectEmitter.emit(netObjDetails);
 

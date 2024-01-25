@@ -7,6 +7,7 @@ export type { ExecutionActivationContext } from '@extension-host/extension-types
 export type { ExecutionToken } from '@node/models/execution-token.model';
 
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
+export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 
 export type { default as IDataProvider } from '@shared/models/data-provider.interface';
 export type {
@@ -17,8 +18,6 @@ export type {
 export type { WithNotifyUpdate } from '@shared/models/data-provider-engine.model';
 export type { default as IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 export type { DialogOptions } from '@shared/models/dialog-options.model';
-export type { PapiEvent } from '@shared/models/papi-event.model';
-export type { default as PapiEventEmitter } from '@shared/models/papi-event-emitter.model';
 export type {
   ExtensionDataScope,
   MandatoryProjectDataType,
@@ -32,6 +31,7 @@ export type {
   WebViewDefinition,
   WebViewProps,
 } from '@shared/models/web-view.model';
-export type { Unsubscriber, UnsubscriberAsync } from '@shared/utils/papi-util';
 
 export type { IWebViewProvider } from '@shared/models/web-view-provider.model';
+
+export type { SettingEvent } from '@shared/services/settings.service';

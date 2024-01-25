@@ -1,6 +1,6 @@
 import { RadioGroup, FormControlLabel, Radio, Typography, Grid } from '@mui/material';
 import { Canon } from '@sillsdev/scripture';
-import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'papi-components';
+import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'platform-bible-react';
 import { useMemo } from 'react';
 import './book-selector.component.scss';
 

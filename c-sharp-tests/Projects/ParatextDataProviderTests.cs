@@ -43,7 +43,7 @@ namespace TestParanextDataProvider.Projects
 
             JsonElement serverMessage = CreateRequestMessage(function);
 
-            Enum<RequestType> requestType = new(PdpDataRequest);
+            string requestType = PdpDataRequest;
             Message result = Client
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
                 .First();
@@ -99,7 +99,7 @@ namespace TestParanextDataProvider.Projects
                 CreateVerseRefNode(bookNum, chapterNum, verseNum)
             );
 
-            Enum<RequestType> requestType = new(PdpDataRequest);
+            string requestType = PdpDataRequest;
             Message result = Client
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
                 .First();
@@ -159,13 +159,14 @@ namespace TestParanextDataProvider.Projects
                 CreateVerseRefNode(bookNum, chapterNum, verseNum)
             );
 
-            Enum<RequestType> requestType = new(PdpDataRequest);
+            string requestType = PdpDataRequest;
             Message result = Client
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
                 .First();
 
             VerifyResponseExceptContents(result, null, requestType, requesterId);
-            VerifyUsfmSame(((MessageResponse)result).Contents, expectedResult, _scrText, 1);
+            string? stringContents = (string?)((MessageResponse)result).Contents;
+            VerifyUsfmSame(stringContents!, expectedResult, _scrText, 1);
         }
 
         [TestCase(
@@ -207,8 +208,8 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             // Set up an event listener to listen for the update
-            List<dynamic?> updateEvents = new();
-            Enum<EventType> dataUpdateEvent = new(PdpDataUpdateEvent);
+            List<MessageEvent> updateEvents = new();
+            string dataUpdateEvent = PdpDataUpdateEvent;
             Client.RegisterEventHandler(
                 dataUpdateEvent,
                 (e) =>
@@ -224,7 +225,7 @@ namespace TestParanextDataProvider.Projects
                 newValue
             );
 
-            Enum<RequestType> requestType = new(PdpDataRequest);
+            string requestType = PdpDataRequest;
             Message result = Client
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
                 .First();
@@ -240,7 +241,7 @@ namespace TestParanextDataProvider.Projects
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
             Assert.That(
-                updateEvents[0],
+                updateEvents[0].Event,
                 Is.EqualTo(ParatextProjectStorageInterpreter.AllScriptureDataTypes)
             );
 
@@ -259,7 +260,8 @@ namespace TestParanextDataProvider.Projects
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage2))
                 .First();
             VerifyResponseExceptContents(result2, null, requestType, requesterId);
-            VerifyUsxSame(((MessageResponse)result2).Contents, newValue);
+            string? stringContents = (string?)((MessageResponse)result2).Contents;
+            VerifyUsxSame(stringContents!, newValue);
         }
 
         [TestCase(
@@ -299,8 +301,8 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             // Set up an event listener to listen for the update
-            List<dynamic?> updateEvents = new();
-            Enum<EventType> dataUpdateEvent = new(PdpDataUpdateEvent);
+            List<MessageEvent> updateEvents = new();
+            string dataUpdateEvent = PdpDataUpdateEvent;
             Client.RegisterEventHandler(
                 dataUpdateEvent,
                 (e) =>
@@ -316,7 +318,7 @@ namespace TestParanextDataProvider.Projects
                 newValue
             );
 
-            Enum<RequestType> requestType = new(PdpDataRequest);
+            string requestType = PdpDataRequest;
             Message result = Client
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
                 .First();
@@ -332,7 +334,7 @@ namespace TestParanextDataProvider.Projects
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
             Assert.That(
-                updateEvents[0],
+                updateEvents[0].Event,
                 Is.EqualTo(ParatextProjectStorageInterpreter.AllScriptureDataTypes)
             );
 
@@ -351,7 +353,8 @@ namespace TestParanextDataProvider.Projects
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage2))
                 .First();
             VerifyResponseExceptContents(result2, null, requestType, requesterId);
-            VerifyUsfmSame(((MessageResponse)result2).Contents, newValue, _scrText, 1);
+            string? stringContents = (string?)((MessageResponse)result2).Contents;
+            VerifyUsfmSame(stringContents!, newValue, _scrText, 1);
         }
 
         [Test]
@@ -366,7 +369,7 @@ namespace TestParanextDataProvider.Projects
             JsonNode scope = CreateDataScope("myExtension", "myFile.txt");
             JsonElement serverMessage = CreateRequestMessage("getExtensionData", scope);
 
-            Enum<RequestType> requestType = new(PdpDataRequest);
+            string requestType = new(PdpDataRequest);
             Message result = Client
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
                 .First();
@@ -390,7 +393,7 @@ namespace TestParanextDataProvider.Projects
                 CreateJsonString("Random file contents")
             );
 
-            Enum<RequestType> requestType = new(PdpDataRequest);
+            string requestType = PdpDataRequest;
             Message result = Client
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
                 .First();

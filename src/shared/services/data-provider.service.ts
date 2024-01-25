@@ -14,16 +14,21 @@ import DataProviderInternal, {
 import IDataProviderEngine, {
   DataProviderEngineNotifyUpdate,
 } from '@shared/models/data-provider-engine.model';
-import { PapiEvent } from '@shared/models/papi-event.model';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
+import {
+  PlatformEvent,
+  PlatformEventEmitter,
+  deepEqual,
+  getAllObjectFunctionNames,
+  groupBy,
+  isString,
+  CannotHaveOnDidDispose,
+  AsyncVariable,
+} from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
-import { deepEqual, serializeRequestType } from '@shared/utils/papi-util';
-import { getAllObjectFunctionNames, groupBy, isString } from '@shared/utils/util';
+import { serializeRequestType } from '@shared/utils/util';
 import { LocalObjectToProxyCreator } from '@shared/models/network-object.model';
 import networkObjectService, { overrideDispose } from '@shared/services/network-object.service';
-import { CannotHaveOnDidDispose } from '@shared/models/disposal.model';
 import logger from '@shared/services/logger.service';
-import AsyncVariable from '@shared/utils/async-variable';
 import {
   DataProviderNames,
   DataProviderTypes,
@@ -112,7 +117,7 @@ function hasKnown(providerName: string): boolean {
  */
 function createDataProviderSubscriber<DataProviderName extends DataProviderNames>(
   dataProviderPromise: Promise<DataProviders[DataProviderName]>,
-  onDidUpdate: PapiEvent<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>,
+  onDidUpdate: PlatformEvent<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>,
   dataType: DataTypeNames<DataProviderTypes[DataProviderName]>,
   // Sadly `DataProviderSubscriber<DataProviderTypes[DataProviderName][typeof dataType]>` did not
   // work. Maybe TypeScript refuses to look at all properties in each member of `DataProviderTypes`
@@ -235,7 +240,7 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
 function createDataProviderProxy<DataProviderName extends DataProviderNames>(
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]> | undefined,
   dataProviderPromise: Promise<DataProviders[DataProviderName]>,
-  onDidUpdate: PapiEvent<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>,
+  onDidUpdate: PlatformEvent<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>,
 ): DataProviderInternal<DataProviderTypes[DataProviderName]> {
   // Object whose methods to run first when the data provider's method is called if they exist here
   // before falling back to the dataProviderEngine's methods. Caches subscribe functions and bound
@@ -467,7 +472,7 @@ const decorators = {
 function buildDataProvider<DataProviderName extends DataProviderNames>(
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
   dataProviderPromise: Promise<DataProviders[DataProviderName]>,
-  onDidUpdateEmitter: PapiEventEmitter<
+  onDidUpdateEmitter: PlatformEventEmitter<
     DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>
   >,
 ): DataProviderInternal<DataProviderTypes[DataProviderName]> {
@@ -573,6 +578,12 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
  *
  * @param providerName Name this data provider should be called on the network
  * @param dataProviderEngine The object to layer over with a new data provider object
+ * @param dataProviderType String to send in a network event to clarify what type of data provider
+ *   is represented by this engine. For generic data providers, the default value of `dataProvider`
+ *   can be used. For data provider types that have multiple instances (e.g., project data
+ *   providers), a unique type name should be used to distinguish from generic data providers.
+ * @param dataProviderAttributes Optional object that will be sent in a network event to provide
+ *   additional metadata about the data provider represented by this engine.
  *
  *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
  *   `set` methods are layered over to facilitate data provider subscriptions.
@@ -582,6 +593,8 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
 async function registerEngine<DataProviderName extends DataProviderNames>(
   providerName: DataProviderName,
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
+  dataProviderType: string = 'dataProvider',
+  dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
 ): Promise<DisposableDataProviders[DataProviderName]> {
   await initialize();
 
@@ -621,6 +634,8 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
   const disposableDataProvider = (await networkObjectService.set(
     dataProviderObjectId,
     dataProviderInternal,
+    dataProviderType,
+    dataProviderAttributes,
   )) as unknown as DisposableDataProviders[DataProviderName];
 
   // Get the local network object proxy for the data provider so the provider can't be disposed
@@ -639,25 +654,25 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
 }
 
 /**
- * Create a mock local data provider object for connecting to the remote data provider
+ * Creates a data provider to be shared on the network layering over the provided data provider
+ * engine.
  *
  * @type `TDataTypes` - The data provider data types served by the data provider to create.
  *
  *   This is not exposed on the papi as it is a helper function to enable other services to layer over
  *   this service and create their own subsets of data providers with other types than
  *   `DataProviders` types using this function and {@link getByType}
- * @param dataProviderObjectId Network object id corresponding to this data provider
- * @param dataProviderContainer Container that holds a reference to the data provider so this
- *   subscribe function can reference the data provider
  * @param providerName Name this data provider should be called on the network
  * @param dataProviderEngine The object to layer over with a new data provider object
+ * @param dataProviderType String to send in a network event to clarify what type of data provider
+ *   is represented by this engine. For generic data providers, the default value of `dataProvider`
+ *   can be used. For data provider types that have multiple instances (e.g., project data
+ *   providers), a unique type name should be used to distinguish from generic data providers.
+ * @param dataProviderAttributes Optional object that will be sent in a network event to provide
+ *   additional metadata about the data provider represented by this engine.
  *
  *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
  *   `set` methods are layered over to facilitate data provider subscriptions.
- * @returns Local data provider object that represents a remote data provider
- *
- *   Creates a data provider to be shared on the network layering over the provided data provider
- *   engine.
  * @returns The data provider including control over disposing of it. Note that this data provider
  *   is a new object distinct from the data provider engine passed in.
  */
@@ -666,12 +681,20 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
 export async function registerEngineByType<TDataTypes extends DataProviderDataTypes>(
   providerName: string,
   dataProviderEngine: IDataProviderEngine<TDataTypes>,
+  dataProviderType: string = 'dataProvider',
+  dataProviderAttributes: { [property: string]: unknown } | undefined = undefined,
 ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>> {
   // All the types on this function and `registerEngine` are just TypeScript helpers. They do not
   // serve us well in this particular case, so we're ignoring the types and using our own since we
   // are making other kinds of data providers that are not in `DataProviders`
-  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-  return registerEngine(providerName as any, dataProviderEngine as any);
+  /* eslint-disable no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any */
+  return registerEngine(
+    providerName as any,
+    dataProviderEngine as any,
+    dataProviderType,
+    dataProviderAttributes,
+  );
+  /* eslint-enable no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any */
 }
 
 /**

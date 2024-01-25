@@ -34,10 +34,15 @@ declare global {
   var webViewComponent: FunctionComponent<WebViewProps>;
   /** JSDOC DESTINATION UseWebViewStateHook */
   var useWebViewState: UseWebViewStateHook;
-  /** Retrieve the value from web view state with the given 'stateKey', if it exists. */
-  var getWebViewState: <T>(stateKey: string) => T | undefined;
+  /**
+   * Retrieve the value from web view state with the given 'stateKey', if it exists. Otherwise
+   * return default value
+   */
+  var getWebViewState: <T>(stateKey: string, defaultValue: T) => T;
   /** Set the value for a given key in the web view state. */
-  var setWebViewState: <T>(stateKey: string, stateValue: NonNullable<T>) => void;
+  var setWebViewState: <T>(stateKey: string, stateValue: T) => void;
+  /** Remove the value for a given key in the web view state */
+  var resetWebViewState: (stateKey: string) => void;
   // Web view "by id" functions are used in the default imports for each webview in web-view.service.ts
   // but probably wouldn't be used in a webview
   // TODO: Find a way to move this to `@renderer/global-this.model.ts` without causing an error on

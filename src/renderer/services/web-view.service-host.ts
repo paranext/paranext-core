@@ -5,8 +5,15 @@
  * for services in the renderer to call.
  */
 import cloneDeep from 'lodash/cloneDeep';
-import { Unsubscriber, deserialize, serialize } from '@shared/utils/papi-util';
-import { isString, newGuid, newNonce } from '@shared/utils/util';
+import {
+  AsyncVariable,
+  Unsubscriber,
+  deserialize,
+  serialize,
+  isString,
+  newGuid,
+} from 'platform-bible-utils';
+import { newNonce } from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   GetWebViewOptions,
@@ -30,7 +37,6 @@ import {
 } from '@shared/models/docking-framework.model';
 import webViewProviderService from '@shared/services/web-view-provider.service';
 import { LayoutBase } from 'rc-dock';
-import AsyncVariable from '@shared/utils/async-variable';
 import logger from '@shared/services/logger.service';
 import LogError from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
@@ -833,7 +839,7 @@ export const getWebView = async (
     // The web view provider might have updated the web view state, so save it
     setFullWebViewStateById(webView.id, webView.state);
 
-  // `webViewRequire`, `getWebViewStateById`, and `setWebViewStateById` below are defined in `src\renderer\global-this.model.ts`
+  // `webViewRequire`, `getWebViewStateById`, `setWebViewStateById` and `resetWebViewStateById` below are defined in `src\renderer\global-this.model.ts`
   // `useWebViewState` below is defined in `src\shared\global-this.model.ts`
   // We have to bind `useWebViewState` to the current `window` context because calls within PAPI don't have access to a webview's `window` context
   /**
@@ -856,19 +862,21 @@ export const getWebView = async (
   var require = window.parent.webViewRequire;
   var getWebViewStateById = window.parent.getWebViewStateById;
   var setWebViewStateById = window.parent.setWebViewStateById;
-  window.getWebViewState = (stateKey) => { return getWebViewStateById('${webView.id}', stateKey) };
+  var resetWebViewStateById = window.parent.resetWebViewStateById;
+  window.getWebViewState = (stateKey, defaultValue) => { return getWebViewStateById('${webView.id}', stateKey, defaultValue) };
   window.setWebViewState = (stateKey, stateValue) => { setWebViewStateById('${webView.id}', stateKey, stateValue) };
+  window.resetWebViewState = (stateKey) => { resetWebViewStateById('${webView.id}', stateKey) };
   window.useWebViewState = window.parent.useWebViewState.bind(window);
   var getWebViewDefinitionUpdatablePropertiesById = window.parent.getWebViewDefinitionUpdatablePropertiesById;
   window.getWebViewDefinitionUpdatableProperties = () => { return getWebViewDefinitionUpdatablePropertiesById('${webView.id}')}
   var updateWebViewDefinitionById = window.parent.updateWebViewDefinitionById;
   window.updateWebViewDefinition = (webViewDefinitionUpdateInfo) => { return updateWebViewDefinitionById('${webView.id}', webViewDefinitionUpdateInfo)}
   window.fetch = papi.fetch;
+  window.WebSocket = papi.WebSocket;
+  window.XMLHttpRequest = papi.XMLHttpRequest;
   delete window.parent;
   delete window.top;
   delete window.frameElement;
-  delete window.XMLHttpRequest;
-  delete window.WebSocket;
   `;
 
   /** Nonce used to allow scripts and styles to run */

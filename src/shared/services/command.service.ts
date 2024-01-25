@@ -4,12 +4,8 @@
  */
 
 import * as networkService from '@shared/services/network.service';
-import {
-  aggregateUnsubscriberAsyncs,
-  createSafeRegisterFn,
-  serializeRequestType,
-  UnsubscriberAsync,
-} from '@shared/utils/papi-util';
+import { aggregateUnsubscriberAsyncs, UnsubscriberAsync } from 'platform-bible-utils';
+import { createSafeRegisterFn, serializeRequestType } from '@shared/utils/util';
 import { isClient, isRenderer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
 import { CommandHandlers, CommandNames } from 'papi-shared-types';

@@ -3,7 +3,7 @@
  * to be used outside of NetworkConnectors and ConnectionService.ts
  */
 
-import { ComplexRequest, ComplexResponse, SerializedRequestType } from '@shared/utils/papi-util';
+import { ComplexRequest, ComplexResponse, SerializedRequestType } from '@shared/utils/util';
 
 /** Represents when the client id has not been assigned by the server */
 export const CLIENT_ID_UNASSIGNED = -1;
@@ -59,7 +59,6 @@ export enum ConnectionStatus {
 
 /** Request to do something and to respond */
 export type InternalRequest<TParam = unknown> = {
-  senderId: number;
   requestId: number;
 } & ComplexRequest<TParam>;
 

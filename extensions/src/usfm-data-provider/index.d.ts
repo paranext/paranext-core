@@ -7,8 +7,8 @@ declare module 'usfm-data-provider' {
     ExtensionDataScope,
     IDataProvider,
     MandatoryProjectDataType,
-    Unsubscriber,
   } from '@papi/core';
+  import { Unsubscriber } from 'platform-bible-utils';
 
   export type UsfmProviderDataTypes = {
     BookNames: DataProviderDataType<boolean, string[], never>;
@@ -358,13 +358,15 @@ declare module 'usfm-data-provider' {
       options?: DataProviderSubscriberOptions,
     ): Unsubscriber;
   };
+
+  export type ParatextStandardProjectDataProvider = IDataProvider<ParatextStandardProjectDataTypes>;
 }
 
 declare module 'papi-shared-types' {
-  import type { ParatextStandardProjectDataTypes, UsfmDataProvider } from 'usfm-data-provider';
+  import type { ParatextStandardProjectDataProvider, UsfmDataProvider } from 'usfm-data-provider';
 
-  export interface ProjectDataTypes {
-    ParatextStandard: ParatextStandardProjectDataTypes;
+  export interface ProjectDataProviders {
+    ParatextStandard: ParatextStandardProjectDataProvider;
   }
 
   export interface DataProviders {

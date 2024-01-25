@@ -1,12 +1,12 @@
 {
   "name": "hello-world",
   "version": "0.0.1",
-  "description": "Simple hello world extension for Paranext",
-  "main": "hello-world.js",
-  "types": "hello-world.d.ts",
+  "description": "Simple hello world extension for Platform.Bible",
+  "main": "src/main.js",
+  "types": "src/types/hello-world.d.ts",
+  "author": "Paranext",
+  "license": "MIT",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "Paranext",
-  "license": "MIT"
+  }
 }

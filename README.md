@@ -80,6 +80,20 @@ After you run `npm start` (or, in VSCode, launch `Debug Paranext Core`), you can
 Paranext Core extensions are found in the `extensions` folder. Please follow the instructions in
 `extensions/README.md` to develop extensions.
 
+## GitHub Pages
+
+**[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**
+
+- Explore the declarations of types available on the PAPI.
+
+**[Platform.Bible React Components and Hooks Documentation](https://paranext.github.io/paranext-core/platform-bible-react)**
+
+- Check out the React components and hooks available to use.
+
+**[Platform.Bible Utilities Documentation](https://paranext.github.io/paranext-core/platform-bible-utils)**
+
+- Check out the utility functions, types, and classes available to use.
+
 ## JavaScript Tool Manager
 
 You can use [Volta](https://volta.sh/) with this repo to use the right version of tools such as **node** and **npm**.

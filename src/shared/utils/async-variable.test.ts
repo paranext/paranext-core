@@ -1,4 +1,4 @@
-import AsyncVariable from './async-variable';
+import { AsyncVariable } from 'platform-bible-utils';
 
 test('wait on other async tasks to set and notify variables', () => {
   const VARIABLE_NAME: string = 'abc';

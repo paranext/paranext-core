@@ -1,37 +1,41 @@
-using PtxUtils;
-
 namespace Paranext.DataProvider.Messages;
 
 /// <summary>
-/// This is what all event messages (other than "MessageEvent" itself) should use as a base class
+/// Message events to/from the server.
 /// </summary>
-public abstract class MessageEventGeneric<ContentsType> : MessageEvent
-// Unfortunately using the EventType as a generic type is not supported, as in "MessageEventGeneric<EventType, ContentsType>".
-// You can't pass any old object as a type to generics. They must be System.Type values, and PtxUtils.Enum values are not System.Type values.
-// Even if PtxUtils.Enum values were actually enums it wouldn't help.  https://stackoverflow.com/a/1331811/7303994
+public class MessageEventGeneric<TContents> : MessageEvent
 {
-    private readonly Enum<EventType> _eventType;
-
-    protected MessageEventGeneric(Enum<EventType> eventType)
-    {
-        _eventType = eventType;
-        EventContentsType = typeof(ContentsType);
-    }
-
-    protected MessageEventGeneric(Enum<EventType> eventType, ContentsType eventContents)
-        : this(eventType)
-    {
-        Event = eventContents;
-    }
-
-    public sealed override Enum<EventType> EventType => _eventType;
+    private TContents _contents;
 
     /// <summary>
-    /// Strongly typed contents of the event message. See also <seealso cref="MessageEvent.Event"/>
+    /// ONLY FOR DESERIALIZATION
     /// </summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public ContentsType? EventContents
+    private MessageEventGeneric()
+        : base(Messages.EventType.UNKNOWN, default)
     {
-        get { return Event; }
+        _contents = default!;
+    }
+
+    public MessageEventGeneric(string eventType, TContents eventContents)
+        : base(eventType, eventContents)
+    {
+        _contents = eventContents;
+    }
+
+    public new TContents Event
+    {
+        get => _contents;
+        // When we update the strongly typed event variable,
+        // also update the weakly typed one owned by MessageEvent
+        set
+        {
+            _contents = value;
+            base.Event = _contents!;
+        }
+    }
+
+    public override string ToString()
+    {
+        return base.ToString() + $", Event = {Event}";
     }
 }

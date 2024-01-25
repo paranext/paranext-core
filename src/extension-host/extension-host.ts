@@ -7,7 +7,7 @@ import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
-import { getErrorMessage } from '@shared/utils/util';
+import { getErrorMessage } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { startProjectLookupService } from '@extension-host/services/project-lookup.service-host';
 import { registerCommand } from '@shared/services/command.service';

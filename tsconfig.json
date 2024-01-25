@@ -46,7 +46,8 @@
     "release/app/dist",
     ".erb/dll",
     "extensions",
-    "lib/papi-components",
+    "lib/platform-bible-react",
+    "lib/platform-bible-utils",
     "lib/papi-dts"
   ],
   "ts-node": {

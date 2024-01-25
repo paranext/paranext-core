@@ -2,10 +2,9 @@ import { VerseRef } from '@sillsdev/scripture';
 import type {
   DataProviderDataType,
   DataProviderSubscriberOptions,
-  PapiEvent,
-  Unsubscriber,
   IDataProvider,
 } from '@papi/core';
+import { PlatformEvent, Unsubscriber } from 'platform-bible-utils';
 
 declare module 'project-notes-data-provider' {
   export type ProjectNotesProviderDataTypes = {
@@ -227,7 +226,7 @@ declare module 'project-notes-data-provider' {
    */
   type ProjectNotesDataProviderExpanded = {
     /** Event emitted when this provider is disposed */
-    onDidDispose: PapiEvent<void>;
+    onDidDispose: PlatformEvent<void>;
     /** Get notes from the provider. `setNotes` is not available; please use `addNote` */
     getNotes(notesSelector: ProjectNotesSelector): Promise<ProjectNote[]>;
     /**

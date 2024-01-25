@@ -7,25 +7,21 @@ import { IExtension } from '@extension-host/extension-types/extension.interface'
 import * as nodeFS from '@node/services/node-file-system.service';
 import { FILE_PROTOCOL, getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
-import {
-  UnsubscriberAsync,
-  deserialize,
-  getModuleSimilarApiMessage,
-} from '@shared/utils/papi-util';
+import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import logger from '@shared/services/logger.service';
-import {
-  ARG_EXTENSION_DIRS,
-  ARG_EXTENSIONS,
-  getCommandLineArgumentsGroup,
-} from '@node/utils/command-line.util';
+import { getCommandLineArgumentsGroup, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
-import UnsubscriberAsyncList from '@shared/utils/unsubscriber-async-list';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
-import { debounce } from '@shared/utils/util';
+import {
+  debounce,
+  UnsubscriberAsync,
+  UnsubscriberAsyncList,
+  deserialize,
+} from 'platform-bible-utils';
 import LogError from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 
@@ -142,7 +138,7 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
  *    - In production: `resources/extensions`
  */
 const extensionRootDirectories: Uri[] = [
-  ...getCommandLineArgumentsGroup(ARG_EXTENSION_DIRS).map(
+  ...getCommandLineArgumentsGroup(COMMAND_LINE_ARGS.ExtensionsDir).map(
     (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
   ),
   installedExtensionsUri,
@@ -150,9 +146,9 @@ const extensionRootDirectories: Uri[] = [
 ];
 
 /** Individual extension folders and/or zips to load as provided by command-line `--extensions` */
-const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(ARG_EXTENSIONS).map(
-  (extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`,
-);
+const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(
+  COMMAND_LINE_ARGS.Extensions,
+).map((extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`);
 
 /**
  * Contents of `nodeFS.readDir()` for all parent folders of extensions. This is expected to be a

@@ -15,6 +15,13 @@ import {
 } from '@shared/data/internal-connection.model';
 import {
   aggregateUnsubscriberAsyncs,
+  UnsubscriberAsync,
+  getErrorMessage,
+  wait,
+  PlatformEventEmitter,
+  PlatformEvent,
+} from 'platform-bible-utils';
+import {
   ComplexRequest,
   ComplexResponse,
   createSafeRegisterFn,
@@ -22,15 +29,11 @@ import {
   RequestHandlerType,
   SerializedRequestType,
   serializeRequestType,
-  UnsubscriberAsync,
-} from '@shared/utils/papi-util';
-import { getErrorMessage, wait } from '@shared/utils/util';
+} from '@shared/utils/util';
 import * as connectionService from '@shared/services/connection.service';
 import { isClient, isRenderer, isServer } from '@shared/utils/internal-util';
 import logger from '@shared/services/logger.service';
 import PapiNetworkEventEmitter from '@shared/models/papi-network-event-emitter.model';
-import PapiEventEmitter from '@shared/models/papi-event-emitter.model';
-import { PapiEvent } from '@shared/models/papi-event.model';
 
 /** Prefix on requests that indicates that the request is related to server operations */
 const CATEGORY_SERVER = 'server';
@@ -232,10 +235,12 @@ const requestUnsafe = async <TParam extends Array<unknown>, TReturn>(
  *
  * @param requestType The type of request from which to unregister the handler
  * @param handler Function to unregister from running on requests
- * @returns True if successfully unregistered, false if registration not found or trying to
+ * @returns True if successfully unregistered, false if registration not found locally or trying to
  *   unregister a handler that is not local. Throws if provided handler is not the correct handler
- *   Likely will never need to be exported from this file. Just use registerRequestHandler, which
- *   returns a matching unsubscriber function that runs this.
+ *   or server rejects request to unregister the request for some reason.
+ *
+ *   This function likely will never need to be exported from this file. Just use
+ *   registerRequestHandler, which returns a matching unsubscriber function that runs this.
  */
 async function unregisterRequestHandlerUnsafe(
   requestType: SerializedRequestType,
@@ -261,18 +266,20 @@ async function unregisterRequestHandlerUnsafe(
     // directly which shouldn't happen. Is this egregious enough that we should throw? I guess...?
     throw new Error(`Handler to unsubscribe from ${requestType} does not match registered handler`);
 
-  // Check with the server to make sure we can unregister this registration
-  const remoteUnregisterSuccessful = isClient()
-    ? await requestUnsafe(
-        serializeRequestType(CATEGORY_SERVER, 'unregisterRequest'),
-        requestType,
-        connectionService.getClientId(),
-      )
-    : true;
-
-  if (!remoteUnregisterSuccessful)
-    // The server did not allow us to unregister
-    return false;
+  // If we're a client, check with the server to make sure we can unregister this registration
+  if (isClient()) {
+    try {
+      // Ask the server to unregister this registration. We are not checking the contents of the
+      // response for now because the contents of a successful response is always undefined.
+      // We can change this later if needed
+      await requestUnsafe(serializeRequestType(CATEGORY_SERVER, 'unregisterRequest'), requestType);
+    } catch (error) {
+      // The server did not allow us to unregister
+      throw new Error(
+        `Unregistering request handler for ${requestType} failed at the server! ${error}`,
+      );
+    }
+  }
 
   // We can unregister this handler! Remove it from the registrations
   requestRegistrations.delete(requestType);
@@ -327,11 +334,7 @@ async function registerRequestHandlerUnsafe(
   // Check with the server if it already has a handler for this requestType
   if (isClient()) {
     // If we are the client, try to register with the server because server has all registrations
-    await requestUnsafe(
-      serializeRequestType(CATEGORY_SERVER, 'registerRequest'),
-      requestType,
-      connectionService.getClientId(),
-    );
+    await requestUnsafe(serializeRequestType(CATEGORY_SERVER, 'registerRequest'), requestType);
   }
 
   // We have successfully checked that this is the first registration for this requestType. Set up
@@ -397,7 +400,7 @@ const createNetworkEventEmitterUnsafe = <T>(
   eventType: string,
   emitOnNetwork = emitEventOnNetworkUnsafe,
   register = true,
-): PapiEventEmitter<T> => {
+): PlatformEventEmitter<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
   if (existingEmitter) {
     if (existingEmitter.isRegistered)
@@ -405,7 +408,7 @@ const createNetworkEventEmitterUnsafe = <T>(
     existingEmitter.isRegistered = register;
     // Assert as emitter with this generic type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return existingEmitter.emitter as PapiEventEmitter<T>;
+    return existingEmitter.emitter as PlatformEventEmitter<T>;
   }
   const newNetworkEventEmitter = new PapiNetworkEventEmitter<T>(
     (event) => emitOnNetwork(eventType, event),
@@ -428,47 +431,66 @@ const createNetworkEventEmitterUnsafe = <T>(
  * Unregisters a client connection's request handler SERVER-ONLY. This should not be needed on the
  * client
  *
- * @param requestType The type of request on which to unregister the handler
- * @param clientId ClientId of the client who wants to unregister the handler
- * @returns True if successfully unregistered, false otherwise
+ * @param request An array of values, the first of which is the `SerializedRequestType` value that
+ *   defines what request type is being unregistered. Note that the value is an array even though we
+ *   only ever look at the first value because all requests come over the network with an array of
+ *   arguments. Technically if there is more than 1 argument passed to the function, values after
+ *   the first they might not be `SerializedRequestType` values.
+ * @returns `ComplexResponse` with `success` = True if successfully unregistered, otherwise False
+ *   along with an error message
  */
 const unregisterRemoteRequestHandler = async (
-  requestType: SerializedRequestType,
-  clientId: number,
-): Promise<boolean> => {
+  request: ComplexRequest<[SerializedRequestType]>,
+): Promise<ComplexResponse<undefined>> => {
+  const [requestType] = request.contents;
   const requestRegistration = requestRegistrations.get(requestType);
 
   if (!requestRegistration)
-    // The request isn't registered
-    return false;
+    return {
+      success: false,
+      errorMessage: `Cannot unregister ${requestType} because it was not registered`,
+    };
 
-  if (requestRegistration.registrationType === 'local' || requestRegistration.clientId !== clientId)
-    // The request handler is not theirs to unregister. Is this egregious enough that we should
-    // throw here?
-    return false;
+  if (
+    requestRegistration.registrationType === 'local' ||
+    requestRegistration.clientId !== request.senderId
+  )
+    return {
+      success: false,
+      errorMessage: `Cannot unregister ${requestType} unless the owner requests it`,
+    };
 
   // We can unregister this handler! Remove it from the registrations
   requestRegistrations.delete(requestType);
-  return true;
+  return {
+    contents: undefined,
+    success: true,
+  };
 };
 
 /**
  * Registers a client connection's request handler SERVER-ONLY. This should not be needed on the
  * client
  *
- * @param requestType The type of request on which to register the handler
- * @param clientId ClientId of the client who wants to register the handler
+ * @param request An array of values, the first of which is the `SerializedRequestType` value that
+ *   defines what request type is being registered. Note that the value is an array even though we
+ *   only ever look at the first value because all requests come over the network with an array of
+ *   arguments. Technically if there is more than 1 argument passed to the function, values after
+ *   the first they might not be `SerializedRequestType` values.
+ * @returns `ComplexResponse` with `success` = True if successfully registered, otherwise False
+ *   along with an error message
  */
 const registerRemoteRequestHandler = async (
-  requestType: SerializedRequestType,
-  clientId: number,
-): Promise<void> => {
-  // TODO: Consider a good way to expose senderId in this scenario instead of just passing it as an argument.
-  // Maybe create a registerRequestHandlerInternal function that uses InternalRequest and InternalResponse?
+  request: ComplexRequest<[SerializedRequestType]>,
+): Promise<ComplexResponse<undefined>> => {
+  const [requestType] = request.contents;
 
   // Check to see if there is already a handler for this requestType
   if (requestRegistrations.has(requestType)) {
-    throw new Error(`requestType ${requestType} already has a remote handler registered`);
+    return {
+      errorMessage: `requestType ${requestType} already has a remote handler registered`,
+      success: false,
+    };
   }
 
   validateRequestTypeFormatting(requestType);
@@ -478,8 +500,13 @@ const registerRemoteRequestHandler = async (
   requestRegistrations.set(requestType, {
     registrationType: 'remote',
     requestType,
-    clientId,
+    clientId: request.senderId,
   });
+
+  return {
+    contents: undefined,
+    success: true,
+  };
 };
 
 /**
@@ -504,7 +531,10 @@ const handleClientDisconnect = ({ clientId }: ClientDisconnectEvent) => {
   // Remove registrations for this clientId
   logger.info(`Client ${clientId} disconnected! Unregistering ${requestTypesToRemove.join(', ')}`);
   requestTypesToRemove.forEach((requestType) =>
-    unregisterRemoteRequestHandler(requestType, clientId),
+    unregisterRemoteRequestHandler({
+      contents: [requestType],
+      senderId: clientId,
+    }),
   );
 };
 
@@ -689,9 +719,13 @@ export const initialize = () => {
 
       const registrationUnsubscribers = Object.entries(serverRequestHandlers).map(
         ([requestType, handler]) =>
-          // Re-assert type after passing through `map`.
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          registerRequestHandlerUnsafe(requestType as SerializedRequestType, handler),
+          registerRequestHandlerUnsafe(
+            // Re-assert type after passing through `map`.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            requestType as SerializedRequestType,
+            handler,
+            RequestHandlerType.Complex,
+          ),
       );
       // Wait to successfully register all requests
       unsubscribeServerRequestHandlers = aggregateUnsubscriberAsyncs(
@@ -793,7 +827,7 @@ const emitEventOnNetwork = async <T>(eventType: string, event: T) => {
  * @param eventType Unique network event type for coordinating between connections
  * @returns Event emitter whose event works between connections
  */
-export const createNetworkEventEmitter = <T>(eventType: string): PapiEventEmitter<T> =>
+export const createNetworkEventEmitter = <T>(eventType: string): PlatformEventEmitter<T> =>
   // Note: running createNetworkEventEmitterUnsafe without initializing is not technically an
   // initialization problem. However, emitting a network event before initializing is. As such, we
   // create an emitter here without awaiting initialization, but we pass in emitEventOnNetwork,
@@ -806,17 +840,17 @@ export const createNetworkEventEmitter = <T>(eventType: string): PapiEventEmitte
  * @param eventType Unique network event type for coordinating between connections
  * @returns Event for the event type that runs the callback provided when the event is emitted
  */
-export const getNetworkEvent = <T>(eventType: string): PapiEvent<T> => {
+export const getNetworkEvent = <T>(eventType: string): PlatformEvent<T> => {
   const existingEmitter = networkEventEmitters.get(eventType);
   // Return event with the generic type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  if (existingEmitter) return existingEmitter.emitter.event as PapiEvent<T>;
+  if (existingEmitter) return existingEmitter.emitter.event as PlatformEvent<T>;
   // We didn't find an existing emitter, so create one but don't mark it as registered because you
   // can't emit the event from this function.
   // Return event with the generic type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return createNetworkEventEmitterUnsafe(eventType, emitEventOnNetwork, false)
-    .event as PapiEvent<T>;
+    .event as PlatformEvent<T>;
 };
 
 // #endregion

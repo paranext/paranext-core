@@ -1,5 +1,5 @@
 import { Tooltip } from '@mui/material';
-import './platform-tab-title.component.css';
+import './platform-tab-title.component.scss';
 import logger from '@shared/services/logger.service';
 
 type PlatformTabTitleProps = {

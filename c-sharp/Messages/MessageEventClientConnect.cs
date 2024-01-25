@@ -1,5 +1,13 @@
+using Paranext.DataProvider.JsonUtils;
+
 namespace Paranext.DataProvider.Messages;
 
+[JsonMessageDeserialization(
+    MessageField.MESSAGE_TYPE,
+    MessageType.EVENT,
+    MessageField.EVENT_TYPE,
+    Messages.EventType.CLIENT_CONNECT
+)]
 public sealed class MessageEventClientConnect
     : MessageEventGeneric<MessageEventClientConnectContents>
 {
@@ -7,10 +15,17 @@ public sealed class MessageEventClientConnect
     /// ONLY FOR DESERIALIZATION
     /// </summary>
     private MessageEventClientConnect()
-        : base(Messages.EventType.ClientConnect) { }
+        : base(Messages.EventType.CLIENT_CONNECT, null!) { }
 
-    public MessageEventClientConnect(MessageEventClientConnectContents eventContents)
-        : base(Messages.EventType.ClientConnect, eventContents) { }
+    public MessageEventClientConnect(int clientId, bool didReconnect)
+        : base(
+            Messages.EventType.CLIENT_CONNECT,
+            new MessageEventClientConnectContents
+            {
+                ClientId = clientId,
+                DidReconnect = didReconnect
+            }
+        ) { }
 }
 
 public sealed record MessageEventClientConnectContents
