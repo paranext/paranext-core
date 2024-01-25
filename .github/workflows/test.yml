@@ -53,8 +53,8 @@ jobs:
         if: ${{ matrix.os == 'macos-latest' }}
         run: npm install dmg-license
 
-      - name: dotnet build
-        run: npm run build:data-release
+      - name: Build
+        run: npm run build
 
       - name: run dotnet unit tests
         run: dotnet test c-sharp-tests/c-sharp-tests.csproj
