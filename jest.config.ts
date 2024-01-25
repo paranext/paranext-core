@@ -22,6 +22,7 @@ const config: Config = {
     '^platform-bible-react$': '<rootDir>/node_modules/platform-bible-react/dist/index.js',
     '^platform-bible-utils$': '<rootDir>/node_modules/platform-bible-utils/dist/index.js',
   },
+  setupFiles: ['./.erb/scripts/check-build-exists.ts'],
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {
     url: 'http://localhost/',
