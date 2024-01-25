@@ -38,40 +38,43 @@
     "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
-    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,csj}\" && npm run lint:scripts",
+    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
     "postinstall": "cd ../.. && npm install --ignore-scripts"
   },
   "peerDependencies": {
     "react": ">=18.2.0",
     "react-dom": ">=18.2.0"
   },
+  "dependencies": {
+    "@emotion/react": ">=11.11.3",
+    "@emotion/styled": ">=11.11.0",
+    "@mui/material": ">=5.15.6",
+    "platform-bible-utils": "file:../platform-bible-utils",
+    "react-data-grid": ">=7.0.0-beta.34"
+  },
   "devDependencies": {
-    "@mui/icons-material": "^5.13.7",
+    "@mui/icons-material": "^5.15.6",
     "@senojs/rollup-plugin-style-inject": "^0.2.3",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
-    "@typescript-eslint/eslint-plugin": "^5.62.0",
-    "@typescript-eslint/parser": "^5.62.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.1",
+    "@typescript-eslint/parser": "^6.19.1",
     "@vitejs/plugin-react": "^4.2.1",
     "dts-bundle-generator": "^9.2.4",
     "eslint": "^8.56.0",
-    "eslint-config-prettier": "^8.10.0",
-    "eslint-plugin-prettier": "^4.2.1",
-    "prettier": "^2.8.8",
-    "prettier-plugin-jsdoc": "^0.4.2",
-    "stylelint": "^15.11.0",
-    "stylelint-config-recommended": "^13.0.0",
-    "stylelint-config-sass-guidelines": "^10.0.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "prettier": "^3.2.4",
+    "prettier-plugin-jsdoc": "^1.3.0",
+    "stylelint": "^16.2.0",
+    "stylelint-config-recommended": "^14.0.0",
+    "stylelint-config-sass-guidelines": "^11.0.0",
     "ts-node": "^10.9.2",
     "tslib": "^2.6.2",
-    "typescript": "^5.1.6",
+    "typescript": "^5.3.3",
     "vite": "^4.5.2"
   },
-  "dependencies": {
-    "@emotion/react": ">=11.11.1",
-    "@emotion/styled": ">=11.11.0",
-    "@mui/material": ">=5.14.1",
-    "platform-bible-utils": "file:../platform-bible-utils",
-    "react-data-grid": ">=7.0.0-beta.34"
+  "volta": {
+    "extends": "../../package.json"
   }
 }
