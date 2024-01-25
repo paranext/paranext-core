@@ -1,4 +1,4 @@
-﻿import { Switch as MuiSwitch } from '@mui/material';
+import { Switch as MuiSwitch } from '@mui/material';
 import { ChangeEvent } from 'react';
 import './switch.component.css';
 
