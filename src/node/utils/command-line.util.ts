@@ -4,18 +4,16 @@ type CommandLineArgumentAliases = {
 };
 
 /**
- * Command Line Arguments Extensions - Command-line argument that specifies extra individual
- * extension folders ExtensionsDir - Command-line argument that specifies extra extension
- * directories in which to check all contained * folders for extensions LogLevel - Command-line
- * argument that specifies log level to use Options: 'error' | 'warn' | 'info' | 'verbose' |
- * 'debug'
+ * Command Line Arguments
  *
- * | 'silly'
- *
- * @see module:electron-log#LogLevel for up-to-date options
- * ResourcesPath - Command-line argument that specifies the path to the resources folder
- * Packaged - Command-line switch that specifies if the application is packaged.
- *  Only on extension-host
+ * - Extensions - Command-line argument that specifies extra individual extension folders
+ * - ExtensionsDir - Command-line argument that specifies extra extension directories in which to
+ *   check all contained folders for extensions
+ * - LogLevel - Command-line argument that specifies log level to use Options: 'error' | 'warn' |
+ *   'info' | 'verbose' | 'debug'
+ * - ResourcesPath - Command-line argument that specifies the path to the resources folder
+ * - Packaged - Command-line switch that specifies if the application is packaged. Only on
+ *   extension-host
  */
 export enum COMMAND_LINE_ARGS {
   Extensions = 'extensions',
@@ -25,6 +23,10 @@ export enum COMMAND_LINE_ARGS {
   Packaged = 'packaged',
 }
 
+/**
+ * Aliases for each command line argument mapped from argument type to an array of aliases for that
+ * argument type
+ */
 export const extensions: CommandLineArgumentAliases = {
   [COMMAND_LINE_ARGS.Extensions]: ['--extensions', '--extension', '-e'],
   [COMMAND_LINE_ARGS.ExtensionsDir]: ['--extensionDirs', '--extensionDir', '-d'],
@@ -96,27 +98,30 @@ export function getCommandLineArgumentsGroup(
 /**
  * Get a command-line argument's argument. If the argument is not present, return `undefined`
  *
- * @param argName Name of the command-line argument to search for
+ * @param argName Name and aliases of the command-line argument to search for
  * @returns String of the command-line arg provided
  *
  *   Ex: '--thing ben'
  *
  *   - `getCommandLineArgument('--thing')` returns `'ben'`
  */
-export function getCommandLineArgument(argName: string) {
+export function getCommandLineArgument(argName: COMMAND_LINE_ARGS) {
   // TODO: If argName has two hyphens, check for single hyphen and first char + capitals if
   // two-hyphen version does not exist. eg --extensionDirs -> -ed
-  const argIndex = process.argv.indexOf(argName);
+  const argNames: string[] = extensions[argName];
+  const argIndices: number[] = argNames.map((name) => process.argv.indexOf(name));
 
-  if (
-    // Not found
-    argIndex < 0 ||
-    // Last argument (the arg name was found, but there is no actual argument provided)
-    argIndex >= process.argv.length - 1 ||
-    // If the next word is also an arg name, there was no actual argument provided
-    findNextCommandLineArgumentIndex(argIndex) === argIndex + 1
-  )
-    return undefined;
+  const argIndex = argIndices.find(
+    (index) =>
+      // Will be negative if not found
+      (index >= 0 &&
+        //  Ensuring it is not the last argument (the arg name was found, but there is no actual argument provided)
+        index < process.argv.length - 1) ||
+      // If the next word is also an arg name, there was no actual argument provided
+      findNextCommandLineArgumentIndex(index) === index + 1,
+  );
+
+  if (argIndex === undefined) return undefined;
 
   return process.argv[argIndex + 1];
 }
