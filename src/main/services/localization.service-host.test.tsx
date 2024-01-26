@@ -87,17 +87,15 @@ test('Error returned with localizeKeys and incorrect language code', async () =>
 
 test('Default language is english when no language provided with localizeKey', async () => {
   const LOCALIZE_KEY = 'submitButton';
-  const response = await testingLocalizationService.localizationService.getLocalizedString(
-    LOCALIZE_KEY,
-  );
+  const response =
+    await testingLocalizationService.localizationService.getLocalizedString(LOCALIZE_KEY);
   await expect(response).toEqual('Submit');
 });
 
 test('Default language is english when no language provided with localizeKeys', async () => {
   const LOCALIZE_KEYS = ['submitButton', 'some_localization_key'];
-  const response = await testingLocalizationService.localizationService.getLocalizedStrings(
-    LOCALIZE_KEYS,
-  );
+  const response =
+    await testingLocalizationService.localizationService.getLocalizedStrings(LOCALIZE_KEYS);
   expect(response).toEqual({
     some_localization_key: 'This is the English text for %some_localization_key%.',
     submitButton: 'Submit',

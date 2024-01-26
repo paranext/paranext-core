@@ -10,7 +10,6 @@ module.exports = {
   ],
   rules: {
     'color-named': null,
-    'function-parentheses-space-inside': null,
     'max-nesting-depth': 2,
     'no-descending-specificity': null,
     'selector-max-compound-selectors': 4,
