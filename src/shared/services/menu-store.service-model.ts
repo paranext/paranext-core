@@ -7,6 +7,7 @@ import {
 import { DataProviderDataType, DataProviderUpdateInstructions } from './papi-core.service';
 
 // Data Type to initialize data provider engine with
+// TODO: Selector to change
 export type MenuStoreDataTypes = {
   MenuData: DataProviderDataType<string, MenuContent, MenuContent>;
 };
@@ -20,20 +21,34 @@ export interface MenuStoreServiceType {
   /**
    * Look up menu data for specific menu key
    *
-   * @param menuType String key that corresponds to a specific menu
+   * @param menuType String key that corresponds to a menu
    * @returns Menu content object
    */
-  getMenuData: (menuType: string) => Promise<MenuContent>;
+  getMenuData: (menuType: string) => Promise<MenuContent>; // When I change this one the return fails
   /**
    * Set the menuContent of a specific menuType
    *
-   * @param menuType String key that corresponds to a specific menu
+   * @param menuType String key that corresponds to a menu
+   * @param menuContent Content to set for specific menuType
    * @returns Unsubscriber function
    */
   setMenuData: (
     menuType: string,
     menuContent: MenuContent,
   ) => Promise<DataProviderUpdateInstructions<MenuStoreDataTypes>>;
+  /**
+   * Subscribe to run a callback function when the "raw" USFM data is changed
+   *
+   * @param menuType Tells the provider what changes to listen for
+   * @param callback Function to run with the updated menuContent for this selector
+   * @param options Various options to adjust how the subscriber emits updates
+   * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+   */
+  // subscribeMenuData(
+  //   menuType: string,
+  //   callback: (menuContent: MenuContent) => void,
+  //   options?: DataProviderSubscriberOptions,
+  // ): Unsubscriber;
 }
 
 export type MenuData = {
