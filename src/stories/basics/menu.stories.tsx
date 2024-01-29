@@ -13,7 +13,7 @@ export default meta;
 
 type Story = StoryObj<typeof SimpleMenu>;
 
-export const Default: Story = {
+export const DefaultNoMenuItems: Story = {
   args: {},
 };
 
@@ -54,5 +54,5 @@ export const Paratext: Story = {
 };
 
 export const ParatextBright: Story = {
-  args: GetMenuDefinition('paratext'),
+  args: GetMenuDefinition('paratext bright'),
 };

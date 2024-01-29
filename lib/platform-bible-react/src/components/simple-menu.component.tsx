@@ -19,20 +19,18 @@ export type MenuProps = {
 export default function SimpleMenu({ commandHandler, className, items, id }: MenuProps) {
   return (
     <div id={id} className={`papi-menu ${className ?? ''}`}>
-      <>
-        {items.map((menuItem, index) => (
-          <MenuItem
-            // By design, menu items will never get reordered. So the index works as a key.
-            // eslint-disable-next-line react/no-array-index-key
-            key={index}
-            className={`papi-menu-item ${menuItem.className}`}
-            onClick={() => {
-              commandHandler(menuItem);
-            }}
-            {...menuItem}
-          />
-        ))}
-      </>
+      {items?.map((menuItem, index) => (
+        <MenuItem
+          // By design, menu items will never get reordered. So the index works as a key.
+          // eslint-disable-next-line react/no-array-index-key
+          key={index}
+          className={`papi-menu-item ${menuItem.className}`}
+          onClick={() => {
+            commandHandler(menuItem);
+          }}
+          {...menuItem}
+        />
+      ))}
     </div>
   );
 }

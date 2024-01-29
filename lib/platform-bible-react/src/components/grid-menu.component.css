@@ -1,17 +1,19 @@
 .papi-multi-column-menu {
-  background-color: lightgray;
+  background-color: rgb(222, 222, 222);
   display: flex;
   flex-direction: column;
   padding-left: 3px;
   padding-right: 3px;
 }
 
-.papi-menu {
-  background-color: rgb(145, 145, 145);
+.papi-menu-column {
   font-size: 11pt;
   font-weight: 600;
-  margin-top: 1px;
   padding-bottom: 2px;
+}
+
+.papi-menu-column-header {
+  background-color: rgb(181, 181, 181);
   padding-left: 24px;
-  padding-top: 2px;
+  margin-top: 0;
 }

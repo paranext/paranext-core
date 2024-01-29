@@ -14,6 +14,8 @@ export type {
   ComboBoxOption,
   ComboBoxValue,
 } from './components/combo-box.component';
+export { default as SimpleMenu } from './components/simple-menu.component';
+export type { MenuProps } from './components/simple-menu.component';
 export { default as GridMenu } from './components/grid-menu.component';
 export type {
   MenuColumnInfo as MenuColumn,

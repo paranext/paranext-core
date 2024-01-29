@@ -201,6 +201,15 @@ export type MenuItemInfo = Command & {
 	focusVisibleClassName?: string;
 };
 export declare function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
+export type MenuProps = {
+	/** Optional unique identifier */
+	id?: string;
+	items: MenuItemInfo[];
+	commandHandler: CommandHandler;
+	/** Additional css classes to help with unique styling of the menu */
+	className?: string;
+};
+export function SimpleMenu({ commandHandler, className, items, id }: MenuProps): import("react/jsx-runtime").JSX.Element;
 type MenuColumnInfo = {
 	/** The name of the menu (displayed as the column header). */
 	name: string;
@@ -218,16 +227,6 @@ export type GridMenuProps = GridMenuInfo & {
 	className?: string;
 };
 export function GridMenu({ commandHandler, className, columns, id }: GridMenuProps): import("react/jsx-runtime").JSX.Element;
-export type MenuProps = {
-	/** Optional unique identifier */
-	id?: string;
-	/** The items to display */
-	items: MenuItemInfo[];
-	commandHandler: CommandHandler;
-	/** Additional css classes to help with unique styling of the menu */
-	className?: string;
-};
-export function SimpleMenu({items : propsItems, commandHandler, className, id }: MenuProps): import("react/jsx-runtime").JSX.Element;
 export type IconButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
