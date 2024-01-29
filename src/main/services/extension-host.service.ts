@@ -1,9 +1,9 @@
-/** Service that runs the extension-host process from the main file */
+﻿/** Service that runs the extension-host process from the main file */
 
 import {
   getCommandLineArgumentsGroup,
   COMMAND_LINE_ARGS,
-  extensions,
+  commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
 import logger, { formatLog, WARN_TAG } from '@shared/services/logger.service';
 import { waitForDuration } from 'platform-bible-utils';
@@ -76,9 +76,9 @@ async function startExtensionHost() {
   // In development, spawn nodemon to watch the extension-host
   /** Arguments that will be passed to the extension host no matter how we start the process */
   const sharedArgs = [
-    extensions[COMMAND_LINE_ARGS.ResourcesPath][0],
+    commandLineArgumentsAliases[COMMAND_LINE_ARGS.ResourcesPath][0],
     globalThis.resourcesPath,
-    extensions[COMMAND_LINE_ARGS.LogLevel][0],
+    commandLineArgumentsAliases[COMMAND_LINE_ARGS.LogLevel][0],
     globalThis.logLevel,
     ...getCommandLineArgumentsToForward(),
   ];
@@ -86,7 +86,7 @@ async function startExtensionHost() {
   if (app.isPackaged) {
     extensionHost = fork(
       path.join(__dirname, '../extension-host/extension-host.js'),
-      [extensions[COMMAND_LINE_ARGS.Packaged][0], ...sharedArgs],
+      [commandLineArgumentsAliases[COMMAND_LINE_ARGS.Packaged][0], ...sharedArgs],
       {
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       },

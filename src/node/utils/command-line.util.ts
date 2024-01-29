@@ -1,4 +1,4 @@
-/** All command line arguments mapped from argument type to array of aliases for the argument */
+﻿/** All command line arguments mapped from argument type to array of aliases for the argument */
 type CommandLineArgumentAliases = {
   [argument in COMMAND_LINE_ARGS]: string[];
 };
@@ -27,7 +27,7 @@ export enum COMMAND_LINE_ARGS {
  * Aliases for each command line argument mapped from argument type to an array of aliases for that
  * argument type
  */
-export const extensions: CommandLineArgumentAliases = {
+export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
   [COMMAND_LINE_ARGS.Extensions]: ['--extensions', '--extension', '-e'],
   [COMMAND_LINE_ARGS.ExtensionsDir]: ['--extensionDirs', '--extensionDir', '-d'],
   [COMMAND_LINE_ARGS.LogLevel]: ['--logLevels', '--logLevel', '-l'],
@@ -73,7 +73,7 @@ export function getCommandLineArgumentsGroup(
   argName: COMMAND_LINE_ARGS,
   shouldIncludeArgName = false,
 ): string[] {
-  const argNames: string[] = extensions[argName];
+  const argNames: string[] = commandLineArgumentsAliases[argName];
 
   const argumentsGroup: string[] = [];
   argNames
@@ -108,7 +108,7 @@ export function getCommandLineArgumentsGroup(
 export function getCommandLineArgument(argName: COMMAND_LINE_ARGS) {
   // TODO: If argName has two hyphens, check for single hyphen and first char + capitals if
   // two-hyphen version does not exist. eg --extensionDirs -> -ed
-  const argNames: string[] = extensions[argName];
+  const argNames: string[] = commandLineArgumentsAliases[argName];
   const argIndices: number[] = argNames.map((name) => process.argv.indexOf(name));
 
   const argIndex = argIndices.find(
@@ -118,7 +118,7 @@ export function getCommandLineArgument(argName: COMMAND_LINE_ARGS) {
         //  Ensuring it is not the last argument (the arg name was found, but there is no actual argument provided)
         index < process.argv.length - 1) ||
       // If the next word is also an arg name, there was no actual argument provided
-      findNextCommandLineArgumentIndex(index) === index + 1,
+      findNextCommandLineArgumentIndex(index) !== index + 1,
   );
 
   if (argIndex === undefined) return undefined;
@@ -138,6 +138,11 @@ export function getCommandLineArgument(argName: COMMAND_LINE_ARGS) {
  *
  *   - `getCommandLineSwitch('--thing')` returns `true`
  */
-export function getCommandLineSwitch(argName: string) {
-  return process.argv.includes(argName);
+export function getCommandLineSwitch(argName: COMMAND_LINE_ARGS) {
+  const argNames: string[] = commandLineArgumentsAliases[argName];
+  let found = false;
+  argNames.forEach((alias) => {
+    found ||= process.argv.includes(alias);
+  });
+  return found;
 }

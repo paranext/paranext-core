@@ -1,10 +1,9 @@
-/** Module to set up globalThis and polyfills in the extension host */
+﻿/** Module to set up globalThis and polyfills in the extension host */
 
 import { LogLevel } from 'electron-log';
 import polyfillLocalStorage from '@node/polyfills/local-storage.polyfill';
 import {
   COMMAND_LINE_ARGS,
-  extensions,
   getCommandLineArgument,
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
@@ -12,7 +11,7 @@ import { ProcessType } from '@shared/global-this.model';
 
 // #region command-line arguments
 
-const isPackaged = getCommandLineSwitch(extensions[COMMAND_LINE_ARGS.Packaged][0]);
+const isPackaged = getCommandLineSwitch(COMMAND_LINE_ARGS.Packaged);
 const resourcesPath = getCommandLineArgument(COMMAND_LINE_ARGS.ResourcesPath) ?? 'resources://';
 const logLevel =
   // Assert the extracted type.
