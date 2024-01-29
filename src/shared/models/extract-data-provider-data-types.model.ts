@@ -10,16 +10,15 @@ import DataProviderInternal from '@shared/models/data-provider.model';
  * `IDataProviderEngine` along with the `papi-shared-types` extensible interfaces `DataProviders`
  * and `DisposableDataProviders`
  */
-type ExtractDataProviderDataTypes<TDataProvider> = TDataProvider extends IDataProvider<
-  infer TDataProviderDataTypes
->
-  ? TDataProviderDataTypes
-  : TDataProvider extends DataProviderInternal<infer TDataProviderDataTypes>
-  ? TDataProviderDataTypes
-  : TDataProvider extends IDisposableDataProvider<infer TDataProviderDataTypes>
-  ? TDataProviderDataTypes
-  : TDataProvider extends IDataProviderEngine<infer TDataProviderDataTypes>
-  ? TDataProviderDataTypes
-  : never;
+type ExtractDataProviderDataTypes<TDataProvider> =
+  TDataProvider extends IDataProvider<infer TDataProviderDataTypes>
+    ? TDataProviderDataTypes
+    : TDataProvider extends DataProviderInternal<infer TDataProviderDataTypes>
+      ? TDataProviderDataTypes
+      : TDataProvider extends IDisposableDataProvider<infer TDataProviderDataTypes>
+        ? TDataProviderDataTypes
+        : TDataProvider extends IDataProviderEngine<infer TDataProviderDataTypes>
+          ? TDataProviderDataTypes
+          : never;
 
 export default ExtractDataProviderDataTypes;

@@ -158,13 +158,12 @@ export type WebViewDefinition =
  * layouts. Could have as little as the type and ID. WebView providers load these into actual
  * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
  */
-export type SavedWebViewDefinition =
-  | (
-      | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles' | 'allowScripts'>>
-      | Partial<Omit<WebViewDefinitionHtml, 'content' | 'allowScripts'>>
-      | Partial<Omit<WebViewDefinitionURL, 'content' | 'allowScripts'>>
-    ) &
-      Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+export type SavedWebViewDefinition = (
+  | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles' | 'allowScripts'>>
+  | Partial<Omit<WebViewDefinitionHtml, 'content' | 'allowScripts'>>
+  | Partial<Omit<WebViewDefinitionURL, 'content' | 'allowScripts'>>
+) &
+  Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
 
 /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
 // To allow more properties to be updated, add them in

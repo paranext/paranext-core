@@ -3,7 +3,7 @@ import detectPort from 'detect-port';
 
 const port = process.env.PORT || '1212';
 
-detectPort(port, (err, availablePort) => {
+detectPort(port, (_err, availablePort) => {
   if (port !== String(availablePort)) {
     throw new Error(
       chalk.whiteBright.bgRed.bold(

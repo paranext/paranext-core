@@ -1,4 +1,4 @@
-﻿import { TextField as MuiTextField } from '@mui/material';
+import { TextField as MuiTextField } from '@mui/material';
 import { ChangeEventHandler, FocusEventHandler } from 'react';
 
 export type TextFieldProps = {
