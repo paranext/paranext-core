@@ -114,9 +114,9 @@ export function getCommandLineArgument(argName: COMMAND_LINE_ARGS) {
   const argIndex = argIndices.find(
     (index) =>
       // Will be negative if not found
-      (index >= 0 &&
-        //  Ensuring it is not the last argument (the arg name was found, but there is no actual argument provided)
-        index < process.argv.length - 1) ||
+      index >= 0 &&
+      //  Ensuring it is not the last argument (the arg name was found, but there is no actual argument provided)
+      index < process.argv.length - 1 &&
       // If the next word is also an arg name, there was no actual argument provided
       findNextCommandLineArgumentIndex(index) !== index + 1,
   );
@@ -140,9 +140,5 @@ export function getCommandLineArgument(argName: COMMAND_LINE_ARGS) {
  */
 export function getCommandLineSwitch(argName: COMMAND_LINE_ARGS) {
   const argNames: string[] = commandLineArgumentsAliases[argName];
-  let found = false;
-  argNames.forEach((alias) => {
-    found ||= process.argv.includes(alias);
-  });
-  return found;
+  return argNames.some((alias) => process.argv.includes(alias));
 }
