@@ -2105,17 +2105,16 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
    * `IDataProviderEngine` along with the `papi-shared-types` extensible interfaces `DataProviders`
    * and `DisposableDataProviders`
    */
-  type ExtractDataProviderDataTypes<TDataProvider> = TDataProvider extends IDataProvider<
-    infer TDataProviderDataTypes
-  >
-    ? TDataProviderDataTypes
-    : TDataProvider extends DataProviderInternal<infer TDataProviderDataTypes>
-    ? TDataProviderDataTypes
-    : TDataProvider extends IDisposableDataProvider<infer TDataProviderDataTypes>
-    ? TDataProviderDataTypes
-    : TDataProvider extends IDataProviderEngine<infer TDataProviderDataTypes>
-    ? TDataProviderDataTypes
-    : never;
+  type ExtractDataProviderDataTypes<TDataProvider> =
+    TDataProvider extends IDataProvider<infer TDataProviderDataTypes>
+      ? TDataProviderDataTypes
+      : TDataProvider extends DataProviderInternal<infer TDataProviderDataTypes>
+        ? TDataProviderDataTypes
+        : TDataProvider extends IDisposableDataProvider<infer TDataProviderDataTypes>
+          ? TDataProviderDataTypes
+          : TDataProvider extends IDataProviderEngine<infer TDataProviderDataTypes>
+            ? TDataProviderDataTypes
+            : never;
   export default ExtractDataProviderDataTypes;
 }
 declare module 'papi-shared-types' {
@@ -3066,8 +3065,8 @@ declare module 'shared/data/file-system.model' {
 }
 declare module 'node/utils/util' {
   import { Uri } from 'shared/data/file-system.model';
-  export const FILE_PROTOCOL: string;
-  export const RESOURCES_PROTOCOL: string;
+  export const FILE_PROTOCOL = 'file://';
+  export const RESOURCES_PROTOCOL = 'resources://';
   export function resolveHtmlPath(htmlFileName: string): string;
   /**
    * Gets the platform-specific user Platform.Bible folder for this application

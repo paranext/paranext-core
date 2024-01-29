@@ -98,9 +98,9 @@ module.exports = {
     globalThis: 'readonly',
   },
   parserOptions: {
-    ecmaVersion: 2020,
+    ecmaVersion: 2022,
     sourceType: 'module',
-    project: './tsconfig.json',
+    project: './tsconfig.lint.json',
     tsconfigRootDir: __dirname,
     createDefaultProgram: true,
   },

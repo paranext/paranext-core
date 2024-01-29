@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig",
+  "include": [
+    ".eslintrc.js",
+    "*.ts",
+    ".erb/configs",
+    ".erb/mocks",
+    ".erb/scripts",
+    ".storybook/*.ts",
+    "src",
+    "assets"
+  ]
+}

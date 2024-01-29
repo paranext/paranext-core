@@ -132,9 +132,8 @@ export async function get<ProjectType extends ProjectTypes>(
       `Project type for project ${projectId} is ${projectTypeFromMetadata}, but 'papi.projectDataProviders.get' was run with mismatching projectType ${projectType}. This could cause issues`,
     );
   const pdpFactoryId: string = getProjectDataProviderFactoryId(projectTypeFromMetadata);
-  const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<ProjectType>>(
-    pdpFactoryId,
-  );
+  const pdpFactory =
+    await networkObjectService.get<ProjectDataProviderFactory<ProjectType>>(pdpFactoryId);
   if (!pdpFactory)
     throw new Error(`Cannot create project data providers of type ${projectTypeFromMetadata}`);
 
