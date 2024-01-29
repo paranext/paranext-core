@@ -47,6 +47,88 @@ export declare class AsyncVariable<T> {
 	/** Prevent any further updates to this variable */
 	private complete;
 }
+export type JsonDocumentLike = {
+	[key: string]: unknown;
+};
+/**
+ * Base class for any code that wants to compose JSON documents (in the form of JS objects) together
+ * into a single output document.
+ */
+export declare abstract class DocumentCombinerEngine {
+	protected startingDocument: JsonDocumentLike;
+	protected readonly contributions: Map<string, JsonDocumentLike>;
+	protected latestOutput: JsonDocumentLike | undefined;
+	protected readonly copyDocuments: boolean;
+	/**
+	 * Create a DocumentCombinerEngine instance
+	 *
+	 * @param startingDocument This is the first document that will be used when composing the output
+	 * @param copyDocuments If true, this instance will perform a deep copy of all provided documents
+	 *   before composing the output. If false, then changes made to provided documents after they are
+	 *   contributed will be reflected in the next time output is composed.
+	 */
+	protected constructor(startingDocument: JsonDocumentLike, copyDocuments: boolean);
+	/** Gets the latest output of all composed documents */
+	get output(): JsonDocumentLike | undefined;
+	/**
+	 * Update the starting document for composition process
+	 *
+	 * @param startingDocument Base JSON document/JS object that all other documents are added to
+	 * @returns Recalculated output document given the new starting state and existing other documents
+	 */
+	updateBaseDocument(startingDocument: JsonDocumentLike): JsonDocumentLike | undefined;
+	/**
+	 * Add or update one of the contribution documents for the composition process
+	 *
+	 * @param documentName Name of the contributed document to combine
+	 * @param document Content of the contributed document to combine
+	 * @returns Recalculated output document given the new or updated contribution and existing other
+	 *   documents
+	 */
+	addOrUpdateContribution(documentName: string, document: JsonDocumentLike): JsonDocumentLike | undefined;
+	/**
+	 * Delete one of the contribution documents for the composition process
+	 *
+	 * @param documentName Name of the contributed document to delete
+	 * @returns Recalculated output document given the remaining other documents
+	 */
+	deleteContribution(documentName: string): object | undefined;
+	/**
+	 * Run the document composition process given the starting document and all contributions. Throws
+	 * if the output document fails to validate properly.
+	 *
+	 * @returns Recalculated output document given the starting and contributed documents
+	 */
+	rebuild(): JsonDocumentLike | undefined;
+	/**
+	 * Recursively merge the properties of one object (copyFrom) into another (startingPoint). Throws
+	 * if copyFrom would overwrite values already existing in startingPoint.
+	 *
+	 * @param startingPoint Object that is the starting point for the return value
+	 * @param copyFrom Object whose values are copied into the return value
+	 * @returns Object that is the combination of the two documents
+	 */
+	private mergeObjects;
+	/**
+	 * Throw an error if the provided document is not a valid starting document.
+	 *
+	 * @param startingDocument Base JSON document/JS object that all other documents are added to
+	 */
+	protected abstract validateStartingDocument(startingDocument: JsonDocumentLike): void;
+	/**
+	 * Throw an error if the provided document is not a valid contribution document.
+	 *
+	 * @param documentName Name of the contributed document to combine
+	 * @param document Content of the contributed document to combine
+	 */
+	protected abstract validateContribution(documentName: string, document: JsonDocumentLike): void;
+	/**
+	 * Throw an error if the provided output is not valid.
+	 *
+	 * @param output Final output document that could potentially be returned callers
+	 */
+	protected abstract validateOutput(output: JsonDocumentLike): void;
+}
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
 /**

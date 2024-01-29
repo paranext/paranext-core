@@ -39,7 +39,7 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
-    "postinstall": "cd ../.. && npm install --ignore-scripts"
+    "postinstall": "echo platform-bible-react postinstall"
   },
   "peerDependencies": {
     "react": ">=18.2.0",
