@@ -42,19 +42,25 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-// No-type-assertion: We are calling stuff off of dataProvider which doesn't exist when we create this proxy.
-// So we use an empty object as a placeholder while we get dataProvider.
-// No-unused-vars: Using someone else's api and we don't want to use target.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars, no-type-assertion/no-type-assertion
-const menuStoreService: MenuStoreServiceType = new Proxy({} as MenuStoreServiceType, {
-  get(_target, methodName): (typeof dataProvider)[keyof typeof dataProvider] {
-    return async (...args: unknown[]) => {
-      await initialize();
-      // The args here are the parameters for the method specified
-      // @ts-expect-error 2556
-      return dataProvider[methodName](...args);
-    };
-  },
+// TODO: Finish/check and move to platform-bible-utils, args spread operator line 55
+function createSyncProxyForAsyncObject<T extends object>(
+  getObject: (args?: unknown[]) => Promise<T>,
+): T {
+  // We are calling stuff off of an object which doesn't exist when we create this proxy.
+  // So we use an empty object as a placeholder while we get the object.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return new Proxy({} as T, {
+    get() {
+      return async (...args: unknown[]) => {
+        await getObject(args);
+      };
+    },
+  });
+}
+
+const menuStoreService = createSyncProxyForAsyncObject<MenuStoreServiceType>(async () => {
+  await initialize();
+  return dataProvider;
 });
 
 export default menuStoreService;
