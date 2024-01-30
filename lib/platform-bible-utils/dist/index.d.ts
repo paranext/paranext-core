@@ -101,15 +101,6 @@ export declare abstract class DocumentCombinerEngine {
 	 */
 	rebuild(): JsonDocumentLike | undefined;
 	/**
-	 * Recursively merge the properties of one object (copyFrom) into another (startingPoint). Throws
-	 * if copyFrom would overwrite values already existing in startingPoint.
-	 *
-	 * @param startingPoint Object that is the starting point for the return value
-	 * @param copyFrom Object whose values are copied into the return value
-	 * @returns Object that is the combination of the two documents
-	 */
-	private mergeObjects;
-	/**
 	 * Throw an error if the provided document is not a valid starting document.
 	 *
 	 * @param startingDocument Base JSON document/JS object that all other documents are added to
