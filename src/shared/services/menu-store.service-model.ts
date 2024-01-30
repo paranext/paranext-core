@@ -4,20 +4,33 @@ import {
   ReferencedItem,
   SingleColumnMenu,
 } from '@shared/schemas/menu-data.types';
-import { DataProviderDataType, DataProviderUpdateInstructions } from './papi-core.service';
+import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
+import {
+  DataProviderDataType,
+  DataProviderSubscriberOptions,
+  DataProviderUpdateInstructions,
+} from './papi-core.service';
+
+export const menuStoreServiceProviderName = 'platform.menuStoreServiceDataProvider';
+export const menuStoreServiceObjectToProxy = { name: menuStoreServiceProviderName };
 
 // Data Type to initialize data provider engine with
-// TODO: Selector to change
 export type MenuStoreDataTypes = {
   MenuData: DataProviderDataType<string, MenuContent, MenuContent>;
 };
+
+declare module 'papi-shared-types' {
+  export interface DataProviders {
+    [menuStoreServiceProviderName]: MenuStoreServiceType;
+  }
+}
 
 /**
  * JSDOC SOURCE menuStoreService
  *
  * Provides Menu data for specific menu
  */
-export interface MenuStoreServiceType {
+export type MenuStoreServiceType = {
   /**
    * Look up menu data for specific menu key
    *
@@ -37,27 +50,26 @@ export interface MenuStoreServiceType {
     menuContent: MenuContent,
   ) => Promise<DataProviderUpdateInstructions<MenuStoreDataTypes>>;
   /**
-   * Subscribe to run a callback function when the "raw" USFM data is changed
+   * Subscribe to run a callback function when the menu data is changed
    *
    * @param menuType Tells the provider what changes to listen for
    * @param callback Function to run with the updated menuContent for this selector
    * @param options Various options to adjust how the subscriber emits updates
    * @returns Unsubscriber function (run to unsubscribe from listening for updates)
    */
-  // subscribeMenuData(
-  //   menuType: string,
-  //   callback: (menuContent: MenuContent) => void,
-  //   options?: DataProviderSubscriberOptions,
-  // ): Unsubscriber;
-}
+  subscribeMenuData: (
+    menuType: string,
+    callback: (menuContent: MenuContent) => void,
+    options?: DataProviderSubscriberOptions,
+  ) => Promise<UnsubscriberAsync>;
+} & OnDidDispose &
+  typeof menuStoreServiceObjectToProxy;
+
+// TODO: Get types from Matt's PR
 
 export type MenuData = {
   [menuType: string]: MenuContent;
 };
-
-// I believe using PlatformBibleMenus instead of MenuData is the ideal implementation,
-// but we cannot use this yet because we are leaving menuType as a string for this issue.
-// export type MenuData = PlatformBibleMenus;
 
 export type MenuContent =
   | MultiColumnMenu
@@ -65,5 +77,3 @@ export type MenuContent =
   | {
       [k: ReferencedItem]: MenusForOneWebView;
     };
-
-export const menuStoreServiceProviderName = 'MenuStoreServiceDataProvider';

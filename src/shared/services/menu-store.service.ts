@@ -1,24 +1,9 @@
+import dataProviderService from '@shared/services/data-provider.service';
 import {
-  MenuStoreDataProviderEngine,
-  getMenuDataObject,
-} from '@extension-host/services/menu-store.service-host';
-import { MenuStoreServiceType, menuStoreServiceProviderName } from './menu-store.service-model';
-import { registerEngineByType } from './data-provider.service';
-
-/**
- * TODO: Similar proxy-ing as in the service-host, create utility function to use in both places
- * that accepts what you want to proxy over and a handler. Notes from TJ: Maybe one way to do the
- * utility function is to have just one input that is an async function that gets the object in
- * question, like this:
- *
- *     function createSyncProxyForAsyncObject<T extends object>(getObject: () => Promise<T>): T;
- *
- * So basically, inside the proxy, you just call and await `getObject`and then run the method on
- * that object instead of running an await function and then calling something on the object. Then
- * using it would look like:
- *
- *     const menuStoreService = createSyncProxyForAsyncObject<MenuStoreService>(async () => { await initialize(); return dataProvider; });`.
- */
+  MenuStoreServiceType,
+  menuStoreServiceObjectToProxy,
+  menuStoreServiceProviderName,
+} from './menu-store.service-model';
 
 let dataProvider: MenuStoreServiceType;
 let initializationPromise: Promise<void>;
@@ -27,10 +12,9 @@ async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          dataProvider = await registerEngineByType(
-            menuStoreServiceProviderName,
-            new MenuStoreDataProviderEngine(await getMenuDataObject()),
-          );
+          const provider = await dataProviderService.get(menuStoreServiceProviderName);
+          if (!provider) throw new Error('Menu service data provider undefined');
+          dataProvider = provider;
           resolve();
         } catch (error) {
           reject(error);
@@ -42,17 +26,24 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-// TODO: Finish/check and move to platform-bible-utils, args spread operator line 55
-function createSyncProxyForAsyncObject<T extends object>(
+// TODO: Finish/check and move to platform-bible-utils
+export function createSyncProxyForAsyncObject<T extends object>(
   getObject: (args?: unknown[]) => Promise<T>,
+  objectToProxy = {},
 ): T {
   // We are calling stuff off of an object which doesn't exist when we create this proxy.
   // So we use an empty object as a placeholder while we get the object.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return new Proxy({} as T, {
-    get() {
+  return new Proxy(objectToProxy as T, {
+    get(target, prop) {
+      // We don't have any type information for T, so we assume methodName exists on it and will let JavaScript throw if it doesn't exist
+      // @ts-expect-error 7053
+      if (prop in target) return target[prop];
       return async (...args: unknown[]) => {
-        await getObject(args);
+        // 7053: We don't have any type information for T, so we assume methodName exists on it and will let JavaScript throw if it doesn't exist
+        // 2556: The args here are the parameters for the method specified
+        // @ts-expect-error 7053 2556
+        return (await getObject())[prop](...args);
       };
     },
   });
@@ -61,6 +52,6 @@ function createSyncProxyForAsyncObject<T extends object>(
 const menuStoreService = createSyncProxyForAsyncObject<MenuStoreServiceType>(async () => {
   await initialize();
   return dataProvider;
-});
+}, menuStoreServiceObjectToProxy);
 
 export default menuStoreService;

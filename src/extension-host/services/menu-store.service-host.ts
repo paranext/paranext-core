@@ -3,16 +3,18 @@ import {
   MenuData,
   MenuStoreDataTypes,
   MenuStoreServiceType,
+  menuStoreServiceObjectToProxy,
   menuStoreServiceProviderName,
 } from '@shared/services/menu-store.service-model';
+import dataProviderService, { DataProviderEngine } from '@shared/services/data-provider.service';
+import { createSyncProxyForAsyncObject } from '@shared/services/menu-store.service';
 import IDataProviderEngine from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { deserialize } from 'platform-bible-utils';
-import { registerEngineByType } from '@shared/services/data-provider.service';
 import menuDataObject from '@extension-host/data/menu.data.json';
-import { logger, DataProviderEngine } from './papi-backend.service';
+import { logger } from './papi-backend.service';
 
-export class MenuStoreDataProviderEngine
+class MenuStoreDataProviderEngine
   extends DataProviderEngine<MenuStoreDataTypes>
   implements IDataProviderEngine<MenuStoreDataTypes>
 {
@@ -26,7 +28,8 @@ export class MenuStoreDataProviderEngine
   }
 
   async getMenuData(menuType: string): Promise<MenuContent> {
-    await this.#loadAllMenuData();
+    // Should we be listening for updates? Or does the driving service handle that
+    // this.#loadAllMenuData();
     const menuData = this.menuDataMap.get(menuType);
 
     if (!menuData) throw new Error(`Missing/invalid menu data`);
@@ -38,7 +41,9 @@ export class MenuStoreDataProviderEngine
     menuType: string,
     menuContent: MenuContent,
   ): Promise<DataProviderUpdateInstructions<MenuStoreDataTypes>> {
-    await this.#loadAllMenuData();
+    // Should we be listening for updates? Or does the driving service handle that
+    // this.#loadAllMenuData();
+
     // if content already exists at that type it will replace content
     this.menuDataMap.set(menuType, menuContent);
     return true;
@@ -73,7 +78,7 @@ export async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          dataProvider = await registerEngineByType(
+          dataProvider = await dataProviderService.registerEngine(
             menuStoreServiceProviderName,
             new MenuStoreDataProviderEngine(await getMenuDataObject()),
           );
@@ -88,23 +93,7 @@ export async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-// TODO: I don't think we need this here because they are calling initialize in extension-host
-// No-type-assertion: We are calling stuff off of dataProvider which doesn't exist when we create this proxy.
-// So we use an empty object as a placeholder while we get dataProvider.
-// No-unused-vars: Using someone else's api and we don't want to use target.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars, no-type-assertion/no-type-assertion
-const menuStoreService: MenuStoreServiceType = new Proxy({} as MenuStoreServiceType, {
-  get(_target, methodName): (typeof dataProvider)[keyof typeof dataProvider] {
-    return async (...args: unknown[]) => {
-      await initialize();
-      // The args here are the parameters for the method specified
-      // @ts-expect-error 2556
-      return dataProvider[methodName](...args);
-    };
-  },
-});
-
-// Not using currently- but will get 'menuStoreService is declared but its value is never read' without it
-export const testingMenuStoreServiceHost = {
-  menuStoreService,
-};
+export const menuStoreService = createSyncProxyForAsyncObject<MenuStoreServiceType>(async () => {
+  await initialize();
+  return dataProvider;
+}, menuStoreServiceObjectToProxy);
