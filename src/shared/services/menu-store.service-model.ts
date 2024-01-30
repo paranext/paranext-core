@@ -1,9 +1,4 @@
-import {
-  MenusForOneWebView,
-  MultiColumnMenu,
-  ReferencedItem,
-  SingleColumnMenu,
-} from '@shared/schemas/menu-data.types';
+import { MultiColumnMenu, SingleColumnMenu, WebViewMenus } from '@shared/schemas/menu-data.types';
 import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
 import {
   DataProviderDataType,
@@ -12,7 +7,7 @@ import {
 } from './papi-core.service';
 
 export const menuStoreServiceProviderName = 'platform.menuStoreServiceDataProvider';
-export const menuStoreServiceObjectToProxy = { name: menuStoreServiceProviderName };
+export const menuStoreServiceObjectToProxy = Object.freeze({ name: menuStoreServiceProviderName });
 
 // Data Type to initialize data provider engine with
 export type MenuStoreDataTypes = {
@@ -65,15 +60,8 @@ export type MenuStoreServiceType = {
 } & OnDidDispose &
   typeof menuStoreServiceObjectToProxy;
 
-// TODO: Get types from Matt's PR
-
 export type MenuData = {
   [menuType: string]: MenuContent;
 };
 
-export type MenuContent =
-  | MultiColumnMenu
-  | SingleColumnMenu
-  | {
-      [k: ReferencedItem]: MenusForOneWebView;
-    };
+export type MenuContent = MultiColumnMenu | SingleColumnMenu | WebViewMenus;
