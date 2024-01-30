@@ -1,4 +1,8 @@
-import { MenuItem as MuiMenuItem } from '@mui/material';
+import {
+  MenuItem as MuiMenuItem,
+  ListItemText as MuiListItemText,
+  ListItemIcon as MuiListItemIcon,
+} from '@mui/material';
 import './menu-item.component.css';
 import { PropsWithChildren } from 'react';
 
@@ -23,6 +27,24 @@ export type MenuItemProps = Omit<MenuItemInfo, 'command'> &
   }>;
 
 export type MenuItemInfo = Command & {
+  /**
+   * If specified, menu item will be inset if it does not have a leading icon.
+   *
+   * @default true
+   */
+  allowForLeadingIcons?: boolean;
+  /**
+   * If specified, the path to the icon image to display on the leading side of the menu text.
+   *
+   * @default undefined (no leading icon will be shown)
+   */
+  iconPathBefore?: string;
+  /**
+   * If specified, the path to the icon image to display on the trailing side of the menu text.
+   *
+   * @default undefined (no trailing icon will be shown)
+   */
+  iconPathAfter?: string;
   /**
    * If true, list item is focused during the first mount
    *
@@ -58,10 +80,21 @@ export type MenuItemInfo = Command & {
   focusVisibleClassName?: string;
 };
 
+function getIcon(icon: string | undefined, menuLabel: string, leading: boolean) {
+  return icon ? (
+    <MuiListItemIcon>
+      <img src={icon} alt={`${leading ? 'Leading' : 'Trailing'} icon for ${menuLabel}`} />
+    </MuiListItemIcon>
+  ) : undefined;
+}
+
 function MenuItem(props: MenuItemProps) {
   const {
     onClick,
     name,
+    allowForLeadingIcons = true,
+    iconPathBefore = undefined,
+    iconPathAfter = undefined,
     hasAutoFocus = false,
     className,
     isDense = true,
@@ -74,6 +107,7 @@ function MenuItem(props: MenuItemProps) {
 
   return (
     <MuiMenuItem
+      sx={{ lineHeight: 0.8 }}
       autoFocus={hasAutoFocus}
       className={className}
       dense={isDense}
@@ -83,7 +117,15 @@ function MenuItem(props: MenuItemProps) {
       onClick={onClick}
       id={id}
     >
-      {name || children}
+      {name ? (
+        <>
+          {getIcon(iconPathBefore, name, true)}
+          <MuiListItemText primary={name} inset={!iconPathBefore && allowForLeadingIcons} />
+          {getIcon(iconPathAfter, name, false)}
+        </>
+      ) : (
+        children
+      )}
     </MuiMenuItem>
   );
 }

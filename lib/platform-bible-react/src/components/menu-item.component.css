@@ -1,14 +1,18 @@
 .papi-menu-item {
   background-color: transparent;
-  line-height: 0.8;
 }
 
-.papi-menu-item.paratext {
+.papi-menu.paratext .papi-menu-item {
   background-color: darkgreen;
   color: greenyellow;
 }
 
-.papi-menu-item.paratext.bright {
+.papi-menu.paratext.bright .papi-menu-item {
   background-color: greenyellow;
   color: darkgreen;
+}
+
+.papi-menu-item img {
+  max-width: 24px;
+  max-height: 24px;
 }

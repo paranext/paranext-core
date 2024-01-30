@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { SimpleMenu, Command } from 'platform-bible-react';
+import { MenuItemList, Command } from 'platform-bible-react';
 
-const meta: Meta<typeof SimpleMenu> = {
-  title: 'Basics/ContextMenu',
-  component: SimpleMenu,
+const meta: Meta<typeof MenuItemList> = {
+  title: 'Basics/MenuItemList',
+  component: MenuItemList,
   tags: ['autodocs'],
   argTypes: {
     items: { control: 'object' },
@@ -11,7 +11,7 @@ const meta: Meta<typeof SimpleMenu> = {
 };
 export default meta;
 
-type Story = StoryObj<typeof SimpleMenu>;
+type Story = StoryObj<typeof MenuItemList>;
 
 export const DefaultNoMenuItems: Story = {
   args: {},
@@ -38,16 +38,22 @@ function GetMenuDefinition(className: string) {
       {
         name: 'Do something normal',
         command: 'storybookMenu.log',
+        iconPathBefore: '/sample-icon.png',
         hasDivider: true,
       },
       {
         name: 'Do something scary',
         command: 'storybookMenu.warn',
+        iconPathAfter: '/sample-icon.png',
       },
     ],
   };
   return menuDefinition;
 }
+
+export const Normal: Story = {
+  args: GetMenuDefinition(''),
+};
 
 export const Paratext: Story = {
   args: GetMenuDefinition('paratext'),

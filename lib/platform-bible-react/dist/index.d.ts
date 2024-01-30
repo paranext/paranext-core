@@ -172,6 +172,24 @@ export type MenuItemProps = Omit<MenuItemInfo, "command"> & React$1.PropsWithChi
 }>;
 export type MenuItemInfo = Command & {
 	/**
+	 * If specified, menu item will be inset if it does not have a leading icon.
+	 *
+	 * @default true
+	 */
+	allowForLeadingIcons?: boolean;
+	/**
+	 * If specified, the path to the icon image to display on the leading side of the menu text.
+	 *
+	 * @default undefined (no leading icon will be shown)
+	 */
+	iconPathBefore?: string;
+	/**
+	 * If specified, the path to the icon image to display on the trailing side of the menu text.
+	 *
+	 * @default undefined (no trailing icon will be shown)
+	 */
+	iconPathAfter?: string;
+	/**
 	 * If true, list item is focused during the first mount
 	 *
 	 * @default false
@@ -201,15 +219,25 @@ export type MenuItemInfo = Command & {
 	focusVisibleClassName?: string;
 };
 export declare function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
-export type MenuProps = {
+export type MenuItemListProps = {
 	/** Optional unique identifier */
 	id?: string;
 	items: MenuItemInfo[];
 	commandHandler: CommandHandler;
+	/**
+	 * Additional action to perform when any menu item is clicked. Allows the caller can handle event
+	 * (e.g., to close the menu).
+	 */
+	onClick?: () => void;
 	/** Additional css classes to help with unique styling of the menu */
 	className?: string;
 };
-export function SimpleMenu({ commandHandler, className, items, id }: MenuProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * This is kind of an "abstract" component in the sense that it will typically not be useful on its
+ * own. It is used to generate and lay out the MenuItems to appear on either a GridMenu or a
+ * ContextMenu.
+ */
+export function MenuItemList({ commandHandler, className, items, id, onClick, }: MenuItemListProps): import("react/jsx-runtime").JSX.Element;
 type MenuColumnInfo = {
 	/** The name of the menu (displayed as the column header). */
 	name: string;
@@ -271,6 +299,7 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
+export function ContextMenu(menuProps: MenuItemListProps): import("react/jsx-runtime").JSX.Element;
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
 /**

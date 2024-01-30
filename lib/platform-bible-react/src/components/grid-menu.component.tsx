@@ -1,6 +1,6 @@
 import { Grid } from '@mui/material';
 import { CommandHandler, MenuItemInfo } from './menu-item.component';
-import SimpleMenu, { MenuProps } from './simple-menu.component';
+import SimpleMenu, { MenuItemListProps } from './menu-item-list.component';
 import './grid-menu.component.css';
 
 export type MenuColumnInfo = {
@@ -12,7 +12,7 @@ export type MenuColumnInfo = {
   items: MenuItemInfo[];
 };
 
-type MenuColumnProps = MenuColumnInfo & MenuProps;
+type MenuColumnProps = MenuColumnInfo & MenuItemListProps;
 
 export type GridMenuInfo = {
   /** The columns to display on the dropdown menu. */

@@ -14,8 +14,8 @@ export type {
   ComboBoxOption,
   ComboBoxValue,
 } from './components/combo-box.component';
-export { default as SimpleMenu } from './components/simple-menu.component';
-export type { MenuProps } from './components/simple-menu.component';
+export { default as MenuItemList } from './components/menu-item-list.component';
+export type { MenuItemListProps } from './components/menu-item-list.component';
 export { default as GridMenu } from './components/grid-menu.component';
 export type {
   MenuColumnInfo as MenuColumn,
@@ -26,6 +26,7 @@ export { default as IconButton } from './components/icon-button.component';
 export type { IconButtonProps } from './components/icon-button.component';
 export { default as LabelPosition } from './components/label-position.model';
 export { default as MenuItem } from './components/menu-item.component';
+export { default as ContextMenu } from './components/context-menu.component';
 export type {
   MenuItemInfo,
   MenuItemProps,
