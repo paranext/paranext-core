@@ -105,51 +105,11 @@ export default abstract class DocumentCombinerEngine {
     // Compose the output by validating each document one at a time to pinpoint errors better
     let outputIteration = this.startingDocument;
     this.contributions.forEach((contribution: JsonDocumentLike) => {
-      outputIteration = this.mergeObjects(outputIteration, contribution);
+      outputIteration = mergeObjects(outputIteration, contribution);
       this.validateOutput(outputIteration);
     });
     this.latestOutput = outputIteration;
     return this.latestOutput;
-  }
-
-  /**
-   * Recursively merge the properties of one object (copyFrom) into another (startingPoint). Throws
-   * if copyFrom would overwrite values already existing in startingPoint.
-   *
-   * @param startingPoint Object that is the starting point for the return value
-   * @param copyFrom Object whose values are copied into the return value
-   * @returns Object that is the combination of the two documents
-   */
-  private mergeObjects(
-    startingPoint: JsonDocumentLike,
-    copyFrom: JsonDocumentLike,
-  ): JsonDocumentLike {
-    const retVal = deepClone(startingPoint);
-    if (!copyFrom) return retVal;
-
-    Object.keys(copyFrom).forEach((key: string | number) => {
-      if (Object.hasOwn(startingPoint, key)) {
-        if (areNonArrayObjects(startingPoint[key], copyFrom[key])) {
-          retVal[key] = this.mergeObjects(
-            // We know these are objects from the `if` check
-            /* eslint-disable no-type-assertion/no-type-assertion */
-            startingPoint[key] as JsonDocumentLike,
-            copyFrom[key] as JsonDocumentLike,
-            /* eslint-enable no-type-assertion/no-type-assertion */
-          );
-        } else if (areArrayObjects(startingPoint[key], copyFrom[key])) {
-          // We know these are arrays because of the `else if` check
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          retVal[key] = (retVal[key] as Array<unknown>).concat(copyFrom[key] as Array<unknown>);
-        } else {
-          throw new Error(`Cannot merge objects: key "${key}" already exists in the target object`);
-        }
-      } else {
-        retVal[key] = copyFrom[key];
-      }
-    });
-
-    return retVal;
   }
 
   /**
@@ -216,6 +176,46 @@ function areArrayObjects(...values: unknown[]): boolean {
     if (!value || typeof value !== 'object' || !Array.isArray(value)) allMatch = false;
   });
   return allMatch;
+}
+
+/**
+ * Recursively merge the properties of one object (copyFrom) into another (startingPoint). Throws if
+ * copyFrom would overwrite values already existing in startingPoint.
+ *
+ * @param startingPoint Object that is the starting point for the return value
+ * @param copyFrom Object whose values are copied into the return value
+ * @returns Object that is the combination of the two documents
+ */
+function mergeObjects(
+  startingPoint: JsonDocumentLike,
+  copyFrom: JsonDocumentLike,
+): JsonDocumentLike {
+  const retVal = deepClone(startingPoint);
+  if (!copyFrom) return retVal;
+
+  Object.keys(copyFrom).forEach((key: string | number) => {
+    if (Object.hasOwn(startingPoint, key)) {
+      if (areNonArrayObjects(startingPoint[key], copyFrom[key])) {
+        retVal[key] = mergeObjects(
+          // We know these are objects from the `if` check
+          /* eslint-disable no-type-assertion/no-type-assertion */
+          startingPoint[key] as JsonDocumentLike,
+          copyFrom[key] as JsonDocumentLike,
+          /* eslint-enable no-type-assertion/no-type-assertion */
+        );
+      } else if (areArrayObjects(startingPoint[key], copyFrom[key])) {
+        // We know these are arrays because of the `else if` check
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        retVal[key] = (retVal[key] as Array<unknown>).concat(copyFrom[key] as Array<unknown>);
+      } else {
+        throw new Error(`Cannot merge objects: key "${key}" already exists in the target object`);
+      }
+    } else {
+      retVal[key] = copyFrom[key];
+    }
+  });
+
+  return retVal;
 }
 
 // #endregion

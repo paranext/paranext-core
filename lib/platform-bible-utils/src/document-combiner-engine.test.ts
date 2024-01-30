@@ -27,23 +27,19 @@ class AlwaysThrowingCombiner extends DocumentCombinerEngine {
 class ThrowingCombiner extends DocumentCombinerEngine {
   throwEnabled: boolean = false;
 
-  // eslint-disable-next-line @typescript-eslint/no-useless-constructor
   constructor(startingDocument: JsonDocumentLike, shouldThrow: boolean) {
     super(startingDocument, true);
     this.throwEnabled = shouldThrow;
   }
 
-  // eslint-disable-next-line class-methods-use-this
   protected validateStartingDocument(): void {
     if (this.throwEnabled) throw new Error();
   }
 
-  // eslint-disable-next-line class-methods-use-this
   protected validateContribution(): void {
     if (this.throwEnabled) throw new Error();
   }
 
-  // eslint-disable-next-line class-methods-use-this
   protected validateOutput(): void {
     if (this.throwEnabled) throw new Error();
   }
