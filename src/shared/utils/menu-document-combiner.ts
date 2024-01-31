@@ -5,9 +5,14 @@ import {
   MenuItemBase,
   ReferencedItem,
   menuDocumentSchema,
+  MenuItemContainingSubmenu,
+  MenuItemContainingCommand,
 } from '@shared/models/menus.model';
 import { DocumentCombinerEngine, JsonDocumentLike } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
+
+// From https://stackoverflow.com/questions/61132262/typescript-deep-partial
+type DeepPartial<T> = T extends object ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
 
 // #region Helper functions
 
@@ -17,6 +22,69 @@ const validate = ajv.compile(menuDocumentSchema);
 function performSchemaValidation(document: JsonDocumentLike, docType: string): void {
   if (!validate(document))
     throw new Error(`Invalid ${docType} menu document: ${ajv.errorsText(validate.errors)}`);
+}
+
+function checkNewColumns(
+  newColumns: DeepPartial<ColumnsWithHeaders> | undefined,
+  namePrefix: string,
+  currentColumns: ColumnsWithHeaders | undefined,
+) {
+  if (!newColumns) return;
+  Object.getOwnPropertyNames(newColumns).forEach((columnName: string) => {
+    if (!columnName) return;
+    if (!columnName.startsWith(namePrefix))
+      throw new Error(`Column name ${columnName} does not start with ${namePrefix}`);
+    if (!!currentColumns && currentColumns.isExtensible !== true)
+      throw new Error(`Cannot add new column ${columnName} because isExtensible is not set`);
+  });
+}
+
+function checkNewGroups(
+  newGroups: DeepPartial<Groups> | undefined,
+  namePrefix: string,
+  currentColumns: ColumnsWithHeaders | undefined,
+) {
+  if (!newGroups) return;
+  Object.getOwnPropertyNames(newGroups).forEach((groupName: string) => {
+    // TS doesn't allow `groupName` above to be a ReferencedItem even though the type says it is
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const group = newGroups[groupName as ReferencedItem];
+    if (!group) return;
+    if (!groupName.startsWith(namePrefix))
+      throw new Error(`Group name ${groupName} does not start with ${namePrefix}`);
+    if ('column' in group && group.column) {
+      if (!currentColumns) return;
+      const targetColumn = currentColumns[group.column];
+      if (targetColumn && targetColumn.isExtensible !== true)
+        throw new Error(`Cannot add new group ${groupName} because isExtensible is not set`);
+    } else if ('menuItem' in group && group.menuItem) {
+      const targetMenuItemName = group.menuItem;
+      if (!targetMenuItemName.startsWith(namePrefix))
+        throw new Error(`Cannot add new group ${groupName} to a submenu owned by something else`);
+    }
+  });
+}
+
+function checkNewMenuItems(
+  newMenuItems: DeepPartial<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]> | undefined,
+  namePrefix: string,
+  currentGroups: Groups | undefined,
+) {
+  if (!newMenuItems) return;
+  newMenuItems.forEach((menuItem) => {
+    if (!menuItem) return;
+    if ('id' in menuItem && menuItem.id && !menuItem.id.startsWith(namePrefix))
+      throw new Error(`Menu item ID ${menuItem.id} does not start with ${namePrefix}`);
+    const targetGroupName = menuItem.group;
+    if (targetGroupName && !targetGroupName.startsWith(namePrefix)) {
+      if (!currentGroups) return;
+      const targetGroup = currentGroups[targetGroupName];
+      if (targetGroup.isExtensible !== true)
+        throw new Error(
+          `Cannot add new menu item ${menuItem.label} to group ${targetGroupName} because isExtensible is not set`,
+        );
+    }
+  });
 }
 
 function checkColumnsForDuplicateOrdering(columns: ColumnsWithHeaders | undefined) {
@@ -105,8 +173,61 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
 
   // Extension contributions are subsets of the whole schema, so don't do normal schema validation
   // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
-  protected validateContribution(_documentName: string, _document: JsonDocumentLike): void {
-    // TODO: Validate that new items added start with the extension names and a dot
+  protected validateContribution(documentName: string, document: JsonDocumentLike): void {
+    const { currentMenus } = this;
+
+    // Type assert all menu properties as partial to make it easier to work with
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const newMenus = document as DeepPartial<PlatformMenus>;
+    const namePrefix = `${documentName}.`;
+
+    checkNewColumns(newMenus.mainMenu?.columns, namePrefix, currentMenus?.mainMenu.columns);
+    checkNewGroups(newMenus.mainMenu?.groups, namePrefix, currentMenus?.mainMenu.columns);
+    checkNewMenuItems(newMenus.mainMenu?.items, namePrefix, currentMenus?.mainMenu.groups);
+    checkNewColumns(
+      newMenus.defaultWebViewTopMenu?.columns,
+      namePrefix,
+      currentMenus?.defaultWebViewTopMenu.columns,
+    );
+    checkNewGroups(
+      newMenus.defaultWebViewTopMenu?.groups,
+      namePrefix,
+      currentMenus?.defaultWebViewTopMenu.columns,
+    );
+    checkNewMenuItems(
+      newMenus.defaultWebViewTopMenu?.items,
+      namePrefix,
+      currentMenus?.defaultWebViewTopMenu.groups,
+    );
+    checkNewGroups(newMenus.defaultWebViewContextMenu?.groups, namePrefix, undefined);
+    checkNewMenuItems(
+      newMenus.defaultWebViewContextMenu?.items,
+      namePrefix,
+      currentMenus?.defaultWebViewContextMenu.groups,
+    );
+    const newWebViewMenus = newMenus?.webViewMenus;
+    if (!newWebViewMenus) return;
+    Object.getOwnPropertyNames(newWebViewMenus).forEach((webViewName: string) => {
+      // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
+      /* eslint-disable no-type-assertion/no-type-assertion */
+      const newWebView = newWebViewMenus[webViewName as ReferencedItem];
+      const currentWebView = currentMenus?.webViewMenus[webViewName as ReferencedItem];
+      /* eslint-enable no-type-assertion/no-type-assertion */
+
+      if (!currentWebView && !webViewName.startsWith(namePrefix))
+        throw new Error(`Cannot add a new web view unless it starts with ${namePrefix}`);
+
+      checkNewColumns(newWebView?.topMenu?.columns, namePrefix, currentWebView?.topMenu?.columns);
+      checkNewGroups(newWebView?.topMenu?.groups, namePrefix, currentWebView?.topMenu?.columns);
+      checkNewMenuItems(newWebView?.topMenu?.items, namePrefix, currentWebView?.topMenu?.groups);
+      checkNewGroups(newWebView?.contextMenu?.groups, namePrefix, undefined);
+      checkNewMenuItems(
+        newWebView?.contextMenu?.items,
+        namePrefix,
+        currentWebView?.contextMenu?.groups,
+      );
+    });
+
     // TODO: Validate that extensions only add to objects that are marked as extensible
   }
 
