@@ -1,7 +1,30 @@
 /* eslint-disable max-classes-per-file */
 import DocumentCombinerEngine, { JsonDocumentLike } from './document-combiner-engine';
-import DocumentCombinerWithoutValidation from './document-combiner-without-validation';
 
+// #region Combiner implementations
+
+/** Combine all provided documents without any checking */
+class DocumentCombinerWithoutValidation extends DocumentCombinerEngine {
+  // Lint doesn't understand that making something public that was protected isn't useless
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor
+  constructor(startingDocument: JsonDocumentLike, copyDocuments: boolean) {
+    super(startingDocument, copyDocuments);
+  }
+
+  // We have the implement this abstract function but don't want it to do anything
+  // eslint-disable-next-line class-methods-use-this
+  protected validateStartingDocument(): void {}
+
+  // We have the implement this abstract function but don't want it to do anything
+  // eslint-disable-next-line class-methods-use-this
+  protected validateContribution(): void {}
+
+  // We have the implement this abstract function but don't want it to do anything
+  // eslint-disable-next-line class-methods-use-this
+  protected validateOutput(): void {}
+}
+
+/** Throw a validation error on any operation, including construction */
 class AlwaysThrowingCombiner extends DocumentCombinerEngine {
   // eslint-disable-next-line @typescript-eslint/no-useless-constructor
   constructor(startingDocument: JsonDocumentLike) {
@@ -24,6 +47,7 @@ class AlwaysThrowingCombiner extends DocumentCombinerEngine {
   }
 }
 
+/** Throw a validation error on any operation after construction is complete */
 class ThrowingCombiner extends DocumentCombinerEngine {
   throwEnabled: boolean = false;
 
@@ -45,6 +69,7 @@ class ThrowingCombiner extends DocumentCombinerEngine {
   }
 }
 
+/** Throw a validation error only when checking the output */
 class OutputThrowingCombiner extends DocumentCombinerEngine {
   // eslint-disable-next-line @typescript-eslint/no-useless-constructor
   constructor(startingDocument: JsonDocumentLike) {
@@ -62,6 +87,8 @@ class OutputThrowingCombiner extends DocumentCombinerEngine {
     throw new Error();
   }
 }
+
+// #endregion
 
 test('Simple combining works', () => {
   const hasA = { a: 1 };
