@@ -260,6 +260,16 @@ export declare function getAllObjectFunctionNames(obj: {
 	[property: string]: unknown;
 }, objId?: string): Set<string>;
 /**
+ * Creates a synchronous proxy for an asynchronous object. The proxy allows calling methods on an
+ * object that is asynchronously fetched using a provided asynchronous function.
+ *
+ * @param getObject - A function that returns a Promise resolving to the object to be proxied.
+ * @param objectToProxy - An optional initial object to use as a placeholder while the actual object
+ *   is being fetched.
+ * @returns A synchronous proxy for the asynchronous object.
+ */
+export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;
+/**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
  * @param a The first object to compare

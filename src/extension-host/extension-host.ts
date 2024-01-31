@@ -11,7 +11,7 @@ import { getErrorMessage } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { startProjectLookupService } from '@extension-host/services/project-lookup.service-host';
 import { registerCommand } from '@shared/services/command.service';
-import { initialize as initializeMenuDataStore } from './services/menu-store.service-host';
+import { initialize as initializeMenuDataStore } from './services/menu-data.service-host';
 
 // #region Test logs
 

@@ -26,6 +26,7 @@ export {
   wait,
   waitForDuration,
   getAllObjectFunctionNames,
+  createSyncProxyForAsyncObject,
 } from './util';
 export { default as deepEqual } from './equality-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';

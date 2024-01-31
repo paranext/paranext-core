@@ -5,55 +5,50 @@ import {
   MenuStoreServiceType,
   menuStoreServiceObjectToProxy,
   menuStoreServiceProviderName,
-} from '@shared/services/menu-store.service-model';
+} from '@shared/services/menu-data.service-model';
 import dataProviderService, { DataProviderEngine } from '@shared/services/data-provider.service';
-import { createSyncProxyForAsyncObject } from '@shared/services/menu-store.service';
 import IDataProviderEngine from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
-import { deserialize } from 'platform-bible-utils';
+import { createSyncProxyForAsyncObject, deserialize } from 'platform-bible-utils';
 import menuDataObject from '@extension-host/data/menu.data.json';
-import { logger } from './papi-backend.service';
+import logger from '@shared/services/logger.service';
 
-class MenuStoreDataProviderEngine
+export class MenuStoreDataProviderEngine
   extends DataProviderEngine<MenuStoreDataTypes>
   implements IDataProviderEngine<MenuStoreDataTypes>
 {
   private menuDataMap = new Map<string, MenuContent>();
-  private menuDataObject: MenuData;
 
   constructor(menuData: MenuData) {
     super();
-    this.menuDataObject = menuData;
-    this.#loadAllMenuData();
+    this.#loadAllMenuData(menuData);
   }
 
+  // TODO: Changes
   async getMenuData(menuType: string): Promise<MenuContent> {
-    // Should we be listening for updates? Or does the driving service handle that
-    // this.#loadAllMenuData();
     const menuData = this.menuDataMap.get(menuType);
 
     if (!menuData) throw new Error(`Missing/invalid menu data`);
     return menuData;
   }
 
-  // TODO: Finish implementation of set, catch errors, return appropriate values based on DataProviderUpdateInstructions
+  // No implementation for this function right now, we just want to throw an error, but it wanted us to use 'this'
+  // https://github.com/paranext/paranext-core/issues/425
+  // eslint-disable-next-line class-methods-use-this
   async setMenuData(
     menuType: string,
     menuContent: MenuContent,
   ): Promise<DataProviderUpdateInstructions<MenuStoreDataTypes>> {
-    // Should we be listening for updates? Or does the driving service handle that
-    // this.#loadAllMenuData();
-
-    // if content already exists at that type it will replace content
-    this.menuDataMap.set(menuType, menuContent);
-    return true;
+    // throw new Error('setMenuData disabled');
+    logger.info(menuType, menuContent);
+    return false;
   }
 
-  #loadAllMenuData(): Map<string, MenuContent> {
+  #loadAllMenuData(menuData: MenuData): Map<string, MenuContent> {
     this.menuDataMap.clear();
     try {
-      Object.keys(this.menuDataObject).forEach((menuType) => {
-        this.menuDataMap.set(menuType, this.menuDataObject[menuType]);
+      Object.keys(menuData).forEach((menuType) => {
+        this.menuDataMap.set(menuType, menuData[menuType]);
       });
     } catch (error) {
       logger.warn(error);
@@ -62,7 +57,7 @@ class MenuStoreDataProviderEngine
   }
 }
 
-export function getMenuDataObject(): MenuData {
+function getMenuDataObject(): MenuData {
   const jsonString = JSON.stringify(menuDataObject);
   if (!jsonString) throw new Error('No data file found');
   const menuData: MenuData = deserialize(jsonString);
