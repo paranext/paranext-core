@@ -10,7 +10,7 @@ const startingDoc = {
       isExtensible: true,
     },
     groups: {
-      'platform.windowGroup1': { column: 'platform.window', order: 1 },
+      'platform.windowGroup1': { column: 'platform.window', order: 1, isExtensible: true },
       'platform.windowGroup2': { column: 'platform.window', order: 2 },
       'platform.layoutSaveDelete': { column: 'platform.layout', order: 1 },
       'platform.helpGroup1': { column: 'platform.help', order: 1 },
@@ -205,7 +205,7 @@ const expectedOutput = {
       'paratext.openCreate': { column: 'paratext.paratext', order: 2 },
       'paratext.saveDelete': { column: 'paratext.paratext', order: 3 },
       'paratext.misc': { column: 'paratext.paratext', order: 9999999, isExtensible: true },
-      'platform.windowGroup1': { column: 'platform.window', order: 1 },
+      'platform.windowGroup1': { column: 'platform.window', order: 1, isExtensible: true },
       'platform.windowGroup2': { column: 'platform.window', order: 2 },
       'platform.layoutSaveDelete': { column: 'platform.layout', order: 1 },
       'platform.helpGroup1': { column: 'platform.help', order: 1 },
@@ -370,51 +370,193 @@ test('Sample documents all validate', () => {
   expect(deepEqual(menuCombiner.output, expectedOutput)).toBeTruthy();
 });
 
-const duplicateColumns = {
-  mainMenu: {
-    columns: {
-      'test.col1': { label: '%test_col1%', order: -1 },
-      'test.col2': { label: '%test_col2%', order: -1 },
-    },
-  },
-};
-
-const duplicateGroups = {
-  mainMenu: {
-    groups: {
-      'test.group': { column: 'platform.window', order: 1 },
-    },
-  },
-};
-
-const duplicateMenuItems = {
-  mainMenu: {
-    items: [
-      {
-        label: '%doSomething%',
-        group: 'platform.windowGroup1',
-        order: 1000,
-        command: 'test.something',
+test('Schema regex checking works as expected', () => {
+  const menuCombiner = new MenuDocumentCombiner(startingDoc);
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        groups: {
+          'test.test.test.group': { column: 'platform.help', order: 1 },
+        },
       },
-      {
-        label: '%doSomethingElse%',
-        group: 'platform.windowGroup1',
-        order: 1000,
-        command: 'test.somethingElse',
+    }),
+  ).toThrow(/data\/mainMenu\/groups must NOT have additional properties/);
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        columns: {
+          'test.col1': { label: '%test_col1%invalid', order: 12345 },
+        },
       },
-    ],
-  },
-};
+    }),
+  ).toThrow(/data\/mainMenu\/columns\/test.col1\/label must match pattern/);
+});
 
 test('Duplicate order values are caught', () => {
   const menuCombiner = new MenuDocumentCombiner(startingDoc);
-  expect(() => menuCombiner.addOrUpdateContribution('test', duplicateColumns)).toThrow(
-    /Duplicate column order: test.col2/,
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        columns: {
+          'test.col1': { label: '%test_col1%', order: -1 },
+          'test.col2': { label: '%test_col2%', order: -1 },
+        },
+      },
+    }),
+  ).toThrow(/Duplicate column order: test.col2/);
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        groups: {
+          'test.group': { column: 'platform.help', order: 1 },
+        },
+      },
+    }),
+  ).toThrow(/Duplicate group order: test.group/);
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        items: [
+          {
+            label: '%doSomething%',
+            group: 'platform.windowGroup1',
+            order: 1000,
+            command: 'test.something',
+          },
+          {
+            label: '%doSomethingElse%',
+            group: 'platform.windowGroup1',
+            order: 1000,
+            command: 'test.somethingElse',
+          },
+        ],
+      },
+    }),
+  ).toThrow(/Duplicate menu item order: %doSomethingElse%/);
+});
+
+test('isExtensible flags are honored', () => {
+  const menuCombiner = new MenuDocumentCombiner(startingDoc);
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      defaultWebViewTopMenu: {
+        columns: {
+          'test.col1': { label: '%test_col1%', order: 12345 },
+        },
+      },
+    }),
+  ).toThrow(/Cannot add new column test.col1 because isExtensible is not set/);
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        groups: {
+          'test.group1': { column: 'platform.window', order: 12345 },
+        },
+      },
+    }),
+  ).toThrow(/Cannot add new group test.group1 because isExtensible is not set/);
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        items: [
+          {
+            label: '%doSomething%',
+            group: 'platform.windowGroup2',
+            order: 12345,
+            command: 'test.something',
+          },
+        ],
+      },
+    }),
+  ).toThrow(
+    /Cannot add new menu item %doSomething% to group platform.windowGroup2 because isExtensible is not set/,
   );
-  expect(() => menuCombiner.addOrUpdateContribution('test', duplicateGroups)).toThrow(
-    /Duplicate group order: test.group/,
-  );
-  expect(() => menuCombiner.addOrUpdateContribution('test', duplicateMenuItems)).toThrow(
-    /Duplicate menu item order: %doSomethingElse%/,
-  );
+});
+
+test('Name prefixes are verified', () => {
+  const menuCombiner = new MenuDocumentCombiner(startingDoc);
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        columns: {
+          'differentPrefix.col1': { label: '%test_col1%', order: 12345 },
+        },
+      },
+    }),
+  ).toThrow(/Column name differentPrefix.col1 does not start with test./);
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        columns: {
+          'differentPrefix.col1': { label: '%test_col1%', order: 12345 },
+        },
+      },
+    }),
+  ).toThrow(/Column name differentPrefix.col1 does not start with test./);
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        groups: {
+          'differentPrefix.group1': { column: 'platform.help', order: 12345 },
+        },
+      },
+    }),
+  ).toThrow(/Group name differentPrefix.group1 does not start with test./);
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        groups: {
+          'test.group1': { menuItem: 'somethingElse.menuItemID', order: 12345 },
+        },
+      },
+    }),
+  ).toThrow(/Cannot add new group test.group1 to a submenu owned by something else/);
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        items: [
+          {
+            label: '%doSomething%',
+            group: 'platform.windowGroup1',
+            order: 12345,
+            id: 'differentPrefix.subMenu1',
+          },
+        ],
+      },
+    }),
+  ).toThrow(/Menu item ID differentPrefix.subMenu1 does not start with test./);
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      webViewMenus: {
+        'differentPrefix.something': {
+          topMenu: {
+            columns: {
+              'test.column': { label: '%abc%', order: 1 },
+            },
+            groups: {
+              'test.group': { column: 'test.column', order: 1 },
+            },
+            items: [
+              {
+                label: '%abc%',
+                group: 'test.group',
+                order: 1,
+                command: 'platform.whatever',
+              },
+            ],
+          },
+        },
+      },
+    }),
+  ).toThrow(/Cannot add a new web view unless it starts with test./);
 });

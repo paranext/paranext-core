@@ -394,3 +394,5 @@ export const menuDocumentSchema = {
     },
   },
 };
+
+Object.freeze(menuDocumentSchema);
