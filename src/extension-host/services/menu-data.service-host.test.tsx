@@ -1,5 +1,5 @@
 import { MenuData } from '@shared/services/menu-data.service-model';
-import { MenuStoreDataProviderEngine } from '@extension-host/services/menu-data.service-host';
+import { MenuDataDataProviderEngine } from '@extension-host/services/menu-data.service-host';
 
 const MOCK_MENU_DATA: MenuData = {
   mainMenu: {
@@ -79,9 +79,9 @@ const MOCK_MENU_DATA: MenuData = {
   },
 };
 
-let menuDataProviderEngine: MenuStoreDataProviderEngine;
+let menuDataProviderEngine: MenuDataDataProviderEngine;
 beforeAll(() => {
-  menuDataProviderEngine = new MenuStoreDataProviderEngine(MOCK_MENU_DATA);
+  menuDataProviderEngine = new MenuDataDataProviderEngine(MOCK_MENU_DATA);
 });
 
 test('Correct menu data returned with `mainMenu` menuType', async () => {

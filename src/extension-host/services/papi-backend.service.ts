@@ -72,7 +72,7 @@ const papi = {
   projectLookup: projectLookupService as ProjectLookupServiceType,
   /** JSDOC DESTINATION extensionStorageService */
   storage: extensionStorageService as ExtensionStorageService,
-  /** JSDOC DESTINATION menuStoreService */
+  /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService,
 };
 /* eslint-enable */
@@ -123,6 +123,6 @@ Object.freeze(papi.projectLookup);
 /** JSDOC DESTINATION extensionStorageService */
 export const { storage } = papi;
 Object.freeze(papi.storage);
-/** JSDOC DESTINATION menuStoreService */
+/** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);

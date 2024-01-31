@@ -1,10 +1,10 @@
 import {
   MenuContent,
   MenuData,
-  MenuStoreDataTypes,
-  MenuStoreServiceType,
-  menuStoreServiceObjectToProxy,
-  menuStoreServiceProviderName,
+  MenuDataDataTypes,
+  IMenuDataService,
+  menuDataServiceObjectToProxy,
+  menuDataServiceProviderName,
 } from '@shared/services/menu-data.service-model';
 import dataProviderService, { DataProviderEngine } from '@shared/services/data-provider.service';
 import IDataProviderEngine from '@shared/models/data-provider-engine.model';
@@ -13,9 +13,9 @@ import { createSyncProxyForAsyncObject, deserialize } from 'platform-bible-utils
 import menuDataObject from '@extension-host/data/menu.data.json';
 import logger from '@shared/services/logger.service';
 
-export class MenuStoreDataProviderEngine
-  extends DataProviderEngine<MenuStoreDataTypes>
-  implements IDataProviderEngine<MenuStoreDataTypes>
+export class MenuDataDataProviderEngine
+  extends DataProviderEngine<MenuDataDataTypes>
+  implements IDataProviderEngine<MenuDataDataTypes>
 {
   private menuDataMap = new Map<string, MenuContent>();
 
@@ -38,7 +38,7 @@ export class MenuStoreDataProviderEngine
   async setMenuData(
     menuType: string,
     menuContent: MenuContent,
-  ): Promise<DataProviderUpdateInstructions<MenuStoreDataTypes>> {
+  ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
     // throw new Error('setMenuData disabled');
     logger.info(menuType, menuContent);
     return false;
@@ -67,15 +67,15 @@ function getMenuDataObject(): MenuData {
 
 let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
-let dataProvider: MenuStoreServiceType;
+let dataProvider: IMenuDataService;
 export async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
           dataProvider = await dataProviderService.registerEngine(
-            menuStoreServiceProviderName,
-            new MenuStoreDataProviderEngine(await getMenuDataObject()),
+            menuDataServiceProviderName,
+            new MenuDataDataProviderEngine(await getMenuDataObject()),
           );
           resolve();
         } catch (error) {
@@ -88,7 +88,7 @@ export async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-export const menuStoreService = createSyncProxyForAsyncObject<MenuStoreServiceType>(async () => {
+export const menuDataService = createSyncProxyForAsyncObject<IMenuDataService>(async () => {
   await initialize();
   return dataProvider;
-}, menuStoreServiceObjectToProxy);
+}, menuDataServiceObjectToProxy);

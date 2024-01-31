@@ -1,19 +1,19 @@
 import dataProviderService from '@shared/services/data-provider.service';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import {
-  MenuStoreServiceType,
-  menuStoreServiceObjectToProxy,
-  menuStoreServiceProviderName,
+  IMenuDataService,
+  menuDataServiceObjectToProxy,
+  menuDataServiceProviderName,
 } from '@shared/services/menu-data.service-model';
 
-let dataProvider: MenuStoreServiceType;
+let dataProvider: IMenuDataService;
 let initializationPromise: Promise<void>;
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          const provider = await dataProviderService.get(menuStoreServiceProviderName);
+          const provider = await dataProviderService.get(menuDataServiceProviderName);
           if (!provider) throw new Error('Menu data service undefined');
           dataProvider = provider;
           resolve();
@@ -28,13 +28,13 @@ async function initialize(): Promise<void> {
 }
 
 /**
- * JSDOC SOURCE menuStoreService
+ * JSDOC SOURCE menuDataService
  *
  * Service that allows to get and store menu data
  */
-const menuDataService = createSyncProxyForAsyncObject<MenuStoreServiceType>(async () => {
+const menuDataService = createSyncProxyForAsyncObject<IMenuDataService>(async () => {
   await initialize();
   return dataProvider;
-}, menuStoreServiceObjectToProxy);
+}, menuDataServiceObjectToProxy);
 
 export default menuDataService;

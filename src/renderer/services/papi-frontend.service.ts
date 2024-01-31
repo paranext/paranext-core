@@ -72,7 +72,7 @@ const papi = {
   react: papiReact,
   /** JSDOC DESTINATION settingsService */
   settings: settingsService as SettingsService,
-  /** JSDOC DESTINATION menuStoreService */
+  /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService,
 };
 /* eslint-enable */
@@ -126,7 +126,7 @@ Object.freeze(papi.react);
 /** JSDOC DESTINATION settingsService */
 export const { settings } = papi;
 Object.freeze(papi.settings);
-/** JSDOC DESTINATION menuStoreService */
+/** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);
 

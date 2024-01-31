@@ -4,28 +4,30 @@ import {
   DataProviderDataType,
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
-} from './papi-core.service';
+} from '@shared/models/data-provider.model';
 
-export const menuStoreServiceProviderName = 'platform.menuStoreServiceDataProvider';
-export const menuStoreServiceObjectToProxy = Object.freeze({ name: menuStoreServiceProviderName });
+export const menuDataServiceProviderName = 'platform.menuDataServiceDataProvider';
+export const menuDataServiceObjectToProxy = Object.freeze({
+  dataProviderName: menuDataServiceProviderName,
+});
 
 // Data Type to initialize data provider engine with
-export type MenuStoreDataTypes = {
+export type MenuDataDataTypes = {
   MenuData: DataProviderDataType<string, MenuContent, MenuContent>;
 };
 
 declare module 'papi-shared-types' {
   export interface DataProviders {
-    [menuStoreServiceProviderName]: MenuStoreServiceType;
+    [menuDataServiceProviderName]: IMenuDataService;
   }
 }
 
 /**
- * JSDOC SOURCE menuStoreService
+ * JSDOC SOURCE menuDataService
  *
  * Provides Menu data for specific menu
  */
-export type MenuStoreServiceType = {
+export type IMenuDataService = {
   /**
    * Look up menu data for specific menu key
    *
@@ -43,7 +45,7 @@ export type MenuStoreServiceType = {
   setMenuData: (
     menuType: string,
     menuContent: MenuContent,
-  ) => Promise<DataProviderUpdateInstructions<MenuStoreDataTypes>>;
+  ) => Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
   /**
    * Subscribe to run a callback function when the menu data is changed
    *
@@ -58,7 +60,7 @@ export type MenuStoreServiceType = {
     options?: DataProviderSubscriberOptions,
   ) => Promise<UnsubscriberAsync>;
 } & OnDidDispose &
-  typeof menuStoreServiceObjectToProxy;
+  typeof menuDataServiceObjectToProxy;
 
 export type MenuData = {
   [menuType: string]: MenuContent;
