@@ -21,6 +21,7 @@ export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscri
 export {
   newGuid,
   isString,
+  deepClone,
   debounce,
   groupBy,
   getErrorMessage,

@@ -21,6 +21,19 @@ export function isString(o: unknown): o is string {
 }
 
 /**
+ * If deepClone isn't used when copying properties between objects, you may be left with dangling
+ * references between the source and target of property copying operations.
+ *
+ * @param obj Object to clone
+ * @returns Duplicate copy of `obj` without any references back to the original one
+ */
+export function deepClone<T>(obj: T): T {
+  // Assert the return type matches what is expected
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return JSON.parse(JSON.stringify(obj)) as T;
+}
+
+/**
  * Get a function that reduces calls to the function passed in
  *
  * @param fn The function to debounce

@@ -367,7 +367,7 @@ test('Sample documents all validate', () => {
   const menuCombiner = new MenuDocumentCombiner(startingDoc);
   menuCombiner.addOrUpdateContribution('paratext', paratextExtensionContribution);
   menuCombiner.addOrUpdateContribution('videoExtension', videoExtensionContribution);
-  expect(deepEqual(menuCombiner.output, expectedOutput)).toBeTruthy();
+  expect(deepEqual(menuCombiner.rawOutput, expectedOutput)).toBeTruthy();
 });
 
 test('Schema regex checking works as expected', () => {
@@ -559,4 +559,161 @@ test('Name prefixes are verified', () => {
       },
     }),
   ).toThrow(/Cannot add a new web view unless it starts with test./);
+});
+
+test('Web view menu defaults are combined', async () => {
+  const menuCombiner = new MenuDocumentCombiner({
+    mainMenu: {
+      columns: {},
+      groups: {},
+      items: [],
+    },
+    defaultWebViewTopMenu: {
+      columns: {
+        'platform.topColumn': { label: '%test%', order: 1 },
+      },
+      groups: {
+        'platform.topGroup': { column: 'platform.topColumn', order: 1 },
+      },
+      items: [
+        {
+          label: '%test%',
+          group: 'platform.topGroup',
+          order: 1,
+          command: 'platform.test',
+        },
+      ],
+    },
+    defaultWebViewContextMenu: {
+      groups: {
+        'platform.contextGroup': { order: 1, isExtensible: true },
+      },
+      items: [
+        {
+          label: '%test%',
+          group: 'platform.contextGroup',
+          order: 1,
+          command: 'platform.test',
+        },
+      ],
+    },
+    webViewMenus: {},
+  });
+  menuCombiner.addOrUpdateContribution('testWebView', {
+    webViewMenus: {
+      'testWebView.testWebView': {
+        includeDefaults: true,
+        topMenu: {
+          columns: {
+            'testWebView.topColumn': { label: '%video%', order: 2 },
+          },
+          groups: {
+            'testWebView.topGroup': { column: 'testWebView.topColumn', order: 1 },
+          },
+          items: [
+            {
+              label: '%testWebViewItem%',
+              group: 'testWebView.topGroup',
+              order: 1,
+              command: 'platform.whatever',
+            },
+          ],
+        },
+        contextMenu: {
+          groups: {},
+          items: [
+            {
+              label: '%testWebViewItem%',
+              group: 'platform.contextGroup',
+              order: 2,
+              command: 'platform.whatever',
+            },
+          ],
+        },
+      },
+    },
+  });
+  const expectedWebViewOutput = {
+    mainMenu: {
+      columns: {},
+      groups: {},
+      items: [],
+    },
+    defaultWebViewTopMenu: {
+      columns: {
+        'platform.topColumn': { label: '%test%', order: 1 },
+      },
+      groups: {
+        'platform.topGroup': { column: 'platform.topColumn', order: 1 },
+      },
+      items: [
+        {
+          label: '%test%',
+          group: 'platform.topGroup',
+          order: 1,
+          command: 'platform.test',
+        },
+      ],
+    },
+    defaultWebViewContextMenu: {
+      groups: {
+        'platform.contextGroup': { order: 1, isExtensible: true },
+      },
+      items: [
+        {
+          label: '%test%',
+          group: 'platform.contextGroup',
+          order: 1,
+          command: 'platform.test',
+        },
+      ],
+    },
+    webViewMenus: {
+      'testWebView.testWebView': {
+        includeDefaults: true,
+        topMenu: {
+          columns: {
+            'platform.topColumn': { label: '%test%', order: 1 },
+            'testWebView.topColumn': { label: '%video%', order: 2 },
+          },
+          groups: {
+            'platform.topGroup': { column: 'platform.topColumn', order: 1 },
+            'testWebView.topGroup': { column: 'testWebView.topColumn', order: 1 },
+          },
+          items: [
+            {
+              label: '%testWebViewItem%',
+              group: 'testWebView.topGroup',
+              order: 1,
+              command: 'platform.whatever',
+            },
+            {
+              label: '%test%',
+              group: 'platform.topGroup',
+              order: 1,
+              command: 'platform.test',
+            },
+          ],
+        },
+        contextMenu: {
+          groups: { 'platform.contextGroup': { order: 1, isExtensible: true } },
+          items: [
+            {
+              label: '%testWebViewItem%',
+              group: 'platform.contextGroup',
+              order: 2,
+              command: 'platform.whatever',
+            },
+            {
+              label: '%test%',
+              group: 'platform.contextGroup',
+              order: 1,
+              command: 'platform.test',
+            },
+          ],
+        },
+      },
+    },
+  };
+  expect(deepEqual(await menuCombiner.getCurrentMenus(), expectedWebViewOutput)).toBeTruthy();
 });

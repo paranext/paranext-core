@@ -1,14 +1,31 @@
 /* eslint-disable max-classes-per-file */
-import DocumentCombinerEngine, { JsonDocumentLike } from './document-combiner-engine';
+import DocumentCombinerEngine, {
+  DocumentCombinerOptions,
+  JsonDocumentLike,
+} from './document-combiner-engine';
 
 // #region Combiner implementations
 
+// Add a common getter to obtain the combined document
+abstract class TestDocumentCombinerEngine extends DocumentCombinerEngine {
+  /** Gets the latest output of all composed documents */
+  get output(): JsonDocumentLike | undefined {
+    return this.latestOutput;
+  }
+
+  // Implementing an abstract base class method
+  // eslint-disable-next-line class-methods-use-this
+  protected transformFinalOutput(finalOutput: JsonDocumentLike): JsonDocumentLike {
+    return finalOutput;
+  }
+}
+
 /** Combine all provided documents without any checking */
-class DocumentCombinerWithoutValidation extends DocumentCombinerEngine {
-  // Lint doesn't understand that making something public that was protected isn't useless
-  // eslint-disable-next-line @typescript-eslint/no-useless-constructor
-  constructor(startingDocument: JsonDocumentLike, copyDocuments: boolean) {
-    super(startingDocument, copyDocuments);
+class DocumentCombinerWithoutValidation extends TestDocumentCombinerEngine {
+  constructor(startingDocument: JsonDocumentLike, options?: DocumentCombinerOptions) {
+    let optionsWithDefault = { copyDocuments: true, ignoreDuplicateProperties: false };
+    if (options) optionsWithDefault = options;
+    super(startingDocument, optionsWithDefault);
   }
 
   // We have the implement this abstract function but don't want it to do anything
@@ -25,10 +42,9 @@ class DocumentCombinerWithoutValidation extends DocumentCombinerEngine {
 }
 
 /** Throw a validation error on any operation, including construction */
-class AlwaysThrowingCombiner extends DocumentCombinerEngine {
-  // eslint-disable-next-line @typescript-eslint/no-useless-constructor
+class AlwaysThrowingCombiner extends TestDocumentCombinerEngine {
   constructor(startingDocument: JsonDocumentLike) {
-    super(startingDocument, true);
+    super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -48,12 +64,12 @@ class AlwaysThrowingCombiner extends DocumentCombinerEngine {
 }
 
 /** Throw a validation error on any operation after construction is complete */
-class ThrowingCombiner extends DocumentCombinerEngine {
+class ThrowingCombiner extends TestDocumentCombinerEngine {
   throwEnabled: boolean = false;
 
-  constructor(startingDocument: JsonDocumentLike, shouldThrow: boolean) {
-    super(startingDocument, true);
-    this.throwEnabled = shouldThrow;
+  constructor(startingDocument: JsonDocumentLike) {
+    super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
+    this.throwEnabled = true;
   }
 
   protected validateStartingDocument(): void {
@@ -70,10 +86,9 @@ class ThrowingCombiner extends DocumentCombinerEngine {
 }
 
 /** Throw a validation error only when checking the output */
-class OutputThrowingCombiner extends DocumentCombinerEngine {
-  // eslint-disable-next-line @typescript-eslint/no-useless-constructor
+class OutputThrowingCombiner extends TestDocumentCombinerEngine {
   constructor(startingDocument: JsonDocumentLike) {
-    super(startingDocument, true);
+    super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -97,7 +112,7 @@ test('Simple combining works', () => {
   const newC = { c: 4 };
   const arrayD1 = { d: ['red', 'yellow'] };
   const arrayD2 = { d: ['blue', 'green'] };
-  const combiner = new DocumentCombinerWithoutValidation(hasA, true);
+  const combiner = new DocumentCombinerWithoutValidation(hasA);
   expect(JSON.stringify(combiner.output)).toBe('{"a":1}');
   combiner.addOrUpdateContribution('B', hasB);
   expect(JSON.stringify(combiner.output)).toBe('{"a":1,"b":2}');
@@ -121,14 +136,20 @@ test('Collisions are not allowed', () => {
   const hasA = { a: 1 };
   const newA = { a: 2 };
   const nestedObject = { b: { c: { d: 9 } } };
-  const combiner = new DocumentCombinerWithoutValidation(hasA, true);
-  expect(() => combiner.addOrUpdateContribution('A', newA)).toThrow();
-  combiner.addOrUpdateContribution('B', nestedObject);
-  expect(() => combiner.addOrUpdateContribution('C', nestedObject)).toThrow();
+  const throwingCombiner = new DocumentCombinerWithoutValidation(hasA);
+  expect(() => throwingCombiner.addOrUpdateContribution('A', newA)).toThrow();
+  throwingCombiner.addOrUpdateContribution('B', nestedObject);
+  expect(() => throwingCombiner.addOrUpdateContribution('C', nestedObject)).toThrow();
+  const nonThrowingCombiner = new DocumentCombinerWithoutValidation(hasA, {
+    copyDocuments: true,
+    ignoreDuplicateProperties: true,
+  });
+  expect(() => nonThrowingCombiner.addOrUpdateContribution('A', newA)).not.toThrow();
+  expect(JSON.stringify(nonThrowingCombiner.output)).toBe('{"a":1}');
 });
 
 test('Can handle various empty contributions', () => {
-  const combiner = new DocumentCombinerWithoutValidation({}, true);
+  const combiner = new DocumentCombinerWithoutValidation({});
   expect(() => combiner.addOrUpdateContribution('A', {})).not.toThrow();
   // @ts-expect-error: Purposefully passing garbage
   expect(() => combiner.addOrUpdateContribution('A', undefined)).not.toThrow();
@@ -143,7 +164,7 @@ test('Validation checking works', () => {
     new AlwaysThrowingCombiner({});
   }).toThrow();
 
-  const combiner = new ThrowingCombiner({}, true);
+  const combiner = new ThrowingCombiner({});
   expect(() => combiner.updateBaseDocument({})).toThrow();
   expect(() => combiner.addOrUpdateContribution('A', {})).toThrow();
 
@@ -158,7 +179,7 @@ test('Modifying contributed documents has no impact when copying documents', () 
   const simpleObject = { a: 1 };
   const nestedObject = { b: { c: { d: 9 } } };
   const arrayObject = { e: ['red', 'yellow'] };
-  const combiner = new DocumentCombinerWithoutValidation(emptyObject, true);
+  const combiner = new DocumentCombinerWithoutValidation(emptyObject);
   combiner.addOrUpdateContribution('simple', simpleObject);
   simpleObject.a = 2;
   combiner.rebuild();
@@ -178,7 +199,10 @@ test('Modifying contributed documents has an impact when not copying documents',
   const simpleObject = { a: 1 };
   const nestedObject = { b: { c: { d: 9 } } };
   const arrayObject = { e: ['red', 'yellow'] };
-  const combiner = new DocumentCombinerWithoutValidation(emptyObject, false);
+  const combiner = new DocumentCombinerWithoutValidation(emptyObject, {
+    copyDocuments: false,
+    ignoreDuplicateProperties: false,
+  });
   combiner.addOrUpdateContribution('simple', simpleObject);
   simpleObject.a = 2;
   combiner.rebuild();

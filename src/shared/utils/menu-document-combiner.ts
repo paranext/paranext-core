@@ -1,18 +1,37 @@
 import {
   PlatformMenus,
+  MultiColumnMenu,
+  SingleColumnMenu,
   ColumnsWithHeaders,
   Groups,
   MenuItemBase,
-  ReferencedItem,
-  menuDocumentSchema,
   MenuItemContainingSubmenu,
   MenuItemContainingCommand,
+  ReferencedItem,
+  LocalizeKey,
+  menuDocumentSchema,
 } from '@shared/models/menus.model';
-import { DocumentCombinerEngine, JsonDocumentLike } from 'platform-bible-utils';
+import {
+  DocumentCombinerEngine,
+  DocumentCombinerOptions,
+  JsonDocumentLike,
+  deepClone,
+} from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
+import localizationService from '@shared/services/localization.service';
+import NonValidatingDocumentCombiner from './non-validating-document-combiner';
 
-// From https://stackoverflow.com/questions/61132262/typescript-deep-partial
+/** Within type T, recursively change all properties to be optional */
 type DeepPartial<T> = T extends object ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
+
+/** Within type T, recursively change properties that were of type A to be of type B */
+type ReplaceType<T, A, B> = T extends A
+  ? B
+  : T extends object
+    ? { [K in keyof T]: ReplaceType<T[K], A, B> }
+    : T;
+
+export type LocalizedMenus = ReplaceType<PlatformMenus, LocalizeKey, string>;
 
 // #region Helper functions
 
@@ -135,6 +154,48 @@ function checkMenuItemsForDuplicateOrdering(menuItems: MenuItemBase[] | undefine
   });
 }
 
+async function localizeColumns(
+  columns: ReplaceType<ColumnsWithHeaders, LocalizeKey, string> | undefined,
+) {
+  if (!columns) return;
+  const strings: string[] = [];
+  Object.getOwnPropertyNames(columns).forEach((columnName: string) => {
+    // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const column = columns[columnName as ReferencedItem];
+    if (!!column && typeof column === 'object') strings.concat([column.label]);
+  });
+  if (strings.length <= 0) return;
+
+  const newStrings = await localizationService.getLocalizedStrings(strings);
+  Object.getOwnPropertyNames(columns).forEach((columnName: string) => {
+    // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const column = columns[columnName as ReferencedItem];
+    if (!!column && typeof column === 'object') column.label = newStrings[column.label];
+  });
+}
+
+async function localizeMenuItems(
+  menuItems: ReplaceType<MenuItemBase, LocalizeKey, string>[] | undefined,
+) {
+  if (!menuItems) return;
+  const strings: string[] = [];
+  menuItems.forEach((menuItem) => {
+    strings.concat([menuItem.label]);
+    if (menuItem.tooltip) strings.concat([menuItem.tooltip]);
+    if (menuItem.searchTerms) strings.concat([menuItem.searchTerms]);
+  });
+  if (strings.length <= 0) return;
+
+  const newStrings = await localizationService.getLocalizedStrings(strings);
+  menuItems.forEach((menuItem) => {
+    menuItem.label = newStrings[menuItem.label];
+    if (menuItem.tooltip) menuItem.tooltip = newStrings[menuItem.tooltip];
+    if (menuItem.searchTerms) menuItem.searchTerms = newStrings[menuItem.searchTerms];
+  });
+}
+
 // #endregion
 
 /**
@@ -143,8 +204,23 @@ function checkMenuItemsForDuplicateOrdering(menuItems: MenuItemBase[] | undefine
  * platform, and all the contribution documents are expected to be provided by extensions.
  */
 export default class MenuDocumentCombiner extends DocumentCombinerEngine {
-  constructor(startingDocument: JsonDocumentLike) {
-    super(startingDocument, false);
+  private localizedOutput: LocalizedMenus | undefined;
+  private originalOutputThatWasLocalized: JsonDocumentLike | undefined;
+
+  constructor(baseDocument: JsonDocumentLike) {
+    super(baseDocument, { copyDocuments: false, ignoreDuplicateProperties: false });
+  }
+
+  /**
+   * Get the latest menu document without replacing any LocalizeKey values with their localized
+   * strings. Document composition and validation has been completed with this output.
+   *
+   * Use `getCurrentMenus` instead if you want the final menu document including localizations.
+   */
+  get rawOutput(): PlatformMenus | undefined {
+    // TS type should be valid since schema validation has been completed
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return this.latestOutput as PlatformMenus;
   }
 
   /**
@@ -157,29 +233,57 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
    * the input documents are static, then there is no need to ever rebuild once all the documents
    * have been contributed to this combiner.
    */
-  get currentMenus(): PlatformMenus | undefined {
-    // If the output has something stored it in, then it has been validated to match the menu type
+  async getCurrentMenus(): Promise<LocalizedMenus | undefined> {
+    if (!this.latestOutput) return undefined;
+    if (this.originalOutputThatWasLocalized === this.latestOutput) return this.localizedOutput;
+
+    this.originalOutputThatWasLocalized = this.latestOutput;
+    // Assert the output type we are transforming the combined document into
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    if (this.latestOutput) return this.latestOutput as PlatformMenus;
-    return undefined;
+    const retVal = deepClone(this.originalOutputThatWasLocalized) as LocalizedMenus;
+
+    await Promise.all([
+      localizeColumns(retVal.mainMenu.columns),
+      localizeMenuItems(retVal.mainMenu.items),
+      localizeColumns(retVal.defaultWebViewTopMenu.columns),
+      localizeMenuItems(retVal.defaultWebViewTopMenu.items),
+      localizeMenuItems(retVal.defaultWebViewContextMenu.items),
+    ]);
+    await Promise.all(
+      Object.getOwnPropertyNames(retVal.webViewMenus).map(async (webViewName: string) => {
+        // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const typedWebViewName = webViewName as ReferencedItem;
+        const webViewMenu = retVal.webViewMenus[typedWebViewName];
+        await Promise.all([
+          localizeColumns(webViewMenu.topMenu?.columns),
+          localizeMenuItems(webViewMenu.topMenu?.items),
+          localizeMenuItems(webViewMenu.contextMenu?.items),
+        ]);
+      }),
+    );
+
+    // Save the transformed output in case someone asks for it again
+    this.localizedOutput = retVal;
+    return retVal;
   }
 
   // We have to implement abstract methods but don't need to use `this`
   // eslint-disable-next-line class-methods-use-this
-  protected validateStartingDocument(startingDocument: JsonDocumentLike): void {
+  protected validateStartingDocument(baseDocument: JsonDocumentLike): void {
     // The starting document has to validate against the output schema, too
-    performSchemaValidation(startingDocument, 'starting');
+    performSchemaValidation(baseDocument, 'starting');
   }
 
-  // Extension contributions are subsets of the whole schema, so don't do normal schema validation
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
   protected validateContribution(documentName: string, document: JsonDocumentLike): void {
-    const { currentMenus } = this;
+    // We know that latestOutput matches the type due to schema validation
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const currentMenus = this.latestOutput as PlatformMenus;
 
     // Type assert all menu properties as partial to make it easier to work with
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const newMenus = document as DeepPartial<PlatformMenus>;
-    const namePrefix = `${documentName}.`;
+    const namePrefix = documentName ? `${documentName}.` : '';
 
     checkNewColumns(newMenus.mainMenu?.columns, namePrefix, currentMenus?.mainMenu.columns);
     checkNewGroups(newMenus.mainMenu?.groups, namePrefix, currentMenus?.mainMenu.columns);
@@ -256,5 +360,42 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
       checkMenuGroupsForDuplicateOrdering(webViewMenu.contextMenu?.groups);
       checkMenuItemsForDuplicateOrdering(webViewMenu.contextMenu?.items);
     });
+  }
+
+  // Combine the webview menu defaults for any web views that indicate that is desired
+  // We have to implement abstract methods but don't need to use `this`
+  // eslint-disable-next-line class-methods-use-this
+  protected transformFinalOutput(finalOutput: JsonDocumentLike): JsonDocumentLike {
+    // The document given to us should be of this type
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const retVal = finalOutput as PlatformMenus;
+    Object.getOwnPropertyNames(retVal.webViewMenus).forEach((webViewName: string) => {
+      // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const typedWebViewName = webViewName as ReferencedItem;
+      const webViewMenu = retVal.webViewMenus[typedWebViewName];
+
+      // Check if we need to fold the default menus into this web view's menus
+      if (!webViewMenu.includeDefaults) return;
+      const options: DocumentCombinerOptions = {
+        copyDocuments: false,
+        ignoreDuplicateProperties: true,
+      };
+
+      const startingTopMenu = webViewMenu.topMenu ?? {};
+      const topMenuCombiner = new NonValidatingDocumentCombiner(startingTopMenu, options);
+      topMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewTopMenu);
+      // Assert that type that schema validation should have already sorted out
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      webViewMenu.topMenu = topMenuCombiner.output as MultiColumnMenu | undefined;
+
+      const startingContextMenu = webViewMenu.contextMenu ?? {};
+      const contextMenuCombiner = new NonValidatingDocumentCombiner(startingContextMenu, options);
+      contextMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewContextMenu);
+      // Assert that type that schema validation should have already sorted out
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      webViewMenu.contextMenu = contextMenuCombiner.output as SingleColumnMenu | undefined;
+    });
+    return retVal;
   }
 }
