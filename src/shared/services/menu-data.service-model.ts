@@ -5,6 +5,7 @@ import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
+import { IDataProvider } from './papi-core.service';
 
 export const menuDataServiceProviderName = 'platform.menuDataServiceDataProvider';
 export const menuDataServiceObjectToProxy = Object.freeze({
@@ -60,7 +61,8 @@ export type IMenuDataService = {
     options?: DataProviderSubscriberOptions,
   ) => Promise<UnsubscriberAsync>;
 } & OnDidDispose &
-  typeof menuDataServiceObjectToProxy;
+  typeof menuDataServiceObjectToProxy &
+  IDataProvider<MenuDataDataTypes>;
 
 export type MenuData = {
   [menuType: string]: MenuContent;

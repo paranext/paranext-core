@@ -23,6 +23,7 @@ import { DialogService } from '@shared/services/dialog.service-model';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
 import PapiRendererWebSocket from '@renderer/services/renderer-web-socket.service';
 import menuDataService from '@shared/services/menu-data.service';
+import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import PapiRendererXMLHttpRequest from './renderer-xml-http-request.service';
 
 // IMPORTANT NOTES:
@@ -73,7 +74,7 @@ const papi = {
   /** JSDOC DESTINATION settingsService */
   settings: settingsService as SettingsService,
   /** JSDOC DESTINATION menuDataService */
-  menuData: menuDataService,
+  menuData: menuDataService as IMenuDataService,
 };
 /* eslint-enable */
 

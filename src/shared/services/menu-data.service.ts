@@ -27,11 +27,6 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-/**
- * JSDOC SOURCE menuDataService
- *
- * Service that allows to get and store menu data
- */
 const menuDataService = createSyncProxyForAsyncObject<IMenuDataService>(async () => {
   await initialize();
   return dataProvider;
