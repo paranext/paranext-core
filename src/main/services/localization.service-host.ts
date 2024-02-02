@@ -10,7 +10,7 @@ import logger from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
 
 const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
-const LANGUAGE_CODE_REGEX = /\/([a-zA-Z]+)\.json$/;
+const LANGUAGE_CODE_REGEX = /[\\/]+([a-zA-Z]+)\.json$/;
 const DEFAULT_LANGUAGE = 'eng';
 
 function getLanguageCodeFromUri(uriToMatch: string): string {
