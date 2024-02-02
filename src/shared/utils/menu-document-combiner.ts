@@ -248,8 +248,6 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
       localizeColumns(retVal.defaultWebViewTopMenu.columns),
       localizeMenuItems(retVal.defaultWebViewTopMenu.items),
       localizeMenuItems(retVal.defaultWebViewContextMenu.items),
-    ]);
-    await Promise.all(
       Object.getOwnPropertyNames(retVal.webViewMenus).map(async (webViewName: string) => {
         // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
         // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -261,7 +259,7 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
           localizeMenuItems(webViewMenu.contextMenu?.items),
         ]);
       }),
-    );
+    ]);
 
     // Save the transformed output in case someone asks for it again
     this.localizedOutput = retVal;
