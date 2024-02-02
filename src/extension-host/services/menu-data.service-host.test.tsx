@@ -185,7 +185,7 @@ const menuDataProviderEngine =
   testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
 
 test('Get main menu data', async () => {
-  const result = await menuDataProviderEngine.getMainMenu();
+  const result = await menuDataProviderEngine.getMainMenu('mainMenu');
   expect(result).toEqual(MOCK_MENU_DATA.mainMenu);
 });
 
