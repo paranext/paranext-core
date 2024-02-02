@@ -2,14 +2,9 @@
   background-color: transparent;
 }
 
-.papi-menu.paratext .papi-menu-item {
-  background-color: darkgreen;
-  color: greenyellow;
-}
-
-.papi-menu.paratext.bright .papi-menu-item {
-  background-color: greenyellow;
-  color: darkgreen;
+.papi-menu-icon-trailing {
+  margin-left: 10px;
+  place-content: flex-end;
 }
 
 .papi-menu-item img {

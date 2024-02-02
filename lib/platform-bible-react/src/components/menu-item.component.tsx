@@ -82,7 +82,7 @@ export type MenuItemInfo = Command & {
 
 function getIcon(icon: string | undefined, menuLabel: string, leading: boolean) {
   return icon ? (
-    <MuiListItemIcon>
+    <MuiListItemIcon className={`papi-menu-icon-${leading ? 'leading' : 'trailing'}`}>
       <img src={icon} alt={`${leading ? 'Leading' : 'Trailing'} icon for ${menuLabel}`} />
     </MuiListItemIcon>
   ) : undefined;

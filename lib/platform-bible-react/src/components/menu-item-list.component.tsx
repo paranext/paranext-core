@@ -1,5 +1,4 @@
 import MenuItem, { CommandHandler, MenuItemInfo } from './menu-item.component';
-import './menu-item-list.component.css';
 
 export type MenuItemListProps = {
   /** Optional unique identifier */
@@ -27,31 +26,21 @@ export type MenuItemListProps = {
  * own. It is used to generate and lay out the MenuItems to appear on either a GridMenu or a
  * ContextMenu.
  */
-export default function MenuItemList({
-  commandHandler,
-  className,
-  items,
-  id,
-  onClick,
-}: MenuItemListProps) {
+export default function MenuItemList({ commandHandler, items, onClick }: MenuItemListProps) {
   const allowForLeadingIcons = items?.find((i) => i.iconPathBefore !== undefined) !== undefined;
 
-  return (
-    <div id={id} className={`papi-menu ${className ?? ''}`}>
-      {items?.map((menuItem, index) => (
-        <MenuItem
-          // By design, menu items will never get reordered. So the index works as a key.
-          // eslint-disable-next-line react/no-array-index-key
-          key={index}
-          className={`papi-menu-item ${menuItem.className}`}
-          allowForLeadingIcons={allowForLeadingIcons}
-          onClick={() => {
-            if (onClick) onClick();
-            commandHandler(menuItem);
-          }}
-          {...menuItem}
-        />
-      ))}
-    </div>
-  );
+  return items?.map((menuItem, index) => (
+    <MenuItem
+      // By design, menu items will never get reordered. So the index works as a key.
+      // eslint-disable-next-line react/no-array-index-key
+      key={index}
+      className={`papi-menu-item ${menuItem.className ?? ''}`}
+      allowForLeadingIcons={allowForLeadingIcons}
+      onClick={() => {
+        if (onClick) onClick();
+        commandHandler(menuItem);
+      }}
+      {...menuItem}
+    />
+  ));
 }

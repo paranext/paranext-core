@@ -237,7 +237,7 @@ export type MenuItemListProps = {
  * own. It is used to generate and lay out the MenuItems to appear on either a GridMenu or a
  * ContextMenu.
  */
-export function MenuItemList({ commandHandler, className, items, id, onClick, }: MenuItemListProps): import("react/jsx-runtime").JSX.Element;
+export function MenuItemList({ commandHandler, items, onClick }: MenuItemListProps): import("react/jsx-runtime").JSX.Element[];
 type MenuColumnInfo = {
 	/** The name of the menu (displayed as the column header). */
 	name: string;
@@ -299,7 +299,7 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
-export function ContextMenu(menuProps: MenuItemListProps): import("react/jsx-runtime").JSX.Element;
+export function ContextMenu(menuProps: React$1.PropsWithChildren<MenuItemListProps>): string | number | boolean | Iterable<React$1.ReactNode> | import("react/jsx-runtime").JSX.Element | null | undefined;
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
 /**

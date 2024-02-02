@@ -87,3 +87,43 @@ export const WithMenu: Story = {
     },
   },
 };
+
+export const WithMenuWithIcons: Story = {
+  args: {
+    commandHandler: HandleMenuCommand,
+    menu: {
+      columns: [
+        {
+          name: 'Menu One',
+          items: [
+            {
+              name: 'Do something normal',
+              command: 'storybookToolbar.log',
+              iconPathBefore: '/sample-icon.png',
+            },
+            {
+              name: 'Do something scary',
+              command: 'storybookToolbar.warn',
+              iconPathAfter: '/sample-icon.png',
+            },
+          ],
+        },
+        {
+          name: 'Last Menu',
+          items: [
+            {
+              name: 'Log a message',
+              command: 'storybookToolbar.log',
+              iconPathBefore: '/sample-icon.png',
+              iconPathAfter: '/sample-icon.png',
+            },
+            {
+              name: 'Nonexistent command',
+              command: 'storybookToolbar.nonexistent',
+            },
+          ],
+        },
+      ],
+    },
+  },
+};

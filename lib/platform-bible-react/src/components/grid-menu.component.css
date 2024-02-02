@@ -17,3 +17,13 @@
   padding-left: 24px;
   margin-top: 0;
 }
+
+.papi-multi-column-menu.paratext {
+  background-color: rgb(76, 106, 76);
+  color: rgb(214, 255, 152);
+}
+
+.papi-multi-column-menu.paratext.bright {
+  color: rgb(76, 106, 76);
+  background-color: rgb(214, 255, 152);
+}

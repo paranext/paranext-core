@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { PropsWithChildren } from 'react';
 import Menu from '@mui/material/Menu';
-import SimpleMenu, { MenuItemListProps } from './menu-item-list.component';
+import MenuItemList, { MenuItemListProps } from './menu-item-list.component';
 import './context-menu.component.css';
 
-export default function ContextMenu(menuProps: MenuItemListProps) {
-  const { className, commandHandler, items } = menuProps;
+export default function ContextMenu(menuProps: PropsWithChildren<MenuItemListProps>) {
+  const { className, commandHandler, items, children } = menuProps;
 
   const [contextMenu, setContextMenu] = React.useState<
     | {
@@ -33,11 +33,18 @@ export default function ContextMenu(menuProps: MenuItemListProps) {
     setContextMenu(undefined);
   };
 
-  return (
-    <div onContextMenu={handleContextMenu} style={{ cursor: 'context-menu' }}>
-      children
+  // If no menu items or children, we don't want to display the context menu at all.
+  return (items?.length ?? 0) === 0 || !children ? (
+    children
+  ) : (
+    <div
+      className={`papi-context-menu-target ${className ?? ''}`}
+      onContextMenu={handleContextMenu}
+      style={{ cursor: 'context-menu' }}
+    >
+      {children}
       <Menu
-        className={`${className} papi-context-menu`}
+        className={`papi-context-menu ${className ?? ''}`}
         open={contextMenu !== undefined}
         onClose={handleClose}
         anchorReference="anchorPosition"
@@ -47,7 +54,7 @@ export default function ContextMenu(menuProps: MenuItemListProps) {
             : undefined
         }
       >
-        <SimpleMenu items={items} commandHandler={commandHandler} onClick={handleClose} />
+        <MenuItemList items={items} commandHandler={commandHandler} onClick={handleClose} />
       </Menu>
     </div>
   );

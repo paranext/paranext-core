@@ -1,6 +1,6 @@
-import { Grid } from '@mui/material';
+import { Grid, List } from '@mui/material';
 import { CommandHandler, MenuItemInfo } from './menu-item.component';
-import SimpleMenu, { MenuItemListProps } from './menu-item-list.component';
+import MenuItemList, { MenuItemListProps } from './menu-item-list.component';
 import './grid-menu.component.css';
 
 export type MenuColumnInfo = {
@@ -33,7 +33,9 @@ function MenuColumn({ commandHandler, name, className, items, id }: MenuColumnPr
   return (
     <Grid id={id} item xs="auto" className={`papi-menu-column ${className ?? ''}`}>
       <h3 className={`papi-menu-column-header ${className ?? ''}`}>{name}</h3>
-      <SimpleMenu commandHandler={commandHandler} items={items} />
+      <List id={id} dense className={className ?? ''}>
+        <MenuItemList className={className} commandHandler={commandHandler} items={items} />
+      </List>
     </Grid>
   );
 }

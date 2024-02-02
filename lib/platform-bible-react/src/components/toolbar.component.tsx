@@ -105,7 +105,11 @@ export default function Toolbar({
                 },
               }}
             >
-              <GridMenu commandHandler={toolbarCommandHandler} columns={menu.columns} />
+              <GridMenu
+                className={className}
+                commandHandler={toolbarCommandHandler}
+                columns={menu.columns}
+              />
             </Drawer>
           ) : undefined}
         </MuiToolbar>
