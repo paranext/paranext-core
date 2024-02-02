@@ -1,16 +1,26 @@
 import { MenuData } from '@shared/services/menu-data.service-model';
-import { MenuDataDataProviderEngine } from '@extension-host/services/menu-data.service-host';
+import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
+import { ReferencedItem, WebViewMenus } from '@shared/schemas/menu-data.types';
 
+const EXTENSION_NAME: ReferencedItem = 'videoExtension.playEditWebView';
 const MOCK_MENU_DATA: MenuData = {
   mainMenu: {
     columns: {
       'paratext.paratext': { label: '%mainMenu_Paratext%', order: 0 },
+      'platform.window': { label: '%mainMenu_Window%', order: 1 },
+      'platform.layout': { label: '%mainMenu_Layout%', order: 2 },
+      'platform.help': { label: '%mainMenu_Help%', order: 3, isExtensible: true },
+      isExtensible: true,
     },
     groups: {
       'paratext.sendReceive': { column: 'paratext.paratext', order: 1 },
       'paratext.openCreate': { column: 'paratext.paratext', order: 2 },
       'paratext.saveDelete': { column: 'paratext.paratext', order: 3 },
       'paratext.misc': { column: 'paratext.paratext', order: 9999999, isExtensible: true },
+      'platform.windowGroup1': { column: 'platform.window', order: 1 },
+      'platform.windowGroup2': { column: 'platform.window', order: 2 },
+      'platform.layoutSaveDelete': { column: 'platform.layout', order: 1 },
+      'platform.helpGroup1': { column: 'platform.help', order: 1 },
       'paratext.helpGroup': { column: 'platform.help', order: 100 },
       'paratext.helpSubgroup': { menuItem: 'paratext.helpRoot', order: 1 },
     },
@@ -75,28 +85,122 @@ const MOCK_MENU_DATA: MenuData = {
         order: 1,
         command: 'paratext.showHelpGuide',
       },
+      {
+        label: '%video_AddParatextVideo%',
+        localizeNotes: 'Main application menu > Paratext column > Add Video',
+        group: 'paratext.misc',
+        order: 1,
+        command: 'videoExtension.addParatextVideo',
+      },
     ],
+  },
+  defaultWebViewTopMenu: {
+    columns: {
+      'platform.project': { label: '%webView_Project%', order: 1 },
+      'platform.edit': { label: '%webView_Edit%', order: 2, isExtensible: true },
+    },
+    groups: {
+      'platform.projectTop': { column: 'platform.project', order: 1 },
+      'platform.manageBooks': { column: 'platform.project', order: 2 },
+      'platform.deleteProject': { column: 'platform.project', order: 3 },
+      'platform.projectDetails': { column: 'platform.project', order: 4, isExtensible: true },
+      'platform.undoRedo': { column: 'platform.edit', order: 1 },
+      'platform.cutCopyPaste': { column: 'platform.edit', order: 2 },
+    },
+    items: [
+      {
+        label: '%projectSendReceive%',
+        localizeNotes: 'Web view main menu > Project > Send/Receive this project',
+        group: 'platform.projectTop',
+        order: 1,
+        command: 'platform.sendReceiveProject',
+      },
+      {
+        label: '%projectAssignmentsAndProgress%',
+        localizeNotes: 'Web view main menu > Project > Assignments and progress...',
+        group: 'platform.projectTop',
+        order: 2,
+        command: 'platform.assignments',
+      },
+    ],
+  },
+  defaultWebViewContextMenu: {
+    groups: {
+      'platform.insert': { order: 1, isExtensible: true, menuItem: 'platform.insert' },
+      'platform.wordList': { order: 2, isExtensible: true, menuItem: 'platform.insert' },
+    },
+    items: [
+      {
+        label: '%insertNote%',
+        localizeNotes: 'Web view context menu > Insert note...',
+        group: 'platform.insert',
+        order: 1,
+        command: 'platform.insertNote',
+      },
+      {
+        label: '%wordList%',
+        localizeNotes: 'Web view context menu > Word list...',
+        group: 'platform.wordList',
+        order: 1,
+        command: 'platform.openWordList',
+      },
+    ],
+  },
+  webViewMenus: {
+    'videoExtension.playEditWebView': {
+      includeDefaults: false,
+      topMenu: {
+        columns: {
+          'videoExtension.video': { label: '%video%', order: 1 },
+        },
+        groups: {
+          'videoExtension.videoTop': { column: 'videoExtension.project', order: 1 },
+        },
+        items: [
+          {
+            label: '%playVideo%',
+            localizeNotes: 'Example localize Notes',
+            group: 'videoExtension.videoTop',
+            order: 1,
+            command: 'videoExtension.playVideo',
+          },
+          {
+            label: '%editVideo%',
+            localizeNotes: 'Example localize Notes',
+            group: 'videoExtension.videoTop',
+            order: 2,
+            command: 'videoExtension.editVideo',
+          },
+        ],
+      },
+      contextMenu: {
+        groups: {},
+        items: [],
+      },
+    },
   },
 };
 
-let menuDataProviderEngine: MenuDataDataProviderEngine;
-beforeAll(() => {
-  menuDataProviderEngine = new MenuDataDataProviderEngine(MOCK_MENU_DATA);
-});
+const menuDataProviderEngine =
+  testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
 
-test('Correct menu data returned with `mainMenu` menuType', async () => {
-  const result = await menuDataProviderEngine.getMenuData('mainMenu');
+test('Get main menu data', async () => {
+  const result = await menuDataProviderEngine.getMainMenu();
   expect(result).toEqual(MOCK_MENU_DATA.mainMenu);
 });
 
-test('Error is thrown with menuType that does not exist', async () => {
-  await expect(menuDataProviderEngine.getMenuData('wrongMenuType')).rejects.toThrow(
-    'Missing/invalid menu data',
-  );
+test('Set main menu data', async () => {
+  await expect(menuDataProviderEngine.setMainMenu()).rejects.toThrow('setMainMenu disabled');
 });
 
-test('Set function throws error when called', async () => {
-  await expect(
-    menuDataProviderEngine.setMenuData('mainMenu', MOCK_MENU_DATA.mainMenu),
-  ).rejects.toThrow('setMenuData disabled');
+test('Get web view menu data for videoExtension', async () => {
+  const result = await menuDataProviderEngine.getWebViewMenu(EXTENSION_NAME);
+  // If I do not specify the type for this object it will not let me index with EXTENSION_NAME
+  // eslint-disable-next-line prefer-destructuring
+  const webViewMenus: WebViewMenus = MOCK_MENU_DATA.webViewMenus;
+  expect(result).toEqual(webViewMenus[EXTENSION_NAME]);
+});
+
+test('Set web view menu data', async () => {
+  await expect(menuDataProviderEngine.setWebViewMenu()).rejects.toThrow('setWebViewMenu disabled');
 });

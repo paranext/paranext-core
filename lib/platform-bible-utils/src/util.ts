@@ -192,9 +192,10 @@ export function getAllObjectFunctionNames(
  * Creates a synchronous proxy for an asynchronous object. The proxy allows calling methods on an
  * object that is asynchronously fetched using a provided asynchronous function.
  *
- * @param getObject - A function that returns a Promise resolving to the object to be proxied.
- * @param objectToProxy - An optional initial object to use as a placeholder while the actual object
- *   is being fetched.
+ * @param getObject - A function that returns a promise resolving to the object whose asynchronous methods to call.
+ * @param objectToProxy - An optional object that is the object that is proxied. If a property is accessed that does
+ *   exist on this object, it will be returned. If a property is accessed that does not exist on this object,
+ *   it will be considered to be an asynchronous method called on the object returned from getObject.
  * @returns A synchronous proxy for the asynchronous object.
  */
 export function createSyncProxyForAsyncObject<T extends object>(

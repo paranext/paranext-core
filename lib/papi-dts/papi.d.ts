@@ -4200,7 +4200,12 @@ declare module '@papi/core' {
   export type { SettingEvent } from 'shared/services/settings.service';
 }
 declare module 'shared/services/menu-data.service-model' {
-  import { MultiColumnMenu, SingleColumnMenu, WebViewMenus } from 'shared/schemas/menu-data.types';
+  import {
+    MultiColumnMenu,
+    ReferencedItem,
+    WebViewMenu,
+    WebViewMenus,
+  } from 'shared/schemas/menu-data.types';
   import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
   import {
     DataProviderDataType,
@@ -4213,7 +4218,8 @@ declare module 'shared/services/menu-data.service-model' {
     dataProviderName: 'platform.menuDataServiceDataProvider';
   }>;
   export type MenuDataDataTypes = {
-    MenuData: DataProviderDataType<string, MenuContent, MenuContent>;
+    MainMenu: DataProviderDataType<never, MultiColumnMenu, never>;
+    WebViewMenu: DataProviderDataType<ReferencedItem, WebViewMenu, never>;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -4222,38 +4228,53 @@ declare module 'shared/services/menu-data.service-model' {
   }
   /**
    *
-   * Provides Menu data for specific menu
+   * Service that allows to get and store menu data
    */
   export type IMenuDataService = {
     /**
-     * Look up menu data for specific menu key
+     * Get menu content for the main menu
      *
-     * @param menuType String key that corresponds to a menu
-     * @returns Menu content object
+     * @returns MultiColumnMenu object of main menu content
      */
-    getMenuData: (menuType: string) => Promise<MenuContent>;
+    getMainMenu: () => Promise<MultiColumnMenu>;
     /**
-     * Set the menuContent of a specific menuType
+     * Set the menuContent of the main menu
      *
-     * @param menuType String key that corresponds to a menu
-     * @param menuContent Content to set for specific menuType
      * @returns Unsubscriber function
      */
-    setMenuData: (
-      menuType: string,
-      menuContent: MenuContent,
-    ) => Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    setMainMenu: () => Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
     /**
-     * Subscribe to run a callback function when the menu data is changed
+     * Subscribe to run a callback function when the main menu data is changed
      *
-     * @param menuType Tells the provider what changes to listen for
      * @param callback Function to run with the updated menuContent for this selector
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
-    subscribeMenuData: (
-      menuType: string,
-      callback: (menuContent: MenuContent) => void,
+    subscribeMainMenu: (
+      callback: (menuContent: MultiColumnMenu) => void,
+      options?: DataProviderSubscriberOptions,
+    ) => Promise<UnsubscriberAsync>;
+    /**
+     * Get menu content for a web view
+     *
+     * @returns WebViewMenu object of web view menu content
+     */
+    getWebViewMenu: (webViewName: ReferencedItem) => Promise<WebViewMenu>;
+    /**
+     * Set the menuContent of a web view menu
+     *
+     * @returns Unsubscriber function
+     */
+    setWebViewMenu: () => Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the web view menu data is changed
+     *
+     * @param callback Function to run with the updated menuContent for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeWebViewMenu: (
+      callback: (menuContent: WebViewMenu) => void,
       options?: DataProviderSubscriberOptions,
     ) => Promise<UnsubscriberAsync>;
   } & OnDidDispose &
@@ -4262,7 +4283,7 @@ declare module 'shared/services/menu-data.service-model' {
   export type MenuData = {
     [menuType: string]: MenuContent;
   };
-  export type MenuContent = MultiColumnMenu | SingleColumnMenu | WebViewMenus;
+  export type MenuContent = MultiColumnMenu | WebViewMenus;
 }
 declare module 'shared/services/menu-data.service' {
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
@@ -4367,7 +4388,7 @@ declare module '@papi/backend' {
     storage: ExtensionStorageService;
     /**
      *
-     * Provides Menu data for specific menu
+     * Service that allows to get and store menu data
      */
     menuData: IMenuDataService;
   };
@@ -4449,7 +4470,7 @@ declare module '@papi/backend' {
   export const storage: ExtensionStorageService;
   /**
    *
-   * Provides Menu data for specific menu
+   * Service that allows to get and store menu data
    */
   export const menuData: IMenuDataService;
 }
@@ -5096,7 +5117,7 @@ declare module '@papi/frontend' {
     settings: SettingsService;
     /**
      *
-     * Provides Menu data for specific menu
+     * Service that allows to get and store menu data
      */
     menuData: IMenuDataService;
   };
@@ -5181,7 +5202,7 @@ declare module '@papi/frontend' {
   export const settings: SettingsService;
   /**
    *
-   * Provides Menu data for specific menu
+   * Service that allows to get and store menu data
    */
   export const menuData: IMenuDataService;
   export type Papi = typeof papi;

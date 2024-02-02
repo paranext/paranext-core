@@ -1,5 +1,4 @@
 import {
-  MenuContent,
   MenuData,
   MenuDataDataTypes,
   IMenuDataService,
@@ -12,48 +11,75 @@ import { DataProviderUpdateInstructions } from '@shared/models/data-provider.mod
 import { createSyncProxyForAsyncObject, deserialize } from 'platform-bible-utils';
 import menuDataObject from '@extension-host/data/menu.data.json';
 import logger from '@shared/services/logger.service';
+import {
+  MultiColumnMenu,
+  ReferencedItem,
+  WebViewMenu,
+  WebViewMenus,
+} from '@shared/schemas/menu-data.types';
 
-export class MenuDataDataProviderEngine
+class MenuDataDataProviderEngine
   extends DataProviderEngine<MenuDataDataTypes>
   implements IDataProviderEngine<MenuDataDataTypes>
 {
-  private menuDataMap = new Map<string, MenuContent>();
+  private mainMenuMap = new Map<'mainMenu', MultiColumnMenu>();
+  private webViewMenusMap = new Map<ReferencedItem, WebViewMenu>();
 
   constructor(menuData: MenuData) {
     super();
     this.#loadAllMenuData(menuData);
   }
 
-  // TODO: Changes
-  async getMenuData(menuType: string): Promise<MenuContent> {
-    const menuData = this.menuDataMap.get(menuType);
-
-    if (!menuData) throw new Error(`Missing/invalid menu data`);
-    return menuData;
+  async getMainMenu(menuType: 'mainMenu'): Promise<MultiColumnMenu> {
+    const mainMenu = this.mainMenuMap.get(menuType);
+    if (!mainMenu) throw new Error('Missing/invalid menu data');
+    return mainMenu;
   }
 
   // No implementation for this function right now, we just want to throw an error, but it wanted us to use 'this'
   // https://github.com/paranext/paranext-core/issues/425
   // eslint-disable-next-line class-methods-use-this
-  async setMenuData(
-    menuType: string,
-    menuContent: MenuContent,
-  ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
-    // throw new Error('setMenuData disabled');
-    logger.info(menuType, menuContent);
-    return false;
+  async setMainMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
+    throw new Error('setMainMenu disabled');
   }
 
-  #loadAllMenuData(menuData: MenuData): Map<string, MenuContent> {
-    this.menuDataMap.clear();
+  async getWebViewMenu(webViewName: ReferencedItem): Promise<WebViewMenu> {
+    const webViewMenu = this.webViewMenusMap.get(webViewName);
+    if (!webViewMenu) throw new Error('Missing/invalid menu data');
+    return webViewMenu;
+  }
+
+  // No implementation for this function right now, we just want to throw an error, but it wanted us to use 'this'
+  // https://github.com/paranext/paranext-core/issues/425
+  // eslint-disable-next-line class-methods-use-this
+  async setWebViewMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
+    throw new Error('setWebViewMenu disabled');
+  }
+
+  #loadAllMenuData(menuData: MenuData): void {
+    this.mainMenuMap.clear();
+    this.webViewMenusMap.clear();
+
     try {
-      Object.keys(menuData).forEach((menuType) => {
-        this.menuDataMap.set(menuType, menuData[menuType]);
+      // MenuData object contains MenuContent as a type so it can't tell if its specifically MultiColumnMenu
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const mainMenuContent = menuData.mainMenu as MultiColumnMenu;
+
+      this.mainMenuMap.set('mainMenu', mainMenuContent);
+
+      // MenuData object contains MenuContent as a type so it can't tell if its specifically WebViewMenus
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const webViewMenus = menuData.webViewMenus as WebViewMenus;
+
+      // TODO: How to do this better?
+      Object.entries(webViewMenus).forEach((webViewMenu) => {
+        // webViewMenus object above is not iterable, when use Object.entries it maps the ReferencedItems to strings
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        this.webViewMenusMap.set(webViewMenu[0] as ReferencedItem, webViewMenu[1]);
       });
     } catch (error) {
       logger.warn(error);
     }
-    return this.menuDataMap;
   }
 }
 
@@ -75,7 +101,7 @@ export async function initialize(): Promise<void> {
         try {
           dataProvider = await dataProviderService.registerEngine(
             menuDataServiceProviderName,
-            new MenuDataDataProviderEngine(await getMenuDataObject()),
+            new MenuDataDataProviderEngine(getMenuDataObject()),
           );
           resolve();
         } catch (error) {
@@ -88,7 +114,18 @@ export async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-export const menuDataService = createSyncProxyForAsyncObject<IMenuDataService>(async () => {
+/** This is an internal-only export for testing purposes, and should not be used in development */
+export const testingMenuDataService = {
+  implementMenuDataDataProviderEngine: (dataObj: MenuData) => {
+    return new MenuDataDataProviderEngine(dataObj);
+  },
+};
+
+// This will be needed later for disposing of the data provider, choosing to ignore instead of
+// remove code that will be used later
+// @ts-ignore 6133
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const menuDataService = createSyncProxyForAsyncObject<IMenuDataService>(async () => {
   await initialize();
   return dataProvider;
 }, menuDataServiceObjectToProxy);
