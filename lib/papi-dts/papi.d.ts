@@ -4203,6 +4203,7 @@ declare module 'shared/services/menu-data.service-model' {
   import {
     MultiColumnMenu,
     ReferencedItem,
+    SingleColumnMenu,
     WebViewMenu,
     WebViewMenus,
   } from 'shared/schemas/menu-data.types';
@@ -4213,12 +4214,17 @@ declare module 'shared/services/menu-data.service-model' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { IDataProvider } from '@papi/core';
+  /**
+   * Name used to register the data provider
+   *
+   * You can use this name
+   */
   export const menuDataServiceProviderName = 'platform.menuDataServiceDataProvider';
   export const menuDataServiceObjectToProxy: Readonly<{
     dataProviderName: 'platform.menuDataServiceDataProvider';
   }>;
   export type MenuDataDataTypes = {
-    MainMenu: DataProviderDataType<never, MultiColumnMenu, never>;
+    MainMenu: DataProviderDataType<'mainMenu', MultiColumnMenu, never>;
     WebViewMenu: DataProviderDataType<ReferencedItem, WebViewMenu, never>;
   };
   module 'papi-shared-types' {
@@ -4234,9 +4240,10 @@ declare module 'shared/services/menu-data.service-model' {
     /**
      * Get menu content for the main menu
      *
+     * @param 'mainMenu'
      * @returns MultiColumnMenu object of main menu content
      */
-    getMainMenu: () => Promise<MultiColumnMenu>;
+    getMainMenu: (menuType: 'mainMenu') => Promise<MultiColumnMenu>;
     /**
      * Set the menuContent of the main menu
      *
@@ -4283,7 +4290,7 @@ declare module 'shared/services/menu-data.service-model' {
   export type MenuData = {
     [menuType: string]: MenuContent;
   };
-  export type MenuContent = MultiColumnMenu | WebViewMenus;
+  export type MenuContent = MultiColumnMenu | WebViewMenus | SingleColumnMenu;
 }
 declare module 'shared/services/menu-data.service' {
   import { IMenuDataService } from 'shared/services/menu-data.service-model';

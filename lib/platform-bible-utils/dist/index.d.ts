@@ -47,6 +47,100 @@ export declare class AsyncVariable<T> {
 	/** Prevent any further updates to this variable */
 	private complete;
 }
+export type JsonDocumentLike = {
+	[key: string]: unknown;
+};
+/**
+ * Options for DocumentCombinerEngine objects
+ *
+ * - `copyDocuments`: If true, this instance will perform a deep copy of all provided documents before
+ *   composing the output. If false, then changes made to provided documents after they are
+ *   contributed will be reflected in the next time output is composed.
+ * - `ignoreDuplicateProperties`: If true, then duplicate properties are skipped if they are seen in
+ *   contributed documents. If false, then throw when duplicate properties are seen in contributed
+ *   documents.
+ */
+export type DocumentCombinerOptions = {
+	copyDocuments: boolean;
+	ignoreDuplicateProperties: boolean;
+};
+/**
+ * Base class for any code that wants to compose JSON documents (in the form of JS objects) together
+ * into a single output document.
+ */
+export declare abstract class DocumentCombinerEngine {
+	protected baseDocument: JsonDocumentLike;
+	protected readonly contributions: Map<string, JsonDocumentLike>;
+	protected latestOutput: JsonDocumentLike | undefined;
+	protected readonly options: DocumentCombinerOptions;
+	/**
+	 * Create a DocumentCombinerEngine instance
+	 *
+	 * @param baseDocument This is the first document that will be used when composing the output
+	 * @param copyDocuments If true, this instance will perform a deep copy of all provided documents
+	 *   before composing the output. If false, then changes made to provided documents after they are
+	 *   contributed will be reflected in the next time output is composed.
+	 */
+	protected constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions);
+	/**
+	 * Update the starting document for composition process
+	 *
+	 * @param baseDocument Base JSON document/JS object that all other documents are added to
+	 * @returns Recalculated output document given the new starting state and existing other documents
+	 */
+	updateBaseDocument(baseDocument: JsonDocumentLike): JsonDocumentLike | undefined;
+	/**
+	 * Add or update one of the contribution documents for the composition process
+	 *
+	 * @param documentName Name of the contributed document to combine
+	 * @param document Content of the contributed document to combine
+	 * @returns Recalculated output document given the new or updated contribution and existing other
+	 *   documents
+	 */
+	addOrUpdateContribution(documentName: string, document: JsonDocumentLike): JsonDocumentLike | undefined;
+	/**
+	 * Delete one of the contribution documents for the composition process
+	 *
+	 * @param documentName Name of the contributed document to delete
+	 * @returns Recalculated output document given the remaining other documents
+	 */
+	deleteContribution(documentName: string): object | undefined;
+	/**
+	 * Run the document composition process given the starting document and all contributions. Throws
+	 * if the output document fails to validate properly.
+	 *
+	 * @returns Recalculated output document given the starting and contributed documents
+	 */
+	rebuild(): JsonDocumentLike | undefined;
+	/**
+	 * Throw an error if the provided document is not a valid starting document.
+	 *
+	 * @param baseDocument Base JSON document/JS object that all other documents are added to
+	 */
+	protected abstract validateStartingDocument(baseDocument: JsonDocumentLike): void;
+	/**
+	 * Throw an error if the provided document is not a valid contribution document.
+	 *
+	 * @param documentName Name of the contributed document to combine
+	 * @param document Content of the contributed document to combine
+	 */
+	protected abstract validateContribution(documentName: string, document: JsonDocumentLike): void;
+	/**
+	 * Throw an error if the provided output is not valid.
+	 *
+	 * @param output Output document that could potentially be returned to callers
+	 */
+	protected abstract validateOutput(output: JsonDocumentLike): void;
+	/**
+	 * Transform the document that is the composition of the base document and all contribution
+	 * documents. This is the last step that will be run prior to validation before
+	 * `this.latestOutput` is updated to the new output.
+	 *
+	 * @param finalOutput Final output document that could potentially be returned to callers. "Final"
+	 *   means no further contribution documents will be merged.
+	 */
+	protected abstract transformFinalOutput(finalOutput: JsonDocumentLike): JsonDocumentLike;
+}
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
 /**
@@ -205,6 +299,14 @@ export declare function newGuid(): string;
  */
 export declare function isString(o: unknown): o is string;
 /**
+ * If deepClone isn't used when copying properties between objects, you may be left with dangling
+ * references between the source and target of property copying operations.
+ *
+ * @param obj Object to clone
+ * @returns Duplicate copy of `obj` without any references back to the original one
+ */
+export declare function deepClone<T>(obj: T): T;
+/**
  * Get a function that reduces calls to the function passed in
  *
  * @param fn The function to debounce
@@ -263,9 +365,10 @@ export declare function getAllObjectFunctionNames(obj: {
  * Creates a synchronous proxy for an asynchronous object. The proxy allows calling methods on an
  * object that is asynchronously fetched using a provided asynchronous function.
  *
- * @param getObject - A function that returns a Promise resolving to the object to be proxied.
- * @param objectToProxy - An optional initial object to use as a placeholder while the actual object
- *   is being fetched.
+ * @param getObject - A function that returns a promise resolving to the object whose asynchronous methods to call.
+ * @param objectToProxy - An optional object that is the object that is proxied. If a property is accessed that does
+ *   exist on this object, it will be returned. If a property is accessed that does not exist on this object,
+ *   it will be considered to be an asynchronous method called on the object returned from getObject.
  * @returns A synchronous proxy for the asynchronous object.
  */
 export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;

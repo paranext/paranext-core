@@ -8,7 +8,7 @@ declare module 'usfm-data-provider' {
     IDataProvider,
     MandatoryProjectDataType,
   } from '@papi/core';
-  import { Unsubscriber } from 'platform-bible-utils';
+  import { UnsubscriberAsync } from 'platform-bible-utils';
 
   export type UsfmProviderDataTypes = {
     BookNames: DataProviderDataType<boolean, string[], never>;
@@ -139,7 +139,7 @@ declare module 'usfm-data-provider' {
       verseRef: VerseRef,
       callback: (usfm: string | undefined) => void,
       options?: DataProviderSubscriberOptions,
-    ): Unsubscriber;
+    ): Promise<UnsubscriberAsync>;
 
     /** Gets the "raw" USFM data for the specified chapter */
     getChapterUSFM(verseRef: VerseRef): Promise<string | undefined>;
@@ -160,7 +160,7 @@ declare module 'usfm-data-provider' {
       verseRef: VerseRef,
       callback: (usfm: string | undefined) => void,
       options?: DataProviderSubscriberOptions,
-    ): Unsubscriber;
+    ): Promise<UnsubscriberAsync>;
 
     /** Gets the "raw" USFM data for the specified verse */
     getVerseUSFM(verseRef: VerseRef): Promise<string | undefined>;
@@ -181,7 +181,7 @@ declare module 'usfm-data-provider' {
       verseRef: VerseRef,
       callback: (usfm: string | undefined) => void,
       options?: DataProviderSubscriberOptions,
-    ): Unsubscriber;
+    ): Promise<UnsubscriberAsync>;
 
     /** Gets the Scripture text in USX format for the specified chapter */
     getChapterUSX(verseRef: VerseRef): Promise<string | undefined>;
@@ -202,7 +202,7 @@ declare module 'usfm-data-provider' {
       verseRef: VerseRef,
       callback: (usx: string | undefined) => void,
       options?: DataProviderSubscriberOptions,
-    ): Unsubscriber;
+    ): Promise<UnsubscriberAsync>;
 
     /**
      * Gets the tokenized USJ data for the specified book
@@ -239,7 +239,7 @@ declare module 'usfm-data-provider' {
       verseRef: VerseRef,
       callback: (usj: USJDocument | undefined) => void,
       options?: DataProviderSubscriberOptions,
-    ): Unsubscriber;
+    ): Promise<UnsubscriberAsync>;
 
     /**
      * Gets the tokenized USJ data for the specified chapter
@@ -276,7 +276,7 @@ declare module 'usfm-data-provider' {
       verseRef: VerseRef,
       callback: (usj: USJDocument | undefined) => void,
       options?: DataProviderSubscriberOptions,
-    ): Unsubscriber;
+    ): Promise<UnsubscriberAsync>;
 
     /**
      * Gets the tokenized USJ data for the specified verse
@@ -313,7 +313,7 @@ declare module 'usfm-data-provider' {
       verseRef: VerseRef,
       callback: (usj: USJDocument | undefined) => void,
       options?: DataProviderSubscriberOptions,
-    ): Unsubscriber;
+    ): Promise<UnsubscriberAsync>;
 
     /**
      * Gets an extension's serialized project data (so the extension can provide and manipulate its
@@ -356,8 +356,8 @@ declare module 'usfm-data-provider' {
       dataScope: ExtensionDataScope,
       callback: (extensionData: string | undefined) => void,
       options?: DataProviderSubscriberOptions,
-    ): Unsubscriber;
-  };
+    ): Promise<UnsubscriberAsync>;
+  } & ParatextStandardProjectDataProvider;
 
   export type ParatextStandardProjectDataProvider = IDataProvider<ParatextStandardProjectDataTypes>;
 }

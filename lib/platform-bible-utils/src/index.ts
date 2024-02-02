@@ -1,5 +1,6 @@
 // Classes
 export { default as AsyncVariable } from './async-variable';
+export { default as DocumentCombinerEngine } from './document-combiner-engine';
 export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 export { default as PlatformEventEmitter } from './platform-event-emitter.model';
 
@@ -20,6 +21,7 @@ export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscri
 export {
   newGuid,
   isString,
+  deepClone,
   debounce,
   groupBy,
   getErrorMessage,
@@ -41,3 +43,4 @@ export type {
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
 export type { ScriptureReference, BookInfo } from './scripture.model';
 export type { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
+export type { JsonDocumentLike } from './document-combiner-engine';

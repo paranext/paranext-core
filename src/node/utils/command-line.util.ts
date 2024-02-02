@@ -1,25 +1,39 @@
-/** Command-line argument that specifies extra individual extension folders */
-export const ARG_EXTENSIONS = '--extensions';
-/**
- * Command-line argument that specifies extra extension directories in which to check all contained
- * folders for extensions
- */
-export const ARG_EXTENSION_DIRS = '--extensionDirs';
+﻿/** All command line arguments mapped from argument type to array of aliases for the argument */
+type CommandLineArgumentAliases = {
+  [argument in COMMAND_LINE_ARGS]: string[];
+};
 
 /**
- * Command-line argument that specifies log level to use
+ * Command Line Arguments
  *
- * Options: 'error' | 'warn' | 'info' | 'verbose' | 'debug' | 'silly'
- *
- * @see module:electron-log#LogLevel for up-to-date options
+ * - Extensions - Command-line argument that specifies extra individual extension folders
+ * - ExtensionsDir - Command-line argument that specifies extra extension directories in which to
+ *   check all contained folders for extensions
+ * - LogLevel - Command-line argument that specifies log level to use Options: 'error' | 'warn' |
+ *   'info' | 'verbose' | 'debug'
+ * - ResourcesPath - Command-line argument that specifies the path to the resources folder
+ * - Packaged - Command-line switch that specifies if the application is packaged. Only on
+ *   extension-host
  */
-export const ARG_LOG_LEVEL = '--logLevel';
+export enum COMMAND_LINE_ARGS {
+  Extensions = 'extensions',
+  ExtensionsDir = 'extensions_dir',
+  LogLevel = 'log_level',
+  ResourcesPath = 'resources_path',
+  Packaged = 'packaged',
+}
 
-/** Command-line argument that specifies the path to the resources folder */
-export const ARG_RESOURCES_PATH = '--resourcesPath';
-
-/** Command-line switch that specifies if the application is packaged. Only on extension-host */
-export const ARG_PACKAGED = '--packaged';
+/**
+ * Aliases for each command line argument mapped from argument type to an array of aliases for that
+ * argument type
+ */
+export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
+  [COMMAND_LINE_ARGS.Extensions]: ['--extensions', '--extension', '-e'],
+  [COMMAND_LINE_ARGS.ExtensionsDir]: ['--extensionDirs', '--extensionDir', '-d'],
+  [COMMAND_LINE_ARGS.LogLevel]: ['--logLevels', '--logLevel', '-l'],
+  [COMMAND_LINE_ARGS.ResourcesPath]: ['--resourcesPath', '--resourcePath', '-r'],
+  [COMMAND_LINE_ARGS.Packaged]: ['--packaged', '--isPackaged', '-p'],
+};
 
 /** Get the index of the next command-line argument after the startIndex */
 export function findNextCommandLineArgumentIndex(currentArgIndex: number) {
@@ -36,7 +50,7 @@ export function findNextCommandLineArgumentIndex(currentArgIndex: number) {
  * Get a command-line argument's group of arguments. If no arguments are in its group, return
  * nothing
  *
- * @param argName Name of the command-line argument to search for
+ * @param argName Name(s) of the command-line argument to search for
  * @param shouldIncludeArgName Whether to include `argName` at the start of the returned array
  * @returns Array of strings of the command-line args in this command-line argument group
  *
@@ -55,47 +69,59 @@ export function findNextCommandLineArgumentIndex(currentArgIndex: number) {
  *   - `getCommandLineArgumentsGroup('--things')` returns `[]`
  *   - `getCommandLineArgumentsGroup('--things', true)` returns `[]`
  */
-export function getCommandLineArgumentsGroup(argName: string, shouldIncludeArgName = false) {
-  // TODO: If argName has two hyphens, check for single hyphen and first char + capitals if
-  // two-hyphen version does not exist. eg --extensionDirs -> -ed
-  const argIndex = process.argv.indexOf(argName);
+export function getCommandLineArgumentsGroup(
+  argName: COMMAND_LINE_ARGS,
+  shouldIncludeArgName = false,
+): string[] {
+  const argNames: string[] = commandLineArgumentsAliases[argName];
 
-  if (argIndex < 0) return [];
+  const argumentsGroup: string[] = [];
+  argNames
+    .filter((n) => process.argv.indexOf(n) > 0)
+    .forEach((arg) => {
+      const argIndex = process.argv.indexOf(arg);
+      const baseArray = shouldIncludeArgName ? [arg] : [];
 
-  const baseArray = shouldIncludeArgName ? [argName] : [];
+      argumentsGroup.concat(
+        process.argv.length > argIndex + 1
+          ? [
+              ...baseArray,
+              ...process.argv.slice(argIndex + 1, findNextCommandLineArgumentIndex(argIndex)),
+            ]
+          : baseArray,
+      );
+    });
 
-  return process.argv.length > argIndex + 1
-    ? [
-        ...baseArray,
-        ...process.argv.slice(argIndex + 1, findNextCommandLineArgumentIndex(argIndex)),
-      ]
-    : baseArray;
+  return argumentsGroup;
 }
 
 /**
  * Get a command-line argument's argument. If the argument is not present, return `undefined`
  *
- * @param argName Name of the command-line argument to search for
+ * @param argName Name and aliases of the command-line argument to search for
  * @returns String of the command-line arg provided
  *
  *   Ex: '--thing ben'
  *
  *   - `getCommandLineArgument('--thing')` returns `'ben'`
  */
-export function getCommandLineArgument(argName: string) {
+export function getCommandLineArgument(argName: COMMAND_LINE_ARGS) {
   // TODO: If argName has two hyphens, check for single hyphen and first char + capitals if
   // two-hyphen version does not exist. eg --extensionDirs -> -ed
-  const argIndex = process.argv.indexOf(argName);
+  const argNames: string[] = commandLineArgumentsAliases[argName];
+  const argIndices: number[] = argNames.map((name) => process.argv.indexOf(name));
 
-  if (
-    // Not found
-    argIndex < 0 ||
-    // Last argument (the arg name was found, but there is no actual argument provided)
-    argIndex >= process.argv.length - 1 ||
-    // If the next word is also an arg name, there was no actual argument provided
-    findNextCommandLineArgumentIndex(argIndex) === argIndex + 1
-  )
-    return undefined;
+  const argIndex = argIndices.find(
+    (index) =>
+      // Will be negative if not found
+      index >= 0 &&
+      //  Ensuring it is not the last argument (the arg name was found, but there is no actual argument provided)
+      index < process.argv.length - 1 &&
+      // If the next word is also an arg name, there was no actual argument provided
+      findNextCommandLineArgumentIndex(index) !== index + 1,
+  );
+
+  if (argIndex === undefined) return undefined;
 
   return process.argv[argIndex + 1];
 }
@@ -112,6 +138,7 @@ export function getCommandLineArgument(argName: string) {
  *
  *   - `getCommandLineSwitch('--thing')` returns `true`
  */
-export function getCommandLineSwitch(argName: string) {
-  return process.argv.includes(argName);
+export function getCommandLineSwitch(argName: COMMAND_LINE_ARGS) {
+  const argNames: string[] = commandLineArgumentsAliases[argName];
+  return argNames.some((alias) => process.argv.includes(alias));
 }

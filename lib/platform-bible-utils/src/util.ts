@@ -21,6 +21,19 @@ export function isString(o: unknown): o is string {
 }
 
 /**
+ * If deepClone isn't used when copying properties between objects, you may be left with dangling
+ * references between the source and target of property copying operations.
+ *
+ * @param obj Object to clone
+ * @returns Duplicate copy of `obj` without any references back to the original one
+ */
+export function deepClone<T>(obj: T): T {
+  // Assert the return type matches what is expected
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return JSON.parse(JSON.stringify(obj)) as T;
+}
+
+/**
  * Get a function that reduces calls to the function passed in
  *
  * @param fn The function to debounce
@@ -192,10 +205,12 @@ export function getAllObjectFunctionNames(
  * Creates a synchronous proxy for an asynchronous object. The proxy allows calling methods on an
  * object that is asynchronously fetched using a provided asynchronous function.
  *
- * @param getObject - A function that returns a promise resolving to the object whose asynchronous methods to call.
- * @param objectToProxy - An optional object that is the object that is proxied. If a property is accessed that does
- *   exist on this object, it will be returned. If a property is accessed that does not exist on this object,
- *   it will be considered to be an asynchronous method called on the object returned from getObject.
+ * @param getObject - A function that returns a promise resolving to the object whose asynchronous
+ *   methods to call.
+ * @param objectToProxy - An optional object that is the object that is proxied. If a property is
+ *   accessed that does exist on this object, it will be returned. If a property is accessed that
+ *   does not exist on this object, it will be considered to be an asynchronous method called on the
+ *   object returned from getObject.
  * @returns A synchronous proxy for the asynchronous object.
  */
 export function createSyncProxyForAsyncObject<T extends object>(
