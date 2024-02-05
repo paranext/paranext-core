@@ -1,4 +1,8 @@
 import {
+  DocumentCombinerEngine,
+  DocumentCombinerOptions,
+  JsonDocumentLike,
+  deepClone,
   PlatformMenus,
   MultiColumnMenu,
   SingleColumnMenu,
@@ -10,12 +14,6 @@ import {
   ReferencedItem,
   LocalizeKey,
   menuDocumentSchema,
-} from '@shared/models/menus.model';
-import {
-  DocumentCombinerEngine,
-  DocumentCombinerOptions,
-  JsonDocumentLike,
-  deepClone,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import localizationService from '@shared/services/localization.service';
