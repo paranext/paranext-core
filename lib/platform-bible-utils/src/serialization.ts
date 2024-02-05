@@ -41,7 +41,7 @@ export function serialize(
  * values, you should wrap them yourself in a string before using this function. Alternatively, you
  * can write your own replacer that will preserve `null` in a way that you can recover later.
  *
- * @param text A valid JSON string.
+ * @param value A valid JSON string.
  * @param reviver A function that transforms the results. This function is called for each member of
  *   the object. If a member contains nested objects, the nested objects are transformed before the
  *   parent object is. Note that `null` values are converted into `undefined` values after the
