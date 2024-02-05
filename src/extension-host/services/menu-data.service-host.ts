@@ -1,5 +1,4 @@
 import {
-  MenuData,
   MenuDataDataTypes,
   IMenuDataService,
   menuDataServiceObjectToProxy,
@@ -12,11 +11,11 @@ import { createSyncProxyForAsyncObject, deserialize } from 'platform-bible-utils
 import menuDataObject from '@extension-host/data/menu.data.json';
 import logger from '@shared/services/logger.service';
 import {
+  PlatformMenus,
   MultiColumnMenu,
   ReferencedItem,
   WebViewMenu,
-  WebViewMenus,
-} from '@shared/schemas/menu-data.types';
+} from '@shared/models/menus.model';
 
 class MenuDataDataProviderEngine
   extends DataProviderEngine<MenuDataDataTypes>
@@ -25,13 +24,12 @@ class MenuDataDataProviderEngine
   private mainMenu: MultiColumnMenu = { groups: {}, items: [], columns: {} };
   private webViewMenusMap = new Map<ReferencedItem, WebViewMenu>();
 
-  constructor(menuData: MenuData) {
+  constructor(menuData: PlatformMenus) {
     super();
     this.#loadAllMenuData(menuData);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async getMainMenu(_menuType: 'mainMenu'): Promise<MultiColumnMenu> {
+  async getMainMenu(): Promise<MultiColumnMenu> {
     if (!this.mainMenu) throw new Error('Missing/invalid menu data');
     return this.mainMenu;
   }
@@ -39,7 +37,14 @@ class MenuDataDataProviderEngine
   // No implementation for this function right now, we just want to throw an error, but it wanted us to use 'this'
   // https://github.com/paranext/paranext-core/issues/425
   // eslint-disable-next-line class-methods-use-this
-  async setMainMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
+  async setMainMenu(
+    // No implementation for this function, so no use for this variable
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _mainMenuType: undefined,
+    // No implementation for this function, so no use for this variable
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _value: never,
+  ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
     throw new Error('setMainMenu disabled');
   }
 
@@ -52,27 +57,29 @@ class MenuDataDataProviderEngine
   // No implementation for this function right now, we just want to throw an error, but it wanted us to use 'this'
   // https://github.com/paranext/paranext-core/issues/425
   // eslint-disable-next-line class-methods-use-this
-  async setWebViewMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
+  async setWebViewMenu(
+    // No implementation for this function, so no use for this variable
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _webViewType: ReferencedItem,
+    // No implementation for this function, so no use for this variable
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _value: never,
+  ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
     throw new Error('setWebViewMenu disabled');
   }
 
-  #loadAllMenuData(menuData: MenuData): void {
+  #loadAllMenuData(menuData: PlatformMenus): void {
     this.mainMenu = { groups: {}, items: [], columns: {} };
     this.webViewMenusMap.clear();
 
     try {
-      // MenuData object contains MenuContent as a type so it can't tell if its specifically MultiColumnMenu
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      this.mainMenu = menuData.mainMenu as MultiColumnMenu;
+      this.mainMenu = menuData.mainMenu;
+      const { webViewMenus } = menuData;
 
-      // MenuData object contains MenuContent as a type so it can't tell if its specifically WebViewMenus
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const webViewMenus = menuData.webViewMenus as WebViewMenus;
-
-      Object.entries(webViewMenus).forEach((webViewMenu) => {
+      Object.entries(webViewMenus).forEach(([webViewType, value]) => {
         // webViewMenus object above is not iterable, when use Object.entries it maps the ReferencedItems to strings
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        this.webViewMenusMap.set(webViewMenu[0] as ReferencedItem, webViewMenu[1]);
+        this.webViewMenusMap.set(webViewType as ReferencedItem, value);
       });
     } catch (error) {
       logger.warn(error);
@@ -80,10 +87,10 @@ class MenuDataDataProviderEngine
   }
 }
 
-function getMenuDataObject(): MenuData {
+function getMenuDataObject(): PlatformMenus {
   const jsonString = JSON.stringify(menuDataObject);
   if (!jsonString) throw new Error('No data file found');
-  const menuData: MenuData = deserialize(jsonString);
+  const menuData: PlatformMenus = deserialize(jsonString);
   if (typeof menuData !== 'object') throw new Error(`Menu data is invalid`);
   return menuData;
 }
@@ -113,7 +120,7 @@ export async function initialize(): Promise<void> {
 
 /** This is an internal-only export for testing purposes, and should not be used in development */
 export const testingMenuDataService = {
-  implementMenuDataDataProviderEngine: (dataObj: MenuData) => {
+  implementMenuDataDataProviderEngine: (dataObj: PlatformMenus) => {
     return new MenuDataDataProviderEngine(dataObj);
   },
 };

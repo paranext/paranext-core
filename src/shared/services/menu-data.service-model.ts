@@ -1,10 +1,4 @@
-import {
-  MultiColumnMenu,
-  ReferencedItem,
-  SingleColumnMenu,
-  WebViewMenu,
-  WebViewMenus,
-} from '@shared/schemas/menu-data.types';
+import { MultiColumnMenu, ReferencedItem, WebViewMenu } from '@shared/models/menus.model';
 import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
 import {
   DataProviderDataType,
@@ -20,12 +14,17 @@ import { IDataProvider } from './papi-core.service';
  */
 export const menuDataServiceProviderName = 'platform.menuDataServiceDataProvider';
 export const menuDataServiceObjectToProxy = Object.freeze({
+  /**
+   * Name used to register the data provider
+   *
+   * You can use this name
+   */
   dataProviderName: menuDataServiceProviderName,
 });
 
 // Data Type to initialize data provider engine with
 export type MenuDataDataTypes = {
-  MainMenu: DataProviderDataType<'mainMenu', MultiColumnMenu, never>;
+  MainMenu: DataProviderDataType<undefined, MultiColumnMenu, never>;
   WebViewMenu: DataProviderDataType<ReferencedItem, WebViewMenu, never>;
 };
 
@@ -44,16 +43,20 @@ export type IMenuDataService = {
   /**
    * Get menu content for the main menu
    *
-   * @param 'mainMenu'
    * @returns MultiColumnMenu object of main menu content
    */
-  getMainMenu: (menuType: 'mainMenu') => Promise<MultiColumnMenu>;
+  getMainMenu: () => Promise<MultiColumnMenu>;
   /**
    * Set the menuContent of the main menu
    *
+   * @param mainMenuType Does not have to be defined
+   * @param value MultiColumnMenu object to set as the main menu
    * @returns Unsubscriber function
    */
-  setMainMenu: () => Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+  setMainMenu: (
+    mainMenuType: undefined,
+    value: never,
+  ) => Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
   /**
    * Subscribe to run a callback function when the main menu data is changed
    *
@@ -74,9 +77,14 @@ export type IMenuDataService = {
   /**
    * Set the menuContent of a web view menu
    *
+   * @param webViewType ReferencedItem corresponding to a webViewType
+   * @param value Menu of specified webViewType
    * @returns Unsubscriber function
    */
-  setWebViewMenu: () => Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+  setWebViewMenu: (
+    webViewType: ReferencedItem,
+    value: never,
+  ) => Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
   /**
    * Subscribe to run a callback function when the web view menu data is changed
    *
@@ -91,9 +99,3 @@ export type IMenuDataService = {
 } & OnDidDispose &
   typeof menuDataServiceObjectToProxy &
   IDataProvider<MenuDataDataTypes>;
-
-export type MenuData = {
-  [menuType: string]: MenuContent;
-};
-
-export type MenuContent = MultiColumnMenu | WebViewMenus | SingleColumnMenu;

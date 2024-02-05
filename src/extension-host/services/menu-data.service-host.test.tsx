@@ -1,9 +1,8 @@
-import { MenuData } from '@shared/services/menu-data.service-model';
 import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
-import { ReferencedItem, WebViewMenus } from '@shared/schemas/menu-data.types';
+import { PlatformMenus, ReferencedItem, WebViewMenus } from '@shared/models/menus.model';
 
 const EXTENSION_NAME: ReferencedItem = 'videoExtension.playEditWebView';
-const MOCK_MENU_DATA: MenuData = {
+const MOCK_MENU_DATA: PlatformMenus = {
   mainMenu: {
     columns: {
       'paratext.paratext': { label: '%mainMenu_Paratext%', order: 0 },
@@ -185,12 +184,14 @@ const menuDataProviderEngine =
   testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
 
 test('Get main menu data', async () => {
-  const result = await menuDataProviderEngine.getMainMenu('mainMenu');
+  const result = await menuDataProviderEngine.getMainMenu();
   expect(result).toEqual(MOCK_MENU_DATA.mainMenu);
 });
 
-test('Set main menu data', async () => {
-  await expect(menuDataProviderEngine.setMainMenu()).rejects.toThrow('setMainMenu disabled');
+test('Setting main menu data throws', async () => {
+  await expect(menuDataProviderEngine.setMainMenu(undefined, never)).rejects.toThrow(
+    'setMainMenu disabled',
+  );
 });
 
 test('Get web view menu data for videoExtension', async () => {
@@ -201,6 +202,8 @@ test('Get web view menu data for videoExtension', async () => {
   expect(result).toEqual(webViewMenus[EXTENSION_NAME]);
 });
 
-test('Set web view menu data', async () => {
-  await expect(menuDataProviderEngine.setWebViewMenu()).rejects.toThrow('setWebViewMenu disabled');
+test('Setting web view menu data throws', async () => {
+  await expect(menuDataProviderEngine.setWebViewMenu('blah.blah', never)).rejects.toThrow(
+    'setWebViewMenu disabled',
+  );
 });
