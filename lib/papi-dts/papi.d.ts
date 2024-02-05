@@ -4209,16 +4209,14 @@ declare module 'shared/services/menu-data.service-model' {
   } from 'shared/models/data-provider.model';
   import { IDataProvider } from '@papi/core';
   /**
-   * Name used to register the data provider
-   *
-   * You can use this name
+   * This name is used to register the menu data data provider on the papi. You can use this name to
+   * find the data provider when accessing it using the useData hook
    */
   export const menuDataServiceProviderName = 'platform.menuDataServiceDataProvider';
   export const menuDataServiceObjectToProxy: Readonly<{
     /**
-     * Name used to register the data provider
-     *
-     * You can use this name
+     * This name is used to register the menu data data provider on the papi. You can use this name to
+     * find the data provider when accessing it using the useData hook
      */
     dataProviderName: 'platform.menuDataServiceDataProvider';
   }>;
@@ -4243,7 +4241,7 @@ declare module 'shared/services/menu-data.service-model' {
      */
     getMainMenu: () => Promise<MultiColumnMenu>;
     /**
-     * Set the menuContent of the main menu
+     * This data cannot be changed. Trying to use this setter this will always throw
      *
      * @param mainMenuType Does not have to be defined
      * @param value MultiColumnMenu object to set as the main menu
@@ -4267,11 +4265,12 @@ declare module 'shared/services/menu-data.service-model' {
     /**
      * Get menu content for a web view
      *
+     * @param webViewType The type of webview for which a menu should be retrieved
      * @returns WebViewMenu object of web view menu content
      */
-    getWebViewMenu: (webViewName: ReferencedItem) => Promise<WebViewMenu>;
+    getWebViewMenu: (webViewType: ReferencedItem) => Promise<WebViewMenu>;
     /**
-     * Set the menuContent of a web view menu
+     * This data cannot be changed. Trying to use this setter this will always throw
      *
      * @param webViewType ReferencedItem corresponding to a webViewType
      * @param value Menu of specified webViewType
@@ -4284,11 +4283,13 @@ declare module 'shared/services/menu-data.service-model' {
     /**
      * Subscribe to run a callback function when the web view menu data is changed
      *
+     * @param selector Reference to the menu object that we are subscribing to
      * @param callback Function to run with the updated menuContent for this selector
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeWebViewMenu: (
+      selector: ReferencedItem,
       callback: (menuContent: WebViewMenu) => void,
       options?: DataProviderSubscriberOptions,
     ) => Promise<UnsubscriberAsync>;
