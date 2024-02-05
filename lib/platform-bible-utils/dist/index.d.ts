@@ -77,9 +77,7 @@ export declare abstract class DocumentCombinerEngine {
 	 * Create a DocumentCombinerEngine instance
 	 *
 	 * @param baseDocument This is the first document that will be used when composing the output
-	 * @param copyDocuments If true, this instance will perform a deep copy of all provided documents
-	 *   before composing the output. If false, then changes made to provided documents after they are
-	 *   contributed will be reflected in the next time output is composed.
+	 * @param options Options used by this object when combining documents
 	 */
 	protected constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions);
 	/**
@@ -365,10 +363,12 @@ export declare function getAllObjectFunctionNames(obj: {
  * Creates a synchronous proxy for an asynchronous object. The proxy allows calling methods on an
  * object that is asynchronously fetched using a provided asynchronous function.
  *
- * @param getObject - A function that returns a promise resolving to the object whose asynchronous methods to call.
- * @param objectToProxy - An optional object that is the object that is proxied. If a property is accessed that does
- *   exist on this object, it will be returned. If a property is accessed that does not exist on this object,
- *   it will be considered to be an asynchronous method called on the object returned from getObject.
+ * @param getObject - A function that returns a promise resolving to the object whose asynchronous
+ *   methods to call.
+ * @param objectToProxy - An optional object that is the object that is proxied. If a property is
+ *   accessed that does exist on this object, it will be returned. If a property is accessed that
+ *   does not exist on this object, it will be considered to be an asynchronous method called on the
+ *   object returned from getObject.
  * @returns A synchronous proxy for the asynchronous object.
  */
 export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;
@@ -424,7 +424,7 @@ export declare function serialize(value: unknown, replacer?: (this: unknown, key
  * values, you should wrap them yourself in a string before using this function. Alternatively, you
  * can write your own replacer that will preserve `null` in a way that you can recover later.
  *
- * @param text A valid JSON string.
+ * @param value A valid JSON string.
  * @param reviver A function that transforms the results. This function is called for each member of
  *   the object. If a member contains nested objects, the nested objects are transformed before the
  *   parent object is. Note that `null` values are converted into `undefined` values after the
@@ -460,5 +460,363 @@ export declare function isSerializable(value: unknown): boolean;
  * @returns HTML-encoded string
  */
 export declare const htmlEncode: (str: string) => string;
+/** Identifier for a string that will be localized in a menu based on the user's UI language */
+export type LocalizeKey = `%${string}%`;
+/** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
+export type ReferencedItem = `${string}.${string}`;
+export type OrderedItem = {
+	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
+	order: number;
+};
+export type OrderedExtensibleContainer = OrderedItem & {
+	/** Determines whether other items can be added to this after it has been defined */
+	isExtensible?: boolean;
+};
+/** Group of menu items that belongs in a column */
+export type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
+	/** ID of column in which this group resides */
+	column: ReferencedItem;
+};
+/** Group of menu items that belongs in a submenu */
+export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
+	/** ID of menu item hosting the submenu in which this group resides */
+	menuItem: ReferencedItem;
+};
+/** Column that includes header text in a menu */
+export type MenuColumnWithHeader = OrderedExtensibleContainer & {
+	/** Key that represents the text of the header text of the column */
+	label: LocalizeKey;
+};
+export type MenuItemBase = OrderedItem & {
+	/** Menu group to which this menu item belongs */
+	group: ReferencedItem;
+	/** Key that represents the text of this menu item to display */
+	label: LocalizeKey;
+	/** Key that represents words the platform should reference when users are searching for menu items */
+	searchTerms?: LocalizeKey;
+	/** Key that represents the text to display if a mouse pointer hovers over the menu item */
+	tooltip?: LocalizeKey;
+	/** Additional information provided by developers to help people who perform localization */
+	localizeNotes: string;
+};
+/** Menu item that hosts a submenu */
+export type MenuItemContainingSubmenu = MenuItemBase & {
+	/** ID for this menu item that holds a submenu */
+	id: ReferencedItem;
+};
+/** Menu item that runs a command */
+export type MenuItemContainingCommand = MenuItemBase & {
+	/** Name of the PAPI command to run when this menu item is selected. */
+	command: ReferencedItem;
+	/** Path to the icon to display after the menu text */
+	iconPathAfter?: string;
+	/** Path to the icon to display before the menu text */
+	iconPathBefore?: string;
+};
+/**
+ * Group of menu items that can be combined with other groups to form a single menu/submenu. Groups
+ * are separated using a line within the menu/submenu.
+ */
+export type Groups = {
+	/** Named menu group */
+	[property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
+};
+/** Group of columns that can be combined with other columns to form a multi-column menu */
+export type ColumnsWithHeaders = {
+	/** Named column of a menu */
+	[property: ReferencedItem]: MenuColumnWithHeader;
+	/** Defines whether columns can be added to this multi-column menu */
+	isExtensible?: boolean;
+};
+/** Menu that contains a column without a header */
+export type SingleColumnMenu = {
+	/** Groups that belong in this menu */
+	groups: Groups;
+	/** List of menu items that belong in this menu */
+	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
+};
+/** Menu that contains multiple columns with headers */
+export type MultiColumnMenu = SingleColumnMenu & {
+	/** Columns that belong in this menu */
+	columns: ColumnsWithHeaders;
+};
+/** Menus for one single web view */
+export type WebViewMenu = {
+	/** Indicates whether the platform default menus should be included for this webview */
+	includeDefaults: boolean | undefined;
+	/** Menu that opens when you click on the top left corner of a tab */
+	topMenu: MultiColumnMenu | undefined;
+	/** Menu that opens when you right click on the main body/area of a tab */
+	contextMenu: SingleColumnMenu | undefined;
+};
+/** Menus for all web views */
+export type WebViewMenus = {
+	/** Named web view */
+	[property: ReferencedItem]: WebViewMenu;
+};
+/** Platform.Bible menus */
+export type PlatformMenus = {
+	/** Top level menu for the application */
+	mainMenu: MultiColumnMenu;
+	/** Menus that apply per web view in the application */
+	webViewMenus: WebViewMenus;
+	/** Default context menu for web views that don't specify their own */
+	defaultWebViewContextMenu: SingleColumnMenu;
+	/** Default top menu for web views that don't specify their own */
+	defaultWebViewTopMenu: MultiColumnMenu;
+};
+/** JSON schema object that aligns with the PlatformMenus type */
+export declare const menuDocumentSchema: {
+	title: string;
+	type: string;
+	properties: {
+		mainMenu: {
+			description: string;
+			$ref: string;
+		};
+		defaultWebViewTopMenu: {
+			description: string;
+			$ref: string;
+		};
+		defaultWebViewContextMenu: {
+			description: string;
+			$ref: string;
+		};
+		webViewMenus: {
+			description: string;
+			type: string;
+			patternProperties: {
+				"^[\\w\\-]+\\.[\\w\\-]+$": {
+					$ref: string;
+				};
+			};
+			additionalProperties: boolean;
+		};
+	};
+	required: string[];
+	additionalProperties: boolean;
+	$defs: {
+		localizeKey: {
+			description: string;
+			type: string;
+			pattern: string;
+		};
+		referencedItem: {
+			description: string;
+			type: string;
+			pattern: string;
+		};
+		columnsWithHeaders: {
+			description: string;
+			type: string;
+			patternProperties: {
+				"^[\\w\\-]+\\.[\\w\\-]+$": {
+					description: string;
+					type: string;
+					properties: {
+						label: {
+							description: string;
+							$ref: string;
+						};
+						localizeNotes: {
+							description: string;
+							type: string;
+						};
+						order: {
+							description: string;
+							type: string;
+						};
+						isExtensible: {
+							description: string;
+							type: string;
+						};
+					};
+					required: string[];
+					additionalProperties: boolean;
+				};
+			};
+			properties: {
+				isExtensible: {
+					description: string;
+					type: string;
+				};
+			};
+		};
+		menuGroups: {
+			description: string;
+			type: string;
+			patternProperties: {
+				"^[\\w\\-]+\\.[\\w\\-]+$": {
+					description: string;
+					type: string;
+					oneOf: ({
+						properties: {
+							column: {
+								description: string;
+								$ref: string;
+							};
+							order: {
+								description: string;
+								type: string;
+							};
+							isExtensible: {
+								description: string;
+								type: string;
+							};
+							menuItem?: undefined;
+						};
+						required: string[];
+						additionalProperties: boolean;
+					} | {
+						properties: {
+							menuItem: {
+								description: string;
+								$ref: string;
+							};
+							order: {
+								description: string;
+								type: string;
+							};
+							isExtensible: {
+								description: string;
+								type: string;
+							};
+							column?: undefined;
+						};
+						required: string[];
+						additionalProperties: boolean;
+					})[];
+				};
+			};
+			additionalProperties: boolean;
+		};
+		menuItem: {
+			description: string;
+			type: string;
+			oneOf: ({
+				properties: {
+					id: {
+						description: string;
+						$ref: string;
+					};
+					command?: undefined;
+					iconPathBefore?: undefined;
+					iconPathAfter?: undefined;
+				};
+				required: string[];
+			} | {
+				properties: {
+					command: {
+						description: string;
+						$ref: string;
+					};
+					iconPathBefore: {
+						description: string;
+						type: string;
+					};
+					iconPathAfter: {
+						description: string;
+						type: string;
+					};
+					id?: undefined;
+				};
+				required: string[];
+			})[];
+			properties: {
+				label: {
+					description: string;
+					$ref: string;
+				};
+				tooltip: {
+					description: string;
+					$ref: string;
+				};
+				searchTerms: {
+					description: string;
+					$ref: string;
+				};
+				localizeNotes: {
+					description: string;
+					type: string;
+				};
+				group: {
+					description: string;
+					$ref: string;
+				};
+				order: {
+					description: string;
+					type: string;
+				};
+			};
+			required: string[];
+			unevaluatedProperties: boolean;
+		};
+		groupsAndItems: {
+			description: string;
+			type: string;
+			properties: {
+				groups: {
+					description: string;
+					$ref: string;
+				};
+				items: {
+					description: string;
+					type: string;
+					items: {
+						$ref: string;
+					};
+					uniqueItems: boolean;
+				};
+			};
+			required: string[];
+		};
+		singleColumnMenu: {
+			description: string;
+			type: string;
+			allOf: {
+				$ref: string;
+			}[];
+			unevaluatedProperties: boolean;
+		};
+		multiColumnMenu: {
+			description: string;
+			type: string;
+			allOf: ({
+				$ref: string;
+				properties?: undefined;
+				required?: undefined;
+			} | {
+				properties: {
+					columns: {
+						description: string;
+						$ref: string;
+					};
+				};
+				required: string[];
+				$ref?: undefined;
+			})[];
+			unevaluatedProperties: boolean;
+		};
+		menusForOneWebView: {
+			description: string;
+			type: string;
+			properties: {
+				includeDefaults: {
+					description: string;
+					type: string;
+				};
+				topMenu: {
+					description: string;
+					$ref: string;
+				};
+				contextMenu: {
+					description: string;
+					$ref: string;
+				};
+			};
+			additionalProperties: boolean;
+		};
+	};
+};
 
 export {};

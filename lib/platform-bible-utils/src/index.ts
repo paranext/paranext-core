@@ -43,4 +43,24 @@ export type {
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
 export type { ScriptureReference, BookInfo } from './scripture.model';
 export type { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
-export type { JsonDocumentLike } from './document-combiner-engine';
+export type { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner-engine';
+export type {
+  LocalizeKey,
+  ReferencedItem,
+  OrderedItem,
+  OrderedExtensibleContainer,
+  MenuItemBase,
+  MenuItemContainingSubmenu,
+  MenuItemContainingCommand,
+  MenuGroupDetailsInColumn,
+  MenuGroupDetailsInSubMenu,
+  MenuColumnWithHeader,
+  Groups,
+  ColumnsWithHeaders,
+  SingleColumnMenu,
+  MultiColumnMenu,
+  WebViewMenu,
+  WebViewMenus,
+  PlatformMenus,
+} from './menus.model';
+export { menuDocumentSchema } from './menus.model';

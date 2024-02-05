@@ -1,5 +1,10 @@
-import { MultiColumnMenu, ReferencedItem, WebViewMenu } from '@shared/models/menus.model';
-import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
+import {
+  OnDidDispose,
+  UnsubscriberAsync,
+  MultiColumnMenu,
+  ReferencedItem,
+  WebViewMenu,
+} from 'platform-bible-utils';
 import {
   DataProviderDataType,
   DataProviderSubscriberOptions,

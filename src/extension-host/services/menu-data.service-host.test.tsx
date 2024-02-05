@@ -1,5 +1,5 @@
 import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
-import { PlatformMenus, ReferencedItem, WebViewMenus } from '@shared/models/menus.model';
+import { PlatformMenus, ReferencedItem, WebViewMenus } from 'platform-bible-utils';
 
 const EXTENSION_NAME: ReferencedItem = 'videoExtension.playEditWebView';
 const MOCK_MENU_DATA: PlatformMenus = {

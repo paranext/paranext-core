@@ -7,15 +7,16 @@ import {
 import dataProviderService, { DataProviderEngine } from '@shared/services/data-provider.service';
 import IDataProviderEngine from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
-import { createSyncProxyForAsyncObject, deserialize } from 'platform-bible-utils';
-import menuDataObject from '@extension-host/data/menu.data.json';
-import logger from '@shared/services/logger.service';
 import {
+  createSyncProxyForAsyncObject,
+  deserialize,
   PlatformMenus,
   MultiColumnMenu,
   ReferencedItem,
   WebViewMenu,
-} from '@shared/models/menus.model';
+} from 'platform-bible-utils';
+import menuDataObject from '@extension-host/data/menu.data.json';
+import logger from '@shared/services/logger.service';
 
 class MenuDataDataProviderEngine
   extends DataProviderEngine<MenuDataDataTypes>
