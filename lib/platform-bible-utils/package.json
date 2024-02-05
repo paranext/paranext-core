@@ -31,7 +31,7 @@
   "scripts": {
     "start": "vite --host --open",
     "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
-    "build:docs": "typedoc",
+    "build:docs": "npm install && typedoc",
     "build": "npm run build:basic && npm run lint-fix",
     "watch": "tsc && vite build --watch",
     "lint": "npm run lint:scripts",

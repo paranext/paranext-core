@@ -31,9 +31,7 @@ export default abstract class DocumentCombinerEngine {
    * Create a DocumentCombinerEngine instance
    *
    * @param baseDocument This is the first document that will be used when composing the output
-   * @param copyDocuments If true, this instance will perform a deep copy of all provided documents
-   *   before composing the output. If false, then changes made to provided documents after they are
-   *   contributed will be reflected in the next time output is composed.
+   * @param options Options used by this object when combining documents
    */
   protected constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions) {
     // Setting baseDocument redundantly because TS doesn't understand that updateBaseDocument does it
