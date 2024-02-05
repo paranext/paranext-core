@@ -22,7 +22,7 @@ class MenuDataDataProviderEngine
   extends DataProviderEngine<MenuDataDataTypes>
   implements IDataProviderEngine<MenuDataDataTypes>
 {
-  private mainMenuMap = new Map<'mainMenu', MultiColumnMenu>();
+  private mainMenu: MultiColumnMenu = { groups: {}, items: [], columns: {} };
   private webViewMenusMap = new Map<ReferencedItem, WebViewMenu>();
 
   constructor(menuData: MenuData) {
@@ -30,10 +30,10 @@ class MenuDataDataProviderEngine
     this.#loadAllMenuData(menuData);
   }
 
-  async getMainMenu(menuType: 'mainMenu'): Promise<MultiColumnMenu> {
-    const mainMenu = this.mainMenuMap.get(menuType);
-    if (!mainMenu) throw new Error('Missing/invalid menu data');
-    return mainMenu;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async getMainMenu(_menuType: 'mainMenu'): Promise<MultiColumnMenu> {
+    if (!this.mainMenu) throw new Error('Missing/invalid menu data');
+    return this.mainMenu;
   }
 
   // No implementation for this function right now, we just want to throw an error, but it wanted us to use 'this'
@@ -57,21 +57,18 @@ class MenuDataDataProviderEngine
   }
 
   #loadAllMenuData(menuData: MenuData): void {
-    this.mainMenuMap.clear();
+    this.mainMenu = { groups: {}, items: [], columns: {} };
     this.webViewMenusMap.clear();
 
     try {
       // MenuData object contains MenuContent as a type so it can't tell if its specifically MultiColumnMenu
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const mainMenuContent = menuData.mainMenu as MultiColumnMenu;
-
-      this.mainMenuMap.set('mainMenu', mainMenuContent);
+      this.mainMenu = menuData.mainMenu as MultiColumnMenu;
 
       // MenuData object contains MenuContent as a type so it can't tell if its specifically WebViewMenus
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const webViewMenus = menuData.webViewMenus as WebViewMenus;
 
-      // TODO: How to do this better?
       Object.entries(webViewMenus).forEach((webViewMenu) => {
         // webViewMenus object above is not iterable, when use Object.entries it maps the ReferencedItems to strings
         // eslint-disable-next-line no-type-assertion/no-type-assertion
