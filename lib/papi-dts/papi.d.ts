@@ -3845,12 +3845,14 @@ declare module 'shared/services/menu-data.service-model' {
   } from 'shared/models/data-provider.model';
   import { IDataProvider } from '@papi/core';
   /**
+   *
    * This name is used to register the menu data data provider on the papi. You can use this name to
    * find the data provider when accessing it using the useData hook
    */
   export const menuDataServiceProviderName = 'platform.menuDataServiceDataProvider';
   export const menuDataServiceObjectToProxy: Readonly<{
     /**
+     *
      * This name is used to register the menu data data provider on the papi. You can use this name to
      * find the data provider when accessing it using the useData hook
      */
@@ -3871,12 +3873,21 @@ declare module 'shared/services/menu-data.service-model' {
    */
   export type IMenuDataService = {
     /**
+     *
      * Get menu content for the main menu
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of main menu content
      */
-    getMainMenu: (mainMenuType: undefined) => Promise<MultiColumnMenu>;
+    getMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
+    /**
+     *
+     * Get menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of main menu content
+     */
+    getMainMenu(): Promise<MultiColumnMenu>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
@@ -3884,10 +3895,10 @@ declare module 'shared/services/menu-data.service-model' {
      * @param value MultiColumnMenu object to set as the main menu
      * @returns Unsubscriber function
      */
-    setMainMenu: (
+    setMainMenu(
       mainMenuType: undefined,
       value: never,
-    ) => Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
     /**
      * Subscribe to run a callback function when the main menu data is changed
      *
@@ -3896,18 +3907,18 @@ declare module 'shared/services/menu-data.service-model' {
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
-    subscribeMainMenu: (
+    subscribeMainMenu(
       mainMenuType: undefined,
       callback: (menuContent: MultiColumnMenu) => void,
       options?: DataProviderSubscriberOptions,
-    ) => Promise<UnsubscriberAsync>;
+    ): Promise<UnsubscriberAsync>;
     /**
      * Get menu content for a web view
      *
      * @param webViewType The type of webview for which a menu should be retrieved
      * @returns WebViewMenu object of web view menu content
      */
-    getWebViewMenu: (webViewType: ReferencedItem) => Promise<WebViewMenu>;
+    getWebViewMenu(webViewType: ReferencedItem): Promise<WebViewMenu>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
@@ -3915,10 +3926,10 @@ declare module 'shared/services/menu-data.service-model' {
      * @param value Menu of specified webViewType
      * @returns Unsubscriber function
      */
-    setWebViewMenu: (
+    setWebViewMenu(
       webViewType: ReferencedItem,
       value: never,
-    ) => Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
     /**
      * Subscribe to run a callback function when the web view menu data is changed
      *
@@ -3927,11 +3938,11 @@ declare module 'shared/services/menu-data.service-model' {
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
-    subscribeWebViewMenu: (
+    subscribeWebViewMenu(
       webViewType: ReferencedItem,
       callback: (menuContent: WebViewMenu) => void,
       options?: DataProviderSubscriberOptions,
-    ) => Promise<UnsubscriberAsync>;
+    ): Promise<UnsubscriberAsync>;
   } & OnDidDispose &
     typeof menuDataServiceObjectToProxy &
     IDataProvider<MenuDataDataTypes>;
