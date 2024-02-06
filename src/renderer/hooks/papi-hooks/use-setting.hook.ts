@@ -56,18 +56,23 @@ const useSetting = <SettingName extends SettingNames>(
   const defaultStateRef = useRef(defaultState);
   defaultStateRef.current = defaultState;
 
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const [setting, setSetting] = useData(settingsService)[''](
-    key,
-    defaultState,
-    subscriberOptions,
-  ) as [
-    setting: SettingTypes[SettingName],
-    setSetting: (
-      newData: SettingTypes[SettingName],
-    ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
-    boolean,
-  ];
+  /* eslint-disable no-type-assertion/no-type-assertion */
+  const [setting, setSetting] = (
+    useData(settingsService) as {
+      ['']: (
+        selector: SettingName,
+        defaultValue: SettingTypes[SettingName],
+        subscriberOptions?: DataProviderSubscriberOptions,
+      ) => [
+        setting: SettingTypes[SettingName],
+        setSetting: (
+          newData: SettingTypes[SettingName],
+        ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
+        boolean,
+      ];
+    }
+  )[''](key, defaultState, subscriberOptions);
+  /* eslint-enable */
 
   const resetSetting = useCallback(() => {
     settingsService.reset(key);
