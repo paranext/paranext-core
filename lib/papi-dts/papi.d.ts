@@ -3541,6 +3541,417 @@ declare module 'shared/services/dialog.service' {
   const dialogService: DialogService;
   export default dialogService;
 }
+declare module 'extension-host/extension-types/extension-activation-context.model' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  import { UnsubscriberAsyncList } from 'platform-bible-utils';
+  /** An object of this type is passed into `activate()` for each extension during initialization */
+  export type ExecutionActivationContext = {
+    /** Canonical name of the extension */
+    name: string;
+    /** Used to save and load data from the storage service. */
+    executionToken: ExecutionToken;
+    /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
+    registrations: UnsubscriberAsyncList;
+  };
+}
+declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
+  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  export type UseDialogCallbackOptions = {
+    /**
+     * How many dialogs are allowed to be open at once from this dialog callback. Calling the callback
+     * when this number of maximum open dialogs has been reached does nothing. Set to -1 for
+     * unlimited. Defaults to 1.
+     */
+    maximumOpenDialogs?: number;
+  };
+  /**
+   *
+   * Enables using `papi.dialogs.showDialog` in React more easily. Returns a callback to run that will
+   * open a dialog with the provided `dialogType` and `options` then run the `resolveCallback` with
+   * the dialog response or `rejectCallback` if there is an error. By default, only one dialog can be
+   * open at a time.
+   *
+   * If you need to open multiple dialogs and track which dialog is which, you can set
+   * `options.shouldOpenMultipleDialogs` to `true` and add a counter to the `options` when calling the
+   * callback. Then `resolveCallback` will be resolved with that options object including your
+   * counter.
+   *
+   * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
+   * @param dialogType Dialog type you want to show on the screen
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. Calling the callback will always use the latest
+   *   `dialogType`.
+   * @param options Various options for configuring the dialog that shows and this hook. If an
+   *   `options` parameter is also provided to the returned `showDialog` callback, those
+   *   callback-provided `options` merge over these hook-provided `options`
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. Calling the callback will always use the latest
+   *   `options`.
+   * @param resolveCallback `(response, dialogType, options)` The function that will be called if the
+   *   dialog request resolves properly
+   *
+   *   - `response` - the resolved value of the dialog call. Either the user's response or `undefined` if
+   *       the user cancels
+   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+   *       consists of the `options` provided to the returned `showDialog` callback merged over the
+   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
+   *       properties
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. When the dialog resolves, it will always call the
+   *   latest `resolveCallback`.
+   * @param rejectCallback `(error, dialogType, options)` The function that will be called if the
+   *   dialog request throws an error
+   *
+   *   - `error` - the error thrown while calling the dialog
+   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+   *       consists of the `options` provided to the returned `showDialog` callback merged over the
+   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
+   *       properties
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. If the dialog throws an error, it will always call
+   *   the latest `rejectCallback`.
+   * @returns `showDialog(options?)` - callback to run to show the dialog to prompt the user for a
+   *   response
+   *
+   *   - `optionsOverrides?` - `options` object you may specify that will merge over the `options` you
+   *       provide to the hook before passing to the dialog. All properties are optional, so you may
+   *       specify as many or as few properties here as you want to overwrite the properties in the
+   *       `options` you provide to the hook
+   */
+  function useDialogCallback<
+    DialogTabType extends DialogTabTypes,
+    DialogOptions extends DialogTypes[DialogTabType]['options'],
+  >(
+    dialogType: DialogTabType,
+    options: DialogOptions & UseDialogCallbackOptions,
+    resolveCallback: (
+      response: DialogTypes[DialogTabType]['responseType'] | undefined,
+      dialogType: DialogTabType,
+      options: DialogOptions,
+    ) => void,
+    rejectCallback: (error: unknown, dialogType: DialogTabType, options: DialogOptions) => void,
+  ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
+  /**
+   *
+   * Enables using `papi.dialogs.showDialog` in React more easily. Returns a callback to run that will
+   * open a dialog with the provided `dialogType` and `options` then run the `resolveCallback` with
+   * the dialog response or `rejectCallback` if there is an error. By default, only one dialog can be
+   * open at a time.
+   *
+   * If you need to open multiple dialogs and track which dialog is which, you can set
+   * `options.shouldOpenMultipleDialogs` to `true` and add a counter to the `options` when calling the
+   * callback. Then `resolveCallback` will be resolved with that options object including your
+   * counter.
+   *
+   * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
+   * @param dialogType Dialog type you want to show on the screen
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. Calling the callback will always use the latest
+   *   `dialogType`.
+   * @param options Various options for configuring the dialog that shows and this hook. If an
+   *   `options` parameter is also provided to the returned `showDialog` callback, those
+   *   callback-provided `options` merge over these hook-provided `options`
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. Calling the callback will always use the latest
+   *   `options`.
+   * @param resolveCallback `(response, dialogType, options)` The function that will be called if the
+   *   dialog request resolves properly
+   *
+   *   - `response` - the resolved value of the dialog call. Either the user's response or `undefined` if
+   *       the user cancels
+   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+   *       consists of the `options` provided to the returned `showDialog` callback merged over the
+   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
+   *       properties
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. When the dialog resolves, it will always call the
+   *   latest `resolveCallback`.
+   * @param rejectCallback `(error, dialogType, options)` The function that will be called if the
+   *   dialog request throws an error
+   *
+   *   - `error` - the error thrown while calling the dialog
+   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
+   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
+   *       consists of the `options` provided to the returned `showDialog` callback merged over the
+   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
+   *       properties
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
+   *   effect on the functionality of this hook. If the dialog throws an error, it will always call
+   *   the latest `rejectCallback`.
+   * @returns `showDialog(options?)` - callback to run to show the dialog to prompt the user for a
+   *   response
+   *
+   *   - `optionsOverrides?` - `options` object you may specify that will merge over the `options` you
+   *       provide to the hook before passing to the dialog. All properties are optional, so you may
+   *       specify as many or as few properties here as you want to overwrite the properties in the
+   *       `options` you provide to the hook
+   */
+  function useDialogCallback<
+    DialogTabType extends DialogTabTypes,
+    DialogOptions extends DialogTypes[DialogTabType]['options'],
+  >(
+    dialogType: DialogTabType,
+    options: DialogOptions & UseDialogCallbackOptions,
+    resolveCallback: (
+      response: DialogTypes[DialogTabType]['responseType'] | undefined,
+      dialogType: DialogTabType,
+      options: DialogOptions,
+    ) => void,
+  ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
+  export default useDialogCallback;
+}
+declare module 'shared/services/settings.service' {
+  import { Unsubscriber } from 'platform-bible-utils';
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  /** Event to set or update a setting */
+  export type UpdateSettingEvent<SettingName extends SettingNames> = {
+    type: 'update-setting';
+    setting: SettingTypes[SettingName];
+  };
+  /** Event to remove a setting */
+  export type ResetSettingEvent = {
+    type: 'reset-setting';
+  };
+  /** All supported setting events */
+  export type SettingEvent<SettingName extends SettingNames> =
+    | UpdateSettingEvent<SettingName>
+    | ResetSettingEvent;
+  /**
+   * Retrieves the value of the specified setting
+   *
+   * @param key The string id of the setting for which the value is being retrieved
+   * @param defaultSetting The default value used for the setting if no value is available for the key
+   * @returns The value of the specified setting, parsed to an object. Returns default setting if
+   *   setting does not exist
+   */
+  const getSetting: <SettingName extends keyof SettingTypes>(
+    key: SettingName,
+    defaultSetting: SettingTypes[SettingName],
+  ) => SettingTypes[SettingName];
+  /**
+   * Sets the value of the specified setting
+   *
+   * @param key The string id of the setting for which the value is being retrieved
+   * @param newSetting The value that is to be stored. Setting the new value to `undefined` is the
+   *   equivalent of deleting the setting
+   */
+  const setSetting: <SettingName extends keyof SettingTypes>(
+    key: SettingName,
+    newSetting: SettingTypes[SettingName],
+  ) => void;
+  /**
+   * Removes the setting from memory
+   *
+   * @param key The string id of the setting for which the value is being removed
+   */
+  const resetSetting: <SettingName extends keyof SettingTypes>(key: SettingName) => void;
+  /**
+   * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
+   * callback function is executed.
+   *
+   * @param key The string id of the setting for which the value is being subscribed to
+   * @param callback The function that will be called whenever the specified setting is updated
+   * @returns Unsubscriber that should be called whenever the subscription should be deleted
+   */
+  const subscribeToSetting: <SettingName extends keyof SettingTypes>(
+    key: SettingName,
+    callback: (newSetting: SettingEvent<SettingName>) => void,
+  ) => Unsubscriber;
+  export interface SettingsService {
+    get: typeof getSetting;
+    set: typeof setSetting;
+    reset: typeof resetSetting;
+    subscribe: typeof subscribeToSetting;
+  }
+  /**
+   *
+   * Service that allows to get and set settings in local storage
+   */
+  const settingsService: SettingsService;
+  export default settingsService;
+}
+declare module '@papi/core' {
+  /** Exporting empty object so people don't have to put 'type' in their import statements */
+  const core: {};
+  export default core;
+  export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+  export type { ExecutionToken } from 'node/models/execution-token.model';
+  export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  export type { default as IDataProvider } from 'shared/models/data-provider.interface';
+  export type {
+    DataProviderUpdateInstructions,
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+  } from 'shared/models/data-provider.model';
+  export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
+  export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
+  export type { DialogOptions } from 'shared/models/dialog-options.model';
+  export type {
+    ExtensionDataScope,
+    MandatoryProjectDataType,
+  } from 'shared/models/project-data-provider.model';
+  export type { ProjectMetadata } from 'shared/models/project-metadata.model';
+  export type {
+    GetWebViewOptions,
+    SavedWebViewDefinition,
+    UseWebViewStateHook,
+    WebViewContentType,
+    WebViewDefinition,
+    WebViewProps,
+  } from 'shared/models/web-view.model';
+  export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+  export type { SettingEvent } from 'shared/services/settings.service';
+}
+declare module 'shared/services/menu-data.service-model' {
+  import {
+    OnDidDispose,
+    UnsubscriberAsync,
+    MultiColumnMenu,
+    ReferencedItem,
+    WebViewMenu,
+  } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from '@papi/core';
+  /**
+   *
+   * This name is used to register the menu data data provider on the papi. You can use this name to
+   * find the data provider when accessing it using the useData hook
+   */
+  export const menuDataServiceProviderName = 'platform.menuDataServiceDataProvider';
+  export const menuDataServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the menu data data provider on the papi. You can use this name to
+     * find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.menuDataServiceDataProvider';
+  }>;
+  export type MenuDataDataTypes = {
+    MainMenu: DataProviderDataType<undefined, MultiColumnMenu, never>;
+    WebViewMenu: DataProviderDataType<ReferencedItem, WebViewMenu, never>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [menuDataServiceProviderName]: IMenuDataService;
+    }
+  }
+  /**
+   *
+   * Service that allows to get and store menu data
+   */
+  export type IMenuDataService = {
+    /**
+     *
+     * Get menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of main menu content
+     */
+    getMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
+    /**
+     *
+     * Get menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of main menu content
+     */
+    getMainMenu(): Promise<MultiColumnMenu>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw
+     *
+     * @param mainMenuType Does not have to be defined
+     * @param value MultiColumnMenu object to set as the main menu
+     * @returns Unsubscriber function
+     */
+    setMainMenu(
+      mainMenuType: undefined,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the main menu data is changed
+     *
+     * @param mainMenuType Does not have to be defined
+     * @param callback Function to run with the updated menuContent for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeMainMenu(
+      mainMenuType: undefined,
+      callback: (menuContent: MultiColumnMenu) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     * Get menu content for a web view
+     *
+     * @param webViewType The type of webview for which a menu should be retrieved
+     * @returns WebViewMenu object of web view menu content
+     */
+    getWebViewMenu(webViewType: ReferencedItem): Promise<WebViewMenu>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw
+     *
+     * @param webViewType The type of webview for which a menu should be set
+     * @param value Menu of specified webViewType
+     * @returns Unsubscriber function
+     */
+    setWebViewMenu(
+      webViewType: ReferencedItem,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the web view menu data is changed
+     *
+     * @param webViewType The type of webview for which a menu should be subscribed
+     * @param callback Function to run with the updated menuContent for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeWebViewMenu(
+      webViewType: ReferencedItem,
+      callback: (menuContent: WebViewMenu) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof menuDataServiceObjectToProxy &
+    IDataProvider<MenuDataDataTypes>;
+}
+declare module 'shared/services/menu-data.service' {
+  import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  const menuDataService: IMenuDataService;
+  export default menuDataService;
+}
 declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -3560,6 +3971,7 @@ declare module '@papi/backend' {
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
   import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
   import { DialogService } from 'shared/services/dialog.service-model';
+  import { IMenuDataService } from 'shared/services/menu-data.service-model';
   const papi: {
     /**
      *
@@ -3636,6 +4048,11 @@ declare module '@papi/backend' {
      * within the renderer.
      */
     storage: ExtensionStorageService;
+    /**
+     *
+     * Service that allows to get and store menu data
+     */
+    menuData: IMenuDataService;
   };
   export default papi;
   /**
@@ -3713,19 +4130,11 @@ declare module '@papi/backend' {
    * within the renderer.
    */
   export const storage: ExtensionStorageService;
-}
-declare module 'extension-host/extension-types/extension-activation-context.model' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
-  import { UnsubscriberAsyncList } from 'platform-bible-utils';
-  /** An object of this type is passed into `activate()` for each extension during initialization */
-  export type ExecutionActivationContext = {
-    /** Canonical name of the extension */
-    name: string;
-    /** Used to save and load data from the storage service. */
-    executionToken: ExecutionToken;
-    /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
-    registrations: UnsubscriberAsyncList;
-  };
+  /**
+   *
+   * Service that allows to get and store menu data
+   */
+  export const menuData: IMenuDataService;
 }
 declare module 'extension-host/extension-types/extension.interface' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -3787,76 +4196,6 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      */
     activationEvents: string[];
   };
-}
-declare module 'shared/services/settings.service' {
-  import { Unsubscriber } from 'platform-bible-utils';
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  /** Event to set or update a setting */
-  export type UpdateSettingEvent<SettingName extends SettingNames> = {
-    type: 'update-setting';
-    setting: SettingTypes[SettingName];
-  };
-  /** Event to remove a setting */
-  export type ResetSettingEvent = {
-    type: 'reset-setting';
-  };
-  /** All supported setting events */
-  export type SettingEvent<SettingName extends SettingNames> =
-    | UpdateSettingEvent<SettingName>
-    | ResetSettingEvent;
-  /**
-   * Retrieves the value of the specified setting
-   *
-   * @param key The string id of the setting for which the value is being retrieved
-   * @param defaultSetting The default value used for the setting if no value is available for the key
-   * @returns The value of the specified setting, parsed to an object. Returns default setting if
-   *   setting does not exist
-   */
-  const getSetting: <SettingName extends keyof SettingTypes>(
-    key: SettingName,
-    defaultSetting: SettingTypes[SettingName],
-  ) => SettingTypes[SettingName];
-  /**
-   * Sets the value of the specified setting
-   *
-   * @param key The string id of the setting for which the value is being retrieved
-   * @param newSetting The value that is to be stored. Setting the new value to `undefined` is the
-   *   equivalent of deleting the setting
-   */
-  const setSetting: <SettingName extends keyof SettingTypes>(
-    key: SettingName,
-    newSetting: SettingTypes[SettingName],
-  ) => void;
-  /**
-   * Removes the setting from memory
-   *
-   * @param key The string id of the setting for which the value is being removed
-   */
-  const resetSetting: <SettingName extends keyof SettingTypes>(key: SettingName) => void;
-  /**
-   * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
-   * callback function is executed.
-   *
-   * @param key The string id of the setting for which the value is being subscribed to
-   * @param callback The function that will be called whenever the specified setting is updated
-   * @returns Unsubscriber that should be called whenever the subscription should be deleted
-   */
-  const subscribeToSetting: <SettingName extends keyof SettingTypes>(
-    key: SettingName,
-    callback: (newSetting: SettingEvent<SettingName>) => void,
-  ) => Unsubscriber;
-  export interface SettingsService {
-    get: typeof getSetting;
-    set: typeof setSetting;
-    reset: typeof resetSetting;
-    subscribe: typeof subscribeToSetting;
-  }
-  /**
-   *
-   * Service that allows to get and set settings in local storage
-   */
-  const settingsService: SettingsService;
-  export default settingsService;
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
   import { NetworkObject } from 'shared/models/network-object.model';
@@ -4235,179 +4574,6 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   const useProjectData: UseProjectDataHook;
   export default useProjectData;
 }
-declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
-  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
-  export type UseDialogCallbackOptions = {
-    /**
-     * How many dialogs are allowed to be open at once from this dialog callback. Calling the callback
-     * when this number of maximum open dialogs has been reached does nothing. Set to -1 for
-     * unlimited. Defaults to 1.
-     */
-    maximumOpenDialogs?: number;
-  };
-  /**
-   *
-   * Enables using `papi.dialogs.showDialog` in React more easily. Returns a callback to run that will
-   * open a dialog with the provided `dialogType` and `options` then run the `resolveCallback` with
-   * the dialog response or `rejectCallback` if there is an error. By default, only one dialog can be
-   * open at a time.
-   *
-   * If you need to open multiple dialogs and track which dialog is which, you can set
-   * `options.shouldOpenMultipleDialogs` to `true` and add a counter to the `options` when calling the
-   * callback. Then `resolveCallback` will be resolved with that options object including your
-   * counter.
-   *
-   * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
-   * @param dialogType Dialog type you want to show on the screen
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. Calling the callback will always use the latest
-   *   `dialogType`.
-   * @param options Various options for configuring the dialog that shows and this hook. If an
-   *   `options` parameter is also provided to the returned `showDialog` callback, those
-   *   callback-provided `options` merge over these hook-provided `options`
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. Calling the callback will always use the latest
-   *   `options`.
-   * @param resolveCallback `(response, dialogType, options)` The function that will be called if the
-   *   dialog request resolves properly
-   *
-   *   - `response` - the resolved value of the dialog call. Either the user's response or `undefined` if
-   *       the user cancels
-   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
-   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
-   *       consists of the `options` provided to the returned `showDialog` callback merged over the
-   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
-   *       properties
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. When the dialog resolves, it will always call the
-   *   latest `resolveCallback`.
-   * @param rejectCallback `(error, dialogType, options)` The function that will be called if the
-   *   dialog request throws an error
-   *
-   *   - `error` - the error thrown while calling the dialog
-   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
-   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
-   *       consists of the `options` provided to the returned `showDialog` callback merged over the
-   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
-   *       properties
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. If the dialog throws an error, it will always call
-   *   the latest `rejectCallback`.
-   * @returns `showDialog(options?)` - callback to run to show the dialog to prompt the user for a
-   *   response
-   *
-   *   - `optionsOverrides?` - `options` object you may specify that will merge over the `options` you
-   *       provide to the hook before passing to the dialog. All properties are optional, so you may
-   *       specify as many or as few properties here as you want to overwrite the properties in the
-   *       `options` you provide to the hook
-   */
-  function useDialogCallback<
-    DialogTabType extends DialogTabTypes,
-    DialogOptions extends DialogTypes[DialogTabType]['options'],
-  >(
-    dialogType: DialogTabType,
-    options: DialogOptions & UseDialogCallbackOptions,
-    resolveCallback: (
-      response: DialogTypes[DialogTabType]['responseType'] | undefined,
-      dialogType: DialogTabType,
-      options: DialogOptions,
-    ) => void,
-    rejectCallback: (error: unknown, dialogType: DialogTabType, options: DialogOptions) => void,
-  ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
-  /**
-   *
-   * Enables using `papi.dialogs.showDialog` in React more easily. Returns a callback to run that will
-   * open a dialog with the provided `dialogType` and `options` then run the `resolveCallback` with
-   * the dialog response or `rejectCallback` if there is an error. By default, only one dialog can be
-   * open at a time.
-   *
-   * If you need to open multiple dialogs and track which dialog is which, you can set
-   * `options.shouldOpenMultipleDialogs` to `true` and add a counter to the `options` when calling the
-   * callback. Then `resolveCallback` will be resolved with that options object including your
-   * counter.
-   *
-   * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
-   * @param dialogType Dialog type you want to show on the screen
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. Calling the callback will always use the latest
-   *   `dialogType`.
-   * @param options Various options for configuring the dialog that shows and this hook. If an
-   *   `options` parameter is also provided to the returned `showDialog` callback, those
-   *   callback-provided `options` merge over these hook-provided `options`
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. Calling the callback will always use the latest
-   *   `options`.
-   * @param resolveCallback `(response, dialogType, options)` The function that will be called if the
-   *   dialog request resolves properly
-   *
-   *   - `response` - the resolved value of the dialog call. Either the user's response or `undefined` if
-   *       the user cancels
-   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
-   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
-   *       consists of the `options` provided to the returned `showDialog` callback merged over the
-   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
-   *       properties
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. When the dialog resolves, it will always call the
-   *   latest `resolveCallback`.
-   * @param rejectCallback `(error, dialogType, options)` The function that will be called if the
-   *   dialog request throws an error
-   *
-   *   - `error` - the error thrown while calling the dialog
-   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
-   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
-   *       consists of the `options` provided to the returned `showDialog` callback merged over the
-   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
-   *       properties
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. If the dialog throws an error, it will always call
-   *   the latest `rejectCallback`.
-   * @returns `showDialog(options?)` - callback to run to show the dialog to prompt the user for a
-   *   response
-   *
-   *   - `optionsOverrides?` - `options` object you may specify that will merge over the `options` you
-   *       provide to the hook before passing to the dialog. All properties are optional, so you may
-   *       specify as many or as few properties here as you want to overwrite the properties in the
-   *       `options` you provide to the hook
-   */
-  function useDialogCallback<
-    DialogTabType extends DialogTabTypes,
-    DialogOptions extends DialogTypes[DialogTabType]['options'],
-  >(
-    dialogType: DialogTabType,
-    options: DialogOptions & UseDialogCallbackOptions,
-    resolveCallback: (
-      response: DialogTypes[DialogTabType]['responseType'] | undefined,
-      dialogType: DialogTabType,
-      options: DialogOptions,
-    ) => void,
-  ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
-  export default useDialogCallback;
-}
 declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   import { DataProviderNames, DataProviders } from 'papi-shared-types';
   /**
@@ -4530,6 +4696,7 @@ declare module '@papi/frontend' {
   import { DialogService } from 'shared/services/dialog.service-model';
   import * as papiReact from '@papi/frontend/react';
   import PapiRendererWebSocket from 'renderer/services/renderer-web-socket.service';
+  import { IMenuDataService } from 'shared/services/menu-data.service-model';
   import PapiRendererXMLHttpRequest from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
     /** This is just an alias for internet.fetch */
@@ -4610,6 +4777,11 @@ declare module '@papi/frontend' {
      * Service that allows to get and set settings in local storage
      */
     settings: SettingsService;
+    /**
+     *
+     * Service that allows to get and store menu data
+     */
+    menuData: IMenuDataService;
   };
   export default papi;
   /** This is just an alias for internet.fetch */
@@ -4690,38 +4862,10 @@ declare module '@papi/frontend' {
    * Service that allows to get and set settings in local storage
    */
   export const settings: SettingsService;
+  /**
+   *
+   * Service that allows to get and store menu data
+   */
+  export const menuData: IMenuDataService;
   export type Papi = typeof papi;
-}
-declare module '@papi/core' {
-  /** Exporting empty object so people don't have to put 'type' in their import statements */
-  const core: {};
-  export default core;
-  export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
-  export type { ExecutionToken } from 'node/models/execution-token.model';
-  export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
-  export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
-  export type { default as IDataProvider } from 'shared/models/data-provider.interface';
-  export type {
-    DataProviderUpdateInstructions,
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-  } from 'shared/models/data-provider.model';
-  export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
-  export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
-  export type { DialogOptions } from 'shared/models/dialog-options.model';
-  export type {
-    ExtensionDataScope,
-    MandatoryProjectDataType,
-  } from 'shared/models/project-data-provider.model';
-  export type { ProjectMetadata } from 'shared/models/project-metadata.model';
-  export type {
-    GetWebViewOptions,
-    SavedWebViewDefinition,
-    UseWebViewStateHook,
-    WebViewContentType,
-    WebViewDefinition,
-    WebViewProps,
-  } from 'shared/models/web-view.model';
-  export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
-  export type { SettingEvent } from 'shared/services/settings.service';
 }

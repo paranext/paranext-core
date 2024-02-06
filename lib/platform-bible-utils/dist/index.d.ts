@@ -77,9 +77,7 @@ export declare abstract class DocumentCombinerEngine {
 	 * Create a DocumentCombinerEngine instance
 	 *
 	 * @param baseDocument This is the first document that will be used when composing the output
-	 * @param copyDocuments If true, this instance will perform a deep copy of all provided documents
-	 *   before composing the output. If false, then changes made to provided documents after they are
-	 *   contributed will be reflected in the next time output is composed.
+	 * @param options Options used by this object when combining documents
 	 */
 	protected constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions);
 	/**
@@ -362,6 +360,19 @@ export declare function getAllObjectFunctionNames(obj: {
 	[property: string]: unknown;
 }, objId?: string): Set<string>;
 /**
+ * Creates a synchronous proxy for an asynchronous object. The proxy allows calling methods on an
+ * object that is asynchronously fetched using a provided asynchronous function.
+ *
+ * @param getObject - A function that returns a promise resolving to the object whose asynchronous
+ *   methods to call.
+ * @param objectToProxy - An optional object that is the object that is proxied. If a property is
+ *   accessed that does exist on this object, it will be returned. If a property is accessed that
+ *   does not exist on this object, it will be considered to be an asynchronous method called on the
+ *   object returned from getObject.
+ * @returns A synchronous proxy for the asynchronous object.
+ */
+export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;
+/**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
  * @param a The first object to compare
@@ -413,7 +424,7 @@ export declare function serialize(value: unknown, replacer?: (this: unknown, key
  * values, you should wrap them yourself in a string before using this function. Alternatively, you
  * can write your own replacer that will preserve `null` in a way that you can recover later.
  *
- * @param text A valid JSON string.
+ * @param value A valid JSON string.
  * @param reviver A function that transforms the results. This function is called for each member of
  *   the object. If a member contains nested objects, the nested objects are transformed before the
  *   parent object is. Note that `null` values are converted into `undefined` values after the
