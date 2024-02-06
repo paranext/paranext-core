@@ -2,7 +2,6 @@ import IDataProviderEngine from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import dataProviderService, { DataProviderEngine } from '@shared/services/data-provider.service';
 import {
-  createSyncProxyForAsyncObject,
   ISettingsService,
   ResetSettingEvent,
   SettingDataTypes,
@@ -11,25 +10,23 @@ import {
   onDidUpdateSettingEmitters,
   settingsServiceDataProviderName,
   settingsServiceObjectToProxy,
-  SettingsValues,
 } from '@shared/services/settings.service-model';
-import * as nodeFS from '@node/services/node-file-system.service';
 import coreSettingsInfo, { AllSettingsInfo } from '@main/data/core-settings-info.data';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
+  createSyncProxyForAsyncObject,
   PlatformEventEmitter,
-  UnsubscriberAsync,
+  // UnsubscriberAsync,
   deserialize,
   serialize,
+  Unsubscriber,
 } from 'platform-bible-utils';
-import { joinUriPaths } from '@node/utils/util';
 
-// TODO: 3 Fix function declarations to match service-model
 // TODO: 4 Fix implementation of all functions
 // TODO: Where do settings live (JSON obj/file)? How is dp going to access it?
 class SettingDataProviderEngine
-  extends DataProviderEngine<SettingDataTypes<SettingNames>>
-  implements IDataProviderEngine<SettingDataTypes<SettingNames>>
+  extends DataProviderEngine<SettingDataTypes>
+  implements IDataProviderEngine<SettingDataTypes>
 {
   private settingsInfo;
   // eslint-disable-next-line @typescript-eslint/no-useless-constructor
@@ -39,9 +36,8 @@ class SettingDataProviderEngine
   }
 
   // eslint-disable-next-line class-methods-use-this
-  async getSetting<SettingName extends SettingNames>(
+  async get<SettingName extends SettingNames>(
     key: SettingName,
-    // defaultSetting: SettingTypes[SettingName],
   ): Promise<SettingTypes[SettingName]> {
     const settingString = localStorage.getItem(key);
     // Null is used by the external API
@@ -55,10 +51,10 @@ class SettingDataProviderEngine
   }
 
   // eslint-disable-next-line class-methods-use-this
-  async setSetting<SettingName extends SettingNames>(
+  async set<SettingName extends SettingNames>(
     key: SettingName,
     newSetting: SettingTypes[SettingName],
-  ): Promise<DataProviderUpdateInstructions<SettingDataTypes<SettingNames>>> {
+  ): Promise<DataProviderUpdateInstructions<SettingDataTypes>> {
     localStorage.setItem(key, serialize(newSetting));
     // Assert type of the particular SettingName of the emitter.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -72,9 +68,7 @@ class SettingDataProviderEngine
   }
 
   // eslint-disable-next-line class-methods-use-this
-  async resetSetting<SettingName extends SettingNames>(
-    key: SettingName,
-  ): Promise<DataProviderUpdateInstructions<SettingDataTypes<SettingNames>>> {
+  async reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean> {
     localStorage.removeItem(key);
     // Assert type of the particular SettingName of the emitter.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -85,10 +79,10 @@ class SettingDataProviderEngine
   }
 
   // eslint-disable-next-line class-methods-use-this
-  async subscribeSetting<SettingName extends SettingNames>(
+  async subscribe<SettingName extends SettingNames>(
     key: SettingName,
     callback: (newSetting: SettingEvent<SettingName>) => void,
-  ): Promise<UnsubscriberAsync> {
+  ): Promise<Unsubscriber> {
     // Assert type of the particular SettingName of the emitter.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     let emitter = onDidUpdateSettingEmitters.get(key) as
@@ -104,16 +98,6 @@ class SettingDataProviderEngine
       );
     }
     return emitter.subscribe(callback);
-  }
-
-  // eslint-disable-next-line class-methods-use-this
-  async #loadSettings(): Promise<SettingsValues> {
-    const settingString = await nodeFS.readFileText(
-      joinUriPaths('shared', 'data', 'settings-values.ts'),
-    );
-    if (!settingString) throw new Error('Error reading settings');
-    const settingsObj: SettingsValues = deserialize(settingString);
-    return settingsObj;
   }
 }
 
@@ -143,7 +127,7 @@ export async function initialize(): Promise<void> {
 /** This is an internal-only export for testing purposes, and should not be used in development */
 export const testingSettingService = {
   implementSettingDataProviderEngine: () => {
-    return new SettingDataProviderEngine();
+    return new SettingDataProviderEngine(coreSettingsInfo);
   },
 };
 

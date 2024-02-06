@@ -1,11 +1,11 @@
 import { SettingNames, SettingTypes } from 'papi-shared-types';
-import { OnDidDispose, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
 import {
-  DataProviderDataType,
-  DataProviderSubscriberOptions,
-  DataProviderUpdateInstructions,
-  IDataProvider,
-} from './papi-core.service';
+  OnDidDispose,
+  PlatformEventEmitter,
+  Unsubscriber,
+  // UnsubscriberAsync,
+} from 'platform-bible-utils';
+import { DataProviderUpdateInstructions, IDataProvider } from './papi-core.service';
 
 /** JSDOC DESTINATION dataProviderName */
 export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
@@ -19,8 +19,17 @@ export const settingsServiceObjectToProxy = Object.freeze({
    */
   dataProviderName: settingsServiceDataProviderName,
 });
-
-// TODO: 1 Fix types- should they be like string/T or SettingName extends SettingNames
+/**
+ * SettingDataTypes handles getting and setting Platform.Bible core application and extension
+ * settings.
+ *
+ * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
+ * would not be able to create a generic type extending from `SettingNames` in order to return the
+ * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
+ * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
+ * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
+ * instead. However, do note that the unnamed data type (`''`) is fully functional.
+ */
 export type SettingDataTypes = {
   // '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
 };
@@ -53,7 +62,6 @@ export const onDidUpdateSettingEmitters = new Map<
   PlatformEventEmitter<SettingEvent<SettingNames>>
 >();
 
-// TODO: 2 Fix function declarations to match data provider data types
 /** JSDOC SOURCE settingsService */
 export type ISettingsService = {
   /**
@@ -65,10 +73,7 @@ export type ISettingsService = {
    * @returns The value of the specified setting, parsed to an object. Returns default setting if
    *   setting does not exist
    */
-  get<SettingName extends SettingNames>(
-    key: SettingName,
-    defaultSetting: SettingTypes[SettingName],
-  ): Promise<SettingTypes[SettingName]>;
+  get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
 
   /**
    * Sets the value of the specified setting
@@ -101,37 +106,7 @@ export type ISettingsService = {
   subscribe<SettingName extends SettingNames>(
     key: SettingName,
     callback: (newSetting: SettingEvent<SettingName>) => void,
-    options?: DataProviderSubscriberOptions,
-  ): Promise<UnsubscriberAsync>;
+  ): Promise<Unsubscriber>;
 } & OnDidDispose &
   IDataProvider<SettingDataTypes> &
   typeof settingsServiceObjectToProxy;
-
-// eslint-disable-next-line no-type-assertion/no-type-assertion
-const blah = {} as ISettingsService;
-const thing = await blah.get('platform.verseRef');
-
-// TODO: delete this utility function once menuDataService is pushed- don't have access to it now
-export function createSyncProxyForAsyncObject<T extends object>(
-  getObject: (args?: unknown[]) => Promise<T>,
-  objectToProxy: Partial<T> = {},
-): T {
-  // objectToProxy will have only the synchronously accessed properties of T on it, and this proxy
-  // makes the async methods that do not exist yet available synchronously so we have all of T
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return new Proxy(objectToProxy as T, {
-    get(target, prop) {
-      // We don't have any type information for T, so we assume methodName exists on it and will let JavaScript throw if it doesn't exist
-      // @ts-expect-error 7053
-      if (prop in target) return target[prop];
-      return async (...args: unknown[]) => {
-        // 7053: We don't have any type information for T, so we assume methodName exists on it and will let JavaScript throw if it doesn't exist
-        // 2556: The args here are the parameters for the method specified
-        // @ts-expect-error 7053 2556
-        return (await getObject())[prop](...args);
-      };
-    },
-  });
-}
-
-export type SettingsValues = { [settingId: string]: unknown };

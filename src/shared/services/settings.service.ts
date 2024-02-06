@@ -1,6 +1,6 @@
+import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import dataProviderService from './data-provider.service';
 import {
-  createSyncProxyForAsyncObject,
   ISettingsService,
   settingsServiceDataProviderName,
   settingsServiceObjectToProxy,
@@ -14,7 +14,7 @@ async function initialize(): Promise<void> {
       const executor = async () => {
         try {
           const provider = await dataProviderService.get(settingsServiceDataProviderName);
-          if (!provider) throw new Error('Menu data service undefined');
+          if (!provider) throw new Error('Settings service undefined');
           dataProvider = provider;
           resolve();
         } catch (error) {
@@ -27,9 +27,9 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const menuDataService = createSyncProxyForAsyncObject<ISettingsService>(async () => {
+const settingsService = createSyncProxyForAsyncObject<ISettingsService>(async () => {
   await initialize();
   return dataProvider;
 }, settingsServiceObjectToProxy);
 
-export default menuDataService;
+export default settingsService;
