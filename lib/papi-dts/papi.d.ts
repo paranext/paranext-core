@@ -3873,9 +3873,10 @@ declare module 'shared/services/menu-data.service-model' {
     /**
      * Get menu content for the main menu
      *
+     * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of main menu content
      */
-    getMainMenu: () => Promise<MultiColumnMenu>;
+    getMainMenu: (mainMenuType: undefined) => Promise<MultiColumnMenu>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
@@ -3890,11 +3891,13 @@ declare module 'shared/services/menu-data.service-model' {
     /**
      * Subscribe to run a callback function when the main menu data is changed
      *
+     * @param mainMenuType Does not have to be defined
      * @param callback Function to run with the updated menuContent for this selector
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeMainMenu: (
+      mainMenuType: undefined,
       callback: (menuContent: MultiColumnMenu) => void,
       options?: DataProviderSubscriberOptions,
     ) => Promise<UnsubscriberAsync>;
@@ -3908,7 +3911,7 @@ declare module 'shared/services/menu-data.service-model' {
     /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
-     * @param webViewType ReferencedItem corresponding to a webViewType
+     * @param webViewType The type of webview for which a menu should be set
      * @param value Menu of specified webViewType
      * @returns Unsubscriber function
      */
@@ -3919,13 +3922,13 @@ declare module 'shared/services/menu-data.service-model' {
     /**
      * Subscribe to run a callback function when the web view menu data is changed
      *
-     * @param selector Reference to the menu object that we are subscribing to
+     * @param webViewType The type of webview for which a menu should be subscribed
      * @param callback Function to run with the updated menuContent for this selector
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeWebViewMenu: (
-      selector: ReferencedItem,
+      webViewType: ReferencedItem,
       callback: (menuContent: WebViewMenu) => void,
       options?: DataProviderSubscriberOptions,
     ) => Promise<UnsubscriberAsync>;
