@@ -3884,6 +3884,7 @@ declare module "renderer/services/papi-frontend.service" {
     import { DataProviderService } from "shared/services/data-provider.service";
     import { ProjectLookupServiceType } from "shared/services/project-lookup.service-model";
     import { PapiFrontendProjectDataProviderService } from "shared/services/project-data-provider.service";
+    import { ISettingsService } from "shared/services/settings.service-model";
     import { DialogService } from "shared/services/dialog.service-model";
     import * as papiReact from "renderer/services/papi-frontend-react.service";
     import PapiRendererWebSocket from "renderer/services/renderer-web-socket.service";
@@ -3923,7 +3924,7 @@ declare module "renderer/services/papi-frontend.service" {
          */
         react: typeof papiReact;
         /** JSDOC DESTINATION settingsService */
-        settings: SettingsService;
+        settings: ISettingsService;
         /** JSDOC DESTINATION menuDataService */
         menuData: IMenuDataService;
     };
@@ -3957,7 +3958,7 @@ declare module "renderer/services/papi-frontend.service" {
     /** JSDOC DESTINATION papiReact */
     export const react: typeof papiReact;
     /** JSDOC DESTINATION settingsService */
-    export const settings: SettingsService;
+    export const settings: ISettingsService;
     /** JSDOC DESTINATION menuDataService */
     export const menuData: IMenuDataService;
     export type Papi = typeof papi;
