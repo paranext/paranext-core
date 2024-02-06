@@ -200,3 +200,37 @@ export function getAllObjectFunctionNames(
 
   return objectFunctionNames;
 }
+
+/**
+ * Creates a synchronous proxy for an asynchronous object. The proxy allows calling methods on an
+ * object that is asynchronously fetched using a provided asynchronous function.
+ *
+ * @param getObject - A function that returns a promise resolving to the object whose asynchronous
+ *   methods to call.
+ * @param objectToProxy - An optional object that is the object that is proxied. If a property is
+ *   accessed that does exist on this object, it will be returned. If a property is accessed that
+ *   does not exist on this object, it will be considered to be an asynchronous method called on the
+ *   object returned from getObject.
+ * @returns A synchronous proxy for the asynchronous object.
+ */
+export function createSyncProxyForAsyncObject<T extends object>(
+  getObject: (args?: unknown[]) => Promise<T>,
+  objectToProxy: Partial<T> = {},
+): T {
+  // objectToProxy will have only the synchronously accessed properties of T on it, and this proxy
+  // makes the async methods that do not exist yet available synchronously so we have all of T
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return new Proxy(objectToProxy as T, {
+    get(target, prop) {
+      // We don't have any type information for T, so we assume methodName exists on it and will let JavaScript throw if it doesn't exist
+      // @ts-expect-error 7053
+      if (prop in target) return target[prop];
+      return async (...args: unknown[]) => {
+        // 7053: We don't have any type information for T, so we assume methodName exists on it and will let JavaScript throw if it doesn't exist
+        // 2556: The args here are the parameters for the method specified
+        // @ts-expect-error 7053 2556
+        return (await getObject())[prop](...args);
+      };
+    },
+  });
+}

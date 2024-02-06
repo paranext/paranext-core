@@ -29,6 +29,8 @@ import { ProjectLookupServiceType } from '@shared/services/project-lookup.servic
 import projectLookupService from '@shared/services/project-lookup.service';
 import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
+import menuDataService from '@shared/services/menu-data.service';
+import { IMenuDataService } from '@shared/services/menu-data.service-model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -71,6 +73,8 @@ const papi = {
   projectLookup: projectLookupService as ProjectLookupServiceType,
   /** JSDOC DESTINATION extensionStorageService */
   storage: extensionStorageService as ExtensionStorageService,
+  /** JSDOC DESTINATION menuDataService */
+  menuData: menuDataService as IMenuDataService,
 };
 /* eslint-enable */
 
@@ -120,3 +124,6 @@ Object.freeze(papi.projectLookup);
 /** JSDOC DESTINATION extensionStorageService */
 export const { storage } = papi;
 Object.freeze(papi.storage);
+/** JSDOC DESTINATION menuDataService */
+export const { menuData } = papi;
+Object.freeze(papi.menuData);
