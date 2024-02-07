@@ -10,6 +10,20 @@ import {
 import coreSettingsInfo, { AllSettingsInfo } from '@main/data/core-settings-info.data';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import { createSyncProxyForAsyncObject, deserialize, serialize } from 'platform-bible-utils';
+import { joinUriPaths } from '@node/utils/util';
+import * as nodeFS from '@node/services/node-file-system.service';
+
+const SETTINGS_FILE_URI = joinUriPaths('data://', 'settings.json');
+
+let settingData = new Map<string, string>();
+
+async function loadSettingsFromFile() {
+  settingData.clear();
+  const settingFileString = await nodeFS.readFileText(SETTINGS_FILE_URI);
+  settingData = deserialize(settingFileString);
+  if (typeof settingData !== 'object')
+    throw new Error(`Settings data located in '${SETTINGS_FILE_URI}' is invalid`);
+}
 
 // TODO: 4 Fix implementation of all functions
 // TODO: Where do settings live (JSON obj/file)? How is dp going to access it?
@@ -69,6 +83,7 @@ export async function initialize(): Promise<void> {
             settingsServiceDataProviderName,
             new SettingDataProviderEngine(coreSettingsInfo), // will be fixed when dp types are correct
           );
+          loadSettingsFromFile();
           resolve();
         } catch (error) {
           reject(error);
