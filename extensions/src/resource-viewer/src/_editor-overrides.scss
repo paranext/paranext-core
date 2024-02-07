@@ -1,0 +1,122 @@
+/* Platform.Bible image protocol overrides */
+/* stylelint-disable selector-no-qualifying-type */
+
+.emoji.happysmile {
+  background-image: url('papi-extension://resource-viewer/assets/images/emoji/1F642.png');
+}
+
+i.chevron-down {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/chevron-down.svg');
+}
+
+#block-controls span.block-type.paragraph {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/text-paragraph.svg');
+}
+
+#block-controls span.block-type.h1 {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-h1.svg');
+}
+
+#block-controls span.block-type.h2 {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-h2.svg');
+}
+
+#block-controls span.block-type.quote {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/chat-square-quote.svg');
+}
+
+#block-controls span.block-type.ul {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/list-ul.svg');
+}
+
+#block-controls span.block-type.ol {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/list-ol.svg');
+}
+
+#block-controls span.block-type.code {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/code.svg');
+}
+
+.link-editor div.link-edit {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/pencil-fill.svg');
+}
+
+i.undo {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/arrow-counterclockwise.svg');
+}
+
+i.redo {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/arrow-clockwise.svg');
+}
+
+.icon.paragraph {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/text-paragraph.svg');
+}
+
+.icon.large-heading,
+.icon.h1 {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-h1.svg');
+}
+
+.icon.small-heading,
+.icon.h2 {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-h2.svg');
+}
+
+.icon.bullet-list,
+.icon.ul {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/list-ul.svg');
+}
+
+.icon.numbered-list,
+.icon.ol {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/list-ol.svg');
+}
+
+.icon.quote {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/chat-square-quote.svg');
+}
+
+.icon.code {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/code.svg');
+}
+
+i.bold {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-bold.svg');
+}
+
+i.italic {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-italic.svg');
+}
+
+i.underline {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-underline.svg');
+}
+
+i.strikethrough {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/type-strikethrough.svg');
+}
+
+i.code {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/code.svg');
+}
+
+i.link {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/link.svg');
+}
+
+i.left-align {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/text-left.svg');
+}
+
+i.center-align {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/text-center.svg');
+}
+
+i.right-align {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/text-right.svg');
+}
+
+i.justify-align {
+  background-image: url('papi-extension://resource-viewer/assets/images/icons/justify.svg');
+}

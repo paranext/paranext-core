@@ -41,3 +41,7 @@ launchSettings.json
 # Test development user appdata files
 dev-appdata/
 c-sharp/**/*.BAK
+
+# yalc
+.yalc
+yalc.lock

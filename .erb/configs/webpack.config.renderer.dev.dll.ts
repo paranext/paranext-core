@@ -21,7 +21,7 @@ const configuration: webpack.Configuration = {
 
   target: 'electron-renderer',
 
-  externals: ['fsevents', 'crypto-browserify'],
+  externals: ['fsevents', 'crypto-browserify', '@biblionexus-foundation/platform-editor'],
 
   /** Use `module` from `webpack.config.renderer.dev.js` */
   module: require('./webpack.config.renderer.dev').default.module,
