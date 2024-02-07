@@ -1,5 +1,8 @@
-// This class is built into the `usxeditor` library. We just need to override it
-/* stylelint-disable-next-line selector-class-pattern */
-.usxEditor {
-  width: auto !important;
+// TODO: replace this `styles` file with one from each Scripture project.
+@import './styles';
+@import './editor';
+@import './editor-overrides';
+
+body {
+  background-color: #eee;
 }
