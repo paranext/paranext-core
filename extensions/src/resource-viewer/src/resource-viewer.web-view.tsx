@@ -37,7 +37,5 @@ globalThis.webViewComponent = function ResourceViewer({
     }
   }, [usx]);
 
-  return (
-    <Editor usj={usj} scrRefState={[scrRef, setScrRef]} logger={logger} />
-  );
+  return <Editor usj={usj} scrRef={scrRef} setScrRef={setScrRef} logger={logger} />;
 };

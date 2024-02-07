@@ -43,7 +43,7 @@
     "platform-bible-utils": "file:../lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@biblionexus-foundation/platform-editor": "^0.0.2",
+    "@biblionexus-foundation/platform-editor": "^0.0.5",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
     "@mui/material": "^5.15.6",
