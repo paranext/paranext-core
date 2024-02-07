@@ -8,4 +8,4 @@ npm run lint:staged
 echo "Lint check finished"
 
 echo "If the following fails run `npm run editor:unlink`"
-yalc check
+npx yalc check
