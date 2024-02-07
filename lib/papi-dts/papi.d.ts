@@ -4128,21 +4128,19 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
 }
 declare module 'shared/services/settings.service-model' {
   import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import { OnDidDispose, PlatformEventEmitter, Unsubscriber } from 'platform-bible-utils';
+  import { OnDidDispose, Unsubscriber } from 'platform-bible-utils';
   import { DataProviderUpdateInstructions, IDataProvider } from '@papi/core';
   /**
    *
-   * Name used to register the data provider
-   *
-   * You can use this name
+   * This name is used to register the settings service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
    */
   export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
   export const settingsServiceObjectToProxy: Readonly<{
     /**
      *
-     * Name used to register the data provider
-     *
-     * You can use this name
+     * This name is used to register the settings service data provider on the papi. You can use this
+     * name to find the data provider when accessing it using the useData hook
      */
     dataProviderName: 'platform.settingsServiceDataProvider';
   }>;
@@ -4172,15 +4170,6 @@ declare module 'shared/services/settings.service-model' {
   export type ResetSettingEvent = {
     type: 'reset-setting';
   };
-  /** All supported setting events */
-  export type SettingEvent<SettingName extends SettingNames> =
-    | UpdateSettingEvent<SettingName>
-    | ResetSettingEvent;
-  /** All message subscriptions - emitters that emit an event each time a setting is updated */
-  export const onDidUpdateSettingEmitters: Map<
-    keyof SettingTypes,
-    PlatformEventEmitter<SettingEvent<keyof SettingTypes>>
-  >;
   /** */
   export type ISettingsService = {
     /**
@@ -4221,7 +4210,7 @@ declare module 'shared/services/settings.service-model' {
      */
     subscribe<SettingName extends SettingNames>(
       key: SettingName,
-      callback: (newSetting: SettingEvent<SettingName>) => void,
+      callback: (newSetting: SettingTypes[SettingName]) => void,
     ): Promise<Unsubscriber>;
   } & OnDidDispose &
     IDataProvider<SettingDataTypes> &

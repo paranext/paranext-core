@@ -3,24 +3,13 @@ import { DataProviderUpdateInstructions } from '@shared/models/data-provider.mod
 import dataProviderService, { DataProviderEngine } from '@shared/services/data-provider.service';
 import {
   ISettingsService,
-  ResetSettingEvent,
   SettingDataTypes,
-  SettingEvent,
-  UpdateSettingEvent,
-  onDidUpdateSettingEmitters,
   settingsServiceDataProviderName,
   settingsServiceObjectToProxy,
 } from '@shared/services/settings.service-model';
 import coreSettingsInfo, { AllSettingsInfo } from '@main/data/core-settings-info.data';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
-import {
-  createSyncProxyForAsyncObject,
-  PlatformEventEmitter,
-  // UnsubscriberAsync,
-  deserialize,
-  serialize,
-  Unsubscriber,
-} from 'platform-bible-utils';
+import { createSyncProxyForAsyncObject, deserialize, serialize } from 'platform-bible-utils';
 
 // TODO: 4 Fix implementation of all functions
 // TODO: Where do settings live (JSON obj/file)? How is dp going to access it?
@@ -56,48 +45,15 @@ class SettingDataProviderEngine
     newSetting: SettingTypes[SettingName],
   ): Promise<DataProviderUpdateInstructions<SettingDataTypes>> {
     localStorage.setItem(key, serialize(newSetting));
-    // Assert type of the particular SettingName of the emitter.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const emitter = onDidUpdateSettingEmitters.get(key);
-    const setMessage: UpdateSettingEvent<SettingName> = {
-      setting: newSetting,
-      type: 'update-setting',
-    };
-    emitter?.emit(setMessage);
+    this.notifyUpdate('*');
     return true;
   }
 
   // eslint-disable-next-line class-methods-use-this
   async reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean> {
     localStorage.removeItem(key);
-    // Assert type of the particular SettingName of the emitter.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const emitter = onDidUpdateSettingEmitters.get(key);
-    const resetMessage: ResetSettingEvent = { type: 'reset-setting' };
-    emitter?.emit(resetMessage);
+    this.notifyUpdate('*');
     return true;
-  }
-
-  // eslint-disable-next-line class-methods-use-this
-  async subscribe<SettingName extends SettingNames>(
-    key: SettingName,
-    callback: (newSetting: SettingEvent<SettingName>) => void,
-  ): Promise<Unsubscriber> {
-    // Assert type of the particular SettingName of the emitter.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    let emitter = onDidUpdateSettingEmitters.get(key) as
-      | PlatformEventEmitter<SettingEvent<SettingName>>
-      | undefined;
-    if (!emitter) {
-      emitter = new PlatformEventEmitter<SettingEvent<SettingName>>();
-      onDidUpdateSettingEmitters.set(
-        key,
-        // Assert type of the general SettingNames of the emitter.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        emitter as PlatformEventEmitter<SettingEvent<SettingNames>>,
-      );
-    }
-    return emitter.subscribe(callback);
   }
 }
 

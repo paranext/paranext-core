@@ -1,21 +1,19 @@
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
   OnDidDispose,
-  PlatformEventEmitter,
   Unsubscriber,
   // UnsubscriberAsync,
 } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions, IDataProvider } from './papi-core.service';
 
-/** JSDOC DESTINATION dataProviderName */
+/** JSDOC DESTINATION settingsServiceDataProviderName */
 export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
 export const settingsServiceObjectToProxy = Object.freeze({
   /**
-   * JSDOC SOURCE dataProviderName
+   * JSDOC SOURCE settingsServiceDataProviderName
    *
-   * Name used to register the data provider
-   *
-   * You can use this name
+   * This name is used to register the settings service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
    */
   dataProviderName: settingsServiceDataProviderName,
 });
@@ -50,17 +48,6 @@ export type UpdateSettingEvent<SettingName extends SettingNames> = {
 export type ResetSettingEvent = {
   type: 'reset-setting';
 };
-
-/** All supported setting events */
-export type SettingEvent<SettingName extends SettingNames> =
-  | UpdateSettingEvent<SettingName>
-  | ResetSettingEvent;
-
-/** All message subscriptions - emitters that emit an event each time a setting is updated */
-export const onDidUpdateSettingEmitters = new Map<
-  SettingNames,
-  PlatformEventEmitter<SettingEvent<SettingNames>>
->();
 
 /** JSDOC SOURCE settingsService */
 export type ISettingsService = {
@@ -105,7 +92,7 @@ export type ISettingsService = {
    */
   subscribe<SettingName extends SettingNames>(
     key: SettingName,
-    callback: (newSetting: SettingEvent<SettingName>) => void,
+    callback: (newSetting: SettingTypes[SettingName]) => void,
   ): Promise<Unsubscriber>;
 } & OnDidDispose &
   IDataProvider<SettingDataTypes> &
