@@ -27,6 +27,14 @@ public sealed class MessageRequest : Message
         Contents = JsonSerializer.SerializeToElement(contents);
     }
 
+    public MessageRequest(string requestType, int requestId, JsonElement contents)
+        : base(MessageType.REQUEST)
+    {
+        RequestType = requestType;
+        RequestId = requestId;
+        Contents = contents;
+    }
+
     public string RequestType { get; set; }
 
     public int RequestId { get; set; }
