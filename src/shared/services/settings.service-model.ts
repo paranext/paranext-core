@@ -4,7 +4,11 @@ import {
   Unsubscriber,
   // UnsubscriberAsync,
 } from 'platform-bible-utils';
-import { DataProviderUpdateInstructions, IDataProvider } from './papi-core.service';
+import {
+  DataProviderSubscriberOptions,
+  DataProviderUpdateInstructions,
+  IDataProvider,
+} from './papi-core.service';
 
 /** JSDOC DESTINATION settingsServiceDataProviderName */
 export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
@@ -55,19 +59,20 @@ export type ISettingsService = {
    * Retrieves the value of the specified setting
    *
    * @param key The string id of the setting for which the value is being retrieved
-   * @param defaultSetting The default value used for the setting if no value is available for the
-   *   key
    * @returns The value of the specified setting, parsed to an object. Returns default setting if
    *   setting does not exist
+   * @throws If no default value is available for the setting.
    */
   get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
 
   /**
    * Sets the value of the specified setting
    *
-   * @param key The string id of the setting for which the value is being retrieved
-   * @param newSetting The value that is to be stored. Setting the new value to `undefined` is the
-   *   equivalent of deleting the setting
+   * @param key The string id of the setting for which the value is being set
+   * @param newSetting The value that is to be set for the specified key
+   * @returns Information that papi uses to interpret whether to send out updates. Defaults to
+   *   `true` (meaning send updates only for this data type).
+   * @see {@link DataProviderUpdateInstructions} for more info on what to return
    */
   set<SettingName extends SettingNames>(
     key: SettingName,
@@ -75,7 +80,7 @@ export type ISettingsService = {
   ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
 
   /**
-   * Removes the setting from memory
+   * Removes the setting from memory and resets it to its default value
    *
    * @param key The string id of the setting for which the value is being removed
    * @returns `true` if successfully reset the project setting. `false` otherwise
@@ -88,11 +93,13 @@ export type ISettingsService = {
    *
    * @param key The string id of the setting for which the value is being subscribed to
    * @param callback The function that will be called whenever the specified setting is updated
+   * @param options Various options to adjust how the subscriber emits updates
    * @returns Unsubscriber that should be called whenever the subscription should be deleted
    */
   subscribe<SettingName extends SettingNames>(
     key: SettingName,
     callback: (newSetting: SettingTypes[SettingName]) => void,
+    options: DataProviderSubscriberOptions,
   ): Promise<Unsubscriber>;
 } & OnDidDispose &
   IDataProvider<SettingDataTypes> &

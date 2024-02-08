@@ -59,14 +59,14 @@ class SettingDataProviderEngine
     newSetting: SettingTypes[SettingName],
   ): Promise<DataProviderUpdateInstructions<SettingDataTypes>> {
     localStorage.setItem(key, serialize(newSetting));
-    this.notifyUpdate('*');
     return true;
   }
 
   // eslint-disable-next-line class-methods-use-this
   async reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean> {
     localStorage.removeItem(key);
-    this.notifyUpdate('*');
+    // this.notifyUpdate(''); TODO: Fix
+    // TODO: Add return true if successfully reset, return false otherwise
     return true;
   }
 }

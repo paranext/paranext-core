@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import settingsService from '@shared/services/settings.service';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import useData from '@renderer/hooks/papi-hooks/use-data.hook';
@@ -10,21 +10,18 @@ import { SettingDataTypes } from '@shared/services/settings.service-model';
 
 /**
  * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
- * and gets updated when the setting is changed by others.
+ * and gets updated when the setting is changed by others. Running `resetSetting()` will always
+ * update the setting value returned to the latest `defaultState`, and changing the `key` will use
+ * the latest `defaultState`. However, if `defaultState` is changed while a setting is
+ * `defaultState` (meaning it is reset and has no value), the returned setting value will not be
+ * updated to the new `defaultState`.
  *
  * @param key The string id that is used to store the setting in local storage
  *
  *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
  *   updated every render
  * @param defaultState The default state of the setting. If the setting already has a value set to
- *   it in local storage, this parameter will be ignored.
- *
- *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
- *   to re-run with its new value. Running `resetSetting()` will always update the setting value
- *   returned to the latest `defaultState`, and changing the `key` will use the latest
- *   `defaultState`. However, if `defaultState` is changed while a setting is `defaultState`
- *   (meaning it is reset and has no value), the returned setting value will not be updated to the
- *   new `defaultState`.
+ *   it in the settings storage, this parameter will be ignored.
  * @param subscriberOptions Various options to adjust how the subscriber emits updates
  *
  *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
@@ -51,13 +48,12 @@ const useSetting = <SettingName extends SettingNames>(
     newData: SettingTypes[SettingName],
   ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
   resetSetting: () => void,
+  isLoading: boolean,
 ] => {
-  // Use defaultState as a ref so it doesn't update dependency arrays
-  const defaultStateRef = useRef(defaultState);
-  defaultStateRef.current = defaultState;
-
+  // Since the `DataProviderDataType` that we're trying to expose here is unnamed  (`''`) we have to
+  // manually assert it's signature in order for useData to know how to work with this data provider.
   /* eslint-disable no-type-assertion/no-type-assertion */
-  const [setting, setSetting] = (
+  const [setting, setSetting, isLoading] = (
     useData(settingsService) as {
       ['']: (
         selector: SettingName,
@@ -78,6 +74,6 @@ const useSetting = <SettingName extends SettingNames>(
     settingsService.reset(key);
   }, [key]);
 
-  return [setting, setSetting, resetSetting];
+  return [setting, setSetting, resetSetting, isLoading];
 };
 export default useSetting;

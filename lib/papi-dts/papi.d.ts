@@ -3881,6 +3881,108 @@ declare module 'shared/services/menu-data.service' {
   const menuDataService: IMenuDataService;
   export default menuDataService;
 }
+declare module 'shared/services/settings.service-model' {
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import { OnDidDispose, Unsubscriber } from 'platform-bible-utils';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+    IDataProvider,
+  } from '@papi/core';
+  /**
+   *
+   * This name is used to register the settings service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
+   */
+  export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
+  export const settingsServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the settings service data provider on the papi. You can use this
+     * name to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.settingsServiceDataProvider';
+  }>;
+  /**
+   * SettingDataTypes handles getting and setting Platform.Bible core application and extension
+   * settings.
+   *
+   * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
+   * would not be able to create a generic type extending from `SettingNames` in order to return the
+   * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
+   * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
+   * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
+   * instead. However, do note that the unnamed data type (`''`) is fully functional.
+   */
+  export type SettingDataTypes = {};
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [settingsServiceDataProviderName]: ISettingsService;
+    }
+  }
+  /** Event to set or update a setting */
+  export type UpdateSettingEvent<SettingName extends SettingNames> = {
+    type: 'update-setting';
+    setting: SettingTypes[SettingName];
+  };
+  /** Event to remove a setting */
+  export type ResetSettingEvent = {
+    type: 'reset-setting';
+  };
+  /** */
+  export type ISettingsService = {
+    /**
+     * Retrieves the value of the specified setting
+     *
+     * @param key The string id of the setting for which the value is being retrieved
+     * @returns The value of the specified setting, parsed to an object. Returns default setting if
+     *   setting does not exist
+     * @throws If no default value is available for the setting.
+     */
+    get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
+    /**
+     * Sets the value of the specified setting
+     *
+     * @param key The string id of the setting for which the value is being set
+     * @param newSetting The value that is to be set for the specified key
+     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
+     *   `true` (meaning send updates only for this data type).
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    set<SettingName extends SettingNames>(
+      key: SettingName,
+      newSetting: SettingTypes[SettingName],
+    ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
+    /**
+     * Removes the setting from memory and resets it to its default value
+     *
+     * @param key The string id of the setting for which the value is being removed
+     * @returns `true` if successfully reset the project setting. `false` otherwise
+     */
+    reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean>;
+    /**
+     * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
+     * callback function is executed.
+     *
+     * @param key The string id of the setting for which the value is being subscribed to
+     * @param callback The function that will be called whenever the specified setting is updated
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribe<SettingName extends SettingNames>(
+      key: SettingName,
+      callback: (newSetting: SettingTypes[SettingName]) => void,
+      options: DataProviderSubscriberOptions,
+    ): Promise<Unsubscriber>;
+  } & OnDidDispose &
+    IDataProvider<SettingDataTypes> &
+    typeof settingsServiceObjectToProxy;
+}
+declare module 'shared/services/settings.service' {
+  import { ISettingsService } from 'shared/services/settings.service-model';
+  const settingsService: ISettingsService;
+  export default settingsService;
+}
 declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -3901,6 +4003,7 @@ declare module '@papi/backend' {
   import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
   import { DialogService } from 'shared/services/dialog.service-model';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { ISettingsService } from 'shared/services/settings.service-model';
   const papi: {
     /**
      *
@@ -3977,6 +4080,8 @@ declare module '@papi/backend' {
      * within the renderer.
      */
     storage: ExtensionStorageService;
+    /** */
+    settings: ISettingsService;
     /**
      *
      * Service that allows to get and store menu data
@@ -4125,101 +4230,6 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      */
     activationEvents: string[];
   };
-}
-declare module 'shared/services/settings.service-model' {
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import { OnDidDispose, Unsubscriber } from 'platform-bible-utils';
-  import { DataProviderUpdateInstructions, IDataProvider } from '@papi/core';
-  /**
-   *
-   * This name is used to register the settings service data provider on the papi. You can use this
-   * name to find the data provider when accessing it using the useData hook
-   */
-  export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
-  export const settingsServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the settings service data provider on the papi. You can use this
-     * name to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.settingsServiceDataProvider';
-  }>;
-  /**
-   * SettingDataTypes handles getting and setting Platform.Bible core application and extension
-   * settings.
-   *
-   * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
-   * would not be able to create a generic type extending from `SettingNames` in order to return the
-   * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
-   * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
-   * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
-   * instead. However, do note that the unnamed data type (`''`) is fully functional.
-   */
-  export type SettingDataTypes = {};
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [settingsServiceDataProviderName]: ISettingsService;
-    }
-  }
-  /** Event to set or update a setting */
-  export type UpdateSettingEvent<SettingName extends SettingNames> = {
-    type: 'update-setting';
-    setting: SettingTypes[SettingName];
-  };
-  /** Event to remove a setting */
-  export type ResetSettingEvent = {
-    type: 'reset-setting';
-  };
-  /** */
-  export type ISettingsService = {
-    /**
-     * Retrieves the value of the specified setting
-     *
-     * @param key The string id of the setting for which the value is being retrieved
-     * @param defaultSetting The default value used for the setting if no value is available for the
-     *   key
-     * @returns The value of the specified setting, parsed to an object. Returns default setting if
-     *   setting does not exist
-     */
-    get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
-    /**
-     * Sets the value of the specified setting
-     *
-     * @param key The string id of the setting for which the value is being retrieved
-     * @param newSetting The value that is to be stored. Setting the new value to `undefined` is the
-     *   equivalent of deleting the setting
-     */
-    set<SettingName extends SettingNames>(
-      key: SettingName,
-      newSetting: SettingTypes[SettingName],
-    ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
-    /**
-     * Removes the setting from memory
-     *
-     * @param key The string id of the setting for which the value is being removed
-     * @returns `true` if successfully reset the project setting. `false` otherwise
-     */
-    reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean>;
-    /**
-     * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
-     * callback function is executed.
-     *
-     * @param key The string id of the setting for which the value is being subscribed to
-     * @param callback The function that will be called whenever the specified setting is updated
-     * @returns Unsubscriber that should be called whenever the subscription should be deleted
-     */
-    subscribe<SettingName extends SettingNames>(
-      key: SettingName,
-      callback: (newSetting: SettingTypes[SettingName]) => void,
-    ): Promise<Unsubscriber>;
-  } & OnDidDispose &
-    IDataProvider<SettingDataTypes> &
-    typeof settingsServiceObjectToProxy;
-}
-declare module 'shared/services/settings.service' {
-  import { ISettingsService } from 'shared/services/settings.service-model';
-  const settingsService: ISettingsService;
-  export default settingsService;
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
   import { NetworkObject } from 'shared/models/network-object.model';
@@ -4440,21 +4450,18 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   import { SettingDataTypes } from 'shared/services/settings.service-model';
   /**
    * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
-   * and gets updated when the setting is changed by others.
+   * and gets updated when the setting is changed by others. Running `resetSetting()` will always
+   * update the setting value returned to the latest `defaultState`, and changing the `key` will use
+   * the latest `defaultState`. However, if `defaultState` is changed while a setting is
+   * `defaultState` (meaning it is reset and has no value), the returned setting value will not be
+   * updated to the new `defaultState`.
    *
    * @param key The string id that is used to store the setting in local storage
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
    *   updated every render
    * @param defaultState The default state of the setting. If the setting already has a value set to
-   *   it in local storage, this parameter will be ignored.
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. Running `resetSetting()` will always update the setting value
-   *   returned to the latest `defaultState`, and changing the `key` will use the latest
-   *   `defaultState`. However, if `defaultState` is changed while a setting is `defaultState`
-   *   (meaning it is reset and has no value), the returned setting value will not be updated to the
-   *   new `defaultState`.
+   *   it in the settings storage, this parameter will be ignored.
    * @param subscriberOptions Various options to adjust how the subscriber emits updates
    *
    *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
@@ -4481,6 +4488,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
       newData: SettingTypes[SettingName],
     ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
     resetSetting: () => void,
+    isLoading: boolean,
   ];
   export default useSetting;
 }
