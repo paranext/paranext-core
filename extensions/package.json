@@ -43,6 +43,7 @@
     "platform-bible-utils": "file:../lib/platform-bible-utils"
   },
   "devDependencies": {
+    "@biblionexus-foundation/platform-editor": "^0.0.2",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
     "@mui/material": "^5.15.6",
@@ -72,7 +73,6 @@
     "tsconfig-paths": "^4.2.0",
     "tsconfig-paths-webpack-plugin": "^4.1.0",
     "typescript": "^5.3.3",
-    "usxeditor": "^0.0.9-alpha",
     "webpack": "^5.90.0",
     "webpack-cli": "^5.1.4",
     "webpack-merge": "^5.10.0",
