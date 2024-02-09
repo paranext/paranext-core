@@ -16,6 +16,7 @@ This is a webpack project configured to build Paranext's official extensions inc
       - `*.web-view.tsx` files will be treated as React WebViews
       - `*.web-view.html` files are a conventional way to provide HTML WebViews (no special functionality)
     - `assets/` contains asset files the extension and its WebViews can retrieve using the `papi-extension:` protocol. It is copied into the build folder
+    - `contributions/` contains JSON files the platform uses to extend data structures for things like menus and settings. The JSON files are referenced from the manifest
     - `public/` contains other static files that are copied into the build folder
 - `dist/` is a generated folder containing the built extension files
 - `release/` is a generated folder containing zips of the built extension files

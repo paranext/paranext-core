@@ -64,6 +64,7 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
       if (
         e
           .toString()
+          .toLowerCase()
           .includes(ERROR_STRINGS.subtreeNeverAdded.replace('{0}', ext.dirPathOSIndependent))
       )
         // If this folder isn't a subtree, it may be intentionally not based on the template. Continue
