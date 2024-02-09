@@ -25,8 +25,6 @@ async function loadSettingsFromFile() {
     throw new Error(`Settings data located in '${SETTINGS_FILE_URI}' is invalid`);
 }
 
-// TODO: 4 Fix implementation of all functions
-// TODO: Where do settings live (JSON obj/file)? How is dp going to access it?
 class SettingDataProviderEngine
   extends DataProviderEngine<SettingDataTypes>
   implements IDataProviderEngine<SettingDataTypes>
