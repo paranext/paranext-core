@@ -18,7 +18,7 @@ import {
  * call that method. This is because we don't want users of network objects to dispose of them. Only
  * the caller of `networkObjectService.set` should be able to dispose of the network object.
  *
- * @see networkObjectService
+ * @see {@link networkObjectService}
  */
 export type NetworkObject<T extends NetworkableObject> = Omit<CanHaveOnDidDispose<T>, 'dispose'> &
   OnDidDispose;
@@ -26,14 +26,14 @@ export type NetworkObject<T extends NetworkableObject> = Omit<CanHaveOnDidDispos
 /**
  * An object of this type is returned from {@link networkObjectService.set}.
  *
- * @see networkObjectService
+ * @see {@link networkObjectService}
  */
 export type DisposableNetworkObject<T extends NetworkableObject> = NetworkObject<T> & Dispose;
 
 /**
  * An object of this type is passed into {@link networkObjectService.set}.
  *
- * @see networkObjectService
+ * @see {@link networkObjectService}
  */
 export type NetworkableObject<T = object> = T & CannotHaveOnDidDispose;
 
@@ -56,7 +56,7 @@ export type NetworkableObject<T = object> = T & CannotHaveOnDidDispose;
  *   Note: This function should return Partial<T>. For some reason, TypeScript can't infer the type
  *   (probably has to do with that it's a wrapped and layered type). Functions that implement this
  *   type should return Partial<T>
- * @see networkObjectService
+ * @see {@link networkObjectService}
  */
 export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
   id: string,

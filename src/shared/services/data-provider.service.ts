@@ -11,9 +11,7 @@ import DataProviderInternal, {
   getDataProviderDataTypeFromFunctionName,
   DataProviderDataType,
 } from '@shared/models/data-provider.model';
-import IDataProviderEngine, {
-  DataProviderEngineNotifyUpdate,
-} from '@shared/models/data-provider-engine.model';
+import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
 import {
   PlatformEvent,
   PlatformEventEmitter,
@@ -66,21 +64,6 @@ let isInitialized = false;
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
 
-/**
- * JSDOC SOURCE DataProviderEngine
- *
- * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
- * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
- * function in order to use `notifyUpdate`.
- *
- * @see IDataProviderEngine for more information on extending this class.
- */
-export abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
-  // This is just a placeholder and will be layered over by papi. We don't need it to do anything
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
-  notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes> = (_updateInstructions) => {};
-}
-
 /** Sets up the service. Only runs once and always returns the same promise after that */
 const initialize = () => {
   if (initializePromise) return initializePromise;
@@ -98,6 +81,8 @@ const initialize = () => {
 };
 
 /**
+ * JSDOC SOURCE DataProviderServiceHasKnown
+ *
  * Indicate if we are aware of an existing data provider with the given name. If a data provider
  * with the given name is somewhere else on the network, this function won't tell you about it
  * unless something else in the existing process is subscribed to it.
@@ -380,6 +365,8 @@ function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataT
 }
 
 /**
+ * JSDOC SOURCE DataProviderServiceDecoratorsIgnore
+ *
  * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
  * papi will not layer over these methods or consider them to be data type methods
  *
@@ -420,20 +407,82 @@ function ignore(method: Function & { isIgnored?: boolean }): void;
  *   Note: this is the signature that provides the actual decorator functionality. However, since
  *   users will not be using this signature, the example usage is provided in the signature above.
  */
-function ignore<T extends object>(target: T, member: keyof T): void;
-function ignore<T extends object>(
-  target: T | (Function & { isIgnored?: boolean }),
-  member?: keyof T,
-): void {
-  if (typeof target === 'function') target.isIgnored = true;
-  else {
-    // We don't care what type the decorated object is. Just want to set some function metadata
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    (target[member as keyof T] as any).isIgnored = true;
+function ignore(target: object, member: string): void;
+// We don't care what type the decorated object is. Just want to set some function metadata
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ignore(target: any, member?: string): void {
+  if (typeof target === 'function') {
+    target.isIgnored = true;
+    return;
   }
+
+  if (!member) return;
+
+  target[member].isIgnored = true;
 }
 
 /**
+ * JSDOC SOURCE DataProviderServiceDecoratorsDoNotNotify
+ *
+ * Decorator function that marks a data provider engine `set<data_type>` method not to automatically
+ * emit an update and notify subscribers of a change to the data. papi will still consider the
+ * `set<data_type>` method to be a data type method, but it will not layer over it to emit updates.
+ *
+ * @example Use this as a decorator on a class's method:
+ *
+ * ```typescript
+ * class MyDataProviderEngine {
+ * ＠papi.dataProviders.decorators.doNotNotify
+ * async setVerse() {}
+ * }
+ * ```
+ *
+ * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
+ * code blocks, so a different unicode character was used. Please use a normal `@` when using a
+ * decorator.
+ *
+ * OR
+ *
+ * @example Call this function signature on an object's method:
+ *
+ * ```typescript
+ * const myDataProviderEngine = {
+ *   async setVerse() {},
+ * };
+ * papi.dataProviders.decorators.ignore(dataProviderEngine.setVerse);
+ * ```
+ *
+ * @param method The method not to layer over to send an automatic update
+ */
+function doNotNotify(method: Function & { doNotNotify?: boolean }): void;
+/**
+ * Decorator function that marks a data provider engine `set<data_type>` method not to automatically
+ * emit an update and notify subscribers of a change to the data. papi will still consider the
+ * `set<data_type>` method to be a data type method, but it will not layer over it to emit updates.
+ *
+ * @param target The class that has the method not to layer over to send an automatic update
+ * @param member The name of the method not to layer over to send an automatic update
+ *
+ *   Note: this is the signature that provides the actual decorator functionality. However, since
+ *   users will not be using this signature, the example usage is provided in the signature above.
+ */
+function doNotNotify(target: object, member: string): void;
+// We don't care what type the decorated object is. Just want to set some function metadata
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function doNotNotify(target: any, member?: string): void {
+  if (typeof target === 'function') {
+    target.doNotNotify = true;
+    return;
+  }
+
+  if (!member) return;
+
+  target[member].doNotNotify = true;
+}
+
+/**
+ * JSDOC SOURCE DataProviderServiceDecorators
+ *
  * A collection of decorators to be used with the data provider service
  *
  * @example To use the `ignore` a decorator on a class's method:
@@ -450,7 +499,10 @@ function ignore<T extends object>(
  * decorator.
  */
 const decorators = {
+  /** JSDOC DESTINATION DataProviderServiceDecoratorsIgnore */
   ignore,
+  /** JSDOC DESTINATION DataProviderServiceDecoratorsDoNotNotify */
+  doNotNotify,
 };
 
 /**
@@ -494,8 +546,6 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
     [...getAllObjectFunctionNames(dataProviderEngine)],
     (fnName) => {
       // If the function was decorated with @ignore, do not consider it a special function
-      // We don't care about types. We just want to check the decorator
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
       if (dataProviderEngineUntyped[fnName].isIgnored) return 'other';
 
       if (fnName.startsWith('get')) return 'get';
@@ -539,7 +589,13 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
   // Layer over the data provider engine's set methods with set methods that actually emit an update
   // if they return true
   dataTypes.get('set')?.forEach((dataType) => {
-    if (dataProviderEngineUntyped[`set${dataType}`]) {
+    // If the function was decorated with @doNotNotify, do not overwrite it to automatically emit an update
+    if (
+      dataProviderEngineUntyped[`set${dataType}`] &&
+      // We don't care about types. We just want to check the decorator
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
+      !(dataProviderEngineUntyped[`set${dataType}`] as any).doNotNotify
+    ) {
       /* eslint-disable no-type-assertion/no-type-assertion */
       /** Saved bound version of the data provider engine's set so we can call it from here */
       const dpeSet = (
@@ -573,6 +629,8 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
 }
 
 /**
+ * JSDOC SOURCE DataProviderServiceRegisterEngine
+ *
  * Creates a data provider to be shared on the network layering over the provided data provider
  * engine.
  *
@@ -722,6 +780,8 @@ function createLocalDataProviderToProxy<DataProviderName extends DataProviderNam
 }
 
 /**
+ * JSDOC SOURCE DataProviderServiceGet
+ *
  * Get a data provider that has previously been set up
  *
  * @param providerName Name of the desired data provider
@@ -781,10 +841,15 @@ export async function getByType<T extends IDataProvider<any>>(
 
 // Declare an interface for the object we're exporting so that JSDoc comments propagate
 export interface DataProviderService {
+  /** JSDOC DESTINATION DataProviderServiceHasKnown */
   hasKnown: typeof hasKnown;
+  /** JSDOC DESTINATION DataProviderServiceRegisterEngine */
   registerEngine: typeof registerEngine;
+  /** JSDOC DESTINATION DataProviderServiceGet */
   get: typeof get;
+  /** JSDOC DESTINATION DataProviderServiceDecorators */
   decorators: typeof decorators;
+  /** JSDOC DESTINATION DataProviderEngine */
   DataProviderEngine: typeof DataProviderEngine;
 }
 

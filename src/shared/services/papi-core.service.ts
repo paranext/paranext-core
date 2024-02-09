@@ -20,9 +20,10 @@ export type { default as IDataProviderEngine } from '@shared/models/data-provide
 export type { DialogOptions } from '@shared/models/dialog-options.model';
 export type {
   ExtensionDataScope,
-  MandatoryProjectDataType,
+  MandatoryProjectDataTypes,
 } from '@shared/models/project-data-provider.model';
 export type { ProjectMetadata } from '@shared/models/project-metadata.model';
+export type { MandatoryProjectStorageDataTypes } from '@shared/models/project-storage-interpreter.model';
 export type {
   GetWebViewOptions,
   SavedWebViewDefinition,
@@ -35,3 +36,4 @@ export type {
 export type { IWebViewProvider } from '@shared/models/web-view-provider.model';
 
 export type { SettingEvent } from '@shared/services/settings.service';
+export type { SimultaneousProjectSettingsChanges } from '@shared/services/project-settings.service-model';

@@ -10,8 +10,9 @@ import { NetworkableObject } from '@shared/models/network-object.model';
  * JSDOC SOURCE DataProviderEngineNotifyUpdate
  *
  * Method to run to send clients updates for a specific data type outside of the `set<data_type>`
- * method. papi overwrites this function on the DataProviderEngine itself to emit an update after
- * running the `notifyUpdate` method in the DataProviderEngine.
+ * method. papi overwrites this function on the DataProviderEngine itself to emit an update based on
+ * the `updateInstructions` and then run the original `notifyUpdateMethod` from the
+ * `DataProviderEngine`.
  *
  * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a data
  * provider engine):
@@ -25,7 +26,7 @@ import { NetworkableObject } from '@shared/models/network-object.model';
  *
  * ```typescript
  * notifyUpdate(updateInstructions) {
- * papi.logger.info(updateInstructions);
+ *   papi.logger.info(updateInstructions);
  * }
  * ```
  *
@@ -37,7 +38,7 @@ import { NetworkableObject } from '@shared/models/network-object.model';
  *   interpreted update value into this `notifyUpdate` function. For example, running
  *   `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
  *   `updateInstructions` of `'*'`.
- * @see DataProviderUpdateInstructions for more info on the `updateInstructions` parameter
+ * @see {@link DataProviderUpdateInstructions} for more info on the `updateInstructions` parameter
  *
  * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
  * It will create a destructive infinite loop.
@@ -51,8 +52,8 @@ export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTy
  * provider engine. You do not need to specify this type unless you are creating an object that is
  * to be registered as a data provider engine and you need to use `notifyUpdate`.
  *
- * @see DataProviderEngineNotifyUpdate for more information on `notifyUpdate`.
- * @see IDataProviderEngine for more information on using this type.
+ * @see {@link DataProviderEngineNotifyUpdate} for more information on `notifyUpdate`.
+ * @see {@link IDataProviderEngine} for more information on using this type.
  */
 export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
   /** JSDOC DESTINATION DataProviderEngineNotifyUpdate */
@@ -61,13 +62,13 @@ export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
 
 /**
  * The object to register with the DataProviderService to create a data provider. The
- * DataProviderService creates an IDataProvider on the papi that layers over this engine, providing
- * special functionality.
+ * DataProviderService creates an {@link IDataProvider} on the papi that layers over this engine,
+ * providing special functionality.
  *
  * @type TDataTypes - The data types that this data provider engine serves. For each data type
  *   defined, the engine must have corresponding `get<data_type>` and `set<data_type> function`
  *   functions.
- * @see DataProviderDataTypes for information on how to make powerful types that work well with
+ * @see {@link DataProviderDataTypes} for information on how to make powerful types that work well with
  * Intellisense.
  *
  * Note: papi creates a `notifyUpdate` function on the data provider engine if one is not provided, so it
@@ -75,8 +76,16 @@ export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
  * not understand that papi will create one as you are writing your data provider engine, so you can
  * avoid type errors with one of the following options:
  *
- * 1. If you are using an object or class to create a data provider engine, you can add a
- * `notifyUpdate` function (and, with an object, add the WithNotifyUpdate type) to
+ * 1. If you are using a class to create a data provider engine, you can extend the
+ * {@link DataProviderEngine} class, and it will provide `notifyUpdate` for you:
+ * ```typescript
+ * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
+ *   ...
+ * }
+ * ```
+ *
+ * 2. If you are using an object or class to create a data provider engine, you can add a
+ * `notifyUpdate` function (and, with an object, add the {@link WithNotifyUpdate} type) to
  * your data provider engine like so:
  * ```typescript
  * const myDPE: IDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
@@ -88,14 +97,6 @@ export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
  * ```typescript
  * class MyDPE implements IDataProviderEngine<MyDataTypes> {
  *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
- *   ...
- * }
- * ```
- *
- * 2. If you are using a class to create a data provider engine, you can extend the `DataProviderEngine`
- * class, and it will provide `notifyUpdate` for you:
- * ```typescript
- * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
  *   ...
  * }
  * ```
@@ -117,7 +118,7 @@ type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProvider
      * WARNING: Do not run this recursively in its own `set<data_type>` method! It will create as
      * many updates as you run `set<data_type>` methods.
      *
-     * @see DataProviderSetter for more information
+     * @see {@link DataProviderSetter} for more information
      */
     DataProviderSetters<TDataTypes> &
     /**
@@ -127,9 +128,26 @@ type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProvider
      * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
      * method.
      *
-     * @see DataProviderGetter for more information
+     * @see {@link DataProviderGetter} for more information
      */
     DataProviderGetters<TDataTypes> &
     Partial<WithNotifyUpdate<TDataTypes>>;
 
 export default IDataProviderEngine;
+
+/**
+ * JSDOC SOURCE DataProviderEngine
+ *
+ * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
+ * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
+ * function in order to use `notifyUpdate`.
+ *
+ * @see {@link IDataProviderEngine} for more information on extending this class.
+ */
+export abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes>
+  implements WithNotifyUpdate<TDataTypes>
+{
+  // This is just a placeholder and will be layered over by papi. We don't need it to do anything
+  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes> = (_updateInstructions) => {};
+}
