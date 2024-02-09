@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@sillsdev/scripture": "^1.4.0",
-    "platform-bible-utils": "file:../paranext-core/lib/platform-bible-utils"
+    "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
     "@types/node": "^20.11.6",
@@ -44,8 +44,8 @@
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "glob": "^10.3.10",
-    "papi-dts": "file:../paranext-core/lib/papi-dts",
-    "platform-bible-react": "file:../paranext-core/lib/platform-bible-react",
+    "papi-dts": "file:../../../lib/papi-dts",
+    "platform-bible-react": "file:../../../lib/platform-bible-react",
     "prettier": "^3.2.4",
     "prettier-plugin-jsdoc": "^1.3.0",
     "sass": "^1.70.0",
