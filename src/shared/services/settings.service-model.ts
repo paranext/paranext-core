@@ -42,17 +42,6 @@ declare module 'papi-shared-types' {
   }
 }
 
-/** Event to set or update a setting */
-export type UpdateSettingEvent<SettingName extends SettingNames> = {
-  type: 'update-setting';
-  setting: SettingTypes[SettingName];
-};
-
-/** Event to remove a setting */
-export type ResetSettingEvent = {
-  type: 'reset-setting';
-};
-
 /** JSDOC SOURCE settingsService */
 export type ISettingsService = {
   /**

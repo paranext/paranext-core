@@ -3920,15 +3920,6 @@ declare module 'shared/services/settings.service-model' {
       [settingsServiceDataProviderName]: ISettingsService;
     }
   }
-  /** Event to set or update a setting */
-  export type UpdateSettingEvent<SettingName extends SettingNames> = {
-    type: 'update-setting';
-    setting: SettingTypes[SettingName];
-  };
-  /** Event to remove a setting */
-  export type ResetSettingEvent = {
-    type: 'reset-setting';
-  };
   /** */
   export type ISettingsService = {
     /**
@@ -4449,19 +4440,13 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   } from 'shared/models/data-provider.model';
   import { SettingDataTypes } from 'shared/services/settings.service-model';
   /**
-   * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
-   * and gets updated when the setting is changed by others. Running `resetSetting()` will always
-   * update the setting value returned to the latest `defaultState`, and changing the `key` will use
-   * the latest `defaultState`. However, if `defaultState` is changed while a setting is
-   * `defaultState` (meaning it is reset and has no value), the returned setting value will not be
-   * updated to the new `defaultState`.
+   * Gets, sets and resets a setting on the papi
    *
-   * @param key The string id that is used to store the setting in local storage
+   * @param key The string id that is used to identify the setting that will be stored on the papi
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
    *   updated every render
-   * @param defaultState The default state of the setting. If the setting already has a value set to
-   *   it in the settings storage, this parameter will be ignored.
+   * @param defaultState The initial value to return while first awaiting the setting value
    * @param subscriberOptions Various options to adjust how the subscriber emits updates
    *
    *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
