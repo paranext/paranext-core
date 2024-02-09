@@ -53,6 +53,8 @@ const configMain: webpack.Configuration = merge(configBase, {
         { from: 'public', to: './', noErrorOnMissing: true },
         // We want all files from the assets folder copied into the output folder under assets
         { from: 'assets', to: './assets/', noErrorOnMissing: true },
+        // We want all files from the contributions folder copied into the output folder under contributions
+        { from: 'contributions', to: './contributions/', noErrorOnMissing: true },
         // Copy this extension's type declaration file into the output folder under src/types
         { from: 'src/types', to: './src/types', noErrorOnMissing: true },
         // We need to distribute the package.json for Platform.Bible to read the extension properly
