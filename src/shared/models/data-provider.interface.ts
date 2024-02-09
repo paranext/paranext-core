@@ -8,8 +8,8 @@ import { Dispose, OnDidDispose } from 'platform-bible-utils';
 
 /**
  * An object on the papi that manages data and has methods for interacting with that data. Created
- * by the papi and layers over an IDataProviderEngine provided by an extension. Returned from
- * getting a data provider with dataProviderService.get.
+ * by the papi and layers over an {@link IDataProviderEngine} provided by an extension. Returned from
+ * getting a data provider with `papi.dataProviders.get`.
  *
  * Note: each `set<data_type>` method has a corresponding `get<data_type>` and
  * `subscribe<data_type>` method.
@@ -30,7 +30,7 @@ export default IDataProvider;
  * data provider (only the service that set it up should dispose of it) with
  * dataProviderService.registerEngine
  *
- * @see IDataProvider
+ * @see {@link IDataProvider}
  */
 // Basically a layer over DisposableNetworkObject
 // Used to be `DisposableNetworkObject<Omit<IDataProvider<TDataTypes>, 'dispose'>>`, , but it had

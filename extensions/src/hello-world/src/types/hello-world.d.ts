@@ -1,7 +1,7 @@
 declare module 'hello-world' {
-  import type { DataProviderDataType, IDataProvider, MandatoryProjectDataType } from '@papi/core';
+  import type { DataProviderDataType, IDataProvider, MandatoryProjectDataTypes } from '@papi/core';
 
-  export type MyProjectDataType = MandatoryProjectDataType & {
+  export type MyProjectDataType = MandatoryProjectDataTypes & {
     MyProjectData: DataProviderDataType<string, string, string>;
   };
 
@@ -23,6 +23,7 @@ declare module 'hello-world' {
 
 declare module 'papi-shared-types' {
   import type { MyProjectDataProvider } from 'hello-world';
+  import type { IProjectStorageInterpreter } from 'papi-shared-types';
 
   export interface CommandHandlers {
     'helloWorld.helloWorld': () => string;
@@ -31,5 +32,10 @@ declare module 'papi-shared-types' {
 
   export interface ProjectDataProviders {
     'helloWorld.myExtensionProjectTypeName': MyProjectDataProvider;
+  }
+
+  export interface ProjectStorageInterpreters {
+    /** Placeholder. Implementation TBD */
+    'helloWorld.myExtensionProjectTypeName': IProjectStorageInterpreter;
   }
 }
