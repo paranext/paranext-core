@@ -72,6 +72,7 @@ The general file structure is as follows:
   - `*.web-view.tsx` files will be treated as React WebViews
   - `*.web-view.html` files are a conventional way to provide HTML WebViews (no special functionality)
 - `assets/` contains asset files the extension and its WebViews can retrieve using the `papi-extension:` protocol. It is copied into the build folder
+- `contributions/` contains JSON files the platform uses to extend data structures for things like menus and settings. The JSON files are referenced from the manifest
 - `public/` contains other static files that are copied into the build folder
 - `dist/` is a generated folder containing the built extension files
 - `release/` is a generated folder containing a zip of the built extension files
