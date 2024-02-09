@@ -127,6 +127,10 @@ const staticFiles: {
   { from: '<types>', noErrorOnMissing: true },
   // Copy the menu JSON file into the output folder based on its listing in `manifest.menus`
   { from: '<menus>', noErrorOnMissing: true },
+  // Copy the settings JSON file into the output folder based on its listing in `manifest.settings`
+  { from: '<settings>', noErrorOnMissing: true },
+  // Copy the project settings JSON file into the output folder based on its listing in `manifest.projectSettings`
+  { from: '<project_settings>', noErrorOnMissing: true },
 ];
 
 /** Get the actual static file name from the template static file name */
@@ -134,7 +138,9 @@ function getStaticFileName(staticFile: string, extensionInfo: ExtensionInfo) {
   return staticFile
     .replace(/<name>/g, extensionInfo.name)
     .replace(/<types>/g, extensionInfo.types ?? '')
-    .replace(/<menus>/g, extensionInfo.menus ?? '');
+    .replace(/<menus>/g, extensionInfo.menus ?? '')
+    .replace(/<settings>/g, extensionInfo.menus ?? '')
+    .replace(/<project_settings>/g, extensionInfo.menus ?? '');
 }
 
 /** Get CopyFile plugin patterns for copying static files for an extension */
@@ -276,6 +282,10 @@ type ExtensionManifest = {
   types?: string;
   /** Path to the JSON file that defines the menu items this extension is adding. */
   menus?: string;
+  /** Path to the JSON file that defines the settings this extension is adding. */
+  settings?: string;
+  /** Path to the JSON file that defines the project settings this extension is adding. */
+  projectSettings?: string;
   activationEvents: string[];
 };
 
