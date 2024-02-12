@@ -1,9 +1,5 @@
 import { SettingNames, SettingTypes } from 'papi-shared-types';
-import {
-  OnDidDispose,
-  Unsubscriber,
-  // UnsubscriberAsync,
-} from 'platform-bible-utils';
+import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
 import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
@@ -88,8 +84,8 @@ export type ISettingsService = {
   subscribe<SettingName extends SettingNames>(
     key: SettingName,
     callback: (newSetting: SettingTypes[SettingName]) => void,
-    options: DataProviderSubscriberOptions,
-  ): Promise<Unsubscriber>;
+    options?: DataProviderSubscriberOptions,
+  ): Promise<UnsubscriberAsync>;
 } & OnDidDispose &
   IDataProvider<SettingDataTypes> &
   typeof settingsServiceObjectToProxy;
