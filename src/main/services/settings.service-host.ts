@@ -2,53 +2,56 @@ import IDataProviderEngine from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import dataProviderService, { DataProviderEngine } from '@shared/services/data-provider.service';
 import {
+  AllSettingsData,
   ISettingsService,
   SettingDataTypes,
   settingsServiceDataProviderName,
   settingsServiceObjectToProxy,
 } from '@shared/services/settings.service-model';
-import coreSettingsInfo, { AllSettingsInfo } from '@main/data/core-settings-info.data';
+import coreSettingsInfo from '@main/data/core-settings-info.data';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
-import { createSyncProxyForAsyncObject, deserialize, serialize } from 'platform-bible-utils';
+import { createSyncProxyForAsyncObject, deserialize } from 'platform-bible-utils';
 import { joinUriPaths } from '@node/utils/util';
 import * as nodeFS from '@node/services/node-file-system.service';
 
 const SETTINGS_FILE_URI = joinUriPaths('data://', 'settings.json');
 
-let settingData = new Map<string, string>();
-
-async function loadSettingsFromFile() {
-  settingData.clear();
-  const settingFileString = await nodeFS.readFileText(SETTINGS_FILE_URI);
-  settingData = deserialize(settingFileString);
-  if (typeof settingData !== 'object')
+async function getSettingsDataFromFile() {
+  const settingsFileExists = await nodeFS.getStats(SETTINGS_FILE_URI);
+  if (!settingsFileExists) {
+    await nodeFS.writeFile(SETTINGS_FILE_URI, '{}');
+  }
+  const settingsFileString = await nodeFS.readFileText(SETTINGS_FILE_URI);
+  const settingsData: AllSettingsData = deserialize(settingsFileString);
+  if (typeof settingsData !== 'object')
     throw new Error(`Settings data located in '${SETTINGS_FILE_URI}' is invalid`);
+  return settingsData;
 }
 
 class SettingDataProviderEngine
   extends DataProviderEngine<SettingDataTypes>
   implements IDataProviderEngine<SettingDataTypes>
 {
-  private settingsInfo;
+  private settingsData: Partial<AllSettingsData>;
+
   // eslint-disable-next-line @typescript-eslint/no-useless-constructor
-  constructor(settingsInfo: Partial<AllSettingsInfo>) {
+  constructor(settingsData: Partial<AllSettingsData>) {
     super();
-    this.settingsInfo = settingsInfo;
+    this.settingsData = settingsData;
+    this.reset('platform.verseRef');
   }
 
   // eslint-disable-next-line class-methods-use-this
   async get<SettingName extends SettingNames>(
     key: SettingName,
   ): Promise<SettingTypes[SettingName]> {
-    const settingString = localStorage.getItem(key);
-    // Null is used by the external API
-    // eslint-disable-next-line no-null/no-null
-    if (settingString !== null) {
-      return deserialize(settingString);
+    if (!(key in this.settingsData)) {
+      return this.#getDefaultValueForKey(key);
     }
-    const settingInfo = this.settingsInfo[key];
-    if (!settingInfo) throw new Error('no setting');
-    return settingInfo.default;
+    // @ts-expect-error ts(2322) TypeScript falsely assumes that the returned value might be
+    // undefined. We know the value is going to be whatever the setting type is, since we just
+    // checked this
+    return this.settingsData[key];
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -56,16 +59,39 @@ class SettingDataProviderEngine
     key: SettingName,
     newSetting: SettingTypes[SettingName],
   ): Promise<DataProviderUpdateInstructions<SettingDataTypes>> {
-    localStorage.setItem(key, serialize(newSetting));
+    try {
+      this.settingsData[key] = newSetting;
+      await nodeFS.writeFile(SETTINGS_FILE_URI, JSON.stringify(this.settingsData));
+    } catch (error) {
+      throw new Error(`Error setting value for key '${key}': ${error}`);
+    }
     return true;
   }
 
   // eslint-disable-next-line class-methods-use-this
   async reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean> {
-    localStorage.removeItem(key);
-    // this.notifyUpdate(''); TODO: Fix
-    // TODO: Add return true if successfully reset, return false otherwise
+    try {
+      delete this.settingsData[key];
+      await nodeFS.writeFile(SETTINGS_FILE_URI, JSON.stringify(this.settingsData));
+    } catch (error) {
+      return false;
+    }
+    this.notifyUpdate('');
     return true;
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  #getDefaultValueForKey<SettingName extends SettingNames>(
+    key: SettingName,
+  ): SettingTypes[SettingName] {
+    const settingInfo = coreSettingsInfo[key];
+    if (!settingInfo) {
+      throw new Error(`No setting exists for key ${key}`);
+    }
+    if (!('default' in settingInfo)) {
+      throw new Error(`No default value specified for key ${key}`);
+    }
+    return settingInfo.default;
   }
 }
 
@@ -79,9 +105,8 @@ export async function initialize(): Promise<void> {
         try {
           dataProvider = await dataProviderService.registerEngine(
             settingsServiceDataProviderName,
-            new SettingDataProviderEngine(coreSettingsInfo), // will be fixed when dp types are correct
+            new SettingDataProviderEngine(await getSettingsDataFromFile()),
           );
-          loadSettingsFromFile();
           resolve();
         } catch (error) {
           reject(error);
@@ -95,8 +120,8 @@ export async function initialize(): Promise<void> {
 
 /** This is an internal-only export for testing purposes, and should not be used in development */
 export const testingSettingService = {
-  implementSettingDataProviderEngine: () => {
-    return new SettingDataProviderEngine(coreSettingsInfo);
+  implementSettingDataProviderEngine: (settingsData: Partial<AllSettingsData>) => {
+    return new SettingDataProviderEngine(settingsData);
   },
 };
 

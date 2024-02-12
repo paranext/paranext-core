@@ -32,6 +32,10 @@ export type SettingDataTypes = {
   // '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
 };
 
+export type AllSettingsData = {
+  [SettingName in SettingNames]: SettingTypes[SettingName];
+};
+
 declare module 'papi-shared-types' {
   export interface DataProviders {
     [settingsServiceDataProviderName]: ISettingsService;

@@ -9,7 +9,8 @@ import {
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 
 /**
- * Gets, sets and resets a setting on the papi
+ * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
+ * and gets updated when the setting is changed by others.
  *
  * @param key The string id that is used to identify the setting that will be stored on the papi
  *
