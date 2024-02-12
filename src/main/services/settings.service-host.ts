@@ -34,14 +34,11 @@ class SettingDataProviderEngine
 {
   private settingsData: Partial<AllSettingsData>;
 
-  // eslint-disable-next-line @typescript-eslint/no-useless-constructor
   constructor(settingsData: Partial<AllSettingsData>) {
     super();
     this.settingsData = settingsData;
-    this.reset('platform.verseRef');
   }
 
-  // eslint-disable-next-line class-methods-use-this
   async get<SettingName extends SettingNames>(
     key: SettingName,
   ): Promise<SettingTypes[SettingName]> {
@@ -54,7 +51,6 @@ class SettingDataProviderEngine
     return this.settingsData[key];
   }
 
-  // eslint-disable-next-line class-methods-use-this
   async set<SettingName extends SettingNames>(
     key: SettingName,
     newSetting: SettingTypes[SettingName],
@@ -68,15 +64,16 @@ class SettingDataProviderEngine
     return true;
   }
 
-  // eslint-disable-next-line class-methods-use-this
   async reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean> {
     try {
-      delete this.settingsData[key];
-      await nodeFS.writeFile(SETTINGS_FILE_URI, JSON.stringify(this.settingsData));
+      if (this.settingsData[key]) {
+        delete this.settingsData[key];
+        await nodeFS.writeFile(SETTINGS_FILE_URI, JSON.stringify(this.settingsData));
+      } else return false;
     } catch (error) {
-      return false;
+      throw new Error(`Error resetting key ${key}: ${error}`);
     }
-    this.notifyUpdate('');
+    this.notifyUpdate(); // TODO: How to test, what does it mean if you don't send param, need help understanding TJs comment
     return true;
   }
 
