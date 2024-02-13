@@ -21,9 +21,9 @@ function getLanguageCodeFromUri(uriToMatch: string): string {
   return match[0].replace('.json', '');
 }
 
-function validateLanguageCode(languageCode: string): boolean {
-  const match = languageCode.match(LANGUAGE_CODE_REGEX) ?? '';
-  return LANGUAGE_CODE_REGEX.test(languageCode) && match[0].length === languageCode.length;
+function isValidLanguageCode(languageCode: string): boolean {
+  const match: RegExpMatchArray | undefined = languageCode.match(LANGUAGE_CODE_REGEX) ?? undefined;
+  return match !== undefined && match[0].length === languageCode.length;
 }
 
 /** Convert contents of a specific localization json file to an object */
@@ -85,7 +85,7 @@ async function initialize(): Promise<void> {
 
 async function getLocalizedString(localizeKey: string, language: string = DEFAULT_LANGUAGE) {
   await initialize();
-  if (!validateLanguageCode(language)) throw new Error('Invalid language format');
+  if (!isValidLanguageCode(language)) throw new Error('Invalid language format');
 
   const languageData =
     languageLocalizedData.get(language) ?? languageLocalizedData.get(DEFAULT_LANGUAGE);
@@ -97,7 +97,7 @@ async function getLocalizedString(localizeKey: string, language: string = DEFAUL
 
 async function getLocalizedStrings(localizeKeys: string[], language: string = DEFAULT_LANGUAGE) {
   await initialize();
-  if (!validateLanguageCode(language)) throw new Error('Invalid language format');
+  if (!isValidLanguageCode(language)) throw new Error('Invalid language format');
 
   const languageData =
     languageLocalizedData.get(language) ?? languageLocalizedData.get(DEFAULT_LANGUAGE);
