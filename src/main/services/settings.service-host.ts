@@ -13,7 +13,7 @@ import {
 } from '@shared/services/settings.service-model';
 import coreSettingsInfo from '@main/data/core-settings-info.data';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
-import { createSyncProxyForAsyncObject, deserialize } from 'platform-bible-utils';
+import { createSyncProxyForAsyncObject, deserialize, serialize } from 'platform-bible-utils';
 import { joinUriPaths } from '@node/utils/util';
 import * as nodeFS from '@node/services/node-file-system.service';
 
@@ -66,7 +66,7 @@ class SettingDataProviderEngine
 
   constructor(settingsData: Partial<AllSettingsData>) {
     super();
-    this.settingsData = settingsData;
+    this.settingsData = deserialize(serialize(settingsData));
   }
 
   async get<SettingName extends SettingNames>(

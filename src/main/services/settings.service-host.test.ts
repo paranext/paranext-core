@@ -8,8 +8,14 @@ const MOCK_SETTINGS_DATA = {
 const VERSE_REF_DEFAULT = { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } };
 const NEW_INTERFACE_LANGUAGE = ['spa'];
 
-const settingsProviderEngine =
-  testingSettingService.implementSettingDataProviderEngine(MOCK_SETTINGS_DATA);
+let settingsProviderEngine: ReturnType<
+  typeof testingSettingService.implementSettingDataProviderEngine
+>;
+
+beforeEach(() => {
+  settingsProviderEngine =
+    testingSettingService.implementSettingDataProviderEngine(MOCK_SETTINGS_DATA);
+});
 
 jest.mock('@node/services/node-file-system.service', () => ({
   readFileText: () => {
