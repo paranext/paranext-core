@@ -6,6 +6,9 @@
   "license": "MIT",
   "main": "src/main.ts",
   "types": "src/types/hello-someone.d.ts",
+  "menus": "contributions/menus.json",
+  "settings": "contributions/settings.json",
+  "projectSettings": "contributions/projectSettings.json",
   "activationEvents": [
     "onCommand:helloSomeone.helloSomeone",
     "onCommand:helloSomeone.echoSomeoneRenderer"

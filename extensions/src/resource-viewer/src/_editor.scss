@@ -6,12 +6,12 @@
   content: attr(data-code) ' ';
 }
 
-.note {
+.immutable-note-caller {
   vertical-align: super;
   font-size: 80%;
 }
 
-.note > button {
+.immutable-note-caller > button {
   cursor: pointer;
   color: #00f;
   text-decoration: none;
