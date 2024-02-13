@@ -10,13 +10,20 @@ import logger from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
 
 const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
-const LANGUAGE_CODE_REGEX = /[\\/]+([a-zA-Z]+)\.json$/;
-const DEFAULT_LANGUAGE = 'eng';
+// BCP 47 validation regex from https://stackoverflow.com/questions/7035825/regular-expression-for-a-language-tag-as-defined-by-bcp47
+const LANGUAGE_CODE_REGEX =
+  /^(?<grandfathered>(?:en-GB-oed|i-(?:ami|bnn|default|enochian|hak|klingon|lux|mingo|navajo|pwn|t(?:a[oy]|su))|sgn-(?:BE-(?:FR|NL)|CH-DE))|(?:art-lojban|cel-gaulish|no-(?:bok|nyn)|zh-(?:guoyu|hakka|min(?:-nan)?|xiang)))|(?:(?<language>(?:[A-Za-z]{2,3}(?:-(?<extlang>[A-Za-z]{3}(?:-[A-Za-z]{3}){0,2}))?)|[A-Za-z]{4}|[A-Za-z]{5,8})(?:-(?<script>[A-Za-z]{4}))?(?:-(?<region>[A-Za-z]{2}|[0-9]{3}))?(?:-(?<variant>[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*(?:-(?<extension>[0-9A-WY-Za-wy-z](?:-[A-Za-z0-9]{2,8})+))*)(?:-(?<privateUse>x(?:-[A-Za-z0-9]{1,8})+))?(?:.json)?$/;
+const DEFAULT_LANGUAGE = 'en-US';
 
 function getLanguageCodeFromUri(uriToMatch: string): string {
   const match = uriToMatch.match(LANGUAGE_CODE_REGEX);
   if (!match) throw new Error('Localization service - No match for language code');
-  return match[1];
+  return match[0].replace('.json', '');
+}
+
+function validateLanguageCode(languageCode: string): boolean {
+  const match = languageCode.match(LANGUAGE_CODE_REGEX) ?? '';
+  return LANGUAGE_CODE_REGEX.test(languageCode) && match[0].length === languageCode.length;
 }
 
 /** Convert contents of a specific localization json file to an object */
@@ -33,7 +40,7 @@ async function getLocalizedFileUris(): Promise<string[]> {
   return entries.file;
 }
 
-/** Map of ISO 639-2 code to localized values for that language */
+/** Map of BCP 47 code to localized values for that language */
 const languageLocalizedData = new Map<string, LocalizationData>();
 
 /** Load the contents of all localization files from disk */
@@ -79,16 +86,22 @@ async function initialize(): Promise<void> {
 
 async function getLocalizedString(localizeKey: string, language: string = DEFAULT_LANGUAGE) {
   await initialize();
-  const languageData = languageLocalizedData.get(language);
+  if (!validateLanguageCode(language)) throw new Error('Invalid language format');
+
+  const languageData =
+    languageLocalizedData.get(language) ?? languageLocalizedData.get(DEFAULT_LANGUAGE);
 
   if (!languageData || !languageData[localizeKey])
-    throw new Error('Missing/invalid localization data');
+    throw new Error(`Missing/invalid localization data`);
   return languageData[localizeKey];
 }
 
 async function getLocalizedStrings(localizeKeys: string[], language: string = DEFAULT_LANGUAGE) {
   await initialize();
-  const languageData = languageLocalizedData.get(language);
+  if (!validateLanguageCode(language)) throw new Error('Invalid language format');
+
+  const languageData =
+    languageLocalizedData.get(language) ?? languageLocalizedData.get(DEFAULT_LANGUAGE);
 
   if (!languageData) throw new Error('Missing/invalid localization data');
   return Object.fromEntries(
