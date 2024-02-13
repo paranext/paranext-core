@@ -1,4 +1,4 @@
-import { UnsubscriberAsync, PlatformEventHandler } from 'platform-bible-utils';
+import { UnsubscriberAsync, PlatformEventHandler, substring } from 'platform-bible-utils';
 import { NetworkableObject } from '@shared/models/network-object.model';
 
 /** Various options to adjust how the data provider subscriber emits updates */
@@ -235,7 +235,7 @@ export function getDataProviderDataTypeFromFunctionName<
 
   // Assert the expected return type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return fnName.substring(fnPrefix.length) as DataTypeNames<TDataTypes>;
+  return substring(fnName, fnPrefix.length) as DataTypeNames<TDataTypes>;
 }
 
 export default DataProviderInternal;

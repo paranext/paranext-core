@@ -4,6 +4,7 @@ import fs from 'fs';
 import typescript from 'typescript';
 import escapeStringRegexp from 'escape-string-regexp';
 import { exit } from 'process';
+import {substring} from 'platform-bible-utils'
 
 const start = performance.now();
 
@@ -143,9 +144,9 @@ if (paths) {
 
     const asteriskIndex = path.indexOf('*');
     // Get the path alias without the * at the end but with the @
-    const pathAlias = path.substring(0, asteriskIndex);
+    const pathAlias = substring(path, 0, asteriskIndex);
     // Get the path alias without the @ at the start
-    const pathAliasNoAt = pathAlias.substring(1);
+    const pathAliasNoAt = substring(pathAlias, 1);
     // Regex-escaped path alias without @ to be used in a regex string
     const pathAliasNoAtRegex = escapeStringRegexp(pathAliasNoAt);
 

@@ -1,5 +1,5 @@
 import { ProcessType } from '@shared/global-this.model';
-import { UnsubscriberAsync, isString } from 'platform-bible-utils';
+import { UnsubscriberAsync, indexOf, isString, substring } from 'platform-bible-utils';
 
 const NONCE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const NONCE_CHARS_LENGTH = NONCE_CHARS.length;
@@ -174,13 +174,13 @@ export function serializeRequestType(category: string, directive: string): Seria
 export function deserializeRequestType(requestType: SerializedRequestType): RequestType {
   if (!requestType) throw new Error('deserializeRequestType: must be a non-empty string');
 
-  const colonIndex = requestType.indexOf(REQUEST_TYPE_SEPARATOR);
+  const colonIndex = indexOf(requestType, REQUEST_TYPE_SEPARATOR);
   if (colonIndex <= 0 || colonIndex >= requestType.length - 1)
     throw new Error(
       `deserializeRequestType: Must have two parts divided by a ${REQUEST_TYPE_SEPARATOR} (${requestType})`,
     );
-  const category = requestType.substring(0, colonIndex);
-  const directive = requestType.substring(colonIndex + 1);
+  const category = substring(requestType, 0, colonIndex);
+  const directive = substring(requestType, colonIndex + 1);
   return { category, directive };
 }
 

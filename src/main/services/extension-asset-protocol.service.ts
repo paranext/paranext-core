@@ -1,6 +1,7 @@
 import { protocol } from 'electron';
 import { StatusCodes } from 'http-status-codes';
 import extensionAssetService from '@shared/services/extension-asset.service';
+import { indexOf, substring } from 'platform-bible-utils';
 
 /** Here some of the most common MIME types that we expect to handle */
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
@@ -31,7 +32,7 @@ const knownMimeTypes = {
 function getMimeTypeForFileName(fileName: string): string {
   const dotIndex = fileName.lastIndexOf('.');
   if (dotIndex > 0) {
-    const fileType: string = fileName.substring(dotIndex);
+    const fileType: string = substring(fileName, dotIndex);
     // Assert key type confirmed in check.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     if (fileType in knownMimeTypes) return knownMimeTypes[fileType as keyof typeof knownMimeTypes];
@@ -67,16 +68,16 @@ const initialize = () => {
       // 2) Use request headers to pass along the extension name so extension code doesn't have to embed its name in URLs.
 
       // Remove "papi-extension://" from the front of the URL
-      const uri: string = request.url.substring(`${protocolName}://`.length);
+      const uri: string = substring(request.url, `${protocolName}://`.length);
 
       // There have to be at least 2 parts to the URI divided by a slash
       if (!uri.includes('/')) {
         return errorResponse(request.url, StatusCodes.BAD_REQUEST);
       }
 
-      const slash = uri.indexOf('/');
-      let extension = uri.substring(0, slash);
-      let asset = uri.substring(slash + 1);
+      const slash = indexOf(uri, '/');
+      let extension = substring(uri, 0, slash);
+      let asset = substring(uri, slash + 1);
       if (!extension || !asset) {
         return errorResponse(request.url, StatusCodes.BAD_REQUEST);
       }

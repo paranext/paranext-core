@@ -1,5 +1,6 @@
 import papi from '@papi/frontend';
 import { useEvent, Button } from 'platform-bible-react';
+import { indexOf } from 'platform-bible-utils';
 import { useCallback, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
 import { WebViewProps } from '@papi/core';
@@ -22,8 +23,13 @@ globalThis.webViewComponent = function HelloWorld2({ useWebViewState }: WebViewP
     useCallback(({ times }: HelloWorldEvent) => setClicks(times), []),
   );
 
+  const someIndex = indexOf('SomeStringWithABunchOfWords', 'i', 15);
+
   return (
     <>
+      <div>
+        Index: {someIndex}
+      </div>
       <div className="title">
         Hello World <span className="framework">React 2</span>
       </div>

@@ -30,6 +30,7 @@ export {
   getAllObjectFunctionNames,
   createSyncProxyForAsyncObject,
 } from './util';
+export { indexOf, substring, length, toArray, padStart, padEnd, normalize } from './string-util';
 export { default as deepEqual } from './equality-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
 
