@@ -1,12 +1,12 @@
 import { testingSettingService } from '@main/services/settings.service-host';
 
 const MOCK_SETTINGS_DATA = {
-  'platform.interfaceLanguage': 'fre',
+  'platform.interfaceLanguage': ['fre'],
   'settingsTest.valueIsUndefined': undefined,
 };
 
 const VERSE_REF_DEFAULT = { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } };
-const NEW_INTERFACE_LANGUAGE = 'spa';
+const NEW_INTERFACE_LANGUAGE = ['spa'];
 
 const settingsProviderEngine =
   testingSettingService.implementSettingDataProviderEngine(MOCK_SETTINGS_DATA);
@@ -24,7 +24,7 @@ jest.mock('@main/data/core-settings-info.data', () => ({
   __esModule: true,
   default: {
     'platform.verseRef': { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } },
-    'platform.interfaceLanguage': { default: 'eng' },
+    'platform.interfaceLanguage': { default: ['eng'] },
     'settingsTest.noDefaultExists': {},
   },
 }));

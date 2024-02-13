@@ -55,7 +55,7 @@ declare module 'papi-shared-types' {
 
   export interface SettingTypes {
     'platform.verseRef': ScriptureReference;
-    'platform.interfaceLanguage': string;
+    'platform.interfaceLanguage': string[];
   }
 
   export type SettingNames = keyof SettingTypes;

@@ -2165,7 +2165,7 @@ declare module 'papi-shared-types' {
   type CommandNames = keyof CommandHandlers;
   interface SettingTypes {
     'platform.verseRef': ScriptureReference;
-    'platform.interfaceLanguage': string;
+    'platform.interfaceLanguage': string[];
   }
   type SettingNames = keyof SettingTypes;
   /** This is just a simple example so we have more than one. It's not intended to be real. */

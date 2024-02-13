@@ -13,7 +13,7 @@ export type AllSettingsInfo = {
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 const coreSettingsInfo: Partial<AllSettingsInfo> = {
   'platform.verseRef': { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } },
-  'platform.interfaceLanguage': { default: 'eng' },
+  'platform.interfaceLanguage': { default: ['eng'] },
 };
 
 export default coreSettingsInfo;

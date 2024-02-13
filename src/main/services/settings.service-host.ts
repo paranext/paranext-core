@@ -31,6 +31,23 @@ async function getSettingsDataFromFile() {
   return settingsData;
 }
 
+async function writeSettingsDataToFile(settingsData: Partial<AllSettingsData>) {
+  await nodeFS.writeFile(SETTINGS_FILE_URI, JSON.stringify(settingsData));
+}
+
+function getDefaultValueForKey<SettingName extends SettingNames>(
+  key: SettingName,
+): SettingTypes[SettingName] {
+  const settingInfo = coreSettingsInfo[key];
+  if (!settingInfo) {
+    throw new Error(`No setting exists for key ${key}`);
+  }
+  if (!('default' in settingInfo)) {
+    throw new Error(`No default value specified for key ${key}`);
+  }
+  return settingInfo.default;
+}
+
 class SettingDataProviderEngine
   extends DataProviderEngine<
     SettingDataTypes & {
@@ -56,7 +73,7 @@ class SettingDataProviderEngine
     key: SettingName,
   ): Promise<SettingTypes[SettingName]> {
     if (!(key in this.settingsData)) {
-      return this.#getDefaultValueForKey(key);
+      return getDefaultValueForKey(key);
     }
     // TypeScript falsely assumes that the returned value might be undefined. We know
     // the value is going to be whatever the setting type is, since we just checked this
@@ -70,7 +87,7 @@ class SettingDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<SettingDataTypes>> {
     try {
       this.settingsData[key] = newSetting;
-      await nodeFS.writeFile(SETTINGS_FILE_URI, JSON.stringify(this.settingsData));
+      writeSettingsDataToFile(this.settingsData);
     } catch (error) {
       throw new Error(`Error setting value for key '${key}': ${error}`);
     }
@@ -79,30 +96,16 @@ class SettingDataProviderEngine
 
   async reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean> {
     try {
-      if (this.settingsData[key]) {
-        delete this.settingsData[key];
-        await nodeFS.writeFile(SETTINGS_FILE_URI, JSON.stringify(this.settingsData));
-      } else return false;
+      if (!this.settingsData[key]) {
+        return false;
+      }
+      delete this.settingsData[key];
+      writeSettingsDataToFile(this.settingsData);
+      this.notifyUpdate('');
+      return true;
     } catch (error) {
       throw new Error(`Error resetting key ${key}: ${error}`);
     }
-    this.notifyUpdate('');
-    return true;
-  }
-
-  // Internal function used by get, does not need to use this
-  // eslint-disable-next-line class-methods-use-this
-  #getDefaultValueForKey<SettingName extends SettingNames>(
-    key: SettingName,
-  ): SettingTypes[SettingName] {
-    const settingInfo = coreSettingsInfo[key];
-    if (!settingInfo) {
-      throw new Error(`No setting exists for key ${key}`);
-    }
-    if (!('default' in settingInfo)) {
-      throw new Error(`No default value specified for key ${key}`);
-    }
-    return settingInfo.default;
   }
 }
 
