@@ -53,6 +53,8 @@ function killExtensionHost() {
   } else {
     logger.error('extension host process was not stopped! Investigate other .kill() options');
   }
+  extensionHost?.stderr?.removeListener('data', logProcessError);
+  extensionHost?.stdout?.removeListener('data', logProcessInfo);
   extensionHost = undefined;
 }
 
@@ -129,14 +131,26 @@ async function startExtensionHost() {
     extensionHost.stdout.on('data', logProcessInfo);
   }
 
-  extensionHost.on('close', (code, signal) => {
+  extensionHost.once('exit', (code, signal) => {
+    if (signal) {
+      logger.info(`'exit' event: extension host process terminated with signal ${signal}`);
+    } else {
+      logger.info(`'exit' event: extension host process exited with code ${code}`);
+    }
+    extensionHost?.stderr?.removeListener('data', logProcessError);
+    extensionHost?.stdout?.removeListener('data', logProcessInfo);
+    extensionHost = undefined;
+    resolveClose();
+  });
+
+  extensionHost.once('close', (code, signal) => {
     if (signal) {
       logger.info(`'close' event: extension host process terminated with signal ${signal}`);
     } else {
       logger.info(`'close' event: extension host process exited with code ${code}`);
     }
-    // TODO: listen for 'exit' event as well?
-    // TODO: unsubscribe event listeners
+    extensionHost?.stderr?.removeListener('data', logProcessError);
+    extensionHost?.stdout?.removeListener('data', logProcessInfo);
     extensionHost = undefined;
     resolveClose();
   });
