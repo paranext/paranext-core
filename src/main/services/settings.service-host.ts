@@ -1,5 +1,8 @@
 import IDataProviderEngine from '@shared/models/data-provider-engine.model';
-import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
+import {
+  DataProviderDataType,
+  DataProviderUpdateInstructions,
+} from '@shared/models/data-provider.model';
 import dataProviderService, { DataProviderEngine } from '@shared/services/data-provider.service';
 import {
   AllSettingsData,
@@ -29,7 +32,17 @@ async function getSettingsDataFromFile() {
 }
 
 class SettingDataProviderEngine
-  extends DataProviderEngine<SettingDataTypes>
+  extends DataProviderEngine<
+    SettingDataTypes & {
+      // Including `''` here so we can emit `''` events though the event types are not
+      // tight enough to use on the actual `''` data type and methods
+      '': DataProviderDataType<
+        SettingNames,
+        SettingTypes[SettingNames],
+        SettingTypes[SettingNames]
+      >;
+    }
+  >
   implements IDataProviderEngine<SettingDataTypes>
 {
   private settingsData: Partial<AllSettingsData>;
@@ -73,7 +86,7 @@ class SettingDataProviderEngine
     } catch (error) {
       throw new Error(`Error resetting key ${key}: ${error}`);
     }
-    this.notifyUpdate(); // TODO: How to test, what does it mean if you don't send param, need help understanding TJs comment
+    this.notifyUpdate('');
     return true;
   }
 

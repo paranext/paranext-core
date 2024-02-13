@@ -7,14 +7,14 @@ import { AllSettingsData } from '@shared/services/settings.service-model';
 // By putting an item in this interface and not in PARTIAL_SETTINGS_DATA, we can declare a SettingName for a setting that doesn't exist.
 declare module 'papi-shared-types' {
   interface SettingTypes {
-    'platform.noSettingExists': 'testType';
-    'platform.valueIsUndefined': undefined;
+    'testingOnly.noSettingExists': 'testType';
+    'testingOnly.valueIsUndefined': undefined;
   }
 }
 
 const PARTIAL_SETTINGS_DATA: Partial<AllSettingsData> = {
   'platform.interfaceLanguage': 'fre',
-  'platform.valueIsUndefined': undefined,
+  'testingOnly.valueIsUndefined': undefined,
 };
 
 const VERSE_REF_DEFAULT = { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } };
@@ -43,23 +43,23 @@ test('Get interfaceLanguage returns stored value', async () => {
 });
 
 test('No setting exists for key', async () => {
-  await expect(settingsProviderEngine.get('platform.noSettingExists')).rejects.toThrow(
+  await expect(settingsProviderEngine.get('testingOnly.noSettingExists')).rejects.toThrow(
     'No setting exists for key platform.noSettingExists',
   );
 });
 
 test('Undefined returned as setting value', async () => {
-  const result = await settingsProviderEngine.get('platform.valueIsUndefined');
+  const result = await settingsProviderEngine.get('testingOnly.valueIsUndefined');
   expect(result).toEqual(undefined);
 });
 
 // Test `No default value specified for key ${key}` line 89
 
-// Test with a key that does not exist anywhere
-// ('Key does not exist (on both settings file and list of known keys)', async () => {
-//   const result = await settingsProviderEngine.get('thisKeyDoesNotExist');
-//   await expect(result).rejects.toThrow('No setting exists for key thisKeyDoesNotExist');
-// });
+test('Key does not exist (on both settings file and list of known keys)', async () => {
+  // @ts-expect-error ts(2345)
+  const result = settingsProviderEngine.get('thisKeyDoesNotExist');
+  await expect(result).rejects.toThrow('No setting exists for key thisKeyDoesNotExist');
+});
 
 test('Set verseRef returns true', async () => {
   const result = await settingsProviderEngine.set(

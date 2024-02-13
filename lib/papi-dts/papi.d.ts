@@ -2165,7 +2165,7 @@ declare module 'papi-shared-types' {
   type CommandNames = keyof CommandHandlers;
   interface SettingTypes {
     'platform.verseRef': ScriptureReference;
-    placeholder: undefined;
+    'platform.interfaceLanguage': string;
   }
   type SettingNames = keyof SettingTypes;
   /** This is just a simple example so we have more than one. It's not intended to be real. */
@@ -3894,7 +3894,7 @@ declare module 'shared/services/menu-data.service' {
 }
 declare module 'shared/services/settings.service-model' {
   import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import { OnDidDispose, Unsubscriber } from 'platform-bible-utils';
+  import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
@@ -3926,6 +3926,9 @@ declare module 'shared/services/settings.service-model' {
    * instead. However, do note that the unnamed data type (`''`) is fully functional.
    */
   export type SettingDataTypes = {};
+  export type AllSettingsData = {
+    [SettingName in SettingNames]: SettingTypes[SettingName];
+  };
   module 'papi-shared-types' {
     interface DataProviders {
       [settingsServiceDataProviderName]: ISettingsService;
@@ -3974,8 +3977,8 @@ declare module 'shared/services/settings.service-model' {
     subscribe<SettingName extends SettingNames>(
       key: SettingName,
       callback: (newSetting: SettingTypes[SettingName]) => void,
-      options: DataProviderSubscriberOptions,
-    ): Promise<Unsubscriber>;
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
   } & OnDidDispose &
     IDataProvider<SettingDataTypes> &
     typeof settingsServiceObjectToProxy;
@@ -4457,7 +4460,8 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   } from 'shared/models/data-provider.model';
   import { SettingDataTypes } from 'shared/services/settings.service-model';
   /**
-   * Gets, sets and resets a setting on the papi
+   * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
+   * and gets updated when the setting is changed by others.
    *
    * @param key The string id that is used to identify the setting that will be stored on the papi
    *
