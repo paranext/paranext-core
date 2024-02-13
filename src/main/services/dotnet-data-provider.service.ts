@@ -71,7 +71,7 @@ function startDotnetDataProvider() {
   dotnet.stdout.on('data', logProcessInfo);
   dotnet.stderr.on('data', logProcessError);
 
-  dotnet.on('exit', (code, signal) => {
+  dotnet.once('exit', (code, signal) => {
     if (signal) {
       logger.info(`'exit' event: dotnet data provider terminated with signal ${signal}`);
     } else {
@@ -83,7 +83,7 @@ function startDotnetDataProvider() {
     resolveClose();
   });
 
-  dotnet.on('close', (code, signal) => {
+  dotnet.once('close', (code, signal) => {
     // In production, this handles the closing of the data provider. However, in development,
     // this is handling the closing of the dotnet watcher.
     if (signal) {
