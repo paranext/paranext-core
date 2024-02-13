@@ -58,9 +58,9 @@ class SettingDataProviderEngine
     if (!(key in this.settingsData)) {
       return this.#getDefaultValueForKey(key);
     }
-    // @ts-expect-error ts(2322) TypeScript falsely assumes that the returned value might be
-    // undefined. We know the value is going to be whatever the setting type is, since we just
-    // checked this
+    // TypeScript falsely assumes that the returned value might be undefined. We know
+    // the value is going to be whatever the setting type is, since we just checked this
+    // @ts-expect-error ts(2322)
     return this.settingsData[key];
   }
 
@@ -90,6 +90,7 @@ class SettingDataProviderEngine
     return true;
   }
 
+  // Internal function used by get, does not need to use this
   // eslint-disable-next-line class-methods-use-this
   #getDefaultValueForKey<SettingName extends SettingNames>(
     key: SettingName,

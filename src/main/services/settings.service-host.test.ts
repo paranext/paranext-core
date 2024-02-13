@@ -1,27 +1,15 @@
 import { testingSettingService } from '@main/services/settings.service-host';
-import { AllSettingsData } from '@shared/services/settings.service-model';
 
-// TODO: Talk about this with TJ
-// Avoids error `Argument of type '"platform.noSettingExists"' is not assignable to parameter of type 'keyof SettingTypes'.`
-// It is added to SettingTypes, therefore picked up into SettingNames, but only actualized in our test code.
-// By putting an item in this interface and not in PARTIAL_SETTINGS_DATA, we can declare a SettingName for a setting that doesn't exist.
-declare module 'papi-shared-types' {
-  interface SettingTypes {
-    'testingOnly.noSettingExists': 'testType';
-    'testingOnly.valueIsUndefined': undefined;
-  }
-}
-
-const PARTIAL_SETTINGS_DATA: Partial<AllSettingsData> = {
+const MOCK_SETTINGS_DATA = {
   'platform.interfaceLanguage': 'fre',
-  'testingOnly.valueIsUndefined': undefined,
+  'settingsTest.valueIsUndefined': undefined,
 };
 
 const VERSE_REF_DEFAULT = { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } };
 const NEW_INTERFACE_LANGUAGE = 'spa';
 
 const settingsProviderEngine =
-  testingSettingService.implementSettingDataProviderEngine(PARTIAL_SETTINGS_DATA);
+  testingSettingService.implementSettingDataProviderEngine(MOCK_SETTINGS_DATA);
 
 jest.mock('@node/services/node-file-system.service', () => ({
   readFileText: () => {
@@ -29,6 +17,15 @@ jest.mock('@node/services/node-file-system.service', () => ({
   },
   writeFile: () => {
     return Promise.resolve();
+  },
+}));
+jest.mock('@main/data/core-settings-info.data', () => ({
+  ...jest.requireActual('@main/data/core-settings-info.data'),
+  __esModule: true,
+  default: {
+    'platform.verseRef': { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } },
+    'platform.interfaceLanguage': { default: 'eng' },
+    'settingsTest.noDefaultExists': {},
   },
 }));
 
@@ -39,26 +36,30 @@ test('Get verseRef returns default value', async () => {
 
 test('Get interfaceLanguage returns stored value', async () => {
   const result = await settingsProviderEngine.get('platform.interfaceLanguage');
-  expect(result).toEqual(PARTIAL_SETTINGS_DATA['platform.interfaceLanguage']);
+  expect(result).toEqual(MOCK_SETTINGS_DATA['platform.interfaceLanguage']);
 });
 
 test('No setting exists for key', async () => {
-  await expect(settingsProviderEngine.get('testingOnly.noSettingExists')).rejects.toThrow(
-    'No setting exists for key platform.noSettingExists',
+  // settingsTest.noSettingExists does not exist on SettingNames
+  // @ts-expect-error ts(2345)
+  await expect(settingsProviderEngine.get('settingsTest.noSettingExists')).rejects.toThrow(
+    'No setting exists for key settingsTest.noSettingExists',
   );
 });
 
 test('Undefined returned as setting value', async () => {
-  const result = await settingsProviderEngine.get('testingOnly.valueIsUndefined');
+  // settingsTest.valueIsUndefined does not exist on SettingNames
+  // @ts-expect-error ts(2345)
+  const result = await settingsProviderEngine.get('settingsTest.valueIsUndefined');
   expect(result).toEqual(undefined);
 });
 
-// Test `No default value specified for key ${key}` line 89
-
-test('Key does not exist (on both settings file and list of known keys)', async () => {
+test('No default specified for key', async () => {
+  // settingsTest.noDefaultExists does not exist on SettingNames
   // @ts-expect-error ts(2345)
-  const result = settingsProviderEngine.get('thisKeyDoesNotExist');
-  await expect(result).rejects.toThrow('No setting exists for key thisKeyDoesNotExist');
+  await expect(settingsProviderEngine.get('settingsTest.noDefaultExists')).rejects.toThrow(
+    'No default value specified for key settingsTest.noDefaultExists',
+  );
 });
 
 test('Set verseRef returns true', async () => {
