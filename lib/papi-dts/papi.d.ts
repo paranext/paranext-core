@@ -2125,15 +2125,15 @@ declare module 'shared/models/data-provider-engine.model' {
    * the `updateInstructions` and then run the original `notifyUpdateMethod` from the
    * `DataProviderEngine`.
    *
-   * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a data
-   * provider engine):
+   * _＠example_ To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
+   * data provider engine):
    *
    * ```typescript
    * this.notifyUpdate(['Verse', 'Heresy']);
    * ```
    *
-   * @example You can log the manual updates in your data provider engine by specifying the following
-   * `notifyUpdate` function in the data provider engine:
+   * _＠example_ You can log the manual updates in your data provider engine by specifying the
+   * following `notifyUpdate` function in the data provider engine:
    *
    * ```typescript
    * notifyUpdate(updateInstructions) {
@@ -2143,13 +2143,14 @@ declare module 'shared/models/data-provider-engine.model' {
    *
    * Note: This function's return is treated the same as the return from `set<data_type>`
    *
-   * @param updateInstructions Information that papi uses to interpret whether to send out updates.
-   *   Defaults to `'*'` (meaning send updates for all data types) if parameter `updateInstructions`
-   *   is not provided or is undefined. Otherwise returns `updateInstructions`. papi passes the
-   *   interpreted update value into this `notifyUpdate` function. For example, running
-   *   `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
-   *   `updateInstructions` of `'*'`.
-   * @see {@link DataProviderUpdateInstructions} for more info on the `updateInstructions` parameter
+   * _＠param_ `updateInstructions` Information that papi uses to interpret whether to send out
+   * updates. Defaults to `'*'` (meaning send updates for all data types) if parameter
+   * `updateInstructions` is not provided or is undefined. Otherwise returns `updateInstructions`.
+   * papi passes the interpreted update value into this `notifyUpdate` function. For example, running
+   * `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
+   * `updateInstructions` of `'*'`.
+   *
+   * _＠see_ {@link DataProviderUpdateInstructions} for more info on the `updateInstructions` parameter
    *
    * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
    * It will create a destructive infinite loop.
@@ -2173,15 +2174,15 @@ declare module 'shared/models/data-provider-engine.model' {
      * the `updateInstructions` and then run the original `notifyUpdateMethod` from the
      * `DataProviderEngine`.
      *
-     * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a data
-     * provider engine):
+     * _＠example_ To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
+     * data provider engine):
      *
      * ```typescript
      * this.notifyUpdate(['Verse', 'Heresy']);
      * ```
      *
-     * @example You can log the manual updates in your data provider engine by specifying the following
-     * `notifyUpdate` function in the data provider engine:
+     * _＠example_ You can log the manual updates in your data provider engine by specifying the
+     * following `notifyUpdate` function in the data provider engine:
      *
      * ```typescript
      * notifyUpdate(updateInstructions) {
@@ -2191,13 +2192,14 @@ declare module 'shared/models/data-provider-engine.model' {
      *
      * Note: This function's return is treated the same as the return from `set<data_type>`
      *
-     * @param updateInstructions Information that papi uses to interpret whether to send out updates.
-     *   Defaults to `'*'` (meaning send updates for all data types) if parameter `updateInstructions`
-     *   is not provided or is undefined. Otherwise returns `updateInstructions`. papi passes the
-     *   interpreted update value into this `notifyUpdate` function. For example, running
-     *   `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
-     *   `updateInstructions` of `'*'`.
-     * @see {@link DataProviderUpdateInstructions} for more info on the `updateInstructions` parameter
+     * _＠param_ `updateInstructions` Information that papi uses to interpret whether to send out
+     * updates. Defaults to `'*'` (meaning send updates for all data types) if parameter
+     * `updateInstructions` is not provided or is undefined. Otherwise returns `updateInstructions`.
+     * papi passes the interpreted update value into this `notifyUpdate` function. For example, running
+     * `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
+     * `updateInstructions` of `'*'`.
+     *
+     * _＠see_ {@link DataProviderUpdateInstructions} for more info on the `updateInstructions` parameter
      *
      * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
      * It will create a destructive infinite loop.
@@ -2287,7 +2289,7 @@ declare module 'shared/models/data-provider-engine.model' {
   export abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes>
     implements WithNotifyUpdate<TDataTypes>
   {
-    notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
+    notifyUpdate(updateInstructions?: DataProviderUpdateInstructions<TDataTypes>): void;
   }
 }
 declare module 'shared/models/extract-data-provider-data-types.model' {

@@ -6,6 +6,10 @@ import {
 } from '@shared/models/data-provider.model';
 import { NetworkableObject } from '@shared/models/network-object.model';
 
+// Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
+// such on this object. JSDoc does not usually carry these to classes inheriting from
+// `DataProviderEngine` for some reason. One day, we may be able to put this comment on an actual
+// function, so we can fix the comments back to using real @
 /**
  * JSDOC SOURCE DataProviderEngineNotifyUpdate
  *
@@ -14,15 +18,15 @@ import { NetworkableObject } from '@shared/models/network-object.model';
  * the `updateInstructions` and then run the original `notifyUpdateMethod` from the
  * `DataProviderEngine`.
  *
- * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a data
- * provider engine):
+ * _＠example_ To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
+ * data provider engine):
  *
  * ```typescript
  * this.notifyUpdate(['Verse', 'Heresy']);
  * ```
  *
- * @example You can log the manual updates in your data provider engine by specifying the following
- * `notifyUpdate` function in the data provider engine:
+ * _＠example_ You can log the manual updates in your data provider engine by specifying the
+ * following `notifyUpdate` function in the data provider engine:
  *
  * ```typescript
  * notifyUpdate(updateInstructions) {
@@ -32,13 +36,14 @@ import { NetworkableObject } from '@shared/models/network-object.model';
  *
  * Note: This function's return is treated the same as the return from `set<data_type>`
  *
- * @param updateInstructions Information that papi uses to interpret whether to send out updates.
- *   Defaults to `'*'` (meaning send updates for all data types) if parameter `updateInstructions`
- *   is not provided or is undefined. Otherwise returns `updateInstructions`. papi passes the
- *   interpreted update value into this `notifyUpdate` function. For example, running
- *   `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
- *   `updateInstructions` of `'*'`.
- * @see {@link DataProviderUpdateInstructions} for more info on the `updateInstructions` parameter
+ * _＠param_ `updateInstructions` Information that papi uses to interpret whether to send out
+ * updates. Defaults to `'*'` (meaning send updates for all data types) if parameter
+ * `updateInstructions` is not provided or is undefined. Otherwise returns `updateInstructions`.
+ * papi passes the interpreted update value into this `notifyUpdate` function. For example, running
+ * `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
+ * `updateInstructions` of `'*'`.
+ *
+ * _＠see_ {@link DataProviderUpdateInstructions} for more info on the `updateInstructions` parameter
  *
  * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
  * It will create a destructive infinite loop.
@@ -148,6 +153,9 @@ export abstract class DataProviderEngine<TDataTypes extends DataProviderDataType
   implements WithNotifyUpdate<TDataTypes>
 {
   // This is just a placeholder and will be layered over by papi. We don't need it to do anything
+  // @ts-expect-error ts(6133) `updateInstructions` is not used in this method, but we don't care
+  // because we want inheriting classes to be able to get this method with Intellisense without
+  // an underscore that indicates to TypeScript that we aren't using the parameter
   // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
-  notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes> = (_updateInstructions) => {};
+  notifyUpdate(updateInstructions?: DataProviderUpdateInstructions<TDataTypes>): void {}
 }
