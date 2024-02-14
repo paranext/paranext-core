@@ -87,7 +87,7 @@ class SettingDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<SettingDataTypes>> {
     try {
       this.settingsData[key] = newSetting;
-      writeSettingsDataToFile(this.settingsData);
+      await writeSettingsDataToFile(this.settingsData);
     } catch (error) {
       throw new Error(`Error setting value for key '${key}': ${error}`);
     }
@@ -96,11 +96,11 @@ class SettingDataProviderEngine
 
   async reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean> {
     try {
-      if (!this.settingsData[key]) {
+      if (!(key in this.settingsData)) {
         return false;
       }
       delete this.settingsData[key];
-      writeSettingsDataToFile(this.settingsData);
+      await writeSettingsDataToFile(this.settingsData);
       this.notifyUpdate('');
       return true;
     } catch (error) {
