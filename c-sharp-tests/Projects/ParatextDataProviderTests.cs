@@ -19,6 +19,7 @@ namespace TestParanextDataProvider.Projects
         private ScrText _scrText = null!; // Will be non-null when the test runs
         private ProjectDetails _projectDetails = null!; // Will be non-null when the test runs
 
+        [SetUp]
         public override void TestSetup()
         {
             base.TestSetup();
@@ -26,6 +27,12 @@ namespace TestParanextDataProvider.Projects
 
             _projectDetails = CreateProjectDetails(_scrText);
             ParatextProjects.FakeAddProject(_projectDetails);
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            _scrText?.Dispose();
         }
 
         [TestCase("getBookUSFM")]
