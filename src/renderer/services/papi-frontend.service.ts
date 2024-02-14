@@ -17,7 +17,8 @@ import {
   papiFrontendProjectDataProviderService,
   PapiFrontendProjectDataProviderService,
 } from '@shared/services/project-data-provider.service';
-import settingsService, { SettingsService } from '@shared/services/settings.service';
+import settingsService from '@shared/services/settings.service';
+import { ISettingsService } from '@shared/services/settings.service-model';
 import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
@@ -72,7 +73,7 @@ const papi = {
    */
   react: papiReact,
   /** JSDOC DESTINATION settingsService */
-  settings: settingsService as SettingsService,
+  settings: settingsService as ISettingsService,
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
 };

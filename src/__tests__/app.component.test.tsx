@@ -31,6 +31,10 @@ jest.mock('@renderer/components/docking/platform-dock-layout.component', () => (
   __esModule: true,
   default: /** ParanextDockLayout Mock */ () => undefined,
 }));
+jest.mock('@renderer/components/platform-bible-toolbar', () => ({
+  __esModule: true,
+  default: /** PlatformBibleToolbar Mock */ () => <div />,
+}));
 
 describe('App', () => {
   it('should render', async () => {
