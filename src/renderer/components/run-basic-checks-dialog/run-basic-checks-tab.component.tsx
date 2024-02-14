@@ -4,7 +4,6 @@ import { getChaptersForBook } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
 import { useState, useMemo } from 'react';
-import settingsService from '@shared/services/settings.service';
 import BookSelector from '@renderer/components/run-basic-checks-dialog/book-selector.component';
 import BasicChecks, {
   fetchChecks,
@@ -12,20 +11,24 @@ import BasicChecks, {
 import './run-basic-checks-tab.component.scss';
 import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
 import { VerseRef } from '@sillsdev/scripture';
+import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
 
 export const TAB_TYPE_RUN_BASIC_CHECKS = 'run-basic-checks';
 
-// Changing global scripture reference won't effect the dialog because reference is passed in once at the start.
 type RunBasicChecksTabProps = {
-  currentScriptureReference: ScriptureReference | undefined;
   currentProjectId: string | undefined;
 };
 
-export default function RunBasicChecksTab({
-  currentScriptureReference,
-  currentProjectId,
-}: RunBasicChecksTabProps) {
-  const currentBookNumber = currentScriptureReference?.bookNum ?? 1;
+const defaultScrRef: ScriptureReference = {
+  bookNum: 1,
+  chapterNum: 1,
+  verseNum: 1,
+};
+
+export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTabProps) {
+  const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
+
+  const currentBookNumber = scrRef?.bookNum ?? 1;
   const basicChecks = fetchChecks();
 
   // used within chapter-range-selector and won't change because current book doesn't change
@@ -138,11 +141,6 @@ export const loadRunBasicChecksTab = (savedTabInfo: SavedTabInfo): TabInfo => {
       <RunBasicChecksTab
         // #region Test a .NET data provider
         currentProjectId="32664dc3288a28df2e2bb75ded887fc8f17a15fb"
-        currentScriptureReference={settingsService.get('platform.verseRef', {
-          bookNum: 1,
-          chapterNum: 1,
-          verseNum: 1,
-        })}
       />
     ),
   };

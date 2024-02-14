@@ -31,6 +31,8 @@ import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
 import menuDataService from '@shared/services/menu-data.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
+import settingsService from '@shared/services/settings.service';
+import { ISettingsService } from '@shared/services/settings.service-model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -73,6 +75,8 @@ const papi = {
   projectLookup: projectLookupService as ProjectLookupServiceType,
   /** JSDOC DESTINATION extensionStorageService */
   storage: extensionStorageService as ExtensionStorageService,
+  /** JSDOC DESTINATION settingsService */
+  settings: settingsService as ISettingsService,
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
 };

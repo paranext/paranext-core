@@ -320,9 +320,15 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
         // We create `subscribe<data_type>` and `notifyUpdate` for extensions, and
         // `subscribe<data_type>` uses `get<data_type>` internally, so those 3 properties can't
         // change after the data provider has been created or bad things will happen.
+        // Locally the data provider engine has getters and the data provider service creates the
+        // subscribers and notifyUpdate.
+        // Remotely this proxy creates subscribers, there is no need for notifyUpdate, and the
+        // network object service sets getters as network request functions through this proxy.
+        // These request functions should not have to change after they're set for the first time.
         if (
           isString(prop) &&
-          (prop === 'get' || prop.startsWith('subscribe') || prop === 'notifyUpdate')
+          (prop.startsWith('get') || prop.startsWith('subscribe') || prop === 'notifyUpdate') &&
+          (prop in obj || prop in dataProviderInternal)
         )
           return false;
 
