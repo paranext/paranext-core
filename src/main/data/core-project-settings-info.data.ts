@@ -19,6 +19,9 @@ const coreProjectSettingsInfo: Partial<AllProjectSettingsInfo> = {
   'platform.language': { default: '%project_language_missing%' },
   'platformScripture.booksPresent': {
     default:
+      //                                                                                                  1
+      //        1         2         3         4         5         6         7         8         9         0         1         2         3
+      // 34567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
       '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
   },
   'platformScripture.versification': { default: 4 },
