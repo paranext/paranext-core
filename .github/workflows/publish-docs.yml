@@ -15,7 +15,7 @@ jobs:
 
       - name: Read package.json
         id: package_json
-        uses: zoexx/github-action-json-file-properties@release
+        uses: zoexx/github-action-json-file-properties@1.0.4
         with:
           file_path: 'package.json'
 
