@@ -10,7 +10,6 @@ import {
 import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
 import {
   DataProviderDataType,
-  DataProviderDataTypes,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
 import {
@@ -24,10 +23,33 @@ import dataProviderService from '@shared/services/data-provider.service';
 
 /** All possible types for ProjectDataProviderEngines: IProjectDataProviderEngine<ProjectDataType> */
 export type ProjectDataProviderEngineTypes = {
-  [ProjectType in ProjectTypes]: IProjectDataProviderEngine<ProjectDataTypes[ProjectType]>;
+  [ProjectType in ProjectTypes]: IProjectDataProviderEngine<ProjectType>;
 };
 
-export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
+/**
+ * A factory object registered with the papi that creates a Project Data Provider Engine for each
+ * project of the factory's `projectType` when the papi requests. Used by the papi to create
+ * {@link IProjectDataProviderEngine}s for a specific project when someone gets a project data
+ * provider with `papi.projectDataProviders.get`. When this factory object is registered with
+ * `papi.projectDataProviders.registerProjectDataProviderEngineFactory`, the papi creates a
+ * {@link ProjectDataProviderFactory} that layers over this engine to create
+ * {@link IProjectDataProvider}s.
+ *
+ * Project Data Provider Engine Factories create Project Data Provider Engines for a specific
+ * `projectType`. For each project available, a new instance of a PDP with that project's
+ * `projectType` is created by the Project Data Provider Factory with that project's `projectType`.
+ */
+export interface IProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
+  /**
+   * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
+   * {@link IProjectDataProvider} for the project. This project will have the same `projectType` as
+   * this Project Data Provider Engine Factory
+   *
+   * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
+   * @param projectStorageInterpreterId Id of the {@link IProjectStorageInterpreter} that the
+   *   {@link IProjectDataProviderEngine} should use to retrieve project data
+   * @returns A {@link IProjectDataProviderEngine} for the project passed in
+   */
   createProjectDataProviderEngine(
     projectId: string,
     projectStorageInterpreterId: string,
@@ -35,10 +57,11 @@ export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTyp
 }
 
 /**
- * The object to return from {@link ProjectDataProviderEngineFactory.createProjectDataProviderEngine}
- * that the PAPI registers to create a Project Data Provider for a specific project. The
- * ProjectDataProviderService creates an {@link IProjectDataProvider} on the papi that layers over
- * this engine, providing special functionality.
+ * The object to return from
+ * {@link IProjectDataProviderEngineFactory.createProjectDataProviderEngine} that the PAPI registers
+ * to create a Project Data Provider for a specific project. The ProjectDataProviderService creates
+ * an {@link IProjectDataProvider} on the papi that layers over this engine, providing special
+ * functionality.
  *
  * @type TProjectDataTypes - The data types that this Project Data Provider Engine serves. For each
  *   data type defined, the engine must have corresponding `get<data_type>` and `set<data_type>
@@ -56,32 +79,33 @@ export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTyp
  * default method implementations to meet the requirements of {@link MandatoryProjectDataTypes}
  * automatically by passing these calls through to the Project Storage Interpreter for you:
  * ```typescript
- * class MyPDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
+ * class MyPDPE extends ProjectDataProviderEngine<'MyProjectData'> implements IProjectDataProviderEngine<'MyProjectData'> {
  *   ...
  * }
  * ```
  *
- * 2. If you are using an object or class to create a Project Data Provider Engine, you can add a
+ * 2. If you are using an object or class not extending {@link PRojectDataProviderEngine} to create a Project Data Provider Engine, you can add a
  * `notifyUpdate` function (and, with an object, add the {@link WithNotifyUpdate} type) to
  * your Project Data Provider Engine like so:
  * ```typescript
- * const myPDPE: IProjectDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
+ * const myPDPE: IProjectDataProviderEngine<'MyProjectData'> & WithNotifyUpdate<ProjectDataTypes['MyProjectData']> = {
  *   notifyUpdate(updateInstructions) {},
  *   ...
  * }
  * ```
  * OR
  * ```typescript
- * class MyPDPE implements IProjectDataProviderEngine<MyDataTypes> {
- *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
+ * class MyPDPE implements IProjectDataProviderEngine<'MyProjectData'> {
+ *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<ProjectDataTypes['MyProjectData']>) {}
  *   ...
  * }
  * ```
  */
-export type IProjectDataProviderEngine<TProjectDataTypes extends DataProviderDataTypes> =
-  IDataProviderEngine<TProjectDataTypes & MandatoryProjectDataTypes> &
-    WithProjectDataProviderEngineSettingMethods<TProjectDataTypes> &
-    WithProjectDataProviderEngineExtensionDataMethods<TProjectDataTypes>;
+export type IProjectDataProviderEngine<ProjectType extends ProjectTypes> = IDataProviderEngine<
+  ProjectDataTypes[ProjectType] & MandatoryProjectDataTypes
+> &
+  WithProjectDataProviderEngineSettingMethods<ProjectDataTypes[ProjectType]> &
+  WithProjectDataProviderEngineExtensionDataMethods<ProjectDataTypes[ProjectType]>;
 
 /**
  * JSDOC SOURCE ProjectDataProviderEngine
@@ -135,34 +159,38 @@ export abstract class ProjectDataProviderEngine<ProjectType extends ProjectTypes
 
     // TODO: Get the appropriate PSI and pass it in instead of this fake PSI that does literally
     // nothing https://github.com/paranext/paranext-core/issues/367
+    // And once we fix this, remove the checks below that see if the subscribe functions exist
     // @ts-expect-error 2322
     this.projectStorageInterpreter = {};
 
     // Set up subscriptions to listen for changes to the PSI Settings and ExtensionData and update
     // our own subscribers
-    this.psiSettingUnsubscriberPromise = this.projectStorageInterpreter.subscribeSetting(
-      // Just picked a key for no reason in particular because we don't need anything in particular
-      // here because we're listening for all updates
-      // TODO: How will we subscribe to all updates from the PSI? We need to notifyUpdate Setting if
-      // one of our own settings changed, not a setting from literally any project served by the PSI
-      { key: 'platform.fullName', projectId: this.projectId },
-      () => {
-        this.notifyUpdate('Setting');
-      },
-      { whichUpdates: '*' },
-    );
-    this.psiExtensionDataUnsubscriberPromise =
-      this.projectStorageInterpreter.subscribeExtensionData(
-        // Just used empty strings because we don't need anything in particular here because we're
-        // listening for all updates
-        // TODO: How will we subscribe to all updates from the PSI? We need to notifyUpdate Setting if
-        // one of our own settings changed, not a setting from literally any project served by the PSI
-        { dataQualifier: '', extensionName: '', projectId: this.projectId },
-        () => {
-          this.notifyUpdate('ExtensionData');
-        },
-        { whichUpdates: '*' },
-      );
+    this.psiSettingUnsubscriberPromise = this.projectStorageInterpreter.subscribeSetting
+      ? this.projectStorageInterpreter.subscribeSetting(
+          // Just picked a key for no reason in particular because we don't need anything in particular
+          // here because we're listening for all updates
+          // TODO: How will we subscribe to all updates from the PSI? We need to notifyUpdate Setting if
+          // one of our own settings changed, not a setting from literally any project served by the PSI
+          { key: 'platform.fullName', projectId: this.projectId },
+          () => {
+            this.notifyUpdate('Setting');
+          },
+          { whichUpdates: '*', retrieveDataImmediately: false },
+        )
+      : Promise.resolve(async () => true);
+    this.psiExtensionDataUnsubscriberPromise = this.projectStorageInterpreter.subscribeExtensionData
+      ? this.projectStorageInterpreter.subscribeExtensionData(
+          // Just used empty strings because we don't need anything in particular here because we're
+          // listening for all updates
+          // TODO: How will we subscribe to all updates from the PSI? We need to notifyUpdate Setting if
+          // one of our own settings changed, not a setting from literally any project served by the PSI
+          { dataQualifier: '', extensionName: '', projectId: this.projectId },
+          () => {
+            this.notifyUpdate('ExtensionData');
+          },
+          { whichUpdates: '*', retrieveDataImmediately: false },
+        )
+      : Promise.resolve(async () => true);
   }
 
   // Do not emit update events when running this method because we are subscribing to `Setting`

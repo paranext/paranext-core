@@ -36,6 +36,11 @@ const standardMenuLayout: GridMenuInfo = {
           hasDivider: true,
         },
         {
+          name: 'Open Hello World Project...',
+          command: 'helloWorld.openProject',
+          hasDivider: true,
+        },
+        {
           name: 'Settings...',
           command: 'platform.settings',
           hasDivider: true,
@@ -106,6 +111,11 @@ export const supportAndDevelopmentMenuLayout: GridMenuInfo = {
         {
           name: 'Open Word List...',
           command: 'paratextBibleWordList.open',
+          hasDivider: true,
+        },
+        {
+          name: 'Open Hello World Project...',
+          command: 'helloWorld.openProject',
           hasDivider: true,
         },
         {

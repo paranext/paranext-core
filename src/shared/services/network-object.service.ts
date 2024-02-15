@@ -20,8 +20,9 @@ import {
   LocalObjectToProxyCreator,
   NetworkObjectDetails,
 } from '@shared/models/network-object.model';
+import MutexMap from '@shared/utils/mutex-map';
+import logger from '@shared/services/logger.service';
 import { Mutex } from 'async-mutex';
-import logger from './logger.service';
 
 // #endregion
 
@@ -175,19 +176,6 @@ onDidDisposeNetworkObject((id: string) => {
 // #region Helpers for get and set
 
 // We need this to protect simultaneous calls to get and/or set the same network objects
-class MutexMap {
-  private mutexesByID = new Map<string, Mutex>();
-
-  get(mutexID: string): Mutex {
-    let retVal = this.mutexesByID.get(mutexID);
-    if (retVal) return retVal;
-
-    retVal = new Mutex();
-    this.mutexesByID.set(mutexID, retVal);
-    return retVal;
-  }
-}
-
 const getterMutexMap: MutexMap = new MutexMap();
 const setterMutexMap: MutexMap = new MutexMap();
 

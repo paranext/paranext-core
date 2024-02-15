@@ -22,6 +22,10 @@ export type {
   ExtensionDataScope,
   MandatoryProjectDataTypes,
 } from '@shared/models/project-data-provider.model';
+export type {
+  IProjectDataProviderEngine,
+  IProjectDataProviderEngineFactory,
+} from '@shared/models/project-data-provider-engine.model';
 export type { ProjectMetadata } from '@shared/models/project-metadata.model';
 export type { MandatoryProjectStorageDataTypes } from '@shared/models/project-storage-interpreter.model';
 export type {

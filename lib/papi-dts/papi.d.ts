@@ -1445,6 +1445,15 @@ declare module 'shared/services/network.service' {
    */
   export const papiNetworkService: PapiNetworkService;
 }
+declare module 'shared/utils/mutex-map' {
+  import { Mutex } from 'async-mutex';
+  /** Map of {@link Mutex}es that automatically generates a new {@link Mutex} for any new key */
+  class MutexMap {
+    private mutexesByID;
+    get(mutexID: string): Mutex;
+  }
+  export default MutexMap;
+}
 declare module 'shared/services/network-object.service' {
   import { PlatformEvent, UnsubscriberAsync } from 'platform-bible-utils';
   import {
@@ -2252,7 +2261,7 @@ declare module 'shared/models/data-provider-engine.model' {
    * }
    * ```
    *
-   * 2. If you are using an object or class to create a data provider engine, you can add a
+   * 2. If you are using an object or class not extending {@link DataProviderEngine} to create a data provider engine, you can add a
    * `notifyUpdate` function (and, with an object, add the {@link WithNotifyUpdate} type) to
    * your data provider engine like so:
    * ```typescript
@@ -2593,12 +2602,12 @@ declare module 'papi-shared-types' {
    *
    * ```typescript
    * declare module 'papi-shared-types' {
-   *   export type MyProjectDataType = MandatoryProjectDataTypes & {
+   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   };
    *
    *   export interface ProjectDataProviders {
-   *     MyExtensionProjectTypeName: IDataProvider<MyProjectDataType>;
+   *     MyExtensionProjectTypeName: IDataProvider<MyProjectDataTypes>;
    *   }
    * }
    * ```
@@ -3699,7 +3708,6 @@ declare module 'shared/models/project-data-provider-engine.model' {
   } from 'shared/models/data-provider-engine.model';
   import {
     DataProviderDataType,
-    DataProviderDataTypes,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import {
@@ -3710,19 +3718,43 @@ declare module 'shared/models/project-data-provider-engine.model' {
   import { ProjectStorageExtensionDataScope } from 'shared/models/project-storage-interpreter.model';
   /** All possible types for ProjectDataProviderEngines: IProjectDataProviderEngine<ProjectDataType> */
   export type ProjectDataProviderEngineTypes = {
-    [ProjectType in ProjectTypes]: IProjectDataProviderEngine<ProjectDataTypes[ProjectType]>;
+    [ProjectType in ProjectTypes]: IProjectDataProviderEngine<ProjectType>;
   };
-  export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
+  /**
+   * A factory object registered with the papi that creates a Project Data Provider Engine for each
+   * project of the factory's `projectType` when the papi requests. Used by the papi to create
+   * {@link IProjectDataProviderEngine}s for a specific project when someone gets a project data
+   * provider with `papi.projectDataProviders.get`. When this factory object is registered with
+   * `papi.projectDataProviders.registerProjectDataProviderEngineFactory`, the papi creates a
+   * {@link ProjectDataProviderFactory} that layers over this engine to create
+   * {@link IProjectDataProvider}s.
+   *
+   * Project Data Provider Engine Factories create Project Data Provider Engines for a specific
+   * `projectType`. For each project available, a new instance of a PDP with that project's
+   * `projectType` is created by the Project Data Provider Factory with that project's `projectType`.
+   */
+  export interface IProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
+    /**
+     * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
+     * {@link IProjectDataProvider} for the project. This project will have the same `projectType` as
+     * this Project Data Provider Engine Factory
+     *
+     * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
+     * @param projectStorageInterpreterId Id of the {@link IProjectStorageInterpreter} that the
+     *   {@link IProjectDataProviderEngine} should use to retrieve project data
+     * @returns A {@link IProjectDataProviderEngine} for the project passed in
+     */
     createProjectDataProviderEngine(
       projectId: string,
       projectStorageInterpreterId: string,
     ): ProjectDataProviderEngineTypes[ProjectType];
   }
   /**
-   * The object to return from {@link ProjectDataProviderEngineFactory.createProjectDataProviderEngine}
-   * that the PAPI registers to create a Project Data Provider for a specific project. The
-   * ProjectDataProviderService creates an {@link IProjectDataProvider} on the papi that layers over
-   * this engine, providing special functionality.
+   * The object to return from
+   * {@link IProjectDataProviderEngineFactory.createProjectDataProviderEngine} that the PAPI registers
+   * to create a Project Data Provider for a specific project. The ProjectDataProviderService creates
+   * an {@link IProjectDataProvider} on the papi that layers over this engine, providing special
+   * functionality.
    *
    * @type TProjectDataTypes - The data types that this Project Data Provider Engine serves. For each
    *   data type defined, the engine must have corresponding `get<data_type>` and `set<data_type>
@@ -3740,32 +3772,33 @@ declare module 'shared/models/project-data-provider-engine.model' {
    * default method implementations to meet the requirements of {@link MandatoryProjectDataTypes}
    * automatically by passing these calls through to the Project Storage Interpreter for you:
    * ```typescript
-   * class MyPDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
+   * class MyPDPE extends ProjectDataProviderEngine<'MyProjectData'> implements IProjectDataProviderEngine<'MyProjectData'> {
    *   ...
    * }
    * ```
    *
-   * 2. If you are using an object or class to create a Project Data Provider Engine, you can add a
+   * 2. If you are using an object or class not extending {@link PRojectDataProviderEngine} to create a Project Data Provider Engine, you can add a
    * `notifyUpdate` function (and, with an object, add the {@link WithNotifyUpdate} type) to
    * your Project Data Provider Engine like so:
    * ```typescript
-   * const myPDPE: IProjectDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
+   * const myPDPE: IProjectDataProviderEngine<'MyProjectData'> & WithNotifyUpdate<ProjectDataTypes['MyProjectData']> = {
    *   notifyUpdate(updateInstructions) {},
    *   ...
    * }
    * ```
    * OR
    * ```typescript
-   * class MyPDPE implements IProjectDataProviderEngine<MyDataTypes> {
-   *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
+   * class MyPDPE implements IProjectDataProviderEngine<'MyProjectData'> {
+   *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<ProjectDataTypes['MyProjectData']>) {}
    *   ...
    * }
    * ```
    */
-  export type IProjectDataProviderEngine<TProjectDataTypes extends DataProviderDataTypes> =
-    IDataProviderEngine<TProjectDataTypes & MandatoryProjectDataTypes> &
-      WithProjectDataProviderEngineSettingMethods<TProjectDataTypes> &
-      WithProjectDataProviderEngineExtensionDataMethods<TProjectDataTypes>;
+  export type IProjectDataProviderEngine<ProjectType extends ProjectTypes> = IDataProviderEngine<
+    ProjectDataTypes[ProjectType] & MandatoryProjectDataTypes
+  > &
+    WithProjectDataProviderEngineSettingMethods<ProjectDataTypes[ProjectType]> &
+    WithProjectDataProviderEngineExtensionDataMethods<ProjectDataTypes[ProjectType]>;
   /**
    *
    * Abstract class that provides default implementations of a number of {@link IProjectDataProvider}
@@ -3878,6 +3911,31 @@ declare module 'shared/models/project-metadata.model' {
 }
 declare module 'shared/services/project-lookup.service-model' {
   import { ProjectMetadata } from 'shared/models/project-metadata.model';
+  export type ProjectMetadataFilterOptions = {
+    /** Project IDs to exclude */
+    excludeProjectIds?: string | string[];
+    /**
+     * String representation of `RegExp` pattern(s) to match against projects' `projectType` (using
+     * the
+     * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+     * function) to determine if they should be included.
+     *
+     * Defaults to all {@link ProjectTypes}, so all projects that do not match `excludeProjectTypes`
+     * will be included
+     */
+    includeProjectTypes?: string | string[];
+    /**
+     * String representation of `RegExp` pattern(s) to match against projects' `projectType` (using
+     * the
+     * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+     * function) to determine if they should absolutely not be included even if they match with
+     * `includeProjectTypes`
+     *
+     * Defaults to no {@link ProjectTypes}, so all projects that match `includeProjectTypes` will be
+     * included
+     */
+    excludeProjectTypes?: string | string[];
+  };
   /**
    *
    * Provides metadata for projects known by the platform
@@ -3900,13 +3958,21 @@ declare module 'shared/services/project-lookup.service-model' {
   export const projectLookupServiceNetworkObjectName = 'ProjectLookupService';
 }
 declare module 'shared/services/project-lookup.service' {
-  import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
+  import {
+    ProjectLookupServiceType,
+    ProjectMetadataFilterOptions,
+  } from 'shared/services/project-lookup.service-model';
+  import { ProjectMetadata } from 'shared/models/project-metadata.model';
+  export function filterProjectsMetadata(
+    projectsMetadata: ProjectMetadata[],
+    options: ProjectMetadataFilterOptions,
+  ): ProjectMetadata[];
   const projectLookupService: ProjectLookupServiceType;
   export default projectLookupService;
 }
 declare module 'shared/services/project-data-provider.service' {
   import { ProjectTypes, ProjectDataProviders } from 'papi-shared-types';
-  import { ProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
+  import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
   import { Dispose } from 'platform-bible-utils';
   /**
    * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
@@ -3918,7 +3984,7 @@ declare module 'shared/services/project-data-provider.service' {
    */
   export function registerProjectDataProviderEngineFactory<ProjectType extends ProjectTypes>(
     projectType: ProjectType,
-    pdpEngineFactory: ProjectDataProviderEngineFactory<ProjectType>,
+    pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>,
   ): Promise<Dispose>;
   /**
    * Get a Project Data Provider for the given project ID.
@@ -4359,19 +4425,16 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   import { DialogOptions } from 'shared/models/dialog-options.model';
   import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
   import { ReactElement } from 'react';
+  import { ProjectMetadataFilterOptions } from 'shared/services/project-lookup.service-model';
   /** The tabType for the select project dialog in `select-project.dialog.tsx` */
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
   /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
+  type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
-  export type SelectProjectDialogOptions = DialogOptions & {
-    /** Project IDs to exclude from showing in the dialog */
-    excludeProjectIds?: string[];
-  };
+  export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
   /** Options to provide when showing the Select Multiple Project dialog */
-  export type SelectMultipleProjectsDialogOptions = DialogOptions & {
-    /** Project IDs to exclude from showing in the dialog */
-    excludeProjectIds?: string[];
+  export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
     /** Project IDs that should start selected in the dialog */
     selectedProjectIds?: string[];
   };
@@ -4429,8 +4492,11 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   >;
 }
 declare module 'shared/services/dialog.service-model' {
-  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
-  import { DialogOptions } from 'shared/models/dialog-options.model';
+  import {
+    DialogTabTypes,
+    DialogTypes,
+    SelectProjectDialogOptions,
+  } from 'renderer/components/dialogs/dialog-definition.model';
   /**
    *
    * Prompt the user for responses with dialogs
@@ -4454,7 +4520,7 @@ declare module 'shared/services/dialog.service-model' {
      * @param options Various options for configuring the dialog that shows
      * @returns Returns the user's selected project id or `undefined` if the user cancels
      */
-    selectProject(options?: DialogOptions): Promise<string | undefined>;
+    selectProject(options?: SelectProjectDialogOptions): Promise<string | undefined>;
   }
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';
@@ -4734,6 +4800,10 @@ declare module '@papi/core' {
     ExtensionDataScope,
     MandatoryProjectDataTypes,
   } from 'shared/models/project-data-provider.model';
+  export type {
+    IProjectDataProviderEngine,
+    IProjectDataProviderEngineFactory,
+  } from 'shared/models/project-data-provider-engine.model';
   export type { ProjectMetadata } from 'shared/models/project-metadata.model';
   export type { MandatoryProjectStorageDataTypes } from 'shared/models/project-storage-interpreter.model';
   export type {

@@ -1,6 +1,5 @@
 ﻿import papi, { logger } from '@papi/backend';
 import type {
-  DialogOptions,
   ExecutionActivationContext,
   GetWebViewOptions,
   IWebViewProvider,
@@ -25,11 +24,11 @@ interface ResourceViewerOptions extends GetWebViewOptions {
 async function openResourceViewer(projectId: string | undefined): Promise<string | undefined> {
   let projectIdForWebView = projectId;
   if (!projectIdForWebView) {
-    const options: DialogOptions = {
+    projectIdForWebView = await papi.dialogs.selectProject({
       title: 'Select Resource',
       prompt: 'Choose the resource project to view:',
-    };
-    projectIdForWebView = await papi.dialogs.selectProject(options);
+      includeProjectTypes: '^ParatextStandard$',
+    });
   }
   if (projectIdForWebView) {
     const options: ResourceViewerOptions = { projectId: projectIdForWebView };

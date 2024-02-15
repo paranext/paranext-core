@@ -5,6 +5,7 @@ import type {
   WebViewDefinition,
   SavedWebViewDefinition,
   IWebViewProvider,
+  GetWebViewOptions,
 } from '@papi/core';
 import { PlatformEventEmitter } from 'platform-bible-utils';
 import type { HelloWorldEvent } from 'hello-world';
@@ -13,10 +14,15 @@ import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?
 import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
 import helloWorldReactWebView2Styles from './web-views/hello-world-2.web-view.scss?inline';
 import helloWorldHtmlWebView from './web-views/hello-world.web-view.html?inline';
+import helloWorldProjectDataProviderEngineFactory from './models/hello-world-project-data-provider-engine-factory.model';
+import helloWorldProjectWebView from './web-views/hello-world-project.web-view?inline';
+import helloWorldProjectWebViewStyles from './web-views/hello-world-project.web-view.scss?inline';
 
 type IWebViewProviderWithType = IWebViewProvider & { webViewType: string };
 
 logger.info('Hello world is importing!');
+
+// #region Hello World General Web Views
 
 /** Simple web view provider that provides sample html web views when papi requests them */
 const htmlWebViewProvider: IWebViewProviderWithType = {
@@ -76,6 +82,77 @@ const reactWebView2Provider: IWebViewProviderWithType = {
   },
 };
 
+// #endregion
+
+// #region Hello World Project Web View, Command, etc.
+
+/** Simple web view provider that provides helloWorld project web views when papi requests them */
+const helloWorldProjectWebViewProvider: IWebViewProviderWithType = {
+  webViewType: 'helloWorld.projectWebView',
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: HelloWorldProjectViewerOptions,
+  ): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== this.webViewType)
+      throw new Error(
+        `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+
+    // We know that the projectId (if present in the state) will be a string.
+    const projectId =
+      getWebViewOptions.projectId ||
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (savedWebView.state?.projectId as string) ||
+      undefined;
+    return {
+      title: projectId
+        ? `Hello World Project: ${
+            (await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId
+          }`
+        : 'Hello World Project',
+      ...savedWebView,
+      content: helloWorldProjectWebView,
+      styles: helloWorldProjectWebViewStyles,
+      state: {
+        ...savedWebView.state,
+        projectId,
+      },
+    };
+  },
+};
+
+interface HelloWorldProjectViewerOptions extends GetWebViewOptions {
+  projectId: string | undefined;
+}
+
+/**
+ * Function to prompt for a project and open it in the hello world project web view. Registered as a
+ * command handler.
+ */
+async function openHelloWorldProjectWebView(
+  projectId: string | undefined,
+): Promise<string | undefined> {
+  let projectIdForWebView = projectId;
+  if (!projectIdForWebView) {
+    projectIdForWebView = await papi.dialogs.selectProject({
+      title: 'Open Hello World Project',
+      prompt: 'Choose the Hello World project to view:',
+      includeProjectTypes: '^helloWorld$',
+    });
+  }
+  if (projectIdForWebView) {
+    const options: HelloWorldProjectViewerOptions = { projectId: projectIdForWebView };
+    return papi.webViews.getWebView(
+      helloWorldProjectWebViewProvider.webViewType,
+      undefined,
+      options,
+    );
+  }
+  return undefined;
+}
+
+// #endregion
+
 /** Number of times the `helloWorld` function has been called */
 let helloWorldCount = 0;
 /** Emitter to inform subscribers when `helloWorld` is called */
@@ -101,6 +178,21 @@ function helloException(message: string) {
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello world is activating!');
+
+  const helloWorldPdpefPromise = papi.projectDataProviders.registerProjectDataProviderEngineFactory(
+    'helloWorld',
+    helloWorldProjectDataProviderEngineFactory,
+  );
+
+  const openHelloWorldProjectPromise = papi.commands.registerCommand(
+    'helloWorld.openProject',
+    openHelloWorldProjectWebView,
+  );
+
+  const helloWorldProjectWebViewProviderPromise = papi.webViewProviders.register(
+    helloWorldProjectWebViewProvider.webViewType,
+    helloWorldProjectWebViewProvider,
+  );
 
   const htmlWebViewProviderPromise = papi.webViewProviders.register(
     htmlWebViewProvider.webViewType,
@@ -154,6 +246,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
+    await helloWorldPdpefPromise,
+    await helloWorldProjectWebViewProviderPromise,
+    await openHelloWorldProjectPromise,
     await htmlWebViewProviderPromise,
     await reactWebViewProviderPromise,
     await reactWebView2ProviderPromise,
