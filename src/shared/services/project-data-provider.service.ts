@@ -10,6 +10,10 @@ import { Dispose, UnsubscriberAsyncList } from 'platform-bible-utils';
 import projectLookupService from '@shared/services/project-lookup.service';
 import logger from '@shared/services/logger.service';
 
+/**
+ * Class that creates Project Data Providers of a specified `projectType`. Layers over
+ * extension-provided {@link ProjectDataProviderEngineFactory}. Internal only
+ */
 class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
   private readonly pdpIds: Map<string, string> = new Map();
   private readonly projectType: ProjectType;
@@ -59,8 +63,12 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
     projectId: string,
     projectStorageInterpreterId: string,
   ): Promise<string> {
-    // Add a check for extensions that provide new project types
-    if (!('getExtensionData' in projectDataProviderEngine))
+    // Add a check for extensions that provide new project types to make sure they fulfill
+    // `MandatoryProjectDataTypes`
+    if (
+      !('getExtensionData' in projectDataProviderEngine) ||
+      !('getSetting' in projectDataProviderEngine)
+    )
       throw new Error('projectDataProviderEngine must implement "MandatoryProjectDataTypes"');
     const pdpId: string = `${newNonce()}-pdp`;
     const pdp = await registerEngineByType<ProjectDataTypes[ProjectType]>(

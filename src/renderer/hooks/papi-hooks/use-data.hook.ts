@@ -95,9 +95,9 @@ type UseDataHook = {
  * _＠returns_ `[data, setData, isLoading]`
  *
  * - `data`: the current value for the data from the data provider with the specified data type and
- *   selector, either the defaultValue or the resolved data
+ *   selector, either the `defaultValue` or the resolved data
  * - `setData`: asynchronous function to request that the data provider update the data at this data
- *   type and selector. Returns true if successful. Note that this function does not update the
+ *   type and selector. Returns `true` if successful. Note that this function does not update the
  *   data. The data provider sends out an update to this subscription if it successfully updates
  *   data.
  * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
