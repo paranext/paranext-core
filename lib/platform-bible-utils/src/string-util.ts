@@ -13,10 +13,10 @@ import {
 /**
  * Returns the index of the first occurrence of a given string
  *
- * @param string String to index
- * @param searchString String to search for
- * @param position The starting position
- * @returns Index of the first occurrence of a given string
+ * @param {string} string
+ * @param {string} [searchString] The string to search
+ * @param {number} [position] Starting position
+ * @returns {number} Index of the first occurrence of a given string
  */
 export function indexOf(
   string: string,
@@ -207,7 +207,6 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
 //   return '';
 // }
 
-// TODO: Implement
 /**
  * @param string String to search through
  * @param searchString The characters to be searched for at the start of this string.
@@ -216,6 +215,8 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
  * @returns True if the given characters are found at the beginning of the string, including when
  *   searchString is an empty string; otherwise, false.
  */
-// export function startsWith(string: string, searchString: string, position: number = 0): boolean {
-//   return true;
-// }
+export function startsWith(string: string, searchString: string, position: number = 0): boolean {
+  const indexOfSearchString = indexOf(string, searchString, position);
+  if (indexOfSearchString !== 0) return false;
+  return true;
+}
