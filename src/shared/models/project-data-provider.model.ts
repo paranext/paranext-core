@@ -43,6 +43,16 @@ export type ExtensionDataScope = {
  * option, but you can use `useProjectSetting` instead. However, do note that the `Setting` data
  * type is fully functional.
  *
+ * The closest possible representation of the `Setting` data type follows:
+ *
+ * ```typescript
+ * Setting: DataProviderDataType<
+ *   ProjectSettingNames,
+ *   ProjectSettingTypes[ProjectSettingNames],
+ *   ProjectSettingTypes[ProjectSettingNames]
+ * >;
+ * ```
+ *
  *     ---
  *
  * ### ExtensionData
@@ -63,11 +73,6 @@ export type ExtensionDataScope = {
  *   implemented.
  */
 export type MandatoryProjectDataTypes = {
-  /* Setting: DataProviderDataType<
-    ProjectSettingNames,
-    ProjectSettingTypes[ProjectSettingNames],
-    ProjectSettingTypes[ProjectSettingNames]
-  >; */
   ExtensionData: DataProviderDataType<ExtensionDataScope, string | undefined, string>;
 };
 

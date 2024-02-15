@@ -81,6 +81,16 @@ export type ProjectStorageExtensionDataScope = ExtensionDataScope & {
  * {@link IProjectStorageInterpreter} instead. However, do note that the `Setting` data type is fully
  * functional.
  *
+ * The closest possible representation of the `Setting` data type follows:
+ *
+ * ```typescript
+ * Setting: DataProviderDataType<
+ *   ProjectStorageSettingDataScope<ProjectSettingNames>,
+ *   ProjectSettingTypes[ProjectSettingNames],
+ *   ProjectSettingTypes[ProjectSettingNames]
+ * >;
+ * ```
+ *
  * WARNING: Each Project Storage Interpreter **needs** to fulfill the following requirements for its
  * settings-related methods:
  *
@@ -94,6 +104,8 @@ export type ProjectStorageExtensionDataScope = ExtensionDataScope & {
  * - `resetSetting`: deletes the value at the key and sends a setting update event. After this,
  *   `getSetting` should see the setting value as not present and return the default value again.
  * - Note: see {@link IProjectStorageInterpreter} for method signatures for these three methods.
+ *
+ *   .---
  *
  * ### ExtensionData
  *
@@ -113,10 +125,5 @@ export type ProjectStorageExtensionDataScope = ExtensionDataScope & {
  *   implemented.
  */
 export type MandatoryProjectStorageDataTypes = {
-  /* Setting: DataProviderDataType<
-    ProjectStorageSettingDataScope<ProjectSettingNames>,
-    ProjectSettingTypes[ProjectSettingNames],
-    ProjectSettingTypes[ProjectSettingNames]
-  >; */
   ExtensionData: DataProviderDataType<ProjectStorageExtensionDataScope, string | undefined, string>;
 };

@@ -1902,6 +1902,16 @@ declare module 'shared/models/project-data-provider.model' {
    * option, but you can use `useProjectSetting` instead. However, do note that the `Setting` data
    * type is fully functional.
    *
+   * The closest possible representation of the `Setting` data type follows:
+   *
+   * ```typescript
+   * Setting: DataProviderDataType<
+   *   ProjectSettingNames,
+   *   ProjectSettingTypes[ProjectSettingNames],
+   *   ProjectSettingTypes[ProjectSettingNames]
+   * >;
+   * ```
+   *
    *     ---
    *
    * ### ExtensionData
@@ -2039,6 +2049,16 @@ declare module 'shared/models/project-storage-interpreter.model' {
    * {@link IProjectStorageInterpreter} instead. However, do note that the `Setting` data type is fully
    * functional.
    *
+   * The closest possible representation of the `Setting` data type follows:
+   *
+   * ```typescript
+   * Setting: DataProviderDataType<
+   *   ProjectStorageSettingDataScope<ProjectSettingNames>,
+   *   ProjectSettingTypes[ProjectSettingNames],
+   *   ProjectSettingTypes[ProjectSettingNames]
+   * >;
+   * ```
+   *
    * WARNING: Each Project Storage Interpreter **needs** to fulfill the following requirements for its
    * settings-related methods:
    *
@@ -2052,6 +2072,8 @@ declare module 'shared/models/project-storage-interpreter.model' {
    * - `resetSetting`: deletes the value at the key and sends a setting update event. After this,
    *   `getSetting` should see the setting value as not present and return the default value again.
    * - Note: see {@link IProjectStorageInterpreter} for method signatures for these three methods.
+   *
+   *   .---
    *
    * ### ExtensionData
    *
@@ -4879,6 +4901,12 @@ declare module 'shared/services/settings.service-model' {
    * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
    * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
    * instead. However, do note that the unnamed data type (`''`) is fully functional.
+   *
+   * The closest possible representation of the unnamed (````) data type follows:
+   *
+   * ```typescript
+   * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
+   * ```
    */
   export type SettingDataTypes = {};
   export type AllSettingsData = {
