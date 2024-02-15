@@ -62,7 +62,7 @@ export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTy
  * @param data The data that determines what to set at the selector
  * @returns Information that papi uses to interpret whether to send out updates. Defaults to `true`
  *   (meaning send updates only for this data type).
- * @see DataProviderUpdateInstructions for more info on what to return
+ * @see {@link DataProviderUpdateInstructions} for more info on what to return
  */
 export type DataProviderSetter<
   TDataTypes extends DataProviderDataTypes,
@@ -164,7 +164,7 @@ export type DataProviderDataTypes = {
  * Names of data types in a DataProviderDataTypes type. Indicates the data types that a data
  * provider can handle (so it will have methods with these names like `set<data_type>`)
  *
- * @see DataProviderDataTypes for more information
+ * @see {@link DataProviderDataTypes} for more information
  */
 export type DataTypeNames<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
   keyof TDataTypes & string;
@@ -172,7 +172,7 @@ export type DataTypeNames<TDataTypes extends DataProviderDataTypes = DataProvide
 /**
  * Set of all `set<data_type>` methods that a data provider provides according to its data types.
  *
- * @see DataProviderSetter for more information
+ * @see {@link DataProviderSetter} for more information
  */
 export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
   [DataType in keyof TDataTypes as `set${DataType & string}`]: DataProviderSetter<
@@ -184,7 +184,7 @@ export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
 /**
  * Set of all `get<data_type>` methods that a data provider provides according to its data types.
  *
- * @see DataProviderGetter for more information
+ * @see {@link DataProviderGetter} for more information
  */
 export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {
   [DataType in keyof TDataTypes as `get${DataType & string}`]: DataProviderGetter<
@@ -196,7 +196,7 @@ export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {
  * Set of all `subscribe<data_type>` methods that a data provider provides according to its data
  * types.
  *
- * @see DataProviderSubscriber for more information
+ * @see {@link DataProviderSubscriber} for more information
  */
 export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = {
   [DataType in keyof TDataTypes as `subscribe${DataType & string}`]: DataProviderSubscriber<
@@ -209,7 +209,7 @@ export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = 
  * object layers over the data provider engine and runs its methods along with other methods. This
  * object is transformed into an IDataProvider by networkObjectService.set.
  *
- * @see IDataProvider
+ * @see {@link IDataProvider}
  */
 type DataProviderInternal<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
   NetworkableObject<

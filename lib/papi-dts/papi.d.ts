@@ -1467,20 +1467,20 @@ declare module 'shared/models/network-object.model' {
    * call that method. This is because we don't want users of network objects to dispose of them. Only
    * the caller of `networkObjectService.set` should be able to dispose of the network object.
    *
-   * @see networkObjectService
+   * @see {@link networkObjectService}
    */
   export type NetworkObject<T extends NetworkableObject> = Omit<CanHaveOnDidDispose<T>, 'dispose'> &
     OnDidDispose;
   /**
    * An object of this type is returned from {@link networkObjectService.set}.
    *
-   * @see networkObjectService
+   * @see {@link networkObjectService}
    */
   export type DisposableNetworkObject<T extends NetworkableObject> = NetworkObject<T> & Dispose;
   /**
    * An object of this type is passed into {@link networkObjectService.set}.
    *
-   * @see networkObjectService
+   * @see {@link networkObjectService}
    */
   export type NetworkableObject<T = object> = T & CannotHaveOnDidDispose;
   /**
@@ -1502,7 +1502,7 @@ declare module 'shared/models/network-object.model' {
    *   Note: This function should return Partial<T>. For some reason, TypeScript can't infer the type
    *   (probably has to do with that it's a wrapped and layered type). Functions that implement this
    *   type should return Partial<T>
-   * @see networkObjectService
+   * @see {@link networkObjectService}
    */
   export type LocalObjectToProxyCreator<T extends NetworkableObject> = (
     id: string,
@@ -1591,7 +1591,7 @@ declare module 'shared/models/data-provider.model' {
    * @param data The data that determines what to set at the selector
    * @returns Information that papi uses to interpret whether to send out updates. Defaults to `true`
    *   (meaning send updates only for this data type).
-   * @see DataProviderUpdateInstructions for more info on what to return
+   * @see {@link DataProviderUpdateInstructions} for more info on what to return
    */
   export type DataProviderSetter<
     TDataTypes extends DataProviderDataTypes,
@@ -1692,14 +1692,14 @@ declare module 'shared/models/data-provider.model' {
    * Names of data types in a DataProviderDataTypes type. Indicates the data types that a data
    * provider can handle (so it will have methods with these names like `set<data_type>`)
    *
-   * @see DataProviderDataTypes for more information
+   * @see {@link DataProviderDataTypes} for more information
    */
   export type DataTypeNames<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
     keyof TDataTypes & string;
   /**
    * Set of all `set<data_type>` methods that a data provider provides according to its data types.
    *
-   * @see DataProviderSetter for more information
+   * @see {@link DataProviderSetter} for more information
    */
   export type DataProviderSetters<TDataTypes extends DataProviderDataTypes> = {
     [DataType in keyof TDataTypes as `set${DataType & string}`]: DataProviderSetter<
@@ -1710,7 +1710,7 @@ declare module 'shared/models/data-provider.model' {
   /**
    * Set of all `get<data_type>` methods that a data provider provides according to its data types.
    *
-   * @see DataProviderGetter for more information
+   * @see {@link DataProviderGetter} for more information
    */
   export type DataProviderGetters<TDataTypes extends DataProviderDataTypes> = {
     [DataType in keyof TDataTypes as `get${DataType & string}`]: DataProviderGetter<
@@ -1721,7 +1721,7 @@ declare module 'shared/models/data-provider.model' {
    * Set of all `subscribe<data_type>` methods that a data provider provides according to its data
    * types.
    *
-   * @see DataProviderSubscriber for more information
+   * @see {@link DataProviderSubscriber} for more information
    */
   export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = {
     [DataType in keyof TDataTypes as `subscribe${DataType & string}`]: DataProviderSubscriber<
@@ -1733,7 +1733,7 @@ declare module 'shared/models/data-provider.model' {
    * object layers over the data provider engine and runs its methods along with other methods. This
    * object is transformed into an IDataProvider by networkObjectService.set.
    *
-   * @see IDataProvider
+   * @see {@link IDataProvider}
    */
   type DataProviderInternal<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
     NetworkableObject<
@@ -1753,13 +1753,17 @@ declare module 'shared/models/data-provider.model' {
   export default DataProviderInternal;
 }
 declare module 'shared/models/project-data-provider.model' {
-  import type { DataProviderDataType } from 'shared/models/data-provider.model';
+  import type {
+    DataProviderDataType,
+    DataProviderDataTypes,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
   /** Indicates to a PDP what extension data is being referenced */
   export type ExtensionDataScope = {
     /** Name of an extension as provided in its manifest */
     extensionName: string;
     /**
-     * Name of a unique partition or segment of data within the extension Some examples include (but
+     * Name of a unique partition or segment of data within the extension. Some examples include (but
      * are not limited to):
      *
      * - Name of an important data structure that is maintained in a project
@@ -1767,18 +1771,53 @@ declare module 'shared/models/project-data-provider.model' {
      * - Name of a resource created by a user that should be maintained in a project
      *
      * This is the smallest level of granularity provided by a PDP for accessing extension data. There
-     * is no way to get or set just a portion of data identified by a single dataQualifier value.
+     * is no way to get or set just a portion of data identified by a single `dataQualifier` value.
      */
     dataQualifier: string;
   };
   /**
+   * `DataProviderDataTypes` that each project data provider **must** implement. They are assumed to
+   * exist and are used by project storage interpreters and other data providers
+   *
+   *     ---
+   *
+   * ### Setting
+   *
+   * The `Setting` data type handles getting and setting project settings. All Project Data Providers
+   * must implement these methods `getSetting` and `setSetting` as well as `resetSetting` in order to
+   * properly support project settings. In most cases, the Project Data Provider only needs to pass
+   * the setting calls through to the Project Storage Interpreter.
+   *
+   * Note: the `Setting` data type is not actually part of {@link MandatoryProjectDataTypes} because
+   * the methods would not be able to create a generic type extending from `ProjectSettingNames` in
+   * order to return the specific setting type being requested. As such, `getSetting`, `setSetting`,
+   * and `subscribeSetting` are all specified on {@link IProjectDataProvider} instead. Unfortunately,
+   * as a result, using Intellisense with `useProjectData` will not show `Setting` as a data type
+   * option, but you can use `useProjectSetting` instead. However, do note that the `Setting` data
+   * type is fully functional.
+   *
+   * The closest possible representation of the `Setting` data type follows:
+   *
+   * ```typescript
+   * Setting: DataProviderDataType<
+   *   ProjectSettingNames,
+   *   ProjectSettingTypes[ProjectSettingNames],
+   *   ProjectSettingTypes[ProjectSettingNames]
+   * >;
+   * ```
+   *
+   *     ---
+   *
+   * ### ExtensionData
+   *
    * All Project Data Provider data types must have an `ExtensionData` type. We strongly recommend all
    * Project Data Provider data types extend from this type in order to standardize the
    * `ExtensionData` types.
    *
    * Benefits of following this standard:
    *
-   * - All PSIs that support this `projectType` can use a standardized `ExtensionData` interface
+   * - All project storage interpreters that support this `projectType` can use a standardized
+   *   `ExtensionData` interface
    * - If an extension uses the `ExtensionData` endpoint for any project, it will likely use this
    *   standardized interface, so using this interface on your Project Data Provider data types
    *   enables your PDP to support generic extension data
@@ -1786,8 +1825,173 @@ declare module 'shared/models/project-data-provider.model' {
    *   so following this interface ensures your PDP will not break if such a requirement is
    *   implemented.
    */
-  export type MandatoryProjectDataType = {
+  export type MandatoryProjectDataTypes = {
     ExtensionData: DataProviderDataType<ExtensionDataScope, string | undefined, string>;
+  };
+  /**
+   * The `ExtensionData` methods required for a Project Data Provider Engine to fulfill the
+   * requirements of {@link MandatoryProjectDataTypes}'s `ExtensionData` data type.
+   *
+   * Note: These methods are already covered by {@link MandatoryProjectDataTypes}, but this type adds
+   * JSDocs for them.
+   */
+  export type WithProjectDataProviderEngineExtensionDataMethods<
+    TProjectDataTypes extends DataProviderDataTypes,
+  > = {
+    /**
+     * Gets an extension's project data identified by `dataScope` in this project
+     *
+     * @param dataScope Information about what data is being referenced by the calling extension given
+     *   to this Project Data Provider
+     * @returns Extension project data in this project for an extension to use in serving its
+     *   extension project data
+     */
+    getExtensionData(dataScope: ExtensionDataScope): Promise<string | undefined>;
+    /**
+     * Sets an extension's project data identified by `dataScope` in this project
+     *
+     * @param dataScope Information about what data is being referenced by the calling extension given
+     *   to this Project Data Provider
+     * @param data Updated value of extension project data in this project to set
+     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
+     *   `true` (meaning send updates only for this data type).
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setExtensionData(
+      dataScope: ExtensionDataScope,
+      data: string,
+    ): Promise<DataProviderUpdateInstructions<TProjectDataTypes>>;
+  };
+}
+declare module 'shared/models/project-storage-interpreter.model' {
+  import { DataProviderDataType } from 'shared/models/data-provider.model';
+  import { ExtensionDataScope } from 'shared/models/project-data-provider.model';
+  /** Indicates to a PSI what raw project data chunk is being referenced */
+  export type ProjectStorageProjectDataScope = {
+    /** ID for the project whose raw data chunk to get */
+    projectId: string;
+    /**
+     * Name of a unique partition or segment of data within the project. Some examples include (but
+     * are not limited to):
+     *
+     * - Name of an important data structure that is maintained in a project
+     * - Name of a downloaded data set that is being cached
+     * - Name of a resource created by a user that should be maintained in a project
+     *
+     * This is the smallest level of granularity provided by a PSI for accessing raw project data.
+     * There is no way to get or set just a portion of data identified by a single `dataQualifier`
+     * value.
+     */
+    dataQualifier: string;
+  };
+  /**
+   * `DataProviderDataTypes` that are a sensible default for project storage interpreters to
+   * implement. Using {@link IProjectStorageInterpreter} without specifying data types will default to
+   * these data types. These types are simply a recommendation for how to write a PSI for a specified
+   * `projectType`. As long as both the Project Data Provider and the Project Storage Interpreter for
+   * a given `projectType` communicate with the same interface, you are free to design the
+   * communication in the way that makes most sense for the `projectType`.
+   *
+   * Note: Project Data Providers are associated to Project Storage Interpreters based on a shared
+   * `projectType`. A PSI must implement the data types specified for each `projectType` it supports.
+   *
+   *     ---
+   *
+   * ### ProjectData
+   *
+   * A simple data type for a Project Data Provider to use to retrieve raw data chunks for a specific
+   * project from a Project Storage Interpreter with the same `projectType`. The Project Data Provider
+   * indicates which project it is associated with and specifies the name of a segment of data within
+   * the project.
+   *
+   * Benefits of following this recommendation:
+   *
+   * - Serving raw data chunks according to a simple specifier keeps the Project Storage Interpreter
+   *   thin and simple so multiple thin PSIs can be made for different `storageType`s while leaving
+   *   the complex task of parsing and serving project data to the Project Data Provider.
+   * - This is an easy pattern to follow when starting to learn how to make new `projectType`s in
+   *   Platform.Bible.
+   */
+  export type DefaultProjectStorageDataTypes = {
+    ProjectData: DataProviderDataType<ProjectStorageProjectDataScope, string | undefined, string>;
+  };
+  /**
+   * Indicates to a PSI what extension data is being referenced on what project. Generally, a PDP
+   * passes calls to `ExtensionData` data type methods to its PSI and adds the `projectId`.
+   */
+  export type ProjectStorageExtensionDataScope = ExtensionDataScope & {
+    /** ID for the project whose extension data to get */
+    projectId: string;
+  };
+  /**
+   * `DataProviderDataTypes` that each project storage interpreter must implement. They are assumed to
+   * exist and are used by project data providers
+   *
+   *     ---
+   *
+   * ### Setting
+   *
+   * The `Setting` data type handles getting and setting project settings. All Project Storage
+   * Interpreters must implement these methods `getSetting` and `setSetting` as well as `resetSetting`
+   * in order to properly support project settings. In most cases, the Project Data Provider will pass
+   * `Setting` calls through to the Project Storage Interpreter.
+   *
+   * Note: the `Setting` data type is not actually part of {@link MandatoryProjectStorageDataTypes}
+   * because the methods would not be able to create a generic type extending from
+   * `ProjectSettingNames` in order to return the specific setting type being requested. As such,
+   * `getSetting`, `setSetting`, and `subscribeSetting` are all specified on
+   * {@link IProjectStorageInterpreter} instead. However, do note that the `Setting` data type is fully
+   * functional.
+   *
+   * The closest possible representation of the `Setting` data type follows:
+   *
+   * ```typescript
+   * Setting: DataProviderDataType<
+   *   ProjectStorageSettingDataScope<ProjectSettingNames>,
+   *   ProjectSettingTypes[ProjectSettingNames],
+   *   ProjectSettingTypes[ProjectSettingNames]
+   * >;
+   * ```
+   *
+   * WARNING: Each Project Storage Interpreter **needs** to fulfill the following requirements for its
+   * settings-related methods:
+   *
+   * - `getSetting`: if a project setting value is present for the key requested, return it. Otherwise,
+   *   you must call `papi.projectSettings.getDefault` to get the default value or throw if that call
+   *   throws. This functionality preserves the intended type of the setting and avoids returning
+   *   `undefined` unexpectedly.
+   * - `setSetting`: must call `papi.projectSettings.isValid` before setting the value and should return
+   *   false if the call returns `false`. This functionality preserves the intended intended type of
+   *   the setting and avoids allowing the setting to be set to the wrong type.
+   * - `resetSetting`: deletes the value at the key and sends a setting update event. After this,
+   *   `getSetting` should see the setting value as not present and return the default value again.
+   * - Note: see {@link IProjectStorageInterpreter} for method signatures for these three methods.
+   *
+   *   .---
+   *
+   * ### ExtensionData
+   *
+   * All Project Storage Interpreter data types must have an `ExtensionData` type. We strongly
+   * recommend all Project Storage Interpreter data types extend from this type in order to
+   * standardize the `ExtensionData` types. Project Data Providers will call this endpoint in order to
+   * retrieve extensions' project data.
+   *
+   * Benefits of following this standard:
+   *
+   * - Project data providers of this `projectType` can use a standardized `ExtensionData` interface
+   * - If an extension uses the `ExtensionData` endpoint for any project, it will likely use this
+   *   standardized interface, so using this interface on your Project Storage Interpreter data types
+   *   enables your PSI to support generic extension data
+   * - In the future, we may enforce that callers to `ExtensionData` endpoints include `extensionName`,
+   *   so following this interface ensures your PSI will not break if such a requirement is
+   *   implemented.
+   */
+  export type MandatoryProjectStorageDataTypes = {
+    ExtensionData: DataProviderDataType<
+      ProjectStorageExtensionDataScope,
+      string | undefined,
+      string
+    >;
   };
 }
 declare module 'shared/models/data-provider.interface' {
@@ -1800,8 +2004,8 @@ declare module 'shared/models/data-provider.interface' {
   import { Dispose, OnDidDispose } from 'platform-bible-utils';
   /**
    * An object on the papi that manages data and has methods for interacting with that data. Created
-   * by the papi and layers over an IDataProviderEngine provided by an extension. Returned from
-   * getting a data provider with dataProviderService.get.
+   * by the papi and layers over an {@link IDataProviderEngine} provided by an extension. Returned from
+   * getting a data provider with `papi.dataProviders.get`.
    *
    * Note: each `set<data_type>` method has a corresponding `get<data_type>` and
    * `subscribe<data_type>` method.
@@ -1817,7 +2021,7 @@ declare module 'shared/models/data-provider.interface' {
    * data provider (only the service that set it up should dispose of it) with
    * dataProviderService.registerEngine
    *
-   * @see IDataProvider
+   * @see {@link IDataProvider}
    */
   export type IDisposableDataProvider<TDataProvider extends IDataProvider<any>> = TDataProvider &
     Dispose;
@@ -1834,34 +2038,36 @@ declare module 'shared/models/data-provider-engine.model' {
    * JSDOC SOURCE DataProviderEngineNotifyUpdate
    *
    * Method to run to send clients updates for a specific data type outside of the `set<data_type>`
-   * method. papi overwrites this function on the DataProviderEngine itself to emit an update after
-   * running the `notifyUpdate` method in the DataProviderEngine.
+   * method. papi overwrites this function on the DataProviderEngine itself to emit an update based on
+   * the `updateInstructions` and then run the original `notifyUpdateMethod` from the
+   * `DataProviderEngine`.
    *
-   * @example To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a data
-   * provider engine):
+   * _＠example_ To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
+   * data provider engine):
    *
    * ```typescript
    * this.notifyUpdate(['Verse', 'Heresy']);
    * ```
    *
-   * @example You can log the manual updates in your data provider engine by specifying the following
-   * `notifyUpdate` function in the data provider engine:
+   * _＠example_ You can log the manual updates in your data provider engine by specifying the
+   * following `notifyUpdate` function in the data provider engine:
    *
    * ```typescript
    * notifyUpdate(updateInstructions) {
-   * papi.logger.info(updateInstructions);
+   *   papi.logger.info(updateInstructions);
    * }
    * ```
    *
    * Note: This function's return is treated the same as the return from `set<data_type>`
    *
-   * @param updateInstructions Information that papi uses to interpret whether to send out updates.
-   *   Defaults to `'*'` (meaning send updates for all data types) if parameter `updateInstructions`
-   *   is not provided or is undefined. Otherwise returns `updateInstructions`. papi passes the
-   *   interpreted update value into this `notifyUpdate` function. For example, running
-   *   `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
-   *   `updateInstructions` of `'*'`.
-   * @see DataProviderUpdateInstructions for more info on the `updateInstructions` parameter
+   * _＠param_ `updateInstructions` Information that papi uses to interpret whether to send out
+   * updates. Defaults to `'*'` (meaning send updates for all data types) if parameter
+   * `updateInstructions` is not provided or is undefined. Otherwise returns `updateInstructions`.
+   * papi passes the interpreted update value into this `notifyUpdate` function. For example, running
+   * `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
+   * `updateInstructions` of `'*'`.
+   *
+   * _＠see_ {@link DataProviderUpdateInstructions} for more info on the `updateInstructions` parameter
    *
    * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
    * It will create a destructive infinite loop.
@@ -1874,8 +2080,8 @@ declare module 'shared/models/data-provider-engine.model' {
    * provider engine. You do not need to specify this type unless you are creating an object that is
    * to be registered as a data provider engine and you need to use `notifyUpdate`.
    *
-   * @see DataProviderEngineNotifyUpdate for more information on `notifyUpdate`.
-   * @see IDataProviderEngine for more information on using this type.
+   * @see {@link DataProviderEngineNotifyUpdate} for more information on `notifyUpdate`.
+   * @see {@link IDataProviderEngine} for more information on using this type.
    */
   export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
     /** JSDOC DESTINATION DataProviderEngineNotifyUpdate */
@@ -1883,13 +2089,13 @@ declare module 'shared/models/data-provider-engine.model' {
   };
   /**
    * The object to register with the DataProviderService to create a data provider. The
-   * DataProviderService creates an IDataProvider on the papi that layers over this engine, providing
-   * special functionality.
+   * DataProviderService creates an {@link IDataProvider} on the papi that layers over this engine,
+   * providing special functionality.
    *
    * @type TDataTypes - The data types that this data provider engine serves. For each data type
    *   defined, the engine must have corresponding `get<data_type>` and `set<data_type> function`
    *   functions.
-   * @see DataProviderDataTypes for information on how to make powerful types that work well with
+   * @see {@link DataProviderDataTypes} for information on how to make powerful types that work well with
    * Intellisense.
    *
    * Note: papi creates a `notifyUpdate` function on the data provider engine if one is not provided, so it
@@ -1897,8 +2103,16 @@ declare module 'shared/models/data-provider-engine.model' {
    * not understand that papi will create one as you are writing your data provider engine, so you can
    * avoid type errors with one of the following options:
    *
-   * 1. If you are using an object or class to create a data provider engine, you can add a
-   * `notifyUpdate` function (and, with an object, add the WithNotifyUpdate type) to
+   * 1. If you are using a class to create a data provider engine, you can extend the
+   * {@link DataProviderEngine} class, and it will provide `notifyUpdate` for you:
+   * ```typescript
+   * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
+   *   ...
+   * }
+   * ```
+   *
+   * 2. If you are using an object or class to create a data provider engine, you can add a
+   * `notifyUpdate` function (and, with an object, add the {@link WithNotifyUpdate} type) to
    * your data provider engine like so:
    * ```typescript
    * const myDPE: IDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
@@ -1910,14 +2124,6 @@ declare module 'shared/models/data-provider-engine.model' {
    * ```typescript
    * class MyDPE implements IDataProviderEngine<MyDataTypes> {
    *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
-   *   ...
-   * }
-   * ```
-   *
-   * 2. If you are using a class to create a data provider engine, you can extend the `DataProviderEngine`
-   * class, and it will provide `notifyUpdate` for you:
-   * ```typescript
-   * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
    *   ...
    * }
    * ```
@@ -1938,7 +2144,7 @@ declare module 'shared/models/data-provider-engine.model' {
        * WARNING: Do not run this recursively in its own `set<data_type>` method! It will create as
        * many updates as you run `set<data_type>` methods.
        *
-       * @see DataProviderSetter for more information
+       * @see {@link DataProviderSetter} for more information
        */
       DataProviderSetters<TDataTypes> &
       /**
@@ -1948,11 +2154,25 @@ declare module 'shared/models/data-provider-engine.model' {
        * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
        * method.
        *
-       * @see DataProviderGetter for more information
+       * @see {@link DataProviderGetter} for more information
        */
       DataProviderGetters<TDataTypes> &
       Partial<WithNotifyUpdate<TDataTypes>>;
   export default IDataProviderEngine;
+  /**
+   * JSDOC SOURCE DataProviderEngine
+   *
+   * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
+   * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
+   * function in order to use `notifyUpdate`.
+   *
+   * @see {@link IDataProviderEngine} for more information on extending this class.
+   */
+  export abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes>
+    implements WithNotifyUpdate<TDataTypes>
+  {
+    notifyUpdate(updateInstructions?: DataProviderUpdateInstructions<TDataTypes>): void;
+  }
 }
 declare module 'shared/models/extract-data-provider-data-types.model' {
   import IDataProviderEngine from 'shared/models/data-provider-engine.model';
@@ -1979,9 +2199,21 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
   export default ExtractDataProviderDataTypes;
 }
 declare module 'papi-shared-types' {
-  import type { ScriptureReference } from 'platform-bible-utils';
-  import type { DataProviderDataType } from 'shared/models/data-provider.model';
-  import type { MandatoryProjectDataType } from 'shared/models/project-data-provider.model';
+  import type { ScriptureReference, UnsubscriberAsync } from 'platform-bible-utils';
+  import type {
+    DataProviderDataType,
+    DataProviderDataTypes,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import type {
+    MandatoryProjectDataTypes,
+    WithProjectDataProviderEngineExtensionDataMethods,
+  } from 'shared/models/project-data-provider.model';
+  import type {
+    DefaultProjectStorageDataTypes,
+    MandatoryProjectStorageDataTypes,
+  } from 'shared/models/project-storage-interpreter.model';
   import type { IDisposableDataProvider } from 'shared/models/data-provider.interface';
   import type IDataProvider from 'shared/models/data-provider.interface';
   import type ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
@@ -1989,7 +2221,7 @@ declare module 'papi-shared-types' {
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
    *
-   * Note: Command names must consist of two string separated by at least one period. We recommend
+   * Note: Command names must consist of two strings separated by at least one period. We recommend
    * one period and lower camel case in case we expand the api in the future to allow dot notation.
    *
    * An extension can extend this interface to add types for the commands it registers by adding the
@@ -2024,34 +2256,204 @@ declare module 'papi-shared-types' {
    * @example 'platform.quit';
    */
   type CommandNames = keyof CommandHandlers;
-  interface SettingTypes {
-    'platform.verseRef': ScriptureReference;
-    'platform.interfaceLanguage': string[];
-  }
-  type SettingNames = keyof SettingTypes;
-  /** This is just a simple example so we have more than one. It's not intended to be real. */
-  type NotesOnlyProjectDataTypes = MandatoryProjectDataType & {
-    Notes: DataProviderDataType<string, string | undefined, string>;
-  };
   /**
-   * `IDataProvider` types for each project data provider supported by PAPI. Extensions can add more
-   * project data providers with corresponding data provider IDs by adding details to their `.d.ts`
-   * file. Note that all project data types should extend `MandatoryProjectDataTypes` like the
-   * following example.
+   * Types corresponding to each user setting available in Platform.Bible. Keys are setting names,
+   * and values are setting data types. Extensions can add more user setting types with
+   * corresponding user setting IDs by adding details to their `.d.ts` file.
    *
-   * Note: Project Data Provider names must consist of two string separated by at least one period.
-   * We recommend one period and lower camel case in case we expand the api in the future to allow
-   * dot notation.
+   * Note: Setting names must consist of two strings separated by at least one period. We recommend
+   * one period and lower camel case in case we expand the api in the future to allow dot notation.
    *
-   * An extension can extend this interface to add types for the project data provider it registers
-   * by adding the following to its `.d.ts` file (in this example, we are adding the
-   * `MyExtensionProjectTypeName` data provider types):
+   * An extension can extend this interface to add types for the user settings it registers by
+   * adding the following to its `.d.ts` file (in this example, we are adding the
+   * `myExtension.highlightColor` setting):
    *
    * @example
    *
    * ```typescript
    * declare module 'papi-shared-types' {
-   *   export type MyProjectDataType = MandatoryProjectDataType & {
+   *   export interface SettingTypes {
+   *     'myExtension.highlightColor': string | { r: number; g: number; b: number };
+   *   }
+   * }
+   * ```
+   */
+  interface SettingTypes {
+    'platform.verseRef': ScriptureReference;
+    'platform.interfaceLanguage': string[];
+  }
+  /**
+   * Names for each user setting available on the papi.
+   *
+   * Automatically includes all extensions' user settings that are added to {@link SettingTypes}.
+   *
+   * @example 'platform.verseRef'
+   */
+  type SettingNames = keyof SettingTypes;
+  /**
+   * Types corresponding to each project setting available in Platform.Bible. Keys are project
+   * setting names, and values are project setting data types. Extensions can add more project
+   * setting types with corresponding project setting IDs by adding details to their `.d.ts` file.
+   *
+   * Note: Project setting names must consist of two strings separated by at least one period. We
+   * recommend one period and lower camel case in case we expand the api in the future to allow dot
+   * notation.
+   *
+   * An extension can extend this interface to add types for the project settings it registers by
+   * adding the following to its `.d.ts` file (in this example, we are adding the
+   * `myExtension.highlightColor` project setting):
+   *
+   * @example
+   *
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export interface ProjectSettingTypes {
+   *     'myExtension.highlightColor': string | { r: number; g: number; b: number };
+   *   }
+   * }
+   * ```
+   */
+  interface ProjectSettingTypes {
+    /**
+     * Localized name of the language in which this project is written. This will be displayed
+     * directly in the UI.
+     *
+     * @example 'English'
+     */
+    'platform.language': string;
+    /**
+     * Localized full name of the project. This will be displayed directly in the UI.
+     *
+     * @example 'World English Bible'
+     */
+    'platform.fullName': string;
+  }
+  /**
+   * Names for each user setting available on the papi.
+   *
+   * Automatically includes all extensions' user settings that are added to
+   * {@link ProjectSettingTypes}.
+   *
+   * @example 'platform.fullName'
+   */
+  type ProjectSettingNames = keyof ProjectSettingTypes;
+  /**
+   * The `Setting` methods required for a Project Data Provider Engine to fulfill the requirements
+   * of {@link MandatoryProjectDataTypes}'s `Setting` data type.
+   */
+  type WithProjectDataProviderEngineSettingMethods<
+    TProjectDataTypes extends DataProviderDataTypes,
+  > = {
+    /**
+     * Set the value of the specified project setting on this project.
+     *
+     * @param key The string id of the project setting to change
+     * @param newSetting The value that is to be set to the project setting.
+     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
+     *   `true` (meaning send updates only for this data type).
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setSetting: <ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+      newSetting: ProjectSettingTypes[ProjectSettingName],
+    ) => Promise<DataProviderUpdateInstructions<TProjectDataTypes & MandatoryProjectDataTypes>>;
+    /**
+     * Get the value of the specified project setting.
+     *
+     * Note: This is good for retrieving a project setting once. If you want to keep the value
+     * up-to-date, use `subscribeSetting` instead, which can immediately give you the value and keep
+     * it up-to-date.
+     *
+     * @param key The string id of the project setting to get
+     * @returns The value of the specified project setting. Returns default setting value if the
+     *   project setting does not exist on the project.
+     * @throws If no default value is available for the setting.
+     */
+    getSetting: <ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+    ) => Promise<ProjectSettingTypes[ProjectSettingName]>;
+    /**
+     * Deletes the specified project setting, setting it back to its default value.
+     *
+     * @param key The string id of the project setting to reset
+     * @returns `true` if successfully reset the project setting, `false` otherwise
+     */
+    resetSetting: <ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+    ) => Promise<boolean>;
+  };
+  /**
+   * An object on the papi that parses raw project data from a Project Storage Interpreter and has
+   * methods for interacting with that project data. Created by the papi and layers over an
+   * {@link IProjectDataProviderEngine} provided by an extension. Returned from getting a project
+   * data provider with `papi.projectDataProviders.get`.
+   *
+   * Project Data Providers are a specialized version of {@link IDataProvider} that works with a
+   * project of a specific `projectType`. For each project available, a new instance of a PDP with
+   * that project's `projectType` is created by the Project Data Provider Factory with that
+   * project's `projectType`.
+   *
+   * Every PDP **must** fulfill the requirements of all PDPs according to
+   * {@link MandatoryProjectDataTypes}.
+   *
+   * Note: Project Data Providers are associated to Project Storage Interpreters based on a shared
+   * `projectType`. A PDP must interact with its PSI according to the
+   * {@link ProjectStorageProjectTypes} exposed by the PSI for that `projectType`.
+   */
+  type IProjectDataProvider<TProjectDataTypes extends DataProviderDataTypes> = IDataProvider<
+    TProjectDataTypes & MandatoryProjectDataTypes
+  > &
+    WithProjectDataProviderEngineSettingMethods<TProjectDataTypes> &
+    WithProjectDataProviderEngineExtensionDataMethods<TProjectDataTypes> & {
+      /**
+       * Subscribe to receive updates to the specified project setting.
+       *
+       * Note: By default, this `subscribeSetting` function automatically retrieves the current
+       * project setting value and runs the provided callback as soon as possible. That way, if you
+       * want to keep your data up-to-date, you do not also have to run `getSetting`. You can turn
+       * this functionality off in the `options` parameter.
+       *
+       * @param key The string id of the project setting for which to listen to changes
+       * @param callback Function to run with the updated project setting value
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber to stop listening for updates
+       */
+      subscribeSetting: <ProjectSettingName extends ProjectSettingNames>(
+        key: ProjectSettingName,
+        callback: (value: ProjectSettingTypes[ProjectSettingName]) => void,
+        options: DataProviderSubscriberOptions,
+      ) => Promise<UnsubscriberAsync>;
+    };
+  /** This is just a simple example so we have more than one. It's not intended to be real. */
+  type NotesOnlyProjectDataTypes = MandatoryProjectDataTypes & {
+    Notes: DataProviderDataType<string, string | undefined, string>;
+  };
+  /**
+   * {@link IProjectDataProvider} types for each `projectType` supported by PAPI. Extensions can add
+   * more Project Data Providers with corresponding `projectType`s by adding details to their
+   * `.d.ts` file and registering a Project Data Provider factory with the corresponding
+   * `projectType`. Note that all Project Data Providers' data types should extend
+   * {@link MandatoryProjectDataTypes} like the following example.
+   *
+   * Note: The keys of this interface are the `projectType`s for the associated Project Data
+   * Providers.
+   *
+   * Note: Project Data Providers are associated to Project Storage Interpreters based on a shared
+   * `projectType`. {@link ProjectStorageInterpreters} is sometimes indexed by {@link ProjectTypes},
+   * so please make PSIs available to support the PDPs available. We recommend you specify a Project
+   * Storage Interpreter type on {@link ProjectStorageInterpreters} for each `projectType` for which
+   * you add a PDP type here in order to indicate what interface you expect to interact with in your
+   * PDP.
+   *
+   * An extension can extend this interface to add types for the Project Data Providers its
+   * registered factory provides by adding the following to its `.d.ts` file (in this example, we
+   * are adding a Project Data Provider type for the `MyExtensionProjectTypeName` `projectType`):
+   *
+   * @example
+   *
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export type MyProjectDataType = MandatoryProjectDataTypes & {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   };
    *
@@ -2062,35 +2464,222 @@ declare module 'papi-shared-types' {
    * ```
    */
   interface ProjectDataProviders {
-    'platform.notesOnly': IDataProvider<NotesOnlyProjectDataTypes & MandatoryProjectDataType>;
-    'platform.placeholder': IDataProvider<PlaceholderDataTypes & MandatoryProjectDataType>;
+    'platform.notesOnly': IProjectDataProvider<NotesOnlyProjectDataTypes>;
+    'platform.placeholder': IProjectDataProvider<PlaceholderDataTypes>;
   }
   /**
-   * Names for each project data provider available on the papi.
+   * Names for each `projectType` available on the papi. Each of the `projectType`s should have a
+   * registered Project Data Provider Factory that provides Project Data Providers for the
+   * `projectType` along with one or more Project Storage Interpreters for the `projectType`.
    *
-   * Automatically includes all extensions' project data providers that are added to
+   * Automatically includes all extensions' `projectTypes` that are added to
    * {@link ProjectDataProviders}.
    *
-   * @example 'platform.placeholder'
+   * Note: {@link ProjectStorageInterpreters} is sometimes indexed by {@link ProjectTypes}, so please
+   * make PSIs available to support the PDPs available.
+   *
+   * @example 'platform.notesOnly'
    */
   type ProjectTypes = keyof ProjectDataProviders;
   /**
-   * `DataProviderDataTypes` for each project data provider supported by PAPI. These are the data
-   * types served by each project data provider.
+   * `DataProviderDataTypes` for each Project Data Provider supported by PAPI. These are the data
+   * types served by Project Data Providers for each `projectType`.
    *
-   * Automatically includes all extensions' project data providers that are added to
+   * Automatically includes all extensions' `projectTypes` that are added to
    * {@link ProjectDataProviders}.
+   *
+   * Note: The keys of this interface are the `projectType`s for the associated project data
+   * provider data types.
    *
    * @example
    *
    * ```typescript
-   * ProjectDataTypes['MyExtensionProjectTypeName'] => {
+   * ProjectDataTypes['MyExtensionProjectTypeName'] => MandatoryProjectDataTypes & {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   }
    * ```
    */
   type ProjectDataTypes = {
     [ProjectType in ProjectTypes]: ExtractDataProviderDataTypes<ProjectDataProviders[ProjectType]>;
+  };
+  /**
+   * Indicates to a Project Storage Interpreter what project setting is being referenced on what
+   * project. Generally, a Project Data Provider passes calls to `Setting` data type methods to its
+   * PSI and adds the `projectId`.
+   */
+  type ProjectStorageSettingDataScope<ProjectSettingName extends ProjectSettingNames> = {
+    /** Key of the Project Setting to select */
+    key: ProjectSettingName;
+    /** ID for the project whose extension data to get */
+    projectId: string;
+  };
+  /**
+   * An object on the papi that manages raw project data and has methods for a Project Data Provider
+   * to interact with that raw project data. Created by the papi and layers over an
+   * {@link IProjectStorageInterpreterEngine} provided by an extension.
+   *
+   * Project Storage Interpreters are a specialized version of {@link IDataProvider} that works with
+   * projects of a specific `storageType` and one or more `projectType`s. For each project
+   * available, a PDP with that project's `projectType` will interact with the PSI with that
+   * project's `storageType` and `projectType`.
+   *
+   * Every PSI **must** fulfill the requirements of all PSIs according to
+   * {@link MandatoryProjectStorageDataTypes}.
+   *
+   * Note: Project Data Providers are associated to Project Storage Interpreters based on a shared
+   * `projectType`. A PSI must implement the {@link ProjectStorageProjectTypes} specified for each
+   * `projectType` it supports.
+   *
+   * Using this interface without specifying data types will default to using
+   * {@link DefaultProjectStorageDataTypes} as a sensible default method of communication between a
+   * PDP and a PSI for a specific `projectType`.
+   */
+  type IProjectStorageInterpreter<
+    TProjectStorageDataTypes extends DataProviderDataTypes = DefaultProjectStorageDataTypes,
+  > = IDataProvider<TProjectStorageDataTypes> &
+    IDataProvider<MandatoryProjectStorageDataTypes> & {
+      /**
+       * Set the value of the specified project setting on this project.
+       *
+       * @param settingDataScope The string id of the project setting to change and the project on
+       *   which to change it
+       * @param newSetting The value that is to be set to the project setting.
+       * @returns Information that papi uses to interpret whether to send out updates. Defaults to
+       *   `true` (meaning send updates only for this data type).
+       * @see {@link DataProviderUpdateInstructions} for more info on what to return
+       */
+      setSetting: <ProjectSettingName extends ProjectSettingNames>(
+        settingDataScope: ProjectStorageSettingDataScope<ProjectSettingName>,
+        newSetting: ProjectSettingTypes[ProjectSettingName],
+      ) => Promise<DataProviderUpdateInstructions<MandatoryProjectStorageDataTypes>>;
+      /**
+       * Get the value of the specified project setting.
+       *
+       * Note: This is good for retrieving a project setting once. If you want to keep the value
+       * up-to-date, use `subscribeSetting` instead, which can immediately give you the value and
+       * keep it up-to-date.
+       *
+       * @param settingDataScope The string id of the project setting to get and the project from
+       *   which to get it
+       * @returns The value of the specified project setting. Returns default setting value if the
+       *   project setting does not exist on the project.
+       * @throws If no default value is available for the setting.
+       */
+      getSetting: <ProjectSettingName extends ProjectSettingNames>(
+        settingDataScope: ProjectStorageSettingDataScope<ProjectSettingName>,
+      ) => Promise<ProjectSettingTypes[ProjectSettingName]>;
+      /**
+       * Subscribe to receive updates to the specified project setting.
+       *
+       * Note: By default, this `subscribeSetting` function automatically retrieves the current
+       * project setting value and runs the provided callback as soon as possible. That way, if you
+       * want to keep your data up-to-date, you do not also have to run `getSetting`. You can turn
+       * this functionality off in the `options` parameter.
+       *
+       * @param settingDataScope The string id of the project setting for which to listen to changes
+       *   and the project on which to listen
+       * @param callback Function to run with the updated project setting value
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber to stop listening for updates
+       */
+      subscribeSetting: <ProjectSettingName extends ProjectSettingNames>(
+        settingDataScope: ProjectStorageSettingDataScope<ProjectSettingName>,
+        callback: (value: ProjectSettingTypes[ProjectSettingName]) => void,
+        options: DataProviderSubscriberOptions,
+      ) => Promise<UnsubscriberAsync>;
+      /**
+       * Deletes the specified project setting, setting it back to its default value.
+       *
+       * @param settingDataScope The string id of the project setting to reset and the project on
+       *   which to reset it
+       * @returns `true` if successfully reset the project setting, `false` otherwise
+       */
+      resetSetting: <ProjectSettingName extends ProjectSettingNames>(
+        settingDataScope: ProjectStorageSettingDataScope<ProjectSettingName>,
+      ) => Promise<boolean>;
+    };
+  /**
+   * {@link IProjectStorageInterpreter} types for each `projectType` supported by PAPI. Extensions
+   * can add more Project Storage Interpreters that support corresponding `projectType`s by adding
+   * details to their `.d.ts` file and registering a Project Storage Interpreter that supports the
+   * corresponding `projectType`. Note that all Project Storage Interpreters' data types should
+   * extend {@link MandatoryProjectStorageDataTypes} like the following example.
+   *
+   * Note: The keys of this interface are the `projectType`s supported by available Project Storage
+   * Interpreters.
+   *
+   * WARNING: Each Project Storage Interpreter **must** fulfill certain requirements for its
+   * `getSetting`, `setSetting`, and `resetSetting` methods. See
+   * {@link MandatoryProjectStorageDataTypes} for more information.
+   *
+   * An extension can extend this interface to add types for the `projectType`s its Project Storage
+   * Interpreters support by adding the following to its `.d.ts` file (in this example, we are
+   * adding a Project Storage Interpreter type for the `MyExtensionProjectTypeName` `projectType`):
+   *
+   * @example
+   *
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export type MyProjectStorageDataType = MandatoryProjectStorageDataTypes & {
+   *     ProjectData: DataProviderDataType<
+   *       { projectId: string; section: number },
+   *       string | undefined,
+   *       string
+   *     >;
+   *   };
+   *
+   *   export interface ProjectStorageInterpreters {
+   *     MyExtensionProjectTypeName: IProjectStorageInterpreter<MyProjectStorageDataType>;
+   *   }
+   * }
+   * ```
+   */
+  interface ProjectStorageInterpreters {
+    'platform.notesOnly': IProjectStorageInterpreter;
+    'platform.placeholder': IProjectStorageInterpreter;
+  }
+  /**
+   * Names for each `projectType` supported by available Project Storage Interpreters on the papi.
+   * Each of the `projectType`s should have a registered Project Data Provider Factory that provides
+   * Project Data Providers for the `projectType` along with one or more Project Storage
+   * Interpreters for the `projectType`.
+   *
+   * Automatically includes all extensions' `projectTypes` that are added to
+   * {@link ProjectStorageInterpreters}.
+   *
+   * Note: {@link ProjectStorageInterpreters} is sometimes indexed by {@link ProjectTypes}, so please
+   * make PSIs available to support the PDPs available.
+   *
+   * @example 'platform.notesOnly'
+   */
+  type ProjectStorageProjectTypes = keyof ProjectStorageInterpreters;
+  /**
+   * `DataProviderDataTypes` for each Project Storage Interpreter supported by PAPI. These are the
+   * data types served by Project Storage Interpreters to Project Data Providers for each
+   * `projectType`.
+   *
+   * Automatically includes all extensions' `projectTypes` that are added to
+   * {@link ProjectStorageInterpreters}.
+   *
+   * Note: The keys of this interface are the `projectType`s supported by available Project Storage
+   * Interpreters.
+   *
+   * @example
+   *
+   * ```typescript
+   * ProjectStorageDataTypes['MyExtensionProjectTypeName'] => MandatoryProjectStorageDataTypes & {
+   *     ProjectData: DataProviderDataType<
+   *       { projectId: string; section: number },
+   *       string | undefined,
+   *       string
+   *     >;
+   *   }
+   * ```
+   */
+  type ProjectStorageDataTypes = {
+    [ProjectType in ProjectStorageProjectTypes]: ExtractDataProviderDataTypes<
+      ProjectStorageInterpreters[ProjectType]
+    >;
   };
   type StuffDataTypes = {
     Stuff: DataProviderDataType<string, number, never>;
@@ -2105,12 +2694,12 @@ declare module 'papi-shared-types' {
     >;
   };
   /**
-   * `IDataProvider` types for each data provider supported by PAPI. Extensions can add more data
-   * providers with corresponding data provider IDs by adding details to their `.d.ts` file and
+   * {@link IDataProvider} types for each data provider supported by PAPI. Extensions can add more
+   * data providers with corresponding data provider IDs by adding details to their `.d.ts` file and
    * registering a data provider engine in their `activate` function with
    * `papi.dataProviders.registerEngine`.
    *
-   * Note: Data Provider names must consist of two string separated by at least one period. We
+   * Note: Data Provider names must consist of two strings separated by at least one period. We
    * recommend one period and lower camel case in case we expand the api in the future to allow dot
    * notation.
    *
@@ -2605,7 +3194,7 @@ declare module 'shared/services/data-provider.service' {
   /** Handles registering data providers and serving data around the papi. Exposed on the papi. */
   import { DataProviderDataTypes } from 'shared/models/data-provider.model';
   import IDataProviderEngine, {
-    DataProviderEngineNotifyUpdate,
+    DataProviderEngine,
   } from 'shared/models/data-provider-engine.model';
   import {
     DataProviderNames,
@@ -2615,24 +3204,16 @@ declare module 'shared/services/data-provider.service' {
   } from 'papi-shared-types';
   import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
   /**
-   * JSDOC SOURCE DataProviderEngine
+   * JSDOC SOURCE DataProviderServiceHasKnown
    *
-   * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
-   * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
-   * function in order to use `notifyUpdate`.
-   *
-   * @see IDataProviderEngine for more information on extending this class.
-   */
-  export abstract class DataProviderEngine<TDataTypes extends DataProviderDataTypes> {
-    notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
-  }
-  /**
    * Indicate if we are aware of an existing data provider with the given name. If a data provider
    * with the given name is somewhere else on the network, this function won't tell you about it
    * unless something else in the existing process is subscribed to it.
    */
   function hasKnown(providerName: string): boolean;
   /**
+   * JSDOC SOURCE DataProviderServiceDecoratorsIgnore
+   *
    * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
    * papi will not layer over these methods or consider them to be data type methods
    *
@@ -2677,8 +3258,60 @@ declare module 'shared/services/data-provider.service' {
    *   Note: this is the signature that provides the actual decorator functionality. However, since
    *   users will not be using this signature, the example usage is provided in the signature above.
    */
-  function ignore<T extends object>(target: T, member: keyof T): void;
+  function ignore(target: object, member: string): void;
   /**
+   * JSDOC SOURCE DataProviderServiceDecoratorsDoNotNotify
+   *
+   * Decorator function that marks a data provider engine `set<data_type>` method not to automatically
+   * emit an update and notify subscribers of a change to the data. papi will still consider the
+   * `set<data_type>` method to be a data type method, but it will not layer over it to emit updates.
+   *
+   * @example Use this as a decorator on a class's method:
+   *
+   * ```typescript
+   * class MyDataProviderEngine {
+   * ＠papi.dataProviders.decorators.doNotNotify
+   * async setVerse() {}
+   * }
+   * ```
+   *
+   * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
+   * code blocks, so a different unicode character was used. Please use a normal `@` when using a
+   * decorator.
+   *
+   * OR
+   *
+   * @example Call this function signature on an object's method:
+   *
+   * ```typescript
+   * const myDataProviderEngine = {
+   *   async setVerse() {},
+   * };
+   * papi.dataProviders.decorators.ignore(dataProviderEngine.setVerse);
+   * ```
+   *
+   * @param method The method not to layer over to send an automatic update
+   */
+  function doNotNotify(
+    method: Function & {
+      doNotNotify?: boolean;
+    },
+  ): void;
+  /**
+   * Decorator function that marks a data provider engine `set<data_type>` method not to automatically
+   * emit an update and notify subscribers of a change to the data. papi will still consider the
+   * `set<data_type>` method to be a data type method, but it will not layer over it to emit updates.
+   *
+   * @param target The class that has the method not to layer over to send an automatic update
+   * @param member The name of the method not to layer over to send an automatic update
+   *
+   *   Note: this is the signature that provides the actual decorator functionality. However, since
+   *   users will not be using this signature, the example usage is provided in the signature above.
+   */
+  function doNotNotify(target: object, member: string): void;
+  /**
+   * JSDOC SOURCE DataProviderServiceDecorators
+   *
    * A collection of decorators to be used with the data provider service
    *
    * @example To use the `ignore` a decorator on a class's method:
@@ -2695,9 +3328,14 @@ declare module 'shared/services/data-provider.service' {
    * decorator.
    */
   const decorators: {
+    /** JSDOC DESTINATION DataProviderServiceDecoratorsIgnore */
     ignore: typeof ignore;
+    /** JSDOC DESTINATION DataProviderServiceDecoratorsDoNotNotify */
+    doNotNotify: typeof doNotNotify;
   };
   /**
+   * JSDOC SOURCE DataProviderServiceRegisterEngine
+   *
    * Creates a data provider to be shared on the network layering over the provided data provider
    * engine.
    *
@@ -2759,6 +3397,8 @@ declare module 'shared/services/data-provider.service' {
       | undefined,
   ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>>;
   /**
+   * JSDOC SOURCE DataProviderServiceGet
+   *
    * Get a data provider that has previously been set up
    *
    * @param providerName Name of the desired data provider
@@ -2783,10 +3423,15 @@ declare module 'shared/services/data-provider.service' {
     providerName: string,
   ): Promise<T | undefined>;
   export interface DataProviderService {
+    /** JSDOC DESTINATION DataProviderServiceHasKnown */
     hasKnown: typeof hasKnown;
+    /** JSDOC DESTINATION DataProviderServiceRegisterEngine */
     registerEngine: typeof registerEngine;
+    /** JSDOC DESTINATION DataProviderServiceGet */
     get: typeof get;
+    /** JSDOC DESTINATION DataProviderServiceDecorators */
     decorators: typeof decorators;
+    /** JSDOC DESTINATION DataProviderEngine */
     DataProviderEngine: typeof DataProviderEngine;
   }
   /**
@@ -2798,17 +3443,176 @@ declare module 'shared/services/data-provider.service' {
   export default dataProviderService;
 }
 declare module 'shared/models/project-data-provider-engine.model' {
-  import { ProjectTypes, ProjectDataTypes } from 'papi-shared-types';
-  import type IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  /** All possible types for ProjectDataProviderEngines: IDataProviderEngine<ProjectDataType> */
+  import {
+    ProjectTypes,
+    ProjectDataTypes,
+    ProjectStorageInterpreters,
+    ProjectSettingNames,
+    ProjectSettingTypes,
+    ProjectStorageSettingDataScope,
+    WithProjectDataProviderEngineSettingMethods,
+  } from 'papi-shared-types';
+  import IDataProviderEngine, {
+    DataProviderEngine,
+  } from 'shared/models/data-provider-engine.model';
+  import {
+    DataProviderDataType,
+    DataProviderDataTypes,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import {
+    ExtensionDataScope,
+    MandatoryProjectDataTypes,
+    WithProjectDataProviderEngineExtensionDataMethods,
+  } from 'shared/models/project-data-provider.model';
+  import { ProjectStorageExtensionDataScope } from 'shared/models/project-storage-interpreter.model';
+  /** All possible types for ProjectDataProviderEngines: IProjectDataProviderEngine<ProjectDataType> */
   export type ProjectDataProviderEngineTypes = {
-    [ProjectType in ProjectTypes]: IDataProviderEngine<ProjectDataTypes[ProjectType]>;
+    [ProjectType in ProjectTypes]: IProjectDataProviderEngine<ProjectDataTypes[ProjectType]>;
   };
   export interface ProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
     createProjectDataProviderEngine(
       projectId: string,
       projectStorageInterpreterId: string,
     ): ProjectDataProviderEngineTypes[ProjectType];
+  }
+  /**
+   * The object to return from {@link ProjectDataProviderEngineFactory.createProjectDataProviderEngine}
+   * that the PAPI registers to create a Project Data Provider for a specific project. The
+   * ProjectDataProviderService creates an {@link IProjectDataProvider} on the papi that layers over
+   * this engine, providing special functionality.
+   *
+   * @type TProjectDataTypes - The data types that this Project Data Provider Engine serves. For each
+   *   data type defined, the engine must have corresponding `get<data_type>` and `set<data_type>
+   *   function` functions. These data types correspond to the `projectType` of the project.
+   * @see {@link DataProviderDataTypes} for information on how to make powerful types that work well with
+   * Intellisense.
+   *
+   * Note: papi creates a `notifyUpdate` function on the Project Data Provider Engine if one is not
+   * provided, so it is not necessary to provide one in order to call `this.notifyUpdate`. However,
+   * TypeScript does not understand that papi will create one as you are writing your Project Data
+   * Provider Engine, so you can avoid type errors with one of the following options:
+   *
+   * 1. If you are using a class to create a Project Data Provider Engine, you can extend the
+   * {@link ProjectDataProviderEngine} class, and it will provide `notifyUpdate` as well as other helpful
+   * default method implementations to meet the requirements of {@link MandatoryProjectDataTypes}
+   * automatically by passing these calls through to the Project Storage Interpreter for you:
+   * ```typescript
+   * class MyPDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
+   *   ...
+   * }
+   * ```
+   *
+   * 2. If you are using an object or class to create a Project Data Provider Engine, you can add a
+   * `notifyUpdate` function (and, with an object, add the {@link WithNotifyUpdate} type) to
+   * your Project Data Provider Engine like so:
+   * ```typescript
+   * const myPDPE: IProjectDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
+   *   notifyUpdate(updateInstructions) {},
+   *   ...
+   * }
+   * ```
+   * OR
+   * ```typescript
+   * class MyPDPE implements IProjectDataProviderEngine<MyDataTypes> {
+   *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
+   *   ...
+   * }
+   * ```
+   */
+  export type IProjectDataProviderEngine<TProjectDataTypes extends DataProviderDataTypes> =
+    IDataProviderEngine<TProjectDataTypes & MandatoryProjectDataTypes> &
+      WithProjectDataProviderEngineSettingMethods<TProjectDataTypes> &
+      WithProjectDataProviderEngineExtensionDataMethods<TProjectDataTypes>;
+  /**
+   * JSDOC SOURCE ProjectDataProviderEngine
+   *
+   * Abstract class that provides default implementations of a number of {@link IProjectDataProvider}
+   * functions including all the `Setting` and `ExtensionData`-related methods. Extensions can create
+   * their own Project Data Provider Engine classes and implement this class to meet the requirements
+   * of {@link MandatoryProjectDataTypes} automatically by passing these calls through to the Project
+   * Storage Interpreter. This class also subscribes to `Setting` and `ExtensionData` updates from the
+   * PSI to make sure it keeps its data up-to-date.
+   *
+   * This class also provides a placeholder `notifyUpdate` for Project Data Provider Engine classes.
+   * If a Project Data Provider Engine class extends this class, it doesn't have to specify its own
+   * `notifyUpdate` function in order to use `notifyUpdate`.
+   *
+   * @see {@link IProjectDataProviderEngine} for more information on extending this class.
+   */
+  export abstract class ProjectDataProviderEngine<ProjectType extends ProjectTypes>
+    extends DataProviderEngine<
+      ProjectDataTypes[ProjectType] & {
+        Setting: DataProviderDataType<
+          ProjectSettingNames,
+          ProjectSettingTypes[ProjectSettingNames],
+          ProjectSettingTypes[ProjectSettingNames]
+        >;
+      }
+    >
+    implements
+      WithProjectDataProviderEngineSettingMethods<ProjectDataTypes[ProjectType]>,
+      WithProjectDataProviderEngineExtensionDataMethods<ProjectDataTypes[ProjectType]>
+  {
+    protected readonly projectId: string;
+    protected readonly projectStorageInterpreterId: string;
+    protected readonly projectStorageInterpreter: ProjectStorageInterpreters[ProjectType];
+    private psiSettingUnsubscriberPromise;
+    private psiExtensionDataUnsubscriberPromise;
+    /**
+     * Create a `ProjectDataProviderEngine` instance
+     *
+     * @param projectId The project id this Project Data Provider represents for which it serves data
+     * @param projectStorageInterpreter The {@link IProjectStorageInterpreter} this Project Data
+     *   Provider uses to access raw project data
+     */
+    protected constructor(projectId: string, projectStorageInterpreterId: string);
+    setSetting<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+      newSetting: ProjectSettingTypes[ProjectSettingName],
+    ): Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>;
+    setExtensionData(
+      dataScope: ExtensionDataScope,
+      data: string,
+    ): Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>;
+    /**
+     * Get the {@link ProjectStorageSettingDataScope} for this project for the specified project
+     * setting. This can be used when passing setting-related calls to the Project Storage
+     * Interpreter.
+     *
+     * @param key The string id of the project setting to get a setting data scope for
+     * @returns `ProjectStorageSettingDataScope` for this project for the specified project setting
+     */
+    protected getProjectStorageSettingDataScope<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+    ): ProjectStorageSettingDataScope<ProjectSettingName>;
+    /**
+     * Get the {@link ProjectStorageExtensionDataScope} for this project for the specified
+     * {@link ExtensionDataScope}. This can be used when passing `ExtensionData`-related calls to the
+     * Project Storage Interpreter.
+     *
+     * @param dataScope Information about what data is being referenced by the calling extension given
+     *   to this Project Data Provider
+     * @returns Information about what data is being referenced by the calling extension that this
+     *   Project Data Provider should give to its Project Storage Interpreter
+     */
+    protected getProjectStorageExtensionDataScope(
+      dataScope: ExtensionDataScope,
+    ): ProjectStorageExtensionDataScope;
+    getSetting<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+    ): Promise<ProjectSettingTypes[ProjectSettingName]>;
+    resetSetting<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+    ): Promise<boolean>;
+    getExtensionData(dataScope: ExtensionDataScope): Promise<string | undefined>;
+    /**
+     * Disposes of this Project Data Provider Engine. Unsubscribes from listening to the Project
+     * Storage Interpreter
+     *
+     * @returns `true` if successfully unsubscribed
+     */
+    dispose(): Promise<boolean>;
   }
 }
 declare module 'shared/models/project-metadata.model' {
@@ -3544,6 +4348,70 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
   export default useDialogCallback;
 }
+declare module 'shared/services/project-settings.service-model' {
+  import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
+  /**
+   * JSDOC SOURCE projectSettingsService
+   *
+   * Provides utility functions that project storage interpreters should call when handling project
+   * settings
+   */
+  export interface IProjectSettingsService {
+    /**
+     * Calls registered project settings validators to determine whether or not a project setting
+     * change is valid.
+     *
+     * Every Project Storage Interpreter **must** run this function when it receives a request to set
+     * a project setting before changing the value of the setting.
+     *
+     * @param newValue The new value requested to set the project setting value to
+     * @param currentValue The current project setting value
+     * @param key The project setting key being set
+     * @param allChanges All project settings changes being set in one batch
+     * @param projectType The `projectType` for the project whose setting is being changed
+     * @returns `true` if change is valid, `false` otherwise
+     */
+    isValid<ProjectSettingName extends ProjectSettingNames>(
+      newValue: ProjectSettingTypes[ProjectSettingName],
+      currentValue: ProjectSettingTypes[ProjectSettingName],
+      key: ProjectSettingName,
+      allChanges: SimultaneousProjectSettingsChanges,
+      projectType: ProjectTypes,
+    ): Promise<boolean>;
+    /**
+     * Gets default value for a project setting
+     *
+     * Every Project Storage Interpreter **must** run this function when it receives a request to get
+     * a project setting if the project does not have a value for the project setting requested. It
+     * should return the response from this function directly, either the returned default value or
+     * throw.
+     *
+     * @param key The project setting key for which to get the default value
+     * @param projectType The `projectType` to get default setting value for
+     * @returns The default value for the setting if a default value is registered
+     * @throws If a default value is not registered for the setting
+     */
+    getDefault<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+      projectType: ProjectTypes,
+    ): Promise<ProjectSettingTypes[ProjectSettingName]>;
+  }
+  /**
+   * All project settings changes being set in one batch
+   *
+   * Project settings may be circularly dependent on one another, so multiple project settings may
+   * need to be changed at once in some cases
+   */
+  export type SimultaneousProjectSettingsChanges = {
+    [ProjectSettingName in ProjectSettingNames]?: {
+      /** The new value requested to set the project setting value to */
+      newValue: ProjectSettingTypes[ProjectSettingName];
+      /** The current project setting value */
+      currentValue: ProjectSettingTypes[ProjectSettingName];
+    };
+  };
+  export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
+}
 declare module 'shared/services/papi-core.service' {
   /** Exporting empty object so people don't have to put 'type' in their import statements */
   const core: {};
@@ -3563,9 +4431,10 @@ declare module 'shared/services/papi-core.service' {
   export type { DialogOptions } from 'shared/models/dialog-options.model';
   export type {
     ExtensionDataScope,
-    MandatoryProjectDataType,
+    MandatoryProjectDataTypes,
   } from 'shared/models/project-data-provider.model';
   export type { ProjectMetadata } from 'shared/models/project-metadata.model';
+  export type { MandatoryProjectStorageDataTypes } from 'shared/models/project-storage-interpreter.model';
   export type {
     GetWebViewOptions,
     SavedWebViewDefinition,
@@ -3575,6 +4444,7 @@ declare module 'shared/services/papi-core.service' {
     WebViewProps,
   } from 'shared/models/web-view.model';
   export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+  export type { SimultaneousProjectSettingsChanges } from 'shared/services/project-settings.service-model';
 }
 declare module 'shared/services/menu-data.service-model' {
   import {
@@ -3720,6 +4590,12 @@ declare module 'shared/services/settings.service-model' {
    * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
    * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
    * instead. However, do note that the unnamed data type (`''`) is fully functional.
+   *
+   * The closest possible representation of the unnamed (````) data type follows:
+   *
+   * ```typescript
+   * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
+   * ```
    */
   export type SettingDataTypes = {};
   export type AllSettingsData = {
@@ -3784,6 +4660,11 @@ declare module 'shared/services/settings.service' {
   const settingsService: ISettingsService;
   export default settingsService;
 }
+declare module 'shared/services/project-settings.service' {
+  import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
+  const projectSettingsService: IProjectSettingsService;
+  export default projectSettingsService;
+}
 declare module 'extension-host/services/papi-backend.service' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -3795,19 +4676,21 @@ declare module 'extension-host/services/papi-backend.service' {
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiWebViewProviderService } from 'shared/services/web-view-provider.service';
   import { InternetService } from 'shared/services/internet.service';
-  import {
-    DataProviderService,
-    DataProviderEngine as PapiDataProviderEngine,
-  } from 'shared/services/data-provider.service';
+  import { DataProviderService } from 'shared/services/data-provider.service';
+  import { DataProviderEngine as PapiDataProviderEngine } from 'shared/models/data-provider-engine.model';
   import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
   import { ProjectLookupServiceType } from 'shared/services/project-lookup.service-model';
   import { DialogService } from 'shared/services/dialog.service-model';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
+  import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
+  import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   const papi: {
     /** JSDOC DESTINATION DataProviderEngine */
     DataProviderEngine: typeof PapiDataProviderEngine;
+    /** JSDOC DESTINATION ProjectDataProviderEngine */
+    ProjectDataProviderEngine: typeof PapiProjectDataProviderEngine;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
     /** JSDOC DESTINATION commandService */
@@ -3832,6 +4715,8 @@ declare module 'extension-host/services/papi-backend.service' {
     projectDataProviders: PapiBackendProjectDataProviderService;
     /** JSDOC DESTINATION projectLookupService */
     projectLookup: ProjectLookupServiceType;
+    /** JSDOC DESTINATION projectSettingsService */
+    projectSettings: IProjectSettingsService;
     /** JSDOC DESTINATION extensionStorageService */
     storage: ExtensionStorageService;
     /** JSDOC DESTINATION settingsService */
@@ -3842,6 +4727,8 @@ declare module 'extension-host/services/papi-backend.service' {
   export default papi;
   /** JSDOC DESTINATION DataProviderEngine */
   export const DataProviderEngine: typeof PapiDataProviderEngine;
+  /** JSDOC DESTINATION ProjectDataProviderEngine */
+  export const ProjectDataProviderEngine: typeof PapiProjectDataProviderEngine;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
   /** JSDOC DESTINATION commandService */
@@ -3866,6 +4753,8 @@ declare module 'extension-host/services/papi-backend.service' {
   export const projectDataProviders: PapiBackendProjectDataProviderService;
   /** JSDOC DESTINATION projectLookupService */
   export const projectLookup: ProjectLookupServiceType;
+  /** JSDOC DESTINATION projectSettingsService */
+  export const projectSettings: IProjectSettingsService;
   /** JSDOC DESTINATION extensionStorageService */
   export const storage: ExtensionStorageService;
   /** JSDOC DESTINATION menuDataService */
@@ -4133,9 +5022,9 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * _＠returns_ `[data, setData, isLoading]`
    *
    * - `data`: the current value for the data from the data provider with the specified data type and
-   *   selector, either the defaultValue or the resolved data
+   *   selector, either the `defaultValue` or the resolved data
    * - `setData`: asynchronous function to request that the data provider update the data at this data
-   *   type and selector. Returns true if successful. Note that this function does not update the
+   *   type and selector. Returns `true` if successful. Note that this function does not update the
    *   data. The data provider sends out an update to this subscription if it successfully updates
    *   data.
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
@@ -4196,15 +5085,15 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    * Gets a project data provider with specified provider name
    *
    * @param projectType Indicates what you expect the `projectType` to be for the project with the
-   *   specified id. The TypeScript type for the returned project data provider will have the project
-   *   data provider type associated with this project type. If this argument does not match the
+   *   specified id. The TypeScript type for the returned Project Data Provider will have the Project
+   *   Data Provider type associated with this `projectType`. If this argument does not match the
    *   project's actual `projectType` (according to its metadata), a warning will be logged
    * @param projectDataProviderSource String name of the id of the project to get OR
    *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
    *   data provider again)
-   * @returns `undefined` if the project data provider has not been retrieved, the requested project
-   *   data provider if it has been retrieved and is not disposed, and undefined again if the project
-   *   data provider is disposed
+   * @returns `undefined` if the Project Data Provider has not been retrieved, the requested Project
+   *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
+   *   Data Provider is disposed
    */
   const useProjectDataProvider: <ProjectType extends keyof ProjectDataProviders>(
     projectType: ProjectType,
@@ -4219,7 +5108,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   } from 'shared/models/data-provider.model';
   import { ProjectDataProviders, ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
   /**
-   * React hook to use data from a project data provider
+   * React hook to use data from a Project Data Provider
    *
    * @example `useProjectData('ParatextStandard', 'project id').VerseUSFM(...);`
    */
@@ -4265,11 +5154,11 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *     ]
    * ```
    *
-   * React hook to use data from a project data provider. Subscribes to run a callback on a project
-   * data provider's data with specified selector on the specified data type that the project data
-   * provider serves according to its `projectType`.
+   * React hook to use data from a Project Data Provider. Subscribes to run a callback on a Project
+   * Data Provider's data with specified selector on the specified data type that the Project Data
+   * Provider serves according to its `projectType`.
    *
-   * Usage: Specify the project type, the project id, and the data type on the project data provider
+   * Usage: Specify the project type, the project id, and the data type on the Project Data Provider
    * with `useProjectData('<project_type>', '<project_id>').<data_type>` and use like any other React
    * hook.
    *
@@ -4287,13 +5176,13 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * ```
    *
    * _＠param_ `projectType` Indicates what you expect the `projectType` to be for the project with the
-   * specified id. The TypeScript type for the returned project data provider will have the project
-   * data provider type associated with this project type. If this argument does not match the
+   * specified id. The TypeScript type for the returned Project Data Provider will have the Project
+   * Data Provider type associated with this project type. If this argument does not match the
    * project's actual `projectType` (according to its metadata), a warning will be logged
    *
    * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
    * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
-   * project data provider once)
+   * Project Data Provider once)
    *
    * _＠param_ `selector` tells the provider what data this listener is listening for
    *
@@ -4305,14 +5194,81 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
    *
    * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   * to re-run with its new value. This means that `subscriberOptions` will be passed to the project
-   * data provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   * to re-run with its new value. This means that `subscriberOptions` will be passed to the Project
+   * Data Provider's `subscribe<data_type>` method as soon as possible and will not be updated again
    * until `projectDataProviderSource` or `selector` changes.
    *
    * _＠returns_ `[data, setData, isLoading]`
+   *
+   * - `data`: the current value for the data from the Project Data Provider with the specified data
+   *   type and selector, either the `defaultValue` or the resolved data
+   * - `setData`: asynchronous function to request that the Project Data Provider update the data at
+   *   this data type and selector. Returns `true` if successful. Note that this function does not
+   *   update the data. The Project Data Provider sends out an update to this subscription if it
+   *   successfully updates data.
+   * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
+   *   provider
    */
   const useProjectData: UseProjectDataHook;
   export default useProjectData;
+}
+declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
+  import { ProjectDataProviders, ProjectSettingTypes } from 'papi-shared-types';
+  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  /**
+   * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
+   * subscribers when the project setting changes and gets updated when the project setting is changed
+   * by others.
+   *
+   * @param projectType Indicates what you expect the `projectType` to be for the project with the
+   *   specified id. The TypeScript type for the returned Project Data Provider will have the Project
+   *   Data Provider type associated with this `projectType`. If this argument does not match the
+   *   project's actual `projectType` (according to its metadata), a warning will be logged
+   * @param projectDataProviderSource `projectDataProviderSource` String name of the id of the project
+   *   to get OR projectDataProvider (result of `useProjectDataProvider` if you want to consolidate
+   *   and only get the Project Data Provider once)
+   * @param key The string id of the project setting to interact with
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param defaultValue The initial value to return while first awaiting the project setting value
+   * @param subscriberOptions Various options to adjust how the subscriber emits updates
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   *   until `dataProviderSource` or `selector` changes.
+   * @returns `[setting, setSetting, resetSetting]`
+   *
+   *   - `setting`: the current value for the project setting from the Project Data Provider with the
+   *       specified key, either the `defaultValue` or the resolved setting value
+   *   - `setSetting`: asynchronous function to request that the Project Data Provider update the project
+   *       setting with the specified key. Returns `true` if successful. Note that this function does
+   *       not update the data. The Project Data Provider sends out an update to this subscription if
+   *       it successfully updates data.
+   *   - `resetSetting`: asynchronous function to request that the Project Data Provider reset the project
+   *       setting
+   *   - `isLoading`: whether the setting value is awaiting retrieval from the Project Data Provider
+   *
+   * @throws When subscription callback function is called with an update that has an unexpected
+   *   message type
+   */
+  const useProjectSetting: <
+    ProjectType extends keyof ProjectDataProviders,
+    ProjectSettingName extends keyof ProjectSettingTypes,
+  >(
+    projectType: ProjectType,
+    projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+    key: ProjectSettingName,
+    defaultValue: ProjectSettingTypes[ProjectSettingName],
+    subscriberOptions?: DataProviderSubscriberOptions,
+  ) => [
+    setting: ProjectSettingTypes[ProjectSettingName],
+    setSetting: ((newSetting: ProjectSettingTypes[ProjectSettingName]) => void) | undefined,
+    resetSetting: (() => void) | undefined,
+    isLoading: boolean,
+  ];
+  export default useProjectSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   import { DataProviderNames, DataProviders } from 'papi-shared-types';
@@ -4354,6 +5310,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';
   export { default as useProjectData } from 'renderer/hooks/papi-hooks/use-project-data.hook';
   export { default as useProjectDataProvider } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
+  export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
 }

@@ -14,10 +14,8 @@ import {
   PapiWebViewProviderService,
 } from '@shared/services/web-view-provider.service';
 import internetService, { InternetService } from '@shared/services/internet.service';
-import dataProviderService, {
-  DataProviderService,
-  DataProviderEngine as PapiDataProviderEngine,
-} from '@shared/services/data-provider.service';
+import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
+import { DataProviderEngine as PapiDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import {
   papiBackendProjectDataProviderService,
   PapiBackendProjectDataProviderService,
@@ -33,6 +31,9 @@ import menuDataService from '@shared/services/menu-data.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import settingsService from '@shared/services/settings.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
+import projectSettingsService from '@shared/services/project-settings.service';
+import { IProjectSettingsService } from '@shared/services/project-settings.service-model';
+import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -46,6 +47,8 @@ const papi = {
   // Classes
   /** JSDOC DESTINATION DataProviderEngine */
   DataProviderEngine: PapiDataProviderEngine,
+  /** JSDOC DESTINATION ProjectDataProviderEngine */
+  ProjectDataProviderEngine: PapiProjectDataProviderEngine,
 
   // Functions
   /** This is just an alias for internet.fetch */
@@ -73,6 +76,8 @@ const papi = {
     papiBackendProjectDataProviderService as PapiBackendProjectDataProviderService,
   /** JSDOC DESTINATION projectLookupService */
   projectLookup: projectLookupService as ProjectLookupServiceType,
+  /** JSDOC DESTINATION projectSettingsService */
+  projectSettings: projectSettingsService as IProjectSettingsService,
   /** JSDOC DESTINATION extensionStorageService */
   storage: extensionStorageService as ExtensionStorageService,
   /** JSDOC DESTINATION settingsService */
@@ -92,6 +97,9 @@ export default papi;
 /** JSDOC DESTINATION DataProviderEngine */
 export const { DataProviderEngine } = papi;
 Object.freeze(papi.DataProviderEngine);
+/** JSDOC DESTINATION ProjectDataProviderEngine */
+export const { ProjectDataProviderEngine } = papi;
+Object.freeze(papi.ProjectDataProviderEngine);
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 Object.freeze(papi.fetch);
@@ -125,6 +133,9 @@ Object.freeze(papi.projectDataProviders);
 /** JSDOC DESTINATION projectLookupService */
 export const { projectLookup } = papi;
 Object.freeze(papi.projectLookup);
+/** JSDOC DESTINATION projectSettingsService */
+export const { projectSettings } = papi;
+Object.freeze(papi.projectSettings);
 /** JSDOC DESTINATION extensionStorageService */
 export const { storage } = papi;
 Object.freeze(papi.storage);

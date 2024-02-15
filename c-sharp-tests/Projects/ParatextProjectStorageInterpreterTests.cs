@@ -335,7 +335,7 @@ internal class ParatextProjectStorageInterpreterTests : PapiTestBase
     [TestCase(ProjectIdType.Include, "", "Must provide a project name")]
     public async Task CreateProject_InvalidParameters_ReturnsError(
         ProjectIdType projectIdType,
-        string projectName,
+        string? projectName,
         string expectedError
     )
     {

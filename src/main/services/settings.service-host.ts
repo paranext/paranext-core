@@ -1,9 +1,9 @@
-import IDataProviderEngine from '@shared/models/data-provider-engine.model';
+import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
 import {
   DataProviderDataType,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
-import dataProviderService, { DataProviderEngine } from '@shared/services/data-provider.service';
+import dataProviderService from '@shared/services/data-provider.service';
 import {
   AllSettingsData,
   ISettingsService,

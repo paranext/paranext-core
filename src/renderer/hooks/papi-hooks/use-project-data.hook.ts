@@ -8,7 +8,7 @@ import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-
 import { ProjectDataProviders, ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
 
 /**
- * React hook to use data from a project data provider
+ * React hook to use data from a Project Data Provider
  *
  * @example `useProjectData('ParatextStandard', 'project id').VerseUSFM(...);`
  */
@@ -62,11 +62,11 @@ type UseProjectDataHook = {
  *     ]
  * ```
  *
- * React hook to use data from a project data provider. Subscribes to run a callback on a project
- * data provider's data with specified selector on the specified data type that the project data
- * provider serves according to its `projectType`.
+ * React hook to use data from a Project Data Provider. Subscribes to run a callback on a Project
+ * Data Provider's data with specified selector on the specified data type that the Project Data
+ * Provider serves according to its `projectType`.
  *
- * Usage: Specify the project type, the project id, and the data type on the project data provider
+ * Usage: Specify the project type, the project id, and the data type on the Project Data Provider
  * with `useProjectData('<project_type>', '<project_id>').<data_type>` and use like any other React
  * hook.
  *
@@ -84,13 +84,13 @@ type UseProjectDataHook = {
  * ```
  *
  * _＠param_ `projectType` Indicates what you expect the `projectType` to be for the project with the
- * specified id. The TypeScript type for the returned project data provider will have the project
- * data provider type associated with this project type. If this argument does not match the
+ * specified id. The TypeScript type for the returned Project Data Provider will have the Project
+ * Data Provider type associated with this project type. If this argument does not match the
  * project's actual `projectType` (according to its metadata), a warning will be logged
  *
  * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
  * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
- * project data provider once)
+ * Project Data Provider once)
  *
  * _＠param_ `selector` tells the provider what data this listener is listening for
  *
@@ -102,11 +102,20 @@ type UseProjectDataHook = {
  * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
  *
  * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
- * to re-run with its new value. This means that `subscriberOptions` will be passed to the project
- * data provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+ * to re-run with its new value. This means that `subscriberOptions` will be passed to the Project
+ * Data Provider's `subscribe<data_type>` method as soon as possible and will not be updated again
  * until `projectDataProviderSource` or `selector` changes.
  *
  * _＠returns_ `[data, setData, isLoading]`
+ *
+ * - `data`: the current value for the data from the Project Data Provider with the specified data
+ *   type and selector, either the `defaultValue` or the resolved data
+ * - `setData`: asynchronous function to request that the Project Data Provider update the data at
+ *   this data type and selector. Returns `true` if successful. Note that this function does not
+ *   update the data. The Project Data Provider sends out an update to this subscription if it
+ *   successfully updates data.
+ * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
+ *   provider
  */
 // Assert the more general and more specific types.
 /* eslint-disable no-type-assertion/no-type-assertion */
