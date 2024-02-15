@@ -39,6 +39,8 @@ namespace TestParanextDataProvider
 
             foreach (ScrText project in projects)
                 ScrTextCollection.Remove(project, false);
+
+            _client?.Dispose();
         }
         #endregion
 
