@@ -380,7 +380,14 @@ declare module 'papi-shared-types' {
   }
 
   export interface ProjectSettingTypes {
-    /** Which versification scheme this Scripture project uses */
+    /**
+     * Which versification scheme this Scripture project uses
+     *
+     * WARNING: This setting is an example and needs to be updated to support proper versification
+     * specification! For the moment, it simply corresponds to
+     * [`ScrVersType`](https://github.com/sillsdev/libpalaso/blob/master/SIL.Scripture/Versification.cs#L1340),
+     * but this is not correct and full design.
+     */
     'platformScripture.versification': number;
     /**
      * Which books are present in this Scripture project. Represented as a string with 0 or 1 for
