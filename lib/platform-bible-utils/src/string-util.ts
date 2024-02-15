@@ -9,7 +9,6 @@ import {
 
 // TODO: Note in each JSDOC that we are dealing with Unicode code points instead of UTF-16 character codes
 // TODO: Overloads
-// TODO: Add npm test to platform-bible-utils build step
 // Rolf - I added a commented line with the override to the two functions that I found that needed one: normalize, and split.
 
 /**

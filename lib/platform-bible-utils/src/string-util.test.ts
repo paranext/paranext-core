@@ -19,7 +19,9 @@ import {
   toArray,
 } from './string-util';
 
-const TEST_STRING = 'This is a really really cool string';
+const SURROGATE_PAIRS_STRING =
+'Look𐐷At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented😉By👌Surrogate🔥Pairs💋!🌟';
+const TEXT_STRING = 'This is a really really cool string';
 const POS_FIRST_REALLY = 10;
 const POS_SECOND_REALLY = 17;
 const TEST_STRING_LENGTH = 35;
@@ -31,65 +33,64 @@ const TO_ARRAY_TEST_STRING_LENGTH = 5;
 
 describe('at', () => {
   test('at', () => {
-    const result = at(TEST_STRING, 1);
-    expect(result).toEqual('h');
+    const result = at(SURROGATE_PAIRS_STRING, 4);
+    expect(result).toEqual('𐐷');
   });
 });
 
 describe('charAt', () => {
   test('charAt', () => {
-    const result = charAt(TEST_STRING, 1);
-    expect(result).toEqual('h');
+    const result = charAt(SURROGATE_PAIRS_STRING, 7);
+    expect(result).toEqual('🦄');
   });
 });
 
 describe('codePointAt', () => {
   test('codePointAt', () => {
-    const result = codePointAt(TEST_STRING, 1);
-    expect(result).toEqual(104);
+    const result = codePointAt(SURROGATE_PAIRS_STRING, 11);
+    expect(result).toEqual(128526);
   });
 });
 
 describe('endsWith', () => {
   test('endsWith without position', () => {
-    const result = endsWith(TEST_STRING, 'string');
+    const result = endsWith(SURROGATE_PAIRS_STRING, '💋!🌟');
     expect(result).toEqual(true);
   });
 
-  // Should test what the end is, not what it isn't
   test('endsWith with position', () => {
-    const result = endsWith(TEST_STRING, 'string', 8);
-    expect(result).toEqual(false);
+    const result = endsWith(SURROGATE_PAIRS_STRING, 'At🦄', 8);
+    expect(result).toEqual(true);
   });
 });
 
 describe('includes', () => {
   test('includes without position', () => {
-    const result = includes(TEST_STRING, 'really');
+    const result = includes(TEXT_STRING, 'really');
     expect(result).toEqual(true);
   });
 
   test('includes with position', () => {
-    const result = includes(TEST_STRING, 'really', 22);
+    const result = includes(TEXT_STRING, 'really', 22);
     expect(result).toEqual(false);
   });
 });
 
 describe('indexOf', () => {
   test('indexOf without position', () => {
-    const result = indexOf(TEST_STRING, 'really');
+    const result = indexOf(TEXT_STRING, 'really');
     expect(result).toEqual(POS_FIRST_REALLY);
   });
 
   test('indexOf with position', () => {
-    const result = indexOf(TEST_STRING, 'really', 12);
+    const result = indexOf(TEXT_STRING, 'really', 12);
     expect(result).toEqual(POS_SECOND_REALLY);
   });
 });
 
 describe('lastIndexOf', () => {
   test('lastIndexOf without position', () => {
-    const result = lastIndexOf(TEST_STRING, 'really');
+    const result = lastIndexOf(TEXT_STRING, 'really');
     expect(result).toEqual(POS_SECOND_REALLY);
   });
 
@@ -103,7 +104,7 @@ describe('lastIndexOf', () => {
 
 describe('length', () => {
   test('length is correct', () => {
-    const result = length(TEST_STRING);
+    const result = length(TEXT_STRING);
     expect(result).toEqual(TEST_STRING_LENGTH);
   });
 });
@@ -112,20 +113,20 @@ describe('length', () => {
 
 describe('normalize', () => {
   test('normalize without form', () => {
-    const result = normalize(TEST_STRING);
-    expect(result).toEqual(TEST_STRING);
+    const result = normalize(TEXT_STRING);
+    expect(result).toEqual(TEXT_STRING);
   });
 
   test('normalize with form', () => {
-    const result = normalize(TEST_STRING, 'NFC');
-    expect(result).toEqual(TEST_STRING);
+    const result = normalize(TEXT_STRING, 'NFC');
+    expect(result).toEqual(TEXT_STRING);
   });
 });
 
 describe('padEnd', () => {
   test('padEnd without padString', () => {
-    const result = padEnd(TEST_STRING, TEST_STRING_LENGTH + 10, undefined);
-    expect(result).toEqual(TEST_STRING + TEN_SPACES);
+    const result = padEnd(TEXT_STRING, TEST_STRING_LENGTH + 10, undefined);
+    expect(result).toEqual(TEXT_STRING + TEN_SPACES);
   });
 
   // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
@@ -153,13 +154,13 @@ describe('padStart', () => {
 
 describe('startsWith', () => {
   test('startsWith without position', () => {
-    const result = startsWith(TEST_STRING, 'This');
+    const result = startsWith(TEXT_STRING, 'This');
     expect(result).toEqual(true);
   });
 
   // Should test what the end is, not what it isn't
   test('startsWith with position', () => {
-    const result = startsWith(TEST_STRING, 'This', 5);
+    const result = startsWith(TEXT_STRING, 'This', 5);
     expect(result).toEqual(false);
   });
 });
@@ -168,17 +169,17 @@ describe('startsWith', () => {
 
 describe('substring', () => {
   test('substring with begin', () => {
-    const result = substring(TEST_STRING, POS_FIRST_REALLY);
+    const result = substring(TEXT_STRING, POS_FIRST_REALLY);
     expect(result).toEqual('really really cool string');
   });
 
   test('substring with end', () => {
-    const result = substring(TEST_STRING, undefined, POS_FIRST_REALLY);
+    const result = substring(TEXT_STRING, undefined, POS_FIRST_REALLY);
     expect(result).toEqual('This is a ');
   });
 
   test('substring with begin and end', () => {
-    const result = substring(TEST_STRING, POS_FIRST_REALLY, POS_SECOND_REALLY);
+    const result = substring(TEXT_STRING, POS_FIRST_REALLY, POS_SECOND_REALLY);
     expect(result).toEqual('really ');
   });
 });
