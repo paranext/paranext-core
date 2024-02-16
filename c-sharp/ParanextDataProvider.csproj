@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Paranext.DataProvider</RootNamespace>
@@ -22,12 +22,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ParatextData" Version="9.4.0-beta" />
-    <PackageReference Include="SIL.Core" Version="12.0.1" />
-    <PackageReference Include="SIL.Scripture" Version="12.0.1" />
-    <PackageReference Include="SIL.WritingSystems" Version="12.0.1" />
+    <PackageReference Include="ParatextData" Version="9.5.0.5" />
+    <PackageReference Include="SIL.Core" Version="13.0.1" />
+    <PackageReference Include="SIL.Scripture" Version="13.0.1" />
+    <PackageReference Include="SIL.WritingSystems" Version="13.0.1" />
     <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
-    <PackageReference Include="System.Text.Encoding.CodePages" Version="7.0.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
     <PackageReference Include="icu.net" Version="2.9.0" />
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.1" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
   </ItemGroup>

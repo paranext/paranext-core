@@ -22,7 +22,8 @@ public class LocalParatextProjectsTests
     [TearDown]
     public void TearDown()
     {
-        (_localProjects as IDisposable)?.Dispose();
+        if (_localProjects is IDisposable disposable)
+            disposable.Dispose();
     }
 
     #region Tests originally for now defunct DoesFolderMatchMetadata method
@@ -46,7 +47,7 @@ public class LocalParatextProjectsTests
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
         Assert.That(details.Metadata.Name, Is.EqualTo("ABC"));
-        Assert.True(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
+        Assert.That(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
     [TestCase("ABC_441f1e41ffb8d319650847df35f4ffb78f12914e", "ABD")]
@@ -61,7 +62,7 @@ public class LocalParatextProjectsTests
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
         Assert.That(details.Metadata.Name, Is.EqualTo(name));
-        Assert.True(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
+        Assert.That(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
     [TestCase("ABC_541f1e41ffb8d319650847df35f4ffb78f12914e", "ABC")]
@@ -75,7 +76,7 @@ public class LocalParatextProjectsTests
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
         Assert.That(details.Metadata.Name, Is.EqualTo(name));
-        Assert.True(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
+        Assert.That(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
     [TestCase("ABC_441F1E41FFB8D319650847DF35F4FFB78F12914E", "ABC")]
@@ -91,7 +92,7 @@ public class LocalParatextProjectsTests
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
         Assert.That(details.Metadata.Name, Is.EqualTo(name));
-        Assert.True(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
+        Assert.That(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
     #endregion
