@@ -149,7 +149,7 @@ export function length(string: string): number {
   return stringzLength(string);
 }
 
-// TODO: test
+// TODO: test, ask TJ if we want this
 /**
  * Limits a string to a given width. This function handles Unicode code points instead of UTF-16
  * character codes.
@@ -170,7 +170,7 @@ export function limit(
   return stringzLimit(string, padLimit, padString, padPosition);
 }
 
-// TODO: Want to override, but getting an error that it isn't compatible
+// TODO: Want to override, but getting an error that it isn't compatible, check if we need to validate the form to make sure its one of the provided options
 // export function normalize(string: string, form?: string): string;
 /**
  * Returns the Unicode Normalization Form of this string.
@@ -188,6 +188,7 @@ export function normalize(string: string, form: 'NFC' | 'NFD' | 'none' = 'NFC'):
   return string.normalize(upperCaseForm);
 }
 
+// TODO: limit only works when length(padString) = 1
 /**
  * Pads this string with another string (multiple times, if needed) until the resulting string
  * reaches the given length. The padding is applied from the end of this string. This function
@@ -205,6 +206,7 @@ export function padEnd(string: string, targetLength: number, padString: string =
   return limit(string, targetLength, padString, 'right');
 }
 
+// TODO: limit only works when length(padString) = 1
 /**
  * Pads this string with another string (multiple times, if needed) until the resulting string
  * reaches the given length. The padding is applied from the start of this string. This function
@@ -222,6 +224,7 @@ export function padStart(string: string, targetLength: number, padString: string
   return limit(string, targetLength, padString, 'left');
 }
 
+// TODO: Do we need to implement both this and substring with subtle differences, or treat them the same
 /**
  * Extracts a section of this string and returns it as a new string, without modifying the original
  * string. This function handles Unicode code points instead of UTF-16 character codes.
@@ -296,11 +299,11 @@ export function split(string: string, separator: string | RegExp, splitLimit?: n
  */
 export function startsWith(string: string, searchString: string, position: number = 0): boolean {
   const indexOfSearchString = indexOf(string, searchString, position);
-  if (indexOfSearchString !== 0) return false;
+  if (indexOfSearchString !== position) return false;
   return true;
 }
 
-// TODO: test
+// TODO: test, ask TJ if we want this since its deprecated in string
 /**
  * Returns a substring by providing start and length. This function handles Unicode code points
  * instead of UTF-16 character codes.

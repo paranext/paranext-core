@@ -14,23 +14,24 @@ import {
   // slice,
   // split,
   startsWith,
-  // substr,
+  substr,
   substring,
   toArray,
 } from './string-util';
 
 const SURROGATE_PAIRS_STRING =
-'Look𐐷At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented😉By🍕Surrogate🔥Pairs💋!🌟';
-const TEXT_STRING = 'This is a really really cool string';
-const POS_FIRST_REALLY = 25;
-const POS_SECOND_REALLY = 57;
+  'Look𐐷At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented😉By🍕Surrogate🔥Pairs💋!🌟';
+
+const SHORTER_SURROGATE_PAIRS_STRING = 'Look𐐷At🦄';
+const SHORTER_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '🦄'];
+
+const POS_FIRST_PIZZA = 25;
+const POS_SECOND_PIZZA = 57;
 const SURROGATE_PAIRS_STRING_LENGTH = 76;
-const TEST_STRING_LENGTH = 35;
 const TEN_SPACES = '          ';
 
-const TO_ARRAY_TEST_STRING = 'Hello';
-const TO_ARRAY_TEST_ARRAY = ['H', 'e', 'l', 'l', 'o'];
-const TO_ARRAY_TEST_STRING_LENGTH = 5;
+const NORMALIZE_STRING = '\u0041\u006d\u00e9\u006c\u0069\u0065';
+const NORMALIZE_SURROGATE_PAIRS = '\u0041\u006d\u0065\u0301\u006c\u0069\u0065';
 
 describe('at', () => {
   test('at', () => {
@@ -80,19 +81,19 @@ describe('includes', () => {
 describe('indexOf', () => {
   test('indexOf without position', () => {
     const result = indexOf(SURROGATE_PAIRS_STRING, '🍕');
-    expect(result).toEqual(POS_FIRST_REALLY);
+    expect(result).toEqual(POS_FIRST_PIZZA);
   });
 
   test('indexOf with position', () => {
     const result = indexOf(SURROGATE_PAIRS_STRING, '🍕', 40);
-    expect(result).toEqual(POS_SECOND_REALLY);
+    expect(result).toEqual(POS_SECOND_PIZZA);
   });
 });
 
 describe('lastIndexOf', () => {
   test('lastIndexOf without position', () => {
     const result = lastIndexOf(SURROGATE_PAIRS_STRING, '🍕');
-    expect(result).toEqual(POS_SECOND_REALLY);
+    expect(result).toEqual(POS_SECOND_PIZZA);
   });
 
   test('lastIndexOf with position', () => {
@@ -108,84 +109,150 @@ describe('length', () => {
   });
 });
 
-// TODO: limit test
+// TODO: limit test, waiting
 
+// TODO: add tests once we add override?
 describe('normalize', () => {
-  test('normalize without form', () => {
-    const result = normalize(TEXT_STRING);
-    expect(result).toEqual(TEXT_STRING);
+  test('normalize with no forms, compare strings', () => {
+    const regularStringResult = normalize(NORMALIZE_STRING, 'none');
+    const surrogatePairStringResult = normalize(NORMALIZE_SURROGATE_PAIRS, 'none');
+    expect(regularStringResult === surrogatePairStringResult).toEqual(false);
   });
 
-  test('normalize with form', () => {
-    const result = normalize(TEXT_STRING, 'NFC');
-    expect(result).toEqual(TEXT_STRING);
+  test('normalize with different forms, compare strings', () => {
+    const NFCResult = normalize(NORMALIZE_STRING, 'NFC');
+    const NFDResult = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFD');
+    expect(NFCResult === NFDResult).toEqual(false);
+  });
+
+  test('normalize with same form, compare strings', () => {
+    const regularStringResult = normalize(NORMALIZE_STRING, 'NFC');
+    const surrogatePairStringResult = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFC');
+    expect(regularStringResult === surrogatePairStringResult).toEqual(true);
+  });
+
+  test('normalize surrogate pairs string', () => {
+    const result = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFC');
+    expect(result).toEqual(NORMALIZE_STRING);
+  });
+
+  test('normalize surrogate pairs string as its own form', () => {
+    const result = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFD');
+    expect(result).toEqual(NORMALIZE_SURROGATE_PAIRS);
   });
 });
 
 describe('padEnd', () => {
   test('padEnd without padString', () => {
-    const result = padEnd(TEXT_STRING, TEST_STRING_LENGTH + 10, undefined);
-    expect(result).toEqual(TEXT_STRING + TEN_SPACES);
+    const result = padEnd(SURROGATE_PAIRS_STRING, SURROGATE_PAIRS_STRING_LENGTH + 10, undefined);
+    expect(result).toEqual(SURROGATE_PAIRS_STRING + TEN_SPACES);
   });
 
+  // TODO: Finish test, once implementation is fixed
   // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
+  // limit only works when length(padString) = 1
   // ('padEnd with padString', () => {
-  //   const result = padEnd(TEST_STRING, TEST_STRING_LENGTH + 10, 'ha');
-  //   expect(result).toEqual(`${TEST_STRING}hahahahaha`);
+  //   const result = padEnd(TEXT_STRING, TEST_STRING_LENGTH + 10, 'ha');
+  //   expect(result).toEqual(`${TEXT_STRING}hahahahaha`);
   // });
 });
 
 describe('padStart', () => {
   test('padStart without padString', () => {
-    const result = padStart(TO_ARRAY_TEST_STRING, TO_ARRAY_TEST_STRING_LENGTH + 10, undefined);
-    expect(result).toEqual(TEN_SPACES + TO_ARRAY_TEST_STRING);
+    const result = padStart(SURROGATE_PAIRS_STRING, SURROGATE_PAIRS_STRING_LENGTH + 10, undefined);
+    expect(result).toEqual(TEN_SPACES + SURROGATE_PAIRS_STRING);
   });
 
+  // TODO: Finish test, once implementation is fixed
   // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
+  // limit only works when length(padString) = 1
   // ('padStart with padString', () => {
   //   const result = padStart(TEST_STRING, TEST_STRING_LENGTH + 10, 'ha');
   //   expect(result).toEqual(`hahahahaha${TEST_STRING}`);
   // });
 });
 
-// TODO: slice test
-// TODO: split test
+// TODO: slice test, waiting
+// ('slice', () => {
+//   ('slice', () => {
+//     const result = slice(SURROGATE_PAIRS_STRING, )
+//   })
+// })
+
+// TODO: fix split implementation and then test, add tests once we add override?
+// ('split', () => {
+//   ('split without splitLimit', () => {
+//     const result = SURROGATE_PAIRS_STRING.split('🍕');
+//     expect(result).toEqual(SURROGATE_PAIRS_ARRAY);
+//   });
+
+//   ('split by empty string', () => {
+//     const result = split(SHORTER_SURROGATE_PAIRS_STRING, '');
+//     expect(result).toEqual(SHORTER_SURROGATE_PAIRS_ARRAY);
+//   });
+// });
 
 describe('startsWith', () => {
   test('startsWith without position', () => {
-    const result = startsWith(TEXT_STRING, 'This');
+    const result = startsWith(SURROGATE_PAIRS_STRING, 'Look𐐷');
     expect(result).toEqual(true);
   });
 
-  // Should test what the end is, not what it isn't
-  test('startsWith with position', () => {
-    const result = startsWith(TEXT_STRING, 'This', 5);
+  test('startsWith with position, searchString is not the start', () => {
+    const result = startsWith(SURROGATE_PAIRS_STRING, 'Look𐐷', 5);
     expect(result).toEqual(false);
+  });
+
+  test('startsWith with position, searchString is the start', () => {
+    const result = startsWith(SURROGATE_PAIRS_STRING, 'At🦄', 5);
+    expect(result).toEqual(true);
   });
 });
 
-// TODO: substr test
+describe('substr', () => {
+  test('substr without begin or end', () => {
+    const result = substr(SURROGATE_PAIRS_STRING);
+    expect(result).toEqual(SURROGATE_PAIRS_STRING);
+  });
+
+  test('substr with begin', () => {
+    const result = substr(SURROGATE_PAIRS_STRING, 5);
+    expect(result).toEqual(
+      'At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented😉By🍕Surrogate🔥Pairs💋!🌟',
+    );
+  });
+
+  test('substr with end', () => {
+    const result = substr(SURROGATE_PAIRS_STRING, undefined, 25);
+    expect(result).toEqual('Look𐐷At🦄All😎These😁Awesome');
+  });
+
+  test('substr with begin and end', () => {
+    const result = substr(SURROGATE_PAIRS_STRING, 5, 25);
+    expect(result).toEqual('At🦄All😎These😁Awesome🍕Symb');
+  });
+});
 
 describe('substring', () => {
   test('substring with begin', () => {
-    const result = substring(TEXT_STRING, POS_FIRST_REALLY);
-    expect(result).toEqual('really really cool string');
+    const result = substring(SURROGATE_PAIRS_STRING, POS_FIRST_PIZZA);
+    expect(result).toEqual('🍕Symbols💩That🚀Are📷Represented😉By🍕Surrogate🔥Pairs💋!🌟');
   });
 
   test('substring with end', () => {
-    const result = substring(TEXT_STRING, undefined, POS_FIRST_REALLY);
-    expect(result).toEqual('This is a ');
+    const result = substring(SURROGATE_PAIRS_STRING, undefined, POS_FIRST_PIZZA);
+    expect(result).toEqual('Look𐐷At🦄All😎These😁Awesome');
   });
 
   test('substring with begin and end', () => {
-    const result = substring(TEXT_STRING, POS_FIRST_REALLY, POS_SECOND_REALLY);
-    expect(result).toEqual('really ');
+    const result = substring(SURROGATE_PAIRS_STRING, POS_FIRST_PIZZA, POS_SECOND_PIZZA);
+    expect(result).toEqual('🍕Symbols💩That🚀Are📷Represented😉By');
   });
 });
 
 describe('toArray', () => {
   test('toArray returns correct array', () => {
-    const result = toArray(TO_ARRAY_TEST_STRING);
-    expect(result).toEqual(TO_ARRAY_TEST_ARRAY);
+    const result = toArray(SHORTER_SURROGATE_PAIRS_STRING);
+    expect(result).toEqual(SHORTER_SURROGATE_PAIRS_ARRAY);
   });
 });
