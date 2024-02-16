@@ -170,8 +170,7 @@ export function limit(
   return stringzLimit(string, padLimit, padString, padPosition);
 }
 
-// TODO: Want to override, but getting an error that it isn't compatible, check if we need to validate the form to make sure its one of the provided options
-// export function normalize(string: string, form?: string): string;
+// TODO: Check if we need to validate the form to make sure its one of the provided options
 /**
  * Returns the Unicode Normalization Form of this string.
  *
@@ -180,7 +179,9 @@ export function limit(
  *   Default is `'NFC'`
  * @returns {string} A string containing the Unicode Normalization Form of the given string.
  */
-export function normalize(string: string, form: 'NFC' | 'NFD' | 'none' = 'NFC'): string {
+export function normalize(string: string, form: 'NFC' | 'NFD' | 'none'): string;
+export function normalize(string: string, form: string): string;
+export function normalize(string: string, form: string = 'NFC'): string {
   const upperCaseForm = form.toUpperCase();
   if (upperCaseForm === 'NONE') {
     return string;
