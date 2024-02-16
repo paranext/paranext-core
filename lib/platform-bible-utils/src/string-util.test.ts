@@ -12,7 +12,7 @@ import {
   padEnd,
   padStart,
   // slice,
-  // split,
+  split,
   startsWith,
   substr,
   substring,
@@ -22,8 +22,11 @@ import {
 const SURROGATE_PAIRS_STRING =
   'Look𐐷At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented😉By🍕Surrogate🔥Pairs💋!🌟';
 
-const SHORTER_SURROGATE_PAIRS_STRING = 'Look𐐷At🦄';
-const SHORTER_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '🦄'];
+const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At🦄';
+const SHORT_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '🦄'];
+
+const SHORTER_SURROGATE_PAIRS_STRING = 'Look𐐷At🦄This𐐷Thing😉Its𐐷Awesome';
+const SHORTER_SURROGATE_PAIRS_ARRAY = ['Look', 'At🦄This', 'Thing😉Its', 'Awesome'];
 
 const POS_FIRST_PIZZA = 25;
 const POS_SECOND_PIZZA = 57;
@@ -189,18 +192,37 @@ describe('padStart', () => {
 //   })
 // })
 
-// TODO: fix split implementation and then test, add tests once we add override?
-// ('split', () => {
-//   ('split without splitLimit', () => {
-//     const result = SURROGATE_PAIRS_STRING.split('🍕');
-//     expect(result).toEqual(SURROGATE_PAIRS_ARRAY);
-//   });
+describe('split', () => {
+  test('split without splitLimit', () => {
+    const result = split(SHORTER_SURROGATE_PAIRS_STRING, '𐐷');
+    expect(result).toEqual(SHORTER_SURROGATE_PAIRS_ARRAY);
+  });
 
-//   ('split by empty string', () => {
-//     const result = split(SHORTER_SURROGATE_PAIRS_STRING, '');
-//     expect(result).toEqual(SHORTER_SURROGATE_PAIRS_ARRAY);
-//   });
-// });
+  test('split with splitLimit', () => {
+    const result = split(SHORTER_SURROGATE_PAIRS_STRING, '𐐷', 2);
+    expect(result).toEqual(['Look', 'At🦄This𐐷Thing😉Its𐐷Awesome']);
+  });
+
+  test('split by empty string', () => {
+    const result = split(SHORT_SURROGATE_PAIRS_STRING, '');
+    expect(result).toEqual(SHORT_SURROGATE_PAIRS_ARRAY);
+  });
+
+  test('split by empty string with splitLimit', () => {
+    const result = split(SHORT_SURROGATE_PAIRS_STRING, '', 3);
+    expect(result).toEqual(['L', 'o', 'o']);
+  });
+
+  test('split with RegExp separator', () => {
+    const result = split(SHORTER_SURROGATE_PAIRS_STRING, /[A-Z]/);
+    expect(result).toEqual(['', 'ook𐐷', 't🦄', 'his𐐷', 'hing😉', 'ts𐐷', 'wesome']);
+  });
+
+  test('split with RegExp separator that contains surrogate pairs', () => {
+    const result = split(SHORTER_SURROGATE_PAIRS_STRING, /🦄/);
+    expect(result).toEqual(['Look𐐷At', 'This𐐷Thing😉Its𐐷Awesome']);
+  });
+});
 
 describe('startsWith', () => {
   test('startsWith without position', () => {
@@ -262,7 +284,7 @@ describe('substring', () => {
 
 describe('toArray', () => {
   test('toArray returns correct array', () => {
-    const result = toArray(SHORTER_SURROGATE_PAIRS_STRING);
-    expect(result).toEqual(SHORTER_SURROGATE_PAIRS_ARRAY);
+    const result = toArray(SHORT_SURROGATE_PAIRS_STRING);
+    expect(result).toEqual(SHORT_SURROGATE_PAIRS_ARRAY);
   });
 });

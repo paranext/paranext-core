@@ -8,7 +8,6 @@ import {
 } from 'stringz';
 
 // TODO: Note in each JSDOC that we are dealing with Unicode code points instead of UTF-16 character codes
-// TODO: Overloads
 
 // TODO: Do we want this to throw instead of return empty string?
 /**
@@ -239,8 +238,6 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
   return substring(string, indexStart, indexEnd);
 }
 
-// TODO: Test, overload for separator type
-// split(splitter: { [Symbol.split](string: string, limit?: number): string[]; }, limit?: number): string[];
 /**
  * Takes a pattern and divides the string into an ordered list of substrings by searching for the
  * pattern, puts these substrings into an array, and returns the array. This function handles
@@ -251,37 +248,49 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
  * @param {number} splitLimit Limit on the number of substrings to be included in the array. Splits
  *   the string at each occurrence of specified separator, but stops when limit entries have been
  *   placed in the array.
- * @returns {string[]} An array of strings, split at each point where separator occurs in the
- *   starting string.
+ * @returns {string[] | undefined} An array of strings, split at each point where separator occurs
+ *   in the starting string. Returns undefined if separator is not found in string.
  */
-export function split(string: string, separator: string | RegExp, splitLimit?: number): string[] {
+export function split(
+  string: string,
+  separator: string | RegExp,
+  splitLimit?: number,
+): string[] | undefined {
   const result: string[] = [];
 
-  if (splitLimit === undefined || splitLimit <= 0) {
-    return [string]; // Return the whole string if limit is not provided or invalid
+  if (splitLimit !== undefined && splitLimit <= 0) {
+    return [string];
   }
+
+  if (separator === '') return toArray(string).slice(0, splitLimit);
+
+  let regexSeparator = separator;
+  if (
+    typeof separator === 'string' ||
+    (separator instanceof RegExp && !separator.flags.includes('g'))
+  ) {
+    regexSeparator = new RegExp(separator, 'g');
+  }
+
+  const matches: RegExpMatchArray | null = string.match(regexSeparator);
 
   let currentIndex = 0;
-  let match: RegExpMatchArray | null;
 
-  match = substr(string, currentIndex).match(separator);
-  // match() returns either RegExpMatchArray or null
-  // eslint-disable-next-line no-null/no-null
-  while (match !== null) {
-    const matchIndex = match.index ?? 0;
-    const matchLength = match[0].length;
+  if (!matches) return undefined;
 
-    result.push(substr(string, currentIndex, matchIndex));
-    currentIndex += matchIndex + matchLength;
+  for (let index = 0; index < (splitLimit ? splitLimit - 1 : matches.length); index++) {
+    const matchIndex = indexOf(string, matches[index], currentIndex);
+    const matchLength = length(matches[index]);
 
-    if (result.length === splitLimit - 1) {
-      break; // Reached the specified limit
+    result.push(substring(string, currentIndex, matchIndex));
+    currentIndex = matchIndex + matchLength;
+
+    if (splitLimit !== undefined && result.length === splitLimit) {
+      break;
     }
-
-    match = substr(string, currentIndex).match(separator);
   }
 
-  result.push(substr(string, currentIndex)); // Add the remaining part of the string
+  result.push(substring(string, currentIndex));
 
   return result;
 }
