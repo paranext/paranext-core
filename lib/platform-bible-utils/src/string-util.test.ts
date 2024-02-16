@@ -34,9 +34,19 @@ const NORMALIZE_STRING = '\u0041\u006d\u00e9\u006c\u0069\u0065';
 const NORMALIZE_SURROGATE_PAIRS = '\u0041\u006d\u0065\u0301\u006c\u0069\u0065';
 
 describe('at', () => {
-  test('at', () => {
+  test('at with in bounds index', () => {
     const result = at(SURROGATE_PAIRS_STRING, 4);
     expect(result).toEqual('𐐷');
+  });
+
+  test('at with negative index returns last character', () => {
+    const result = at(SURROGATE_PAIRS_STRING, -1);
+    expect(result).toEqual('🌟');
+  });
+
+  test('at with index greater than length returns empty string', () => {
+    const result = at(SURROGATE_PAIRS_STRING, length(SURROGATE_PAIRS_STRING) + 10);
+    expect(result).toEqual('');
   });
 });
 

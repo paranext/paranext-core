@@ -9,8 +9,8 @@ import {
 
 // TODO: Note in each JSDOC that we are dealing with Unicode code points instead of UTF-16 character codes
 // TODO: Overloads
-// Rolf - I added a commented line with the override to the two functions that I found that needed one: normalize, and split.
 
+// TODO: Do we want this to throw instead of return empty string?
 /**
  * Finds the Unicode code point at the given index
  *
@@ -19,7 +19,7 @@ import {
  * @returns {string} New string consisting of the Unicode code point located at the specified offset
  */
 export function at(string: string, index: number): string {
-  // TODO: Add validation for index? can't be less than 0 or greater than string length
+  if (index > length(string) || index < -length(string)) return '';
   return substr(string, index, 1);
 }
 
