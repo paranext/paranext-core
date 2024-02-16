@@ -1445,15 +1445,6 @@ declare module 'shared/services/network.service' {
    */
   export const papiNetworkService: PapiNetworkService;
 }
-declare module 'shared/utils/mutex-map' {
-  import { Mutex } from 'async-mutex';
-  /** Map of {@link Mutex}es that automatically generates a new {@link Mutex} for any new key */
-  class MutexMap {
-    private mutexesByID;
-    get(mutexID: string): Mutex;
-  }
-  export default MutexMap;
-}
 declare module 'shared/services/network-object.service' {
   import { PlatformEvent, UnsubscriberAsync } from 'platform-bible-utils';
   import {

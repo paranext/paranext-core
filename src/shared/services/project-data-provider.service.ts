@@ -6,10 +6,9 @@ import {
 import networkObjectService from '@shared/services/network-object.service';
 import { getByType, registerEngineByType } from '@shared/services/data-provider.service';
 import { newNonce } from '@shared/utils/util';
-import { Dispose, UnsubscriberAsyncList } from 'platform-bible-utils';
+import { Dispose, MutexMap, UnsubscriberAsyncList } from 'platform-bible-utils';
 import projectLookupService from '@shared/services/project-lookup.service';
 import logger from '@shared/services/logger.service';
-import MutexMap from '@shared/utils/mutex-map';
 
 /**
  * Class that creates Project Data Providers of a specified `projectType`. Layers over

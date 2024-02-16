@@ -12,6 +12,7 @@ import {
   getAllObjectFunctionNames,
   isString,
   CanHaveOnDidDispose,
+  MutexMap,
 } from 'platform-bible-utils';
 import {
   NetworkObject,
@@ -20,9 +21,7 @@ import {
   LocalObjectToProxyCreator,
   NetworkObjectDetails,
 } from '@shared/models/network-object.model';
-import MutexMap from '@shared/utils/mutex-map';
 import logger from '@shared/services/logger.service';
-import { Mutex } from 'async-mutex';
 
 // #endregion
 
@@ -176,8 +175,8 @@ onDidDisposeNetworkObject((id: string) => {
 // #region Helpers for get and set
 
 // We need this to protect simultaneous calls to get and/or set the same network objects
-const getterMutexMap: MutexMap = new MutexMap();
-const setterMutexMap: MutexMap = new MutexMap();
+const getterMutexMap = new MutexMap();
+const setterMutexMap = new MutexMap();
 
 /** This proxy enables calling functions on a network object that exists in a different process */
 const createRemoteProxy = (
@@ -339,7 +338,7 @@ const get = async <T extends object>(
   await initialize();
 
   // Don't allow simultaneous gets to run for the same network object
-  const lock: Mutex = getterMutexMap.get(id);
+  const lock = getterMutexMap.get(id);
   return lock.runExclusive(async () => {
     // If we already have this network object, return it
     const networkObjectRegistration = networkObjectRegistrations.get(id);
@@ -433,7 +432,7 @@ const set = async <T extends NetworkableObject>(
   await initialize();
 
   // Don't allow simultaneous sets to run for the same network object
-  const lock: Mutex = setterMutexMap.get(id);
+  const lock = setterMutexMap.get(id);
   return lock.runExclusive(async () => {
     // Check to see if we already know there is a network object with this ID.
     if (hasKnown(id)) throw new Error(`Network object with id ${id} is already registered`);
