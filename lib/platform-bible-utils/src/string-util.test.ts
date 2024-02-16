@@ -20,10 +20,11 @@ import {
 } from './string-util';
 
 const SURROGATE_PAIRS_STRING =
-'Look𐐷At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented😉By👌Surrogate🔥Pairs💋!🌟';
+'Look𐐷At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented😉By🍕Surrogate🔥Pairs💋!🌟';
 const TEXT_STRING = 'This is a really really cool string';
-const POS_FIRST_REALLY = 10;
-const POS_SECOND_REALLY = 17;
+const POS_FIRST_REALLY = 25;
+const POS_SECOND_REALLY = 57;
+const SURROGATE_PAIRS_STRING_LENGTH = 76;
 const TEST_STRING_LENGTH = 35;
 const TEN_SPACES = '          ';
 
@@ -66,46 +67,44 @@ describe('endsWith', () => {
 
 describe('includes', () => {
   test('includes without position', () => {
-    const result = includes(TEXT_STRING, 'really');
+    const result = includes(SURROGATE_PAIRS_STRING, '🍕Symbols💩');
     expect(result).toEqual(true);
   });
 
   test('includes with position', () => {
-    const result = includes(TEXT_STRING, 'really', 22);
-    expect(result).toEqual(false);
+    const result = includes(SURROGATE_PAIRS_STRING, '🦄All😎', 8);
+    expect(result).toEqual(true);
   });
 });
 
 describe('indexOf', () => {
   test('indexOf without position', () => {
-    const result = indexOf(TEXT_STRING, 'really');
+    const result = indexOf(SURROGATE_PAIRS_STRING, '🍕');
     expect(result).toEqual(POS_FIRST_REALLY);
   });
 
   test('indexOf with position', () => {
-    const result = indexOf(TEXT_STRING, 'really', 12);
+    const result = indexOf(SURROGATE_PAIRS_STRING, '🍕', 40);
     expect(result).toEqual(POS_SECOND_REALLY);
   });
 });
 
 describe('lastIndexOf', () => {
   test('lastIndexOf without position', () => {
-    const result = lastIndexOf(TEXT_STRING, 'really');
+    const result = lastIndexOf(SURROGATE_PAIRS_STRING, '🍕');
     expect(result).toEqual(POS_SECOND_REALLY);
   });
 
-  // Expecting -1 but returning 17
-  // position should set the "start" of the string to 20, there is no 'really' from 20 to the end of the test string
-  // ('lastIndexOf with position', () => {
-  //   const result = lastIndexOf(TEST_STRING, 'really', 20);
-  //   expect(result).toEqual(-1);
-  // });
+  test('lastIndexOf with position', () => {
+    const result = lastIndexOf(SURROGATE_PAIRS_STRING, '🍕', 5);
+    expect(result).toEqual(-1);
+  });
 });
 
 describe('length', () => {
   test('length is correct', () => {
-    const result = length(TEXT_STRING);
-    expect(result).toEqual(TEST_STRING_LENGTH);
+    const result = length(SURROGATE_PAIRS_STRING);
+    expect(result).toEqual(SURROGATE_PAIRS_STRING_LENGTH);
   });
 });
 
