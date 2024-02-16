@@ -86,8 +86,13 @@ describe('includes', () => {
   });
 
   test('includes with position', () => {
-    const result = includes(SURROGATE_PAIRS_STRING, '🦄All😎', 8);
+    const result = includes(SURROGATE_PAIRS_STRING, '🦄All😎', 7);
     expect(result).toEqual(true);
+  });
+
+  test('includes with position that is to high, so no matches are found', () => {
+    const result = includes(SURROGATE_PAIRS_STRING, '🦄All😎', 10);
+    expect(result).toEqual(false);
   });
 });
 
