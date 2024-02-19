@@ -7,47 +7,46 @@ import {
   substr as stringzSubstr,
 } from 'stringz';
 
-// TODO: Note in each JSDOC that we are dealing with Unicode code points instead of UTF-16 character codes
-
-// TODO: Do we want this to throw instead of return empty string?
 /**
  * Finds the Unicode code point at the given index
  *
  * @param {string} string String to index
- * @param {number} index Position of the character to be returned
- * @returns {string} New string consisting of the Unicode code point located at the specified offset
+ * @param {number} index Position of the character to be returned in range of 0 to -length(string)
+ * @returns {string} New string consisting of the Unicode code point located at the specified
+ *   offset, undefined if index is out of bounds
  */
-export function at(string: string, index: number): string {
-  if (index > length(string) || index < -length(string)) return '';
+export function at(string: string, index: number): string | undefined {
+  if (index > length(string) || index < -length(string)) return undefined;
   return substr(string, index, 1);
 }
 
-// TODO: Is this all we need to do here?
 /**
  * Always indexes string as a sequence of Unicode code points
  *
  * @param string String to index
- * @param index Position of the string character to be returned
- * @returns {string} New string consisting of the Unicode code point located at the specified offset
+ * @param index Position of the string character to be returned, in the range of 0 to
+ *   length(string)-1
+ * @returns {string} New string consisting of the Unicode code point located at the specified
+ *   offset, empty string if index is out of bounds
  */
 export function charAt(string: string, index: number): string {
-  return at(string, index);
+  if (index < 0 || index > length(string) - 1) return '';
+  return substr(string, index, 1);
 }
 
-// TODO: Is this all we need to do here?
 /**
  * Returns a non-negative integer that is the Unicode code point value of the character starting at
  * the given index. This function handles Unicode code points instead of UTF-16 character codes.
  *
  * @param {string} string String to index
- * @param {number} index Position of the string character to be returned
+ * @param {number} index Position of the string character to be returned, in the range of 0 to
+ *   length(string)-1
  * @returns {number | undefined} Non-negative integer representing the code point value of the
  *   character at the given index, or undefined if there is no element at that position
  */
 export function codePointAt(string: string, index: number): number | undefined {
-  // TODO: validation for index?
-  const character = at(string, index);
-  return character.codePointAt(0);
+  if (index < 0 || index > length(string) - 1) return undefined;
+  return substr(string, index, 1).codePointAt(0);
 }
 
 /**
@@ -148,39 +147,15 @@ export function length(string: string): number {
   return stringzLength(string);
 }
 
-// TODO: test, ask TJ if we want this
-/**
- * Limits a string to a given width. This function handles Unicode code points instead of UTF-16
- * character codes.
- *
- * @param {string} string The string to be limited
- * @param {number} [padLimit=16] Desired string length. Default is `16`
- * @param {string} [padString=' '] Character to pad the output with. Default is `' '`
- * @param {'right' | 'left'} [padPosition='right'] The pad position: 'right' or 'left'. Default is
- *   `'right'`
- * @returns {string} String limited to the given width with the padString provided
- */
-export function limit(
-  string: string,
-  padLimit: number = 16,
-  padString: string = ' ',
-  padPosition: 'right' | 'left' = 'right',
-): string {
-  return stringzLimit(string, padLimit, padString, padPosition);
-}
-
-// TODO: Check if we need to validate the form to make sure its one of the provided options
 /**
  * Returns the Unicode Normalization Form of this string.
  *
  * @param {string} string The starting string
- * @param {'NFC' | 'NFD' | 'none'} [form='NFC'] Form specifying the Unicode Normalization Form.
- *   Default is `'NFC'`
+ * @param {'NFC' | 'NFD' | 'NFKC' | 'NFKD' | 'none'} [form='NFC'] Form specifying the Unicode
+ *   Normalization Form. Default is `'NFC'`
  * @returns {string} A string containing the Unicode Normalization Form of the given string.
  */
-export function normalize(string: string, form: 'NFC' | 'NFD' | 'none'): string;
-export function normalize(string: string, form: string): string;
-export function normalize(string: string, form: string = 'NFC'): string {
+export function normalize(string: string, form: 'NFC' | 'NFD' | 'NFKC' | 'NFKD' | 'none'): string {
   const upperCaseForm = form.toUpperCase();
   if (upperCaseForm === 'NONE') {
     return string;
@@ -188,7 +163,6 @@ export function normalize(string: string, form: string = 'NFC'): string {
   return string.normalize(upperCaseForm);
 }
 
-// TODO: limit only works when length(padString) = 1
 /**
  * Pads this string with another string (multiple times, if needed) until the resulting string
  * reaches the given length. The padding is applied from the end of this string. This function
@@ -201,12 +175,12 @@ export function normalize(string: string, form: string = 'NFC'): string {
  *   long to stay within targetLength, it will be truncated. Default is `" "`
  * @returns {string} String with appropriate padding at the end
  */
+// Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
 export function padEnd(string: string, targetLength: number, padString: string = ' '): string {
   if (targetLength <= length(string)) return string;
-  return limit(string, targetLength, padString, 'right');
+  return stringzLimit(string, targetLength, padString, 'right');
 }
 
-// TODO: limit only works when length(padString) = 1
 /**
  * Pads this string with another string (multiple times, if needed) until the resulting string
  * reaches the given length. The padding is applied from the start of this string. This function
@@ -219,12 +193,20 @@ export function padEnd(string: string, targetLength: number, padString: string =
  *   long to stay within the targetLength, it will be truncated from the end. Default is `" "`
  * @returns String with of specified targetLength with padString applied from the start
  */
+// Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
 export function padStart(string: string, targetLength: number, padString: string = ' '): string {
   if (targetLength <= length(string)) return string;
-  return limit(string, targetLength, padString, 'left');
+  return stringzLimit(string, targetLength, padString, 'left');
 }
 
-// TODO: Do we need to implement both this and substring with subtle differences, or treat them the same
+// function validateSliceIndex(string: string, index: number) {
+//   if (index < -length(string)) return -length(string);
+//   if (index > length(string)) return length(string);
+//   if (index < 0) return index + length(string);
+//   return index;
+// }
+
+// TODO:  slice accepts negative and loops include differences
 /**
  * Extracts a section of this string and returns it as a new string, without modifying the original
  * string. This function handles Unicode code points instead of UTF-16 character codes.
@@ -235,7 +217,20 @@ export function padStart(string: string, targetLength: number, padString: string
  * @returns {string} A new string containing the extracted section of the string.
  */
 export function slice(string: string, indexStart: number, indexEnd?: number): string {
-  return substring(string, indexStart, indexEnd);
+  let newStart = indexStart;
+  let newEnd = indexEnd || 0;
+
+  if (!newStart) newStart = 0;
+  if (newStart >= length(string)) return '';
+  if (newStart < 0) newStart += length(string);
+
+  if (newEnd >= length(string)) newEnd = length(string) - 1;
+  if (newEnd < 0) newEnd += length(string);
+
+  // AFTER normalizing negatives
+  if (newEnd <= newStart) return '';
+
+  return substr(string, newStart, newEnd - newStart);
 }
 
 /**
@@ -313,10 +308,10 @@ export function startsWith(string: string, searchString: string, position: numbe
   return true;
 }
 
-// TODO: test, ask TJ if we want this since its deprecated in string
 /**
  * Returns a substring by providing start and length. This function handles Unicode code points
- * instead of UTF-16 character codes.
+ * instead of UTF-16 character codes. This function is not exported because it is considered
+ * deprecated, however it is still useful as a local helper function.
  *
  * @param {string} string String to be divided
  * @param {number} [begin=Start of string] Start position. Default is `Start of string`
@@ -324,11 +319,7 @@ export function startsWith(string: string, searchString: string, position: numbe
  *   length minus start parameter`. Default is `String length minus start parameter`
  * @returns {string} Substring from starting string
  */
-export function substr(
-  string: string,
-  begin: number = 0,
-  len: number = length(string) - begin,
-): string {
+function substr(string: string, begin: number = 0, len: number = length(string) - begin): string {
   return stringzSubstr(string, begin, len);
 }
 

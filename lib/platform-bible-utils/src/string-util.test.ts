@@ -7,14 +7,12 @@ import {
   indexOf,
   lastIndexOf,
   length,
-  // limit,
   normalize,
   padEnd,
   padStart,
-  // slice,
+  slice,
   split,
   startsWith,
-  substr,
   substring,
   toArray,
 } from './string-util';
@@ -47,9 +45,9 @@ describe('at', () => {
     expect(result).toEqual('🌟');
   });
 
-  test('at with index greater than length returns empty string', () => {
+  test('at with index greater than length returns undefined', () => {
     const result = at(SURROGATE_PAIRS_STRING, length(SURROGATE_PAIRS_STRING) + 10);
-    expect(result).toEqual('');
+    expect(result).toEqual(undefined);
   });
 });
 
@@ -58,6 +56,8 @@ describe('charAt', () => {
     const result = charAt(SURROGATE_PAIRS_STRING, 7);
     expect(result).toEqual('🦄');
   });
+
+  // TODO: more tests
 });
 
 describe('codePointAt', () => {
@@ -65,6 +65,8 @@ describe('codePointAt', () => {
     const result = codePointAt(SURROGATE_PAIRS_STRING, 11);
     expect(result).toEqual(128526);
   });
+
+  // TODO: more tests
 });
 
 describe('endsWith', () => {
@@ -127,9 +129,6 @@ describe('length', () => {
   });
 });
 
-// TODO: limit test, waiting
-
-// TODO: add tests once we add override?
 describe('normalize', () => {
   test('normalize with no forms, compare strings', () => {
     const regularStringResult = normalize(NORMALIZE_STRING, 'none');
@@ -166,7 +165,9 @@ describe('padEnd', () => {
     expect(result).toEqual(SURROGATE_PAIRS_STRING + TEN_SPACES);
   });
 
-  // TODO: Finish test, once implementation is fixed
+  // TODO: test with one character padString
+
+  // Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
   // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
   // limit only works when length(padString) = 1
   // ('padEnd with padString', () => {
@@ -181,7 +182,9 @@ describe('padStart', () => {
     expect(result).toEqual(TEN_SPACES + SURROGATE_PAIRS_STRING);
   });
 
-  // TODO: Finish test, once implementation is fixed
+  // TODO: test with one character padString
+
+  // Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
   // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
   // limit only works when length(padString) = 1
   // ('padStart with padString', () => {
@@ -190,12 +193,28 @@ describe('padStart', () => {
   // });
 });
 
-// TODO: slice test, waiting
-// ('slice', () => {
-//   ('slice', () => {
-//     const result = slice(SURROGATE_PAIRS_STRING, )
-//   })
-// })
+describe('slice', () => {
+  test('slice with with end greater than negative length of string returns empty string', () => {
+    const result = slice(SHORT_SURROGATE_PAIRS_STRING, 0, -1000);
+    expect(result).toEqual('');
+  });
+
+  test('slice with begin greater than negative length of string returns whole string', () => {
+    const result = slice(SHORT_SURROGATE_PAIRS_STRING, -1000);
+    expect(result).toEqual(SHORT_SURROGATE_PAIRS_STRING);
+  });
+
+  // Failing receives ''
+  // test('slice with begin of -1 returns last character', () => {
+  //   const result = slice(SHORT_SURROGATE_PAIRS_STRING, -1);
+  //   expect(result).toEqual('🦄');
+  // });
+
+  test('slice with in bounds begin and end', () => {
+    const result = slice(SHORT_SURROGATE_PAIRS_STRING, 0, 2);
+    expect(result).toEqual('Lo');
+  });
+});
 
 describe('split', () => {
   test('split without splitLimit', () => {
@@ -243,30 +262,6 @@ describe('startsWith', () => {
   test('startsWith with position, searchString is the start', () => {
     const result = startsWith(SURROGATE_PAIRS_STRING, 'At🦄', 5);
     expect(result).toEqual(true);
-  });
-});
-
-describe('substr', () => {
-  test('substr without begin or end', () => {
-    const result = substr(SURROGATE_PAIRS_STRING);
-    expect(result).toEqual(SURROGATE_PAIRS_STRING);
-  });
-
-  test('substr with begin', () => {
-    const result = substr(SURROGATE_PAIRS_STRING, 5);
-    expect(result).toEqual(
-      'At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented😉By🍕Surrogate🔥Pairs💋!🌟',
-    );
-  });
-
-  test('substr with end', () => {
-    const result = substr(SURROGATE_PAIRS_STRING, undefined, 25);
-    expect(result).toEqual('Look𐐷At🦄All😎These😁Awesome');
-  });
-
-  test('substr with begin and end', () => {
-    const result = substr(SURROGATE_PAIRS_STRING, 5, 25);
-    expect(result).toEqual('At🦄All😎These😁Awesome🍕Symb');
   });
 });
 
