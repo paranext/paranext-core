@@ -249,6 +249,36 @@ internal class LocalParatextProjects
                 )
             );
         }
+
+        // Taking advantage of the code here to add a helloWorld project for now.
+        // TODO: We should definitely change this when we have some kind of add project
+        // functionality https://github.com/paranext/paranext-core/issues/544
+        projectName = "hwtest";
+        projectId = "helloworldtest";
+        projectFolderName = projectName + "_" + projectId;
+        projectFolder = Path.Join(ProjectRootFolder, projectFolderName);
+        metadata = new(projectId, projectName, "helloWorld", "helloWorld");
+        metadataString = ProjectMetadataConverter.ToJsonString(
+            metadata.ID,
+            metadata.Name,
+            metadata.ProjectStorageType,
+            metadata.ProjectType
+        );
+
+        CreateDirectory(Path.Join(projectFolder, PROJECT_SUBDIRECTORY));
+
+        File.WriteAllText(Path.Join(projectFolder, PROJECT_METADATA_FILE), metadataString);
+
+        foreach (string filePath in Directory.GetFiles("assets/" + projectName, "*.*"))
+        {
+            File.Copy(
+                filePath,
+                filePath.Replace(
+                    "assets/" + projectName,
+                    Path.Join(projectFolder, PROJECT_SUBDIRECTORY)
+                )
+            );
+        }
     }
 
     #endregion

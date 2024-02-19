@@ -2,6 +2,7 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import styleInject from '@senojs/rollup-plugin-style-inject';
+import { peerDependencies, dependencies } from './package.json';
 
 const config = defineConfig({
   base: './',
@@ -20,16 +21,11 @@ const config = defineConfig({
     },
     rollupOptions: {
       external: [
-        'react',
-        'react-data-grid',
-        'react-dom',
+        ...Object.keys(peerDependencies ?? {}),
+        ...Object.keys(dependencies ?? {}),
         'react/jsx-runtime',
-        '@emotion/react',
-        '@emotion/styled',
-        '@mui/material',
         '@mui/styled-engine-sc',
         '@mui/styled-engine',
-        'platform-bible-utils',
       ],
       output: {
         globals: {

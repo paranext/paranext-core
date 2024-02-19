@@ -4,7 +4,9 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import DoneIcon from '@mui/icons-material/Done';
 import ProjectList from '@renderer/components/projects/project-list.component';
 import './select-multiple-projects-dialog.component.scss';
-import projectLookupService from '@shared/services/project-lookup.service';
+import projectLookupService, {
+  filterProjectsMetadata,
+} from '@shared/services/project-lookup.service';
 import { Button, usePromise } from 'platform-bible-react';
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
 import {
@@ -17,17 +19,19 @@ function SelectMultipleProjectsDialog({
   prompt,
   submitDialog,
   excludeProjectIds,
+  includeProjectTypes,
+  excludeProjectTypes,
   selectedProjectIds: initialSelectedProjectIds,
 }: DialogTypes[typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]['props']) {
   const [projects, isLoadingProjects] = usePromise(
     useCallback(async () => {
       const allProjectsMetadata = await projectLookupService.getMetadataForAllProjects();
-      return !excludeProjectIds
-        ? allProjectsMetadata
-        : allProjectsMetadata.filter(
-            (projectMetadata) => !excludeProjectIds.some((id) => projectMetadata.id === id),
-          );
-    }, [excludeProjectIds]),
+      return filterProjectsMetadata(allProjectsMetadata, {
+        excludeProjectIds,
+        includeProjectTypes,
+        excludeProjectTypes,
+      });
+    }, [excludeProjectIds, includeProjectTypes, excludeProjectTypes]),
     useMemo(() => [], []),
   );
 

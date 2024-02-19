@@ -7,7 +7,23 @@
   "author": "Katherine Jensen",
   "license": "MIT",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
+    "build:main": "webpack --config ./webpack/webpack.config.main.ts",
+    "build": "webpack",
+    "watch": "npm run build -- --watch",
+    "build:production": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=false webpack",
+    "watch:production": "npm run build:production -- --watch",
+    "zip": "zip-build dist release --template '%NAME%_%VERSION%.%EXT%' --override",
+    "package": "npm run build:production && npm run zip",
+    "package:debug": "cross-env DEBUG_PROD=true npm run package",
+    "start:core": "cd ../../.. && npm run start",
+    "start": "npm run start:core",
+    "start:production": "echo unimplemented",
+    "lint": "npm run lint:scripts && npm run lint:styles",
+    "lint:scripts": "eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
+    "lint:styles": "stylelint **/*.{css,scss}",
+    "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
+    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx}\" && npm run lint:scripts"
   },
   "browserslist": [],
   "peerDependencies": {
@@ -19,6 +35,7 @@
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
+    "@swc/core": "^1.4.1",
     "@types/node": "^20.11.6",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",

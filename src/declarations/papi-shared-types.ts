@@ -283,12 +283,12 @@ declare module 'papi-shared-types' {
    *
    * ```typescript
    * declare module 'papi-shared-types' {
-   *   export type MyProjectDataType = MandatoryProjectDataTypes & {
+   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   };
    *
    *   export interface ProjectDataProviders {
-   *     MyExtensionProjectTypeName: IDataProvider<MyProjectDataType>;
+   *     MyExtensionProjectTypeName: IDataProvider<MyProjectDataTypes>;
    *   }
    * }
    * ```
