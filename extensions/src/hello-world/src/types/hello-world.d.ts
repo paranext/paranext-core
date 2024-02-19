@@ -3,13 +3,24 @@ declare module 'hello-world' {
   import type { IProjectDataProvider } from 'papi-shared-types';
 
   export type HelloWorldProjectDataTypes = MandatoryProjectDataTypes & {
+    /**
+     * A random number (or set to a specific number) generated with the selector being the max
+     * possible value for the number
+     */
     RandomNumber: DataProviderDataType<number, number, number>;
+    /** One list of names for the project. No meaningful selector information. */
     Names: DataProviderDataType<undefined, string[], never>;
   };
 
   export type HelloWorldProjectDataProviderMethods = {
+    /**
+     * Get one of the random numbers that has been generated up to this point. If there have not
+     * been any random numbers generated yet, returns a random number between 0 and 1
+     */
     getAnyRandomNumber(): Promise<number>;
+    /** Add a name to the list of names for this project */
     addName(name: string): Promise<boolean>;
+    /** Remove a name from the list of names for this project */
     removeName(name: string): Promise<boolean>;
   };
 

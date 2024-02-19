@@ -19,11 +19,11 @@ class HelloWorldProjectDataProviderEngine
   @papi.dataProviders.decorators.ignore
   async getAnyRandomNumber() {
     const keys = Object.keys(this.numbers);
-    return keys[Math.random() * keys.length];
+    return keys[Math.random() * keys.length] ?? Math.random();
   }
 
   async setRandomNumber(max: number, newNum: number) {
-    if (newNum === this.numbers[max]) return false;
+    if (newNum === this.numbers[max] || newNum > max) return false;
 
     this.numbers[max] = newNum;
     return true;

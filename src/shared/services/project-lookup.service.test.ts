@@ -3,13 +3,13 @@ import { filterProjectsMetadata } from '@shared/services/project-lookup.service'
 import { ProjectMetadataFilterOptions } from './project-lookup.service-model';
 
 describe('filterProjectsMetadata', () => {
-  test('should return a shallow clone if there are no filters', () => {
-    const projectsMetadata: ProjectMetadata[] = [
-      { id: 'asdf', name: 'fdsa', projectType: 'helloWorld', storageType: 'qwer' },
-      { id: 'asdfg', name: 'fdsag', projectType: 'ParatextStandard', storageType: 'qwert' },
-      { id: 'asdfgh', name: 'fdsagh', projectType: 'platform.placeholder', storageType: 'qwerty' },
-    ];
+  const projectsMetadata: ProjectMetadata[] = [
+    { id: 'asdf', name: 'fdsa', projectType: 'helloWorld', storageType: 'qwer' },
+    { id: 'asdfg', name: 'fdsag', projectType: 'ParatextStandard', storageType: 'qwert' },
+    { id: 'asdfgh', name: 'fdsagh', projectType: 'platform.placeholder', storageType: 'qwerty' },
+  ];
 
+  test('should return a shallow clone if there are no filters', () => {
     const options: ProjectMetadataFilterOptions = {};
 
     const filteredMetadata = filterProjectsMetadata(projectsMetadata, options);
@@ -19,12 +19,6 @@ describe('filterProjectsMetadata', () => {
   });
 
   test('should remove ids matching excludeProjectIds', () => {
-    const projectsMetadata: ProjectMetadata[] = [
-      { id: 'asdf', name: 'fdsa', projectType: 'helloWorld', storageType: 'qwer' },
-      { id: 'asdfg', name: 'fdsag', projectType: 'ParatextStandard', storageType: 'qwert' },
-      { id: 'asdfgh', name: 'fdsagh', projectType: 'platform.placeholder', storageType: 'qwerty' },
-    ];
-
     // Single string
 
     let options: ProjectMetadataFilterOptions = {
@@ -45,7 +39,7 @@ describe('filterProjectsMetadata', () => {
 
     expect(filteredMetadata.length).toEqual(1);
 
-    // Precedence over includeProjectTypes
+    // Still excludes even if includeProjectTypes includes
 
     options = {
       excludeProjectIds: ['asdf', 'asdfg'],
@@ -58,12 +52,6 @@ describe('filterProjectsMetadata', () => {
   });
 
   test('should remove ids matching excludeProjectTypes', () => {
-    const projectsMetadata: ProjectMetadata[] = [
-      { id: 'asdf', name: 'fdsa', projectType: 'helloWorld', storageType: 'qwer' },
-      { id: 'asdfg', name: 'fdsag', projectType: 'ParatextStandard', storageType: 'qwert' },
-      { id: 'asdfgh', name: 'fdsagh', projectType: 'platform.placeholder', storageType: 'qwerty' },
-    ];
-
     // Single RegExp that exact matches one project
 
     let options: ProjectMetadataFilterOptions = {
@@ -94,7 +82,7 @@ describe('filterProjectsMetadata', () => {
 
     expect(filteredMetadata.length).toEqual(1);
 
-    // Precedence over includeProjectTypes
+    // Still excludes even if includeProjectTypes includes
 
     options = {
       excludeProjectTypes: 'Paratext',
@@ -107,12 +95,6 @@ describe('filterProjectsMetadata', () => {
   });
 
   test('should include only ids matching includeProjectTypes', () => {
-    const projectsMetadata: ProjectMetadata[] = [
-      { id: 'asdf', name: 'fdsa', projectType: 'helloWorld', storageType: 'qwer' },
-      { id: 'asdfg', name: 'fdsag', projectType: 'ParatextStandard', storageType: 'qwert' },
-      { id: 'asdfgh', name: 'fdsagh', projectType: 'platform.placeholder', storageType: 'qwerty' },
-    ];
-
     // Single RegExp that exact matches one project
 
     let options: ProjectMetadataFilterOptions = {
@@ -143,7 +125,7 @@ describe('filterProjectsMetadata', () => {
 
     expect(filteredMetadata.length).toEqual(2);
 
-    // Precedence over includeProjectTypes
+    // excludeProjectTypes excludes even if this includes
 
     options = {
       excludeProjectTypes: 'Paratext',
