@@ -1,3 +1,4 @@
+import { includes } from 'platform-bible-utils';
 import {
   ERROR_STRINGS,
   MULTI_TEMPLATE_BRANCH,
@@ -62,12 +63,10 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
       extensionsBasedOnTemplate.push(ext);
     } catch (e) {
       if (
-        e
-          .toString()
-          .toLowerCase()
-          .includes(
-            ERROR_STRINGS.subtreeNeverAdded.replace('{0}', ext.dirPathOSIndependent).toLowerCase(),
-          )
+        includes(
+          e.toString().toLowerCase(),
+          ERROR_STRINGS.subtreeNeverAdded.replace('{0}', ext.dirPathOSIndependent).toLowerCase(),
+        )
       )
         // If this folder isn't a subtree, it may be intentionally not based on the template. Continue
         console.warn(

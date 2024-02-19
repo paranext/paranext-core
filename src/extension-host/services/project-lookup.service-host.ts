@@ -8,7 +8,7 @@ import { joinUriPaths } from '@node/utils/util';
 import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import * as nodeFS from '@node/services/node-file-system.service';
-import { deserialize, wait } from 'platform-bible-utils';
+import { deserialize, endsWith, wait } from 'platform-bible-utils';
 
 /** This points to the directory where all of the project subdirectories live */
 const PROJECTS_ROOT_URI = joinUriPaths('file://', os.homedir(), '.platform.bible', 'projects');
@@ -64,7 +64,7 @@ async function loadAllProjectsMetadata(): Promise<Set<ProjectMetadata>> {
 async function getProjectMetadata(projectId: string): Promise<ProjectMetadata> {
   const idUpper = projectId.toUpperCase();
   const uris = await getProjectUris();
-  const matches = uris.filter((uri) => uri.toUpperCase().endsWith(`_${idUpper}`));
+  const matches = uris.filter((uri) => endsWith(uri.toUpperCase(), `_${idUpper}`));
   if (matches.length === 0) throw new Error(`No known project with ID ${projectId}`);
   if (matches.length > 1) throw new Error(`${matches.length} projects share the ID ${projectId}`);
 

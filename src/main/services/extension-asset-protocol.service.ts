@@ -1,7 +1,7 @@
 import { protocol } from 'electron';
 import { StatusCodes } from 'http-status-codes';
 import extensionAssetService from '@shared/services/extension-asset.service';
-import { indexOf, length, substring } from 'platform-bible-utils';
+import { includes, indexOf, lastIndexOf, length, substring } from 'platform-bible-utils';
 
 /** Here some of the most common MIME types that we expect to handle */
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
@@ -30,7 +30,7 @@ const knownMimeTypes = {
 
 /** Lookup the MIME type to pass back to the renderer */
 function getMimeTypeForFileName(fileName: string): string {
-  const dotIndex = fileName.lastIndexOf('.');
+  const dotIndex = lastIndexOf(fileName, '.');
   if (dotIndex > 0) {
     const fileType: string = substring(fileName, dotIndex);
     // Assert key type confirmed in check.
@@ -71,7 +71,7 @@ const initialize = () => {
       const uri: string = substring(request.url, length(`${protocolName}://`));
 
       // There have to be at least 2 parts to the URI divided by a slash
-      if (!uri.includes('/')) {
+      if (!includes(uri, '/')) {
         return errorResponse(request.url, StatusCodes.BAD_REQUEST);
       }
 

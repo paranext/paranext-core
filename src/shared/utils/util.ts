@@ -1,5 +1,12 @@
 import { ProcessType } from '@shared/global-this.model';
-import { UnsubscriberAsync, indexOf, isString, length, substring } from 'platform-bible-utils';
+import {
+  UnsubscriberAsync,
+  charAt,
+  indexOf,
+  isString,
+  length,
+  substring,
+} from 'platform-bible-utils';
 
 const NONCE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const NONCE_CHARS_LENGTH = length(NONCE_CHARS);
@@ -14,7 +21,7 @@ const NONCE_CHARS_LENGTH = length(NONCE_CHARS);
 export function newNonce(): string {
   let nonce = '';
   for (let i = 0; i < 32; i++)
-    nonce += NONCE_CHARS.charAt(Math.floor(Math.random() * NONCE_CHARS_LENGTH));
+    nonce += charAt(NONCE_CHARS, Math.floor(Math.random() * NONCE_CHARS_LENGTH));
   return nonce;
 }
 

@@ -267,7 +267,7 @@ export function split(
   let regexSeparator = separator;
   if (
     typeof separator === 'string' ||
-    (separator instanceof RegExp && !separator.flags.includes('g'))
+    (separator instanceof RegExp && !includes(separator.flags, 'g'))
   ) {
     regexSeparator = new RegExp(separator, 'g');
   }
