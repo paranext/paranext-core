@@ -77,18 +77,18 @@ export function getCommandLineArgumentsGroup(
 
   const argumentsGroup: string[] = [];
   argNames
-    .filter((n) => process.argv.indexOf(n) > 0)
+    .filter((n) => process.argv.indexOf(n) >= 0)
     .forEach((arg) => {
       const argIndex = process.argv.indexOf(arg);
       const baseArray = shouldIncludeArgName ? [arg] : [];
 
-      argumentsGroup.concat(
-        process.argv.length > argIndex + 1
+      argumentsGroup.push(
+        ...(process.argv.length > argIndex + 1
           ? [
               ...baseArray,
               ...process.argv.slice(argIndex + 1, findNextCommandLineArgumentIndex(argIndex)),
             ]
-          : baseArray,
+          : baseArray),
       );
     });
 

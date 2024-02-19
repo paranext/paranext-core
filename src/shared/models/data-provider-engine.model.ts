@@ -89,7 +89,7 @@ export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
  * }
  * ```
  *
- * 2. If you are using an object or class to create a data provider engine, you can add a
+ * 2. If you are using an object or class not extending {@link DataProviderEngine} to create a data provider engine, you can add a
  * `notifyUpdate` function (and, with an object, add the {@link WithNotifyUpdate} type) to
  * your data provider engine like so:
  * ```typescript

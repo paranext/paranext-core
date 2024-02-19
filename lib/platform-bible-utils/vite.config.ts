@@ -1,5 +1,6 @@
 import path from 'path';
 import { defineConfig } from 'vite';
+import { peerDependencies, dependencies } from './package.json';
 
 const config = defineConfig({
   base: './',
@@ -11,17 +12,7 @@ const config = defineConfig({
       fileName: (format) => `index.${format === 'es' ? 'js' : format}`,
     },
     rollupOptions: {
-      external: [
-        'react',
-        'react-data-grid',
-        'react-dom',
-        'react/jsx-runtime',
-        '@emotion/react',
-        '@emotion/styled',
-        '@mui/material',
-        '@mui/styled-engine-sc',
-        '@mui/styled-engine',
-      ],
+      external: [...Object.keys(peerDependencies ?? {}), ...Object.keys(dependencies ?? {})],
       output: {
         globals: {
           react: 'React',
