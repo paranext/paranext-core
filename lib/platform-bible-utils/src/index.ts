@@ -31,20 +31,22 @@ export {
   createSyncProxyForAsyncObject,
 } from './util';
 export {
-  indexOf,
-  substring,
-  length,
-  toArray,
-  padStart,
-  padEnd,
-  normalize,
   at,
   charAt,
   codePointAt,
   endsWith,
   includes,
+  indexOf,
   lastIndexOf,
+  length,
+  normalize,
+  padEnd,
+  padStart,
   slice,
+  split,
+  startsWith,
+  substring,
+  toArray,
 } from './string-util';
 export { default as deepEqual } from './equality-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';

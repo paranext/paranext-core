@@ -492,6 +492,33 @@ export declare function padStart(string: string, targetLength: number, padString
  */
 export declare function slice(string: string, indexStart: number, indexEnd?: number): string;
 /**
+ * Takes a pattern and divides the string into an ordered list of substrings by searching for the
+ * pattern, puts these substrings into an array, and returns the array. This function handles
+ * Unicode code points instead of UTF-16 character codes.
+ *
+ * @param {string} string The string to split
+ * @param {string | RegExp} separator The pattern describing where each split should occur
+ * @param {number} splitLimit Limit on the number of substrings to be included in the array. Splits
+ *   the string at each occurrence of specified separator, but stops when limit entries have been
+ *   placed in the array.
+ * @returns {string[] | undefined} An array of strings, split at each point where separator occurs
+ *   in the starting string. Returns undefined if separator is not found in string.
+ */
+export declare function split(string: string, separator: string | RegExp, splitLimit?: number): string[] | undefined;
+/**
+ * Determines whether the string begins with the characters of a specified string, returning true or
+ * false as appropriate. This function handles Unicode code points instead of UTF-16 character
+ * codes.
+ *
+ * @param {string} string String to search through
+ * @param {string} searchString The characters to be searched for at the start of this string.
+ * @param {number} [position=0] The start position at which searchString is expected to be found
+ *   (the index of searchString's first character). Default is `0`
+ * @returns {boolean} True if the given characters are found at the beginning of the string,
+ *   including when searchString is an empty string; otherwise, false.
+ */
+export declare function startsWith(string: string, searchString: string, position?: number): boolean;
+/**
  * Returns a substring by providing start and end position. This function handles Unicode code
  * points instead of UTF-16 character codes.
  *
