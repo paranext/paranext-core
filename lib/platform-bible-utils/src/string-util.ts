@@ -199,14 +199,13 @@ export function padStart(string: string, targetLength: number, padString: string
   return stringzLimit(string, targetLength, padString, 'left');
 }
 
-// function validateSliceIndex(string: string, index: number) {
-//   if (index < -length(string)) return -length(string);
-//   if (index > length(string)) return length(string);
-//   if (index < 0) return index + length(string);
-//   return index;
-// }
+function correctSliceIndex(stringLength: number, index: number) {
+  if (index > stringLength) return stringLength;
+  if (index < -stringLength) return 0;
+  if (index < 0) return index + stringLength;
+  return index;
+}
 
-// TODO:  slice accepts negative and loops include differences
 /**
  * Extracts a section of this string and returns it as a new string, without modifying the original
  * string. This function handles Unicode code points instead of UTF-16 character codes.
@@ -217,20 +216,26 @@ export function padStart(string: string, targetLength: number, padString: string
  * @returns {string} A new string containing the extracted section of the string.
  */
 export function slice(string: string, indexStart: number, indexEnd?: number): string {
-  let newStart = indexStart;
-  let newEnd = indexEnd || 0;
+  const stringLength: number = length(string);
+  if (
+    indexStart > stringLength ||
+    (indexEnd &&
+      ((indexStart > indexEnd &&
+        !(
+          indexStart > 0 &&
+          indexStart < stringLength &&
+          indexEnd < 0 &&
+          indexEnd > -stringLength
+        )) ||
+        indexEnd < -stringLength ||
+        (indexStart < 0 && indexStart > -stringLength && indexEnd > 0)))
+  )
+    return '';
 
-  if (!newStart) newStart = 0;
-  if (newStart >= length(string)) return '';
-  if (newStart < 0) newStart += length(string);
+  const newStart = correctSliceIndex(stringLength, indexStart);
+  const newEnd = indexEnd ? correctSliceIndex(stringLength, indexEnd) : undefined;
 
-  if (newEnd >= length(string)) newEnd = length(string) - 1;
-  if (newEnd < 0) newEnd += length(string);
-
-  // AFTER normalizing negatives
-  if (newEnd <= newStart) return '';
-
-  return substr(string, newStart, newEnd - newStart);
+  return substring(string, newStart, newEnd);
 }
 
 /**
