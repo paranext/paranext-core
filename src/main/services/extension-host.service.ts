@@ -26,7 +26,7 @@ const closePromise: Promise<void> = new Promise<void>((resolve) => {
 function logProcessError(message: unknown) {
   let msg = message?.toString() || '';
   if (msg.includes(WARN_TAG)) {
-    msg = msg.split(WARN_TAG).join('');
+    msg = msg.split(WARN_TAG).join(''); // TODO: Can't use our new split here for some reason
     logger.warn(formatLog(msg, EXTENSION_HOST_NAME, 'warning'));
   } else logger.error(formatLog(msg, EXTENSION_HOST_NAME, 'error'));
 }

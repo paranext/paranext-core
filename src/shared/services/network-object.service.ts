@@ -13,6 +13,7 @@ import {
   isString,
   CanHaveOnDidDispose,
   MutexMap,
+  startsWith,
 } from 'platform-bible-utils';
 import {
   NetworkObject,
@@ -198,7 +199,7 @@ const createRemoteProxy = (
       // If the prop requested is a symbol, that doesn't work over the network. Reject
       if (!isString(key)) return undefined;
       // Don't create remote proxies for events
-      if (key.startsWith('on')) return undefined;
+      if (startsWith(key, 'on')) return undefined;
 
       // If the local network object doesn't have the property, build a request for it
       const requestFunction = (...args: unknown[]) =>
@@ -247,7 +248,7 @@ const createLocalProxy = (
       // Block access to constructors and dispose
       if (key === 'constructor' || key === 'dispose') return undefined;
       // Don't proxy events
-      if (isString(key) && key.startsWith('on')) return undefined;
+      if (isString(key) && startsWith(key, 'on')) return undefined;
 
       return Reflect.get(target, key, objectBeingSet);
     },
@@ -267,7 +268,7 @@ function createNetworkObjectDetails(
   objectFunctionNames.delete('dispose');
   objectFunctionNames.forEach((functionName) => {
     // If we come up with some better way to identify events, we can remove this and related checks
-    if (functionName.startsWith('on')) objectFunctionNames.delete(functionName);
+    if (startsWith(functionName, 'on')) objectFunctionNames.delete(functionName);
   });
   return {
     id,

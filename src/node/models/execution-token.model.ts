@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { createNonce } from '@node/utils/crypto-util';
+import { length } from 'platform-bible-utils';
 
 /** For now this is just for extensions, but maybe we will want to expand this in the future */
 export type ExecutionTokenType = 'extension';
@@ -12,7 +13,7 @@ export class ExecutionToken {
 
   constructor(tokenType: ExecutionTokenType, name: string) {
     if (!tokenType) throw new Error('token type must be defined');
-    if (!name || name.length < 1) throw new Error('name must be a string of length > 0');
+    if (!name || length(name) < 1) throw new Error('name must be a string of length > 0');
 
     this.type = tokenType;
     this.name = name;

@@ -62,7 +62,7 @@ function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
   // Add app scheme to the uri if it doesn't have one
   const fullUri = uri.includes(PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
 
-  const [scheme, uriPath] = fullUri.split(PROTOCOL_PART);
+  const [scheme, uriPath] = fullUri.split(PROTOCOL_PART); // TODO: Our new split doesn't support this return
   return {
     scheme,
     uriPath,

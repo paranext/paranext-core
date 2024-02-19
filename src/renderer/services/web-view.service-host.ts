@@ -14,6 +14,7 @@ import {
   newGuid,
   indexOf,
   substring,
+  startsWith,
 } from 'platform-bible-utils';
 import { newNonce } from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
@@ -822,7 +823,7 @@ export const getWebView = async (
   let { allowedFrameSources } = webView;
   if (contentType !== WebViewContentType.URL && allowedFrameSources)
     allowedFrameSources = allowedFrameSources.filter(
-      (hostValue) => hostValue.startsWith('https:') || hostValue.startsWith('papi-extension:'),
+      (hostValue) => startsWith(hostValue, 'https:') || startsWith(hostValue, 'papi-extension:'),
     );
 
   // Validate the WebViewDefinition to make sure it is acceptable

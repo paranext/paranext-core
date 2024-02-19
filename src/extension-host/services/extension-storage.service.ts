@@ -8,6 +8,7 @@ import {
 import { ExecutionToken } from '@node/models/execution-token.model';
 import executionTokenService from '@node/services/execution-token.service';
 import { Buffer } from 'buffer';
+import { length } from 'platform-bible-utils';
 
 // #region Functions that need to be called by other services to initialize this service
 
@@ -66,7 +67,7 @@ export function buildExtensionPathFromName(extensionName: string, fileName: stri
 function buildUserDataPath(token: ExecutionToken, key: string): string {
   if (!executionTokenService.tokenIsValid(token)) throw new Error('Invalid token');
   const subDir: string = sanitizeDirectoryName(token.name);
-  if (!subDir || subDir.length === 0) throw new Error('Bad extension name');
+  if (!subDir || length(subDir) === 0) throw new Error('Bad extension name');
 
   // From https://base64.guru/standards/base64url, the purpose of "base64url" encoding is
   // "the ability to use the encoding result as filename or URL address"

@@ -21,6 +21,9 @@ import {
   UnsubscriberAsync,
   UnsubscriberAsyncList,
   deserialize,
+  length,
+  startsWith,
+  slice,
 } from 'platform-bible-utils';
 import LogError from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
@@ -117,7 +120,7 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
     throw new Error('Extension name must not include `..`!');
   // Replace ts with js so people can list their source code ts name but run the transpiled js
   if (extensionManifest.main && extensionManifest.main.toLowerCase().endsWith('.ts'))
-    extensionManifest.main = `${extensionManifest.main.slice(0, -3)}.js`;
+    extensionManifest.main = `${slice(extensionManifest.main, 0, -3)}.js`;
 
   return extensionManifest;
 }
@@ -228,7 +231,7 @@ async function getExtensionUrisToLoad(): Promise<Uri[]> {
   const extensionFolderPromises = commandLineExtensionDirectories
     .map((extensionDirPath) => {
       const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
-        ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
+        ? slice(extensionDirPath, 0, -length(MANIFEST_FILE_NAME))
         : extensionDirPath;
       return extensionFolder;
     })
@@ -456,7 +459,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         // with version number or something
         if (!extensionDtsInfo)
           extensionDtsInfo = dtsInfos.find((dtsInfo) =>
-            dtsInfo.base.startsWith(extensionInfo.name),
+            startsWith(dtsInfo.base, extensionInfo.name),
           );
 
         // Try using a dts file whose name is `index.d.ts`
@@ -473,7 +476,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
 
       // If the dts file has stuff after the extension name, we want to use it so they can suffix a
       // version number or something
-      if (extensionDtsInfo.base.startsWith(extensionInfo.name))
+      if (startsWith(extensionDtsInfo.base, extensionInfo.name))
         extensionDtsBaseDestination = extensionDtsInfo.base;
 
       // Put the extension's dts in the types cache in its own folder
@@ -486,7 +489,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         userExtensionTypesCacheUri,
         // Folder name must match module name which we are assuming is the same as the name of the
         // .d.ts file, so get the .d.ts file's name and use it as the folder name
-        extensionDtsBaseDestination.slice(0, -'.d.ts'.length),
+        slice(extensionDtsBaseDestination, 0, -length('.d.ts')),
         'index.d.ts',
       );
 
