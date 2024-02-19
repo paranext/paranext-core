@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import { Uri } from '@shared/data/file-system.model';
 import memoizeOne from 'memoize-one';
+import { split } from 'platform-bible-utils';
 
 // FOR SCHEME DOCUMENTATION, SEE Uri JSDOC
 const APP_SCHEME = 'app';
@@ -62,7 +63,7 @@ function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
   // Add app scheme to the uri if it doesn't have one
   const fullUri = uri.includes(PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
 
-  const [scheme, uriPath] = fullUri.split(PROTOCOL_PART); // TODO: Our new split doesn't support this return
+  const [scheme, uriPath] = split(fullUri, PROTOCOL_PART);
   return {
     scheme,
     uriPath,

@@ -535,7 +535,7 @@ export declare function slice(string: string, indexStart: number, indexEnd?: num
  * @returns {string[] | undefined} An array of strings, split at each point where separator occurs
  *   in the starting string. Returns undefined if separator is not found in string.
  */
-export declare function split(string: string, separator: string | RegExp, splitLimit?: number): string[] | undefined;
+export declare function split(string: string, separator: string | RegExp, splitLimit?: number): string[];
 /**
  * Determines whether the string begins with the characters of a specified string, returning true or
  * false as appropriate. This function handles Unicode code points instead of UTF-16 character

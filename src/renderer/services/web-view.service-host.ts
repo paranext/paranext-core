@@ -15,6 +15,7 @@ import {
   indexOf,
   substring,
   startsWith,
+  split,
 } from 'platform-bible-utils';
 import { newNonce } from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
@@ -310,7 +311,7 @@ function removeNodeIfForbidden(node: Node) {
         removeElement(`iframe with a non-string sandbox value ${sandbox.value}`);
         return;
       }
-      const sandboxValues = sandbox.value.split(' ');
+      const sandboxValues = split(sandbox.value, ' ');
       const src = currentElement.attributes.getNamedItem('src');
       // If the iframe has `src`, only allow `src` sandbox values because browsers that do not
       // support `srcdoc` fall back to `src` so we should be more strict

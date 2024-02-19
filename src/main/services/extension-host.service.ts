@@ -6,7 +6,7 @@ import {
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
 import logger, { formatLog, WARN_TAG } from '@shared/services/logger.service';
-import { waitForDuration } from 'platform-bible-utils';
+import { split, waitForDuration } from 'platform-bible-utils';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
@@ -26,7 +26,7 @@ const closePromise: Promise<void> = new Promise<void>((resolve) => {
 function logProcessError(message: unknown) {
   let msg = message?.toString() || '';
   if (msg.includes(WARN_TAG)) {
-    msg = msg.split(WARN_TAG).join(''); // TODO: Can't use our new split here for some reason
+    msg = split(msg, WARN_TAG).join('');
     logger.warn(formatLog(msg, EXTENSION_HOST_NAME, 'warning'));
   } else logger.error(formatLog(msg, EXTENSION_HOST_NAME, 'error'));
 }

@@ -251,11 +251,7 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
  * @returns {string[] | undefined} An array of strings, split at each point where separator occurs
  *   in the starting string. Returns undefined if separator is not found in string.
  */
-export function split(
-  string: string,
-  separator: string | RegExp,
-  splitLimit?: number,
-): string[] | undefined {
+export function split(string: string, separator: string | RegExp, splitLimit?: number): string[] {
   const result: string[] = [];
 
   if (splitLimit !== undefined && splitLimit <= 0) {
@@ -276,7 +272,7 @@ export function split(
 
   let currentIndex = 0;
 
-  if (!matches) return undefined;
+  if (!matches) return [string];
 
   for (let index = 0; index < (splitLimit ? splitLimit - 1 : matches.length); index++) {
     const matchIndex = indexOf(string, matches[index], currentIndex);

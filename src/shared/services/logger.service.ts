@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import log, { LogLevel } from 'electron-log';
 import { getProcessType, isClient, isExtensionHost, isRenderer } from '@shared/utils/internal-util';
+import { split } from 'platform-bible-utils';
 
 export const WARN_TAG = '<WARN>';
 
@@ -66,7 +67,7 @@ function identifyCaller(): string | undefined {
   const { stack } = new Error();
   if (!stack) return undefined;
   let details: parsedErrorLine;
-  const lines = stack.split('\n'); // TODO: Our new split doesn't work here
+  const lines = split(stack, '\n');
   // Start at 3 to skip the "Error" line, this function's stack frame, and this function's caller
   for (let lineNumber = 3; lineNumber < lines.length; lineNumber += 1) {
     // Skip over all logging library frames to get to the real call

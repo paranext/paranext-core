@@ -351,6 +351,11 @@ describe('split', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /🦄/);
     expect(result).toEqual(['Look𐐷At', 'This𐐷Thing😉Its𐐷Awesome']);
   });
+
+  test('split with RegExp separator that matches nothing in the string', () => {
+    const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /\d/);
+    expect(result).toEqual([MEDIUM_SURROGATE_PAIRS_STRING]);
+  });
 });
 
 describe('startsWith', () => {
