@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import { exec } from 'child_process';
 import fkill from 'fkill';
+import { indexOf, lastIndexOf } from 'platform-bible-utils';
 
 // All processes with any of these terms in the command line will be killed
 const searchTerms = ['electronmon', 'esbuild', 'nodemon', 'vite', 'webpack', 'extension-host'];
@@ -34,8 +35,8 @@ function killProcessesWithSearchTerm() {
         .split('\n')
         .slice(1)
         .map((line) => {
-          const firstIndex = line.indexOf(',');
-          const lastIndex = line.lastIndexOf(',');
+          const firstIndex = indexOf(line, ',');
+          const lastIndex = lastIndexOf(line, ',');
           const pid = line.substring(lastIndex + 1);
           const command = line.substring(firstIndex + 1, lastIndex);
           return { pid, command };
@@ -46,7 +47,7 @@ function killProcessesWithSearchTerm() {
         .slice(1)
         .map((line) => {
           const trimmedLine = line.trim();
-          const index = trimmedLine.indexOf(' ');
+          const index = indexOf(trimmedLine, ' ');
           const pid = trimmedLine.substring(0, index);
           const command = trimmedLine.substring(index + 1);
           return { pid, command };
@@ -59,7 +60,7 @@ function killProcessesWithSearchTerm() {
     // Kill the processes with a search term in process name or arguments
     await Promise.all(
       processes.map(async ({ pid, command }) => {
-        if (command && pid && searchTerms.some((term) => command.includes(term))) {
+        if (command && pid && searchTerms.some((term) => includes(command, term))) {
           console.log(`Killing ${command}`);
           return fkill(Number(pid), fkillOptions);
         }

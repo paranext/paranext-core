@@ -21,6 +21,8 @@ import {
   UnsubscriberAsync,
   UnsubscriberAsyncList,
   deserialize,
+  endsWith,
+  includes,
   length,
   startsWith,
   slice,
@@ -116,11 +118,11 @@ let availableExtensions: ExtensionInfo[];
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
   const extensionManifest: ExtensionManifest = deserialize(extensionManifestJson);
-  if (extensionManifest.name.includes('..'))
+  if (includes(extensionManifest.name, '..'))
     throw new Error('Extension name must not include `..`!');
   // Replace ts with js so people can list their source code ts name but run the transpiled js
   if (extensionManifest.main && extensionManifest.main.toLowerCase().endsWith('.ts'))
-    extensionManifest.main = `${slice(extensionManifest.main, 0, -3)}.js`;
+    extensionManifest.main = `${extensionManifest.main.slice(0, -3)}.js`;
 
   return extensionManifest;
 }
@@ -196,7 +198,7 @@ async function getExtensionZipUris(): Promise<Uri[]> {
         .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.File])
         .filter((extensionFileUri) => extensionFileUri),
     )
-    .filter((extensionFileUri) => extensionFileUri.toLowerCase().endsWith('.zip'));
+    .filter((extensionFileUri) => endsWith(extensionFileUri.toLowerCase(), '.zip'));
 }
 
 /**
@@ -231,7 +233,7 @@ async function getExtensionUrisToLoad(): Promise<Uri[]> {
   const extensionFolderPromises = commandLineExtensionDirectories
     .map((extensionDirPath) => {
       const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
-        ? slice(extensionDirPath, 0, -length(MANIFEST_FILE_NAME))
+        ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
         : extensionDirPath;
       return extensionFolder;
     })
@@ -284,7 +286,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
   await Promise.all(
     zipEntries.map(async ([fileName]) => {
       const parsedPath = path.parse(fileName);
-      if (fileName.includes('..')) {
+      if (includes(fileName, '..')) {
         logger.warn(`Invalid extension ZIP file entry in "${zipUri}": ${fileName}`);
         zipEntriesInProperDirectory = false;
       }
@@ -441,7 +443,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         // it can lead to problems with race conditions. If this ever becomes a problem, we can fix
         // this code.
         const dtsInfos = (
-          await nodeFS.readDir(extensionInfo.dirUri, (entryName) => entryName.endsWith('.d.ts'))
+          await nodeFS.readDir(extensionInfo.dirUri, (entryName) => endsWith(entryName, '.d.ts'))
         )[nodeFS.EntryType.File].map(createDtsInfoFromUri);
 
         if (dtsInfos.length <= 0) {

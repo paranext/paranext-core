@@ -8,7 +8,7 @@ import {
 import { ExecutionToken } from '@node/models/execution-token.model';
 import executionTokenService from '@node/services/execution-token.service';
 import { Buffer } from 'buffer';
-import { length } from 'platform-bible-utils';
+import { length, includes } from 'platform-bible-utils';
 
 // #region Functions that need to be called by other services to initialize this service
 
@@ -52,7 +52,7 @@ export function buildExtensionPathFromName(extensionName: string, fileName: stri
   // TODO: If we really care about the potential to jump into other directories, this probably
   // needs some work. For example, this doesn't detect symlinks. There might be many other holes.
   if (!isValidFileOrDirectoryName(fileName)) throw new Error(`Invalid file name: ${fileName}`);
-  if (fileName.includes('..')) throw new Error('Cannot include ".." in the file name');
+  if (includes(fileName, '..')) throw new Error('Cannot include ".." in the file name');
 
   return joinUriPaths(baseUri, fileName);
 }

@@ -21,6 +21,7 @@ import {
   isString,
   CannotHaveOnDidDispose,
   AsyncVariable,
+  endsWith,
   startsWith,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
@@ -54,7 +55,7 @@ const SUBSCRIBE_PLACEHOLDER = {};
  * provider name if it's already there to avoid duplication
  */
 const getDataProviderObjectId = (providerName: string) => {
-  return providerName.endsWith(`-${DATA_PROVIDER_LABEL}`)
+  return endsWith(providerName, `-${DATA_PROVIDER_LABEL}`)
     ? providerName
     : `${providerName}-${DATA_PROVIDER_LABEL}`;
 };
