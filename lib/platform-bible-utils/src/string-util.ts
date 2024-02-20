@@ -28,7 +28,7 @@ export function at(string: string, index: number): string | undefined {
  * This function mirrors the `charAt` function from the JavaScript Standard String object.
  * It handles Unicode code points instead of UTF-16 character codes.
  *
- * Returns a new string consisting of the single UTF-16 code unit at the given index.
+ * Returns a new string consisting of the single unicode code point at the given index.
  *
  * @param string String to index
  * @param index Position of the string character to be returned, in the range of 0 to
