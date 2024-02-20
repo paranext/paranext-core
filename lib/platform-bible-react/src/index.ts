@@ -14,25 +14,16 @@ export type {
   ComboBoxOption,
   ComboBoxValue,
 } from './components/combo-box.component';
-export { default as MenuItemList } from './components/menu-item-list.component';
-export type { MenuItemListProps } from './components/menu-item-list.component';
+export { default as TopLevelMenu } from './components/top-level-menu.component';
+export type { MenuItemListProps } from './components/top-level-menu.component';
 export { default as GridMenu } from './components/grid-menu.component';
-export type {
-  MenuColumnInfo as MenuColumn,
-  GridMenuProps,
-  GridMenuInfo,
-} from './components/grid-menu.component';
+export type { GridMenuProps, GridMenuInfo } from './components/grid-menu.component';
 export { default as IconButton } from './components/icon-button.component';
 export type { IconButtonProps } from './components/icon-button.component';
 export { default as LabelPosition } from './components/label-position.model';
 export { default as MenuItem } from './components/menu-item.component';
 export { default as ContextMenu } from './components/context-menu.component';
-export type {
-  MenuItemInfo,
-  MenuItemProps,
-  Command,
-  CommandHandler,
-} from './components/menu-item.component';
+export type { CommandHandler } from './components/menu-item.component';
 export { default as RefSelector } from './components/ref-selector.component';
 export type { ScrRefSelectorProps } from './components/ref-selector.component';
 export { default as SearchBar } from './components/search-bar.component';
@@ -66,7 +57,7 @@ export type {
 export { default as TextField } from './components/text-field.component';
 export type { TextFieldProps } from './components/text-field.component';
 export { default as Toolbar } from './components/toolbar.component';
-export type { ToolbarProps, ToolbarDataHandler } from './components/toolbar.component';
+export type { ToolbarProps, MultiColumnMenuProvider } from './components/toolbar.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

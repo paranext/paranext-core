@@ -1,10 +1,15 @@
 import React, { PropsWithChildren } from 'react';
 import Menu from '@mui/material/Menu';
-import MenuItemList, { MenuItemListProps } from './menu-item-list.component';
+import MenuItemList, { GroupedMenuItemListProps } from './grouped-menu-item-list.component';
 import './context-menu.component.css';
 
-export default function ContextMenu(menuProps: PropsWithChildren<MenuItemListProps>) {
-  const { className, commandHandler, items, children } = menuProps;
+export type ContextMenuProps = GroupedMenuItemListProps & {
+  /** Additional css classes to help with styling of the context menu */
+  className?: string;
+};
+
+export default function ContextMenu(menuProps: PropsWithChildren<ContextMenuProps>) {
+  const { className, commandHandler, menuDefinition, children } = menuProps;
 
   const [contextMenu, setContextMenu] = React.useState<
     | {
@@ -34,7 +39,7 @@ export default function ContextMenu(menuProps: PropsWithChildren<MenuItemListPro
   };
 
   // If no menu items or children, we don't want to display the context menu at all.
-  return (items?.length ?? 0) === 0 || !children ? (
+  return (menuDefinition.items?.length ?? 0) === 0 || !children ? (
     children
   ) : (
     <div
@@ -54,7 +59,11 @@ export default function ContextMenu(menuProps: PropsWithChildren<MenuItemListPro
             : undefined
         }
       >
-        <MenuItemList items={items} commandHandler={commandHandler} onClick={handleClose} />
+        <MenuItemList
+          menuDefinition={menuDefinition}
+          commandHandler={commandHandler}
+          onClick={handleClose}
+        />
       </Menu>
     </div>
   );

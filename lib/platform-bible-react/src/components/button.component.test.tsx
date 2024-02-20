@@ -1,6 +1,6 @@
 import { render, fireEvent } from '@testing-library/react';
-import { Button } from 'platform-bible-react';
 import '@testing-library/jest-dom';
+import Button from './button.component';
 
 describe('Button', () => {
   it('renders button text correctly', () => {

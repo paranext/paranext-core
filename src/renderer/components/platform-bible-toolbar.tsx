@@ -1,7 +1,7 @@
 import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
 import { Toolbar, RefSelector, ScriptureReference, Button } from 'platform-bible-react';
 import { handleMenuCommand } from './platform-bible-menu.commands';
-import { handleMenuData } from './platform-bible-menu.data';
+import { provideMenuData } from './platform-bible-menu.data';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -17,7 +17,7 @@ export default function PlatformBibleToolbar() {
   };
 
   return (
-    <Toolbar className="toolbar" dataHandler={handleMenuData} commandHandler={handleMenuCommand}>
+    <Toolbar className="toolbar" menuProvider={provideMenuData} commandHandler={handleMenuCommand}>
       <RefSelector handleSubmit={handleReferenceChanged} scrRef={scrRef} />
       <Button
         onClick={() => {

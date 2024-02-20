@@ -29,7 +29,11 @@ type ReplaceType<T, A, B> = T extends A
     ? { [K in keyof T]: ReplaceType<T[K], A, B> }
     : T;
 
-export type LocalizedMenus = ReplaceType<PlatformMenus, LocalizeKey, string>;
+export type LocalizedMenus = ReplaceType<
+  ReplaceType<PlatformMenus, LocalizeKey, string>,
+  ReferencedItem,
+  string
+>;
 
 // #region Helper functions
 
@@ -238,7 +242,11 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
     this.originalOutputThatWasLocalized = this.latestOutput;
     // Assert the output type we are transforming the combined document into
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const retVal = deepClone(this.originalOutputThatWasLocalized) as LocalizedMenus;
+    const retVal = deepClone(this.originalOutputThatWasLocalized) as ReplaceType<
+      PlatformMenus,
+      LocalizeKey,
+      string
+    >;
 
     await Promise.all([
       localizeColumns(retVal.mainMenu.columns),
@@ -381,14 +389,14 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
       const startingTopMenu = webViewMenu.topMenu ?? {};
       const topMenuCombiner = new NonValidatingDocumentCombiner(startingTopMenu, options);
       topMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewTopMenu);
-      // Assert that type that schema validation should have already sorted out
+      // Assert the type that schema validation should have already sorted out
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       webViewMenu.topMenu = topMenuCombiner.output as MultiColumnMenu | undefined;
 
       const startingContextMenu = webViewMenu.contextMenu ?? {};
       const contextMenuCombiner = new NonValidatingDocumentCombiner(startingContextMenu, options);
       contextMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewContextMenu);
-      // Assert that type that schema validation should have already sorted out
+      // Assert the type that schema validation should have already sorted out
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       webViewMenu.contextMenu = contextMenuCombiner.output as SingleColumnMenu | undefined;
     });

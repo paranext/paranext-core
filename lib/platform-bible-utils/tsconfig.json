@@ -5,7 +5,7 @@
     "rootDir": "./src",
     "target": "ESNext",
     "module": "ESNext",
-    "typeRoots": ["./node_modules/@types"],
+    "typeRoots": ["./node_modules/@types", "../../node_modules/@types"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "forceConsistentCasingInFileNames": true,
     "incremental": false,

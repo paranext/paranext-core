@@ -12,10 +12,15 @@
   padding-bottom: 2px;
 }
 
+.papi-menu-column ul {
+  padding-top: 0;
+}
+
 .papi-menu-column-header {
   background-color: rgb(181, 181, 181);
   padding-left: 24px;
   margin-top: 0;
+  margin-bottom: 0;
 }
 
 .papi-multi-column-menu.paratext {

@@ -3,22 +3,50 @@ import {
   ListItemText as MuiListItemText,
   ListItemIcon as MuiListItemIcon,
 } from '@mui/material';
-import './menu-item.component.css';
 import { PropsWithChildren } from 'react';
+import { SingleColumnMenu } from 'platform-bible-utils';
+import './menu-item.component.css';
 
-export type Command = {
+type MenuItemInfoBase = {
   /** Text (displayable in the UI) as the name of the command */
-  name: string;
+  label: string;
+};
 
+export type Command = MenuItemInfoBase & {
   /** Command to execute (string.string) */
   command: string;
+};
+
+type SubMenu = MenuItemInfoBase & {
+  /** Command to execute (string.string) */
+  items: MenuItemInfo[];
 };
 
 export interface CommandHandler {
   (command: Command): void;
 }
 
-export type MenuItemProps = Omit<MenuItemInfo, 'command'> &
+export type MenuProps = {
+  /*
+   * The JSON defining the menu whose items are to be rendered. This will typically be one of the
+   * menus in the "defs" in a Platform.Bible menu (see PlatformMenus). The schema for this is
+   * menuDocumentSchema (at the end of menus.model.ts). Note that while this is a
+   * "SingleColumnMenu", somewhat bizarrely, a MultiColumnMenu is a SingleColumnMenu, so it really
+   * could be a MultiColumnMenu, in which case, column had better be defined so it can be used
+   * to filter out the actual groups and items to display on the column.
+   */
+  menuDefinition: SingleColumnMenu;
+
+  commandHandler: CommandHandler;
+
+  /**
+   * Additional action to perform when any menu item is clicked. Allows the caller can handle event
+   * (e.g., to close the menu).
+   */
+  onClick?: () => void;
+};
+
+type MenuItemProps = Omit<MenuItemInfo, 'command'> &
   PropsWithChildren<{
     /** Optional unique identifier */
     id?: string;
@@ -26,7 +54,7 @@ export type MenuItemProps = Omit<MenuItemInfo, 'command'> &
     onClick: () => void;
   }>;
 
-export type MenuItemInfo = Command & {
+type MenuItemInfo = (Command | SubMenu) & {
   /**
    * If specified, menu item will be inset if it does not have a leading icon.
    *
@@ -52,8 +80,15 @@ export type MenuItemInfo = Command & {
    */
   hasAutoFocus?: boolean;
 
-  /** Additional css classes to help with unique styling of the button */
+  /** Additional css classes to help with unique styling of the menu item */
   className?: string;
+
+  /**
+   * If true, the menu item will appear disabled and it will not respond to clicks or mouse hovers.
+   *
+   * @default false
+   */
+  isDisabled?: boolean;
 
   /**
    * If true, compact vertical padding designed for keyboard and mouse input is used.
@@ -78,6 +113,9 @@ export type MenuItemInfo = Command & {
 
   /** Help identify which element has keyboard focus */
   focusVisibleClassName?: string;
+
+  /** If it's a submenu, it should have the items property */
+  items?: MenuItemInfo[];
 };
 
 function getIcon(icon: string | undefined, menuLabel: string, leading: boolean) {
@@ -88,15 +126,16 @@ function getIcon(icon: string | undefined, menuLabel: string, leading: boolean) 
   ) : undefined;
 }
 
-function MenuItem(props: MenuItemProps) {
+export default function MenuItem(props: MenuItemProps) {
   const {
     onClick,
-    name,
+    label,
     allowForLeadingIcons = true,
     iconPathBefore = undefined,
     iconPathAfter = undefined,
     hasAutoFocus = false,
     className,
+    isDisabled = false,
     isDense = true,
     hasDisabledGutters = false,
     hasDivider = false,
@@ -110,6 +149,7 @@ function MenuItem(props: MenuItemProps) {
       sx={{ lineHeight: 0.8 }}
       autoFocus={hasAutoFocus}
       className={className}
+      disabled={isDisabled}
       dense={isDense}
       disableGutters={hasDisabledGutters}
       divider={hasDivider}
@@ -117,11 +157,11 @@ function MenuItem(props: MenuItemProps) {
       onClick={onClick}
       id={id}
     >
-      {name ? (
+      {label ? (
         <>
-          {getIcon(iconPathBefore, name, true)}
-          <MuiListItemText primary={name} inset={!iconPathBefore && allowForLeadingIcons} />
-          {getIcon(iconPathAfter, name, false)}
+          {getIcon(iconPathBefore, label, true)}
+          <MuiListItemText primary={label} inset={!iconPathBefore && allowForLeadingIcons} />
+          {getIcon(iconPathAfter, label, false)}
         </>
       ) : (
         children
@@ -129,5 +169,3 @@ function MenuItem(props: MenuItemProps) {
     </MuiMenuItem>
   );
 }
-
-export default MenuItem;

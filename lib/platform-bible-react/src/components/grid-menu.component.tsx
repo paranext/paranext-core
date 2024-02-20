@@ -1,22 +1,27 @@
 import { Grid, List } from '@mui/material';
-import { CommandHandler, MenuItemInfo } from './menu-item.component';
-import MenuItemList, { MenuItemListProps } from './menu-item-list.component';
+import { MenuColumnWithHeader, MultiColumnMenu, ReferencedItem } from 'platform-bible-utils';
+import { CommandHandler } from './menu-item.component';
+import { GroupedMenuItemListProps } from './grouped-menu-item-list.component';
+import TopLevelMenu from './top-level-menu.component';
 import './grid-menu.component.css';
 
-export type MenuColumnInfo = {
-  /** The name of the menu (displayed as the column header). */
-  name: string;
+type ColumnInfo = {
   /*
-   * The menu items to include.
+   * The ID (`${string}.${string}`) of a specific menu column.
    */
-  items: MenuItemInfo[];
+  id: ReferencedItem;
+
+  /*
+   * Metadata (label, order, etc.) for a specific menu column.
+   */
+  metadata: MenuColumnWithHeader;
 };
 
-type MenuColumnProps = MenuColumnInfo & MenuItemListProps;
+type MenuColumnProps = ColumnInfo & GroupedMenuItemListProps;
 
 export type GridMenuInfo = {
-  /** The columns to display on the dropdown menu. */
-  columns: MenuColumnInfo[];
+  /** The menu object containing information about the columns, groups, and items to display. */
+  multiColumnMenu: MultiColumnMenu;
 };
 
 export type GridMenuProps = GridMenuInfo & {
@@ -29,35 +34,80 @@ export type GridMenuProps = GridMenuInfo & {
   className?: string;
 };
 
-function MenuColumn({ commandHandler, name, className, items, id }: MenuColumnProps) {
+function MenuColumn(
+  {
+    commandHandler,
+    menuDefinition,
+    id,
+    metadata,
+    onClick,
+    className, // className is now part of the destructured props object
+  }: MenuColumnProps & { className: string | undefined }, // Ensure className is provided and of type string
+) {
   return (
     <Grid id={id} item xs="auto" className={`papi-menu-column ${className ?? ''}`}>
-      <h3 className={`papi-menu-column-header ${className ?? ''}`}>{name}</h3>
+      <h3 className={`papi-menu-column-header ${className ?? ''}`}>{metadata.label}</h3>
       <List id={id} dense className={className ?? ''}>
-        <MenuItemList className={className} commandHandler={commandHandler} items={items} />
+        <TopLevelMenu
+          commandHandler={commandHandler}
+          menuDefinition={menuDefinition}
+          columnId={id}
+          onClick={onClick}
+        />
       </List>
     </Grid>
   );
 }
 
-export default function GridMenu({ commandHandler, className, columns, id }: GridMenuProps) {
+export default function GridMenu({
+  commandHandler,
+  className,
+  multiColumnMenu,
+  id,
+}: GridMenuProps) {
+  const { columns } = multiColumnMenu;
+  const columnNumbers = new Map<number, ColumnInfo>();
+  Object.getOwnPropertyNames(columns).forEach((columnName: string) => {
+    // We know for sure there is a (boolean) property 'isExtensible' that we are not interested in.
+    if (columnName === 'isExtensible') return;
+    // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const columnId = columnName as ReferencedItem;
+    const column = columns[columnId];
+    // As of right now (and hopefully forever after), all remaining properties of the
+    // ColumnsWithHeaders object are columns whose property names are the IDs of the columns.
+    // This is an additional (redundant) sanity check. Specifically we're interested in
+    // MenuColumnWithHeader objects, which TypeScript now "knows" we have, but at runtime all we
+    // can check for is that it's an object.
+    if (typeof column === 'object')
+      columnNumbers.set(column.order, { id: columnId, metadata: column });
+  });
+
+  // Extract values and sort them based on the 'order' property
+  const sortedColumns = Array.from(columnNumbers.values()).sort((a, b) => {
+    return (a.metadata.order || 0) - (b.metadata.order || 0);
+  });
+
+  // We might need something like this if we need to be able to prevent empty columns
+  // sortedColumns.filter((c) => multiColumnMenu.groups.some((g) => 'column' in g && (g as .column)...
+
   return (
     <Grid
       container
       spacing={0}
       className={`papi-multi-column-menu ${className ?? ''}`}
-      columns={columns.length}
+      columns={sortedColumns.length}
       id={id}
     >
-      {columns.map((col, index) => (
+      {sortedColumns.map((col, index) => (
         <MenuColumn
           // By design, menu items will never get reordered. So the index works as a key.
           // eslint-disable-next-line react/no-array-index-key
           key={index}
           commandHandler={commandHandler}
-          name={col.name}
+          menuDefinition={multiColumnMenu}
+          {...col}
           className={className}
-          items={col.items}
         />
       ))}
     </Grid>
