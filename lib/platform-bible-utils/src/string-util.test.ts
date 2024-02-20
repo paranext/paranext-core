@@ -50,6 +50,11 @@ describe('at', () => {
     const result = at(LONG_SURROGATE_PAIRS_STRING, length(LONG_SURROGATE_PAIRS_STRING) + 10);
     expect(result).toEqual(undefined);
   });
+
+  test('at with index smaller than -length returns undefined', () => {
+    const result = at(LONG_SURROGATE_PAIRS_STRING, -length(LONG_SURROGATE_PAIRS_STRING) - 10);
+    expect(result).toEqual(undefined);
+  });
 });
 
 describe('charAt', () => {
@@ -382,7 +387,7 @@ describe('substring', () => {
   });
 
   test('substring with end', () => {
-    const result = substring(LONG_SURROGATE_PAIRS_STRING, undefined, POS_FIRST_PIZZA);
+    const result = substring(LONG_SURROGATE_PAIRS_STRING, 0, POS_FIRST_PIZZA);
     expect(result).toEqual('Look𐐷At🦄All😎These😁Awesome');
   });
 

@@ -139,13 +139,13 @@ Record<string, any> = tsconfig;
 // Replace all dynamic imports for @ path aliases with the path alias without @
 if (paths) {
   Object.keys(paths).forEach((path) => {
-    if (!path.startsWith('@')) return; // TODO: Change startsWith?
+    if (!path.startsWith('@')) return;
 
-    const asteriskIndex = path.indexOf('*'); // TODO: Change indexOf?
+    const asteriskIndex = path.indexOf('*');
     // Get the path alias without the * at the end but with the @
-    const pathAlias = path.substring(0, asteriskIndex); // TODO: Change substring?
+    const pathAlias = path.substring(0, asteriskIndex);
     // Get the path alias without the @ at the start
-    const pathAliasNoAt = pathAlias.substring(1); // TODO: Change substring?
+    const pathAliasNoAt = pathAlias.substring(1);
     // Regex-escaped path alias without @ to be used in a regex string
     const pathAliasNoAtRegex = escapeStringRegexp(pathAliasNoAt);
 

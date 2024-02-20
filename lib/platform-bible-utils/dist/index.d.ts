@@ -404,21 +404,24 @@ export declare function getAllObjectFunctionNames(obj: {
  */
 export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;
 /**
- * Finds the Unicode code point at the given index
+ * Finds the Unicode code point at the given index. This function handles Unicode code points
+ * instead of UTF-16 character codes.
  *
- * @param {string} string String to index
- * @param {number} index Position of the character to be returned in range of 0 to -length(string)
- * @returns {string} New string consisting of the Unicode code point located at the specified
+ * @param string String to index
+ * @param index Position of the character to be returned in range of -length(string) to
+ * length(string)
+ * @returns New string consisting of the Unicode code point located at the specified
  *   offset, undefined if index is out of bounds
  */
 export declare function at(string: string, index: number): string | undefined;
 /**
- * Always indexes string as a sequence of Unicode code points
+ * Returns a new string consisting of the single UTF-16 code unit at the given index.
+ * This function handles Unicode code points instead of UTF-16 character codes.
  *
  * @param string String to index
  * @param index Position of the string character to be returned, in the range of 0 to
  *   length(string)-1
- * @returns {string} New string consisting of the Unicode code point located at the specified
+ * @returns New string consisting of the Unicode code point located at the specified
  *   offset, empty string if index is out of bounds
  */
 export declare function charAt(string: string, index: number): string;
@@ -426,10 +429,10 @@ export declare function charAt(string: string, index: number): string;
  * Returns a non-negative integer that is the Unicode code point value of the character starting at
  * the given index. This function handles Unicode code points instead of UTF-16 character codes.
  *
- * @param {string} string String to index
- * @param {number} index Position of the string character to be returned, in the range of 0 to
+ * @param string String to index
+ * @param index Position of the string character to be returned, in the range of 0 to
  *   length(string)-1
- * @returns {number | undefined} Non-negative integer representing the code point value of the
+ * @returns Non-negative integer representing the code point value of the
  *   character at the given index, or undefined if there is no element at that position
  */
 export declare function codePointAt(string: string, index: number): number | undefined;
@@ -437,53 +440,52 @@ export declare function codePointAt(string: string, index: number): number | und
  * Determines whether a string ends with the characters of this string. This function handles
  * Unicode code points instead of UTF-16 character codes.
  *
- * @param {string} string String to search through
- * @param {string} searchString Characters to search for at the end of the string
- * @param {number} [endPosition=length(string)] End position where searchString is expected to be
+ * @param string String to search through
+ * @param searchString Characters to search for at the end of the string
+ * @param endPosition End position where searchString is expected to be
  *   found. Default is `length(string)`
- * @returns {boolean} True if it ends with searchString, false if it does not
+ * @returns True if it ends with searchString, false if it does not
  */
 export declare function endsWith(string: string, searchString: string, endPosition?: number): boolean;
 /**
  * Performs a case-sensitive search to determine if searchString is found in string. This function
  * handles Unicode code points instead of UTF-16 character codes.
  *
- * @param {string} string String to search through
- * @param {string} searchString String to search for
- * @param {string} [position=0] Position within the string to start searching for searchString.
+ * @param string String to search through
+ * @param searchString String to search for
+ * @param position Position within the string to start searching for searchString.
  *   Default is `0`
- * @returns {boolean} True if search string is found, false if it is not
+ * @returns True if search string is found, false if it is not
  */
 export declare function includes(string: string, searchString: string, position?: number): boolean;
 /**
  * Returns the index of the first occurrence of a given string. This function handles Unicode code
  * points instead of UTF-16 character codes.
  *
- * @param {string} string String to search through
- * @param {string} searchString The string to search for
- * @param {number} [position=0] Start of searching. Default is `0`
- * @returns {number} Index of the first occurrence of a given string
+ * @param string String to search through
+ * @param searchString The string to search for
+ * @param position Start of searching. Default is `0`
+ * @returns Index of the first occurrence of a given string
  */
 export declare function indexOf(string: string, searchString: string, position?: number | undefined): number;
 /**
  * Searches this string and returns the index of the last occurrence of the specified substring.
  * This function handles Unicode code points instead of UTF-16 character codes.
  *
- * @param {string} string String to search through
- * @param {string} searchString Substring to search for
- * @param {number} [position=+Infinity] The method returns the index of the last occurrence of the
- *   specified substring at a position less than or equal to position. . Default is `+Infinity`
- * @returns {number} Index of the last occurrence of searchString found, or -1 if not found.
+ * @param string String to search through
+ * @param searchString Substring to search for
+ * @param position The index at which to begin searching. If omitted, the search begins at the end
+ * of the string. Default is `undefined`
+ * @returns Index of the last occurrence of searchString found, or -1 if not found.
  */
 export declare function lastIndexOf(string: string, searchString: string, position?: number): number;
 declare function length$1(string: string): number;
 /**
  * Returns the Unicode Normalization Form of this string.
  *
- * @param {string} string The starting string
- * @param {'NFC' | 'NFD' | 'NFKC' | 'NFKD' | 'none'} [form='NFC'] Form specifying the Unicode
- *   Normalization Form. Default is `'NFC'`
- * @returns {string} A string containing the Unicode Normalization Form of the given string.
+ * @param string The starting string
+ * @param form Form specifying the Unicode Normalization Form. Default is `'NFC'`
+ * @returns A string containing the Unicode Normalization Form of the given string.
  */
 export declare function normalize(string: string, form: "NFC" | "NFD" | "NFKC" | "NFKD" | "none"): string;
 /**
@@ -491,12 +493,12 @@ export declare function normalize(string: string, form: "NFC" | "NFD" | "NFKC" |
  * reaches the given length. The padding is applied from the end of this string. This function
  * handles Unicode code points instead of UTF-16 character codes.
  *
- * @param {string} string String to add padding too
- * @param {number} targetLength The length of the resulting string once the starting string has been
+ * @param string String to add padding too
+ * @param targetLength The length of the resulting string once the starting string has been
  *   padded. If value is less than or equal to length(string), then string is returned as is.
- * @param {string} [padString=" "] The string to pad the current string with. If padString is too
+ * @param padString The string to pad the current string with. If padString is too
  *   long to stay within targetLength, it will be truncated. Default is `" "`
- * @returns {string} String with appropriate padding at the end
+ * @returns String with appropriate padding at the end
  */
 export declare function padEnd(string: string, targetLength: number, padString?: string): string;
 /**
@@ -504,10 +506,10 @@ export declare function padEnd(string: string, targetLength: number, padString?:
  * reaches the given length. The padding is applied from the start of this string. This function
  * handles Unicode code points instead of UTF-16 character codes.
  *
- * @param {string} string String to add padding too
- * @param {number} targetLength The length of the resulting string once the starting string has been
+ * @param string String to add padding too
+ * @param targetLength The length of the resulting string once the starting string has been
  *   padded. If value is less than or equal to length(string), then string is returned as is.
- * @param {string} [padString=" "] The string to pad the current string with. If padString is too
+ * @param padString The string to pad the current string with. If padString is too
  *   long to stay within the targetLength, it will be truncated from the end. Default is `" "`
  * @returns String with of specified targetLength with padString applied from the start
  */
@@ -516,10 +518,10 @@ export declare function padStart(string: string, targetLength: number, padString
  * Extracts a section of this string and returns it as a new string, without modifying the original
  * string. This function handles Unicode code points instead of UTF-16 character codes.
  *
- * @param {string} string The starting string
- * @param {number} indexStart The index of the first character to include in the returned substring.
- * @param {number} indexEnd The index of the first character to exclude from the returned substring.
- * @returns {string} A new string containing the extracted section of the string.
+ * @param string The starting string
+ * @param indexStart The index of the first character to include in the returned substring.
+ * @param indexEnd The index of the first character to exclude from the returned substring.
+ * @returns A new string containing the extracted section of the string.
  */
 export declare function slice(string: string, indexStart: number, indexEnd?: number): string;
 /**
@@ -527,12 +529,12 @@ export declare function slice(string: string, indexStart: number, indexEnd?: num
  * pattern, puts these substrings into an array, and returns the array. This function handles
  * Unicode code points instead of UTF-16 character codes.
  *
- * @param {string} string The string to split
- * @param {string | RegExp} separator The pattern describing where each split should occur
- * @param {number} splitLimit Limit on the number of substrings to be included in the array. Splits
+ * @param string The string to split
+ * @param separator The pattern describing where each split should occur
+ * @param splitLimit Limit on the number of substrings to be included in the array. Splits
  *   the string at each occurrence of specified separator, but stops when limit entries have been
  *   placed in the array.
- * @returns {string[] | undefined} An array of strings, split at each point where separator occurs
+ * @returns An array of strings, split at each point where separator occurs
  *   in the starting string. Returns undefined if separator is not found in string.
  */
 export declare function split(string: string, separator: string | RegExp, splitLimit?: number): string[];
@@ -541,11 +543,11 @@ export declare function split(string: string, separator: string | RegExp, splitL
  * false as appropriate. This function handles Unicode code points instead of UTF-16 character
  * codes.
  *
- * @param {string} string String to search through
- * @param {string} searchString The characters to be searched for at the start of this string.
- * @param {number} [position=0] The start position at which searchString is expected to be found
+ * @param string String to search through
+ * @param searchString The characters to be searched for at the start of this string.
+ * @param position The start position at which searchString is expected to be found
  *   (the index of searchString's first character). Default is `0`
- * @returns {boolean} True if the given characters are found at the beginning of the string,
+ * @returns True if the given characters are found at the beginning of the string,
  *   including when searchString is an empty string; otherwise, false.
  */
 export declare function startsWith(string: string, searchString: string, position?: number): boolean;
@@ -553,18 +555,18 @@ export declare function startsWith(string: string, searchString: string, positio
  * Returns a substring by providing start and end position. This function handles Unicode code
  * points instead of UTF-16 character codes.
  *
- * @param {string} string String to be divided
- * @param {string} begin Start position
- * @param {number} [end=End of string] End position. Default is `End of string`
- * @returns {string} Substring from starting string
+ * @param string String to be divided
+ * @param begin Start position
+ * @param end End position. Default is `End of string`
+ * @returns Substring from starting string
  */
-export declare function substring(string: string, begin?: number | undefined, end?: number | undefined): string;
+export declare function substring(string: string, begin: number, end?: number): string;
 /**
  * Converts a string to an array of string characters. This function handles Unicode code points
  * instead of UTF-16 character codes.
  *
- * @param {string} string String to convert to array
- * @returns {string[]} An array of characters from the starting string
+ * @param string String to convert to array
+ * @returns An array of characters from the starting string
  */
 export declare function toArray(string: string): string[];
 /**
