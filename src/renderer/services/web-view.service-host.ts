@@ -12,6 +12,10 @@ import {
   serialize,
   isString,
   newGuid,
+  indexOf,
+  substring,
+  startsWith,
+  split,
 } from 'platform-bible-utils';
 import { newNonce } from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
@@ -307,7 +311,7 @@ function removeNodeIfForbidden(node: Node) {
         removeElement(`iframe with a non-string sandbox value ${sandbox.value}`);
         return;
       }
-      const sandboxValues = sandbox.value.split(' ');
+      const sandboxValues = split(sandbox.value, ' ');
       const src = currentElement.attributes.getNamedItem('src');
       // If the iframe has `src`, only allow `src` sandbox values because browsers that do not
       // support `srcdoc` fall back to `src` so we should be more strict
@@ -820,7 +824,7 @@ export const getWebView = async (
   let { allowedFrameSources } = webView;
   if (contentType !== WebViewContentType.URL && allowedFrameSources)
     allowedFrameSources = allowedFrameSources.filter(
-      (hostValue) => hostValue.startsWith('https:') || hostValue.startsWith('papi-extension:'),
+      (hostValue) => startsWith(hostValue, 'https:') || startsWith(hostValue, 'papi-extension:'),
     );
 
   // Validate the WebViewDefinition to make sure it is acceptable
@@ -1039,16 +1043,16 @@ export const getWebView = async (
     ">`;
 
   // Add a script at the start of the head to give access to papi
-  const headStart = webViewContent.indexOf('<head');
-  const headEnd = webViewContent.indexOf('>', headStart);
+  const headStart = indexOf(webViewContent, '<head');
+  const headEnd = indexOf(webViewContent, '>', headStart);
 
   // Inject the CSP and import scripts into the html if it is not a URL iframe
   if (contentType !== WebViewContentType.URL)
-    webViewContent = `${webViewContent.substring(0, headEnd + 1)}
+    webViewContent = `${substring(webViewContent, 0, headEnd + 1)}
     ${contentSecurityPolicy}
     <script nonce="${srcNonce}">
     ${imports}
-    </script>${webViewContent.substring(headEnd + 1)}`;
+    </script>${substring(webViewContent, headEnd + 1)}`;
 
   const updatedWebView: WebViewTabProps = {
     ...webView,

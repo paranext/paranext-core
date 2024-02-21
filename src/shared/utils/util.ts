@@ -1,8 +1,15 @@
 import { ProcessType } from '@shared/global-this.model';
-import { UnsubscriberAsync, isString } from 'platform-bible-utils';
+import {
+  UnsubscriberAsync,
+  charAt,
+  indexOf,
+  isString,
+  stringLength,
+  substring,
+} from 'platform-bible-utils';
 
 const NONCE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-const NONCE_CHARS_LENGTH = NONCE_CHARS.length;
+const NONCE_CHARS_LENGTH = stringLength(NONCE_CHARS);
 /**
  * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
  * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
@@ -14,7 +21,7 @@ const NONCE_CHARS_LENGTH = NONCE_CHARS.length;
 export function newNonce(): string {
   let nonce = '';
   for (let i = 0; i < 32; i++)
-    nonce += NONCE_CHARS.charAt(Math.floor(Math.random() * NONCE_CHARS_LENGTH));
+    nonce += charAt(NONCE_CHARS, Math.floor(Math.random() * NONCE_CHARS_LENGTH));
   return nonce;
 }
 
@@ -174,13 +181,13 @@ export function serializeRequestType(category: string, directive: string): Seria
 export function deserializeRequestType(requestType: SerializedRequestType): RequestType {
   if (!requestType) throw new Error('deserializeRequestType: must be a non-empty string');
 
-  const colonIndex = requestType.indexOf(REQUEST_TYPE_SEPARATOR);
-  if (colonIndex <= 0 || colonIndex >= requestType.length - 1)
+  const colonIndex = indexOf(requestType, REQUEST_TYPE_SEPARATOR);
+  if (colonIndex <= 0 || colonIndex >= stringLength(requestType) - 1)
     throw new Error(
       `deserializeRequestType: Must have two parts divided by a ${REQUEST_TYPE_SEPARATOR} (${requestType})`,
     );
-  const category = requestType.substring(0, colonIndex);
-  const directive = requestType.substring(colonIndex + 1);
+  const category = substring(requestType, 0, colonIndex);
+  const directive = substring(requestType, colonIndex + 1);
   return { category, directive };
 }
 

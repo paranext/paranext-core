@@ -21,6 +21,8 @@ import {
   isString,
   CannotHaveOnDidDispose,
   AsyncVariable,
+  endsWith,
+  startsWith,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
@@ -53,7 +55,7 @@ const SUBSCRIBE_PLACEHOLDER = {};
  * provider name if it's already there to avoid duplication
  */
 const getDataProviderObjectId = (providerName: string) => {
-  return providerName.endsWith(`-${DATA_PROVIDER_LABEL}`)
+  return endsWith(providerName, `-${DATA_PROVIDER_LABEL}`)
     ? providerName
     : `${providerName}-${DATA_PROVIDER_LABEL}`;
 };
@@ -264,7 +266,7 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
         DataProviderInternal<DataProviderTypes[DataProviderName]>[any] | undefined;
 
         // If they want a subscriber, build a subscribe function specific to the data type used
-        if (isString(prop) && prop.startsWith('subscribe')) {
+        if (isString(prop) && startsWith(prop, 'subscribe')) {
           const dataType =
             getDataProviderDataTypeFromFunctionName<DataProviderTypes[DataProviderName]>(prop);
           // Subscribe to run the callback when data changes. Also immediately calls callback with the current value
@@ -312,7 +314,7 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
         // These request functions should not have to change after they're set for the first time.
         if (
           isString(prop) &&
-          (prop.startsWith('get') || prop.startsWith('subscribe') || prop === 'notifyUpdate') &&
+          (startsWith(prop, 'get') || startsWith(prop, 'subscribe') || prop === 'notifyUpdate') &&
           (prop in obj || prop in dataProviderInternal)
         )
           return false;
@@ -328,7 +330,7 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
       has(obj, prop) {
         if (prop in dataProviderInternal) return true;
         // This proxy provides subscribe methods, so make sure they seem to exist
-        if (isString(prop) && prop.startsWith('subscribe')) return true;
+        if (isString(prop) && startsWith(prop, 'subscribe')) return true;
         return prop in obj;
       },
     },
@@ -554,8 +556,8 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
       // If the function was decorated with @ignore, do not consider it a special function
       if (dataProviderEngineUntyped[fnName].isIgnored) return 'other';
 
-      if (fnName.startsWith('get')) return 'get';
-      if (fnName.startsWith('set')) return 'set';
+      if (startsWith(fnName, 'get')) return 'get';
+      if (startsWith(fnName, 'set')) return 'set';
       return 'other';
     },
     (fnName, fnType) => {
