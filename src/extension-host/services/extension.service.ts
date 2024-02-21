@@ -23,7 +23,7 @@ import {
   deserialize,
   endsWith,
   includes,
-  length,
+  stringLength,
   startsWith,
   slice,
 } from 'platform-bible-utils';
@@ -491,7 +491,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         userExtensionTypesCacheUri,
         // Folder name must match module name which we are assuming is the same as the name of the
         // .d.ts file, so get the .d.ts file's name and use it as the folder name
-        slice(extensionDtsBaseDestination, 0, -length('.d.ts')),
+        slice(extensionDtsBaseDestination, 0, -stringLength('.d.ts')),
         'index.d.ts',
       );
 

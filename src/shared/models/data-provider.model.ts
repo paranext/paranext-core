@@ -1,5 +1,5 @@
 import {
-  length,
+  stringLength,
   UnsubscriberAsync,
   PlatformEventHandler,
   substring,
@@ -241,7 +241,7 @@ export function getDataProviderDataTypeFromFunctionName<
 
   // Assert the expected return type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return substring(fnName, length(fnPrefix)) as DataTypeNames<TDataTypes>;
+  return substring(fnName, stringLength(fnPrefix)) as DataTypeNames<TDataTypes>;
 }
 
 export default DataProviderInternal;

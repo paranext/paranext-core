@@ -40,7 +40,7 @@ export {
   includes,
   indexOf,
   lastIndexOf,
-  length,
+  stringLength,
   normalize,
   padEnd,
   padStart,

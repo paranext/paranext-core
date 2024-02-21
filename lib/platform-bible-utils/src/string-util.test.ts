@@ -6,7 +6,7 @@ import {
   includes,
   indexOf,
   lastIndexOf,
-  length,
+  stringLength,
   normalize,
   padEnd,
   padStart,
@@ -47,12 +47,12 @@ describe('at', () => {
   });
 
   test('at with index greater than length returns undefined', () => {
-    const result = at(LONG_SURROGATE_PAIRS_STRING, length(LONG_SURROGATE_PAIRS_STRING) + 10);
+    const result = at(LONG_SURROGATE_PAIRS_STRING, stringLength(LONG_SURROGATE_PAIRS_STRING) + 10);
     expect(result).toEqual(undefined);
   });
 
   test('at with index smaller than -length returns undefined', () => {
-    const result = at(LONG_SURROGATE_PAIRS_STRING, -length(LONG_SURROGATE_PAIRS_STRING) - 10);
+    const result = at(LONG_SURROGATE_PAIRS_STRING, -stringLength(LONG_SURROGATE_PAIRS_STRING) - 10);
     expect(result).toEqual(undefined);
   });
 });
@@ -151,7 +151,7 @@ describe('lastIndexOf', () => {
 
 describe('length', () => {
   test('length is correct', () => {
-    const result = length(LONG_SURROGATE_PAIRS_STRING);
+    const result = stringLength(LONG_SURROGATE_PAIRS_STRING);
     expect(result).toEqual(SURROGATE_PAIRS_STRING_LENGTH);
   });
 });

@@ -8,8 +8,8 @@ import {
 } from 'stringz';
 
 /**
- * This function mirrors the `at` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `at` function from the JavaScript Standard String object. It handles
+ * Unicode code points instead of UTF-16 character codes.
  *
  * Finds the Unicode code point at the given index.
  *
@@ -20,13 +20,13 @@ import {
  *   undefined if index is out of bounds
  */
 export function at(string: string, index: number): string | undefined {
-  if (index > length(string) || index < -length(string)) return undefined;
+  if (index > stringLength(string) || index < -stringLength(string)) return undefined;
   return substr(string, index, 1);
 }
 
 /**
- * This function mirrors the `charAt` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `charAt` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Returns a new string consisting of the single unicode code point at the given index.
  *
@@ -37,13 +37,13 @@ export function at(string: string, index: number): string | undefined {
  *   string if index is out of bounds
  */
 export function charAt(string: string, index: number): string {
-  if (index < 0 || index > length(string) - 1) return '';
+  if (index < 0 || index > stringLength(string) - 1) return '';
   return substr(string, index, 1);
 }
 
 /**
- * This function mirrors the `codePointAt` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `codePointAt` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Returns a non-negative integer that is the Unicode code point value of the character starting at
  * the given index.
@@ -55,13 +55,13 @@ export function charAt(string: string, index: number): string {
  *   index, or undefined if there is no element at that position
  */
 export function codePointAt(string: string, index: number): number | undefined {
-  if (index < 0 || index > length(string) - 1) return undefined;
+  if (index < 0 || index > stringLength(string) - 1) return undefined;
   return substr(string, index, 1).codePointAt(0);
 }
 
 /**
- * This function mirrors the `endsWith` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `endsWith` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Determines whether a string ends with the characters of this string.
  *
@@ -74,17 +74,17 @@ export function codePointAt(string: string, index: number): number | undefined {
 export function endsWith(
   string: string,
   searchString: string,
-  endPosition: number = length(string),
+  endPosition: number = stringLength(string),
 ): boolean {
   const lastIndexOfSearchString = lastIndexOf(string, searchString);
   if (lastIndexOfSearchString === -1) return false;
-  if (lastIndexOfSearchString + length(searchString) !== endPosition) return false;
+  if (lastIndexOfSearchString + stringLength(searchString) !== endPosition) return false;
   return true;
 }
 
 /**
- * This function mirrors the `includes` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `includes` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Performs a case-sensitive search to determine if searchString is found in string.
  *
@@ -101,8 +101,8 @@ export function includes(string: string, searchString: string, position: number 
 }
 
 /**
- * This function mirrors the `indexOf` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `indexOf` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Returns the index of the first occurrence of a given string.
  *
@@ -120,8 +120,8 @@ export function indexOf(
 }
 
 /**
- * This function mirrors the `lastIndexOf` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `lastIndexOf` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Searches this string and returns the index of the last occurrence of the specified substring.
  *
@@ -132,16 +132,16 @@ export function indexOf(
  * @returns Index of the last occurrence of searchString found, or -1 if not found.
  */
 export function lastIndexOf(string: string, searchString: string, position?: number): number {
-  let validatedPosition = position === undefined ? length(string) : position;
+  let validatedPosition = position === undefined ? stringLength(string) : position;
 
   if (validatedPosition < 0) {
     validatedPosition = 0;
-  } else if (validatedPosition >= length(string)) {
-    validatedPosition = length(string) - 1;
+  } else if (validatedPosition >= stringLength(string)) {
+    validatedPosition = stringLength(string) - 1;
   }
 
   for (let index = validatedPosition; index >= 0; index--) {
-    if (substr(string, index, length(searchString)) === searchString) {
+    if (substr(string, index, stringLength(searchString)) === searchString) {
       return index;
     }
   }
@@ -150,21 +150,22 @@ export function lastIndexOf(string: string, searchString: string, position?: num
 }
 
 /**
- * This function mirrors the `length` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `length` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes. Since `length` appears to be a
+ * reserved keyword, the function was renamed to `stringLength`
  *
  * Returns the length of a string.
  *
  * @param string String to return the length for
  * @returns Number that is length of the starting string
  */
-export function length(string: string): number {
+export function stringLength(string: string): number {
   return stringzLength(string);
 }
 
 /**
- * This function mirrors the `normalize` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `normalize` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Returns the Unicode Normalization Form of this string.
  *
@@ -181,8 +182,8 @@ export function normalize(string: string, form: 'NFC' | 'NFD' | 'NFKC' | 'NFKD' 
 }
 
 /**
- * This function mirrors the `padEnd` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `padEnd` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Pads this string with another string (multiple times, if needed) until the resulting string
  * reaches the given length. The padding is applied from the end of this string.
@@ -196,13 +197,13 @@ export function normalize(string: string, form: 'NFC' | 'NFD' | 'NFKC' | 'NFKD' 
  */
 // Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
 export function padEnd(string: string, targetLength: number, padString: string = ' '): string {
-  if (targetLength <= length(string)) return string;
+  if (targetLength <= stringLength(string)) return string;
   return stringzLimit(string, targetLength, padString, 'right');
 }
 
 /**
- * This function mirrors the `padStart` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `padStart` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Pads this string with another string (multiple times, if needed) until the resulting string
  * reaches the given length. The padding is applied from the start of this string.
@@ -216,22 +217,22 @@ export function padEnd(string: string, targetLength: number, padString: string =
  */
 // Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
 export function padStart(string: string, targetLength: number, padString: string = ' '): string {
-  if (targetLength <= length(string)) return string;
+  if (targetLength <= stringLength(string)) return string;
   return stringzLimit(string, targetLength, padString, 'left');
 }
 
 // This is a helper function that performs a correction on the slice index to make sure it
 // cannot go out of bounds
-function correctSliceIndex(stringLength: number, index: number) {
-  if (index > stringLength) return stringLength;
-  if (index < -stringLength) return 0;
-  if (index < 0) return index + stringLength;
+function correctSliceIndex(length: number, index: number) {
+  if (index > length) return length;
+  if (index < -length) return 0;
+  if (index < 0) return index + length;
   return index;
 }
 
 /**
- * This function mirrors the `slice` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `slice` function from the JavaScript Standard String object. It handles
+ * Unicode code points instead of UTF-16 character codes.
  *
  * Extracts a section of this string and returns it as a new string, without modifying the original
  * string.
@@ -242,31 +243,26 @@ function correctSliceIndex(stringLength: number, index: number) {
  * @returns A new string containing the extracted section of the string.
  */
 export function slice(string: string, indexStart: number, indexEnd?: number): string {
-  const stringLength: number = length(string);
+  const length: number = stringLength(string);
   if (
-    indexStart > stringLength ||
+    indexStart > length ||
     (indexEnd &&
       ((indexStart > indexEnd &&
-        !(
-          indexStart > 0 &&
-          indexStart < stringLength &&
-          indexEnd < 0 &&
-          indexEnd > -stringLength
-        )) ||
-        indexEnd < -stringLength ||
-        (indexStart < 0 && indexStart > -stringLength && indexEnd > 0)))
+        !(indexStart > 0 && indexStart < length && indexEnd < 0 && indexEnd > -length)) ||
+        indexEnd < -length ||
+        (indexStart < 0 && indexStart > -length && indexEnd > 0)))
   )
     return '';
 
-  const newStart = correctSliceIndex(stringLength, indexStart);
-  const newEnd = indexEnd ? correctSliceIndex(stringLength, indexEnd) : undefined;
+  const newStart = correctSliceIndex(length, indexStart);
+  const newEnd = indexEnd ? correctSliceIndex(length, indexEnd) : undefined;
 
   return substring(string, newStart, newEnd);
 }
 
 /**
- * This function mirrors the `split` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `split` function from the JavaScript Standard String object. It handles
+ * Unicode code points instead of UTF-16 character codes.
  *
  * Takes a pattern and divides the string into an ordered list of substrings by searching for the
  * pattern, puts these substrings into an array, and returns the array.
@@ -304,7 +300,7 @@ export function split(string: string, separator: string | RegExp, splitLimit?: n
 
   for (let index = 0; index < (splitLimit ? splitLimit - 1 : matches.length); index++) {
     const matchIndex = indexOf(string, matches[index], currentIndex);
-    const matchLength = length(matches[index]);
+    const matchLength = stringLength(matches[index]);
 
     result.push(substring(string, currentIndex, matchIndex));
     currentIndex = matchIndex + matchLength;
@@ -320,8 +316,8 @@ export function split(string: string, separator: string | RegExp, splitLimit?: n
 }
 
 /**
- * This function mirrors the `startsWith` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `startsWith` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Determines whether the string begins with the characters of a specified string, returning true or
  * false as appropriate.
@@ -340,8 +336,8 @@ export function startsWith(string: string, searchString: string, position: numbe
 }
 
 /**
- * This function mirrors the `substr` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `substr` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Returns a substring by providing start and length. This function is not exported because it is
  * considered deprecated, however it is still useful as a local helper function.
@@ -352,13 +348,17 @@ export function startsWith(string: string, searchString: string, position: numbe
  *   length minus start parameter`
  * @returns Substring from starting string
  */
-function substr(string: string, begin: number = 0, len: number = length(string) - begin): string {
+function substr(
+  string: string,
+  begin: number = 0,
+  len: number = stringLength(string) - begin,
+): string {
   return stringzSubstr(string, begin, len);
 }
 
 /**
- * This function mirrors the `substring` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `substring` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Returns a substring by providing start and end position.
  *
@@ -367,13 +367,17 @@ function substr(string: string, begin: number = 0, len: number = length(string) 
  * @param end End position. Default is `End of string`
  * @returns Substring from starting string
  */
-export function substring(string: string, begin: number, end: number = length(string)): string {
+export function substring(
+  string: string,
+  begin: number,
+  end: number = stringLength(string),
+): string {
   return stringzSubstring(string, begin, end);
 }
 
 /**
- * This function mirrors the `toArray` function from the JavaScript Standard String object.
- * It handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `toArray` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
  *
  * Converts a string to an array of string characters.
  *

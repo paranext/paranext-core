@@ -4,12 +4,12 @@ import {
   charAt,
   indexOf,
   isString,
-  length,
+  stringLength,
   substring,
 } from 'platform-bible-utils';
 
 const NONCE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-const NONCE_CHARS_LENGTH = length(NONCE_CHARS);
+const NONCE_CHARS_LENGTH = stringLength(NONCE_CHARS);
 /**
  * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
  * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
@@ -182,7 +182,7 @@ export function deserializeRequestType(requestType: SerializedRequestType): Requ
   if (!requestType) throw new Error('deserializeRequestType: must be a non-empty string');
 
   const colonIndex = indexOf(requestType, REQUEST_TYPE_SEPARATOR);
-  if (colonIndex <= 0 || colonIndex >= length(requestType) - 1)
+  if (colonIndex <= 0 || colonIndex >= stringLength(requestType) - 1)
     throw new Error(
       `deserializeRequestType: Must have two parts divided by a ${REQUEST_TYPE_SEPARATOR} (${requestType})`,
     );

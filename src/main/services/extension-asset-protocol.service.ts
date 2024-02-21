@@ -1,7 +1,7 @@
 import { protocol } from 'electron';
 import { StatusCodes } from 'http-status-codes';
 import extensionAssetService from '@shared/services/extension-asset.service';
-import { includes, indexOf, lastIndexOf, length, substring } from 'platform-bible-utils';
+import { includes, indexOf, lastIndexOf, stringLength, substring } from 'platform-bible-utils';
 
 /** Here some of the most common MIME types that we expect to handle */
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
@@ -68,7 +68,7 @@ const initialize = () => {
       // 2) Use request headers to pass along the extension name so extension code doesn't have to embed its name in URLs.
 
       // Remove "papi-extension://" from the front of the URL
-      const uri: string = substring(request.url, length(`${protocolName}://`));
+      const uri: string = substring(request.url, stringLength(`${protocolName}://`));
 
       // There have to be at least 2 parts to the URI divided by a slash
       if (!includes(uri, '/')) {
@@ -86,7 +86,7 @@ const initialize = () => {
       // allowed in URLs. So let's decode both of them before passing them to the extension host.
       extension = decodeURIComponent(extension);
       asset = decodeURIComponent(asset);
-      if (length(extension) > 100 || length(asset) > 100) {
+      if (stringLength(extension) > 100 || stringLength(asset) > 100) {
         return errorResponse(request.url, StatusCodes.BAD_REQUEST);
       }
 

@@ -15,7 +15,7 @@ import {
 } from '@shared/data/internal-connection.model';
 import {
   aggregateUnsubscriberAsyncs,
-  length,
+  stringLength,
   UnsubscriberAsync,
   getErrorMessage,
   wait,
@@ -149,7 +149,7 @@ function validateCommandFormatting(commandName: string) {
     throw new Error(
       `Invalid command name ${commandName}: must have non-empty string before a period`,
     );
-  if (periodIndex >= length(commandName) - 1)
+  if (periodIndex >= stringLength(commandName) - 1)
     throw new Error(
       `Invalid command name ${commandName}: must have a non-empty string after a period`,
     );
