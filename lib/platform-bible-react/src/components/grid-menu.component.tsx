@@ -47,6 +47,9 @@ function MenuColumn(
   return (
     <Grid id={id} item xs="auto" className={`papi-menu-column ${className ?? ''}`}>
       <h3 className={`papi-menu-column-header ${className ?? ''}`}>{metadata.label}</h3>
+      {/* It would seem as though this List component were unnecessary, since it only contains one
+      thing, but the "dense" property does affect the layout of the items (in a way I don't fully
+      understand). There might be a better way. */}
       <List id={id} dense className={className ?? ''}>
         <TopLevelMenu
           commandHandler={commandHandler}
