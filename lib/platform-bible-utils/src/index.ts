@@ -3,6 +3,8 @@ export { default as AsyncVariable } from './async-variable';
 export { default as DocumentCombinerEngine } from './document-combiner-engine';
 export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 export { default as PlatformEventEmitter } from './platform-event-emitter.model';
+export { default as Mutex } from './mutex';
+export { default as MutexMap } from './mutex-map';
 
 // Consts
 export {
@@ -28,6 +30,7 @@ export {
   wait,
   waitForDuration,
   getAllObjectFunctionNames,
+  createSyncProxyForAsyncObject,
 } from './util';
 export { default as deepEqual } from './equality-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';

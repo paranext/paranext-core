@@ -5,6 +5,7 @@ import os from 'os';
 import { Uri } from '@shared/data/file-system.model';
 import memoizeOne from 'memoize-one';
 
+// FOR SCHEME DOCUMENTATION, SEE Uri JSDOC
 const APP_SCHEME = 'app';
 const CACHE_SCHEME = 'cache';
 const CACHE_DIR_NAME = CACHE_SCHEME;
@@ -40,6 +41,7 @@ export const getAppDir = memoizeOne((): string => {
     : path.join(__dirname, '../../../dev-appdata');
 });
 
+// FOR SCHEME DOCUMENTATION, SEE Uri JSDOC
 /** Get a mapping from scheme to the absolute path to that scheme. */
 // TODO: this is currently lazy-loaded because globalThis doesn't get populated until after this
 // file is imported. Fix this to be a normal object after fixing globalThis import dependencies.

@@ -17,11 +17,14 @@ import {
   papiFrontendProjectDataProviderService,
   PapiFrontendProjectDataProviderService,
 } from '@shared/services/project-data-provider.service';
-import settingsService, { SettingsService } from '@shared/services/settings.service';
+import settingsService from '@shared/services/settings.service';
+import { ISettingsService } from '@shared/services/settings.service-model';
 import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
 import PapiRendererWebSocket from '@renderer/services/renderer-web-socket.service';
+import menuDataService from '@shared/services/menu-data.service';
+import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import PapiRendererXMLHttpRequest from './renderer-xml-http-request.service';
 
 // IMPORTANT NOTES:
@@ -70,7 +73,9 @@ const papi = {
    */
   react: papiReact,
   /** JSDOC DESTINATION settingsService */
-  settings: settingsService as SettingsService,
+  settings: settingsService as ISettingsService,
+  /** JSDOC DESTINATION menuDataService */
+  menuData: menuDataService as IMenuDataService,
 };
 /* eslint-enable */
 
@@ -123,5 +128,8 @@ Object.freeze(papi.react);
 /** JSDOC DESTINATION settingsService */
 export const { settings } = papi;
 Object.freeze(papi.settings);
+/** JSDOC DESTINATION menuDataService */
+export const { menuData } = papi;
+Object.freeze(papi.menuData);
 
 export type Papi = typeof papi;

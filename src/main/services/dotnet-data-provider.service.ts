@@ -31,6 +31,8 @@ function killDotnetDataProvider() {
   } else {
     logger.error('dotnet data provider was not stopped! Investigate other .kill() options');
   }
+  dotnet?.stderr?.removeListener('data', logProcessError);
+  dotnet?.stdout?.removeListener('data', logProcessInfo);
   dotnet = undefined;
 }
 
@@ -69,7 +71,19 @@ function startDotnetDataProvider() {
   dotnet.stdout.on('data', logProcessInfo);
   dotnet.stderr.on('data', logProcessError);
 
-  dotnet.on('close', (code, signal) => {
+  dotnet.once('exit', (code, signal) => {
+    if (signal) {
+      logger.info(`'exit' event: dotnet data provider terminated with signal ${signal}`);
+    } else {
+      logger.info(`'exit' event: dotnet data provider exited with code ${code}`);
+    }
+    dotnet?.stderr?.removeListener('data', logProcessError);
+    dotnet?.stdout?.removeListener('data', logProcessInfo);
+    dotnet = undefined;
+    resolveClose();
+  });
+
+  dotnet.once('close', (code, signal) => {
     // In production, this handles the closing of the data provider. However, in development,
     // this is handling the closing of the dotnet watcher.
     if (signal) {
@@ -77,8 +91,8 @@ function startDotnetDataProvider() {
     } else {
       logger.info(`'close' event: dotnet data provider exited with code ${code}`);
     }
-    // TODO: listen for 'exit' event as well?
-    // TODO: unsubscribe event listeners
+    dotnet?.stderr?.removeListener('data', logProcessError);
+    dotnet?.stdout?.removeListener('data', logProcessInfo);
     dotnet = undefined;
     resolveClose();
   });

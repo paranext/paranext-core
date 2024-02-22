@@ -6,5 +6,8 @@
   "license": "MIT",
   "main": "src/main.ts",
   "types": "src/types/quick-verse.d.ts",
+  "menus": "contributions/menus.json",
+  "settings": "contributions/settings.json",
+  "projectSettings": "contributions/projectSettings.json",
   "activationEvents": []
 }

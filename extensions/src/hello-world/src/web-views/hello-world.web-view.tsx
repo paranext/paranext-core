@@ -108,13 +108,14 @@ globalThis.webViewComponent = function HelloWorld({
     // This is intentionally not a stable reference like `useMemo` or something because we are
     // testing below to make sure `useDialogCallback` returns the same callback every time
     {
-      prompt: `Please select a project for Hello World WebView: (Render ${currentRender.current})`,
+      prompt: `Please select a Scripture project for Hello World WebView: (Render ${currentRender.current})`,
       iconUrl: 'papi-extension://hello-world/assets/offline.svg',
       title: 'Select Hello World Project',
       maximumOpenDialogs: 2,
       // Test ref parameter properly getting latest value
       currentRender: currentRender.current,
       optionsSource: 'hook',
+      includeProjectTypes: '^ParatextStandard$',
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
@@ -155,10 +156,11 @@ globalThis.webViewComponent = function HelloWorld({
     'platform.selectMultipleProjects',
     useMemo(
       () => ({
-        prompt: 'Please select one or more projects for Hello World WebView:',
+        prompt: 'Please select one or more Scripture projects for Hello World WebView:',
         iconUrl: 'papi-extension://hello-world/assets/offline.svg',
         title: 'Select List of Hello World Projects',
         selectedProjectIds: projects,
+        includeProjectTypes: '^ParatextStandard$',
       }),
       [projects],
     ),

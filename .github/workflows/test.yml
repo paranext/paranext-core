@@ -23,7 +23,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
-        dotnet_version: [7.0.x]
+        dotnet_version: [8.0.x]
 
     steps:
       - name: Check out Git repository
@@ -36,7 +36,7 @@ jobs:
 
       - name: Read package.json
         id: package_json
-        uses: zoexx/github-action-json-file-properties@release
+        uses: zoexx/github-action-json-file-properties@1.0.4
         with:
           file_path: 'package.json'
 

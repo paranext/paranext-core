@@ -15,6 +15,7 @@ const standardMenuLayout: LocalizedMainMenu = {
     'paratext.sendReceive': { column: 'paratext.paratext', order: 1 },
     'paratext.openCreate': { column: 'paratext.paratext', order: 2 },
     'paratext.saveDelete': { column: 'paratext.paratext', order: 3 },
+    'platform.project': { column: 'paratext.paratext', order: 4 },
     'paratext.resourceTools': { column: 'paratext.paratext', order: 4 },
     'platform.misc': { column: 'paratext.paratext', order: 9999999, isExtensible: true },
     'platform.windowGroup1': { column: 'platform.window', order: 1, isExtensible: true },
@@ -68,6 +69,13 @@ const standardMenuLayout: LocalizedMainMenu = {
       group: 'paratext.resourceTools',
       order: 3,
       command: 'paratextBibleWordList.open',
+    },
+    {
+      label: 'Open Hello World Project...',
+      localizeNotes: 'Main application menu > Paratext column > Open Hello World Project',
+      group: 'platform.project',
+      order: 1,
+      command: 'helloWorld.openProject',
     },
     {
       label: 'Settings',
@@ -151,6 +159,11 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
       group: 'paratext.resourceTools',
       order: 3,
       command: 'paratextBibleWordList.open',
+      hasDivider: true,
+    },
+    {
+      name: 'Open Hello World Project...',
+      command: 'helloWorld.openProject',
     },
     {
       label: 'Settings',

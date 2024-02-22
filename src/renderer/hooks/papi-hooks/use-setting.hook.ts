@@ -1,24 +1,28 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import settingsService from '@shared/services/settings.service';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
+import useData from '@renderer/hooks/papi-hooks/use-data.hook';
+import {
+  DataProviderSubscriberOptions,
+  DataProviderUpdateInstructions,
+} from '@shared/models/data-provider.model';
+import { SettingDataTypes } from '@shared/services/settings.service-model';
 
 /**
  * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
  * and gets updated when the setting is changed by others.
  *
- * @param key The string id that is used to store the setting in local storage
+ * @param key The string id that is used to identify the setting that will be stored on the papi
  *
  *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
  *   updated every render
- * @param defaultState The default state of the setting. If the setting already has a value set to
- *   it in local storage, this parameter will be ignored.
+ * @param defaultState The initial value to return while first awaiting the setting value
+ * @param subscriberOptions Various options to adjust how the subscriber emits updates
  *
  *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
- *   to re-run with its new value. Running `resetSetting()` will always update the setting value
- *   returned to the latest `defaultState`, and changing the `key` will use the latest
- *   `defaultState`. However, if `defaultState` is changed while a setting is `defaultState`
- *   (meaning it is reset and has no value), the returned setting value will not be updated to the
- *   new `defaultState`.
+ *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+ *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+ *   until `dataProviderSource` or `selector` changes.
  * @returns `[setting, setSetting, resetSetting]`
  *
  *   - `setting`: The current state of the setting, either `defaultState` or the stored state on the
@@ -32,50 +36,40 @@ import { SettingNames, SettingTypes } from 'papi-shared-types';
 const useSetting = <SettingName extends SettingNames>(
   key: SettingName,
   defaultState: SettingTypes[SettingName],
+  subscriberOptions?: DataProviderSubscriberOptions,
 ): [
   setting: SettingTypes[SettingName],
-  setSetting: (newSetting: SettingTypes[SettingName]) => void,
+  setSetting: (
+    newData: SettingTypes[SettingName],
+  ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
   resetSetting: () => void,
+  isLoading: boolean,
 ] => {
-  // Use defaultState as a ref so it doesn't update dependency arrays
-  const defaultStateRef = useRef(defaultState);
-  defaultStateRef.current = defaultState;
-
-  const [setting, setSettingInternal] = useState(settingsService.get(key, defaultStateRef.current));
-
-  useEffect(() => {
-    // Get the setting for the new key when the key changes
-    setSettingInternal(settingsService.get(key, defaultStateRef.current));
-
-    // Subscribe to changes to the setting
-    const unsubscriber = settingsService.subscribe(key, (newSetting) => {
-      if (newSetting.type === 'update-setting') {
-        setSettingInternal(newSetting.setting);
-      } else if (newSetting.type === 'reset-setting') {
-        setSettingInternal(defaultStateRef.current);
-      } else {
-        throw new Error('Unexpected message type used for updating setting');
-      }
-    });
-
-    return () => {
-      unsubscriber();
-    };
-  }, [key]);
-
-  const setSetting = useCallback(
-    (newSetting: SettingTypes[SettingName]) => {
-      settingsService.set(key, newSetting);
-      setSettingInternal(newSetting);
-    },
-    [key],
-  );
+  // `SettingDataTypes` has no data types defined on it. We're using custom methods to interact
+  // with the data provider. The useData hook is not able to see these, so we are asserting them
+  // because we know we've defined them on the data provider.
+  /* eslint-disable no-type-assertion/no-type-assertion */
+  const [setting, setSetting, isLoading] = (
+    useData(settingsService) as {
+      ['']: (
+        selector: SettingName,
+        defaultValue: SettingTypes[SettingName],
+        subscriberOptions?: DataProviderSubscriberOptions,
+      ) => [
+        setting: SettingTypes[SettingName],
+        setSetting: (
+          newData: SettingTypes[SettingName],
+        ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
+        boolean,
+      ];
+    }
+  )[''](key, defaultState, subscriberOptions);
+  /* eslint-enable */
 
   const resetSetting = useCallback(() => {
     settingsService.reset(key);
-    setSettingInternal(defaultStateRef.current);
   }, [key]);
 
-  return [setting, setSetting, resetSetting];
+  return [setting, setSetting, resetSetting, isLoading];
 };
 export default useSetting;

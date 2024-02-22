@@ -30,7 +30,7 @@ const errorStringTemplates = {
   multiRemoteExists: 'remote {MULTI_TEMPLATE_NAME} already exists',
   singleRemoteExists: 'remote {SINGLE_TEMPLATE_NAME} already exists',
   /** `{0} is the subtree name aka the OS-independent extension directory path */
-  subtreeNeverAdded: "fatal: can't squash-merge: '{0}' was never added.\n",
+  subtreeNeverAdded: "can't squash-merge: '{0}' was never added.\n",
 };
 
 /** Object mapping const names for template replacing */

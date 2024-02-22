@@ -30,6 +30,12 @@ export type ExtensionManifest = {
    * for more information about extension type declaration files.
    */
   types?: string;
+  /** Path to the JSON file that defines the menu items this extension is adding. */
+  menus?: string;
+  /** Path to the JSON file that defines the settings this extension is adding. */
+  settings?: string;
+  /** Path to the JSON file that defines the project settings this extension is adding. */
+  projectSettings?: string;
   /**
    * List of events that occur that should cause this extension to be activated. Not yet
    * implemented.

@@ -97,6 +97,7 @@ internal class PapiClient : IDisposable
         if (isDisposing)
         {
             _webSocket.Dispose();
+            _clientInitializationComplete.TrySetResult(false);
             _clientInitializationComplete.Task.Dispose();
             _cancellationTokenSource.Dispose();
             _outgoingMessages.Dispose();
@@ -186,6 +187,35 @@ internal class PapiClient : IDisposable
     }
 
     /// <summary>
+    /// Send a request to the server. The response (if any) will be handled asynchronously by calling <paramref name="responseCallback"/>.
+    /// </summary>
+    /// <param name="requestType">Type of request intended for the server</param>
+    /// <param name="requestContents">If the object is a <see cref="JsonElement"/>, it will be used as-is in the request.
+    /// Otherwise the object will be serialized into a <see cref="JsonElement"/> then sent.</param>
+    /// <param name="responseCallback">Callback for the response to this request being sent.
+    /// The first argument indicates whether the request was successful.
+    /// The second argument is the optional contents of the response message.</param>
+    public virtual void SendRequest(
+        string requestType,
+        object requestContents,
+        Action<bool, object?> responseCallback
+    )
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+
+        int requestId = Interlocked.Increment(ref _nextRequestId);
+        var requestMessage =
+            (requestContents is JsonElement jse)
+                ? new MessageRequest(requestType, requestId, jse)
+                : new MessageRequest(requestType, requestId, requestContents);
+        _messageHandlersForMyRequests[requestId] = new MessageHandlerResponse(
+            requestMessage,
+            responseCallback
+        );
+        QueueOutgoingMessage(requestMessage);
+    }
+
+    /// <summary>
     /// Register a request handler with the server.
     /// </summary>
     /// <param name="requestType">The request type to register</param>
@@ -205,14 +235,9 @@ internal class PapiClient : IDisposable
         TaskCompletionSource registrationSource = new();
         using Task registrationTask = registrationSource.Task;
 
-        var requestMessage = new MessageRequest(
+        SendRequest(
             "server:registerRequest",
-            Interlocked.Increment(ref _nextRequestId),
-            new object[] { requestType, _clientId }
-        );
-
-        _messageHandlersForMyRequests[requestMessage.RequestId] = new MessageHandlerResponse(
-            requestMessage,
+            new object[] { requestType, _clientId },
             (bool success, object? _) =>
             {
                 if (!success)
@@ -236,8 +261,6 @@ internal class PapiClient : IDisposable
                     Console.WriteLine("Couldn't signal that registration is complete");
             }
         );
-
-        QueueOutgoingMessage(requestMessage);
 
         var timeout = TimeSpan.FromMilliseconds(responseTimeoutInMs);
         if (!await IsTaskCompleted(registrationTask, timeout, _cancellationToken))
