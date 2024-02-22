@@ -87,10 +87,19 @@
     "storybook:build": "storybook build"
   },
   "lint-staged": {
-    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
-    "*.json": ["prettier --parser json --write"],
-    "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
-    "*.{html,md,yml}": ["prettier --single-quote --write"]
+    "*.{cjs,js,jsx,ts,tsx}": [
+      "prettier --write",
+      "cross-env NODE_ENV=development eslint --cache"
+    ],
+    "*.json": [
+      "prettier --parser json --write"
+    ],
+    "*.{css,scss}": [
+      "stylelint --fix --allow-empty-input"
+    ],
+    "*.{html,md,yml}": [
+      "prettier --single-quote --write"
+    ]
   },
   "browserslist": [],
   "dependencies": {
@@ -104,6 +113,8 @@
     "ajv": "^8.12.0",
     "chalk": "^4.1.2",
     "chokidar": "^3.5.3",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
     "electron-debug": "^3.2.0",
     "electron-log": "^5.0.3",
     "electron-updater": "^6.1.7",
@@ -112,6 +123,7 @@
     "graphql": "^16.8.1",
     "http-status-codes": "^2.3.0",
     "jszip": "^3.10.1",
+    "lucide-react": "^0.336.0",
     "memoize-one": "^6.0.0",
     "node-localstorage": "^3.0.5",
     "platform-bible-react": "file:./lib/platform-bible-react",
@@ -121,6 +133,8 @@
     "react-data-grid": "^7.0.0-beta.34",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.3",
+    "tailwind-merge": "^2.2.1",
+    "tailwindcss-animate": "^1.0.7",
     "ws": "^8.16.0"
   },
   "devDependencies": {
@@ -206,6 +220,8 @@
     "stylelint": "^16.2.0",
     "stylelint-config-recommended": "^14.0.0",
     "stylelint-config-sass-guidelines": "^11.0.0",
+    "stylelint-config-tailwindcss": "^0.0.7",
+    "tailwindcss": "^3.4.1",
     "terser-webpack-plugin": "^5.3.10",
     "ts-jest": "^29.1.2",
     "ts-loader": "^9.5.1",
@@ -228,7 +244,12 @@
     "npm": ">=7.x"
   },
   "electronmon": {
-    "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**"],
+    "patterns": [
+      "!**/**",
+      "src/main/**",
+      "src/node/**",
+      "src/shared/**"
+    ],
     "logLevel": "quiet"
   },
   "volta": {
