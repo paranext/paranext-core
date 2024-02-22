@@ -1,7 +1,8 @@
 import { PlatformMenus } from 'platform-bible-utils';
 import { fireEvent, render } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { Command, GridMenu } from 'platform-bible-react';
+import GridMenu from './grid-menu.component';
+import { Command } from './menu-item.component';
 import { PropsWithChildren } from 'react';
 import NonValidatingDocumentCombiner from '../test-utils/non-validating-document-combiner';
 import * as jsonMenu from './sample.composed.full.menu.json';
@@ -33,7 +34,7 @@ jest.mock('@mui/material', () => {
     }: { divider: boolean | undefined; className: string | undefined } & PropsWithChildren) => {
       const dividerStyle = divider ? ' hasDivider' : '';
       return (
-        <li className={`${className}${dividerStyle}`} role="menuitem">
+        <li className={`${className || ''}${dividerStyle}`} role="menuitem">
           {children}
         </li>
       );
@@ -101,11 +102,10 @@ describe('GridMenu', () => {
       expect(allMenuItems.length).toBe(expectedMenuItems.length);
     });
 
-    it('the correct number of groups in each column', () => {
+    it('the correct total number of groups with dividers', () => {
       let cGroupsWithDividers = 0;
       allMenuItems.forEach((m) => {
-        if (!!m.attributes.getNamedItem('class')?.value?.match('hasDivider'))
-          cGroupsWithDividers += 1;
+        if (m.outerHTML?.match('hasDivider')) cGroupsWithDividers += 1;
       });
 
       // In the test data, only 4 of the column-level groups contain menu items. They are in two
@@ -114,10 +114,12 @@ describe('GridMenu', () => {
     });
 
     it('the last group in a column without a final separator', () => {
-      const lastItemInFirstColumn = getByText('%video_AddParatextVideo%');
+      const htmlForAddParatextVideoItem = allMenuItems.map((i) => i.outerHTML).find((html) => html &&
+        /%video_AddParatextVideo%/.test(html),
+      );
 
-      expect(lastItemInFirstColumn).toBeInTheDocument();
-      expect(lastItemInFirstColumn).toHaveAttribute('hasDivider', 'false');
+      expect(htmlForAddParatextVideoItem).toBeDefined();expect(htmlForAddParatextVideoItem).not.toMatch('hasDivider');
+
     });
   });
   describe('handles', () => {

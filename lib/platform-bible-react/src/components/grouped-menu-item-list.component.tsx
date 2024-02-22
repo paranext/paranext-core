@@ -113,12 +113,15 @@ export default function GroupedMenuItemList(
     if (items.length > 0) items[items.length - 1].isLastItemInGroup = true;
   });
 
+  // No divider after last item in final group.
+  if (items.length > 0) items[items.length - 1].isLastItemInGroup = false;
+
   const allowForLeadingIcons = items?.some((i) => 'iconPathBefore' in i);
 
   // Create props for MenuItem component including setting hasDivider for the last item in a group
   const createMenuItemProps = ({ item, isLastItemInGroup }: ItemInfo) => {
     const menuItemProps = {
-      class: 'papi-menu-item',
+      className: 'papi-menu-item',
       label: item.label,
       iconPathBefore: 'iconPathBefore' in item ? item.iconPathBefore : undefined,
       iconPathAfter: 'iconPathAfter' in item ? item.iconPathAfter : undefined,
