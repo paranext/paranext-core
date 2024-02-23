@@ -1,8 +1,8 @@
 import { PlatformMenus } from 'platform-bible-utils';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { PropsWithChildren } from 'react';
 import GridMenu from './grid-menu.component';
-import { MouseEventHandler, PropsWithChildren } from 'react';
 import NonValidatingDocumentCombiner from '../test-utils/non-validating-document-combiner';
 import * as jsonMenu from './sample.composed.full.menu.json';
 
@@ -20,7 +20,6 @@ jest.mock('@mui/material', () => {
     }: {
       divider: boolean | undefined;
       className: string | undefined;
-      onClick?: MouseEventHandler<HTMLLIElement> | undefined;
     } & PropsWithChildren) => {
       const dividerStyle = divider ? ' hasDivider' : '';
       return (
@@ -32,9 +31,6 @@ jest.mock('@mui/material', () => {
   };
 });
 
-function HandleMenuCommandNoOp() {
-}
-
 describe('GridMenu renders', () => {
   const topMenuCombiner = new NonValidatingDocumentCombiner(jsonMenu, {
     copyDocuments: false,
@@ -44,21 +40,26 @@ describe('GridMenu renders', () => {
   // Assert the type that schema validation should have already sorted out
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menuData = topMenuCombiner.output as PlatformMenus;
-  render(
-    <GridMenu multiColumnMenu={menuData.mainMenu} commandHandler={HandleMenuCommandNoOp} />,
-  );
+  render(<GridMenu multiColumnMenu={menuData.mainMenu} commandHandler={() => {}} />);
 
   it('column label correctly', () => {
     const expectedColumns = [
-      screen.queryByText('%mainMenu_Paratext%'),
-      screen.queryByText('%mainMenu_Window%'),
-      screen.queryByText('%mainMenu_Layout%'),
-      screen.queryByText('%mainMenu_Help%'),
+      {
+        html: screen.getByRole('menu', { name: 'paratext.paratext' }),
+        label: '%mainMenu_Paratext%',
+      },
+      { html: screen.getByRole('menu', { name: 'platform.window' }), label: '%mainMenu_Window%' },
+      { html: screen.getByRole('menu', { name: 'platform.layout' }), label: '%mainMenu_Layout%' },
+      { html: screen.getByRole('menu', { name: 'platform.help' }), label: '%mainMenu_Help%' },
     ];
 
     expectedColumns.forEach((column) => {
-      expect(column).toBeInTheDocument();
-      expect(column).toHaveAttribute(
+      const { html, label } = column;
+      expect(html).toBeInTheDocument();
+      const labelElement = screen.getByLabelText(label);
+      expect(html).toContainElement(labelElement);
+      expect(labelElement).toHaveTextContent(label);
+      expect(labelElement).toHaveAttribute(
         'class',
         expect.stringMatching(/\bpapi-menu-column-header\b/),
       );
@@ -90,9 +91,9 @@ describe('GridMenu renders', () => {
   });
 
   it('the last group in a column without a final separator', () => {
-    const htmlForAddParatextVideoItem = allMenuItems.map((i) => i.outerHTML).find((html) => html &&
-      /%video_AddParatextVideo%/.test(html),
-    );
+    const htmlForAddParatextVideoItem = allMenuItems
+      .map((i) => i.outerHTML)
+      .find((html) => html && /%video_AddParatextVideo%/.test(html));
 
     expect(htmlForAddParatextVideoItem).toBeDefined();
     expect(htmlForAddParatextVideoItem).not.toMatch('hasDivider');

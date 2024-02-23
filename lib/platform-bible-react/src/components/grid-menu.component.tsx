@@ -45,8 +45,17 @@ function MenuColumn(
   }: MenuColumnProps & { className: string | undefined }, // Ensure className is provided and of type string
 ) {
   return (
-    <Grid id={id} item xs="auto" className={`papi-menu-column ${className ?? ''}`}>
-      <h3 className={`papi-menu-column-header ${className ?? ''}`}>{metadata.label}</h3>
+    <Grid
+      id={id}
+      item
+      xs="auto"
+      role="menu"
+      aria-label={id}
+      className={`papi-menu-column ${className ?? ''}`}
+    >
+      <h3 aria-label={metadata.label} className={`papi-menu-column-header ${className ?? ''}`}>
+        {metadata.label}
+      </h3>
       {/* It would seem as though this List component were unnecessary, since it only contains one
       thing, but the "dense" property does affect the layout of the items (in a way I don't fully
       understand). There might be a better way. */}
@@ -69,6 +78,7 @@ export default function GridMenu({
   id,
 }: GridMenuProps) {
   const { columns } = multiColumnMenu;
+
   const columnNumbers = new Map<number, ColumnInfo>();
   Object.getOwnPropertyNames(columns).forEach((columnName: string) => {
     // We know for sure there is a (boolean) property 'isExtensible' that we are not interested in.
@@ -100,6 +110,8 @@ export default function GridMenu({
       spacing={0}
       className={`papi-multi-column-menu ${className ?? ''}`}
       columns={sortedColumns.length}
+      role="menu"
+      aria-label="GridMenu"
       id={id}
     >
       {sortedColumns.map((col, index) => (

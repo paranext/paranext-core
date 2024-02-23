@@ -139,7 +139,7 @@ export default function GroupedMenuItemList(
   const divKey = firstItem.item.group;
 
   return (
-    <div key={divKey}>
+    <div key={divKey} role="menu" aria-label="divKey">
       {/* I can't find anyway to "destructure" items.map. Asked ChatGPT, Google, and co-workers. */}
       {/* eslint-disable-next-line react/destructuring-assignment */}
       {items.map((itemInfo, index) => {

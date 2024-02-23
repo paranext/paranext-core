@@ -28,11 +28,10 @@ describe('GridMenu', () => {
     render(
       <GridMenu multiColumnMenu={menuData.mainMenu} commandHandler={RememberLastMenuCommand} />,
     );
-    
-    const sendReceiveProjectsItem = screen.queryByText('%sendReceiveProjects%');
-    expect(sendReceiveProjectsItem).toBeDefined();
 
-    sendReceiveProjectsItem && fireEvent.click(sendReceiveProjectsItem);
+    const sendReceiveProjectsItem = screen.getByRole('menuitem', { name: '%sendReceiveProjects%' });
+
+    fireEvent.click(sendReceiveProjectsItem);
 
     expect(numberOfCommandsHandled).toBe(1);
     expect(lastCommandHandled).toBe('paratext.sendReceiveProjects');
