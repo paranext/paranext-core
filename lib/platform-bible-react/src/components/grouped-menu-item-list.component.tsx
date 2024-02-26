@@ -157,7 +157,7 @@ export default function GroupedMenuItemList(
                   commandHandler(item);
                 }}
                 {...menuItemProps}
-              />
+              />,
             );
           } else {
             elements.push(<SubMenu key={divKey + item.id} parentMenuItem={item} {...menuProps} />);

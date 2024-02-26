@@ -350,15 +350,6 @@ export type MenuItemInfo = (Command | SubMenu) & {
 	items?: MenuItemInfo[];
 };
 export function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
-export type MenuItemListProps = MenuProps & {
-	/** Optional unique (column) identifier */
-	columnId?: ReferencedItem;
-};
-/**
- * This will typically not be useful on its own. It is used to generate and lay out the MenuItems to
- * appear on either a GridMenu or a ContextMenu.
- */
-export function TopLevelMenu(props: MenuItemListProps): import("react/jsx-runtime").JSX.Element;
 export type GridMenuInfo = {
 	/** The menu object containing information about the columns, groups, and items to display. */
 	multiColumnMenu: MultiColumnMenu;
@@ -884,6 +875,15 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	className?: string;
 }>;
 export function Toolbar({ menuProvider, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export type MenuItemListProps = MenuProps & {
+	/** Optional unique (column) identifier */
+	columnId?: ReferencedItem;
+};
+/**
+ * This will typically not be useful on its own. It is used to generate and lay out the MenuItems to
+ * appear on either a GridMenu or a ContextMenu.
+ */
+export function TopLevelMenu(props: MenuItemListProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
