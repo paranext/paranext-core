@@ -14,8 +14,6 @@ export type {
   ComboBoxOption,
   ComboBoxValue,
 } from './components/combo-box.component';
-export { default as TopLevelMenu } from './components/top-level-menu.component';
-export type { MenuItemListProps } from './components/top-level-menu.component';
 export { default as GridMenu } from './components/grid-menu.component';
 export type { GridMenuProps, GridMenuInfo } from './components/grid-menu.component';
 export { default as IconButton } from './components/icon-button.component';
@@ -58,6 +56,8 @@ export { default as TextField } from './components/text-field.component';
 export type { TextFieldProps } from './components/text-field.component';
 export { default as Toolbar } from './components/toolbar.component';
 export type { ToolbarProps, MultiColumnMenuProvider } from './components/toolbar.component';
+export { default as TopLevelMenu } from './components/top-level-menu.component';
+export type { MenuItemListProps } from './components/top-level-menu.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

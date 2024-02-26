@@ -38,12 +38,7 @@
     "resolveJsonModule": true,
     "outDir": ".erb/dll"
   },
-  "include": [
-    "src",
-    "assets",
-    "lib/platform-bible-react/src/components/button.component.test.tsx",
-    "lib/platform-bible-react/src/components/gridMenu.component.test.tsx"
-  ],
+  "include": ["src", "assets"],
   "exclude": [
     "node_modules",
     "test",

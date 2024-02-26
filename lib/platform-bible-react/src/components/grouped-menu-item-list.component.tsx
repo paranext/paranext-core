@@ -1,4 +1,4 @@
-import { MouseEvent, useState } from 'react';
+import { MouseEvent, ReactNode, useState } from 'react';
 import { Menu, MenuItem as MuiMenuItem } from '@mui/material';
 import {
   MenuGroupDetailsInColumn,
@@ -139,30 +139,32 @@ export default function GroupedMenuItemList(
   const divKey = firstItem.item.group;
 
   return (
-    <div key={divKey} role="menu" aria-label="divKey">
-      {/* I can't find anyway to "destructure" items.map. Asked ChatGPT, Google, and co-workers. */}
-      {/* eslint-disable-next-line react/destructuring-assignment */}
-      {items.map((itemInfo, index) => {
-        const { item } = itemInfo;
-        const menuItemProps = createMenuItemProps(itemInfo);
-        if ('command' in item) {
-          const key = item.group + index;
-          return (
-            <MenuItem
-              // By design, menu items will never get reordered. So (combined with the group ID)
-              // the index works as a key.
-              // eslint-disable-next-line react/no-array-index-key
-              key={key}
-              onClick={() => {
-                onClick?.();
-                commandHandler(item);
-              }}
-              {...menuItemProps}
-            />
-          );
-        }
-        return <SubMenu key={divKey + item.id} parentMenuItem={item} {...menuProps} />;
-      })}
+    <div key={divKey} role="menu" aria-label={divKey}>
+      {(() => {
+        const elements: ReactNode[] = [];
+        // A little more convoluted, but using foreach instead of map gets around a complaint about
+        // not destructuring items.
+        items.forEach((itemInfo, index) => {
+          const { item } = itemInfo;
+          const menuItemProps = createMenuItemProps(itemInfo);
+          if ('command' in item) {
+            const key = item.group + index;
+            elements.push(
+              <MenuItem
+                key={key}
+                onClick={() => {
+                  onClick?.();
+                  commandHandler(item);
+                }}
+                {...menuItemProps}
+              />
+            );
+          } else {
+            elements.push(<SubMenu key={divKey + item.id} parentMenuItem={item} {...menuProps} />);
+          }
+        });
+        return elements;
+      })()}
     </div>
   );
 }
