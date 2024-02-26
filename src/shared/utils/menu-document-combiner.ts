@@ -14,6 +14,7 @@ import {
   ReferencedItem,
   LocalizeKey,
   menuDocumentSchema,
+  startsWith,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import localizationService from '@shared/services/localization.service';
@@ -53,7 +54,7 @@ function checkNewColumns(
   if (!newColumns) return;
   Object.getOwnPropertyNames(newColumns).forEach((columnName: string) => {
     if (!columnName) return;
-    if (!columnName.startsWith(namePrefix))
+    if (!startsWith(columnName, namePrefix))
       throw new Error(`Column name ${columnName} does not start with ${namePrefix}`);
     if (!!currentColumns && currentColumns.isExtensible !== true)
       throw new Error(`Cannot add new column ${columnName} because isExtensible is not set`);
@@ -71,7 +72,7 @@ function checkNewGroups(
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const group = newGroups[groupName as ReferencedItem];
     if (!group) return;
-    if (!groupName.startsWith(namePrefix))
+    if (!startsWith(groupName, namePrefix))
       throw new Error(`Group name ${groupName} does not start with ${namePrefix}`);
     if ('column' in group && group.column) {
       if (!currentColumns) return;
@@ -80,7 +81,7 @@ function checkNewGroups(
         throw new Error(`Cannot add new group ${groupName} because isExtensible is not set`);
     } else if ('menuItem' in group && group.menuItem) {
       const targetMenuItemName = group.menuItem;
-      if (!targetMenuItemName.startsWith(namePrefix))
+      if (!startsWith(targetMenuItemName, namePrefix))
         throw new Error(`Cannot add new group ${groupName} to a submenu owned by something else`);
     }
   });
@@ -94,10 +95,10 @@ function checkNewMenuItems(
   if (!newMenuItems) return;
   newMenuItems.forEach((menuItem) => {
     if (!menuItem) return;
-    if ('id' in menuItem && menuItem.id && !menuItem.id.startsWith(namePrefix))
+    if ('id' in menuItem && menuItem.id && !startsWith(menuItem.id, namePrefix))
       throw new Error(`Menu item ID ${menuItem.id} does not start with ${namePrefix}`);
     const targetGroupName = menuItem.group;
-    if (targetGroupName && !targetGroupName.startsWith(namePrefix)) {
+    if (targetGroupName && !startsWith(targetGroupName, namePrefix)) {
       if (!currentGroups) return;
       const targetGroup = currentGroups[targetGroupName];
       if (targetGroup.isExtensible !== true)
@@ -322,7 +323,7 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
       const currentWebView = currentMenus?.webViewMenus[webViewName as ReferencedItem];
       /* eslint-enable no-type-assertion/no-type-assertion */
 
-      if (!currentWebView && !webViewName.startsWith(namePrefix))
+      if (!currentWebView && !startsWith(webViewName, namePrefix))
         throw new Error(`Cannot add a new web view unless it starts with ${namePrefix}`);
 
       checkNewColumns(newWebView?.topMenu?.columns, namePrefix, currentWebView?.topMenu?.columns);

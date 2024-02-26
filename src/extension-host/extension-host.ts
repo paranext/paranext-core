@@ -7,7 +7,7 @@ import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, substring } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { startProjectLookupService } from '@extension-host/services/project-lookup.service-host';
 import { registerCommand } from '@shared/services/command.service';
@@ -80,7 +80,7 @@ networkService
     getVerse: async () => {
       try {
         const exampleData = await (await papiFetch('https://www.example.com')).text();
-        const results = `testExtensionHost got data: ${exampleData.substring(0, 100)}`;
+        const results = `testExtensionHost got data: ${substring(exampleData, 0, 100)}`;
         logger.debug(results);
         return results;
       } catch (e) {

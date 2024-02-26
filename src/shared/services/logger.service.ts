@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import log, { LogLevel } from 'electron-log';
 import { getProcessType, isClient, isExtensionHost, isRenderer } from '@shared/utils/internal-util';
+import { includes, split } from 'platform-bible-utils';
 
 export const WARN_TAG = '<WARN>';
 
@@ -66,11 +67,11 @@ function identifyCaller(): string | undefined {
   const { stack } = new Error();
   if (!stack) return undefined;
   let details: parsedErrorLine;
-  const lines = stack.split('\n');
+  const lines = split(stack, '\n');
   // Start at 3 to skip the "Error" line, this function's stack frame, and this function's caller
   for (let lineNumber = 3; lineNumber < lines.length; lineNumber += 1) {
     // Skip over all logging library frames to get to the real call
-    if (!lines[lineNumber].includes('node_modules') && !lines[lineNumber].includes('node:')) {
+    if (!includes(lines[lineNumber], 'node_modules') && !includes(lines[lineNumber], 'node:')) {
       details = parseErrorLine(lines[lineNumber]);
       if (details) break;
     }
@@ -95,7 +96,7 @@ export function formatLog(message: string, serviceName: string, tag = '') {
   // Remove the new line at the end of every message coming from stdout from other processes
   const messageTrimmed = message.trimEnd();
   const openTag = `[${serviceName}${tag ? ' ' : ''}${tag}]`;
-  if (messageTrimmed.includes('\n')) {
+  if (includes(messageTrimmed, '\n')) {
     const closeTag = `[/${serviceName}${tag ? ' ' : ''}${tag}]`;
     // Multi-line
     return `\n${openTag}\n${messageTrimmed}\n${closeTag}`;

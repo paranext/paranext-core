@@ -60,7 +60,7 @@
     "editor:link": "cd extensions && yalc link @biblionexus-foundation/platform-editor",
     "editor:update": "cd extensions && yalc update @biblionexus-foundation/platform-editor",
     "editor:unlink": "cd extensions && yalc remove @biblionexus-foundation/platform-editor && npm i",
-    "postinstall": "patch-package && ts-node .erb/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll && cd lib/papi-dts && npm install && cd ../../extensions && npm install && cd .. && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
+    "postinstall": "patch-package && tsx .erb/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll && cd lib/papi-dts && npm install && cd ../../extensions && npm install && cd .. && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
     "lint": "npm run build:types && npm run lint:scripts && npm run lint:styles && cd lib/papi-dts && npm run lint && cd ../../extensions && npm run lint",
     "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
     "lint:styles": "stylelint **/*.{css,scss}",
@@ -69,19 +69,19 @@
     "lint-fix:styles": "npm run lint:styles -- --fix",
     "lint:config": "cross-env NODE_ENV=development eslint --print-config .eslintrc.js > .eslintConfig.json",
     "lint:staged": "npm run build:types && lint-staged -q && cd lib/papi-dts && npm run lint:staged && cd ../../extensions && npm run lint:staged",
-    "package": "ts-node ./.erb/scripts/clean.js dist && npm run build && npm run build:extensions:production && electron-builder build --publish never && npm run build:dll",
+    "package": "tsx ./.erb/scripts/clean.js dist && npm run build && npm run build:extensions:production && electron-builder build --publish never && npm run build:dll",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "prepare": "husky install && npm run csharp:tool:restore",
     "prettier": "prettier --write \"**/*.{ts,tsx,js,jsx,csj,json,css,scss,html,md,yml}\"",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
-    "start": "ts-node ./.erb/scripts/check-port-in-use.js && npm run start:renderer",
+    "start": "tsx ./.erb/scripts/check-port-in-use.js && npm run start:renderer",
     "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only .",
     "start:extension-host": "cross-env NODE_ENV=development nodemon --transpile-only ./src/extension-host/extension-host.ts",
     "start:extensions": "cd extensions && npm run watch",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
     "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
-    "stop": "ts-node stop-processes.mjs",
+    "stop": "tsx stop-processes.mjs",
     "test": "jest --silent",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build"
@@ -213,6 +213,7 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tsconfig-paths-webpack-plugin": "^4.1.0",
+    "tsx": "^4.7.1",
     "typedoc": "^0.25.7",
     "typescript": "^5.3.3",
     "url-loader": "^4.1.1",
@@ -232,6 +233,6 @@
     "logLevel": "quiet"
   },
   "volta": {
-    "node": "18.18.2"
+    "node": "20.11.1"
   }
 }
