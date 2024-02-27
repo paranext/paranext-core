@@ -495,7 +495,8 @@ export declare function indexOf(string: string, searchString: string, position?:
 export declare function lastIndexOf(string: string, searchString: string, position?: number): number;
 /**
  * This function mirrors the `length` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * handles Unicode code points instead of UTF-16 character codes. Since `length` appears to be a
+ * reserved keyword, the function was renamed to `stringLength`
  *
  * Returns the length of a string.
  *

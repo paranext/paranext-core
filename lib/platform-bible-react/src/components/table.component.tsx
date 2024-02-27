@@ -338,7 +338,7 @@ function Table<R>({
       onScroll={onScroll}
       renderers={{ renderCheckbox }}
       className={className ?? 'rdg-light'}
-      id={id}
+      data-testid={id}
     />
   );
 }
