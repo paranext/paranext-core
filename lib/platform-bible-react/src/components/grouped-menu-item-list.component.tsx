@@ -6,6 +6,7 @@ import {
   MenuItemContainingCommand,
   MenuItemContainingSubmenu,
   ReferencedItem,
+  SingleColumnMenu,
 } from 'platform-bible-utils';
 import MenuItem, { MenuProps } from './menu-item.component';
 
@@ -23,6 +24,12 @@ type SubMenuProps = MenuProps & {
   parentMenuItem: MenuItemContainingSubmenu;
 };
 
+function getAllGroups(menuDefinition : SingleColumnMenu) {
+  const groupEntries = Object.entries(menuDefinition.groups);
+  // Convert array of entries to array of objects with id and group properties
+  return groupEntries.map(([key, value]) => ({ id: key, group: value }));
+};
+
 function SubMenu(props: SubMenuProps) {
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLElement>(undefined);
 
@@ -37,10 +44,7 @@ function SubMenu(props: SubMenuProps) {
   };
 
   const renderSubMenuItems = () => {
-    const groupEntries = Object.entries(menuDefinition.groups);
-    // Convert array of entries to array of objects with id and group properties
-    const groups = groupEntries.map(([key, value]) => ({ id: key, group: value }));
-    let includedGroups = groups.filter((g) => 'menuItem' in g.group);
+    let includedGroups = getAllGroups(menuDefinition).filter((g) => 'menuItem' in g.group);
 
     // Ensure valid parent menu was provided. (If not, submenu will contain all groups!)
     if (parentMenuItem?.id) {
@@ -99,6 +103,12 @@ export default function GroupedMenuItemList(
   includedGroups: { id: string; group: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu }[],
 ) {
   const { menuDefinition, onClick, commandHandler } = menuProps;
+
+  if (includedGroups?.length ?? 0 === 0) {
+    // We're apparently laying out a single-column menu (presumably a context menu). In this case,
+    // all groups should be included expect ones that belong to a submenu.
+    includedGroups = getAllGroups(menuDefinition).filter((g) => !('menuItem' in g.group));
+  }
 
   const sortedGroups = Object.values(includedGroups).sort(
     (a, b) => (a.group.order || 0) - (b.group.order || 0),

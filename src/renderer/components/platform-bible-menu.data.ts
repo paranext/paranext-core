@@ -159,10 +159,12 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
       group: 'paratext.resourceTools',
       order: 3,
       command: 'paratextBibleWordList.open',
-      hasDivider: true,
     },
     {
-      name: 'Open Hello World Project...',
+      label: 'Open Hello World Project...',
+      localizeNotes: 'Main application menu > Paratext column > Open Word List',
+      group: 'paratext.resourceTools',
+      order: 4,
       command: 'helloWorld.openProject',
     },
     {

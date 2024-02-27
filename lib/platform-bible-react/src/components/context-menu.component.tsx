@@ -39,7 +39,7 @@ export default function ContextMenu(menuProps: PropsWithChildren<ContextMenuProp
   };
 
   // If no menu items or children, we don't want to display the context menu at all.
-  return (menuDefinition.items?.length ?? 0) === 0 || !children ? (
+  return (menuDefinition?.items?.length ?? 0) === 0 || !children ? (
     children
   ) : (
     <div
