@@ -10,6 +10,7 @@ import { Uri } from '@shared/data/file-system.model';
 import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
+import * as platformBibleUtils from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { getCommandLineArgumentsGroup, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
@@ -619,6 +620,7 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
     // Allow the extension to import papi and some other things
     if (moduleName === '@papi/backend') return papi;
     if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
+    if (moduleName === 'platform-bible-utils') return platformBibleUtils;
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithCheck.find(
