@@ -4,43 +4,16 @@
  */
 
 import * as networkService from '@shared/services/network.service';
-import { aggregateUnsubscriberAsyncs, UnsubscriberAsync } from 'platform-bible-utils';
+import { UnsubscriberAsync } from 'platform-bible-utils';
 import { createSafeRegisterFn, serializeRequestType } from '@shared/utils/util';
-import { isClient, isRenderer } from '@shared/utils/internal-util';
-import logger from '@shared/services/logger.service';
 import { CommandHandlers, CommandNames } from 'papi-shared-types';
 import { CATEGORY_COMMAND } from '@shared/data/internal-connection.model';
-
-// Commands that this file supplies
-declare module 'papi-shared-types' {
-  export interface CommandHandlers {
-    'test.addThree': typeof addThree;
-    'test.squareAndConcat': typeof squareAndConcat;
-  }
-}
 
 /** Whether this service has finished setting up */
 let isInitialized = false;
 
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
-
-async function addThree(a: number, b: number, c: number) {
-  return a + b + c;
-}
-async function squareAndConcat(a: number, b: string) {
-  return a * a + b.toString();
-}
-/**
- * Commands that this process will handle if it is the renderer. Registered automatically at
- * initialization
- */
-// This map should allow any functions because commands can be any function type
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rendererCommandFunctions: { [CommandName in CommandNames]?: (...args: any[]) => any } = {
-  'test.addThree': addThree,
-  'test.squareAndConcat': squareAndConcat,
-};
 
 /**
  * Send a command to the backend.
@@ -97,40 +70,7 @@ export const initialize = () => {
 
     // Set up subscriptions that the service needs to work
 
-    // Register built-in commands
-    if (isRenderer()) {
-      // TODO: make a registerRequestHandlers function that we use here and in NetworkService.initialize?
-      const unsubPromises = Object.entries(rendererCommandFunctions).map(([commandName, handler]) =>
-        // Re-assert type of `commandName` even though the type is actually a string ultimately.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        registerCommandUnsafe(commandName as CommandNames, handler),
-      );
-
-      // Wait to successfully register all commands
-      const unsubscribeCommands = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
-
-      // On closing, try to remove command listeners
-      // TODO: should do this on the server when the connection closes or when the server exists as well
-      window.addEventListener('beforeunload', async () => {
-        await unsubscribeCommands();
-      });
-    }
-
     isInitialized = true;
-
-    if (isClient()) {
-      const start = performance.now();
-      sendCommandUnsafe('test.echo', 'Hi server!')
-        .then((response) =>
-          logger.info(
-            'command:test.echo Response!!!',
-            response,
-            'Response time:',
-            performance.now() - start,
-          ),
-        )
-        .catch(logger.error);
-    }
   })();
 
   return initializePromise;

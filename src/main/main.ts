@@ -17,14 +17,10 @@ import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
 import { resolveHtmlPath } from '@node/utils/util';
 import extensionHostService from '@main/services/extension-host.service';
-import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
-import { wait, serialize } from 'platform-bible-utils';
+import { wait } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
-import { get } from '@shared/services/project-data-provider.service';
-import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startLocalizationService } from '@main/services/localization.service-host';
 import { initialize as initializeSettingsService } from '@main/services/settings.service-host';
@@ -37,24 +33,6 @@ const PROCESS_CLOSE_TIME_OUT = 2000;
 // This map should allow any functions because commands can be any function type
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
-  'test.echo': async (message: string) => {
-    return message;
-  },
-  'test.echoRenderer': async (message: string) => {
-    /* const start = performance.now(); */
-    /* const result =  */ await commandService.sendCommand('test.addThree', 1, 4, 9);
-    /* logger.debug(
-      `test.addThree(...) = ${result} took ${performance.now() - start} ms`,
-    ); */
-    return message;
-  },
-  'test.echoExtensionHost': async (message: string) => {
-    await commandService.sendCommand('test.addMany', 3, 5, 7, 1, 4);
-    return message;
-  },
-  'test.throwError': async (message: string) => {
-    throw new Error(`Test Error thrown in throwError command: ${message}`);
-  },
   'platform.restartExtensionHost': async () => {
     restartExtensionHost();
   },
@@ -90,13 +68,6 @@ async function main() {
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
-
-  // Extension host test
-  setTimeout(async () => {
-    logger.debug(
-      `Add Many (from EH): ${await commandService.sendCommand('test.addMany', 2, 5, 9, 7)}`,
-    );
-  }, 20000);
 
   // #region Start the renderer
 
@@ -280,7 +251,7 @@ async function main() {
 
   // #endregion
 
-  // #region Register test command handlers
+  // #region Register command handlers
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
     // Re-assert type after passing through `forEach`.
@@ -288,72 +259,6 @@ async function main() {
     commandService.registerCommand(commandName as CommandNames, handler);
   });
 
-  // #endregion
-
-  // #region Test network objects
-
-  const testMain = {
-    doStuff: (stuff: string) => {
-      const result = `testMain did stuff: ${stuff}!`;
-      logger.debug(result);
-      return result;
-    },
-    dispose: () => {
-      logger.debug('testMain.dispose() ran in testMain');
-      return Promise.resolve(true);
-    },
-  };
-
-  const testMainDisposer = await networkObjectService.set('testMain', testMain);
-  testMain.doStuff('main things');
-  testMainDisposer.onDidDispose(() => {
-    logger.debug('testMain disposed in main message #1');
-  });
-  testMainDisposer.onDidDispose(() => {
-    logger.debug('testMain disposed in main message #2');
-  });
-
-  setTimeout(testMainDisposer.dispose, 20000);
-
-  setTimeout(async () => {
-    let testExtensionHost = await networkObjectService.get<{
-      getVerse: () => Promise<string>;
-    }>('testExtensionHost');
-    if (testExtensionHost) {
-      logger.debug(`get verse: ${await testExtensionHost.getVerse()}`);
-      testExtensionHost.onDidDispose(() => {
-        logger.debug('testExtensionHost disposed in main');
-        testExtensionHost = undefined;
-      });
-    } else logger.error('Could not get testExtensionHost from main');
-  }, 5000);
-
-  setTimeout(async () => {
-    logger.info(
-      `Available network objects after 30 seconds: ${serialize(
-        await networkObjectStatusService.getAllNetworkObjectDetails(),
-      )}`,
-    );
-  }, 30000);
-
-  // #endregion
-
-  // #region Test a .NET data provider
-  setTimeout(async () => {
-    const paratextPdp = await get<'ParatextStandard'>(
-      'ParatextStandard',
-      '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
-    );
-    const verse = await paratextPdp.getChapterUSX(new VerseRef('JHN', '1', '1'));
-    logger.info(`Got PDP data: ${verse}`);
-
-    if (verse !== undefined) await paratextPdp.setChapterUSX(new VerseRef('JHN', '1', '1'), verse);
-
-    paratextPdp.setExtensionData(
-      { extensionName: 'foo', dataQualifier: 'fooData' },
-      'This is the data from extension foo',
-    );
-  }, 10000);
   // #endregion
 }
 

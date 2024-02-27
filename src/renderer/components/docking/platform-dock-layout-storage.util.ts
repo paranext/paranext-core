@@ -50,12 +50,7 @@ import {
 } from '@renderer/components/web-view.component';
 
 import { TAB_TYPE_ABOUT, loadAboutTab } from '@renderer/testing/about-panel.component';
-import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';
-import {
-  TAB_TYPE_QUICK_VERSE_HERESY,
-  loadQuickVerseHeresyTab,
-} from '@renderer/testing/test-quick-verse-heresy-panel.component';
 
 import { layoutDefaults, getFloatPosition } from './platform-dock-layout-positioning.util';
 import { TabType, RCDockTabInfo, isTab } from './docking-framework-internal.model';
@@ -65,8 +60,6 @@ import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './er
 /** Tab loader functions for each Platform tab type */
 const tabLoaderMap = new Map<TabType, TabLoader>([
   [TAB_TYPE_ABOUT, loadAboutTab],
-  [TAB_TYPE_BUTTONS, loadButtonsTab],
-  [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
   [TAB_TYPE_TEST, loadTestTab],
   [TAB_TYPE_WEBVIEW, loadWebViewTab],
   [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
