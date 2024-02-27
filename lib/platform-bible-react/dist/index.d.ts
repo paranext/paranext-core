@@ -283,7 +283,7 @@ export type MenuProps = {
 	menuDefinition: SingleColumnMenu;
 	commandHandler: CommandHandler;
 	/**
-	 * Additional action to perform when any menu item is clicked. Allows the caller can handle event
+	 * Additional action to perform when any menu item is clicked. Allows the caller to handle event
 	 * (e.g., to close the menu).
 	 */
 	onClick?: () => void;
