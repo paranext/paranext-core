@@ -40,17 +40,14 @@ describe('ContextMenu renders', () => {
   // Assert the type that schema validation should have already sorted out
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menuData = topMenuCombiner.output as PlatformMenus;
-  render(<ContextMenu
-    menuDefinition={menuData.defaultWebViewContextMenu}
-    commandHandler={() => {}} >
+  render(
+    <ContextMenu menuDefinition={menuData.defaultWebViewContextMenu} commandHandler={() => {}}>
       click me
-    </ContextMenu>);
+    </ContextMenu>,
+  );
 
   const contextMenuTarget = screen.getByText('click me');
   fireEvent.contextMenu(contextMenuTarget);
-
-  console.log(screen.debug());
-
   const allMenuItems = screen.queryAllByRole('menuitem');
 
   it('the correct total number of items', () => {

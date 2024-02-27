@@ -24,11 +24,11 @@ type SubMenuProps = MenuProps & {
   parentMenuItem: MenuItemContainingSubmenu;
 };
 
-function getAllGroups(menuDefinition : SingleColumnMenu) {
+function getAllGroups(menuDefinition: SingleColumnMenu) {
   const groupEntries = Object.entries(menuDefinition.groups);
   // Convert array of entries to array of objects with id and group properties
   return groupEntries.map(([key, value]) => ({ id: key, group: value }));
-};
+}
 
 function SubMenu(props: SubMenuProps) {
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLElement>(undefined);
@@ -104,13 +104,14 @@ export default function GroupedMenuItemList(
 ) {
   const { menuDefinition, onClick, commandHandler } = menuProps;
 
-  if (includedGroups?.length ?? 0 === 0) {
-    // We're apparently laying out a single-column menu (presumably a context menu). In this case,
-    // all groups should be included expect ones that belong to a submenu.
-    includedGroups = getAllGroups(menuDefinition).filter((g) => !('menuItem' in g.group));
-  }
+  const groupsToInclude =
+    (includedGroups?.length ?? 0) > 0
+      ? includedGroups
+      : // We're apparently laying out a single-column menu (presumably a context menu). In this case,
+        // all groups should be included expect ones that belong to a submenu.
+        getAllGroups(menuDefinition).filter((g) => !('menuItem' in g.group));
 
-  const sortedGroups = Object.values(includedGroups).sort(
+  const sortedGroups = Object.values(groupsToInclude).sort(
     (a, b) => (a.group.order || 0) - (b.group.order || 0),
   );
 
