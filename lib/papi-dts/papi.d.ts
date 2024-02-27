@@ -2379,14 +2379,8 @@ declare module 'papi-shared-types' {
    * ```
    */
   interface CommandHandlers {
-    'test.echo': (message: string) => string;
-    'test.echoRenderer': (message: string) => Promise<string>;
-    'test.echoExtensionHost': (message: string) => Promise<string>;
-    'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
     'platform.quit': () => Promise<void>;
-    'test.addMany': (...nums: number[]) => number;
-    'test.throwErrorExtensionHost': (message: string) => void;
   }
   /**
    * Names for each command available on the papi.
@@ -2919,14 +2913,6 @@ declare module 'papi-shared-types' {
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
   import { CommandHandlers, CommandNames } from 'papi-shared-types';
-  module 'papi-shared-types' {
-    interface CommandHandlers {
-      'test.addThree': typeof addThree;
-      'test.squareAndConcat': typeof squareAndConcat;
-    }
-  }
-  function addThree(a: number, b: number, c: number): Promise<number>;
-  function squareAndConcat(a: number, b: string): Promise<string>;
   /** Sets up the CommandService. Only runs once and always returns the same promise after that */
   export const initialize: () => Promise<void>;
   /** Send a command to the backend. */
