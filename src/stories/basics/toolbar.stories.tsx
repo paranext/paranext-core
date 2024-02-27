@@ -1,16 +1,124 @@
 import { Typography } from '@mui/material';
+import { LocalizedMenus } from '@shared/utils/menu-document-combiner';
 import type { Meta, StoryObj } from '@storybook/react';
-import { Toolbar, Command } from 'platform-bible-react';
+import { Toolbar, Command, MultiColumnMenu } from 'platform-bible-react';
 
 const meta: Meta<typeof Toolbar> = {
   title: 'Basics/Toolbar',
   component: Toolbar,
   tags: ['autodocs'],
   argTypes: {
-    menu: { control: 'object' },
+    className: { control: 'text' },
   },
 };
 export default meta;
+
+type LocalizedMainMenu = LocalizedMenus['mainMenu'];
+
+const menuLayoutWithIcons: LocalizedMainMenu = {
+  columns: {
+    'column.one': { label: 'Menu One', order: 0 },
+    'column.two': { label: 'Empty', order: 2 },
+    'column.three': { label: 'Last Menu', order: 3, isExtensible: true },
+    isExtensible: false,
+  },
+  groups: {
+    'good.stuff': { column: 'column.one', order: 1 },
+    'okay.things': { column: 'column.one', order: 2 },
+    'last.items': { column: 'column.three', order: 1 },
+  },
+  items: [
+    {
+      label: 'Do something normal',
+      localizeNotes: 'Storybook toolbar menu > Column One > Do something normal',
+      group: 'good.stuff',
+      order: 1,
+      command: 'storybookToolbar.log',
+    },
+    {
+      label: 'Do something scary',
+      localizeNotes: 'Storybook toolbar menu > Column One > Do something scary',
+      group: 'okay.things',
+      order: 1,
+      command: 'storybookToolbar.warn',
+    },
+    // Note: The next two items are intentionally out of order.
+    {
+      label: 'Nonexistent command',
+      localizeNotes: 'Storybook toolbar menu > Column Three > Nonexistent command',
+      group: 'last.items',
+      order: 2,
+      command: 'storybookToolbar.nonexistent',
+    },
+    {
+      label: 'Log a message',
+      localizeNotes: 'Storybook toolbar menu > Column Three > Log a message',
+      group: 'last.items',
+      order: 1,
+      command: 'storybookToolbar.log',
+    },
+  ],
+};
+
+const menuLayoutWithoutIcons: LocalizedMainMenu = {
+  columns: {
+    'column.one': { label: 'Menu One', order: 0 },
+    'column.two': { label: 'Empty', order: 2 },
+    'column.three': { label: 'Last Menu', order: 3, isExtensible: true },
+    isExtensible: false,
+  },
+  groups: {
+    'good.stuff': { column: 'column.one', order: 1 },
+    'okay.things': { column: 'column.one', order: 2 },
+    'last.items': { column: 'column.three', order: 1 },
+  },
+  items: [
+    {
+      label: 'Do something normal',
+      localizeNotes: 'Storybook toolbar menu > Column One > Do something normal',
+      group: 'good.stuff',
+      order: 1,
+      command: 'storybookToolbar.log',
+      iconPathBefore: '/sample-icon.png',
+    },
+    {
+      label: 'Do something scary',
+      localizeNotes: 'Storybook toolbar menu > Column One > Do something scary',
+      group: 'okay.things',
+      order: 1,
+      command: 'storybookToolbar.warn',
+      iconPathAfter: '/sample-icon.png',
+    },
+    // Note: The next two items are intentionally out of order.
+    {
+      label: 'Nonexistent command',
+      localizeNotes: 'Storybook toolbar menu > Column Three > Nonexistent command',
+      group: 'last.items',
+      order: 2,
+      command: 'storybookToolbar.nonexistent',
+    },
+    {
+      label: 'Log a message',
+      localizeNotes: 'Storybook toolbar menu > Column Three > Log a message',
+      group: 'last.items',
+      order: 1,
+      command: 'storybookToolbar.log',
+      iconPathBefore: '/sample-icon.png',
+      iconPathAfter: '/sample-icon.png',
+    },
+  ],
+};
+
+function provideMenuData(isSupportAndDevelopment: boolean): MultiColumnMenu {
+  // TODO: As part of #425 (Menus: Stitch together back end services and UI components to get menu
+  // contributions working end-to-end), we will want to create a parallel type to MultiColumnMenu
+  // that should be used in the React components (and returned here) that does not expect the
+  // ReferencedItem keys, but rather takes a plain string.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return (
+    isSupportAndDevelopment ? menuLayoutWithoutIcons : menuLayoutWithIcons
+  ) as MultiColumnMenu;
+}
 
 type Story = StoryObj<typeof Toolbar>;
 
@@ -35,95 +143,19 @@ export const ParatextBright: Story = {
 function HandleMenuCommand(command: Command) {
   if (command.command === 'storybookToolbar.log') {
     // eslint-disable-next-line no-console
-    console.log(command.name);
+    console.log(command.command);
   } else if (command.command === 'storybookToolbar.warn') {
     // eslint-disable-next-line no-console
-    console.warn(command.name);
+    console.warn(command.command);
   } else {
     // eslint-disable-next-line no-console
-    console.error(`Unexpected command: ${command.name}`);
+    console.error(`Unexpected command: ${command.command}`);
   }
 }
 
-export const WithMenu: Story = {
+export const WithMenuHoldShiftToSeeIcons: Story = {
   args: {
     commandHandler: HandleMenuCommand,
-    menu: {
-      columns: [
-        {
-          name: 'Menu One',
-          items: [
-            {
-              name: 'Do something normal',
-              command: 'storybookToolbar.log',
-              hasDivider: true,
-            },
-            {
-              name: 'Do something scary',
-              command: 'storybookToolbar.warn',
-            },
-          ],
-        },
-        {
-          name: 'Empty Menu',
-          items: [],
-        },
-        {
-          name: 'Last Menu',
-          items: [
-            {
-              name: 'Log a message',
-              command: 'storybookToolbar.log',
-              isDense: true,
-            },
-            {
-              name: 'Nonexistent command',
-              command: 'storybookToolbar.nonexistent',
-              isDense: true,
-            },
-          ],
-        },
-      ],
-    },
-  },
-};
-
-export const WithMenuWithIcons: Story = {
-  args: {
-    commandHandler: HandleMenuCommand,
-    menu: {
-      columns: [
-        {
-          name: 'Menu One',
-          items: [
-            {
-              name: 'Do something normal',
-              command: 'storybookToolbar.log',
-              iconPathBefore: '/sample-icon.png',
-            },
-            {
-              name: 'Do something scary',
-              command: 'storybookToolbar.warn',
-              iconPathAfter: '/sample-icon.png',
-            },
-          ],
-        },
-        {
-          name: 'Last Menu',
-          items: [
-            {
-              name: 'Log a message',
-              command: 'storybookToolbar.log',
-              iconPathBefore: '/sample-icon.png',
-              iconPathAfter: '/sample-icon.png',
-            },
-            {
-              name: 'Nonexistent command',
-              command: 'storybookToolbar.nonexistent',
-            },
-          ],
-        },
-      ],
-    },
+    menuProvider: provideMenuData,
   },
 };
