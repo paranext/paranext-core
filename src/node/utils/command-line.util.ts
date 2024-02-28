@@ -94,6 +94,7 @@ export function getCommandLineArgumentsGroup(
       );
     });
 
+  if (argName === COMMAND_LINE_ARGS.ExtensionsDir) return argumentsGroup.concat(['zip']);
   return argumentsGroup;
 }
 

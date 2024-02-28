@@ -49,7 +49,7 @@ const configMain: () => Promise<webpack.Configuration> = async () => {
     plugins: [
       // Copy static files to the output folder https://webpack.js.org/plugins/copy-webpack-plugin/
       new CopyPlugin({
-        patterns: getMainCopyFilePatterns(extensions),
+        patterns: getMainCopyFilePatterns(extensions).concat({ from: 'zip' }),
       }),
     ],
   });
