@@ -414,7 +414,16 @@ export type ContextMenuProps = GroupedMenuItemListProps & {
 	/** Additional css classes to help with styling of the context menu */
 	className?: string;
 };
-export function ContextMenu(menuProps: React$1.PropsWithChildren<ContextMenuProps>): string | number | boolean | Iterable<React$1.ReactNode> | import("react/jsx-runtime").JSX.Element | null | undefined;
+/**
+ * A component that wraps its children, making them the "target" of a context menu so that the
+ * context menu is displayed when the target is right-clicked.
+ *
+ * @param {ContextMenuProps & PropsWithChildren} props - The properties for the ContextMenu
+ * component which define what menu items to display and supply a command handler for when a menu
+ * item is clicked.
+ * @returns {JSX.Element} The ContextMenu component (including the wrapped children)
+ */
+export function ContextMenu({ className, commandHandler, menuDefinition, children, }: React$1.PropsWithChildren<ContextMenuProps>): string | number | boolean | Iterable<React$1.ReactNode> | import("react/jsx-runtime").JSX.Element | null | undefined;
 export interface ScrRefSelectorProps {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;

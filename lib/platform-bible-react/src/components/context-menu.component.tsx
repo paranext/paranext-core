@@ -1,4 +1,4 @@
-import React, { PropsWithChildren } from 'react';
+import React, { PropsWithChildren, useCallback, useMemo } from 'react';
 import Menu from '@mui/material/Menu';
 import MenuItemList, { GroupedMenuItemListProps } from './grouped-menu-item-list.component';
 import './context-menu.component.css';
@@ -8,10 +8,22 @@ export type ContextMenuProps = GroupedMenuItemListProps & {
   className?: string;
 };
 
-export default function ContextMenu(menuProps: PropsWithChildren<ContextMenuProps>) {
-  const { className, commandHandler, menuDefinition, children } = menuProps;
-
-  const [contextMenu, setContextMenu] = React.useState<
+/**
+ * A component that wraps its children, making them the "target" of a context menu so that the
+ * context menu is displayed when the target is right-clicked.
+ *
+ * @param {ContextMenuProps & PropsWithChildren} props - The properties for the ContextMenu
+ *   component which define what menu items to display and supply a command handler for when a menu
+ *   item is clicked.
+ * @returns {JSX.Element} The ContextMenu component (including the wrapped children)
+ */
+export default function ContextMenu({
+  className,
+  commandHandler,
+  menuDefinition,
+  children,
+}: PropsWithChildren<ContextMenuProps>) {
+  const [contextMenuPosition, setContextMenuPosition] = React.useState<
     | {
         mouseX: number;
         mouseY: number;
@@ -19,24 +31,34 @@ export default function ContextMenu(menuProps: PropsWithChildren<ContextMenuProp
     | undefined
   >(undefined);
 
-  const handleContextMenu = (event: React.MouseEvent) => {
-    event.preventDefault();
-    setContextMenu(
-      contextMenu === undefined
-        ? {
-            mouseX: event.clientX + 2,
-            mouseY: event.clientY - 6,
-          }
-        : // repeated contextmenu when it is already open closes it with Chrome 84 on Ubuntu
-          // Other native context menus might behave different.
-          // With this behavior we prevent re-locating existing context menus.
-          undefined,
-    );
-  };
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault();
+      setContextMenuPosition(
+        contextMenuPosition === undefined
+          ? {
+              mouseX: event.clientX + 2,
+              mouseY: event.clientY - 6,
+            }
+          : // repeated contextmenu when it is already open closes it with Chrome 84 on Ubuntu
+            // Other native context menus might behave different.
+            // With this behavior we prevent re-locating existing context menus.
+            undefined,
+      );
+    },
+    [contextMenuPosition],
+  );
 
-  const handleClose = () => {
-    setContextMenu(undefined);
-  };
+  const handleClose = useCallback(() => {
+    setContextMenuPosition(undefined);
+  }, []);
+
+  const anchorPosition = useMemo(() => {
+    if (contextMenuPosition !== undefined) {
+      return { top: contextMenuPosition.mouseY, left: contextMenuPosition.mouseX };
+    }
+    return undefined;
+  }, [contextMenuPosition]);
 
   // If no menu items or children, we don't want to display the context menu at all.
   return (menuDefinition?.items?.length ?? 0) === 0 || !children ? (
@@ -45,19 +67,14 @@ export default function ContextMenu(menuProps: PropsWithChildren<ContextMenuProp
     <div
       className={`papi-context-menu-target ${className ?? ''}`}
       onContextMenu={handleContextMenu}
-      style={{ cursor: 'context-menu' }}
     >
       {children}
       <Menu
         className={`papi-context-menu ${className ?? ''}`}
-        open={contextMenu !== undefined}
+        open={contextMenuPosition !== undefined}
         onClose={handleClose}
         anchorReference="anchorPosition"
-        anchorPosition={
-          contextMenu !== undefined
-            ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
-            : undefined
-        }
+        anchorPosition={anchorPosition}
       >
         <MenuItemList
           menuDefinition={menuDefinition}

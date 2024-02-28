@@ -1,5 +1,6 @@
 .papi-context-menu-target {
   white-space: nowrap;
+  cursor: context-menu;
 }
 
 .papi-context-menu-target * {
