@@ -1,3 +1,7 @@
+# 0.2.1 (2024.2.28)
+
+This release removes a number of extensions, web views, and menu items that are only there to help with testing. It won't be merged back into main. It is being made to help with demonstration purposes.
+
 # 0.2.0 (2024.2.27)
 
 ## What's Changed
