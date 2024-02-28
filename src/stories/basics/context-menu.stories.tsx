@@ -47,6 +47,7 @@ function GetMenuDefinition(): Partial<MenuProps> {
     groups: {
       'group.2': { order: 2, column: 'TODO: this should not be required' },
       'group.1': { order: 1, column: 'TODO: this should not be required' },
+      'group.submenu': { order: 1, menuItem: 'submenu.root' },
     },
     items: [
       {
@@ -77,6 +78,14 @@ function GetMenuDefinition(): Partial<MenuProps> {
         iconPathBefore: '/sample-icon.png',
       },
       {
+        label: 'I have a submenu',
+        localizeNotes: 'N/A',
+        tooltip: 'Click me to see submenu',
+        group: 'group.1',
+        order: 0,
+        id: 'submenu.root',
+      },
+      {
         label: 'Do something else in group 1',
         localizeNotes: 'N/A',
         tooltip: 'Perform another action',
@@ -84,6 +93,22 @@ function GetMenuDefinition(): Partial<MenuProps> {
         order: 1,
         command: 'storybookMenu.other',
         iconPathBefore: '/sample-icon.png',
+      },
+      {
+        label: 'I am thing 2 on the submenu',
+        localizeNotes: 'N/A',
+        tooltip: 'Do not click me - it tickles!',
+        group: 'group.submenu',
+        order: 4,
+        command: 'storybookMenu.tickle',
+      },
+      {
+        label: 'I am thing 1 on the submenu',
+        localizeNotes: 'N/A',
+        tooltip: 'Log something to the console',
+        group: 'group.submenu',
+        order: 2,
+        command: 'storybookMenu.log',
       },
     ],
   };

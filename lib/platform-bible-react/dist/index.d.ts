@@ -265,8 +265,10 @@ export type MultiColumnMenu = SingleColumnMenu & {
 	columns: ColumnsWithHeaders;
 };
 export type MenuItemInfoBase = {
-	/** Text (displayable in the UI) as the name of the command */
+	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
+	/** Text to display when the mouse hovers over the menu item */
+	tooltip?: string;
 };
 export type Command = MenuItemInfoBase & {
 	/** Command to execute (string.string) */

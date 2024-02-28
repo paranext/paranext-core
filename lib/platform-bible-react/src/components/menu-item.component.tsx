@@ -3,13 +3,16 @@ import {
   ListItemText as MuiListItemText,
   ListItemIcon as MuiListItemIcon,
 } from '@mui/material';
+import Tooltip from '@mui/material/Tooltip';
 import { PropsWithChildren } from 'react';
 import { SingleColumnMenu } from 'platform-bible-utils';
 import './menu-item.component.css';
 
 type MenuItemInfoBase = {
-  /** Text (displayable in the UI) as the name of the command */
+  /** Text (displayable in the UI) as the name of the menu item */
   label: string;
+  /** Text to display when the mouse hovers over the menu item */
+  tooltip?: string;
 };
 
 export type Command = MenuItemInfoBase & {
@@ -130,6 +133,7 @@ export default function MenuItem(props: MenuItemProps) {
   const {
     onClick,
     label,
+    tooltip,
     allowForLeadingIcons = true,
     iconPathBefore = undefined,
     iconPathAfter = undefined,
@@ -144,7 +148,7 @@ export default function MenuItem(props: MenuItemProps) {
     children,
   } = props;
 
-  return (
+  const menuItem = (
     <MuiMenuItem
       sx={{ lineHeight: 0.8 }}
       autoFocus={hasAutoFocus}
@@ -167,5 +171,13 @@ export default function MenuItem(props: MenuItemProps) {
         children
       )}
     </MuiMenuItem>
+  );
+
+  return tooltip ? (
+    <Tooltip title={tooltip} placement="right">
+      <div>{menuItem}</div>
+    </Tooltip>
+  ) : (
+    menuItem
   );
 }

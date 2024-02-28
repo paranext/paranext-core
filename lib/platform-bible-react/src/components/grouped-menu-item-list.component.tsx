@@ -53,7 +53,7 @@ function SubMenu(props: SubMenuProps) {
     // Note: without the (annoying) redundant check that the included groups
     // have the menuItem field, TS doesn't think it exists.
     includedGroups = includedGroups.filter(
-      (group) => 'menuItem' in group && group.menuItem === parentMenuItem.id,
+      (group) => 'menuItem' in group.group && group.group.menuItem === parentMenuItem.id,
     );
 
     return GroupedMenuItemList(props, includedGroups);
@@ -107,8 +107,8 @@ export default function GroupedMenuItemList(
   const groupsToInclude =
     (includedGroups?.length ?? 0) > 0
       ? includedGroups
-      : // We're apparently laying out a single-column menu (presumably a context menu). In this case,
-        // all groups should be included expect ones that belong to a submenu.
+      : // We're apparently laying out a single-column menu (presumably a context menu). In this
+        // case, all groups should be included except ones that belong to a submenu.
         getAllGroups(menuDefinition).filter((g) => !('menuItem' in g.group));
 
   const sortedGroups = Object.values(groupsToInclude).sort(
@@ -134,6 +134,7 @@ export default function GroupedMenuItemList(
     const menuItemProps = {
       className: 'papi-menu-item',
       label: item.label,
+      tooltip: item.tooltip,
       iconPathBefore: 'iconPathBefore' in item ? item.iconPathBefore : undefined,
       iconPathAfter: 'iconPathAfter' in item ? item.iconPathAfter : undefined,
       hasDivider: isLastItemInGroup, // Set hasDivider to true for the last item in a group

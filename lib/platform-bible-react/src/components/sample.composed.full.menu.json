@@ -75,6 +75,7 @@
       },
       {
         "label": "%paratext_helpGuide%",
+        "tooltip": "%paratext_helpGuide_tooltip%",
         "localizeNotes": "Main application menu > Help column > Paratext > Guide",
         "group": "paratext.helpSubgroup",
         "order": 1,
