@@ -358,10 +358,28 @@ export type GridMenuProps = GridMenuInfo & {
 	/** Optional unique identifier */
 	id?: string;
 	commandHandler: CommandHandler;
-	/** Additional css classes to help with unique styling of the toolbar */
+	/** Additional css classes to help with unique styling of the grid menu */
 	className?: string;
 };
 export function GridMenu({ commandHandler, className, multiColumnMenu, id, }: GridMenuProps): import("react/jsx-runtime").JSX.Element;
+export type GroupedMenuItemListProps = MenuProps & {
+	/** Optional unique (column) identifier */
+	columnId?: ReferencedItem;
+};
+export type ContextMenuProps = GroupedMenuItemListProps & {
+	/** Additional css classes to help with styling of the context menu */
+	className?: string;
+};
+/**
+ * A component that wraps its children, making them the "target" of a context menu so that the
+ * context menu is displayed when the target is right-clicked.
+ *
+ * @param {ContextMenuProps & PropsWithChildren} props - The properties for the ContextMenu
+ *   component which define what menu items to display and supply a command handler for when a menu
+ *   item is clicked.
+ * @returns {JSX.Element} The ContextMenu component (including the wrapped children)
+ */
+export function ContextMenu({ className, commandHandler, menuDefinition, children, }: React$1.PropsWithChildren<ContextMenuProps>): string | number | boolean | Iterable<React$1.ReactNode> | import("react/jsx-runtime").JSX.Element | null | undefined;
 export type IconButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
@@ -406,24 +424,6 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
-export type GroupedMenuItemListProps = MenuProps & {
-	/** Optional unique (column) identifier */
-	columnId?: ReferencedItem;
-};
-export type ContextMenuProps = GroupedMenuItemListProps & {
-	/** Additional css classes to help with styling of the context menu */
-	className?: string;
-};
-/**
- * A component that wraps its children, making them the "target" of a context menu so that the
- * context menu is displayed when the target is right-clicked.
- *
- * @param {ContextMenuProps & PropsWithChildren} props - The properties for the ContextMenu
- * component which define what menu items to display and supply a command handler for when a menu
- * item is clicked.
- * @returns {JSX.Element} The ContextMenu component (including the wrapped children)
- */
-export function ContextMenu({ className, commandHandler, menuDefinition, children, }: React$1.PropsWithChildren<ContextMenuProps>): string | number | boolean | Iterable<React$1.ReactNode> | import("react/jsx-runtime").JSX.Element | null | undefined;
 export interface ScrRefSelectorProps {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -847,7 +847,7 @@ export type TextFieldProps = {
 	 * @default false
 	 */
 	isRequired?: boolean;
-	/** Additional css classes to help with unique styling of the button */
+	/** Additional css classes to help with unique styling of the text field */
 	className?: string;
 	/** Starting value for the text field if it is not controlled */
 	defaultValue?: unknown;

@@ -47,14 +47,14 @@ function SubMenu(props: SubMenuProps) {
     let includedGroups = getAllGroups(menuDefinition).filter((g) => 'menuItem' in g.group);
 
     // Ensure valid parent menu was provided. (If not, submenu will contain all groups!)
-    if (parentMenuItem?.id) {
-      // When laying out a submenu, only include groups associated with the provided parent menu.
-      // Note: without the (annoying) redundant check that the included groups
-      // have the menuItem field, TS doesn't think it exists.
-      includedGroups = includedGroups.filter(
-        (group) => 'menuItem' in group && group.menuItem === parentMenuItem.id,
-      );
-    }
+    if (!parentMenuItem?.id) throw new Error('A valid parent menu item is required for submenus.');
+
+    // When laying out a submenu, only include groups associated with the provided parent menu.
+    // Note: without the (annoying) redundant check that the included groups
+    // have the menuItem field, TS doesn't think it exists.
+    includedGroups = includedGroups.filter(
+      (group) => 'menuItem' in group && group.menuItem === parentMenuItem.id,
+    );
 
     return GroupedMenuItemList(props, includedGroups);
   };

@@ -16,11 +16,11 @@ export type {
 } from './components/combo-box.component';
 export { default as GridMenu } from './components/grid-menu.component';
 export type { GridMenuProps, GridMenuInfo } from './components/grid-menu.component';
+export { default as ContextMenu } from './components/context-menu.component';
 export { default as IconButton } from './components/icon-button.component';
 export type { IconButtonProps } from './components/icon-button.component';
 export { default as LabelPosition } from './components/label-position.model';
 export { default as MenuItem } from './components/menu-item.component';
-export { default as ContextMenu } from './components/context-menu.component';
 export type { CommandHandler } from './components/menu-item.component';
 export { default as RefSelector } from './components/ref-selector.component';
 export type { ScrRefSelectorProps } from './components/ref-selector.component';
