@@ -1,4 +1,4 @@
-import { MouseEvent, ReactNode, useState } from 'react';
+import { MouseEvent, ReactNode, useMemo, useState } from 'react';
 import { Menu, MenuItem as MuiMenuItem } from '@mui/material';
 import {
   MenuGroupDetailsInColumn,
@@ -118,30 +118,32 @@ const getOrderedGroupItems = (
 export default function GroupedMenuItemList(menuProps: GroupedMenuItemListProps) {
   const { menuDefinition, onClick, commandHandler, includedGroups } = menuProps;
 
-  const groupsToInclude =
-    includedGroups && includedGroups.length > 0
-      ? includedGroups
-      : // We're apparently laying out a single-column menu (presumably a context menu). In this
-        // case, all groups should be included except ones that belong to a submenu.
-        getAllGroups(menuDefinition).filter((g) => !('menuItem' in g.group));
+  const { items, allowForLeadingIcons } = useMemo(() => {
+    const groupsToInclude =
+      includedGroups && includedGroups.length > 0
+        ? includedGroups
+        : getAllGroups(menuDefinition).filter((g) => !('menuItem' in g.group));
 
-  const sortedGroups = Object.values(groupsToInclude).sort(
-    (a, b) => (a.group.order || 0) - (b.group.order || 0),
-  );
-
-  const items: ItemInfo[] = [];
-
-  sortedGroups.forEach((group) => {
-    getOrderedGroupItems(group.id, menuDefinition.items).forEach((item) =>
-      items.push({ item, isLastItemInGroup: false }),
+    const sortedGroups = Object.values(groupsToInclude).sort(
+      (a, b) => (a.group.order || 0) - (b.group.order || 0),
     );
-    if (items.length > 0) items[items.length - 1].isLastItemInGroup = true;
-  });
 
-  // No divider after last item in final group.
-  if (items.length > 0) items[items.length - 1].isLastItemInGroup = false;
+    const itemArray: ItemInfo[] = [];
 
-  const allowForLeadingIcons = items?.some((i) => 'iconPathBefore' in i);
+    sortedGroups.forEach((group) => {
+      getOrderedGroupItems(group.id, menuDefinition.items).forEach((item) =>
+        itemArray.push({ item, isLastItemInGroup: false }),
+      );
+      if (itemArray.length > 0) itemArray[itemArray.length - 1].isLastItemInGroup = true;
+    });
+
+    // No divider after last item in final group.
+    if (itemArray.length > 0) itemArray[itemArray.length - 1].isLastItemInGroup = false;
+
+    const allowSpaceForLeadingIcons = itemArray.some((i) => 'iconPathBefore' in i);
+
+    return { items: itemArray, allowForLeadingIcons: allowSpaceForLeadingIcons };
+  }, [includedGroups, menuDefinition]);
 
   // Create props for MenuItem component including setting hasDivider for the last item in a group
   const createMenuItemProps = ({ item, isLastItemInGroup }: ItemInfo) => {
@@ -168,8 +170,9 @@ export default function GroupedMenuItemList(menuProps: GroupedMenuItemListProps)
     <div key={divKey} role="menu" aria-label={divKey}>
       {(() => {
         const elements: ReactNode[] = [];
-        // A little more convoluted, but using foreach instead of map gets around a complaint about
-        // not destructuring items.
+        // REVIEW(TJ): Using foreach instead of map gets around a complaint about not destructuring
+        // items, however this is more difficult to read and understand.
+        // Try to find a way to resolve this problem without the IIFE and forEach and such.
         items.forEach((itemInfo, index) => {
           const { item } = itemInfo;
           const menuItemProps = createMenuItemProps(itemInfo);
