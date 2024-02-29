@@ -1,5 +1,5 @@
 import { MenuItem as MuiMenuItem } from '@mui/material';
-import './menu-item.component.css';
+import '@/components/menu-item.component.css';
 import { PropsWithChildren } from 'react';
 
 export type Command = {

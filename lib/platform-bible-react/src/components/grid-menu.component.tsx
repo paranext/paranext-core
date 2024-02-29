@@ -1,6 +1,6 @@
 import { Grid } from '@mui/material';
-import MenuItem, { CommandHandler, MenuItemInfo } from './menu-item.component';
-import './grid-menu.component.css';
+import MenuItem, { CommandHandler, MenuItemInfo } from '@/components/menu-item.component';
+import '@/components/grid-menu.component.css';
 
 export type MenuColumnInfo = {
   /** The name of the menu (displayed as the column header). */
