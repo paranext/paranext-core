@@ -84,6 +84,7 @@ function GetMenuDefinition(): Partial<MenuPropsBase> {
         group: 'group.1',
         order: 0,
         id: 'submenu.root',
+        iconPathBefore: '/sample-icon.png',
       },
       {
         label: 'Do something else in group 1',

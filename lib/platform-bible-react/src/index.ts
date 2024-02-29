@@ -56,7 +56,6 @@ export { default as TextField } from './components/text-field.component';
 export type { TextFieldProps } from './components/text-field.component';
 export { default as Toolbar } from './components/toolbar.component';
 export type { ToolbarProps, MultiColumnMenuProvider } from './components/toolbar.component';
-export { default as TopLevelMenu } from './components/top-level-menu.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

@@ -20,6 +20,9 @@ describe('GridMenu', () => {
   it('renders submenu when parent menu is clicked', async () => {
     const parentMenuItem = screen.getByRole('menuitem', { name: '%paratext_help%' });
 
+    const rightArrowIcon = parentMenuItem.querySelector('.MuiListItemIcon-root > .MuiSvgIcon-root');
+    expect(rightArrowIcon).toHaveAttribute('data-testid', 'ArrowRightIcon');
+
     fireEvent.click(parentMenuItem);
 
     screen.getByRole('menuitem', { name: '%paratext_helpVideos%' });

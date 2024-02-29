@@ -1,5 +1,5 @@
 import { MouseEvent, ReactNode, useMemo, useState } from 'react';
-import { Menu, MenuItem as MuiMenuItem } from '@mui/material';
+import { Menu } from '@mui/material';
 import {
   MenuGroupDetailsInColumn,
   MenuGroupDetailsInSubMenu,
@@ -8,7 +8,7 @@ import {
   ReferencedItem,
   SingleColumnMenu,
 } from 'platform-bible-utils';
-import MenuItem, { MenuItemListProps, MenuPropsBase } from './menu-item.component';
+import MenuItem, { MenuItemListProps, MenuItemProps, MenuPropsBase } from './menu-item.component';
 
 /**
  * All the exported types in this file should be regarded as "internal" (i.e., they should not be
@@ -39,6 +39,7 @@ interface ItemInfo {
 
 type SubMenuProps = MenuPropsBase & {
   parentMenuItem: MenuItemContainingSubmenu;
+  parentItemProps: Omit<Omit<MenuItemProps, 'onClick'>, 'iconPathAfter'>;
 };
 
 function getAllGroups(menuDefinition: SingleColumnMenu) {
@@ -50,7 +51,7 @@ function getAllGroups(menuDefinition: SingleColumnMenu) {
 function SubMenu(props: SubMenuProps) {
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLElement>(undefined);
 
-  const { parentMenuItem, menuDefinition } = props;
+  const { parentMenuItem, parentItemProps, menuDefinition } = props;
 
   const handleParentMenuItemClick = (event: MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -78,7 +79,7 @@ function SubMenu(props: SubMenuProps) {
 
   return (
     <>
-      <MuiMenuItem onClick={handleParentMenuItemClick}>{parentMenuItem.label}</MuiMenuItem>
+      <MenuItem onClick={handleParentMenuItemClick} {...parentItemProps} isSubMenuParent />
       <Menu
         key={parentMenuItem.id}
         anchorEl={anchorEl}
@@ -122,7 +123,9 @@ export default function GroupedMenuItemList(menuProps: GroupedMenuItemListProps)
     const groupsToInclude =
       includedGroups && includedGroups.length > 0
         ? includedGroups
-        : getAllGroups(menuDefinition).filter((g) => !('menuItem' in g.group));
+        : // We're apparently laying out a single-column menu (presumably a context menu). In this
+          // case, all groups should be included except ones that belong to a submenu.
+          getAllGroups(menuDefinition).filter((g) => !('menuItem' in g.group));
 
     const sortedGroups = Object.values(groupsToInclude).sort(
       (a, b) => (a.group.order || 0) - (b.group.order || 0),
@@ -181,15 +184,22 @@ export default function GroupedMenuItemList(menuProps: GroupedMenuItemListProps)
             elements.push(
               <MenuItem
                 key={key}
-                onClick={() => {
-                  onClick?.();
+                onClick={(event: MouseEvent<HTMLElement>) => {
+                  onClick?.(event);
                   commandHandler(item);
                 }}
                 {...menuItemProps}
               />,
             );
           } else {
-            elements.push(<SubMenu key={divKey + item.id} parentMenuItem={item} {...menuProps} />);
+            elements.push(
+              <SubMenu
+                key={divKey + item.id}
+                parentMenuItem={item}
+                parentItemProps={menuItemProps}
+                {...menuProps}
+              />,
+            );
           }
         });
         return elements;

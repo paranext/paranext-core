@@ -4,7 +4,8 @@ import {
   ListItemIcon as MuiListItemIcon,
 } from '@mui/material';
 import Tooltip from '@mui/material/Tooltip';
-import { PropsWithChildren } from 'react';
+import ArrowRightIcon from '@mui/icons-material/ArrowRight';
+import { MouseEvent, PropsWithChildren } from 'react';
 import { ReferencedItem, SingleColumnMenu } from 'platform-bible-utils';
 import './menu-item.component.css';
 
@@ -46,7 +47,7 @@ export type MenuPropsBase = {
    * Additional action to perform when any menu item is clicked. Allows the caller to handle event
    * (e.g., to close the menu).
    */
-  onClick?: () => void;
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
 };
 
 export type MenuItemListProps = MenuPropsBase & {
@@ -54,12 +55,12 @@ export type MenuItemListProps = MenuPropsBase & {
   columnId?: ReferencedItem;
 };
 
-type MenuItemProps = Omit<MenuItemInfo, 'command'> &
+export type MenuItemProps = Omit<MenuItemInfo, 'command'> &
   PropsWithChildren<{
     /** Optional unique identifier */
     id?: string;
 
-    onClick: () => void;
+    onClick: (event: MouseEvent<HTMLElement>) => void;
   }>;
 
 type MenuItemInfo = (Command | SubMenu) & {
@@ -106,6 +107,13 @@ type MenuItemInfo = (Command | SubMenu) & {
   isDense?: boolean;
 
   /**
+   * If true, a right-arrow icon will be displayed (iconPathAfter, if specified, will be ignored).
+   *
+   * @default false
+   */
+  isSubMenuParent?: boolean;
+
+  /**
    * If true, the left and right padding is removed
    *
    * @default false
@@ -146,6 +154,7 @@ export default function MenuItem(props: MenuItemProps) {
     className,
     isDisabled = false,
     isDense = true,
+    isSubMenuParent = false,
     hasDisabledGutters = false,
     hasDivider = false,
     focusVisibleClassName,
@@ -170,7 +179,13 @@ export default function MenuItem(props: MenuItemProps) {
         <>
           {getIcon(iconPathBefore, label, true)}
           <MuiListItemText primary={label} inset={!iconPathBefore && allowForLeadingIcons} />
-          {getIcon(iconPathAfter, label, false)}
+          {isSubMenuParent ? (
+            <MuiListItemIcon className="papi-menu-icon-trailing">
+              <ArrowRightIcon />
+            </MuiListItemIcon>
+          ) : (
+            getIcon(iconPathAfter, label, false)
+          )}
         </>
       ) : (
         children

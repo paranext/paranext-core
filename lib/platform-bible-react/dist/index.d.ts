@@ -2,7 +2,7 @@
 
 import { AutocompleteChangeDetails, AutocompleteChangeReason, AutocompleteValue, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import React$1 from 'react';
-import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEventHandler, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
+import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
 import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';
 
 export type ButtonProps = React$1.PropsWithChildren<{
@@ -288,7 +288,7 @@ export type MenuPropsBase = {
 	 * Additional action to perform when any menu item is clicked. Allows the caller to handle event
 	 * (e.g., to close the menu).
 	 */
-	onClick?: () => void;
+	onClick?: (event: React$1.MouseEvent<HTMLElement>) => void;
 };
 export type MenuItemListProps = MenuPropsBase & {
 	/** Optional unique (column) identifier */
@@ -297,7 +297,7 @@ export type MenuItemListProps = MenuPropsBase & {
 export type MenuItemProps = Omit<MenuItemInfo, "command"> & React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
-	onClick: () => void;
+	onClick: (event: React$1.MouseEvent<HTMLElement>) => void;
 }>;
 export type MenuItemInfo = (Command | SubMenu) & {
 	/**
@@ -338,6 +338,12 @@ export type MenuItemInfo = (Command | SubMenu) & {
 	 * @default true
 	 */
 	isDense?: boolean;
+	/**
+	 * If true, a right-arrow icon will be displayed (iconPathAfter, if specified, will be ignored).
+	 *
+	 * @default false
+	 */
+	isSubMenuParent?: boolean;
 	/**
 	 * If true, the left and right padding is removed
 	 *
@@ -894,11 +900,6 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	className?: string;
 }>;
 export function Toolbar({ menuProvider, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
-/**
- * This will typically not be useful on its own. It is used to generate and lay out the MenuItems to
- * appear on either a GridMenu or a ContextMenu.
- */
-export function TopLevelMenu(props: MenuItemListProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

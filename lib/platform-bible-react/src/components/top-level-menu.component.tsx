@@ -3,8 +3,8 @@ import GroupedMenuItemList from './grouped-menu-item-list.component';
 import { MenuItemListProps } from './menu-item.component';
 
 /**
- * This will typically not be useful on its own. It is used to generate and lay out the MenuItems to
- * appear on either a GridMenu or a ContextMenu.
+ * This component is internal; it does not need to be exposed to the outside world since it is not
+ * useful on its own. Use either GridMenu or ContextMenu.
  */
 export default function TopLevelMenu(props: MenuItemListProps) {
   const { menuDefinition, columnId } = props;
