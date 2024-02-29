@@ -1,4 +1,4 @@
-import { MouseEvent, ReactNode, useMemo, useState } from 'react';
+import { MouseEvent, useMemo, useState } from 'react';
 import { Menu } from '@mui/material';
 import {
   MenuGroupDetailsInColumn,
@@ -171,39 +171,31 @@ export default function GroupedMenuItemList(menuProps: GroupedMenuItemListProps)
 
   return (
     <div key={divKey} role="menu" aria-label={divKey}>
-      {(() => {
-        const elements: ReactNode[] = [];
-        // REVIEW(TJ): Using foreach instead of map gets around a complaint about not destructuring
-        // items, however this is more difficult to read and understand.
-        // Try to find a way to resolve this problem without the IIFE and forEach and such.
-        items.forEach((itemInfo, index) => {
-          const { item } = itemInfo;
-          const menuItemProps = createMenuItemProps(itemInfo);
-          if ('command' in item) {
-            const key = item.group + index;
-            elements.push(
-              <MenuItem
-                key={key}
-                onClick={(event: MouseEvent<HTMLElement>) => {
-                  onClick?.(event);
-                  commandHandler(item);
-                }}
-                {...menuItemProps}
-              />,
-            );
-          } else {
-            elements.push(
-              <SubMenu
-                key={divKey + item.id}
-                parentMenuItem={item}
-                parentItemProps={menuItemProps}
-                {...menuProps}
-              />,
-            );
-          }
-        });
-        return elements;
-      })()}
+      {items.map((itemInfo, index) => {
+        const { item } = itemInfo;
+        const menuItemProps = createMenuItemProps(itemInfo);
+        if ('command' in item) {
+          const key = item.group + index;
+          return (
+            <MenuItem
+              key={key}
+              onClick={(event: MouseEvent<HTMLElement>) => {
+                onClick?.(event);
+                commandHandler(item);
+              }}
+              {...menuItemProps}
+            />
+          );
+        }
+        return (
+          <SubMenu
+            key={divKey + item.id}
+            parentMenuItem={item}
+            parentItemProps={menuItemProps}
+            {...menuProps}
+          />
+        );
+      })}
     </div>
   );
 }

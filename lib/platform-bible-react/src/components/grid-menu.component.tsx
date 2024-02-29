@@ -103,13 +103,17 @@ export default function GridMenu({
         !Number.isNaN(column.order)
       )
         columnNumbers.set(column.order, { id: columnId, metadata: column });
+      else
+        console.warn(
+          `Property ${columnName} (${typeof column}) on menu ${id} is not a valid column and is being ignored. This might indicate data corruption`,
+        );
     });
 
     // Extract values and sort them based on the 'order' property
     return Array.from(columnNumbers.values()).sort((a, b) => {
       return (a.metadata.order || 0) - (b.metadata.order || 0);
     });
-  }, [columns]);
+  }, [columns, id]);
 
   // We might need something like this if we need to be able to prevent empty columns
   // sortedColumns.filter((c) => multiColumnMenu.groups.some((g) => 'column' in g && (g as .column)...
