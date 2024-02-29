@@ -13,6 +13,7 @@
   "eslint.validate": ["javascript", "javascriptreact", "html", "typescriptreact"],
 
   "files.associations": {
+    "*.css": "tailwindcss",
     ".eslintignore": "ignore",
     ".prettierignore": "ignore",
     ".stylelintignore": "ignore"
