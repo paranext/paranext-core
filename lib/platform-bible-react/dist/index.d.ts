@@ -21,12 +21,7 @@ export type ButtonProps = React$1.PropsWithChildren<{
 	/** Optional context menu handler */
 	onContextMenu?: React$1.MouseEventHandler<HTMLButtonElement>;
 }>;
-/**
- * Button a user can click to do something
- *
- * Thanks to MUI for heavy inspiration and documentation
- * https://mui.com/material-ui/getting-started/overview/
- */
+/** Button a user can click to do something */
 export declare function Button({ id, isDisabled, className, onClick, onContextMenu, children, }: ButtonProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	startChapter: number;
