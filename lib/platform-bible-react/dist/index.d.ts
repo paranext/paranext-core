@@ -281,7 +281,7 @@ export type SubMenu = MenuItemInfoBase & {
 export interface CommandHandler {
 	(command: Command): void;
 }
-export type MenuProps = {
+export type MenuPropsBase = {
 	menuDefinition: SingleColumnMenu;
 	commandHandler: CommandHandler;
 	/**
@@ -289,6 +289,10 @@ export type MenuProps = {
 	 * (e.g., to close the menu).
 	 */
 	onClick?: () => void;
+};
+export type MenuItemListProps = MenuPropsBase & {
+	/** Optional unique (column) identifier */
+	columnId?: ReferencedItem;
 };
 export type MenuItemProps = Omit<MenuItemInfo, "command"> & React$1.PropsWithChildren<{
 	/** Optional unique identifier */
@@ -364,11 +368,15 @@ export type GridMenuProps = GridMenuInfo & {
 	className?: string;
 };
 export function GridMenu({ commandHandler, className, multiColumnMenu, id, }: GridMenuProps): import("react/jsx-runtime").JSX.Element;
-export type GroupedMenuItemListProps = MenuProps & {
+/**
+ * All the exported types in this file should be regarded as "internal" (i.e., they should not be
+ * exposed via index.ts).
+ */
+export type GroupedMenuPropsBase = MenuPropsBase & {
 	/** Optional unique (column) identifier */
 	columnId?: ReferencedItem;
 };
-export type ContextMenuProps = GroupedMenuItemListProps & {
+export type ContextMenuProps = GroupedMenuPropsBase & {
 	/** Additional css classes to help with styling of the context menu */
 	className?: string;
 };
@@ -886,10 +894,6 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	className?: string;
 }>;
 export function Toolbar({ menuProvider, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
-export type MenuItemListProps = MenuProps & {
-	/** Optional unique (column) identifier */
-	columnId?: ReferencedItem;
-};
 /**
  * This will typically not be useful on its own. It is used to generate and lay out the MenuItems to
  * appear on either a GridMenu or a ContextMenu.

@@ -1,11 +1,6 @@
-import { MultiColumnMenu, ReferencedItem } from 'platform-bible-utils';
-import { MenuProps } from './menu-item.component';
+import { MultiColumnMenu } from 'platform-bible-utils';
 import GroupedMenuItemList from './grouped-menu-item-list.component';
-
-export type MenuItemListProps = MenuProps & {
-  /** Optional unique (column) identifier */
-  columnId?: ReferencedItem;
-};
+import { MenuItemListProps } from './menu-item.component';
 
 /**
  * This will typically not be useful on its own. It is used to generate and lay out the MenuItems to
@@ -35,5 +30,5 @@ export default function TopLevelMenu(props: MenuItemListProps) {
     );
   }
 
-  return GroupedMenuItemList(props, includedGroups);
+  return <GroupedMenuItemList {...props} includedGroups={includedGroups} />;
 }

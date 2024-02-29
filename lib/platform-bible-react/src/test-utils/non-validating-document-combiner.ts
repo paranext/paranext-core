@@ -1,4 +1,4 @@
-/* Copied from src\shared\utils\non-validating-document-combiner.ts. TChanges made there should
+/* Copied from src\shared\utils\non-validating-document-combiner.ts. Changes made there should
    most likely be reflected here as well. */
 import {
   DocumentCombinerEngine,

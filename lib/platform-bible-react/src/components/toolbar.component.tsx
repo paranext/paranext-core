@@ -23,17 +23,11 @@ export type ToolbarProps = PropsWithChildren<{
   /** Optional unique identifier */
   id?: string;
 
-  // Assuming we can use the "menu provider" approach in Storybook, we really don't need two ways to
-  // get the menu information.
-  // /** The optional grid menu to display. If not specified, the "hamburger" menu will not display. */
-  // menu?: MultiColumnMenu;
-
   /** Additional css classes to help with unique styling of the toolbar */
   className?: string;
 }>;
 
 export default function Toolbar({
-  // menu: propsMenu, --- Just use "menu provider"???
   menuProvider,
   commandHandler,
   className,

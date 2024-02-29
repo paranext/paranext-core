@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Grid, List } from '@mui/material';
 import { MenuColumnWithHeader, MultiColumnMenu, ReferencedItem } from 'platform-bible-utils';
 import { CommandHandler } from './menu-item.component';
-import { GroupedMenuItemListProps } from './grouped-menu-item-list.component';
+import { GroupedMenuPropsBase } from './grouped-menu-item-list.component';
 import TopLevelMenu from './top-level-menu.component';
 import './grid-menu.component.css';
 
@@ -19,7 +19,7 @@ type ColumnInfo = {
 };
 
 type MenuColumnProps = ColumnInfo &
-  GroupedMenuItemListProps & {
+  GroupedMenuPropsBase & {
     /** Additional css classes to help with unique styling of the menu column */
     className?: string;
   };

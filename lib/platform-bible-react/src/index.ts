@@ -21,7 +21,7 @@ export { default as IconButton } from './components/icon-button.component';
 export type { IconButtonProps } from './components/icon-button.component';
 export { default as LabelPosition } from './components/label-position.model';
 export { default as MenuItem } from './components/menu-item.component';
-export type { CommandHandler } from './components/menu-item.component';
+export type { CommandHandler, MenuItemListProps } from './components/menu-item.component';
 export { default as RefSelector } from './components/ref-selector.component';
 export type { ScrRefSelectorProps } from './components/ref-selector.component';
 export { default as SearchBar } from './components/search-bar.component';
@@ -57,7 +57,6 @@ export type { TextFieldProps } from './components/text-field.component';
 export { default as Toolbar } from './components/toolbar.component';
 export type { ToolbarProps, MultiColumnMenuProvider } from './components/toolbar.component';
 export { default as TopLevelMenu } from './components/top-level-menu.component';
-export type { MenuItemListProps } from './components/top-level-menu.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

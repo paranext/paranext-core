@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import Tooltip from '@mui/material/Tooltip';
 import { PropsWithChildren } from 'react';
-import { SingleColumnMenu } from 'platform-bible-utils';
+import { ReferencedItem, SingleColumnMenu } from 'platform-bible-utils';
 import './menu-item.component.css';
 
 type MenuItemInfoBase = {
@@ -29,7 +29,7 @@ export interface CommandHandler {
   (command: Command): void;
 }
 
-export type MenuProps = {
+export type MenuPropsBase = {
   /*
    * The JSON defining the menu whose items are to be rendered. This will typically be one of the
    * menus in the "defs" in a Platform.Bible menu (see PlatformMenus). The schema for this is
@@ -47,6 +47,11 @@ export type MenuProps = {
    * (e.g., to close the menu).
    */
   onClick?: () => void;
+};
+
+export type MenuItemListProps = MenuPropsBase & {
+  /** Optional unique (column) identifier */
+  columnId?: ReferencedItem;
 };
 
 type MenuItemProps = Omit<MenuItemInfo, 'command'> &

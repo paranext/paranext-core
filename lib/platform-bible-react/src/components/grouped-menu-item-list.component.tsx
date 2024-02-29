@@ -8,11 +8,28 @@ import {
   ReferencedItem,
   SingleColumnMenu,
 } from 'platform-bible-utils';
-import MenuItem, { MenuProps } from './menu-item.component';
+import MenuItem, { MenuItemListProps, MenuPropsBase } from './menu-item.component';
 
-export type GroupedMenuItemListProps = MenuProps & {
+/**
+ * All the exported types in this file should be regarded as "internal" (i.e., they should not be
+ * exposed via index.ts).
+ */
+
+export type GroupedMenuPropsBase = MenuPropsBase & {
   /** Optional unique (column) identifier */
   columnId?: ReferencedItem;
+};
+
+export type GroupedMenuItemListProps = MenuItemListProps & {
+  /**
+   * If the menuDefinition includes "top-level" groups (i.e., those that belong to a column as
+   * opposed to those that belong to a submenu) that should not be included in the list, then this
+   * array specifies which groups to include. Likewise, for a submenu, this list indicates which
+   * groups are pertinent for that submenu. So then for a context menu this property need not be
+   * specified since it is a top-level menu based on a "true" SingleColumnMenu (i.e., one that is
+   * not a MultiColumnMenu).
+   */
+  includedGroups?: { id: string; group: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu }[];
 };
 
 interface ItemInfo {
@@ -20,7 +37,7 @@ interface ItemInfo {
   isLastItemInGroup: boolean;
 }
 
-type SubMenuProps = MenuProps & {
+type SubMenuProps = MenuPropsBase & {
   parentMenuItem: MenuItemContainingSubmenu;
 };
 
@@ -56,7 +73,7 @@ function SubMenu(props: SubMenuProps) {
       (group) => 'menuItem' in group.group && group.group.menuItem === parentMenuItem.id,
     );
 
-    return GroupedMenuItemList(props, includedGroups);
+    return <GroupedMenuItemList {...props} includedGroups={includedGroups} />;
   };
 
   return (
@@ -95,17 +112,14 @@ const getOrderedGroupItems = (
 
 /**
  * This component is internal; it does not need to be exposed to the outside world since it is not
- * useful on its own. It is used to generate and lay out the MenuItems that appear either on
+ * useful on its own. It is used to generate and lay out the MenuItems that appear either on a
  * top-level menu (in a GridMenu or ContextMenu) or in a submenu.
  */
-export default function GroupedMenuItemList(
-  menuProps: MenuProps,
-  includedGroups: { id: string; group: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu }[],
-) {
-  const { menuDefinition, onClick, commandHandler } = menuProps;
+export default function GroupedMenuItemList(menuProps: GroupedMenuItemListProps) {
+  const { menuDefinition, onClick, commandHandler, includedGroups } = menuProps;
 
   const groupsToInclude =
-    (includedGroups?.length ?? 0) > 0
+    includedGroups && includedGroups.length > 0
       ? includedGroups
       : // We're apparently laying out a single-column menu (presumably a context menu). In this
         // case, all groups should be included except ones that belong to a submenu.

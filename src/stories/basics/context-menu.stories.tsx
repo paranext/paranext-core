@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Command, ContextMenu, MenuProps } from 'platform-bible-react';
+import { Command, ContextMenu, MenuPropsBase } from 'platform-bible-react';
 import { SingleColumnMenu } from 'platform-bible-utils';
 import { LocalizedMenus } from '@shared/utils/menu-document-combiner';
 
@@ -42,7 +42,7 @@ function HandleMenuCommand(command: Command) {
 
 type LocalizedContextMenu = LocalizedMenus['defaultWebViewContextMenu'];
 
-function GetMenuDefinition(): Partial<MenuProps> {
+function GetMenuDefinition(): Partial<MenuPropsBase> {
   const contextMenuDefinition: LocalizedContextMenu = {
     groups: {
       'group.2': { order: 2, column: 'TODO: this should not be required' },
