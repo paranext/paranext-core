@@ -1,6 +1,6 @@
 import { SyntheticEvent, useMemo } from 'react';
 import { FormControlLabel } from '@mui/material';
-import ComboBox from './combo-box.component';
+import ComboBox from '@/components/combo-box.component';
 
 export type ChapterRangeSelectorProps = {
   startChapter: number;

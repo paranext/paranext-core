@@ -1,7 +1,7 @@
 import { Paper } from '@mui/material';
 import { useState } from 'react';
-import TextField from './text-field.component';
-import './search-bar.component.css';
+import TextField from '@/components/text-field.component';
+import '@/components/search-bar.component.css';
 
 export type SearchBarProps = {
   /**

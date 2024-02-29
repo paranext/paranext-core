@@ -1,5 +1,6 @@
 import path from 'path';
 import { defineConfig } from 'vite';
+import tsconfigPaths from 'vite-tsconfig-paths';
 import react from '@vitejs/plugin-react';
 import styleInject from '@senojs/rollup-plugin-style-inject';
 import { peerDependencies, dependencies } from './package.json';
@@ -7,6 +8,7 @@ import { peerDependencies, dependencies } from './package.json';
 const config = defineConfig({
   base: './',
   plugins: [
+    tsconfigPaths(),
     react(),
     styleInject({
       insertAt: 'top',

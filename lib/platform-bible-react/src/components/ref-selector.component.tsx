@@ -10,10 +10,10 @@ import {
   getChaptersForBook,
   ScriptureReference,
 } from 'platform-bible-utils';
-import './ref-selector.component.css';
-import ComboBox, { ComboBoxLabelOption } from './combo-box.component';
-import Button from './button.component';
-import TextField from './text-field.component';
+import '@/components/ref-selector.component.css';
+import ComboBox, { ComboBoxLabelOption } from '@/components/combo-box.component';
+import Button from '@/components/button.component';
+import TextField from '@/components/text-field.component';
 
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
