@@ -12,11 +12,11 @@ import DataGrid, {
   SortColumn,
 } from 'react-data-grid';
 import React, { ChangeEvent, Key, ReactElement, ReactNode, useMemo } from 'react';
-import Checkbox from './checkbox.component';
-import TextField from './text-field.component';
+import Checkbox from '@/components/checkbox.component';
+import TextField from '@/components/text-field.component';
 
 import 'react-data-grid/lib/styles.css';
-import './table.component.css';
+import '@/components/table.component.css';
 
 export interface TableCalculatedColumn<R> extends TableColumn<R> {
   readonly idx: number;

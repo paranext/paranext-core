@@ -1,9 +1,9 @@
 import { useRef, useState, useCallback, useEffect, MouseEvent, PropsWithChildren } from 'react';
 import { AppBar, Toolbar as MuiToolbar, IconButton, Drawer } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
-import GridMenu, { GridMenuInfo } from './grid-menu.component';
-import './toolbar.component.css';
-import { Command, CommandHandler } from './menu-item.component';
+import GridMenu, { GridMenuInfo } from '@/components/grid-menu.component';
+import '@/components/toolbar.component.css';
+import { Command, CommandHandler } from '@/components/menu-item.component';
 
 export interface ToolbarDataHandler {
   (isSupportAndDevelopment: boolean): GridMenuInfo;
