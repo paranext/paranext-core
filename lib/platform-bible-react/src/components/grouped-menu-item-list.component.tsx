@@ -143,7 +143,9 @@ export default function GroupedMenuItemList(menuProps: GroupedMenuItemListProps)
     // No divider after last item in final group.
     if (itemArray.length > 0) itemArray[itemArray.length - 1].isLastItemInGroup = false;
 
-    const allowSpaceForLeadingIcons = itemArray.some((i) => 'iconPathBefore' in i);
+    const allowSpaceForLeadingIcons = itemArray.some(
+      (i) => 'iconPathBefore' in i.item && i.item.iconPathBefore,
+    );
 
     return { items: itemArray, allowForLeadingIcons: allowSpaceForLeadingIcons };
   }, [includedGroups, menuDefinition]);
