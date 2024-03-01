@@ -5,6 +5,7 @@ import React$1 from 'react';
 import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEventHandler, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
 import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';
 
+export declare function BookChapterControl(): import("react/jsx-runtime").JSX.Element;
 export type ButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
@@ -664,8 +665,6 @@ export type TableProps<R> = {
 	onPaste?: (event: TablePasteEvent<R>) => R;
 	/** Additional css classes to help with unique styling of the table */
 	className?: string;
-	/** Optional unique identifier */
-	id?: string;
 };
 /**
  * Configurable table component
@@ -673,7 +672,7 @@ export type TableProps<R> = {
  * Thanks to Adazzle for heavy inspiration and documentation
  * https://adazzle.github.io/react-data-grid/
  */
-export declare function Table<R>({ columns, sortColumns, onSortColumnsChange, onColumnResize, defaultColumnWidth, defaultColumnMinWidth, defaultColumnMaxWidth, defaultColumnSortable, defaultColumnResizable, rows, enableSelectColumn, selectColumnWidth, rowKeyGetter, rowHeight, headerRowHeight, selectedRows, onSelectedRowsChange, onRowsChange, onCellClick, onCellDoubleClick, onCellContextMenu, onCellKeyDown, direction, enableVirtualization, onCopy, onPaste, onScroll, className, id, }: TableProps<R>): import("react/jsx-runtime").JSX.Element;
+export declare function Table<R>({ columns, sortColumns, onSortColumnsChange, onColumnResize, defaultColumnWidth, defaultColumnMinWidth, defaultColumnMaxWidth, defaultColumnSortable, defaultColumnResizable, rows, enableSelectColumn, selectColumnWidth, rowKeyGetter, rowHeight, headerRowHeight, selectedRows, onSelectedRowsChange, onRowsChange, onCellClick, onCellDoubleClick, onCellContextMenu, onCellKeyDown, direction, enableVirtualization, onCopy, onPaste, onScroll, className, }: TableProps<R>): import("react/jsx-runtime").JSX.Element;
 export type TextFieldProps = {
 	/**
 	 * The variant to use.
