@@ -239,7 +239,7 @@ export type TableProps<R> = {
   className?: string;
   /** Optional unique identifier */
   // Patched react-data-grid@7.0.0-beta.34 to add this prop, link to issue: https://github.com/adazzle/react-data-grid/issues/3305
-  id?: string;
+  // id?: string;
 };
 
 /**
@@ -277,7 +277,7 @@ function Table<R>({
   onPaste,
   onScroll,
   className,
-  id,
+  // id,
 }: TableProps<R>) {
   const cachedColumns = useMemo(() => {
     const editableColumns = columns.map((column) => {
@@ -338,7 +338,7 @@ function Table<R>({
       onScroll={onScroll}
       renderers={{ renderCheckbox }}
       className={className ?? 'rdg-light'}
-      id={id}
+      // id={id}
     />
   );
 }

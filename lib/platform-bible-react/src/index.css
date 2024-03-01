@@ -70,6 +70,7 @@
   * {
     @apply pr-border-border;
   }
+
   body {
     @apply pr-bg-background pr-text-foreground;
   }
