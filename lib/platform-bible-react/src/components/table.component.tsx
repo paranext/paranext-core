@@ -337,7 +337,7 @@ function Table<R>({
       onPaste={onPaste}
       onScroll={onScroll}
       renderers={{ renderCheckbox }}
-      className={className ?? 'rdg-light'}
+      className={`papi-table ${className ?? 'rdg-light'}`}
       id={id}
     />
   );

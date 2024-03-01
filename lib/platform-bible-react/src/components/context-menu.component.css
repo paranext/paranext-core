@@ -1,0 +1,30 @@
+.papi-context-menu-target {
+  white-space: nowrap;
+  cursor: context-menu;
+}
+
+.papi-context-menu-target * {
+  white-space: normal;
+}
+
+.papi-context-menu-target:hover {
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.07); /* Faint shadowy background */
+}
+
+.papi-context-menu-target.paratext:hover {
+  box-shadow: 0 0 10px rgba(0, 100, 0, 0.07); /* Faint shadowy background */
+}
+
+.papi-context-menu-target.paratext.bright:hover {
+  box-shadow: 0 0 10px rgba(173, 255, 47, 0.07); /* Faint shadowy background */
+}
+
+.papi-context-menu.paratext ul {
+  background-color: rgb(76, 106, 76);
+  color: rgb(214, 255, 152);
+}
+
+.papi-context-menu.paratext.bright ul {
+  color: rgb(76, 106, 76);
+  background-color: rgb(214, 255, 152);
+}

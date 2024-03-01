@@ -40,7 +40,7 @@ export type TextFieldProps = {
    * @default false
    */
   isRequired?: boolean;
-  /** Additional css classes to help with unique styling of the button */
+  /** Additional css classes to help with unique styling of the text field */
   className?: string;
   /** Starting value for the text field if it is not controlled */
   defaultValue?: unknown;

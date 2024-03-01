@@ -2,7 +2,7 @@
 
 import { AutocompleteChangeDetails, AutocompleteChangeReason, AutocompleteValue, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import React$1 from 'react';
-import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEventHandler, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
+import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
 import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';
 
 export type ButtonProps = React$1.PropsWithChildren<{
@@ -156,35 +156,194 @@ export type ComboBoxProps<T> = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, title, isDisabled, isClearable, hasError, isFullWidth, width, options, className, value, onChange, onFocus, onBlur, getOptionLabel, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
-export type Command = {
-	/** Text (displayable in the UI) as the name of the command */
-	name: string;
+/** Function to run to dispose of something. Returns true if successfully unsubscribed */
+export type Unsubscriber = () => boolean;
+/**
+ * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
+ * successfully unsubscribed
+ */
+export type UnsubscriberAsync = () => Promise<boolean>;
+/** Callback function that accepts an event and should run when an event is emitted */
+export type PlatformEventHandler<T> = (event: T) => void;
+/**
+ * Function that subscribes the provided callback to run when this event is emitted.
+ *
+ * @param callback Function to run with the event when it is emitted
+ * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
+ *   emitted
+ */
+export type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
+/**
+ * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
+ *
+ * Note: The callback itself is not asynchronous.
+ */
+export type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
+export interface ScriptureReference {
+	bookNum: number;
+	chapterNum: number;
+	verseNum: number;
+}
+/** Identifier for a string that will be localized in a menu based on the user's UI language */
+export type LocalizeKey = `%${string}%`;
+/** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
+export type ReferencedItem = `${string}.${string}`;
+export type OrderedItem = {
+	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
+	order: number;
+};
+export type OrderedExtensibleContainer = OrderedItem & {
+	/** Determines whether other items can be added to this after it has been defined */
+	isExtensible?: boolean;
+};
+/** Group of menu items that belongs in a column */
+export type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
+	/** ID of column in which this group resides */
+	column: ReferencedItem;
+};
+/** Group of menu items that belongs in a submenu */
+export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
+	/** ID of menu item hosting the submenu in which this group resides */
+	menuItem: ReferencedItem;
+};
+/** Column that includes header text in a menu */
+export type MenuColumnWithHeader = OrderedExtensibleContainer & {
+	/** Key that represents the text of the header text of the column */
+	label: LocalizeKey;
+};
+export type MenuItemBase = OrderedItem & {
+	/** Menu group to which this menu item belongs */
+	group: ReferencedItem;
+	/** Key that represents the text of this menu item to display */
+	label: LocalizeKey;
+	/** Key that represents words the platform should reference when users are searching for menu items */
+	searchTerms?: LocalizeKey;
+	/** Key that represents the text to display if a mouse pointer hovers over the menu item */
+	tooltip?: LocalizeKey;
+	/** Additional information provided by developers to help people who perform localization */
+	localizeNotes: string;
+};
+/** Menu item that hosts a submenu */
+export type MenuItemContainingSubmenu = MenuItemBase & {
+	/** ID for this menu item that holds a submenu */
+	id: ReferencedItem;
+};
+/** Menu item that runs a command */
+export type MenuItemContainingCommand = MenuItemBase & {
+	/** Name of the PAPI command to run when this menu item is selected. */
+	command: ReferencedItem;
+	/** Path to the icon to display after the menu text */
+	iconPathAfter?: string;
+	/** Path to the icon to display before the menu text */
+	iconPathBefore?: string;
+};
+/**
+ * Group of menu items that can be combined with other groups to form a single menu/submenu. Groups
+ * are separated using a line within the menu/submenu.
+ */
+export type Groups = {
+	/** Named menu group */
+	[property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
+};
+/** Group of columns that can be combined with other columns to form a multi-column menu */
+export type ColumnsWithHeaders = {
+	/** Named column of a menu */
+	[property: ReferencedItem]: MenuColumnWithHeader;
+	/** Defines whether columns can be added to this multi-column menu */
+	isExtensible?: boolean;
+};
+/** Menu that contains a column without a header */
+export type SingleColumnMenu = {
+	/** Groups that belong in this menu */
+	groups: Groups;
+	/** List of menu items that belong in this menu */
+	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
+};
+/** Menu that contains multiple columns with headers */
+export type MultiColumnMenu = SingleColumnMenu & {
+	/** Columns that belong in this menu */
+	columns: ColumnsWithHeaders;
+};
+export type MenuItemInfoBase = {
+	/** Text (displayable in the UI) as the name of the menu item */
+	label: string;
+	/** Text to display when the mouse hovers over the menu item */
+	tooltip?: string;
+};
+export type Command = MenuItemInfoBase & {
 	/** Command to execute (string.string) */
 	command: string;
+};
+export type SubMenu = MenuItemInfoBase & {
+	/** Command to execute (string.string) */
+	items: MenuItemInfo[];
 };
 export interface CommandHandler {
 	(command: Command): void;
 }
+export type MenuPropsBase = {
+	menuDefinition: SingleColumnMenu;
+	commandHandler: CommandHandler;
+	/**
+	 * Additional action to perform when any menu item is clicked. Allows the caller to handle event
+	 * (e.g., to close the menu).
+	 */
+	onClick?: (event: React$1.MouseEvent<HTMLElement>) => void;
+};
+export type MenuItemListProps = MenuPropsBase & {
+	/** Optional unique (column) identifier */
+	columnId?: ReferencedItem;
+};
 export type MenuItemProps = Omit<MenuItemInfo, "command"> & React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
-	onClick: () => void;
+	onClick: (event: React$1.MouseEvent<HTMLElement>) => void;
 }>;
-export type MenuItemInfo = Command & {
+export type MenuItemInfo = (Command | SubMenu) & {
+	/**
+	 * If specified, menu item will be inset if it does not have a leading icon.
+	 *
+	 * @default true
+	 */
+	allowForLeadingIcons?: boolean;
+	/**
+	 * If specified, the path to the icon image to display on the leading side of the menu text.
+	 *
+	 * @default undefined (no leading icon will be shown)
+	 */
+	iconPathBefore?: string;
+	/**
+	 * If specified, the path to the icon image to display on the trailing side of the menu text.
+	 *
+	 * @default undefined (no trailing icon will be shown)
+	 */
+	iconPathAfter?: string;
 	/**
 	 * If true, list item is focused during the first mount
 	 *
 	 * @default false
 	 */
 	hasAutoFocus?: boolean;
-	/** Additional css classes to help with unique styling of the button */
+	/** Additional css classes to help with unique styling of the menu item */
 	className?: string;
+	/**
+	 * If true, the menu item will appear disabled and it will not respond to clicks or mouse hovers.
+	 *
+	 * @default false
+	 */
+	isDisabled?: boolean;
 	/**
 	 * If true, compact vertical padding designed for keyboard and mouse input is used.
 	 *
 	 * @default true
 	 */
 	isDense?: boolean;
+	/**
+	 * If true, a right-arrow icon will be displayed (iconPathAfter, if specified, will be ignored).
+	 *
+	 * @default false
+	 */
+	isSubMenuParent?: boolean;
 	/**
 	 * If true, the left and right padding is removed
 	 *
@@ -199,25 +358,44 @@ export type MenuItemInfo = Command & {
 	hasDivider?: boolean;
 	/** Help identify which element has keyboard focus */
 	focusVisibleClassName?: string;
+	/** If it's a submenu, it should have the items property */
+	items?: MenuItemInfo[];
 };
-export declare function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
-type MenuColumnInfo = {
-	/** The name of the menu (displayed as the column header). */
-	name: string;
-	items: MenuItemInfo[];
-};
+export function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
 export type GridMenuInfo = {
-	/** The columns to display on the dropdown menu. */
-	columns: MenuColumnInfo[];
+	/** The menu object containing information about the columns, groups, and items to display. */
+	multiColumnMenu: MultiColumnMenu;
 };
 export type GridMenuProps = GridMenuInfo & {
 	/** Optional unique identifier */
 	id?: string;
 	commandHandler: CommandHandler;
-	/** Additional css classes to help with unique styling of the toolbar */
+	/** Additional css classes to help with unique styling of the grid menu */
 	className?: string;
 };
-export function GridMenu({ commandHandler, className, columns, id }: GridMenuProps): import("react/jsx-runtime").JSX.Element;
+export function GridMenu({ commandHandler, className, multiColumnMenu, id, }: GridMenuProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * All the exported types in this file should be regarded as "internal" (i.e., they should not be
+ * exposed via index.ts).
+ */
+export type GroupedMenuPropsBase = MenuPropsBase & {
+	/** Optional unique (column) identifier */
+	columnId?: ReferencedItem;
+};
+export type ContextMenuProps = GroupedMenuPropsBase & {
+	/** Additional css classes to help with styling of the context menu */
+	className?: string;
+};
+/**
+ * A component that wraps its children, making them the "target" of a context menu so that the
+ * context menu is displayed when the target is right-clicked.
+ *
+ * @param {ContextMenuProps & PropsWithChildren} props - The properties for the ContextMenu
+ *   component which define what menu items to display and supply a command handler for when a menu
+ *   item is clicked.
+ * @returns {JSX.Element} The ContextMenu component (including the wrapped children)
+ */
+export function ContextMenu({ className, commandHandler, menuDefinition, children, }: React$1.PropsWithChildren<ContextMenuProps>): string | number | boolean | Iterable<React$1.ReactNode> | import("react/jsx-runtime").JSX.Element | null | undefined;
 export type IconButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
@@ -262,34 +440,6 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
-/** Function to run to dispose of something. Returns true if successfully unsubscribed */
-export type Unsubscriber = () => boolean;
-/**
- * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
- * successfully unsubscribed
- */
-export type UnsubscriberAsync = () => Promise<boolean>;
-/** Callback function that accepts an event and should run when an event is emitted */
-export type PlatformEventHandler<T> = (event: T) => void;
-/**
- * Function that subscribes the provided callback to run when this event is emitted.
- *
- * @param callback Function to run with the event when it is emitted
- * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
- *   emitted
- */
-export type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
-/**
- * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
- *
- * Note: The callback itself is not asynchronous.
- */
-export type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
-export interface ScriptureReference {
-	bookNum: number;
-	chapterNum: number;
-	verseNum: number;
-}
 export interface ScrRefSelectorProps {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -713,7 +863,7 @@ export type TextFieldProps = {
 	 * @default false
 	 */
 	isRequired?: boolean;
-	/** Additional css classes to help with unique styling of the button */
+	/** Additional css classes to help with unique styling of the text field */
 	className?: string;
 	/** Starting value for the text field if it is not controlled */
 	defaultValue?: unknown;
@@ -733,22 +883,23 @@ export type TextFieldProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function TextField({ variant, id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
-export interface ToolbarDataHandler {
-	(isSupportAndDevelopment: boolean): GridMenuInfo;
+export interface MultiColumnMenuProvider {
+	(isSupportAndDevelopment: boolean): MultiColumnMenu;
 }
 export type ToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	commandHandler: CommandHandler;
-	/** The handler to use for menu data if there is no menu provided. */
-	dataHandler?: ToolbarDataHandler;
+	/**
+	 * The optional delegate to use to get the menu data. If not specified or if it returns undefined,
+	 * the "hamburger" menu will not display.
+	 */
+	menuProvider?: MultiColumnMenuProvider;
 	/** Optional unique identifier */
 	id?: string;
-	/** The optional grid menu to display. If not specified, the "hamburger" menu will not display. */
-	menu?: GridMenuInfo;
 	/** Additional css classes to help with unique styling of the toolbar */
 	className?: string;
 }>;
-export function Toolbar({ menu: propsMenu, dataHandler, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export function Toolbar({ menuProvider, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
@@ -822,6 +973,4 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	isLoading: boolean
 ];
 
-export {
-	MenuColumnInfo as MenuColumn,
-};
+export {};

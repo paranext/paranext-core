@@ -1,34 +1,34 @@
 import { useRef, useState, useCallback, useEffect, MouseEvent, PropsWithChildren } from 'react';
 import { AppBar, Toolbar as MuiToolbar, IconButton, Drawer } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
-import GridMenu, { GridMenuInfo } from './grid-menu.component';
-import './toolbar.component.css';
+import { MultiColumnMenu } from 'platform-bible-utils';
 import { Command, CommandHandler } from './menu-item.component';
+import GridMenu from './grid-menu.component';
+import './toolbar.component.css';
 
-export interface ToolbarDataHandler {
-  (isSupportAndDevelopment: boolean): GridMenuInfo;
+export interface MultiColumnMenuProvider {
+  (isSupportAndDevelopment: boolean): MultiColumnMenu;
 }
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
   commandHandler: CommandHandler;
 
-  /** The handler to use for menu data if there is no menu provided. */
-  dataHandler?: ToolbarDataHandler;
+  /**
+   * The optional delegate to use to get the menu data. If not specified or if it returns undefined,
+   * the "hamburger" menu will not display.
+   */
+  menuProvider?: MultiColumnMenuProvider;
 
   /** Optional unique identifier */
   id?: string;
-
-  /** The optional grid menu to display. If not specified, the "hamburger" menu will not display. */
-  menu?: GridMenuInfo;
 
   /** Additional css classes to help with unique styling of the toolbar */
   className?: string;
 }>;
 
 export default function Toolbar({
-  menu: propsMenu,
-  dataHandler,
+  menuProvider,
   commandHandler,
   className,
   id,
@@ -72,8 +72,7 @@ export default function Toolbar({
     [commandHandler, handleMenuItemClick],
   );
 
-  let menu = propsMenu;
-  if (!menu && dataHandler) menu = dataHandler(hasShiftModifier);
+  const menu = menuProvider?.(hasShiftModifier);
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
@@ -105,7 +104,11 @@ export default function Toolbar({
                 },
               }}
             >
-              <GridMenu commandHandler={toolbarCommandHandler} columns={menu.columns} />
+              <GridMenu
+                className={className}
+                commandHandler={toolbarCommandHandler}
+                multiColumnMenu={menu}
+              />
             </Drawer>
           ) : undefined}
         </MuiToolbar>
