@@ -7,34 +7,23 @@ import {
   MultiColumnMenu,
   SingleColumnMenu,
   ColumnsWithHeaders,
-  Groups,
+  GroupsInSingleColumnMenu,
+  GroupsInMultiColumnMenu,
   MenuItemBase,
   MenuItemContainingSubmenu,
   MenuItemContainingCommand,
   ReferencedItem,
-  LocalizeKey,
   menuDocumentSchema,
+  NonValidatingDocumentCombiner,
+  DeepPartial,
+  Localized,
   startsWith,
+  substring,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import localizationService from '@shared/services/localization.service';
-import NonValidatingDocumentCombiner from './non-validating-document-combiner';
 
-/** Within type T, recursively change all properties to be optional */
-type DeepPartial<T> = T extends object ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
-
-/** Within type T, recursively change properties that were of type A to be of type B */
-type ReplaceType<T, A, B> = T extends A
-  ? B
-  : T extends object
-    ? { [K in keyof T]: ReplaceType<T[K], A, B> }
-    : T;
-
-export type LocalizedMenus = ReplaceType<
-  ReplaceType<PlatformMenus, LocalizeKey, string>,
-  ReferencedItem,
-  string
->;
+export type LocalizedMenus = Localized<PlatformMenus>;
 
 // #region Helper functions
 
@@ -44,6 +33,11 @@ const validate = ajv.compile(menuDocumentSchema);
 function performSchemaValidation(document: JsonDocumentLike, docType: string): void {
   if (!validate(document))
     throw new Error(`Invalid ${docType} menu document: ${ajv.errorsText(validate.errors)}`);
+}
+
+/** Remove '%' from the beginning and ending of the input string */
+function removePercentSigns(localizeKey: string): string {
+  return substring(localizeKey, 1, localizeKey.length - 1);
 }
 
 function checkNewColumns(
@@ -62,7 +56,7 @@ function checkNewColumns(
 }
 
 function checkNewGroups(
-  newGroups: DeepPartial<Groups> | undefined,
+  newGroups: DeepPartial<GroupsInMultiColumnMenu | GroupsInSingleColumnMenu> | undefined,
   namePrefix: string,
   currentColumns: ColumnsWithHeaders | undefined,
 ) {
@@ -90,7 +84,7 @@ function checkNewGroups(
 function checkNewMenuItems(
   newMenuItems: DeepPartial<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]> | undefined,
   namePrefix: string,
-  currentGroups: Groups | undefined,
+  currentGroups: GroupsInSingleColumnMenu | GroupsInMultiColumnMenu | undefined,
 ) {
   if (!newMenuItems) return;
   newMenuItems.forEach((menuItem) => {
@@ -129,7 +123,9 @@ function getOrAssign(map: Map<string, Set<number>>, key: string): Set<number> {
   return mySet;
 }
 
-function checkMenuGroupsForDuplicateOrdering(groups: Groups | undefined) {
+function checkMenuGroupsForDuplicateOrdering(
+  groups: GroupsInSingleColumnMenu | GroupsInMultiColumnMenu | undefined,
+) {
   if (!groups) return;
   const menuGroupsInColumns = new Map<string, Set<number>>();
   const menuGroupsInSubmenus = new Map<string, Set<number>>();
@@ -137,10 +133,11 @@ function checkMenuGroupsForDuplicateOrdering(groups: Groups | undefined) {
     // TS doesn't allow `groupName` above to be a ReferencedItem even though the type says it is
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const group = groups[groupName as ReferencedItem];
-    const groupSet =
-      'column' in group
-        ? getOrAssign(menuGroupsInColumns, group.column)
-        : getOrAssign(menuGroupsInSubmenus, group.menuItem);
+    let groupSet: Set<number> | undefined;
+    if ('column' in group) groupSet = getOrAssign(menuGroupsInColumns, group.column);
+    else if ('menuItem' in group) groupSet = getOrAssign(menuGroupsInSubmenus, group.menuItem);
+    // Single column menus don't reference a column name
+    else groupSet = getOrAssign(menuGroupsInColumns, '__SINGLE_COLUMN__');
     if (groupSet.has(group.order)) throw new Error(`Duplicate group order: ${groupName}`);
     groupSet.add(group.order);
   });
@@ -157,16 +154,15 @@ function checkMenuItemsForDuplicateOrdering(menuItems: MenuItemBase[] | undefine
   });
 }
 
-async function localizeColumns(
-  columns: ReplaceType<ColumnsWithHeaders, LocalizeKey, string> | undefined,
-) {
+async function localizeColumns(columns: Localized<ColumnsWithHeaders> | undefined) {
   if (!columns) return;
-  const strings: string[] = [];
+  let strings: string[] = [];
   Object.getOwnPropertyNames(columns).forEach((columnName: string) => {
     // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const column = columns[columnName as ReferencedItem];
-    if (!!column && typeof column === 'object') strings.concat([column.label]);
+    if (!!column && typeof column === 'object')
+      strings = strings.concat([removePercentSigns(column.label)]);
   });
   if (strings.length <= 0) return;
 
@@ -175,27 +171,27 @@ async function localizeColumns(
     // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const column = columns[columnName as ReferencedItem];
-    if (!!column && typeof column === 'object') column.label = newStrings[column.label];
+    if (!!column && typeof column === 'object')
+      column.label = newStrings[removePercentSigns(column.label)];
   });
 }
 
-async function localizeMenuItems(
-  menuItems: ReplaceType<MenuItemBase, LocalizeKey, string>[] | undefined,
-) {
+async function localizeMenuItems(menuItems: Localized<MenuItemBase>[] | undefined) {
   if (!menuItems) return;
-  const strings: string[] = [];
+  let strings: string[] = [];
   menuItems.forEach((menuItem) => {
-    strings.concat([menuItem.label]);
-    if (menuItem.tooltip) strings.concat([menuItem.tooltip]);
-    if (menuItem.searchTerms) strings.concat([menuItem.searchTerms]);
+    strings = strings.concat([removePercentSigns(menuItem.label)]);
+    if (menuItem.tooltip) strings = strings.concat([removePercentSigns(menuItem.tooltip)]);
+    if (menuItem.searchTerms) strings = strings.concat([removePercentSigns(menuItem.searchTerms)]);
   });
   if (strings.length <= 0) return;
 
   const newStrings = await localizationService.getLocalizedStrings(strings);
   menuItems.forEach((menuItem) => {
-    menuItem.label = newStrings[menuItem.label];
-    if (menuItem.tooltip) menuItem.tooltip = newStrings[menuItem.tooltip];
-    if (menuItem.searchTerms) menuItem.searchTerms = newStrings[menuItem.searchTerms];
+    menuItem.label = newStrings[removePercentSigns(menuItem.label)];
+    if (menuItem.tooltip) menuItem.tooltip = newStrings[removePercentSigns(menuItem.tooltip)];
+    if (menuItem.searchTerms)
+      menuItem.searchTerms = newStrings[removePercentSigns(menuItem.searchTerms)];
   });
 }
 
@@ -243,11 +239,7 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
     this.originalOutputThatWasLocalized = this.latestOutput;
     // Assert the output type we are transforming the combined document into
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const retVal = deepClone(this.originalOutputThatWasLocalized) as ReplaceType<
-      PlatformMenus,
-      LocalizeKey,
-      string
-    >;
+    const retVal = deepClone(this.originalOutputThatWasLocalized) as LocalizedMenus;
 
     await Promise.all([
       localizeColumns(retVal.mainMenu.columns),

@@ -29,6 +29,7 @@ import { startNetworkObjectStatusService } from '@main/services/network-object-s
 import { startLocalizationService } from '@main/services/localization.service-host';
 import { initialize as initializeSettingsService } from '@main/services/settings.service-host';
 import { startProjectSettingsService } from '@main/services/project-settings.service-host';
+import localizationService from '@shared/services/localization.service';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 
@@ -335,6 +336,10 @@ async function main() {
       )}`,
     );
   }, 30000);
+
+  logger.debug(
+    await localizationService.getLocalizedStrings(['mainMenu_project', 'mainMenu_layout']),
+  );
 
   // #endregion
 

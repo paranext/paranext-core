@@ -1,13 +1,14 @@
 import { useRef, useState, useCallback, useEffect, MouseEvent, PropsWithChildren } from 'react';
 import { AppBar, Toolbar as MuiToolbar, IconButton, Drawer } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
-import { MultiColumnMenu } from 'platform-bible-utils';
+import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { Command, CommandHandler } from './menu-item.component';
 import GridMenu from './grid-menu.component';
 import './toolbar.component.css';
+import usePromise from '../hooks/use-promise.hook';
 
 export interface MultiColumnMenuProvider {
-  (isSupportAndDevelopment: boolean): MultiColumnMenu;
+  (isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>>;
 }
 
 export type ToolbarProps = PropsWithChildren<{
@@ -72,13 +73,20 @@ export default function Toolbar({
     [commandHandler, handleMenuItemClick],
   );
 
-  const menu = menuProvider?.(hasShiftModifier);
+  const [menuData] = usePromise(
+    useCallback(async () => {
+      return menuProvider?.(hasShiftModifier);
+      // isMenuOpen needs to be included for the menu contents to reevaluate when reopened
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [menuProvider, hasShiftModifier, isMenuOpen]),
+    undefined,
+  );
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
       <AppBar position="static" id={id}>
         <MuiToolbar className={`papi-toolbar ${className ?? ''}`} variant="dense">
-          {menu ? (
+          {menuData ? (
             <IconButton
               edge="start"
               className={`papi-menuButton ${className ?? ''}`}
@@ -90,7 +98,7 @@ export default function Toolbar({
             </IconButton>
           ) : undefined}
           {children ? <div className="papi-menu-children">{children}</div> : undefined}
-          {menu ? (
+          {menuData ? (
             <Drawer
               className={`papi-menu-drawer ${className ?? ''}`}
               anchor="left"
@@ -107,7 +115,7 @@ export default function Toolbar({
               <GridMenu
                 className={className}
                 commandHandler={toolbarCommandHandler}
-                multiColumnMenu={menu}
+                multiColumnMenu={menuData}
               />
             </Drawer>
           ) : undefined}

@@ -1,9 +1,8 @@
-import { PlatformMenus } from 'platform-bible-utils';
+import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { PropsWithChildren } from 'react';
 import GridMenu from './grid-menu.component';
-import NonValidatingDocumentCombiner from '../test-utils/non-validating-document-combiner';
 import * as jsonMenu from './sample.composed.full.menu.json';
 
 jest.mock('@mui/material', () => {

@@ -93,7 +93,7 @@ async function getLocalizedStrings(localizeKeys: string[], language: string = DE
   if (!languageData) throw new Error('Missing/invalid localization data');
   return Object.fromEntries(
     localizeKeys.map((key) => {
-      if (!languageData[key]) throw new Error('Missing/invalid localization data');
+      if (!languageData[key]) throw new Error(`Missing/invalid localization data for ${key}`);
       return [key, languageData[key]];
     }),
   );

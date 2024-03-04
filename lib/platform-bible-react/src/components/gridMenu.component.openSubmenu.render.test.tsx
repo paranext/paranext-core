@@ -1,9 +1,8 @@
-import { PlatformMenus } from 'platform-bible-utils';
+import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import GridMenu from './grid-menu.component';
-import NonValidatingDocumentCombiner from '../test-utils/non-validating-document-combiner';
 import * as jsonMenu from './sample.composed.full.menu.json';
 
 describe('GridMenu', () => {
