@@ -1,24 +1,24 @@
-// import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
-import { Toolbar, BookChapterControl } from 'platform-bible-react';
+import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
+import { Toolbar, BookChapterControl, ScriptureReference } from 'platform-bible-react';
 import { handleMenuCommand } from './platform-bible-menu.commands';
-import { handleMenuData } from './platform-bible-menu.data';
+import { provideMenuData } from './platform-bible-menu.data';
 
-// const defaultScrRef: ScriptureReference = {
-//   bookNum: 1,
-//   chapterNum: 1,
-//   verseNum: 1,
-// };
+const defaultScrRef: ScriptureReference = {
+  bookNum: 1,
+  chapterNum: 1,
+  verseNum: 1,
+};
 
 export default function PlatformBibleToolbar() {
-  // const [scrRef, setScrRef, resetScrRef] = useSetting('platform.verseRef', defaultScrRef);
+  const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  // const handleReferenceChanged = (newScrRef: ScriptureReference) => {
-  //   setScrRef(newScrRef);
-  // };
+  const handleReferenceChanged = (newScrRef: ScriptureReference) => {
+    setScrRef(newScrRef);
+  };
 
   return (
-    <Toolbar className="toolbar" dataHandler={handleMenuData} commandHandler={handleMenuCommand}>
-      <BookChapterControl />
+    <Toolbar className="toolbar" menuProvider={provideMenuData} commandHandler={handleMenuCommand}>
+      <BookChapterControl scrRef={scrRef} handleSubmit={handleReferenceChanged} />
     </Toolbar>
   );
 }

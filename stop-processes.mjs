@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import { exec } from 'child_process';
 import fkill from 'fkill';
-import { indexOf, lastIndexOf } from 'platform-bible-utils';
+import { indexOf, lastIndexOf, includes } from 'platform-bible-utils';
 
 // All processes with any of these terms in the command line will be killed
 const searchTerms = ['electronmon', 'esbuild', 'nodemon', 'vite', 'webpack', 'extension-host'];
