@@ -18,6 +18,8 @@
     "asyncs",
     "autodocs",
     "biblionexus",
+    "camelcase",
+    "Consts",
     "deuterocanon",
     "dockbox",
     "electronmon",

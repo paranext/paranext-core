@@ -6,7 +6,7 @@ import {
 import Tooltip from '@mui/material/Tooltip';
 import ArrowRightIcon from '@mui/icons-material/ArrowRight';
 import { MouseEvent, PropsWithChildren } from 'react';
-import { ReferencedItem, SingleColumnMenu } from 'platform-bible-utils';
+import { Localized, ReferencedItem, SingleColumnMenu } from 'platform-bible-utils';
 import './menu-item.component.css';
 
 type MenuItemInfoBase = {
@@ -39,7 +39,7 @@ export type MenuPropsBase = {
    * could be a MultiColumnMenu, in which case, column had better be defined so it can be used
    * to filter out the actual groups and items to display on the column.
    */
-  menuDefinition: SingleColumnMenu;
+  menuDefinition: Localized<SingleColumnMenu>;
 
   commandHandler: CommandHandler;
 

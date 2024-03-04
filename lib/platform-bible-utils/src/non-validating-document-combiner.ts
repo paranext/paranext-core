@@ -1,11 +1,7 @@
-/* There is a copy of this file in
-  lib\platform-bible-react\src\test-utils\non-validating-document-combiner.ts. Changes made here
-  should most likely be reflected there as well. */
-import {
-  DocumentCombinerEngine,
+import DocumentCombinerEngine, {
   DocumentCombinerOptions,
   JsonDocumentLike,
-} from 'platform-bible-utils';
+} from './document-combiner-engine';
 
 export default class NonValidatingDocumentCombiner extends DocumentCombinerEngine {
   // Making the protected base constructor public

@@ -561,7 +561,7 @@ test('Name prefixes are verified', () => {
   ).toThrow(/Cannot add a new web view unless it starts with test./);
 });
 
-test('Web view menu defaults are combined', async () => {
+test('Web view menu defaults are combined', () => {
   const menuCombiner = new MenuDocumentCombiner({
     mainMenu: {
       columns: {},
@@ -715,5 +715,5 @@ test('Web view menu defaults are combined', async () => {
       },
     },
   };
-  expect(deepEqual(await menuCombiner.getCurrentMenus(), expectedWebViewOutput)).toBeTruthy();
+  expect(deepEqual(menuCombiner.rawOutput, expectedWebViewOutput)).toBeTruthy();
 });
