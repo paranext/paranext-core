@@ -39,7 +39,8 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
-    "test": "jest --silent"
+    "test": "jest --silent",
+    "postinstall": "echo WARNING: You must now run cd ../..; npm install --ignore-scripts"
   },
   "peerDependencies": {
     "react": ">=18.2.0",
