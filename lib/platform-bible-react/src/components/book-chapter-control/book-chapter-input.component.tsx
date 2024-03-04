@@ -1,26 +1,39 @@
 import { forwardRef } from 'react';
+import { History } from 'lucide-react';
 import { Input as ShadInput } from '../shadcn-ui/input';
 import './book-chapter-input.component.css';
+import '../../index.css';
 
 export type BookChapterInputProps = {
   handleSearch: (searchString: string) => void;
-  handleClick: () => void;
   value: string;
   placeholder: string;
 };
 
 // Shadcn Input sets type to "button"- HAVE to prop spread before setting type
 const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
-  ({ handleSearch, handleClick, ...props }: BookChapterInputProps, ref) => {
+  ({ handleSearch, ...props }: BookChapterInputProps, ref) => {
     return (
-      <ShadInput
-        {...props}
-        type="text"
-        className="book-chapter-input"
-        onChange={(event) => handleSearch(event.target.value)}
-        onClick={handleClick}
-        ref={ref}
-      />
+      <div>
+        <ShadInput
+          {...props}
+          type="text"
+          className="book-chapter-input"
+          onChange={(event) => handleSearch(event.target.value)}
+          ref={ref}
+        />
+        <History
+          style={{
+            cursor: 'pointer',
+            height: '16px',
+            width: '16px',
+          }}
+          onClick={() => {
+            // eslint-disable-next-line no-console
+            console.log('back in history');
+          }}
+        />
+      </div>
     );
   },
 );
