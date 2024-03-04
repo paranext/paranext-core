@@ -1,10 +1,11 @@
 import { MouseEvent, useMemo, useState } from 'react';
 import { Menu } from '@mui/material';
 import {
-  MenuGroupDetailsInColumn,
+  Localized,
   MenuGroupDetailsInSubMenu,
   MenuItemContainingCommand,
   MenuItemContainingSubmenu,
+  OrderedExtensibleContainer,
   ReferencedItem,
   SingleColumnMenu,
 } from 'platform-bible-utils';
@@ -29,20 +30,23 @@ export type GroupedMenuItemListProps = MenuItemListProps & {
    * specified since it is a top-level menu based on a "true" SingleColumnMenu (i.e., one that is
    * not a MultiColumnMenu).
    */
-  includedGroups?: { id: string; group: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu }[];
+  includedGroups?: {
+    id: string;
+    group: Localized<OrderedExtensibleContainer | MenuGroupDetailsInSubMenu>;
+  }[];
 };
 
 interface ItemInfo {
-  item: MenuItemContainingCommand | MenuItemContainingSubmenu;
+  item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>;
   isLastItemInGroup: boolean;
 }
 
 type SubMenuProps = MenuPropsBase & {
-  parentMenuItem: MenuItemContainingSubmenu;
+  parentMenuItem: Localized<MenuItemContainingSubmenu>;
   parentItemProps: Omit<Omit<MenuItemProps, 'onClick'>, 'iconPathAfter'>;
 };
 
-function getAllGroups(menuDefinition: SingleColumnMenu) {
+function getAllGroups(menuDefinition: Localized<SingleColumnMenu>) {
   const groupEntries = Object.entries(menuDefinition.groups);
   // Convert array of entries to array of objects with id and group properties
   return groupEntries.map(([key, value]) => ({ id: key, group: value }));
@@ -102,7 +106,7 @@ function SubMenu(props: SubMenuProps) {
 
 const getOrderedGroupItems = (
   groupId: string,
-  allItems: (MenuItemContainingCommand | MenuItemContainingSubmenu)[],
+  allItems: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>[],
 ) => {
   // Filter items that belong to the specified group
   const itemsForGroup = allItems.filter((item) => item.group === groupId);

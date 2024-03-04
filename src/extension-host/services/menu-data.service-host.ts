@@ -14,62 +14,63 @@ import {
   MultiColumnMenu,
   ReferencedItem,
   WebViewMenu,
+  Localized,
 } from 'platform-bible-utils';
 import menuDataObject from '@extension-host/data/menu.data.json';
 import logger from '@shared/services/logger.service';
+import MenuDocumentCombiner from '@shared/utils/menu-document-combiner';
+
+/**
+ * Object that keeps track of all active menus in the platform. Call
+ * {@link MenuDataDataProviderEngine.rebuildMenus} in the service host after updating this object.
+ *
+ * Keeping this object separate from the data provider and disabling the `set` calls in the data
+ * provider prevents random services from changing system menus unexpectedly.
+ */
+export const menuDocumentCombiner = new MenuDocumentCombiner(menuDataObject);
 
 class MenuDataDataProviderEngine
   extends DataProviderEngine<MenuDataDataTypes>
   implements IDataProviderEngine<MenuDataDataTypes>
 {
-  private mainMenu: MultiColumnMenu = { groups: {}, items: [], columns: {} };
-  private webViewMenusMap = new Map<ReferencedItem, WebViewMenu>();
+  private mainMenu: Localized<MultiColumnMenu> = { groups: {}, items: [], columns: {} };
+  private webViewMenusMap = new Map<ReferencedItem, Localized<WebViewMenu>>();
 
-  constructor(menuData: PlatformMenus) {
+  constructor(menuData: Localized<PlatformMenus>) {
     super();
     this.#loadAllMenuData(menuData);
   }
 
-  async getMainMenu(): Promise<MultiColumnMenu> {
+  async rebuildMenus(): Promise<void> {
+    const currentMenus = await menuDocumentCombiner.getCurrentMenus();
+    if (!currentMenus || currentMenus.mainMenu === this.mainMenu) return;
+    this.#loadAllMenuData(currentMenus);
+  }
+
+  async getMainMenu(): Promise<Localized<MultiColumnMenu>> {
     if (!this.mainMenu) throw new Error('Missing/invalid menu data');
     return this.mainMenu;
   }
 
-  // No implementation for this function right now, we just want to throw an error, but it wanted us to use 'this'
-  // https://github.com/paranext/paranext-core/issues/425
+  // Because this is a data provider, we have to provide this method even though it always throws
   // eslint-disable-next-line class-methods-use-this
-  async setMainMenu(
-    // No implementation for this function, so no use for this variable
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _mainMenuType: undefined,
-    // No implementation for this function, so no use for this variable
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _value: never,
-  ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
+  async setMainMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
     throw new Error('setMainMenu disabled');
   }
 
-  async getWebViewMenu(webViewName: ReferencedItem): Promise<WebViewMenu> {
+  async getWebViewMenu(webViewName: ReferencedItem): Promise<Localized<WebViewMenu>> {
     const webViewMenu = this.webViewMenusMap.get(webViewName);
     if (!webViewMenu) throw new Error('Missing/invalid menu data');
     return webViewMenu;
   }
 
-  // No implementation for this function right now, we just want to throw an error, but it wanted us to use 'this'
-  // https://github.com/paranext/paranext-core/issues/425
+  // Because this is a data provider, we have to provide this method even though it always throws
   // eslint-disable-next-line class-methods-use-this
-  async setWebViewMenu(
-    // No implementation for this function, so no use for this variable
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _webViewType: ReferencedItem,
-    // No implementation for this function, so no use for this variable
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _value: never,
-  ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
+  async setWebViewMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
     throw new Error('setWebViewMenu disabled');
   }
 
-  #loadAllMenuData(menuData: PlatformMenus): void {
+  #loadAllMenuData(menuData: Localized<PlatformMenus>): void {
     this.mainMenu = { groups: {}, items: [], columns: {} };
     this.webViewMenusMap.clear();
 
@@ -88,10 +89,10 @@ class MenuDataDataProviderEngine
   }
 }
 
-function getMenuDataObject(): PlatformMenus {
+function getMenuDataObject(): Localized<PlatformMenus> {
   const jsonString = JSON.stringify(menuDataObject);
   if (!jsonString) throw new Error('No data file found');
-  const menuData: PlatformMenus = deserialize(jsonString);
+  const menuData: Localized<PlatformMenus> = deserialize(jsonString);
   if (typeof menuData !== 'object') throw new Error(`Menu data is invalid`);
   return menuData;
 }
@@ -121,7 +122,7 @@ export async function initialize(): Promise<void> {
 
 /** This is an internal-only export for testing purposes, and should not be used in development */
 export const testingMenuDataService = {
-  implementMenuDataDataProviderEngine: (dataObj: PlatformMenus) => {
+  implementMenuDataDataProviderEngine: (dataObj: Localized<PlatformMenus>) => {
     return new MenuDataDataProviderEngine(dataObj);
   },
 };
