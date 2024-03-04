@@ -17,6 +17,7 @@ export type {
 export { default as GridMenu } from './components/grid-menu.component';
 export type { GridMenuProps, GridMenuInfo } from './components/grid-menu.component';
 export { default as ContextMenu } from './components/context-menu.component';
+export { default as HamburgerMenuButton } from './components/hamburger-menu-button.component';
 export { default as IconButton } from './components/icon-button.component';
 export type { IconButtonProps } from './components/icon-button.component';
 export { default as LabelPosition } from './components/label-position.model';

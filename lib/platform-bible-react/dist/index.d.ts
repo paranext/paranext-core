@@ -2,7 +2,7 @@
 
 import { AutocompleteChangeDetails, AutocompleteChangeReason, AutocompleteValue, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import React$1 from 'react';
-import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
+import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
 import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';
 
 export type ButtonProps = React$1.PropsWithChildren<{
@@ -396,6 +396,27 @@ export type ContextMenuProps = GroupedMenuPropsBase & {
  * @returns {JSX.Element} The ContextMenu component (including the wrapped children)
  */
 export function ContextMenu({ className, commandHandler, menuDefinition, children, }: React$1.PropsWithChildren<ContextMenuProps>): string | number | boolean | Iterable<React$1.ReactNode> | import("react/jsx-runtime").JSX.Element | null | undefined;
+export type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
+	/** The handler to use for menu commands (and eventually toolbar commands). */
+	commandHandler: CommandHandler;
+	/**
+	 * Reference to the "div" container that determines the top of the area in which the menu should
+	 * appear.
+	 */
+	containerRef: React$1.MutableRefObject<HTMLDivElement>;
+	/** The menu data to show when the menu is opened. */
+	normalMenu: MultiColumnMenu;
+	/**
+	 * The menu data to show when the menu is opened with the SHIFT key pressed. If not defined, the
+	 * normal menu will display.
+	 */
+	fullMenu?: MultiColumnMenu;
+	/** Additional css class(es) to help with unique styling of the sub-components */
+	className?: string;
+	/** Value to use as prefix for ARIA labels on interactive sub-components */
+	ariaLabelPrefix?: string;
+};
+export function HamburgerMenuButton({ normalMenu, fullMenu, commandHandler, containerRef, className, ariaLabelPrefix, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
 export type IconButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;

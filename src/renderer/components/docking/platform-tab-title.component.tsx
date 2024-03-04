@@ -1,8 +1,13 @@
 import { Tooltip } from '@mui/material';
+import { HamburgerMenuButton, HamburgerMenuButtonProps } from 'platform-bible-react';
 import './platform-tab-title.component.scss';
-import logger from '@shared/services/logger.service';
 
 type PlatformTabTitleProps = {
+  /**
+   * Optional information about the menu to display. If provided, the "hamburger" menu icon will be
+   * shown on the leading side of the icon and/or text label.
+   */
+  menuInfo?: HamburgerMenuButtonProps;
   /** Url to image to show on the tab. Defaults to Platform.Bible logo */
   iconUrl?: string;
   /** Text to show on the tab */
@@ -18,29 +23,37 @@ type PlatformTabTitleProps = {
  * @param text The text to show on the tab title
  * @param tooltip Text to show when hovering over the tab. Defaults to empty string
  */
-export default function PlatformTabTitle({ iconUrl, text, tooltip }: PlatformTabTitleProps) {
-  const toggleDropdown = () => {
-    logger.info('Pretend a menu was shown!');
-  };
-
+export default function PlatformTabTitle({
+  menuInfo,
+  iconUrl,
+  text,
+  tooltip,
+}: PlatformTabTitleProps) {
   const tooltipDiv = tooltip ? <div className="tooltip">{tooltip}</div> : '';
+
+  const icon = (
+    <div
+      className="tab-menu-icon"
+      style={
+        iconUrl
+          ? {
+              backgroundImage: `url(${iconUrl})`,
+            }
+          : undefined
+      }
+    />
+  );
 
   return (
     <Tooltip title={tooltipDiv}>
       <div className="title">
-        <button
-          type="button"
-          className="tab-menu-button"
-          style={
-            iconUrl
-              ? {
-                  backgroundImage: `url(${iconUrl})`,
-                }
-              : undefined
-          }
-          aria-label="Tab Menu"
-          onClick={toggleDropdown}
-        />
+        {menuInfo ? (
+          <HamburgerMenuButton className="tab-menu-button" aria-label="Tab" {...menuInfo}>
+            {icon}
+          </HamburgerMenuButton>
+        ) : (
+          icon
+        )}
         <span>{text}</span>
       </div>
     </Tooltip>
