@@ -193,14 +193,14 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
       localizeNotes: 'Main application menu > Help column > Visit Support.Bible',
       group: 'platform.helpGroup',
       order: 1,
-      id: 'platform.visitSupportPage',
+      command: 'platform.visitSupportPage',
     },
     {
       label: 'About Platform Bible',
       localizeNotes: 'Main application menu > Help column > About Platform.Bible',
       group: 'platform.helpGroup',
       order: 2,
-      id: 'platform.about',
+      command: 'platform.about',
     },
   ],
 };
