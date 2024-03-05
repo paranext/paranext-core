@@ -132,6 +132,13 @@ module.exports = {
         'no-console': 'off',
       },
     },
+    {
+      files: ['*.d.ts'],
+      rules: {
+        // Allow .d.ts files to self import so they can refer to their types in `papi-shared-types`
+        'import/no-self-import': 'off',
+      },
+    },
   ],
   parserOptions: {
     ecmaVersion: 2022,
