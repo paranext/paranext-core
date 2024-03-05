@@ -2978,6 +2978,7 @@ declare module 'shared/models/docking-framework.model' {
     WebViewDefinition,
     WebViewDefinitionUpdateInfo,
   } from 'shared/models/web-view.model';
+  import { HamburgerMenuButtonProps } from 'platform-bible-react';
   /**
    * Saved information used to recreate a tab.
    *
@@ -3002,6 +3003,11 @@ declare module 'shared/models/docking-framework.model' {
    * - {@link TabSaver} saves this into {@link SavedTabInfo}
    */
   export type TabInfo = SavedTabInfo & {
+    /**
+     * Optional multi-column menu definition. If provided, the "hamburger" menu icon will be shown on
+     * the leading side of the icon and/or text label.
+     */
+    menuInfo?: HamburgerMenuButtonProps;
     /**
      * Url of image to show on the title bar of the tab
      *

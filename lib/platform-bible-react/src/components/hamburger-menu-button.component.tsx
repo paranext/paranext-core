@@ -45,6 +45,7 @@ export default function HamburgerMenuButton({
   containerRef,
   className,
   ariaLabelPrefix,
+  children,
 }: HamburgerMenuButtonProps) {
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [showFullMenu, setShowFullMenu] = useState(false);
@@ -94,7 +95,7 @@ export default function HamburgerMenuButton({
         aria-label={`${ariaLabelPrefix ?? ''} menu button`}
         onClick={handleMenuButtonClick}
       >
-        children ?? <MenuIcon />
+        {children ?? <MenuIcon />}
       </IconButton>
       <Drawer
         className={`papi-menu-drawer ${className ?? ''}`}

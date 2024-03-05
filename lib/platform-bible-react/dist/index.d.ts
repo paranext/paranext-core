@@ -416,7 +416,7 @@ export type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
 	/** Value to use as prefix for ARIA labels on interactive sub-components */
 	ariaLabelPrefix?: string;
 };
-export function HamburgerMenuButton({ normalMenu, fullMenu, commandHandler, containerRef, className, ariaLabelPrefix, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
+export function HamburgerMenuButton({ normalMenu, fullMenu, commandHandler, containerRef, className, ariaLabelPrefix, children, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
 export type IconButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
