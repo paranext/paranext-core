@@ -385,7 +385,6 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
       !extensionInfos.some((finalExtensionInfo) => finalExtensionInfo.name === extensionInfo.name)
     )
       extensionInfos.push(extensionInfo);
-    logger.warn(`LOADING ${extensionInfo.name}`);
   });
   return extensionInfos;
 }

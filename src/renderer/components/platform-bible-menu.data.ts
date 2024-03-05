@@ -118,7 +118,8 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
 export default function provideMenuData(
   isSupportAndDevelopment: boolean,
 ): Promise<Localized<MultiColumnMenu>> {
+  if (!isSupportAndDevelopment) return menuDataService.getMainMenu();
   const supportMenu = new AsyncVariable<Localized<MultiColumnMenu>>('supportMenu');
   supportMenu.resolveToValue(supportAndDevelopmentMenuLayout);
-  return isSupportAndDevelopment ? supportMenu.promise : menuDataService.getMainMenu();
+  return supportMenu.promise;
 }
