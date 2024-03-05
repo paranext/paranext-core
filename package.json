@@ -60,7 +60,7 @@
     "editor:link": "cd extensions && yalc link @biblionexus-foundation/platform-editor",
     "editor:update": "cd extensions && yalc update @biblionexus-foundation/platform-editor",
     "editor:unlink": "cd extensions && yalc remove @biblionexus-foundation/platform-editor && npm i",
-    "postinstall": "patch-package && tsx .erb/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll && cd lib/papi-dts && npm install && cd ../../extensions && npm install && cd .. && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
+    "postinstall": "patch-package && tsx .erb/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
     "lint": "npm run build:types && npm run lint:scripts && npm run lint:styles && cd lib/papi-dts && npm run lint && cd ../../extensions && npm run lint",
     "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
     "lint:styles": "stylelint **/*.{css,scss}",
@@ -232,6 +232,7 @@
     "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**"],
     "logLevel": "quiet"
   },
+  "workspaces": ["lib/*", "extensions", "extensions/src/*"],
   "volta": {
     "node": "20.11.1"
   }
