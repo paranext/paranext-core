@@ -1,47 +1,26 @@
 .menu-item {
-  font-size: 14px;
+  color: #334155;
 }
 
-.selected-menu-item {
-  font-size: 14px;
-  background: #f9f9f9;
-}
-
-.tally-div {
-  margin-right: 24px;
-  margin-left: -24px;
+.menu-item.selected {
+  color: #78350F;
+  background-color: #FFFBEB;
 }
 
 .book-color-label {
   height: 16px;
   width: 2px;
-}
-
-.selected-book-color-label {
-  height: 16px;
-  width: 2px;
+  margin-right: 10px;
 }
 
 .book-color-label.ot {
-  background-color: orange;
-}
-
-.selected-book-color-label.ot {
-  background-color: orangered;
+  background-color: #FCA5A5;
 }
 
 .book-color-label.nt {
-  background-color: lightpink;
-}
-
-.selected-book-color-label.nt {
-  background-color: pink;
+  background-color: #E9D5FF;
 }
 
 .book-color-label.dc {
-  background-color: lightskyblue;
-}
-
-.selected-book-color-label.dc {
-  background-color: skyblue;
+  background-color: #C7D2FE;
 }

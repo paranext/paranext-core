@@ -1,8 +1,7 @@
 import { forwardRef } from 'react';
 import { History } from 'lucide-react';
-import { Input as ShadInput } from '../shadcn-ui/input';
-import './book-chapter-input.component.css';
-import '../../index.css';
+import { Input as ShadInput } from '@/components/shadcn-ui/input';
+import '@/components/book-chapter-control/book-chapter-input.component.css';
 
 export type BookChapterInputProps = {
   handleSearch: (searchString: string) => void;
@@ -14,7 +13,7 @@ export type BookChapterInputProps = {
 const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
   ({ handleSearch, ...props }: BookChapterInputProps, ref) => {
     return (
-      <div>
+      <div className="input-container">
         <ShadInput
           {...props}
           type="text"
@@ -22,17 +21,15 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
           onChange={(event) => handleSearch(event.target.value)}
           ref={ref}
         />
-        <History
-          style={{
-            cursor: 'pointer',
-            height: '16px',
-            width: '16px',
-          }}
-          onClick={() => {
-            // eslint-disable-next-line no-console
-            console.log('back in history');
-          }}
-        />
+        <div className="history-icon-container">
+          <History
+            size={16}
+            onClick={() => {
+              // eslint-disable-next-line no-console
+              console.log('back in history');
+            }}
+          />
+        </div>
       </div>
     );
   },
