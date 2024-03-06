@@ -31,13 +31,13 @@ async function initialize(): Promise<void> {
 }
 
 const localizationService: LocalizationServiceType = {
-  getLocalizedString: async (localizeKey: string, language?: string) => {
+  getLocalizedString: async (localizeKey: string, languages?: string[]) => {
     await initialize();
-    return networkObject.getLocalizedString(localizeKey, language);
+    return networkObject.getLocalizedString(localizeKey, languages);
   },
-  getLocalizedStrings: async (localizeKeys: string[], language?: string) => {
+  getLocalizedStrings: async (localizeKeys: string[], languages?: string[]) => {
     await initialize();
-    return networkObject.getLocalizedStrings(localizeKeys, language);
+    return networkObject.getLocalizedStrings(localizeKeys, languages);
   },
 };
 
