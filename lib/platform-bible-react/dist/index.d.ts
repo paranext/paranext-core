@@ -400,8 +400,8 @@ export type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	commandHandler: CommandHandler;
 	/**
-	 * Optional reference to the "div" container that determines the top of the area in which the menu should
-	 * appear. If not defined, then the offsetFromBottomOfMenuToTopOfMenu is used.
+	 * Optional reference to the "div" container that determines the top of the area in which the menu
+	 * should appear. If not defined, then the offsetFromBottomOfMenuToTopOfMenu is used.
 	 */
 	containerRef?: React$1.MutableRefObject<HTMLDivElement>;
 	/**
@@ -652,16 +652,26 @@ export type SwitchProps = {
  */
 export declare function Switch({ id, isChecked: checked, isDisabled, hasError, className, onChange, }: SwitchProps): import("react/jsx-runtime").JSX.Element;
 export interface TableCalculatedColumn<R> extends TableColumn<R> {
+	readonly parent: TableCalculatedColumnParent<R> | undefined;
 	readonly idx: number;
+	readonly level: number;
 	readonly width: number | string;
 	readonly minWidth: number;
 	readonly maxWidth: number | undefined;
 	readonly resizable: boolean;
 	readonly sortable: boolean;
+	readonly draggable: boolean;
 	readonly frozen: boolean;
 	readonly isLastFrozenColumn: boolean;
-	readonly rowGroup: boolean;
 	readonly renderCell: (props: RenderCellProps<R>) => React$1.ReactNode;
+}
+export declare interface TableCalculatedColumnParent<R> {
+	readonly name: string | React$1.ReactElement;
+	readonly parent: TableCalculatedColumnParent<R> | undefined;
+	readonly idx: number;
+	readonly colSpan: number;
+	readonly level: number;
+	readonly headerCellClass?: string | null;
 }
 export type TableCellClickArgs<R> = CellClickArgs<R>;
 export type TableCellKeyboardEvent = CellKeyboardEvent;
@@ -840,8 +850,8 @@ export type TableProps<R> = {
 	onPaste?: (event: TablePasteEvent<R>) => R;
 	/** Additional css classes to help with unique styling of the table */
 	className?: string;
-	/** Optional unique identifier */
-	id?: string;
+	/** Optional unique identifier for testing */
+	"data-testid"?: string;
 };
 /**
  * Configurable table component
@@ -849,7 +859,7 @@ export type TableProps<R> = {
  * Thanks to Adazzle for heavy inspiration and documentation
  * https://adazzle.github.io/react-data-grid/
  */
-export declare function Table<R>({ columns, sortColumns, onSortColumnsChange, onColumnResize, defaultColumnWidth, defaultColumnMinWidth, defaultColumnMaxWidth, defaultColumnSortable, defaultColumnResizable, rows, enableSelectColumn, selectColumnWidth, rowKeyGetter, rowHeight, headerRowHeight, selectedRows, onSelectedRowsChange, onRowsChange, onCellClick, onCellDoubleClick, onCellContextMenu, onCellKeyDown, direction, enableVirtualization, onCopy, onPaste, onScroll, className, id, }: TableProps<R>): import("react/jsx-runtime").JSX.Element;
+export declare function Table<R>({ columns, sortColumns, onSortColumnsChange, onColumnResize, defaultColumnWidth, defaultColumnMinWidth, defaultColumnMaxWidth, defaultColumnSortable, defaultColumnResizable, rows, enableSelectColumn, selectColumnWidth, rowKeyGetter, rowHeight, headerRowHeight, selectedRows, onSelectedRowsChange, onRowsChange, onCellClick, onCellDoubleClick, onCellContextMenu, onCellKeyDown, direction, enableVirtualization, onCopy, onPaste, onScroll, className, "data-testid": testId, }: TableProps<R>): import("react/jsx-runtime").JSX.Element;
 export type TextFieldProps = {
 	/**
 	 * The variant to use.
