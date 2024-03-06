@@ -12,6 +12,8 @@ import {
   getAllObjectFunctionNames,
   isString,
   CanHaveOnDidDispose,
+  MutexMap,
+  startsWith,
 } from 'platform-bible-utils';
 import {
   NetworkObject,
@@ -20,8 +22,7 @@ import {
   LocalObjectToProxyCreator,
   NetworkObjectDetails,
 } from '@shared/models/network-object.model';
-import { Mutex } from 'async-mutex';
-import logger from './logger.service';
+import logger from '@shared/services/logger.service';
 
 // #endregion
 
@@ -175,21 +176,8 @@ onDidDisposeNetworkObject((id: string) => {
 // #region Helpers for get and set
 
 // We need this to protect simultaneous calls to get and/or set the same network objects
-class MutexMap {
-  private mutexesByID = new Map<string, Mutex>();
-
-  get(mutexID: string): Mutex {
-    let retVal = this.mutexesByID.get(mutexID);
-    if (retVal) return retVal;
-
-    retVal = new Mutex();
-    this.mutexesByID.set(mutexID, retVal);
-    return retVal;
-  }
-}
-
-const getterMutexMap: MutexMap = new MutexMap();
-const setterMutexMap: MutexMap = new MutexMap();
+const getterMutexMap = new MutexMap();
+const setterMutexMap = new MutexMap();
 
 /** This proxy enables calling functions on a network object that exists in a different process */
 const createRemoteProxy = (
@@ -211,7 +199,7 @@ const createRemoteProxy = (
       // If the prop requested is a symbol, that doesn't work over the network. Reject
       if (!isString(key)) return undefined;
       // Don't create remote proxies for events
-      if (key.startsWith('on')) return undefined;
+      if (startsWith(key, 'on')) return undefined;
 
       // If the local network object doesn't have the property, build a request for it
       const requestFunction = (...args: unknown[]) =>
@@ -260,7 +248,7 @@ const createLocalProxy = (
       // Block access to constructors and dispose
       if (key === 'constructor' || key === 'dispose') return undefined;
       // Don't proxy events
-      if (isString(key) && key.startsWith('on')) return undefined;
+      if (isString(key) && startsWith(key, 'on')) return undefined;
 
       return Reflect.get(target, key, objectBeingSet);
     },
@@ -280,7 +268,7 @@ function createNetworkObjectDetails(
   objectFunctionNames.delete('dispose');
   objectFunctionNames.forEach((functionName) => {
     // If we come up with some better way to identify events, we can remove this and related checks
-    if (functionName.startsWith('on')) objectFunctionNames.delete(functionName);
+    if (startsWith(functionName, 'on')) objectFunctionNames.delete(functionName);
   });
   return {
     id,
@@ -351,7 +339,7 @@ const get = async <T extends object>(
   await initialize();
 
   // Don't allow simultaneous gets to run for the same network object
-  const lock: Mutex = getterMutexMap.get(id);
+  const lock = getterMutexMap.get(id);
   return lock.runExclusive(async () => {
     // If we already have this network object, return it
     const networkObjectRegistration = networkObjectRegistrations.get(id);
@@ -445,7 +433,7 @@ const set = async <T extends NetworkableObject>(
   await initialize();
 
   // Don't allow simultaneous sets to run for the same network object
-  const lock: Mutex = setterMutexMap.get(id);
+  const lock = setterMutexMap.get(id);
   return lock.runExclusive(async () => {
     // Check to see if we already know there is a network object with this ID.
     if (hasKnown(id)) throw new Error(`Network object with id ${id} is already registered`);

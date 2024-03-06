@@ -1,22 +1,20 @@
 import { DialogOptions } from '@shared/models/dialog-options.model';
 import { DialogDefinitionBase, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import { ReactElement } from 'react';
+import { ProjectMetadataFilterOptions } from '@shared/services/project-lookup.service-model';
 
 /** The tabType for the select project dialog in `select-project.dialog.tsx` */
 export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
 export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
 
+type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
+
 /** Options to provide when showing the Select Project dialog */
-export type SelectProjectDialogOptions = DialogOptions & {
-  /** Project IDs to exclude from showing in the dialog */
-  excludeProjectIds?: string[];
-};
+export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
 
 /** Options to provide when showing the Select Multiple Project dialog */
-export type SelectMultipleProjectsDialogOptions = DialogOptions & {
-  /** Project IDs to exclude from showing in the dialog */
-  excludeProjectIds?: string[];
+export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
   /** Project IDs that should start selected in the dialog */
   selectedProjectIds?: string[];
 };

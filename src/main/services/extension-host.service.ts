@@ -6,7 +6,7 @@ import {
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
 import logger, { formatLog, WARN_TAG } from '@shared/services/logger.service';
-import { waitForDuration } from 'platform-bible-utils';
+import { includes, split, waitForDuration } from 'platform-bible-utils';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
@@ -25,8 +25,8 @@ const closePromise: Promise<void> = new Promise<void>((resolve) => {
 // log functions for inside the extension host process
 function logProcessError(message: unknown) {
   let msg = message?.toString() || '';
-  if (msg.includes(WARN_TAG)) {
-    msg = msg.split(WARN_TAG).join('');
+  if (includes(msg, WARN_TAG)) {
+    msg = split(msg, WARN_TAG).join('');
     logger.warn(formatLog(msg, EXTENSION_HOST_NAME, 'warning'));
   } else logger.error(formatLog(msg, EXTENSION_HOST_NAME, 'error'));
 }

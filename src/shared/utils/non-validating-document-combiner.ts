@@ -1,3 +1,6 @@
+/* There is a copy of this file in
+  lib\platform-bible-react\src\test-utils\non-validating-document-combiner.ts. Changes made here
+  should most likely be reflected there as well. */
 import {
   DocumentCombinerEngine,
   DocumentCombinerOptions,

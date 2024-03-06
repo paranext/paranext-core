@@ -4,8 +4,8 @@ import {
   menuDataServiceObjectToProxy,
   menuDataServiceProviderName,
 } from '@shared/services/menu-data.service-model';
-import dataProviderService, { DataProviderEngine } from '@shared/services/data-provider.service';
-import IDataProviderEngine from '@shared/models/data-provider-engine.model';
+import dataProviderService from '@shared/services/data-provider.service';
+import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
   createSyncProxyForAsyncObject,

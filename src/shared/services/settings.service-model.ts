@@ -27,10 +27,14 @@ export const settingsServiceObjectToProxy = Object.freeze({
  * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
  * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
  * instead. However, do note that the unnamed data type (`''`) is fully functional.
+ *
+ * The closest possible representation of the unnamed (````) data type follows:
+ *
+ * ```typescript
+ * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
+ * ```
  */
-export type SettingDataTypes = {
-  // '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
-};
+export type SettingDataTypes = {};
 
 export type AllSettingsData = {
   [SettingName in SettingNames]: SettingTypes[SettingName];

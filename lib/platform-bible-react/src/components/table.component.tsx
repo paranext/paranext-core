@@ -18,17 +18,29 @@ import TextField from './text-field.component';
 import 'react-data-grid/lib/styles.css';
 import './table.component.css';
 
+// Taken from react-data-grid@7.0.0-beta.42 index.d.ts and adapted to our types (no real changes made)
 export interface TableCalculatedColumn<R> extends TableColumn<R> {
+  readonly parent: TableCalculatedColumnParent<R> | undefined;
   readonly idx: number;
+  readonly level: number;
   readonly width: number | string;
   readonly minWidth: number;
   readonly maxWidth: number | undefined;
   readonly resizable: boolean;
   readonly sortable: boolean;
+  readonly draggable: boolean;
   readonly frozen: boolean;
   readonly isLastFrozenColumn: boolean;
-  readonly rowGroup: boolean;
   readonly renderCell: (props: RenderCellProps<R>) => ReactNode;
+}
+// Taken from react-data-grid@7.0.0-beta.42 index.d.ts and adapted to our types (no real changes made)
+export declare interface TableCalculatedColumnParent<R> {
+  readonly name: string | ReactElement;
+  readonly parent: TableCalculatedColumnParent<R> | undefined;
+  readonly idx: number;
+  readonly colSpan: number;
+  readonly level: number;
+  readonly headerCellClass?: string | null;
 }
 export type TableCellClickArgs<R> = CellClickArgs<R>;
 export type TableCellKeyboardEvent = CellKeyboardEvent;
@@ -237,9 +249,8 @@ export type TableProps<R> = {
   onPaste?: (event: TablePasteEvent<R>) => R;
   /** Additional css classes to help with unique styling of the table */
   className?: string;
-  /** Optional unique identifier */
-  // Patched react-data-grid@7.0.0-beta.34 to add this prop, link to issue: https://github.com/adazzle/react-data-grid/issues/3305
-  id?: string;
+  /** Optional unique identifier for testing */
+  'data-testid'?: string;
 };
 
 /**
@@ -277,7 +288,7 @@ function Table<R>({
   onPaste,
   onScroll,
   className,
-  id,
+  'data-testid': testId,
 }: TableProps<R>) {
   const cachedColumns = useMemo(() => {
     const editableColumns = columns.map((column) => {
@@ -337,8 +348,8 @@ function Table<R>({
       onPaste={onPaste}
       onScroll={onScroll}
       renderers={{ renderCheckbox }}
-      className={className ?? 'rdg-light'}
-      id={id}
+      className={`papi-table ${className ?? 'rdg-light'}`}
+      data-testid={testId}
     />
   );
 }

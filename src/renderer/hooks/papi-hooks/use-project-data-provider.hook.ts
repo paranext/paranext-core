@@ -7,13 +7,13 @@ import createUseNetworkObjectHook from '@renderer/hooks/hook-generators/create-u
  * with those parameters.
  *
  * @param projectType Indicates what you expect the `projectType` to be for the project with the
- *   specified id. The TypeScript type for the returned project data provider will have the project
- *   data provider type associated with this project type. If this argument does not match the
+ *   specified id. The TypeScript type for the returned Project Data Provider will have the Project
+ *   Data Provider type associated with this `projectType`. If this argument does not match the
  *   project's actual `projectType` (according to its metadata), a warning will be logged
  * @param projectDataProviderSource String name of the id of the project to get OR
  *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
  *   data provider again)
- * @returns `projectDataProviderSource` for getting the project data provider
+ * @returns `projectDataProviderSource` for getting the Project Data Provider
  */
 function mapParametersToProjectDataProviderSource<ProjectType extends ProjectTypes>(
   _projectType: ProjectType,
@@ -26,15 +26,15 @@ function mapParametersToProjectDataProviderSource<ProjectType extends ProjectTyp
  * Gets a project data provider with specified provider name
  *
  * @param projectType Indicates what you expect the `projectType` to be for the project with the
- *   specified id. The TypeScript type for the returned project data provider will have the project
- *   data provider type associated with this project type. If this argument does not match the
+ *   specified id. The TypeScript type for the returned Project Data Provider will have the Project
+ *   Data Provider type associated with this `projectType`. If this argument does not match the
  *   project's actual `projectType` (according to its metadata), a warning will be logged
  * @param projectDataProviderSource String name of the id of the project to get OR
  *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
  *   data provider again)
- * @returns `undefined` if the project data provider has not been retrieved, the requested project
- *   data provider if it has been retrieved and is not disposed, and undefined again if the project
- *   data provider is disposed
+ * @returns `undefined` if the Project Data Provider has not been retrieved, the requested Project
+ *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
+ *   Data Provider is disposed
  */
 
 // Assert to specific data type for this hook.

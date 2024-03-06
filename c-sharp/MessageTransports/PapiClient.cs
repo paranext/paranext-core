@@ -97,6 +97,7 @@ internal class PapiClient : IDisposable
         if (isDisposing)
         {
             _webSocket.Dispose();
+            _clientInitializationComplete.TrySetResult(false);
             _clientInitializationComplete.Task.Dispose();
             _cancellationTokenSource.Dispose();
             _outgoingMessages.Dispose();

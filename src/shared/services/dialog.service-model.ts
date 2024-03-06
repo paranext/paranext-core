@@ -1,5 +1,8 @@
-import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
-import { DialogOptions } from '@shared/models/dialog-options.model';
+import {
+  DialogTabTypes,
+  DialogTypes,
+  SelectProjectDialogOptions,
+} from '@renderer/components/dialogs/dialog-definition.model';
 
 /**
  * JSDOC SOURCE dialogService
@@ -25,7 +28,7 @@ export interface DialogService {
    * @param options Various options for configuring the dialog that shows
    * @returns Returns the user's selected project id or `undefined` if the user cancels
    */
-  selectProject(options?: DialogOptions): Promise<string | undefined>;
+  selectProject(options?: SelectProjectDialogOptions): Promise<string | undefined>;
 }
 
 /** Prefix on requests that indicates that the request is related to dialog operations */

@@ -1,4 +1,6 @@
-﻿/** All command line arguments mapped from argument type to array of aliases for the argument */
+﻿import { startsWith } from 'platform-bible-utils';
+
+/** All command line arguments mapped from argument type to array of aliases for the argument */
 type CommandLineArgumentAliases = {
   [argument in COMMAND_LINE_ARGS]: string[];
 };
@@ -39,7 +41,7 @@ export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
 export function findNextCommandLineArgumentIndex(currentArgIndex: number) {
   let endOfExtensionsIndex = process.argv.length;
   for (let i = currentArgIndex + 1; i < process.argv.length; i++)
-    if (process.argv[i].startsWith('-')) {
+    if (startsWith(process.argv[i], '-')) {
       endOfExtensionsIndex = i;
       break;
     }
@@ -77,18 +79,18 @@ export function getCommandLineArgumentsGroup(
 
   const argumentsGroup: string[] = [];
   argNames
-    .filter((n) => process.argv.indexOf(n) > 0)
+    .filter((n) => process.argv.indexOf(n) >= 0)
     .forEach((arg) => {
       const argIndex = process.argv.indexOf(arg);
       const baseArray = shouldIncludeArgName ? [arg] : [];
 
-      argumentsGroup.concat(
-        process.argv.length > argIndex + 1
+      argumentsGroup.push(
+        ...(process.argv.length > argIndex + 1
           ? [
               ...baseArray,
               ...process.argv.slice(argIndex + 1, findNextCommandLineArgumentIndex(argIndex)),
             ]
-          : baseArray,
+          : baseArray),
       );
     });
 

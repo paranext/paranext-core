@@ -4,7 +4,9 @@ import './select-project.dialog.scss';
 import { useCallback, useMemo } from 'react';
 import ProjectList from '@renderer/components/projects/project-list.component';
 import { usePromise } from 'platform-bible-react';
-import projectLookupService from '@shared/services/project-lookup.service';
+import projectLookupService, {
+  filterProjectsMetadata,
+} from '@shared/services/project-lookup.service';
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,
@@ -16,16 +18,18 @@ function SelectProjectDialog({
   prompt,
   submitDialog,
   excludeProjectIds,
+  includeProjectTypes,
+  excludeProjectTypes,
 }: DialogTypes[typeof SELECT_PROJECT_DIALOG_TYPE]['props']) {
   const [projects, isLoadingProjects] = usePromise(
     useCallback(async () => {
       const allProjectsMetadata = await projectLookupService.getMetadataForAllProjects();
-      return !excludeProjectIds
-        ? allProjectsMetadata
-        : allProjectsMetadata.filter(
-            (projectMetadata) => !excludeProjectIds.some((id) => projectMetadata.id === id),
-          );
-    }, [excludeProjectIds]),
+      return filterProjectsMetadata(allProjectsMetadata, {
+        excludeProjectIds,
+        includeProjectTypes,
+        excludeProjectTypes,
+      });
+    }, [excludeProjectIds, includeProjectTypes, excludeProjectTypes]),
     useMemo(() => [], []),
   );
 

@@ -15,11 +15,13 @@ import {
 } from '@shared/data/internal-connection.model';
 import {
   aggregateUnsubscriberAsyncs,
+  stringLength,
   UnsubscriberAsync,
   getErrorMessage,
   wait,
   PlatformEventEmitter,
   PlatformEvent,
+  indexOf,
 } from 'platform-bible-utils';
 import {
   ComplexRequest,
@@ -140,14 +142,14 @@ type RoutedRequestHandler<TParam = any, TReturn = any> =
 function validateCommandFormatting(commandName: string) {
   if (!commandName)
     throw new Error(`Invalid command name ${commandName}: must be a non-empty string`);
-  const periodIndex = commandName.indexOf('.');
+  const periodIndex = indexOf(commandName, '.');
   if (periodIndex < 0)
     throw new Error(`Invalid command name ${commandName}: must have at least one period`);
   if (periodIndex === 0)
     throw new Error(
       `Invalid command name ${commandName}: must have non-empty string before a period`,
     );
-  if (periodIndex >= commandName.length - 1)
+  if (periodIndex >= stringLength(commandName) - 1)
     throw new Error(
       `Invalid command name ${commandName}: must have a non-empty string after a period`,
     );

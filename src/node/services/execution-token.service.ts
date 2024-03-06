@@ -1,10 +1,11 @@
 import { ExecutionToken, ExecutionTokenType } from '@node/models/execution-token.model';
+import { stringLength } from 'platform-bible-utils';
 
 const tokenMap = new Map<string, ExecutionToken>();
 
 function getMapKey(name: string, tokenType: ExecutionTokenType = 'extension'): string {
-  if (!name || name.length < 1) throw new Error('name must be defined');
-  if (!tokenType || tokenType.length < 1) throw new Error('type must be defined');
+  if (!name || stringLength(name) < 1) throw new Error('name must be defined');
+  if (!tokenType || stringLength(tokenType) < 1) throw new Error('type must be defined');
 
   return `${tokenType}:${name}`;
 }

@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import { Uri } from '@shared/data/file-system.model';
 import memoizeOne from 'memoize-one';
+import { includes, split } from 'platform-bible-utils';
 
 // FOR SCHEME DOCUMENTATION, SEE Uri JSDOC
 const APP_SCHEME = 'app';
@@ -60,9 +61,9 @@ const getSchemePaths = memoizeOne((): { [scheme: string]: string } => {
 // TODO: Make URI an actual class. Will be challenging when passing through WebSocket
 function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
   // Add app scheme to the uri if it doesn't have one
-  const fullUri = uri.includes(PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
+  const fullUri = includes(uri, PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
 
-  const [scheme, uriPath] = fullUri.split(PROTOCOL_PART);
+  const [scheme, uriPath] = split(fullUri, PROTOCOL_PART);
   return {
     scheme,
     uriPath,

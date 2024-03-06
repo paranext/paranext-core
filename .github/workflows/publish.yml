@@ -20,25 +20,25 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
-        dotnet_version: [7.0.x]
+        dotnet_version: [8.0.x]
 
     steps:
       - name: Checkout git repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ matrix.dotnet_version }}
 
       - name: Read package.json
         id: package_json
-        uses: zoexx/github-action-json-file-properties@release
+        uses: zoexx/github-action-json-file-properties@1.0.6
         with:
           file_path: 'package.json'
 
       - name: Install Node and NPM
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm

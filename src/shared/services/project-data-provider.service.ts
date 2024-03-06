@@ -1,24 +1,29 @@
 import { ProjectTypes, ProjectDataTypes, ProjectDataProviders } from 'papi-shared-types';
 import {
   ProjectDataProviderEngineTypes,
-  ProjectDataProviderEngineFactory,
+  IProjectDataProviderEngineFactory,
 } from '@shared/models/project-data-provider-engine.model';
 import networkObjectService from '@shared/services/network-object.service';
 import { getByType, registerEngineByType } from '@shared/services/data-provider.service';
 import { newNonce } from '@shared/utils/util';
-import { Dispose, UnsubscriberAsyncList } from 'platform-bible-utils';
+import { Dispose, MutexMap, UnsubscriberAsyncList } from 'platform-bible-utils';
 import projectLookupService from '@shared/services/project-lookup.service';
 import logger from '@shared/services/logger.service';
 
+/**
+ * Class that creates Project Data Providers of a specified `projectType`. Layers over
+ * extension-provided {@link IProjectDataProviderEngineFactory}. Internal only
+ */
 class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
+  private readonly pdpIdsMutexMap = new MutexMap();
   private readonly pdpIds: Map<string, string> = new Map();
   private readonly projectType: ProjectType;
   private readonly pdpCleanupList: UnsubscriberAsyncList;
-  private readonly pdpEngineFactory: ProjectDataProviderEngineFactory<ProjectType>;
+  private readonly pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>;
 
   constructor(
     projectType: ProjectType,
-    pdpEngineFactory: ProjectDataProviderEngineFactory<ProjectType>,
+    pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>,
   ) {
     this.projectType = projectType;
     this.pdpCleanupList = new UnsubscriberAsyncList(`PDP Factory for ${projectType}`);
@@ -37,20 +42,25 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
     projectStorageInterpreterId: string,
   ): Promise<string> {
     const key = projectId.concat(':', projectStorageInterpreterId);
-    let pdpId = this.pdpIds.get(key);
-    if (!pdpId) {
-      pdpId = await this.registerProjectDataProvider(
-        this.pdpEngineFactory.createProjectDataProviderEngine(
+    // Don't allow simultaneous gets to run for the same project data provider id as an easy way to
+    // make sure we don't create multiple of the same PDP
+    const lock = this.pdpIdsMutexMap.get(key);
+    return lock.runExclusive(async () => {
+      let pdpId = this.pdpIds.get(key);
+      if (!pdpId) {
+        pdpId = await this.registerProjectDataProvider(
+          this.pdpEngineFactory.createProjectDataProviderEngine(
+            projectId,
+            projectStorageInterpreterId,
+          ),
           projectId,
           projectStorageInterpreterId,
-        ),
-        projectId,
-        projectStorageInterpreterId,
-      );
-      if (!pdpId) throw new Error(`Could get register project data provider for ${projectId} `);
-      this.pdpIds.set(key, pdpId);
-    }
-    return pdpId;
+        );
+        if (!pdpId) throw new Error(`Could get register project data provider for ${projectId} `);
+        this.pdpIds.set(key, pdpId);
+      }
+      return pdpId;
+    });
   }
 
   /** Convert the PDP engine into a PDP using the data provider service */
@@ -59,8 +69,12 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
     projectId: string,
     projectStorageInterpreterId: string,
   ): Promise<string> {
-    // Add a check for extensions that provide new project types
-    if (!('getExtensionData' in projectDataProviderEngine))
+    // Add a check for extensions that provide new project types to make sure they fulfill
+    // `MandatoryProjectDataTypes`
+    if (
+      !('getExtensionData' in projectDataProviderEngine) ||
+      !('getSetting' in projectDataProviderEngine)
+    )
       throw new Error('projectDataProviderEngine must implement "MandatoryProjectDataTypes"');
     const pdpId: string = `${newNonce()}-pdp`;
     const pdp = await registerEngineByType<ProjectDataTypes[ProjectType]>(
@@ -92,7 +106,7 @@ function getProjectDataProviderFactoryId(projectType: ProjectTypes) {
  */
 export async function registerProjectDataProviderEngineFactory<ProjectType extends ProjectTypes>(
   projectType: ProjectType,
-  pdpEngineFactory: ProjectDataProviderEngineFactory<ProjectType>,
+  pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>,
 ): Promise<Dispose> {
   const factoryId = getProjectDataProviderFactoryId(projectType);
   const factory = new ProjectDataProviderFactory(projectType, pdpEngineFactory);

@@ -100,6 +100,7 @@ async function loadAllLocalizationData() {
 }
 
 let initializationPromise: Promise<void>;
+/** Do the setup this service needs to function */
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
