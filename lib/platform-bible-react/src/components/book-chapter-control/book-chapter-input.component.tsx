@@ -5,13 +5,14 @@ import '@/components/book-chapter-control/book-chapter-input.component.css';
 
 export type BookChapterInputProps = {
   handleSearch: (searchString: string) => void;
+  handleKeyDown: () => void;
   value: string;
   placeholder: string;
 };
 
 // Shadcn Input sets type to "button"- HAVE to prop spread before setting type
 const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
-  ({ handleSearch, ...props }: BookChapterInputProps, ref) => {
+  ({ handleSearch, handleKeyDown, ...props }: BookChapterInputProps, ref) => {
     return (
       <div className="input-container">
         <ShadInput
@@ -19,6 +20,7 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
           type="text"
           className="book-chapter-input"
           onChange={(event) => handleSearch(event.target.value)}
+          onKeyUp={handleKeyDown}
           ref={ref}
         />
         <div className="history-icon-container">
