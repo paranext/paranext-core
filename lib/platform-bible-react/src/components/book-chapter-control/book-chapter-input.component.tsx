@@ -17,6 +17,7 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
       <div className="input-container">
         <ShadInput
           {...props}
+          style={{ outline: 0 }}
           type="text"
           className="book-chapter-input"
           onChange={(event) => handleSearch(event.target.value)}
