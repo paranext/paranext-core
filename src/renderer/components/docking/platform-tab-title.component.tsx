@@ -1,13 +1,13 @@
 import { Tooltip } from '@mui/material';
-import { HamburgerMenuButton, HamburgerMenuButtonProps } from 'platform-bible-react';
+import { HamburgerMenuButton } from 'platform-bible-react';
 import './platform-tab-title.component.scss';
+import menuDataService from '@shared/services/menu-data.service';
+import { useData } from '@renderer/hooks/papi-hooks';
+import { handleMenuCommand } from '../platform-bible-menu.commands';
 
 type PlatformTabTitleProps = {
-  /**
-   * Optional information about the menu to display. If provided, the "hamburger" menu icon will be
-   * shown on the leading side of the icon and/or text label.
-   */
-  menuInfo?: HamburgerMenuButtonProps;
+  /** What type of WebView this is. Unique to all other WebView definitions */
+  webViewType?: `${string}.${string}`;
   /** Url to image to show on the tab. Defaults to Platform.Bible logo */
   iconUrl?: string;
   /** Text to show on the tab */
@@ -24,11 +24,24 @@ type PlatformTabTitleProps = {
  * @param tooltip Text to show when hovering over the tab. Defaults to empty string
  */
 export default function PlatformTabTitle({
-  menuInfo,
+  webViewType,
   iconUrl,
   text,
   tooltip,
 }: PlatformTabTitleProps) {
+  const menuSelector = webViewType ?? 'invalid.invalid';
+
+  const menuInfo = useData(webViewType ? menuDataService.dataProviderName : undefined).WebViewMenu(
+    menuSelector,
+    {
+      topMenu: undefined,
+      includeDefaults: true,
+      contextMenu: undefined,
+    },
+  );
+
+  const [webViewMenu, , isLoading] = menuInfo;
+
   const tooltipDiv = tooltip ? <div className="tooltip">{tooltip}</div> : '';
 
   const icon = (
@@ -47,12 +60,18 @@ export default function PlatformTabTitle({
   return (
     <Tooltip title={tooltipDiv}>
       <div className="title">
-        {menuInfo ? (
-          <HamburgerMenuButton className="tab-menu-button" aria-label="Tab" {...menuInfo}>
+        {isLoading || !webViewMenu?.topMenu ? (
+          icon
+        ) : (
+          <HamburgerMenuButton
+            commandHandler={handleMenuCommand}
+            normalMenu={webViewMenu.topMenu}
+            className="tab-menu-button"
+            aria-label="Tab"
+            offsetFromBottomOfButtonToTopOfMenu={20}
+          >
             {icon}
           </HamburgerMenuButton>
-        ) : (
-          icon
         )}
         <span>{text}</span>
       </div>

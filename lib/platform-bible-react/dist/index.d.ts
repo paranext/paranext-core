@@ -400,10 +400,15 @@ export type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	commandHandler: CommandHandler;
 	/**
-	 * Reference to the "div" container that determines the top of the area in which the menu should
-	 * appear.
+	 * Optional reference to the "div" container that determines the top of the area in which the menu should
+	 * appear. If not defined, then the offsetFromBottomOfMenuToTopOfMenu is used.
 	 */
-	containerRef: React$1.MutableRefObject<HTMLDivElement>;
+	containerRef?: React$1.MutableRefObject<HTMLDivElement>;
+	/**
+	 * If containerRef is not defined, this is the desired offset in pixels from the bottom of the
+	 * button to the top of menu. Defaults to 1.
+	 */
+	offsetFromBottomOfButtonToTopOfMenu?: number;
 	/** The menu data to show when the menu is opened. */
 	normalMenu: MultiColumnMenu;
 	/**
@@ -416,7 +421,7 @@ export type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
 	/** Value to use as prefix for ARIA labels on interactive sub-components */
 	ariaLabelPrefix?: string;
 };
-export function HamburgerMenuButton({ normalMenu, fullMenu, commandHandler, containerRef, className, ariaLabelPrefix, children, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
+export function HamburgerMenuButton({ normalMenu, fullMenu, commandHandler, containerRef, offsetFromBottomOfButtonToTopOfMenu, className, ariaLabelPrefix, children, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
 export type IconButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;

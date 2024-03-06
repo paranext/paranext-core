@@ -17,10 +17,16 @@ export type HamburgerMenuButtonProps = PropsWithChildren & {
   commandHandler: CommandHandler;
 
   /**
-   * Reference to the "div" container that determines the top of the area in which the menu should
-   * appear.
+   * Optional reference to the "div" container that determines the top of the area in which the menu
+   * should appear. If not defined, then the offsetFromBottomOfMenuToTopOfMenu is used.
    */
-  containerRef: MutableRefObject<HTMLDivElement>;
+  containerRef?: MutableRefObject<HTMLDivElement>;
+
+  /**
+   * If containerRef is not defined, this is the desired offset in pixels from the bottom of the
+   * button to the top of menu. Defaults to 1.
+   */
+  offsetFromBottomOfButtonToTopOfMenu?: number;
 
   /** The menu data to show when the menu is opened. */
   normalMenu: MultiColumnMenu;
@@ -43,6 +49,7 @@ export default function HamburgerMenuButton({
   fullMenu,
   commandHandler,
   containerRef,
+  offsetFromBottomOfButtonToTopOfMenu,
   className,
   ariaLabelPrefix,
   children,
@@ -81,10 +88,14 @@ export default function HamburgerMenuButton({
   const [topOfMenu, setTopOfMenu] = useState(0);
 
   useEffect(() => {
-    if (isMenuOpen && containerRef.current) {
-      setTopOfMenu(containerRef.current.clientHeight);
+    if (isMenuOpen) {
+      if (containerRef?.current) {
+        setTopOfMenu(containerRef.current.clientHeight);
+      } else {
+        setTopOfMenu(offsetFromBottomOfButtonToTopOfMenu ?? 1);
+      }
     }
-  }, [isMenuOpen, containerRef]);
+  }, [isMenuOpen, containerRef, offsetFromBottomOfButtonToTopOfMenu]);
 
   return (
     <>
