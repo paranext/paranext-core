@@ -1,4 +1,4 @@
-import {
+﻿import {
   LocalizationServiceType,
   localizationServiceNetworkObjectName,
   LocalizationData,
@@ -305,9 +305,3 @@ export async function startLocalizationService(): Promise<void> {
     localizationService,
   );
 }
-
-/*
-const settingService = createSyncProxyForAsyncObject<ISettingsService>(async () => {
-  await initialize();
-  return dataProvider;
-}, settingsServiceObjectToProxy); */
