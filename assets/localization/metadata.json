@@ -1,0 +1,9 @@
+{
+  "%yes%": {
+    "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
+    "fallbackKey": "%confirm%"
+  },
+  "%submit%": {
+    "fallbackKey": "%yes%"
+  }
+}
