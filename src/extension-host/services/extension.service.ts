@@ -768,7 +768,7 @@ async function resyncMenus(extensions: Readonly<ExtensionManifest & { dirUri: st
     }),
   );
 
-  menuDataService.rebuildMenus();
+  await menuDataService.rebuildMenus();
 }
 
 async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<void> {

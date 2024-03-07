@@ -9,7 +9,6 @@ import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-pro
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
   createSyncProxyForAsyncObject,
-  deserialize,
   PlatformMenus,
   MultiColumnMenu,
   ReferencedItem,
@@ -45,6 +44,7 @@ class MenuDataDataProviderEngine
     const currentMenus = await menuDocumentCombiner.getCurrentMenus();
     if (!currentMenus || currentMenus.mainMenu === this.mainMenu) return;
     this.#loadAllMenuData(currentMenus);
+    this.notifyUpdate('*');
   }
 
   async getMainMenu(): Promise<Localized<MultiColumnMenu>> {
@@ -89,14 +89,6 @@ class MenuDataDataProviderEngine
   }
 }
 
-function getMenuDataObject(): Localized<PlatformMenus> {
-  const jsonString = JSON.stringify(menuDataObject);
-  if (!jsonString) throw new Error('No data file found');
-  const menuData: Localized<PlatformMenus> = deserialize(jsonString);
-  if (typeof menuData !== 'object') throw new Error(`Menu data is invalid`);
-  return menuData;
-}
-
 let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
 let dataProvider: IMenuDataService;
@@ -107,7 +99,7 @@ export async function initialize(): Promise<void> {
         try {
           dataProvider = await dataProviderService.registerEngine(
             menuDataServiceProviderName,
-            new MenuDataDataProviderEngine(getMenuDataObject()),
+            new MenuDataDataProviderEngine(menuDataObject),
           );
           resolve();
         } catch (error) {

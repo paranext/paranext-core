@@ -2,7 +2,15 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": []
+    "items": [
+      {
+        "label": "%mainMenu_openResourceViewer%",
+        "localizeNotes": "Application main menu > Project > Open Resource Viewer",
+        "group": "platform.projectResources",
+        "order": -100,
+        "command": "resourceViewer.open"
+      }
+    ]
   },
   "defaultWebViewTopMenu": {
     "columns": {},
