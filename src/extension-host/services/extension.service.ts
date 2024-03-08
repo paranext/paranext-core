@@ -746,19 +746,22 @@ function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | u
   );
 }
 
-async function resyncMenus(extensions: Readonly<ExtensionManifest & { dirUri: string }>[]) {
+async function resyncMenus(
+  extensionsToRemove: Readonly<ExtensionManifest & { dirUri: string }>[] | undefined,
+  extensionsToAdd: Readonly<ExtensionManifest & { dirUri: string }>[],
+) {
   const currentMenus = menuDocumentCombiner.rawOutput;
-  if (currentMenus) {
-    const { webViewMenus } = currentMenus;
-    Object.entries(webViewMenus).forEach(([webViewType]) => {
-      menuDocumentCombiner.deleteContribution(webViewType);
+  if (currentMenus && extensionsToRemove) {
+    Object.entries(extensionsToRemove).forEach(([, extension]) => {
+      menuDocumentCombiner.deleteContribution(extension.name);
     });
   }
 
   await Promise.all(
-    extensions.map(async (extension) => {
+    extensionsToAdd.map(async (extension) => {
       if (!extension.menus) return;
       try {
+        // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
         const menuJson = await nodeFS.readFileText(joinUriPaths(extension.dirUri, extension.menus));
         const menuDocument = JSON.parse(menuJson);
         menuDocumentCombiner.addOrUpdateContribution(extension.name, menuDocument);
@@ -772,8 +775,11 @@ async function resyncMenus(extensions: Readonly<ExtensionManifest & { dirUri: st
 }
 
 async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<void> {
-  if (shouldDeactivateExtensions && availableExtensions)
+  let deactivatedExtensions;
+  if (shouldDeactivateExtensions && availableExtensions) {
     await deactivateExtensions(availableExtensions);
+    deactivatedExtensions = availableExtensions;
+  }
 
   await unzipCompressedExtensionFiles();
 
@@ -804,7 +810,10 @@ async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<vo
   await activateExtensions(availableExtensions);
 
   // Update the menus
-  await resyncMenus(allExtensions.filter((extension) => extension.menus));
+  await resyncMenus(
+    deactivatedExtensions,
+    allExtensions.filter((extension) => extension.menus),
+  );
 }
 
 /**
