@@ -189,11 +189,7 @@ test('Get main menu data', async () => {
 });
 
 test('Setting main menu data throws', async () => {
-  // The second parameter of the setter is of type never
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  await expect(menuDataProviderEngine.setMainMenu(undefined, undefined as never)).rejects.toThrow(
-    'setMainMenu disabled',
-  );
+  await expect(menuDataProviderEngine.setMainMenu()).rejects.toThrow('setMainMenu disabled');
 });
 
 test('Get web view menu data for videoExtension', async () => {
@@ -205,9 +201,5 @@ test('Get web view menu data for videoExtension', async () => {
 });
 
 test('Setting web view menu data throws', async () => {
-  await expect(
-    // The second parameter of the setter is of type never
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    menuDataProviderEngine.setWebViewMenu('blah.blah', undefined as never),
-  ).rejects.toThrow('setWebViewMenu disabled');
+  await expect(menuDataProviderEngine.setWebViewMenu()).rejects.toThrow('setWebViewMenu disabled');
 });

@@ -234,3 +234,13 @@ export function createSyncProxyForAsyncObject<T extends object>(
     },
   });
 }
+
+/** Within type T, recursively change all properties to be optional */
+export type DeepPartial<T> = T extends object ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
+
+/** Within type T, recursively change properties that were of type A to be of type B */
+export type ReplaceType<T, A, B> = T extends A
+  ? B
+  : T extends object
+    ? { [K in keyof T]: ReplaceType<T[K], A, B> }
+    : T;

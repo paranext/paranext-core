@@ -2,7 +2,15 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": []
+    "items": [
+      {
+        "label": "%mainMenu_openHelloWorldProject%",
+        "localizeNotes": "Application main menu > Project > Open Hello World Project",
+        "group": "platform.projectProjects",
+        "order": 1000.1,
+        "command": "helloWorld.openProject"
+      }
+    ]
   },
   "defaultWebViewTopMenu": {
     "columns": {},

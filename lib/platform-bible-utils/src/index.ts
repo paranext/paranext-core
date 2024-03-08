@@ -1,6 +1,7 @@
 // Classes
 export { default as AsyncVariable } from './async-variable';
 export { default as DocumentCombinerEngine } from './document-combiner-engine';
+export { default as NonValidatingDocumentCombiner } from './non-validating-document-combiner';
 export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 export { default as PlatformEventEmitter } from './platform-event-emitter.model';
 export { default as Mutex } from './mutex';
@@ -54,6 +55,7 @@ export { default as deepEqual } from './equality-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
 
 // Types
+export type { DeepPartial, ReplaceType } from './util';
 export type {
   Dispose,
   OnDidDispose,
@@ -75,12 +77,14 @@ export type {
   MenuGroupDetailsInColumn,
   MenuGroupDetailsInSubMenu,
   MenuColumnWithHeader,
-  Groups,
+  GroupsInSingleColumnMenu,
+  GroupsInMultiColumnMenu,
   ColumnsWithHeaders,
   SingleColumnMenu,
   MultiColumnMenu,
   WebViewMenu,
   WebViewMenus,
   PlatformMenus,
+  Localized,
 } from './menus.model';
 export { menuDocumentSchema } from './menus.model';

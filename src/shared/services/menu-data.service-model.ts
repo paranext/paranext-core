@@ -4,6 +4,7 @@ import {
   MultiColumnMenu,
   ReferencedItem,
   WebViewMenu,
+  Localized,
 } from 'platform-bible-utils';
 import {
   DataProviderDataType,
@@ -26,8 +27,8 @@ export const menuDataServiceObjectToProxy = Object.freeze({
 
 // Data Type to initialize data provider engine with
 export type MenuDataDataTypes = {
-  MainMenu: DataProviderDataType<undefined, MultiColumnMenu, never>;
-  WebViewMenu: DataProviderDataType<ReferencedItem, WebViewMenu, never>;
+  MainMenu: DataProviderDataType<undefined, Localized<MultiColumnMenu>, never>;
+  WebViewMenu: DataProviderDataType<ReferencedItem, Localized<WebViewMenu>, never>;
 };
 
 declare module 'papi-shared-types' {
@@ -42,6 +43,8 @@ declare module 'papi-shared-types' {
  * Service that allows to get and store menu data
  */
 export type IMenuDataService = {
+  /** Rebuild the menus with the latest inputs from all extensions. */
+  rebuildMenus(): Promise<void>;
   /**
    * JSDOC SOURCE getMainMenu
    *
@@ -74,7 +77,7 @@ export type IMenuDataService = {
    */
   subscribeMainMenu(
     mainMenuType: undefined,
-    callback: (menuContent: MultiColumnMenu) => void,
+    callback: (menuContent: Localized<MultiColumnMenu>) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
   /**
@@ -105,7 +108,7 @@ export type IMenuDataService = {
    */
   subscribeWebViewMenu(
     webViewType: ReferencedItem,
-    callback: (menuContent: WebViewMenu) => void,
+    callback: (menuContent: Localized<WebViewMenu>) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
 } & OnDidDispose &

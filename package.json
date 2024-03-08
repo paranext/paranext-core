@@ -87,10 +87,19 @@
     "storybook:build": "storybook build"
   },
   "lint-staged": {
-    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
-    "*.json": ["prettier --parser json --write"],
-    "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
-    "*.{html,md,yml}": ["prettier --single-quote --write"]
+    "*.{cjs,js,jsx,ts,tsx}": [
+      "prettier --write",
+      "cross-env NODE_ENV=development eslint --cache"
+    ],
+    "*.json": [
+      "prettier --parser json --write"
+    ],
+    "*.{css,scss}": [
+      "stylelint --fix --allow-empty-input"
+    ],
+    "*.{html,md,yml}": [
+      "prettier --single-quote --write"
+    ]
   },
   "browserslist": [],
   "dependencies": {
@@ -229,10 +238,19 @@
     "npm": ">=7.x"
   },
   "electronmon": {
-    "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**"],
+    "patterns": [
+      "!**/**",
+      "src/main/**",
+      "src/node/**",
+      "src/shared/**"
+    ],
     "logLevel": "quiet"
   },
-  "workspaces": ["lib/*", "extensions", "extensions/src/*"],
+  "workspaces": [
+    "lib/*",
+    "extensions",
+    "extensions/src/*"
+  ],
   "volta": {
     "node": "20.11.1"
   }

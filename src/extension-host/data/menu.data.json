@@ -1,98 +1,85 @@
 {
   "mainMenu": {
     "columns": {
-      "paratext.paratext": { "label": "%mainMenu_Paratext%", "order": 0 },
-      "platform.window": { "label": "%mainMenu_Window%", "order": 1 },
-      "platform.layout": { "label": "%mainMenu_Layout%", "order": 2 },
-      "platform.help": { "label": "%mainMenu_Help%", "order": 3, "isExtensible": true },
+      "platform.project": { "label": "%mainMenu_project%", "order": 1 },
+      "platform.window": { "label": "%mainMenu_window%", "order": 2 },
+      "platform.layout": { "label": "%mainMenu_layout%", "order": 3 },
+      "platform.help": { "label": "%mainMenu_help%", "order": 4 },
       "isExtensible": true
     },
     "groups": {
-      "paratext.sendReceive": { "column": "paratext.paratext", "order": 1 },
-      "paratext.openCreate": { "column": "paratext.paratext", "order": 2 },
-      "paratext.saveDelete": { "column": "paratext.paratext", "order": 3 },
-      "paratext.misc": { "column": "paratext.paratext", "order": 9999999, "isExtensible": true },
-      "platform.windowGroup1": { "column": "platform.window", "order": 1 },
-      "platform.windowGroup2": { "column": "platform.window", "order": 2 },
-      "platform.layoutSaveDelete": { "column": "platform.layout", "order": 1 },
-      "platform.helpGroup1": { "column": "platform.help", "order": 1 },
-      "paratext.helpGroup": { "column": "platform.help", "order": 100 },
-      "paratext.helpSubgroup": { "menuItem": "paratext.helpRoot", "order": 1 }
+      "platform.projectProjects": {
+        "column": "platform.project",
+        "order": 1,
+        "isExtensible": true
+      },
+      "platform.projectResources": {
+        "column": "platform.project",
+        "order": 2,
+        "isExtensible": true
+      },
+      "platform.projectSettings": { "column": "platform.project", "order": 3 },
+      "platform.projectMisc": { "column": "platform.project", "order": 4 },
+      "platform.windowGroup": { "column": "platform.window", "order": 1 },
+      "platform.layoutGroup": { "column": "platform.layout", "order": 1 },
+      "platform.helpMisc": { "column": "platform.help", "order": 1 }
     },
     "items": [
       {
-        "label": "%sendReceiveProjects%",
-        "tooltip": "%sendReceiveProjects_tooltip%",
-        "localizeNotes": "Main application menu > Paratext column > Send/Receive Projects",
-        "group": "paratext.sendReceive",
+        "label": "%mainMenu_openProject%",
+        "localizeNotes": "Application main menu > Project > Open Project",
+        "group": "platform.projectProjects",
         "order": 1,
-        "command": "paratext.sendReceiveProjects"
+        "command": "platform.openProjectDialog"
       },
       {
-        "label": "%downloadInstallResources%",
-        "tooltip": "%downloadInstallResources_tooltip%",
-        "localizeNotes": "Main application menu > Paratext column > Download/Install Resources",
-        "group": "paratext.sendReceive",
+        "label": "%mainMenu_downloadSlashUpdateProject%",
+        "localizeNotes": "Application main menu > Project > Download/Update Project",
+        "group": "platform.projectProjects",
         "order": 2,
-        "command": "paratext.downloadInstallResources"
+        "command": "platform.openDownloadUpdateProjectDialog"
       },
       {
-        "label": "%newProject%",
-        "tooltip": "%newProject_tooltip%",
-        "localizeNotes": "Main application menu > Paratext column > New Project",
-        "group": "paratext.openCreate",
+        "label": "%mainMenu_downloadSlashInstallResources%",
+        "localizeNotes": "Application main menu > Project > Download/Install Resources",
+        "group": "platform.projectResources",
         "order": 1,
-        "command": "paratext.createNewProject"
+        "command": "platform.downloadAndInstallResources"
       },
       {
-        "label": "%openProject%",
-        "tooltip": "%openProject_tooltip%",
-        "localizeNotes": "Main application menu > Paratext column > Open Project",
-        "group": "paratext.openCreate",
+        "label": "%mainMenu_settings%",
+        "localizeNotes": "Application main menu > Project > Settings",
+        "group": "platform.projectSettings",
+        "order": 1,
+        "command": "platform.settings"
+      },
+      {
+        "label": "%mainMenu_exit%",
+        "localizeNotes": "Application main menu > Project > Exit",
+        "group": "platform.projectMisc",
+        "order": 999999999,
+        "command": "platform.quit"
+      },
+      {
+        "label": "%mainMenu_visitSupportBible%",
+        "localizeNotes": "Application main menu > Help > Visit Support.Bible",
+        "group": "platform.helpMisc",
+        "order": 1,
+        "command": "platform.visitSupportPage"
+      },
+      {
+        "label": "%mainMenu_aboutPlatformBible%",
+        "localizeNotes": "Application main menu > Help > About Platform.Bible",
+        "group": "platform.helpMisc",
         "order": 2,
-        "command": "paratext.openProject"
-      },
-      {
-        "label": "%openTextCollection%",
-        "localizeNotes": "Main application menu > Paratext column > Open Text Collection",
-        "group": "paratext.openCreate",
-        "order": 3,
-        "command": "paratext.openTextCollection"
-      },
-      {
-        "label": "%paratext_help%",
-        "localizeNotes": "Main application menu > Help column > Paratext",
-        "group": "paratext.helpGroup",
-        "order": 100,
-        "id": "paratext.helpRoot"
-      },
-      {
-        "label": "%paratext_helpVideos%",
-        "localizeNotes": "Main application menu > Help column > Paratext > Videos",
-        "group": "paratext.helpSubgroup",
-        "order": 1,
-        "command": "paratext.showHelpVideos"
-      },
-      {
-        "label": "%paratext_helpGuide%",
-        "localizeNotes": "Main application menu > Help column > Paratext > Guide",
-        "group": "paratext.helpSubgroup",
-        "order": 1,
-        "command": "paratext.showHelpGuide"
-      },
-      {
-        "label": "%video_AddParatextVideo%",
-        "localizeNotes": "Main application menu > Paratext column > Add Video",
-        "group": "paratext.misc",
-        "order": 1,
-        "command": "videoExtension.addParatextVideo"
+        "command": "platform.about"
       }
     ]
   },
   "defaultWebViewTopMenu": {
     "columns": {
-      "platform.project": { "label": "%webView_Project%", "order": 1 },
-      "platform.edit": { "label": "%webView_Edit%", "order": 2, "isExtensible": true }
+      "platform.project": { "label": "%webView_project%", "order": 1 },
+      "platform.edit": { "label": "%webView_edit%", "order": 2, "isExtensible": true }
     },
     "groups": {
       "platform.projectTop": { "column": "platform.project", "order": 1 },
@@ -104,14 +91,14 @@
     },
     "items": [
       {
-        "label": "%projectSendReceive%",
+        "label": "%webView_projectSendReceive%",
         "localizeNotes": "Web view main menu > Project > Send/Receive this project",
         "group": "platform.projectTop",
         "order": 1,
         "command": "platform.sendReceiveProject"
       },
       {
-        "label": "%projectAssignmentsAndProgress%",
+        "label": "%webView_projectAssignmentsAndProgress%",
         "localizeNotes": "Web view main menu > Project > Assignments and progress...",
         "group": "platform.projectTop",
         "order": 2,
@@ -141,35 +128,5 @@
       }
     ]
   },
-  "webViewMenus": {
-    "videoExtension.playEditWebView": {
-      "includeDefaults": false,
-      "topMenu": {
-        "columns": {
-          "videoExtension.video": { "label": "%video%", "order": 1 }
-        },
-        "groups": {
-          "videoExtension.videoTop": { "column": "videoExtension.project", "order": 1 }
-        },
-        "items": [
-          {
-            "label": "%playVideo%",
-            "group": "videoExtension.videoTop",
-            "order": 1,
-            "command": "videoExtension.playVideo"
-          },
-          {
-            "label": "%editVideo%",
-            "group": "videoExtension.videoTop",
-            "order": 2,
-            "command": "videoExtension.editVideo"
-          }
-        ]
-      },
-      "contextMenu": {
-        "groups": {},
-        "items": []
-      }
-    }
-  }
+  "webViewMenus": {}
 }
