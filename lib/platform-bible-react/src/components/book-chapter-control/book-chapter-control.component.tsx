@@ -11,7 +11,7 @@ import {
 import BookChapterInput from '@/components/book-chapter-control/book-chapter-input.component';
 import ChapterSelect from '@/components/book-chapter-control/chapter-select.component';
 import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-menu-item.component';
-import '@/components/book-chapter-control/book-chapter-control.component.css';
+// import '@/components/book-chapter-control/book-chapter-control.component.css';
 
 type BookTypeLabels = {
   [bookType in BookType]: string;
@@ -128,13 +128,13 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           />
         </ShadDropdownMenuTrigger>
         <ShadDropdownMenuContent
-          className="menu-content"
-          style={{ overflowY: 'auto' }}
+          className="pr-overflow-y-auto pr-font-sans pr-font-normal pr-text-slate-700"
+          style={{ width: '300px', maxHeight: '500px' }}
           onKeyDown={giveFocusToInput}
         >
           {bookTypeArray.map((bookType) => (
             <div key={bookType}>
-              <ShadDropdownMenuLabel className="menu-label">
+              <ShadDropdownMenuLabel className="pr-font-semibold pr-text-slate-700">
                 {bookTypeLabels[bookType]}
               </ShadDropdownMenuLabel>
               {fetchFilteredBooks(bookType).map((bookId) => (

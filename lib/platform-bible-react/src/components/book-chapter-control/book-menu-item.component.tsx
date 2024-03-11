@@ -2,6 +2,7 @@ import { Canon } from '@sillsdev/scripture';
 import { PropsWithChildren } from 'react';
 import { Tally1 } from 'lucide-react';
 import { DropdownMenuItem as ShadDropdownMenuItem } from '@/components/shadcn-ui/dropdown-menu';
+import { cn } from '@/utils/shadcn-ui.util';
 import '@/components/book-chapter-control/book-menu-item.component.css';
 
 export type BookType = 'OT' | 'NT' | 'DC';
@@ -26,24 +27,24 @@ function BookMenuItem({
   children,
 }: BookMenuItemProps) {
   return (
-    <div>
-      <ShadDropdownMenuItem
-        key={bookId}
-        textValue={bookId}
-        className={`menu-item ${isSelected && 'selected'}`}
-        onSelect={(e) => {
-          // preventDefault() here prevents the entire dropdown menu from closing when selecting this item
-          e.preventDefault();
-          handleSelectBook(bookId);
-        }}
-      >
-        <div>
-          <Tally1 className={`book-color-label ${bookType.toLowerCase()}`} />
-          {Canon.bookIdToEnglishName(bookId)}
-        </div>
-      </ShadDropdownMenuItem>
-      {isSelected && children}
-    </div>
+    <ShadDropdownMenuItem
+      key={bookId}
+      textValue={bookId}
+      className={cn(
+        'pr-relative pr-font-sans pr-font-normal pr-text-slate-700',
+        isSelected ?? 'selected',
+      )}
+      onSelect={(e) => {
+        // preventDefault() here prevents the entire dropdown menu from closing when selecting this item
+        e.preventDefault();
+        handleSelectBook(bookId);
+      }}
+    >
+      <Tally1 className={cn('pr-mr-2.5 pr-h-4 pr-w-0.5', `${bookType.toLowerCase()}`)} />
+      {Canon.bookIdToEnglishName(bookId)}
+
+      {isSelected && <div className="pr-absolute">{children}</div>}
+    </ShadDropdownMenuItem>
   );
 }
 
