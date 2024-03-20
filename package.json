@@ -82,7 +82,8 @@
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
     "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
     "stop": "tsx stop-processes.mjs",
-    "test": "jest --silent",
+    "test:core": "jest --silent",
+    "test": "npm run test:core && npm run test --workspaces --if-present",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build"
   },
