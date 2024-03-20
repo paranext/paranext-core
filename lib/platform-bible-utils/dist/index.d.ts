@@ -106,6 +106,12 @@ export declare abstract class DocumentCombinerEngine {
 	 */
 	deleteContribution(documentName: string): object | undefined;
 	/**
+	 * Delete all present contribution documents for the composition process and return to the base document
+	 *
+	 * @returns Recalculated output document consisting only of the base document
+	 */
+	deleteAllContributions(): object | undefined;
+	/**
 	 * Run the document composition process given the starting document and all contributions. Throws
 	 * if the output document fails to validate properly.
 	 *
