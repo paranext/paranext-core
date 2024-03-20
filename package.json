@@ -82,24 +82,16 @@
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
     "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
     "stop": "tsx stop-processes.mjs",
-    "test": "jest --silent",
+    "test:core": "jest --silent",
+    "test": "npm run test:core && npm run test --workspaces --if-present",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build"
   },
   "lint-staged": {
-    "*.{cjs,js,jsx,ts,tsx}": [
-      "prettier --write",
-      "cross-env NODE_ENV=development eslint --cache"
-    ],
-    "*.json": [
-      "prettier --parser json --write"
-    ],
-    "*.{css,scss}": [
-      "stylelint --fix --allow-empty-input"
-    ],
-    "*.{html,md,yml}": [
-      "prettier --single-quote --write"
-    ]
+    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
+    "*.json": ["prettier --parser json --write"],
+    "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
+    "*.{html,md,yml}": ["prettier --single-quote --write"]
   },
   "browserslist": [],
   "dependencies": {
@@ -238,19 +230,10 @@
     "npm": ">=7.x"
   },
   "electronmon": {
-    "patterns": [
-      "!**/**",
-      "src/main/**",
-      "src/node/**",
-      "src/shared/**"
-    ],
+    "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**"],
     "logLevel": "quiet"
   },
-  "workspaces": [
-    "lib/*",
-    "extensions",
-    "extensions/src/*"
-  ],
+  "workspaces": ["lib/*", "extensions", "extensions/src/*"],
   "volta": {
     "node": "20.11.1"
   }
