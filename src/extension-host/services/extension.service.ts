@@ -746,15 +746,10 @@ function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | u
   );
 }
 
-async function resyncMenus(
-  extensionsToRemove: Readonly<ExtensionManifest & { dirUri: string }>[] | undefined,
-  extensionsToAdd: Readonly<ExtensionManifest & { dirUri: string }>[],
-) {
+async function resyncMenus(extensionsToAdd: Readonly<ExtensionManifest & { dirUri: string }>[]) {
   const currentMenus = menuDocumentCombiner.rawOutput;
-  if (currentMenus && extensionsToRemove) {
-    Object.entries(extensionsToRemove).forEach(([, extension]) => {
-      menuDocumentCombiner.deleteContribution(extension.name);
-    });
+  if (currentMenus) {
+    menuDocumentCombiner.deleteAllContributions();
   }
 
   await Promise.all(
@@ -775,10 +770,8 @@ async function resyncMenus(
 }
 
 async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<void> {
-  let deactivatedExtensions;
   if (shouldDeactivateExtensions && availableExtensions) {
     await deactivateExtensions(availableExtensions);
-    deactivatedExtensions = availableExtensions;
   }
 
   await unzipCompressedExtensionFiles();
@@ -810,10 +803,7 @@ async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<vo
   await activateExtensions(availableExtensions);
 
   // Update the menus
-  await resyncMenus(
-    deactivatedExtensions,
-    allExtensions.filter((extension) => extension.menus),
-  );
+  await resyncMenus(allExtensions.filter((extension) => extension.menus));
 }
 
 /**
