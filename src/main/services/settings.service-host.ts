@@ -1,3 +1,4 @@
+import * as networkService from '@shared/services/network.service';
 import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
 import {
   DataProviderDataType,
@@ -6,16 +7,23 @@ import {
 import dataProviderService from '@shared/services/data-provider.service';
 import {
   AllSettingsData,
+  CATEGORY_EXTENSION_SETTING_VALIDATOR,
   ISettingsService,
   SettingDataTypes,
   settingsServiceDataProviderName,
   settingsServiceObjectToProxy,
 } from '@shared/services/settings.service-model';
-import coreSettingsInfo from '@main/data/core-settings-info.data';
+import { coreSettingsInfo, coreSettingsValidators } from '@main/data/core-settings-info.data';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
-import { createSyncProxyForAsyncObject, deserialize, serialize } from 'platform-bible-utils';
+import {
+  createSyncProxyForAsyncObject,
+  deserialize,
+  includes,
+  serialize,
+} from 'platform-bible-utils';
 import { joinUriPaths } from '@node/utils/util';
 import * as nodeFS from '@node/services/node-file-system.service';
+import { serializeRequestType } from '@shared/utils/util';
 
 const SETTINGS_FILE_URI = joinUriPaths('data://', 'settings.json');
 
@@ -46,6 +54,33 @@ function getDefaultValueForKey<SettingName extends SettingNames>(
     throw new Error(`No default value specified for key ${key}`);
   }
   return settingInfo.default;
+}
+
+async function validateSetting<SettingName extends SettingNames>(
+  key: SettingName,
+  newValue: SettingTypes[SettingName],
+  currentValue: SettingTypes[SettingName],
+  allChanges?: Partial<SettingTypes>,
+): Promise<boolean> {
+  if (key in coreSettingsValidators) {
+    const settingValidator = coreSettingsValidators[key];
+    if (settingValidator) return settingValidator(newValue, currentValue, allChanges ?? {});
+    // If there is no validator just let the change go through
+    return true;
+  }
+  try {
+    return networkService.request(
+      serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key),
+      newValue,
+      currentValue,
+      allChanges ?? {},
+    );
+  } catch (error) {
+    // If there is no validator just let the change go through
+    const missingValidatorMsg = `No handler was found to process the request of type`;
+    if (includes(`${error}`, missingValidatorMsg)) return true;
+    throw error;
+  }
 }
 
 class SettingDataProviderEngine
@@ -86,6 +121,9 @@ class SettingDataProviderEngine
     newSetting: SettingTypes[SettingName],
   ): Promise<DataProviderUpdateInstructions<SettingDataTypes>> {
     try {
+      if (!(await validateSetting(key, newSetting, await this.get(key))))
+        throw new Error('validation failed');
+
       this.settingsData[key] = newSetting;
       await writeSettingsDataToFile(this.settingsData);
     } catch (error) {
