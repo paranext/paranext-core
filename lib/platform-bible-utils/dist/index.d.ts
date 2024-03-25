@@ -106,7 +106,8 @@ export declare abstract class DocumentCombinerEngine {
 	 */
 	deleteContribution(documentName: string): object | undefined;
 	/**
-	 * Delete all present contribution documents for the composition process and return to the base document
+	 * Delete all present contribution documents for the composition process and return to the base
+	 * document
 	 *
 	 * @returns Recalculated output document consisting only of the base document
 	 */
