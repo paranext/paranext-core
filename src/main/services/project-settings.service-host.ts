@@ -56,6 +56,7 @@ async function isValid<ProjectSettingName extends ProjectSettingNames>(
       if (projectSettingValidator)
         return projectSettingValidator(newValue, currentValue, allChanges ?? {}, projectType);
     }
+    // If there is no validator let the change go through
     return true;
   } catch (error) {
     throw new Error(`Error validating setting for key '${key}': ${error}`);

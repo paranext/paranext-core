@@ -2,7 +2,7 @@ import { testingProjectSettingsService } from '@main/services/project-settings.s
 
 jest.mock('@main/data/core-project-settings-info.data', () => ({
   __esModule: true,
-  default: {
+  coreProjectSettingsInfo: {
     'platform.fullName': { default: '%test_project_full_name_missing%' },
     'platform.language': { default: '%test_project_language_missing%' },
     'platformScripture.booksPresent': {
@@ -10,10 +10,16 @@ jest.mock('@main/data/core-project-settings-info.data', () => ({
     },
     // Not present! Should throw error 'platformScripture.versification': { default: 1629326 },
   },
+  coreProjectSettingsValidators: {
+    'platformScripture.booksPresent': async (): Promise<boolean> => {
+      // Accept all attempts to set the books present
+      return true;
+    },
+  },
 }));
 
 describe('isValid', () => {
-  it('should return true if new value has 123 characters', async () => {
+  it('should return true', async () => {
     const projectSettingKey = 'platformScripture.booksPresent';
     const isSettingChangeValid = await testingProjectSettingsService.isValid(
       projectSettingKey,

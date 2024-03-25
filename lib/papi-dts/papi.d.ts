@@ -2467,16 +2467,6 @@ declare module 'papi-shared-types' {
      * @example 'World English Bible'
      */
     'platform.fullName': string;
-    /**
-     * Which books are present in this Scripture project. Represented as a string with 0 or 1 for
-     * each possible book by [standardized book
-     * code](https://github.com/sillsdev/libpalaso/blob/master/SIL.Scripture/Canon.cs#L226) (123
-     * characters long)
-     *
-     * @example
-     * '100111000000000000110000001000000000010111111111111111111111111111000000000000000000000000000000000000000000100000000000000'
-     */
-    'platformScripture.booksPresent': string;
   }
   /**
    * Names for each user setting available on the papi.
@@ -2495,7 +2485,9 @@ declare module 'papi-shared-types' {
     TProjectDataTypes extends DataProviderDataTypes,
   > = {
     /**
-     * Set the value of the specified project setting on this project.
+     * Set the value of the specified project setting on this project. `setSetting` must call
+     * `papi.projectSettings.isValid(newValue, currentValue, key, allChanges, projectType)` before
+     * allowing the setting change.
      *
      * @param key The string id of the project setting to change
      * @param newSetting The value that is to be set to the project setting.
@@ -4776,7 +4768,7 @@ declare module 'shared/services/project-settings.service-model' {
      */
     registerValidator<ProjectSettingName extends ProjectSettingNames>(
       key: ProjectSettingName,
-      validator: ProjectSettingValidator<ProjectSettingName>,
+      validatorCallback: ProjectSettingValidator<ProjectSettingName>,
     ): Promise<UnsubscriberAsync>;
   }
   /**
@@ -4798,6 +4790,7 @@ declare module 'shared/services/project-settings.service-model' {
     newValue: ProjectSettingTypes[ProjectSettingName],
     currentValue: ProjectSettingTypes[ProjectSettingName],
     allChanges: SimultaneousProjectSettingsChanges,
+    projectType: ProjectTypes,
   ) => Promise<boolean>;
   /**
    * Validators for all project settings. Keys are setting keys, values are functions to validate new

@@ -54,5 +54,3 @@ export const coreProjectSettingsValidators: Partial<AllProjectSettingsValidators
   'platformScripture.booksPresent': booksPresentSettingsValidator,
   'platformScripture.versification': versificationSettingsValidator,
 };
-
-export default coreProjectSettingsInfo;
