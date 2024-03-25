@@ -13,12 +13,12 @@ jest.mock('@main/data/core-project-settings-info.data', () => ({
 }));
 
 describe('isValid', () => {
-  it('should return true always - TEMP. TODO: Fix when we implement validation #511', async () => {
+  it('should return true if new value has 123 characters', async () => {
+    const projectSettingKey = 'platformScripture.booksPresent';
     const isSettingChangeValid = await testingProjectSettingsService.isValid(
-      '',
-      '',
-      'platform.fullName',
-      {},
+      projectSettingKey,
+      '000000011110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+      '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
       'ParatextStandard',
     );
     expect(isSettingChangeValid).toBe(true);

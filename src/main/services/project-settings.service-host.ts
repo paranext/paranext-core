@@ -1,12 +1,20 @@
-import coreProjectSettingsInfo, {
+import * as networkService from '@shared/services/network.service';
+import {
   AllProjectSettingsInfo,
+  coreProjectSettingsValidators,
+  coreProjectSettingsInfo,
 } from '@main/data/core-project-settings-info.data';
 import networkObjectService from '@shared/services/network-object.service';
 import {
+  CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR,
   IProjectSettingsService,
+  ProjectSettingValidator,
+  SimultaneousProjectSettingsChanges,
   projectSettingsServiceNetworkObjectName,
 } from '@shared/services/project-settings.service-model';
+import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
+import { UnsubscriberAsync } from 'platform-bible-utils';
 
 /**
  * Our internal list of project settings information for each setting. Theoretically this should not
@@ -35,9 +43,23 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-// TODO: Implement validators in https://github.com/paranext/paranext-core/issues/511
-async function isValid(): Promise<boolean> {
-  return true;
+async function isValid<ProjectSettingName extends ProjectSettingNames>(
+  key: ProjectSettingName,
+  newValue: ProjectSettingTypes[ProjectSettingName],
+  currentValue: ProjectSettingTypes[ProjectSettingName],
+  projectType: ProjectTypes,
+  allChanges?: SimultaneousProjectSettingsChanges,
+): Promise<boolean> {
+  try {
+    if (key in coreProjectSettingsValidators) {
+      const projectSettingValidator = coreProjectSettingsValidators[key];
+      if (projectSettingValidator)
+        return projectSettingValidator(newValue, currentValue, allChanges ?? {}, projectType);
+    }
+    return true;
+  } catch (error) {
+    throw new Error(`Error validating setting for key '${key}': ${error}`);
+  }
 }
 
 async function getDefault<ProjectSettingName extends ProjectSettingNames>(
@@ -55,9 +77,20 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
   return projectSettingInfo.default;
 }
 
+async function registerValidator<ProjectSettingName extends ProjectSettingNames>(
+  key: ProjectSettingName,
+  validatorCallback: ProjectSettingValidator<ProjectSettingName>,
+): Promise<UnsubscriberAsync> {
+  return networkService.registerRequestHandler(
+    serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key),
+    validatorCallback,
+  );
+}
+
 const projectSettingsService: IProjectSettingsService = {
   isValid,
   getDefault,
+  registerValidator,
 };
 
 /** This is an internal-only export for testing purposes, and should not be used in development */

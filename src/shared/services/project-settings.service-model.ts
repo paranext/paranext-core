@@ -1,4 +1,10 @@
 import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
+import { UnsubscriberAsync } from 'platform-bible-utils';
+
+/** Name prefix for registered commands that call project settings validators */
+export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
+
+export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
 
 /**
  * JSDOC SOURCE projectSettingsService
@@ -22,11 +28,11 @@ export interface IProjectSettingsService {
    * @returns `true` if change is valid, `false` otherwise
    */
   isValid<ProjectSettingName extends ProjectSettingNames>(
+    key: ProjectSettingName,
     newValue: ProjectSettingTypes[ProjectSettingName],
     currentValue: ProjectSettingTypes[ProjectSettingName],
-    key: ProjectSettingName,
-    allChanges: SimultaneousProjectSettingsChanges,
     projectType: ProjectTypes,
+    allChanges?: SimultaneousProjectSettingsChanges,
   ): Promise<boolean>;
   /**
    * Gets default value for a project setting
@@ -45,6 +51,17 @@ export interface IProjectSettingsService {
     key: ProjectSettingName,
     projectType: ProjectTypes,
   ): Promise<ProjectSettingTypes[ProjectSettingName]>;
+  /**
+   * Registers a function that validates whether a new setting value is allowed to be set.
+   *
+   * @param key The string id of the setting to validate
+   * @param validator Function to call to validate the new setting value
+   * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+   */
+  registerValidator<ProjectSettingName extends ProjectSettingNames>(
+    key: ProjectSettingName,
+    validatorCallback: ProjectSettingValidator<ProjectSettingName>,
+  ): Promise<UnsubscriberAsync>;
 }
 
 /**
@@ -61,5 +78,18 @@ export type SimultaneousProjectSettingsChanges = {
     currentValue: ProjectSettingTypes[ProjectSettingName];
   };
 };
+/** Function that validates whether a new project setting value should be allowed to be set */
+export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNames> = (
+  newValue: ProjectSettingTypes[ProjectSettingName],
+  currentValue: ProjectSettingTypes[ProjectSettingName],
+  allChanges: SimultaneousProjectSettingsChanges,
+  projectType: ProjectTypes,
+) => Promise<boolean>;
 
-export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
+/**
+ * Validators for all project settings. Keys are setting keys, values are functions to validate new
+ * settings
+ */
+export type AllProjectSettingsValidators = {
+  [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
+};
