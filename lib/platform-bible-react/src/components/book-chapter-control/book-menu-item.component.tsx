@@ -30,10 +30,7 @@ function BookMenuItem({
     <ShadDropdownMenuItem
       key={bookId}
       textValue={bookId}
-      className={cn(
-        'pr-relative pr-font-sans pr-font-normal pr-text-slate-700',
-        isSelected ?? 'selected',
-      )}
+      className={cn('pr-font-sans pr-font-normal pr-text-slate-700', isSelected ?? 'selected')}
       onSelect={(e) => {
         // preventDefault() here prevents the entire dropdown menu from closing when selecting this item
         e.preventDefault();
@@ -42,8 +39,7 @@ function BookMenuItem({
     >
       <Tally1 className={cn('pr-mr-2.5 pr-h-4 pr-w-0.5', `${bookType.toLowerCase()}`)} />
       {Canon.bookIdToEnglishName(bookId)}
-
-      {isSelected && <div className="pr-absolute">{children}</div>}
+      {isSelected && <div>{children}</div>} {/* className="pr-absolute" */}
     </ShadDropdownMenuItem>
   );
 }

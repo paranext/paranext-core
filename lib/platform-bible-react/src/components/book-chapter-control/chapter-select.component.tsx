@@ -1,5 +1,4 @@
 import { cn } from '@/utils/shadcn-ui.util';
-// import './chapter-select.component.css';
 
 export type ChapterSelectProps = {
   // The end chapter of the selected book
