@@ -2486,8 +2486,7 @@ declare module 'papi-shared-types' {
   > = {
     /**
      * Set the value of the specified project setting on this project. `setSetting` must call
-     * `papi.projectSettings.isValid(newValue, currentValue, key, allChanges, projectType)` before
-     * allowing the setting change.
+     * `papi.projectSettings.isValid` before allowing the setting change.
      *
      * @param key The string id of the project setting to change
      * @param newSetting The value that is to be set to the project setting.

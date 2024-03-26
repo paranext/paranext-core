@@ -1,8 +1,7 @@
 import * as networkService from '@shared/services/network.service';
-import {
+import coreProjectSettingsInfo, {
   AllProjectSettingsInfo,
   coreProjectSettingsValidators,
-  coreProjectSettingsInfo,
 } from '@main/data/core-project-settings-info.data';
 import networkObjectService from '@shared/services/network-object.service';
 import {

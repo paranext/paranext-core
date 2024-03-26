@@ -19,7 +19,7 @@ export type AllProjectSettingsInfo = {
 };
 
 /** Info about all project settings built into core. Does not contain info for extensions' settings */
-export const coreProjectSettingsInfo: Partial<AllProjectSettingsInfo> = {
+const coreProjectSettingsInfo: Partial<AllProjectSettingsInfo> = {
   'platform.fullName': { default: '%project_full_name_missing%' },
   'platform.language': { default: '%project_language_missing%' },
   'platformScripture.booksPresent': {
@@ -54,3 +54,5 @@ export const coreProjectSettingsValidators: Partial<AllProjectSettingsValidators
   'platformScripture.booksPresent': booksPresentSettingsValidator,
   'platformScripture.versification': versificationSettingsValidator,
 };
+
+export default coreProjectSettingsInfo;
