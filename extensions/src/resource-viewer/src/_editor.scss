@@ -1,48 +1,5 @@
 /* stylelint-disable selector-no-qualifying-type */
 
-/* USJ Nodes */
-
-.book[data-code]::before {
-  content: attr(data-code) ' ';
-}
-
-.immutable-note-caller {
-  vertical-align: super;
-  font-size: 80%;
-}
-
-.immutable-note-caller[data-caller="-"] {
-  display: none;
-}
-
-.immutable-note-caller > button {
-  cursor: pointer;
-  color: #00f;
-  text-decoration: none;
-  border: 0;
-  padding: 0;
-  background-color: inherit;
-}
-
-.verse {
-  vertical-align: super;
-}
-
-.no-indent {
-  text-indent: 0;
-  text-align: start;
-  margin-left: 0;
-}
-
-.plain-font {
-  font-weight: normal;
-  font-style: normal;
-  font-size: 100%;
-  color: inherit;
-  background-color: inherit;
-  vertical-align: inherit;
-}
-
 /* Lexical */
 
 .editor-container {
