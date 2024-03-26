@@ -28,10 +28,20 @@ jest.mock('@node/services/node-file-system.service', () => ({
 jest.mock('@main/data/core-settings-info.data', () => ({
   ...jest.requireActual('@main/data/core-settings-info.data'),
   __esModule: true,
-  default: {
+  coreSettingsInfo: {
     'platform.verseRef': { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } },
     'platform.interfaceLanguage': { default: ['eng'] },
     'settingsTest.noDefaultExists': {},
+  },
+  coreSettingsValidators: {
+    'platform.verseRef': async (): Promise<boolean> => {
+      // Reject all attempts to set the verse ref
+      return false;
+    },
+    'platform.interfaceLanguage': async (): Promise<boolean> => {
+      // Accept all attempts to set the interface language
+      return true;
+    },
   },
 }));
 
@@ -68,7 +78,7 @@ test('No default specified for key', async () => {
   );
 });
 
-test('Set verseRef returns true', async () => {
+test('Set interfaceLanguage returns true', async () => {
   const result = await settingsProviderEngine.set(
     'platform.interfaceLanguage',
     NEW_INTERFACE_LANGUAGE,
@@ -84,4 +94,15 @@ test('Reset interfaceLanguage returns true', async () => {
 test('Reset verseRef returns false', async () => {
   const result = await settingsProviderEngine.reset('platform.verseRef');
   expect(result).toBe(false);
+});
+
+test('Set verseRef throws', async () => {
+  const result = settingsProviderEngine.set('platform.verseRef', {
+    bookNum: 2,
+    chapterNum: 1,
+    verseNum: 1,
+  });
+  await expect(result).rejects.toThrow(
+    "Error setting value for key 'platform.verseRef': Error: validation failed",
+  );
 });

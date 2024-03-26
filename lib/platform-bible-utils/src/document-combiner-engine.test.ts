@@ -105,31 +105,42 @@ class OutputThrowingCombiner extends TestDocumentCombinerEngine {
 
 // #endregion
 
-test('Simple combining works', () => {
+describe('Simple combining', () => {
   const hasA = { a: 1 };
   const hasB = { b: 2 };
   const hasC = { c: 3 };
   const newC = { c: 4 };
   const arrayD1 = { d: ['red', 'yellow'] };
   const arrayD2 = { d: ['blue', 'green'] };
-  const combiner = new DocumentCombinerWithoutValidation(hasA);
-  expect(JSON.stringify(combiner.output)).toBe('{"a":1}');
-  combiner.addOrUpdateContribution('B', hasB);
-  expect(JSON.stringify(combiner.output)).toBe('{"a":1,"b":2}');
-  combiner.addOrUpdateContribution('C', hasC);
-  expect(JSON.stringify(combiner.output)).toBe('{"a":1,"b":2,"c":3}');
-  combiner.addOrUpdateContribution('C', newC);
-  expect(JSON.stringify(combiner.output)).toBe('{"a":1,"b":2,"c":4}');
-  combiner.deleteContribution('B');
-  expect(JSON.stringify(combiner.output)).toBe('{"a":1,"c":4}');
-  combiner.deleteContribution('C');
-  expect(JSON.stringify(combiner.output)).toBe('{"a":1}');
-  combiner.updateBaseDocument({ a: 10 });
-  expect(JSON.stringify(combiner.output)).toBe('{"a":10}');
-  combiner.addOrUpdateContribution('D1', arrayD1);
-  expect(JSON.stringify(combiner.output)).toBe('{"a":10,"d":["red","yellow"]}');
-  combiner.addOrUpdateContribution('D2', arrayD2);
-  expect(JSON.stringify(combiner.output)).toBe('{"a":10,"d":["red","yellow","blue","green"]}');
+
+  test('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument works', () => {
+    const combiner = new DocumentCombinerWithoutValidation(hasA);
+    expect(JSON.stringify(combiner.output)).toBe('{"a":1}');
+    combiner.addOrUpdateContribution('B', hasB);
+    expect(JSON.stringify(combiner.output)).toBe('{"a":1,"b":2}');
+    combiner.addOrUpdateContribution('C', hasC);
+    expect(JSON.stringify(combiner.output)).toBe('{"a":1,"b":2,"c":3}');
+    combiner.addOrUpdateContribution('C', newC);
+    expect(JSON.stringify(combiner.output)).toBe('{"a":1,"b":2,"c":4}');
+    combiner.deleteContribution('B');
+    expect(JSON.stringify(combiner.output)).toBe('{"a":1,"c":4}');
+    combiner.deleteContribution('C');
+    expect(JSON.stringify(combiner.output)).toBe('{"a":1}');
+    combiner.updateBaseDocument({ a: 10 });
+    expect(JSON.stringify(combiner.output)).toBe('{"a":10}');
+    combiner.addOrUpdateContribution('D1', arrayD1);
+    expect(JSON.stringify(combiner.output)).toBe('{"a":10,"d":["red","yellow"]}');
+    combiner.addOrUpdateContribution('D2', arrayD2);
+    expect(JSON.stringify(combiner.output)).toBe('{"a":10,"d":["red","yellow","blue","green"]}');
+  });
+
+  test('deleteAllContributions works', () => {
+    const combiner = new DocumentCombinerWithoutValidation(hasA);
+    combiner.addOrUpdateContribution('B', hasB);
+    combiner.addOrUpdateContribution('C', newC);
+    combiner.deleteAllContributions();
+    expect(JSON.stringify(combiner.output)).toBe('{"a":1}');
+  });
 });
 
 test('Collisions are not allowed', () => {
