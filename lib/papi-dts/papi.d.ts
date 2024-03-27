@@ -2485,7 +2485,8 @@ declare module 'papi-shared-types' {
     TProjectDataTypes extends DataProviderDataTypes,
   > = {
     /**
-     * Set the value of the specified project setting on this project.
+     * Set the value of the specified project setting on this project. `setSetting` must call
+     * `papi.projectSettings.isValid` before allowing the setting change.
      *
      * @param key The string id of the project setting to change
      * @param newSetting The value that is to be set to the project setting.
@@ -4709,6 +4710,10 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
 }
 declare module 'shared/services/project-settings.service-model' {
   import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
+  import { UnsubscriberAsync } from 'platform-bible-utils';
+  /** Name prefix for registered commands that call project settings validators */
+  export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
+  export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
   /**
    *
    * Provides utility functions that project storage interpreters should call when handling project
@@ -4730,11 +4735,11 @@ declare module 'shared/services/project-settings.service-model' {
      * @returns `true` if change is valid, `false` otherwise
      */
     isValid<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
       newValue: ProjectSettingTypes[ProjectSettingName],
       currentValue: ProjectSettingTypes[ProjectSettingName],
-      key: ProjectSettingName,
-      allChanges: SimultaneousProjectSettingsChanges,
       projectType: ProjectTypes,
+      allChanges?: SimultaneousProjectSettingsChanges,
     ): Promise<boolean>;
     /**
      * Gets default value for a project setting
@@ -4753,6 +4758,17 @@ declare module 'shared/services/project-settings.service-model' {
       key: ProjectSettingName,
       projectType: ProjectTypes,
     ): Promise<ProjectSettingTypes[ProjectSettingName]>;
+    /**
+     * Registers a function that validates whether a new setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+      validatorCallback: ProjectSettingValidator<ProjectSettingName>,
+    ): Promise<UnsubscriberAsync>;
   }
   /**
    * All project settings changes being set in one batch
@@ -4768,7 +4784,20 @@ declare module 'shared/services/project-settings.service-model' {
       currentValue: ProjectSettingTypes[ProjectSettingName];
     };
   };
-  export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
+  /** Function that validates whether a new project setting value should be allowed to be set */
+  export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNames> = (
+    newValue: ProjectSettingTypes[ProjectSettingName],
+    currentValue: ProjectSettingTypes[ProjectSettingName],
+    allChanges: SimultaneousProjectSettingsChanges,
+    projectType: ProjectTypes,
+  ) => Promise<boolean>;
+  /**
+   * Validators for all project settings. Keys are setting keys, values are functions to validate new
+   * settings
+   */
+  export type AllProjectSettingsValidators = {
+    [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
+  };
 }
 declare module '@papi/core' {
   /** Exporting empty object so people don't have to put 'type' in their import statements */

@@ -40,6 +40,10 @@ const projectSettingsService: IProjectSettingsService = {
     await initialize();
     return networkObject.isValid(newValue, currentValue, key, allChanges, projectType);
   },
+  async registerValidator(key, validator) {
+    await initialize();
+    return networkObject.registerValidator(key, validator);
+  },
 };
 
 export default projectSettingsService;
