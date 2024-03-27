@@ -7,10 +7,26 @@ import {
   DropdownMenuContent as ShadDropdownMenuContent,
   DropdownMenuLabel as ShadDropdownMenuLabel,
   DropdownMenuSeparator as ShadDropdownMenuSeparator,
+  DropdownMenuItem as ShadDropdownMenuItem,
 } from '@/components/shadcn-ui/dropdown-menu';
+import ShadSlider from '@/components/shadcn-ui/slider';
 import BookChapterInput from '@/components/book-chapter-control/book-chapter-input.component';
 import ChapterSelect from '@/components/book-chapter-control/chapter-select.component';
 import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-menu-item.component';
+import { cn } from '@/utils/shadcn-ui.util';
+import {
+  RadioGroup as ShadRadioGroup,
+  RadioGroupItem as ShadRadioGroupItem,
+} from '@/components/shadcn-ui/radio-group';
+import {
+  Select as ShadSelect,
+  SelectGroup as ShadSelectGroup,
+  SelectValue as ShadSelectValue,
+  SelectTrigger as ShadSelectTrigger,
+  SelectContent as ShadSelectContent,
+  SelectLabel as ShadSelectLabel,
+  SelectItem as ShadSelectItem,
+} from '@/components/shadcn-ui/select';
 
 type BookTypeLabels = {
   [bookType in BookType]: string;
@@ -32,6 +48,9 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>('');
+  const [zoom, setZoom] = useState<number>(100);
+  const [fruit, setFruit] = useState<string>('');
+  const [radio, setRadio] = useState<string>('');
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
@@ -131,6 +150,79 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           style={{ width: '300px', maxHeight: '500px' }}
           onKeyDown={giveFocusToInput}
         >
+          <ShadDropdownMenuItem
+            key={1}
+            className={cn(
+              'pr-flex pr-justify-between pr-font-sans pr-font-normal pr-text-slate-700',
+            )}
+          >
+            {`Zoom: ${zoom}%`}
+            <ShadSlider
+              defaultValue={[100]}
+              value={[zoom]}
+              min={50}
+              max={200}
+              step={1}
+              onValueChange={([value]) => {
+                setZoom(value);
+              }}
+            />
+          </ShadDropdownMenuItem>
+
+          <ShadDropdownMenuItem
+            key={1}
+            className={cn(
+              'pr-flex pr-justify-between pr-font-sans pr-font-normal pr-text-slate-700',
+            )}
+          >
+            Fruit:
+            <ShadSelect
+              onValueChange={(value) => {
+                setFruit(value);
+              }}
+              value={fruit}
+            >
+              <ShadSelectTrigger>
+                <ShadSelectValue placeholder="Select a fruit" />
+              </ShadSelectTrigger>
+              <ShadSelectContent>
+                <ShadSelectGroup>
+                  <ShadSelectLabel>Fruits</ShadSelectLabel>
+                  <ShadSelectItem value="apple">Apple</ShadSelectItem>
+                  <ShadSelectItem value="banana">Banana</ShadSelectItem>
+                  <ShadSelectItem value="blueberry">Blueberry</ShadSelectItem>
+                  <ShadSelectItem value="grapes">Grapes</ShadSelectItem>
+                  <ShadSelectItem value="pineapple">Pineapple</ShadSelectItem>
+                </ShadSelectGroup>
+              </ShadSelectContent>
+            </ShadSelect>
+          </ShadDropdownMenuItem>
+          <ShadDropdownMenuItem
+            key={1}
+            className={cn(
+              'pr-flex pr-justify-between pr-font-sans pr-font-normal pr-text-slate-700',
+            )}
+          >
+            Scroll with:
+            <ShadRadioGroup
+              orientation="horizontal"
+              defaultValue="a"
+              onValueChange={(value) => {
+                setRadio(value);
+              }}
+              value={radio}
+            >
+              <div className="pr-flex pr-items-center pr-space-x-2">
+                <ShadRadioGroupItem value="a" id="r1" />A
+              </div>
+              <div className="pr-flex pr-items-center pr-space-x-2">
+                <ShadRadioGroupItem value="b" id="r2" />B
+              </div>
+              <div className="pr-flex pr-items-center pr-space-x-2">
+                <ShadRadioGroupItem value="c" id="r3" />C
+              </div>
+            </ShadRadioGroup>
+          </ShadDropdownMenuItem>
           {bookTypeArray.map((bookType) => (
             <div key={bookType}>
               <ShadDropdownMenuLabel className="pr-font-semibold pr-text-slate-700">
