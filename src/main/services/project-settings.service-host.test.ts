@@ -55,21 +55,18 @@ describe('getDefault', () => {
       testingProjectSettingsService.getDefault(projectSettingKey, 'ParatextStandard'),
     ).rejects.toThrow(new RegExp(`default value for project setting ${projectSettingKey}`));
   });
+});
 
-  describe('registerValidator', () => {
-    it('should resolve', async () => {
-      const projectSettingKey = 'platform.fullName';
-      const fullNameSettingsValidator: ProjectSettingValidator<
-        'platform.fullName'
-      > = async (): Promise<boolean> => {
-        return true;
-      };
-      await expect(
-        testingProjectSettingsService.registerValidator(
-          projectSettingKey,
-          fullNameSettingsValidator,
-        ),
-      ).resolves.toStrictEqual({});
-    });
+describe('registerValidator', () => {
+  it('should resolve', async () => {
+    const projectSettingKey = 'platform.fullName';
+    const fullNameSettingsValidator: ProjectSettingValidator<
+      'platform.fullName'
+    > = async (): Promise<boolean> => {
+      return true;
+    };
+    await expect(
+      testingProjectSettingsService.registerValidator(projectSettingKey, fullNameSettingsValidator),
+    ).resolves.toStrictEqual({});
   });
 });
