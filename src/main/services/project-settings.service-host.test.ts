@@ -1,8 +1,16 @@
 import { testingProjectSettingsService } from '@main/services/project-settings.service-host';
+import { ProjectSettingValidator } from '@shared/services/project-settings.service-model';
 
+jest.mock('@shared/services/network.service', () => ({
+  ...jest.requireActual('@shared/services/network.service'),
+  registerRequestHandler: () => {
+    return {};
+  },
+}));
 jest.mock('@main/data/core-project-settings-info.data', () => ({
+  ...jest.requireActual('@main/data/core-project-settings-info.data'),
   __esModule: true,
-  coreProjectSettingsInfo: {
+  default: {
     'platform.fullName': { default: '%test_project_full_name_missing%' },
     'platform.language': { default: '%test_project_language_missing%' },
     'platformScripture.booksPresent': {
@@ -46,5 +54,22 @@ describe('getDefault', () => {
     await expect(
       testingProjectSettingsService.getDefault(projectSettingKey, 'ParatextStandard'),
     ).rejects.toThrow(new RegExp(`default value for project setting ${projectSettingKey}`));
+  });
+
+  describe('registerValidator', () => {
+    it('should resolve', async () => {
+      const projectSettingKey = 'platform.fullName';
+      const fullNameSettingsValidator: ProjectSettingValidator<
+        'platform.fullName'
+      > = async (): Promise<boolean> => {
+        return true;
+      };
+      await expect(
+        testingProjectSettingsService.registerValidator(
+          projectSettingKey,
+          fullNameSettingsValidator,
+        ),
+      ).resolves.toStrictEqual({});
+    });
   });
 });
