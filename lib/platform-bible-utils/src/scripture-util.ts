@@ -1,4 +1,6 @@
+import { Canon } from '@sillsdev/scripture';
 import { BookInfo, ScriptureReference } from './scripture.model';
+import { startsWith } from './string-util';
 
 const scrBookData: BookInfo[] = [
   { shortName: 'ERR', fullNames: ['ERROR'], chapters: -1 },
@@ -98,3 +100,47 @@ export const offsetVerse = (scrRef: ScriptureReference, offset: number): Scriptu
   ...scrRef,
   verseNum: Math.max(FIRST_SCR_VERSE_NUM, scrRef.verseNum + offset),
 });
+
+/**
+ * https://github.com/ubsicap/Paratext/blob/master/ParatextData/SILScriptureExtensions.cs#L72
+ *
+ * Convert book number to a localized Id (a short description of the book). This should be used
+ * whenever a book ID (short code) is shown to the user. It is primarily needed for people who do
+ * not read Roman script well /// and need to have books identified in a alternate script (e.g.
+ * Chinese or Russian)
+ *
+ * @param bookNumber
+ * @param localizationLanguage
+ * @param getLocalizedString
+ * @returns
+ */
+export async function getLocalizedIdFromBookNumber(
+  bookNumber: number,
+  localizationLanguage: string,
+  getLocalizedString: (item: {
+    localizeKey: string;
+    languagesToSearch?: string[];
+  }) => Promise<string>,
+) {
+  const id = Canon.bookNumberToId(bookNumber);
+
+  // Intl.getCanonicalLocales is in the new typescript and is not in mainline VSCode yet so
+  // leaving this here for the future, but will eventually be able to remove the expects error
+  // @ts-expect-error
+  if (!startsWith(Intl.getCanonicalLocales(localizationLanguage)[0], 'zh'))
+    return getLocalizedString({
+      localizeKey: `LocalizedId.${id}`,
+      languagesToSearch: [localizationLanguage],
+    });
+
+  // For Chinese the normal book name is already fairly short.
+  const bookName = await getLocalizedString({
+    localizeKey: `Book.${id}`,
+    languagesToSearch: [localizationLanguage],
+  });
+  const parts = bookName.split('-');
+  // some entries had a second name inside ideographic parenthesis
+  const parts2 = parts[0].split('\xff08');
+  const retVal = parts2[0].trim();
+  return retVal;
+}

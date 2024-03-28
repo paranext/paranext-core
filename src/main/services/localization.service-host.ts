@@ -1,12 +1,18 @@
 ﻿import {
-  LocalizationServiceType,
-  localizationServiceNetworkObjectName,
+  ILocalizationService,
+  localizationServiceProviderName,
   LocalizationData,
+  LocalizationDataDataTypes,
+  LocalizationSelector,
+  LocalizationSelectors,
   LocalizedStringMetadata,
+  localizationServiceObjectToProxy,
 } from '@shared/services/localization.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import dataProviderService from '@shared/services/data-provider.service';
+import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
+import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import * as nodeFS from '@node/services/node-file-system.service';
-import { deserialize } from 'platform-bible-utils';
+import { deserialize, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
 import path from 'path';
@@ -99,25 +105,6 @@ async function loadAllLocalizationData() {
   );
 }
 
-let initializationPromise: Promise<void>;
-/** Do the setup this service needs to function */
-async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          await loadAllLocalizationData();
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
-  }
-  return initializationPromise;
-}
-
 async function getDefaultLanguages() {
   const languagesFromSetting = await settingsService.get('platform.interfaceLanguage');
   if (languagesFromSetting) return languagesFromSetting;
@@ -208,106 +195,140 @@ async function findFirstLocalization(localizeKey: string, languages: string[]) {
   return findFirstLocalization(localizeKey, languages);
 }
 
-async function getLocalizedString(localizeKey: string, languagesToSearch: string[] = []) {
-  await initialize();
-  const languages = languagesToSearch.length > 0 ? languagesToSearch : await getDefaultLanguages();
+class LocalizationDataProviderEngine
+  extends DataProviderEngine<LocalizationDataDataTypes>
+  implements IDataProviderEngine<LocalizationDataDataTypes>
+{
+  // This method legitimately does not need to call anything else in this class as of now
+  // eslint-disable-next-line class-methods-use-this
+  async getLocalizedString({ localizeKey, languagesToSearch = [] }: LocalizationSelector) {
+    const languages =
+      languagesToSearch.length > 0 ? languagesToSearch : await getDefaultLanguages();
 
-  // English is always a backup
-  addLanguageIfNotThere(languages, 'en', false);
+    // English is always a backup
+    addLanguageIfNotThere(languages, 'en', false);
 
-  const initialLanguageData = await getNextDefinedLanguageData(languages);
-  // Note: This should never happen, but if it does then there are no languages with data so just
-  // return the localize key so there is some text to display even if we can't find a localization
-  if (initialLanguageData === undefined) return localizeKey;
+    const initialLanguageData = await getNextDefinedLanguageData(languages);
+    // Note: This should never happen, but if it does then there are no languages with data so just
+    // return the localize key so there is some text to display even if we can't find a localization
+    if (initialLanguageData === undefined) return localizeKey;
 
-  const initialLocalizationSearchResult = initialLanguageData[localizeKey];
-  if (initialLocalizationSearchResult) return initialLocalizationSearchResult;
+    const initialLocalizationSearchResult = initialLanguageData[localizeKey];
+    if (initialLocalizationSearchResult) return initialLocalizationSearchResult;
 
-  const metadata = await getMetadata(localizeKey);
-  if (metadata !== undefined) {
-    const { fallbackKey } = metadata;
+    const metadata = await getMetadata(localizeKey);
+    if (metadata !== undefined) {
+      const { fallbackKey } = metadata;
 
-    // check fallback key in current language
-    const fallbackLocalizationInCurrentLanguage = initialLanguageData[fallbackKey];
-    if (fallbackLocalizationInCurrentLanguage) return fallbackLocalizationInCurrentLanguage;
+      // check fallback key in current language
+      const fallbackLocalizationInCurrentLanguage = initialLanguageData[fallbackKey];
+      if (fallbackLocalizationInCurrentLanguage) return fallbackLocalizationInCurrentLanguage;
+    }
+
+    // If the fallback key can't be found in the current language, check the localize key in the other
+    // fallback languages
+    const currentKeyLanguages = languages; // Make a duplicate as array will get changed during search
+    const currentKeyFallbackLanguageLocalization = await findFirstLocalization(
+      localizeKey,
+      currentKeyLanguages,
+    );
+    if (currentKeyFallbackLanguageLocalization) return currentKeyFallbackLanguageLocalization;
+
+    // If the localize key can't be found in any language, look for a fallback key and look for that
+    // key in the fallback languages if it exists
+    if (metadata !== undefined) {
+      const { fallbackKey } = metadata;
+      const fallbackKeyFallbackLanguageLocalization = await findFirstLocalization(
+        fallbackKey,
+        languages,
+      );
+      if (fallbackKeyFallbackLanguageLocalization) return fallbackKeyFallbackLanguageLocalization;
+    }
+
+    if (shouldThrowIfNotFound())
+      throw new Error(
+        `No localizations found for key or fallback key in any of the given languages for localize key: ${localizeKey}`,
+      );
+    return localizeKey;
   }
 
-  // If the fallback key can't be found in the current language, check the localize key in the other
-  // fallback languages
-  const currentKeyLanguages = languages; // Make a duplicate as array will get changed during search
-  const currentKeyFallbackLanguageLocalization = await findFirstLocalization(
-    localizeKey,
-    currentKeyLanguages,
-  );
-  if (currentKeyFallbackLanguageLocalization) return currentKeyFallbackLanguageLocalization;
+  async getLocalizedStrings({ localizeKeys, languagesToSearch = [] }: LocalizationSelectors) {
+    const languages =
+      languagesToSearch.length > 0
+        ? languagesToSearch
+        : await settingsService.get('platform.interfaceLanguage');
 
-  // If the localize key can't be found in any language, look for a fallback key and look for that
-  // key in the fallback languages if it exists
-  if (metadata !== undefined) {
-    const { fallbackKey } = metadata;
-    const fallbackKeyFallbackLanguageLocalization = await findFirstLocalization(
-      fallbackKey,
-      languages,
+    // This will remove languages with no data from languages so that work only needs to be done once
+    // rather than doing it for every key.
+    await moveToFirstLanguageWithData(languages);
+
+    const localizations = new Map<string, string>();
+    await Promise.all(
+      localizeKeys.map(async (key) => {
+        // Languages without a localization for the given key get removed from the languages list, but
+        // a language may have localizations for some keys and not others so we don't want them to be
+        // permanently removed. Work around this by sending in a copy of the languages list that can be
+        // safely manipulated for each key.
+        const languagesForKey = languages;
+        localizations.set(
+          key,
+          await this.getLocalizedString({ localizeKey: key, languagesToSearch: languagesForKey }),
+        );
+      }),
     );
-    if (fallbackKeyFallbackLanguageLocalization) return fallbackKeyFallbackLanguageLocalization;
+    return Object.fromEntries(localizations);
   }
 
-  if (shouldThrowIfNotFound())
-    throw new Error(
-      `No localizations found for key or fallback key in any of the given languages for localize key: ${localizeKey}`,
-    );
-  return localizeKey;
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line class-methods-use-this
+  async setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {
+    throw new Error('setLocalizedString disabled');
+  }
+
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line class-methods-use-this
+  async setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {
+    throw new Error('setLocalizedStrings disabled');
+  }
 }
 
-async function getLocalizedStrings(localizeKeys: string[], languagesToSearch: string[] = []) {
-  await initialize();
-  const languages =
-    languagesToSearch.length > 0
-      ? languagesToSearch
-      : await settingsService.get('platform.interfaceLanguage');
-
-  // This will remove languages with no data from languages so that work only needs to be done once
-  // rather than doing it for every key.
-  await moveToFirstLanguageWithData(languages);
-
-  const localizations = new Map<string, string>();
-  await Promise.all(
-    localizeKeys.map(async (key) => {
-      // Languages without a localization for the given key get removed from the languages list, but
-      // a language may have localizations for some keys and not others so we don't want them to be
-      // permanently removed. Work around this by sending in a copy of the languages list that can be
-      // safely manipulated for each key.
-      const languagesForKey = languages;
-      localizations.set(key, await getLocalizedString(key, languagesForKey));
-    }),
-  );
-  return Object.fromEntries(localizations);
+let initializationPromise: Promise<void>;
+/** Need to run initialize before using this */
+let dataProvider: ILocalizationService;
+export async function initialize(): Promise<void> {
+  if (!initializationPromise) {
+    initializationPromise = new Promise<void>((resolve, reject) => {
+      const executor = async () => {
+        try {
+          await loadAllLocalizationData();
+          dataProvider = await dataProviderService.registerEngine(
+            localizationServiceProviderName,
+            new LocalizationDataProviderEngine(),
+          );
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      };
+      executor();
+    });
+  }
+  return initializationPromise;
 }
-
-const localizationService: LocalizationServiceType = {
-  getLocalizedString,
-  getLocalizedStrings,
-};
 
 /** This is an internal-only export for testing purposes, and should not be used in development */
 export const testingLocalizationService = {
-  localizationService,
+  implementLocalizationDataProviderEngine: async () => {
+    await loadAllLocalizationData();
+    return new LocalizationDataProviderEngine();
+  },
 };
 
-/** Register the network object that backs the PAPI localization service */
-// This doesn't really represent this service module, so we're not making it default. To use this
-// service, you should use `localization.service.ts`
-// eslint-disable-next-line import/prefer-default-export
-export async function startLocalizationService(): Promise<void> {
-  await initialize();
-  await networkObjectService.set<LocalizationServiceType>(
-    localizationServiceNetworkObjectName,
-    localizationService,
-  );
-}
-
-/*
-const settingService = createSyncProxyForAsyncObject<ISettingsService>(async () => {
+// This will be needed later for disposing of the data provider, choosing to ignore instead of
+// remove code that will be used later
+// @ts-ignore 6133
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const localizationDataService = createSyncProxyForAsyncObject<ILocalizationService>(async () => {
   await initialize();
   return dataProvider;
-}, settingsServiceObjectToProxy); */
+}, localizationServiceObjectToProxy);

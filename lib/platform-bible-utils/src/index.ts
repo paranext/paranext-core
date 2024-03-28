@@ -10,6 +10,7 @@ export { default as MutexMap } from './mutex-map';
 // Consts
 export {
   getChaptersForBook,
+  getLocalizedIdFromBookNumber,
   offsetBook,
   offsetChapter,
   offsetVerse,

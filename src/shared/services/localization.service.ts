@@ -1,24 +1,21 @@
+import dataProviderService from '@shared/services/data-provider.service';
+import { createSyncProxyForAsyncObject, getLocalizedIdFromBookNumber } from 'platform-bible-utils';
 import {
-  localizationServiceNetworkObjectName,
-  LocalizationServiceType,
+  ILocalizationService,
+  localizationServiceProviderName,
+  localizationServiceObjectToProxy,
 } from '@shared/services/localization.service-model';
-import networkObjectService from '@shared/services/network-object.service';
 
-let networkObject: LocalizationServiceType;
+let dataProvider: ILocalizationService;
 let initializationPromise: Promise<void>;
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          const localLocalizationService = await networkObjectService.get<LocalizationServiceType>(
-            localizationServiceNetworkObjectName,
-          );
-          if (!localLocalizationService)
-            throw new Error(
-              `${localizationServiceNetworkObjectName} is not available as a network object`,
-            );
-          networkObject = localLocalizationService;
+          const provider = await dataProviderService.get(localizationServiceProviderName);
+          if (!provider) throw new Error('Localization service undefined');
+          dataProvider = provider;
           resolve();
         } catch (error) {
           reject(error);
@@ -30,15 +27,21 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const localizationService: LocalizationServiceType = {
-  getLocalizedString: async (localizeKey: string, languages?: string[]) => {
+const localizationDataService = createSyncProxyForAsyncObject<ILocalizationService>(
+  async () => {
     await initialize();
-    return networkObject.getLocalizedString(localizeKey, languages);
+    return dataProvider;
   },
-  getLocalizedStrings: async (localizeKeys: string[], languages?: string[]) => {
-    await initialize();
-    return networkObject.getLocalizedStrings(localizeKeys, languages);
+  {
+    ...localizationServiceObjectToProxy,
+    getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string> {
+      return getLocalizedIdFromBookNumber(
+        bookNum,
+        localizationLanguage,
+        localizationDataService.getLocalizedString,
+      );
+    },
   },
-};
+);
 
-export default localizationService;
+export default localizationDataService;

@@ -28,12 +28,14 @@ import projectLookupService from '@shared/services/project-lookup.service';
 import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
 import menuDataService from '@shared/services/menu-data.service';
+import localizationDataService from '@shared/services/localization.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import settingsService from '@shared/services/settings.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
 import projectSettingsService from '@shared/services/project-settings.service';
 import { IProjectSettingsService } from '@shared/services/project-settings.service-model';
 import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
+import { ILocalizationService } from '@shared/services/localization.service-model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -84,6 +86,8 @@ const papi = {
   settings: settingsService as ISettingsService,
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
+  /** JSDOC DESTINATION localizationDataService */
+  localization: localizationDataService as ILocalizationService,
 };
 /* eslint-enable */
 
@@ -142,3 +146,6 @@ Object.freeze(papi.storage);
 /** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);
+/** JSDOC DESTINATION localizationDataService */
+export const { localization } = papi;
+Object.freeze(papi.localization);
