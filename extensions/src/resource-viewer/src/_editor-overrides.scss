@@ -1,6 +1,10 @@
 /* Platform.Bible image protocol overrides */
 /* stylelint-disable selector-no-qualifying-type */
 
+.editor-container {
+  max-width: none;
+}
+
 .link-editor div.link-edit {
   background-image: url('papi-extension://resource-viewer/assets/images/icons/pencil-fill.svg');
 }
