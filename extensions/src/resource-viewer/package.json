@@ -35,7 +35,7 @@
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@biblionexus-foundation/platform-editor": "^0.0.5",
+    "@biblionexus-foundation/platform-editor": "^0.1.0",
     "@swc/core": "^1.4.2",
     "@types/node": "^20.11.19",
     "@types/react": "^18.2.57",
