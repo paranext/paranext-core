@@ -1,7 +1,7 @@
 import { VerseRef } from '@sillsdev/scripture';
 import { logger } from '@papi/frontend';
 import { useProjectData, useSetting } from '@papi/frontend/react';
-import { ScriptureReference } from 'platform-bible-utils';
+import { ScriptureReference, debounce } from 'platform-bible-utils';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import {
@@ -34,7 +34,13 @@ globalThis.webViewComponent = function ResourceViewer({
     '',
   );
 
-  const onChange = useCallback((usj: Usj) => setUsx?.(usjToUsxString(usj)), [setUsx]);
+  const debouncedSetUsx = useMemo(
+    () => debounce((usj: Usj) => setUsx?.(usjToUsxString(usj)), 300),
+    [setUsx],
+  );
+
+  // TODO: remove debounce when issue #826 is done.
+  const onChange = useCallback(debouncedSetUsx, [debouncedSetUsx]);
 
   useEffect(() => {
     if (usx) editorRef.current?.setUsj(usxStringToUsj(usx));
