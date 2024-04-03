@@ -61,6 +61,7 @@ networkService
     // Make sure project lookups are available before extensions look for them on PAPI
     await startProjectLookupService();
 
+    // Prepare for menu data to be contributed from extensions before the extensions come online
     await initializeMenuData();
 
     // The extension service locks down importing other modules, so be careful what runs after it
@@ -116,10 +117,10 @@ setTimeout(async () => {
 // This is just testing dispose on data providers
 (async () => {
   const testDP = {
-    set: () => {
+    setPlaceholder: () => {
       throw new Error('I am a bad data provider');
     },
-    get: () => {
+    getPlaceholder: () => {
       throw new Error('I am a bad data provider');
     },
     dispose: async () => {
@@ -128,7 +129,7 @@ setTimeout(async () => {
     },
   };
 
-  const realDP = await dataProviderService.registerEngine('testDP', testDP);
+  const realDP = await dataProviderService.registerEngine('platform.placeholder', testDP);
   realDP.onDidDispose(() => {
     logger.debug('testDP onDidDispose ran');
   });

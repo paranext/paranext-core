@@ -1,21 +1,16 @@
 import { useRef, PropsWithChildren } from 'react';
 import { AppBar, Toolbar as MuiToolbar } from '@mui/material';
-import { MultiColumnMenu } from 'platform-bible-utils';
 import { CommandHandler } from './menu-item.component';
-import HamburgerMenuButton from './hamburger-menu-button.component';
+import HamburgerMenuButton, { MultiColumnMenuProvider } from './hamburger-menu-button.component';
 import './toolbar.component.css';
-
-export interface MultiColumnMenuProvider {
-  (isSupportAndDevelopment: boolean): MultiColumnMenu;
-}
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
   commandHandler: CommandHandler;
 
   /**
-   * The optional delegate to use to get the menu data. If not specified or if it returns undefined,
-   * the "hamburger" menu will not display.
+   * The optional delegate to use to get the menu data. If not specified, the "hamburger" menu will
+   * not display.
    */
   menuProvider?: MultiColumnMenuProvider;
 
@@ -45,8 +40,7 @@ export default function Toolbar({
             <HamburgerMenuButton
               commandHandler={commandHandler}
               containerRef={containerRef}
-              normalMenu={menuProvider(false)}
-              fullMenu={menuProvider(true)}
+              menuProvider={menuProvider}
             />
           ) : undefined}
           {children ? <div className="papi-toolbar-children">{children}</div> : undefined}

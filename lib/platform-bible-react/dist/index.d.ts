@@ -184,6 +184,10 @@ export interface ScriptureReference {
 	chapterNum: number;
 	verseNum: number;
 }
+/** Within type T, recursively change properties that were of type A to be of type B */
+export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
+	[K in keyof T]: ReplaceType<T[K], A, B>;
+} : T;
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;
 /** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
@@ -238,10 +242,18 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	iconPathBefore?: string;
 };
 /**
- * Group of menu items that can be combined with other groups to form a single menu/submenu. Groups
- * are separated using a line within the menu/submenu.
+ * Group of menu items that can be combined with other groups to form a single context menu/submenu.
+ * Groups are separated using a line within the menu/submenu.
  */
-export type Groups = {
+export type GroupsInSingleColumnMenu = {
+	/** Named menu group */
+	[property: ReferencedItem]: OrderedExtensibleContainer | MenuGroupDetailsInSubMenu;
+};
+/**
+ * Group of menu items that can be combined with other groups to form a single menu/submenu within a
+ * multi-column menu. Groups are separated using a line within the menu/submenu.
+ */
+export type GroupsInMultiColumnMenu = {
 	/** Named menu group */
 	[property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
 };
@@ -255,15 +267,24 @@ export type ColumnsWithHeaders = {
 /** Menu that contains a column without a header */
 export type SingleColumnMenu = {
 	/** Groups that belong in this menu */
-	groups: Groups;
+	groups: GroupsInSingleColumnMenu;
 	/** List of menu items that belong in this menu */
 	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
 };
 /** Menu that contains multiple columns with headers */
-export type MultiColumnMenu = SingleColumnMenu & {
+export type MultiColumnMenu = {
 	/** Columns that belong in this menu */
 	columns: ColumnsWithHeaders;
+	/** Groups that belong in this menu */
+	groups: GroupsInMultiColumnMenu;
+	/** List of menu items that belong in this menu */
+	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
 };
+/**
+ * Type that converts any menu type before it is localized to what it is after it is localized. This
+ * can be applied to any menu type as needed.
+ */
+export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
@@ -282,7 +303,7 @@ export interface CommandHandler {
 	(command: Command): void;
 }
 export type MenuPropsBase = {
-	menuDefinition: SingleColumnMenu;
+	menuDefinition: Localized<SingleColumnMenu>;
 	commandHandler: CommandHandler;
 	/**
 	 * Additional action to perform when any menu item is clicked. Allows the caller to handle event
@@ -364,7 +385,7 @@ export type MenuItemInfo = (Command | SubMenu) & {
 export function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
 export type GridMenuInfo = {
 	/** The menu object containing information about the columns, groups, and items to display. */
-	multiColumnMenu: MultiColumnMenu;
+	multiColumnMenu: Localized<MultiColumnMenu>;
 };
 export type GridMenuProps = GridMenuInfo & {
 	/** Optional unique identifier */
@@ -396,6 +417,9 @@ export type ContextMenuProps = GroupedMenuPropsBase & {
  * @returns {JSX.Element} The ContextMenu component (including the wrapped children)
  */
 export function ContextMenu({ className, commandHandler, menuDefinition, children, }: React$1.PropsWithChildren<ContextMenuProps>): string | number | boolean | Iterable<React$1.ReactNode> | import("react/jsx-runtime").JSX.Element | null | undefined;
+export interface MultiColumnMenuProvider {
+	(isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>>;
+}
 export type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	commandHandler: CommandHandler;
@@ -409,19 +433,28 @@ export type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
 	 * button to the top of menu. Defaults to 1.
 	 */
 	offsetFromBottomOfButtonToTopOfMenu?: number;
-	/** The menu data to show when the menu is opened. */
-	normalMenu: MultiColumnMenu;
 	/**
-	 * The menu data to show when the menu is opened with the SHIFT key pressed. If not defined, the
-	 * normal menu will display.
+	 * The delegate to use to get the menu data. If not specified or if it returns undefined, the data
+	 * in normalMenu or fullMenu property will be used.
 	 */
-	fullMenu?: MultiColumnMenu;
+	menuProvider?: MultiColumnMenuProvider;
+	/**
+	 * The menu data to show when the menu is opened if the menuProvider property is not defined.
+	 * (This allows for a default or test-only static menu to be used.)
+	 */
+	normalMenu?: Localized<MultiColumnMenu>;
+	/**
+	 * The menu data to show for "full" menu (when opened with the SHIFT key pressed) if the
+	 * menuProvider property is not defined. (This allows for a default or test-only static menu to be
+	 * used.)
+	 */
+	fullMenu?: Localized<MultiColumnMenu>;
 	/** Additional css class(es) to help with unique styling of the sub-components */
 	className?: string;
 	/** Value to use as prefix for ARIA labels on interactive sub-components */
 	ariaLabelPrefix?: string;
 };
-export function HamburgerMenuButton({ normalMenu, fullMenu, commandHandler, containerRef, offsetFromBottomOfButtonToTopOfMenu, className, ariaLabelPrefix, children, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
+export function HamburgerMenuButton({ menuProvider, normalMenu, fullMenu, commandHandler, containerRef, offsetFromBottomOfButtonToTopOfMenu, className, ariaLabelPrefix, children, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
 export type IconButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
@@ -919,15 +952,12 @@ export type TextFieldProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function TextField({ variant, id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
-export interface MultiColumnMenuProvider {
-	(isSupportAndDevelopment: boolean): MultiColumnMenu;
-}
 export type ToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	commandHandler: CommandHandler;
 	/**
-	 * The optional delegate to use to get the menu data. If not specified or if it returns undefined,
-	 * the "hamburger" menu will not display.
+	 * The optional delegate to use to get the menu data. If not specified, the "hamburger" menu will
+	 * not display.
 	 */
 	menuProvider?: MultiColumnMenuProvider;
 	/** Optional unique identifier */

@@ -86,7 +86,7 @@ export default abstract class DocumentCombinerEngine {
    */
   deleteContribution(documentName: string): object | undefined {
     const document = this.contributions.get(documentName);
-    if (!document) throw new Error(`{documentKey} does not exist`);
+    if (!document) throw new Error(`${documentName} does not exist`);
     this.contributions.delete(documentName);
     try {
       return this.rebuild();
@@ -94,6 +94,31 @@ export default abstract class DocumentCombinerEngine {
       // If the output isn't valid after deleting the contribution, put it back and rethrow
       this.contributions.set(documentName, document);
       throw new Error(`Error when deleting the document named ${documentName}: ${error}`);
+    }
+  }
+
+  /**
+   * Delete all present contribution documents for the composition process and return to the base
+   * document
+   *
+   * @returns Recalculated output document consisting only of the base document
+   */
+  deleteAllContributions(): object | undefined {
+    // Save out all contributions
+    const contributions = [...this.contributions.entries()];
+
+    // Delete all contributions
+    contributions.forEach(([contributionName]) => this.contributions.delete(contributionName));
+
+    // Rebuild with no contributions
+    try {
+      return this.rebuild();
+    } catch (error) {
+      // If the output isn't valid after deleting all contributions, put them back and rethrow
+      contributions.forEach(([contributionName, document]) =>
+        this.contributions.set(contributionName, document),
+      );
+      throw new Error(`Error when deleting all contributions: ${error}`);
     }
   }
 

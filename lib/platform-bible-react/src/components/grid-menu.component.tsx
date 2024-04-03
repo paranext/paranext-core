@@ -1,6 +1,11 @@
 import { useMemo } from 'react';
 import { Grid, List } from '@mui/material';
-import { MenuColumnWithHeader, MultiColumnMenu, ReferencedItem } from 'platform-bible-utils';
+import {
+  Localized,
+  MenuColumnWithHeader,
+  MultiColumnMenu,
+  ReferencedItem,
+} from 'platform-bible-utils';
 import { CommandHandler } from './menu-item.component';
 import { GroupedMenuPropsBase } from './grouped-menu-item-list.component';
 import TopLevelMenu from './top-level-menu.component';
@@ -15,7 +20,7 @@ type ColumnInfo = {
   /*
    * Metadata (label, order, etc.) for a specific menu column.
    */
-  metadata: MenuColumnWithHeader;
+  metadata: Localized<MenuColumnWithHeader>;
 };
 
 type MenuColumnProps = ColumnInfo &
@@ -26,7 +31,7 @@ type MenuColumnProps = ColumnInfo &
 
 export type GridMenuInfo = {
   /** The menu object containing information about the columns, groups, and items to display. */
-  multiColumnMenu: MultiColumnMenu;
+  multiColumnMenu: Localized<MultiColumnMenu>;
 };
 
 export type GridMenuProps = GridMenuInfo & {

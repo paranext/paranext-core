@@ -3,6 +3,8 @@
 // changed so they align.
 //----------------------------------------------------------------------------------------------
 
+import { ReplaceType } from './util';
+
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;
 
@@ -67,10 +69,19 @@ export type MenuItemContainingCommand = MenuItemBase & {
 };
 
 /**
- * Group of menu items that can be combined with other groups to form a single menu/submenu. Groups
- * are separated using a line within the menu/submenu.
+ * Group of menu items that can be combined with other groups to form a single context menu/submenu.
+ * Groups are separated using a line within the menu/submenu.
  */
-export type Groups = {
+export type GroupsInSingleColumnMenu = {
+  /** Named menu group */
+  [property: ReferencedItem]: OrderedExtensibleContainer | MenuGroupDetailsInSubMenu;
+};
+
+/**
+ * Group of menu items that can be combined with other groups to form a single menu/submenu within a
+ * multi-column menu. Groups are separated using a line within the menu/submenu.
+ */
+export type GroupsInMultiColumnMenu = {
   /** Named menu group */
   [property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
 };
@@ -86,15 +97,19 @@ export type ColumnsWithHeaders = {
 /** Menu that contains a column without a header */
 export type SingleColumnMenu = {
   /** Groups that belong in this menu */
-  groups: Groups;
+  groups: GroupsInSingleColumnMenu;
   /** List of menu items that belong in this menu */
   items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
 };
 
 /** Menu that contains multiple columns with headers */
-export type MultiColumnMenu = SingleColumnMenu & {
+export type MultiColumnMenu = {
   /** Columns that belong in this menu */
   columns: ColumnsWithHeaders;
+  /** Groups that belong in this menu */
+  groups: GroupsInMultiColumnMenu;
+  /** List of menu items that belong in this menu */
+  items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
 };
 
 /** Menus for one single web view */
@@ -113,7 +128,7 @@ export type WebViewMenus = {
   [property: ReferencedItem]: WebViewMenu;
 };
 
-/** Platform.Bible menus */
+/** Platform.Bible menus before they are localized */
 export type PlatformMenus = {
   /** Top level menu for the application */
   mainMenu: MultiColumnMenu;
@@ -124,6 +139,12 @@ export type PlatformMenus = {
   /** Default top menu for web views that don't specify their own */
   defaultWebViewTopMenu: MultiColumnMenu;
 };
+
+/**
+ * Type that converts any menu type before it is localized to what it is after it is localized. This
+ * can be applied to any menu type as needed.
+ */
+export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
 
 //----------------------------------------------------------------------------------------------
 // NOTE: If you change the schema below, make sure the TS types above get changed so they align.

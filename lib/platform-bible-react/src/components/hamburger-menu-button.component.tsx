@@ -8,9 +8,14 @@ import {
 } from 'react';
 import { IconButton, Drawer } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
-import { MultiColumnMenu } from 'platform-bible-utils';
+import { MultiColumnMenu, Localized } from 'platform-bible-utils';
 import { Command, CommandHandler } from './menu-item.component';
 import GridMenu from './grid-menu.component';
+import usePromise from '../hooks/use-promise.hook';
+
+export interface MultiColumnMenuProvider {
+  (isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>>;
+}
 
 export type HamburgerMenuButtonProps = PropsWithChildren & {
   /** The handler to use for menu commands (and eventually toolbar commands). */
@@ -28,14 +33,24 @@ export type HamburgerMenuButtonProps = PropsWithChildren & {
    */
   offsetFromBottomOfButtonToTopOfMenu?: number;
 
-  /** The menu data to show when the menu is opened. */
-  normalMenu: MultiColumnMenu;
+  /**
+   * The delegate to use to get the menu data. If not specified or if it returns undefined, the data
+   * in normalMenu or fullMenu property will be used.
+   */
+  menuProvider?: MultiColumnMenuProvider;
 
   /**
-   * The menu data to show when the menu is opened with the SHIFT key pressed. If not defined, the
-   * normal menu will display.
+   * The menu data to show when the menu is opened if the menuProvider property is not defined.
+   * (This allows for a default or test-only static menu to be used.)
    */
-  fullMenu?: MultiColumnMenu;
+  normalMenu?: Localized<MultiColumnMenu>;
+
+  /**
+   * The menu data to show for "full" menu (when opened with the SHIFT key pressed) if the
+   * menuProvider property is not defined. (This allows for a default or test-only static menu to be
+   * used.)
+   */
+  fullMenu?: Localized<MultiColumnMenu>;
 
   /** Additional css class(es) to help with unique styling of the sub-components */
   className?: string;
@@ -45,6 +60,7 @@ export type HamburgerMenuButtonProps = PropsWithChildren & {
 };
 
 export default function HamburgerMenuButton({
+  menuProvider,
   normalMenu,
   fullMenu,
   commandHandler,
@@ -62,18 +78,15 @@ export default function HamburgerMenuButton({
     setShowFullMenu(false);
   }, [isMenuOpen]);
 
-  const handleMenuButtonClick = useCallback(
-    (e: MouseEvent<HTMLButtonElement>) => {
-      e.stopPropagation();
-      setMenuOpen((prevIsOpen) => {
-        const isOpening = !prevIsOpen;
-        if (isOpening && fullMenu && e.shiftKey) setShowFullMenu(true);
-        else if (!isOpening) setShowFullMenu(false);
-        return isOpening;
-      });
-    },
-    [fullMenu],
-  );
+  const handleMenuButtonClick = useCallback((e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setMenuOpen((prevIsOpen) => {
+      const isOpening = !prevIsOpen;
+      if (isOpening && e.shiftKey) setShowFullMenu(true);
+      else if (!isOpening) setShowFullMenu(false);
+      return isOpening;
+    });
+  }, []);
 
   const menuCommandHandler = useCallback(
     (command: Command) => {
@@ -82,8 +95,6 @@ export default function HamburgerMenuButton({
     },
     [commandHandler, handleMenuItemClick],
   );
-
-  const menu = showFullMenu && fullMenu ? fullMenu : normalMenu;
 
   const [topOfMenu, setTopOfMenu] = useState(0);
 
@@ -96,6 +107,26 @@ export default function HamburgerMenuButton({
       }
     }
   }, [isMenuOpen, containerRef, offsetFromBottomOfButtonToTopOfMenu]);
+
+  const [normalMenuData] = usePromise(
+    useCallback(async () => {
+      return menuProvider?.(false) ?? normalMenu;
+      // isMenuOpen needs to be included for the menu contents to reevaluate when reopened
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [menuProvider, normalMenu, isMenuOpen]),
+    normalMenu,
+  );
+
+  const [fullMenuData] = usePromise(
+    useCallback(async () => {
+      return menuProvider?.(true) ?? fullMenu ?? normalMenuData;
+      // isMenuOpen needs to be included for the menu contents to reevaluate when reopened
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [menuProvider, fullMenu, normalMenuData, isMenuOpen]),
+    fullMenu ?? normalMenuData,
+  );
+
+  const menu = showFullMenu && fullMenuData ? fullMenuData : normalMenuData;
 
   return (
     <>
@@ -121,12 +152,14 @@ export default function HamburgerMenuButton({
           },
         }}
       >
-        <GridMenu
-          className={className}
-          id={`${ariaLabelPrefix ?? ''} main menu`}
-          commandHandler={menuCommandHandler}
-          multiColumnMenu={menu}
-        />
+        {menu ? (
+          <GridMenu
+            className={className}
+            id={`${ariaLabelPrefix ?? ''} main menu`}
+            commandHandler={menuCommandHandler}
+            multiColumnMenu={menu}
+          />
+        ) : undefined}
       </Drawer>
     </>
   );

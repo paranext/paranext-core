@@ -30,6 +30,8 @@ import {
 } from 'platform-bible-utils';
 import LogError from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
+import { menuDocumentCombiner } from '@extension-host/services/menu-data.service-host';
+import menuDataService from '@shared/services/menu-data.service';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -744,9 +746,33 @@ function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | u
   );
 }
 
+async function resyncMenus(extensionsToAdd: Readonly<ExtensionManifest & { dirUri: string }>[]) {
+  const currentMenus = menuDocumentCombiner.rawOutput;
+  if (currentMenus) {
+    menuDocumentCombiner.deleteAllContributions();
+  }
+
+  await Promise.all(
+    extensionsToAdd.map(async (extension) => {
+      if (!extension.menus) return;
+      try {
+        // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
+        const menuJson = await nodeFS.readFileText(joinUriPaths(extension.dirUri, extension.menus));
+        const menuDocument = JSON.parse(menuJson);
+        menuDocumentCombiner.addOrUpdateContribution(extension.name, menuDocument);
+      } catch (error) {
+        logger.warn(`Could not add menu JSON for ${extension.name}: ${error}`);
+      }
+    }),
+  );
+
+  await menuDataService.rebuildMenus();
+}
+
 async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<void> {
-  if (shouldDeactivateExtensions && availableExtensions)
+  if (shouldDeactivateExtensions && availableExtensions) {
     await deactivateExtensions(availableExtensions);
+  }
 
   await unzipCompressedExtensionFiles();
 
@@ -773,8 +799,11 @@ async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<vo
   });
   setExtensionUris(uriMap);
 
-  // And finally activate them
+  // Active the extensions
   await activateExtensions(availableExtensions);
+
+  // Update the menus
+  await resyncMenus(allExtensions.filter((extension) => extension.menus));
 }
 
 /**

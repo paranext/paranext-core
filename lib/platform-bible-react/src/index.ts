@@ -18,6 +18,7 @@ export { default as GridMenu } from './components/grid-menu.component';
 export type { GridMenuProps, GridMenuInfo } from './components/grid-menu.component';
 export { default as ContextMenu } from './components/context-menu.component';
 export { default as HamburgerMenuButton } from './components/hamburger-menu-button.component';
+export type { MultiColumnMenuProvider } from './components/hamburger-menu-button.component';
 export { default as IconButton } from './components/icon-button.component';
 export type { IconButtonProps } from './components/icon-button.component';
 export { default as LabelPosition } from './components/label-position.model';
@@ -56,7 +57,7 @@ export type {
 export { default as TextField } from './components/text-field.component';
 export type { TextFieldProps } from './components/text-field.component';
 export { default as Toolbar } from './components/toolbar.component';
-export type { ToolbarProps, MultiColumnMenuProvider } from './components/toolbar.component';
+export type { ToolbarProps } from './components/toolbar.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

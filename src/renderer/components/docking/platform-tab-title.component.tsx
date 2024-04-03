@@ -65,7 +65,7 @@ export default function PlatformTabTitle({
         ) : (
           <HamburgerMenuButton
             commandHandler={handleMenuCommand}
-            normalMenu={webViewMenu.topMenu}
+            normalMenu={webViewMenu?.topMenu}
             className="tab-menu-button"
             aria-label="Tab"
             offsetFromBottomOfButtonToTopOfMenu={20}

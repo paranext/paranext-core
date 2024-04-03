@@ -12,6 +12,8 @@ import { groupBy } from 'platform-bible-utils';
  * @param uri URI of file
  * @returns Promise that resolves to the contents of the file
  */
+// TODO: Provide options or some other way to allow callers to the URI isn't pointing outside of
+// some expected location (e.g., an extension file's URI doesn't point outside of the extension dir)
 export async function readFileText(uri: Uri): Promise<string> {
   return fs.promises.readFile(getPathFromUri(uri), 'utf8');
 }
