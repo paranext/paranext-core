@@ -3,6 +3,7 @@ import { HamburgerMenuButton } from 'platform-bible-react';
 import './platform-tab-title.component.scss';
 import menuDataService from '@shared/services/menu-data.service';
 import { useData } from '@renderer/hooks/papi-hooks';
+import { useRef } from 'react';
 import { handleMenuCommand } from '../platform-bible-menu.commands';
 
 type PlatformTabTitleProps = {
@@ -57,9 +58,13 @@ export default function PlatformTabTitle({
     />
   );
 
+  // This ref will always be defined
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const containerRef = useRef<HTMLDivElement>(undefined!);
+
   return (
     <Tooltip title={tooltipDiv}>
-      <div className="title">
+      <div ref={containerRef} className="title">
         {isLoading || !webViewMenu?.topMenu ? (
           icon
         ) : (
@@ -68,7 +73,7 @@ export default function PlatformTabTitle({
             normalMenu={webViewMenu?.topMenu}
             className="tab-menu-button"
             aria-label="Tab"
-            offsetFromBottomOfButtonToTopOfMenu={20}
+            containerRef={containerRef}
           >
             {icon}
           </HamburgerMenuButton>

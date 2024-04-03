@@ -22,16 +22,10 @@ export type HamburgerMenuButtonProps = PropsWithChildren & {
   commandHandler: CommandHandler;
 
   /**
-   * Optional reference to the "div" container that determines the top of the area in which the menu
-   * should appear. If not defined, then the offsetFromBottomOfMenuToTopOfMenu is used.
+   * Optional reference to the "div" container that determines the where the menu should appear. If
+   * not defined, then (1,1) used.
    */
   containerRef?: MutableRefObject<HTMLDivElement>;
-
-  /**
-   * If containerRef is not defined, this is the desired offset in pixels from the bottom of the
-   * button to the top of menu. Defaults to 1.
-   */
-  offsetFromBottomOfButtonToTopOfMenu?: number;
 
   /**
    * The delegate to use to get the menu data. If not specified or if it returns undefined, the data
@@ -65,7 +59,6 @@ export default function HamburgerMenuButton({
   fullMenu,
   commandHandler,
   containerRef,
-  offsetFromBottomOfButtonToTopOfMenu,
   className,
   ariaLabelPrefix,
   children,
@@ -96,17 +89,21 @@ export default function HamburgerMenuButton({
     [commandHandler, handleMenuItemClick],
   );
 
-  const [topOfMenu, setTopOfMenu] = useState(0);
+  const [offset, setOffset] = useState({ top: 1, left: 1 });
 
   useEffect(() => {
     if (isMenuOpen) {
-      if (containerRef?.current) {
-        setTopOfMenu(containerRef.current.clientHeight);
-      } else {
-        setTopOfMenu(offsetFromBottomOfButtonToTopOfMenu ?? 1);
+      const node = containerRef?.current;
+      if (node) {
+        const rect = node.getBoundingClientRect();
+        const scrollTop = window.scrollY;
+        const scrollLeft = window.scrollX;
+        const top = rect.top + scrollTop + node.clientHeight;
+        const left = rect.left + scrollLeft;
+        setOffset({ top, left });
       }
     }
-  }, [isMenuOpen, containerRef, offsetFromBottomOfButtonToTopOfMenu]);
+  }, [isMenuOpen, containerRef]);
 
   const [normalMenuData] = usePromise(
     useCallback(async () => {
@@ -131,6 +128,10 @@ export default function HamburgerMenuButton({
   return (
     <>
       <IconButton
+        sx={{
+          paddingTop: 0,
+          paddingBottom: 0,
+        }}
         edge="start"
         className={`papi-menuButton ${className ?? ''}`}
         color="inherit"
@@ -142,13 +143,14 @@ export default function HamburgerMenuButton({
       <Drawer
         className={`papi-menu-drawer ${className ?? ''}`}
         anchor="left"
-        variant="persistent"
+        variant="temporary"
         open={isMenuOpen}
         onClose={handleMenuItemClick}
         PaperProps={{
           className: 'papi-menu-drawer-paper',
           style: {
-            top: topOfMenu,
+            top: offset.top,
+            left: offset.left,
           },
         }}
       >
