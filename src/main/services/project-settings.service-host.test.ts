@@ -19,23 +19,32 @@ jest.mock('@main/data/core-project-settings-info.data', () => ({
     // Not present! Should throw error 'platformScripture.versification': { default: 1629326 },
   },
   coreProjectSettingsValidators: {
-    'platformScripture.booksPresent': async (): Promise<boolean> => {
-      // Accept all attempts to set the books present
-      return true;
+    'platform.language': async (newValue: string): Promise<boolean> => {
+      return newValue === 'eng' || newValue === 'fre';
     },
   },
 }));
 
 describe('isValid', () => {
   it('should return true', async () => {
-    const projectSettingKey = 'platformScripture.booksPresent';
+    const projectSettingKey = 'platform.language';
     const isSettingChangeValid = await testingProjectSettingsService.isValid(
       projectSettingKey,
-      '000000011110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
-      '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+      'eng',
+      '%test_project_language_missing%',
       'ParatextStandard',
     );
     expect(isSettingChangeValid).toBe(true);
+  });
+  it('should return false', async () => {
+    const projectSettingKey = 'platform.language';
+    const isSettingChangeValid = await testingProjectSettingsService.isValid(
+      projectSettingKey,
+      'ger',
+      '%test_project_language_missing%',
+      'ParatextStandard',
+    );
+    expect(isSettingChangeValid).toBe(false);
   });
 });
 

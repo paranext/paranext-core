@@ -1,3 +1,5 @@
+import { serializeRequestType } from '@shared/utils/util';
+import * as networkService from '@shared/services/network.service';
 import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
 import { UnsubscriberAsync } from 'platform-bible-utils';
 
@@ -5,6 +7,18 @@ import { UnsubscriberAsync } from 'platform-bible-utils';
 export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
 
 export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
+export const projectSettingsServiceObjectToProxy = Object.freeze({
+  /** JSDOC DESTINATION projectSettingsServiceRegisterValidator */
+  registerValidator: async <ProjectSettingName extends ProjectSettingNames>(
+    key: ProjectSettingName,
+    validator: ProjectSettingValidator<ProjectSettingName>,
+  ): Promise<UnsubscriberAsync> => {
+    return networkService.registerRequestHandler(
+      serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key),
+      validator,
+    );
+  },
+});
 
 /**
  * JSDOC SOURCE projectSettingsService
@@ -52,7 +66,9 @@ export interface IProjectSettingsService {
     projectType: ProjectTypes,
   ): Promise<ProjectSettingTypes[ProjectSettingName]>;
   /**
-   * Registers a function that validates whether a new setting value is allowed to be set.
+   * JSDOC SOURCE projectSettingsServiceRegisterValidator
+   *
+   * Registers a function that validates whether a new project setting value is allowed to be set.
    *
    * @param key The string id of the setting to validate
    * @param validator Function to call to validate the new setting value

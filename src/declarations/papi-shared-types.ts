@@ -172,13 +172,16 @@ declare module 'papi-shared-types' {
     TProjectDataTypes extends DataProviderDataTypes,
   > = {
     /**
-     * Set the value of the specified project setting on this project. `setSetting` must call
-     * `papi.projectSettings.isValid` before allowing the setting change.
+     * Set the value of the specified project setting on this project.
+     *
+     * Note: `setSetting` must call `papi.projectSettings.isValid` before allowing the setting
+     * change.
      *
      * @param key The string id of the project setting to change
      * @param newSetting The value that is to be set to the project setting.
      * @returns Information that papi uses to interpret whether to send out updates. Defaults to
      *   `true` (meaning send updates only for this data type).
+     * @throws If the setting validator failed.
      * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
     setSetting: <ProjectSettingName extends ProjectSettingNames>(

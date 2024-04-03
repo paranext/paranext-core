@@ -1,8 +1,10 @@
 import {
   projectSettingsServiceNetworkObjectName,
   IProjectSettingsService,
+  projectSettingsServiceObjectToProxy,
 } from '@shared/services/project-settings.service-model';
 import networkObjectService from '@shared/services/network-object.service';
+import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let networkObject: IProjectSettingsService;
 let initializationPromise: Promise<void>;
@@ -31,19 +33,9 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const projectSettingsService: IProjectSettingsService = {
-  async getDefault(key, projectType) {
-    await initialize();
-    return networkObject.getDefault(key, projectType);
-  },
-  async isValid(newValue, currentValue, key, allChanges, projectType) {
-    await initialize();
-    return networkObject.isValid(newValue, currentValue, key, allChanges, projectType);
-  },
-  async registerValidator(key, validator) {
-    await initialize();
-    return networkObject.registerValidator(key, validator);
-  },
-};
+const projectSettingsService = createSyncProxyForAsyncObject<IProjectSettingsService>(async () => {
+  await initialize();
+  return networkObject;
+}, projectSettingsServiceObjectToProxy);
 
 export default projectSettingsService;

@@ -7,13 +7,13 @@ import networkObjectService from '@shared/services/network-object.service';
 import {
   CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR,
   IProjectSettingsService,
-  ProjectSettingValidator,
   SimultaneousProjectSettingsChanges,
   projectSettingsServiceNetworkObjectName,
+  projectSettingsServiceObjectToProxy,
 } from '@shared/services/project-settings.service-model';
 import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
-import { UnsubscriberAsync } from 'platform-bible-utils';
+import { includes } from 'platform-bible-utils';
 
 /**
  * Our internal list of project settings information for each setting. Theoretically this should not
@@ -49,16 +49,26 @@ async function isValid<ProjectSettingName extends ProjectSettingNames>(
   projectType: ProjectTypes,
   allChanges?: SimultaneousProjectSettingsChanges,
 ): Promise<boolean> {
-  try {
-    if (key in coreProjectSettingsValidators) {
-      const projectSettingValidator = coreProjectSettingsValidators[key];
-      if (projectSettingValidator)
-        return projectSettingValidator(newValue, currentValue, allChanges ?? {}, projectType);
-    }
-    // If there is no validator let the change go through
+  if (key in coreProjectSettingsValidators) {
+    const projectSettingValidator = coreProjectSettingsValidators[key];
+    if (projectSettingValidator)
+      return projectSettingValidator(newValue, currentValue, allChanges ?? {}, projectType);
+    // If key exists in coreProjectSettingsValidators but there is no validator, let the change go through
     return true;
+  }
+  try {
+    return networkService.request(
+      serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key),
+      newValue,
+      currentValue,
+      allChanges ?? {},
+      projectType,
+    );
   } catch (error) {
-    throw new Error(`Error validating setting for key '${key}': ${error}`);
+    // If there is no validator just let the change go through
+    const missingValidatorMsg = `No handler was found to process the request of type`;
+    if (includes(`${error}`, missingValidatorMsg)) return true;
+    throw error;
   }
 }
 
@@ -77,16 +87,7 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
   return projectSettingInfo.default;
 }
 
-async function registerValidator<ProjectSettingName extends ProjectSettingNames>(
-  key: ProjectSettingName,
-  validatorCallback: ProjectSettingValidator<ProjectSettingName>,
-): Promise<UnsubscriberAsync> {
-  return networkService.registerRequestHandler(
-    serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key),
-    validatorCallback,
-  );
-}
-
+const { registerValidator } = projectSettingsServiceObjectToProxy;
 const projectSettingsService: IProjectSettingsService = {
   isValid,
   getDefault,
