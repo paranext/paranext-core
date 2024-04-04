@@ -58,7 +58,7 @@
     "stringz": "^2.1.0",
     "tslib": "^2.6.2",
     "typescript": "^5.3.3",
-    "vite": "^4.5.2"
+    "vite": "^4.5.3"
   },
   "volta": {
     "extends": "../../package.json"
