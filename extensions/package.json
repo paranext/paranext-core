@@ -79,6 +79,7 @@
     "webpack-merge": "^5.10.0",
     "zip-folder-promise": "^1.2.0"
   },
+  "workspaces": ["src/*"],
   "volta": {
     "extends": "../package.json"
   }
