@@ -1,23 +1,16 @@
-import { useRef, useState, useCallback, useEffect, MouseEvent, PropsWithChildren } from 'react';
-import { AppBar, Toolbar as MuiToolbar, IconButton, Drawer } from '@mui/material';
-import { Menu as MenuIcon } from '@mui/icons-material';
-import { Localized, MultiColumnMenu } from 'platform-bible-utils';
-import { Command, CommandHandler } from './menu-item.component';
-import GridMenu from './grid-menu.component';
+import { useRef, PropsWithChildren } from 'react';
+import { AppBar, Toolbar as MuiToolbar } from '@mui/material';
+import { CommandHandler } from './menu-item.component';
+import HamburgerMenuButton, { MultiColumnMenuProvider } from './hamburger-menu-button.component';
 import './toolbar.component.css';
-import usePromise from '../hooks/use-promise.hook';
-
-export interface MultiColumnMenuProvider {
-  (isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>>;
-}
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
   commandHandler: CommandHandler;
 
   /**
-   * The optional delegate to use to get the menu data. If not specified or if it returns undefined,
-   * the "hamburger" menu will not display.
+   * The optional delegate to use to get the menu data. If not specified, the "hamburger" menu will
+   * not display.
    */
   menuProvider?: MultiColumnMenuProvider;
 
@@ -35,90 +28,22 @@ export default function Toolbar({
   id,
   children,
 }: ToolbarProps) {
-  const [isMenuOpen, setMenuOpen] = useState(false);
-  const [hasShiftModifier, setHasShiftModifier] = useState(false);
-
-  const handleMenuItemClick = useCallback(() => {
-    if (isMenuOpen) setMenuOpen(false);
-    setHasShiftModifier(false);
-  }, [isMenuOpen]);
-
-  const handleMenuButtonClick = useCallback((e: MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    setMenuOpen((prevIsOpen) => {
-      const isOpening = !prevIsOpen;
-      if (isOpening && e.shiftKey) setHasShiftModifier(true);
-      else if (!isOpening) setHasShiftModifier(false);
-      return isOpening;
-    });
-  }, []);
-
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const containerRef = useRef<HTMLDivElement>(undefined!);
-
-  const [toolbarHeight, setToolbarHeight] = useState(0);
-
-  useEffect(() => {
-    if (isMenuOpen && containerRef.current) {
-      setToolbarHeight(containerRef.current.clientHeight);
-    }
-  }, [isMenuOpen]);
-
-  const toolbarCommandHandler = useCallback(
-    (command: Command) => {
-      handleMenuItemClick();
-      return commandHandler(command);
-    },
-    [commandHandler, handleMenuItemClick],
-  );
-
-  const [menuData] = usePromise(
-    useCallback(async () => {
-      return menuProvider?.(hasShiftModifier);
-      // isMenuOpen needs to be included for the menu contents to reevaluate when reopened
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [menuProvider, hasShiftModifier, isMenuOpen]),
-    undefined,
-  );
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
       <AppBar position="static" id={id}>
         <MuiToolbar className={`papi-toolbar ${className ?? ''}`} variant="dense">
-          {menuData ? (
-            <IconButton
-              edge="start"
-              className={`papi-menuButton ${className ?? ''}`}
-              color="inherit"
-              aria-label="open drawer"
-              onClick={handleMenuButtonClick}
-            >
-              <MenuIcon />
-            </IconButton>
+          {menuProvider ? (
+            <HamburgerMenuButton
+              commandHandler={commandHandler}
+              containerRef={containerRef}
+              menuProvider={menuProvider}
+            />
           ) : undefined}
-          {children ? <div className="papi-menu-children">{children}</div> : undefined}
-          {menuData ? (
-            <Drawer
-              className={`papi-menu-drawer ${className ?? ''}`}
-              anchor="left"
-              variant="persistent"
-              open={isMenuOpen}
-              onClose={handleMenuItemClick}
-              PaperProps={{
-                className: 'papi-menu-drawer-paper',
-                style: {
-                  top: toolbarHeight,
-                },
-              }}
-            >
-              <GridMenu
-                className={className}
-                commandHandler={toolbarCommandHandler}
-                multiColumnMenu={menuData}
-              />
-            </Drawer>
-          ) : undefined}
+          {children ? <div className="papi-toolbar-children">{children}</div> : undefined}
         </MuiToolbar>
       </AppBar>
     </div>

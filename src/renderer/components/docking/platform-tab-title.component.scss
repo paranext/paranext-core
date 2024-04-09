@@ -5,7 +5,7 @@
   align-items: center;
 }
 
-.tab-menu-button {
+.tab-menu-icon {
   margin: 0;
   margin-right: $space--xs;
   padding: 0;
@@ -16,6 +16,10 @@
   width: $space--m;
   height: $space--m;
   vertical-align: middle;
+}
+
+.tab-menu-button {
+  padding-top: 0;
 }
 
 .tooltip {

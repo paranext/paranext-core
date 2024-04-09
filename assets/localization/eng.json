@@ -22,5 +22,12 @@
   "webView_project": "Project",
   "webView_projectAssignmentsAndProgress": "Assignments and Progress",
   "webView_projectSendReceive": "Send/Receive this project",
-  "wordList": "Word List"
+  "wordList": "Word List",
+  "webView_resourceViewer_options": "Options",
+  "webView_resourceViewer_info": "Info",
+  "webView_resourceViewer_backgroundColor": "Background Color",
+  "webView_resourceViewer_textColor": "Text Color",
+  "webView_resourceViewer_thickBorders": "Thick Borders",
+  "webView_resourceViewer_publisherInfo": "Publisher Info",
+  "webView_resourceViewer_copyrightInfo": "Copyright Info"
 }
