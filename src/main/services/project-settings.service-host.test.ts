@@ -1,6 +1,14 @@
 import { testingProjectSettingsService } from '@main/services/project-settings.service-host';
+import { ProjectSettingValidator } from '@shared/services/project-settings.service-model';
 
+jest.mock('@shared/services/network.service', () => ({
+  ...jest.requireActual('@shared/services/network.service'),
+  registerRequestHandler: () => {
+    return {};
+  },
+}));
 jest.mock('@main/data/core-project-settings-info.data', () => ({
+  ...jest.requireActual('@main/data/core-project-settings-info.data'),
   __esModule: true,
   default: {
     'platform.fullName': { default: '%test_project_full_name_missing%' },
@@ -10,18 +18,33 @@ jest.mock('@main/data/core-project-settings-info.data', () => ({
     },
     // Not present! Should throw error 'platformScripture.versification': { default: 1629326 },
   },
+  coreProjectSettingsValidators: {
+    'platform.language': async (newValue: string): Promise<boolean> => {
+      return newValue === 'eng' || newValue === 'fre';
+    },
+  },
 }));
 
 describe('isValid', () => {
-  it('should return true always - TEMP. TODO: Fix when we implement validation #511', async () => {
+  it('should return true', async () => {
+    const projectSettingKey = 'platform.language';
     const isSettingChangeValid = await testingProjectSettingsService.isValid(
-      '',
-      '',
-      'platform.fullName',
-      {},
+      projectSettingKey,
+      'eng',
+      '%test_project_language_missing%',
       'ParatextStandard',
     );
     expect(isSettingChangeValid).toBe(true);
+  });
+  it('should return false', async () => {
+    const projectSettingKey = 'platform.language';
+    const isSettingChangeValid = await testingProjectSettingsService.isValid(
+      projectSettingKey,
+      'ger',
+      '%test_project_language_missing%',
+      'ParatextStandard',
+    );
+    expect(isSettingChangeValid).toBe(false);
   });
 });
 
@@ -40,5 +63,19 @@ describe('getDefault', () => {
     await expect(
       testingProjectSettingsService.getDefault(projectSettingKey, 'ParatextStandard'),
     ).rejects.toThrow(new RegExp(`default value for project setting ${projectSettingKey}`));
+  });
+});
+
+describe('registerValidator', () => {
+  it('should resolve', async () => {
+    const projectSettingKey = 'platform.fullName';
+    const fullNameSettingsValidator: ProjectSettingValidator<
+      'platform.fullName'
+    > = async (): Promise<boolean> => {
+      return true;
+    };
+    await expect(
+      testingProjectSettingsService.registerValidator(projectSettingKey, fullNameSettingsValidator),
+    ).resolves.toStrictEqual({});
   });
 });
