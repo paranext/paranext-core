@@ -132,6 +132,10 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
 
     const { retrieveDataImmediately, whichUpdates } = subscriberOptions;
 
+    // Keep track of whether we should call the callback when we receive a result or if they have already unsubscribed
+    // Important because a promise could resolve after they have unsubscribed
+    let isSubscribed = true;
+
     /**
      * The most recent data before the newest update. Used for deep comparison checks to prevent
      * useless updates
@@ -149,6 +153,9 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
     const callbackWithUpdate = async (
       updateEventResult: DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>,
     ) => {
+      // If we're already unsubscribed somehow, don't want to run this
+      if (!isSubscribed) return;
+
       if (
         updateEventResult !== '*' &&
         (!Array.isArray(updateEventResult) || !updateEventResult.includes(dataType))
@@ -156,32 +163,41 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
         // The update does not apply to this data type. Ignore
         return;
 
-      // The update is relevant to this data type, so continue with this subscription
-      // Get the data at our selector when we receive notification that the data updated
-      // TODO: Implement selector events so we can receive the new data with the update instead of reaching back out for it
-      // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
-      // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
-      // to specify the specific types
-      /* eslint-disable no-type-assertion/no-type-assertion */
-      const data = await (
-        dataProviderUntyped[
-          `get${dataType}`
-          // Sadly DataProviderGetter<DataProviderTypes[DataProviderName][typeof dataType]> doesn't
-          // work here. See comment in function signature for more info
-        ] as DataProviderGetter<DataProviderDataType<unknown, unknown, unknown>>
-      )(selector);
-      /* eslint-enable */
-      // Take note that we have received an update so we don't run the callback with the old data below in the `retrieveDataImmediately` code
-      receivedUpdate = true;
+      try {
+        // The update is relevant to this data type, so continue with this subscription
+        // Get the data at our selector when we receive notification that the data updated
+        // TODO: Implement selector events so we can receive the new data with the update instead of reaching back out for it
+        // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
+        // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
+        // to specify the specific types
+        /* eslint-disable no-type-assertion/no-type-assertion */
+        const data = await (
+          dataProviderUntyped[
+            `get${dataType}`
+            // Sadly DataProviderGetter<DataProviderTypes[DataProviderName][typeof dataType]> doesn't
+            // work here. See comment in function signature for more info
+          ] as DataProviderGetter<DataProviderDataType<unknown, unknown, unknown>>
+        )(selector);
+        /* eslint-enable */
+        // Take note that we have received an update so we don't run the callback with the old data below in the `retrieveDataImmediately` code
+        receivedUpdate = true;
 
-      // Only update if we should listen to all updates, if the old data is the default placeholder data, or the data is not deeply equal
-      if (
-        whichUpdates === '*' ||
-        dataPrevious === SUBSCRIBE_PLACEHOLDER ||
-        !deepEqual(dataPrevious, data)
-      ) {
-        dataPrevious = data;
-        callback(data);
+        // If we unsubscribed while we were awaiting the promise to get data, don't do anything
+        if (!isSubscribed) return;
+
+        // Only update if we should listen to all updates, if the old data is the default placeholder data, or the data is not deeply equal
+        if (
+          whichUpdates === '*' ||
+          dataPrevious === SUBSCRIBE_PLACEHOLDER ||
+          !deepEqual(dataPrevious, data)
+        ) {
+          dataPrevious = data;
+          callback(data);
+        }
+      } catch (e) {
+        logger.warn(
+          `Tried to retrieve data after an update event for ${dataType} with selector ${JSON.stringify(selector).substring(0, 120)}, but it threw. ${e}`,
+        );
       }
     };
 
@@ -189,29 +205,42 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
 
     // If the subscriber wants to get the data as soon as possible in addition to running the callback on updates, get the data
     if (retrieveDataImmediately) {
-      // Get the data to run the callback immediately so it has the data
-      // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
-      // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
-      // to specify the specific types
-      /* eslint-disable no-type-assertion/no-type-assertion */
-      const data = await (
-        dataProviderUntyped[
-          `get${dataType}`
-          // Sadly DataProviderGetter<DataProviderTypes[DataProviderName][typeof dataType]> doesn't
-          // work here. See comment in function signature for more info
-        ] as DataProviderGetter<DataProviderDataType<unknown, unknown, unknown>>
-      )(selector);
-      /* eslint-enable */
-      // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
-      if (!receivedUpdate) {
-        receivedUpdate = true;
-        dataPrevious = data;
-        callback(data);
-      }
+      (async () => {
+        try {
+          // Get the data to run the callback immediately so it has the data
+          // TypeScript seems to be unable to figure out these `get${dataType}` types when we wrap
+          // DataProviderInternal in NetworkObject to make IDataProvider, so we have to do all this work
+          // to specify the specific types
+          /* eslint-disable no-type-assertion/no-type-assertion */
+          const data = await (
+            dataProviderUntyped[
+              `get${dataType}`
+              // Sadly DataProviderGetter<DataProviderTypes[DataProviderName][typeof dataType]> doesn't
+              // work here. See comment in function signature for more info
+            ] as DataProviderGetter<DataProviderDataType<unknown, unknown, unknown>>
+          )(selector);
+          /* eslint-enable */
+          // Only run the callback with this updated data if we have not already received an update so we don't accidentally overwrite the newly updated data with old data
+          // And don't run the callback if we have already unsubscribed
+          if (!receivedUpdate && isSubscribed) {
+            receivedUpdate = true;
+            dataPrevious = data;
+            callback(data);
+          }
+        } catch (e) {
+          logger.warn(
+            `Tried to retrieve data immediately for ${dataType} with selector ${JSON.stringify(selector).substring(0, 120)}, but it threw. ${e}`,
+          );
+        }
+      })();
     }
 
     // Forcing the unsubscribe to be asynchronous to support selector events in the future
-    return async () => unsubscribe();
+    return async () => {
+      const didSuccessfullyUnsubscribe = unsubscribe();
+      if (didSuccessfullyUnsubscribe) isSubscribed = false;
+      return didSuccessfullyUnsubscribe;
+    };
   };
 }
 
