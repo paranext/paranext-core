@@ -1,12 +1,19 @@
+import * as networkService from '@shared/services/network.service';
 import coreProjectSettingsInfo, {
   AllProjectSettingsInfo,
+  coreProjectSettingsValidators,
 } from '@main/data/core-project-settings-info.data';
 import networkObjectService from '@shared/services/network-object.service';
 import {
+  CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR,
   IProjectSettingsService,
+  SimultaneousProjectSettingsChanges,
   projectSettingsServiceNetworkObjectName,
+  projectSettingsServiceObjectToProxy,
 } from '@shared/services/project-settings.service-model';
+import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
+import { includes } from 'platform-bible-utils';
 
 /**
  * Our internal list of project settings information for each setting. Theoretically this should not
@@ -35,9 +42,34 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-// TODO: Implement validators in https://github.com/paranext/paranext-core/issues/511
-async function isValid(): Promise<boolean> {
-  return true;
+async function isValid<ProjectSettingName extends ProjectSettingNames>(
+  key: ProjectSettingName,
+  newValue: ProjectSettingTypes[ProjectSettingName],
+  currentValue: ProjectSettingTypes[ProjectSettingName],
+  projectType: ProjectTypes,
+  allChanges?: SimultaneousProjectSettingsChanges,
+): Promise<boolean> {
+  if (key in coreProjectSettingsValidators) {
+    const projectSettingValidator = coreProjectSettingsValidators[key];
+    if (projectSettingValidator)
+      return projectSettingValidator(newValue, currentValue, allChanges ?? {}, projectType);
+    // If key exists in coreProjectSettingsValidators but there is no validator, let the change go through
+    return true;
+  }
+  try {
+    return networkService.request(
+      serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key),
+      newValue,
+      currentValue,
+      allChanges ?? {},
+      projectType,
+    );
+  } catch (error) {
+    // If there is no validator just let the change go through
+    const missingValidatorMsg = `No handler was found to process the request of type`;
+    if (includes(`${error}`, missingValidatorMsg)) return true;
+    throw error;
+  }
 }
 
 async function getDefault<ProjectSettingName extends ProjectSettingNames>(
@@ -55,9 +87,11 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
   return projectSettingInfo.default;
 }
 
+const { registerValidator } = projectSettingsServiceObjectToProxy;
 const projectSettingsService: IProjectSettingsService = {
   isValid,
   getDefault,
+  registerValidator,
 };
 
 /** This is an internal-only export for testing purposes, and should not be used in development */
