@@ -27,7 +27,6 @@ import { get } from '@shared/services/project-data-provider.service';
 import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startLocalizationService } from '@main/services/localization.service-host';
-import { initialize as initializeSettingsService } from '@main/services/settings.service-host';
 import { startProjectSettingsService } from '@main/services/project-settings.service-host';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
@@ -83,8 +82,6 @@ async function main() {
   await extensionHostService.start();
 
   await startLocalizationService();
-
-  await initializeSettingsService();
 
   await startProjectSettingsService();
 

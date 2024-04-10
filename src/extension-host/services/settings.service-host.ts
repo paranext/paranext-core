@@ -13,7 +13,10 @@ import {
   settingsServiceDataProviderName,
   settingsServiceObjectToProxy,
 } from '@shared/services/settings.service-model';
-import { coreSettingsInfo, coreSettingsValidators } from '@main/data/core-settings-info.data';
+import {
+  coreSettingsInfo,
+  coreSettingsValidators,
+} from '@extension-host/data/core-settings-info.data';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
   createSyncProxyForAsyncObject,

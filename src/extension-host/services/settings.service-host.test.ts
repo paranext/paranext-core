@@ -1,4 +1,4 @@
-import { testingSettingService } from '@main/services/settings.service-host';
+import { testingSettingService } from '@extension-host/services/settings.service-host';
 
 const MOCK_SETTINGS_DATA = {
   'platform.interfaceLanguage': ['fre'],
