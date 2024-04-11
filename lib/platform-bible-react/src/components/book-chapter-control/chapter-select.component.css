@@ -1,0 +1,28 @@
+.chapter-select {
+  display: flex;
+  padding: 0 8px 0 24px;
+  align-items: flex-start;
+  align-content: flex-start;
+  align-self: stretch;
+  flex-wrap: wrap;
+  background: var(--sl-color-neutral-50);
+
+  > div {
+    display: flex;
+    width: 16px;
+    height: 16px;
+    padding: 8px;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .active {
+    border-radius: 4px;
+    background: var(--sl-color-amber-100);
+  }
+
+  :hover {
+    background: var(--sl-color-amber-50);
+  }
+}
