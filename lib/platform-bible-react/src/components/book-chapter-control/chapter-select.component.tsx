@@ -18,7 +18,7 @@ function ChapterSelect({ endChapter, activeChapter, handleSelectChapter }: Chapt
         // When adding onClick to <div> get error: Visible, non-interactive elements with click handlers must have at least one keyboard listener.
         // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div
-          className={chapter === activeChapter ? 'active' : undefined}
+          className={`chapter ${chapter === activeChapter ? 'active' : undefined}`}
           key={chapter}
           onClick={() => handleSelectChapter(chapter)}
         >
