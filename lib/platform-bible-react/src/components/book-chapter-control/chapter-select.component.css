@@ -5,24 +5,54 @@
   align-content: flex-start;
   align-self: stretch;
   flex-wrap: wrap;
-  background: var(--sl-color-neutral-50);
-
-  > div {
-    display: flex;
-    width: 16px;
-    height: 16px;
-    padding: 8px;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-  }
-
-  .active {
-    border-radius: 4px;
-    background: var(--sl-color-amber-100);
-  }
-
-  :hover {
-    background: var(--sl-color-amber-50);
-  }
+  background: hsl(0, 0%, 96%);
 }
+
+.chapter {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  padding: 8px;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
+
+.chapter:hover {
+  background: yellow;
+}
+
+.active {
+  border-radius: 4px;
+  background: yellow;
+}
+
+/* .chapterSelector {
+  display: flex;
+  padding: 0px 8px 0px 24px;
+  align-items: flex-start;
+  align-content: flex-start;
+  align-self: stretch;
+  flex-wrap: wrap;
+  background-color: whitesmoke;
+}
+.chapterSelector.focus\:bg-accent:focus {
+  background-color: whitesmoke;
+}
+.chapterSelector > * {
+  display: flex;
+  width: 36px;
+  padding: 8px 12px 8px 4px;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.chapterSelector > *.active {
+  background-color: #fef3c7;
+}
+.chapterSelector > *:hover {
+  background-color: hsl(48 100% 96.1%);
+} */
+
+/* State=default, type=default */
