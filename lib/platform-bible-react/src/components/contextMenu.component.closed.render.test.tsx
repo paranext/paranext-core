@@ -1,8 +1,8 @@
 import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ContextMenu from './context-menu.component';
-import * as jsonMenu from './sample.composed.full.menu.json';
+import ContextMenu from '@/components/context-menu.component';
+import * as jsonMenu from '@/components/sample.composed.full.menu.json';
 
 describe('ContextMenu', () => {
   const topMenuCombiner = new NonValidatingDocumentCombiner(jsonMenu, {
