@@ -9,8 +9,8 @@ import {
 import { IconButton, Drawer } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
 import { MultiColumnMenu, Localized } from 'platform-bible-utils';
-import { Command, CommandHandler } from './menu-item.component';
-import GridMenu from './grid-menu.component';
+import { Command, CommandHandler } from '@/components/menu-item.component';
+import GridMenu from '@/components/grid-menu.component';
 import usePromise from '../hooks/use-promise.hook';
 
 export interface MultiColumnMenuProvider {

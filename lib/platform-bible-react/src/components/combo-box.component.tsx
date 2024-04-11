@@ -6,7 +6,7 @@ import {
   AutocompleteValue,
 } from '@mui/material';
 import { FocusEventHandler, SyntheticEvent } from 'react';
-import './combo-box.component.css';
+import '@/components/combo-box.component.css';
 
 export type ComboBoxLabelOption = { label: string };
 export type ComboBoxOption = string | number | ComboBoxLabelOption;
