@@ -50,8 +50,13 @@
     "@emotion/styled": ">=11.11.0",
     "@mui/material": ">=5.15.10",
     "autoprefixer": "^10.4.19",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.367.0",
     "platform-bible-utils": "file:../platform-bible-utils",
-    "react-data-grid": ">=7.0.0-beta.34"
+    "react-data-grid": ">=7.0.0-beta.34",
+    "tailwind-merge": "^2.2.2",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.24.3",
