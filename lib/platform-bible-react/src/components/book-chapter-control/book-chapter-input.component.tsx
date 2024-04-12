@@ -5,13 +5,14 @@ import { Input as ShadInput } from '@/components/shadcn-ui/input';
 export type BookChapterInputProps = {
   handleSearch: (searchString: string) => void;
   handleKeyUp: () => void;
+  handleOnClick: () => void;
   value: string;
   placeholder: string;
 };
 
 // Shadcn Input sets type to "button"- HAVE to prop spread before setting type
 const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
-  ({ handleSearch, handleKeyUp, ...props }: BookChapterInputProps, ref) => {
+  ({ handleSearch, handleKeyUp, handleOnClick, ...props }: BookChapterInputProps, ref) => {
     return (
       <div className="pr-relative">
         <ShadInput
@@ -20,6 +21,7 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
           className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none"
           onChange={(event) => handleSearch(event.target.value)}
           onKeyUp={handleKeyUp}
+          onClick={handleOnClick}
           ref={ref}
         />
         <History

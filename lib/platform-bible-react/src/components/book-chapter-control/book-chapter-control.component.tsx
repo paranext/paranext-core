@@ -119,6 +119,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             value={searchQuery}
             handleSearch={handleSearchInput}
             handleKeyUp={() => setIsOpen(true)}
+            handleOnClick={() => setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum))}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
           />
         </ShadDropdownMenuTrigger>
