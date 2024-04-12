@@ -5,7 +5,140 @@ import React$1 from 'react';
 import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
 import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';
 
-export declare function BookChapterControl(): import("react/jsx-runtime").JSX.Element;
+/** Function to run to dispose of something. Returns true if successfully unsubscribed */
+export type Unsubscriber = () => boolean;
+/**
+ * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
+ * successfully unsubscribed
+ */
+export type UnsubscriberAsync = () => Promise<boolean>;
+/** Callback function that accepts an event and should run when an event is emitted */
+export type PlatformEventHandler<T> = (event: T) => void;
+/**
+ * Function that subscribes the provided callback to run when this event is emitted.
+ *
+ * @param callback Function to run with the event when it is emitted
+ * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
+ *   emitted
+ */
+export type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
+/**
+ * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
+ *
+ * Note: The callback itself is not asynchronous.
+ */
+export type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
+export interface ScriptureReference {
+	bookNum: number;
+	chapterNum: number;
+	verseNum: number;
+}
+/** Within type T, recursively change properties that were of type A to be of type B */
+export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
+	[K in keyof T]: ReplaceType<T[K], A, B>;
+} : T;
+/** Identifier for a string that will be localized in a menu based on the user's UI language */
+export type LocalizeKey = `%${string}%`;
+/** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
+export type ReferencedItem = `${string}.${string}`;
+export type OrderedItem = {
+	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
+	order: number;
+};
+export type OrderedExtensibleContainer = OrderedItem & {
+	/** Determines whether other items can be added to this after it has been defined */
+	isExtensible?: boolean;
+};
+/** Group of menu items that belongs in a column */
+export type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
+	/** ID of column in which this group resides */
+	column: ReferencedItem;
+};
+/** Group of menu items that belongs in a submenu */
+export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
+	/** ID of menu item hosting the submenu in which this group resides */
+	menuItem: ReferencedItem;
+};
+/** Column that includes header text in a menu */
+export type MenuColumnWithHeader = OrderedExtensibleContainer & {
+	/** Key that represents the text of the header text of the column */
+	label: LocalizeKey;
+};
+export type MenuItemBase = OrderedItem & {
+	/** Menu group to which this menu item belongs */
+	group: ReferencedItem;
+	/** Key that represents the text of this menu item to display */
+	label: LocalizeKey;
+	/** Key that represents words the platform should reference when users are searching for menu items */
+	searchTerms?: LocalizeKey;
+	/** Key that represents the text to display if a mouse pointer hovers over the menu item */
+	tooltip?: LocalizeKey;
+	/** Additional information provided by developers to help people who perform localization */
+	localizeNotes: string;
+};
+/** Menu item that hosts a submenu */
+export type MenuItemContainingSubmenu = MenuItemBase & {
+	/** ID for this menu item that holds a submenu */
+	id: ReferencedItem;
+};
+/** Menu item that runs a command */
+export type MenuItemContainingCommand = MenuItemBase & {
+	/** Name of the PAPI command to run when this menu item is selected. */
+	command: ReferencedItem;
+	/** Path to the icon to display after the menu text */
+	iconPathAfter?: string;
+	/** Path to the icon to display before the menu text */
+	iconPathBefore?: string;
+};
+/**
+ * Group of menu items that can be combined with other groups to form a single context menu/submenu.
+ * Groups are separated using a line within the menu/submenu.
+ */
+export type GroupsInSingleColumnMenu = {
+	/** Named menu group */
+	[property: ReferencedItem]: OrderedExtensibleContainer | MenuGroupDetailsInSubMenu;
+};
+/**
+ * Group of menu items that can be combined with other groups to form a single menu/submenu within a
+ * multi-column menu. Groups are separated using a line within the menu/submenu.
+ */
+export type GroupsInMultiColumnMenu = {
+	/** Named menu group */
+	[property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
+};
+/** Group of columns that can be combined with other columns to form a multi-column menu */
+export type ColumnsWithHeaders = {
+	/** Named column of a menu */
+	[property: ReferencedItem]: MenuColumnWithHeader;
+	/** Defines whether columns can be added to this multi-column menu */
+	isExtensible?: boolean;
+};
+/** Menu that contains a column without a header */
+export type SingleColumnMenu = {
+	/** Groups that belong in this menu */
+	groups: GroupsInSingleColumnMenu;
+	/** List of menu items that belong in this menu */
+	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
+};
+/** Menu that contains multiple columns with headers */
+export type MultiColumnMenu = {
+	/** Columns that belong in this menu */
+	columns: ColumnsWithHeaders;
+	/** Groups that belong in this menu */
+	groups: GroupsInMultiColumnMenu;
+	/** List of menu items that belong in this menu */
+	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
+};
+/**
+ * Type that converts any menu type before it is localized to what it is after it is localized. This
+ * can be applied to any menu type as needed.
+ */
+export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
+export type BookChapterControlProps = {
+	scrRef: ScriptureReference;
+	handleSubmit: (scrRef: ScriptureReference) => void;
+};
+export declare function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
@@ -157,135 +290,6 @@ export type ComboBoxProps<T> = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, title, isDisabled, isClearable, hasError, isFullWidth, width, options, className, value, onChange, onFocus, onBlur, getOptionLabel, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
-/** Function to run to dispose of something. Returns true if successfully unsubscribed */
-export type Unsubscriber = () => boolean;
-/**
- * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
- * successfully unsubscribed
- */
-export type UnsubscriberAsync = () => Promise<boolean>;
-/** Callback function that accepts an event and should run when an event is emitted */
-export type PlatformEventHandler<T> = (event: T) => void;
-/**
- * Function that subscribes the provided callback to run when this event is emitted.
- *
- * @param callback Function to run with the event when it is emitted
- * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
- *   emitted
- */
-export type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
-/**
- * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
- *
- * Note: The callback itself is not asynchronous.
- */
-export type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
-export interface ScriptureReference {
-	bookNum: number;
-	chapterNum: number;
-	verseNum: number;
-}
-/** Within type T, recursively change properties that were of type A to be of type B */
-export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
-	[K in keyof T]: ReplaceType<T[K], A, B>;
-} : T;
-/** Identifier for a string that will be localized in a menu based on the user's UI language */
-export type LocalizeKey = `%${string}%`;
-/** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
-export type ReferencedItem = `${string}.${string}`;
-export type OrderedItem = {
-	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
-	order: number;
-};
-export type OrderedExtensibleContainer = OrderedItem & {
-	/** Determines whether other items can be added to this after it has been defined */
-	isExtensible?: boolean;
-};
-/** Group of menu items that belongs in a column */
-export type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
-	/** ID of column in which this group resides */
-	column: ReferencedItem;
-};
-/** Group of menu items that belongs in a submenu */
-export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
-	/** ID of menu item hosting the submenu in which this group resides */
-	menuItem: ReferencedItem;
-};
-/** Column that includes header text in a menu */
-export type MenuColumnWithHeader = OrderedExtensibleContainer & {
-	/** Key that represents the text of the header text of the column */
-	label: LocalizeKey;
-};
-export type MenuItemBase = OrderedItem & {
-	/** Menu group to which this menu item belongs */
-	group: ReferencedItem;
-	/** Key that represents the text of this menu item to display */
-	label: LocalizeKey;
-	/** Key that represents words the platform should reference when users are searching for menu items */
-	searchTerms?: LocalizeKey;
-	/** Key that represents the text to display if a mouse pointer hovers over the menu item */
-	tooltip?: LocalizeKey;
-	/** Additional information provided by developers to help people who perform localization */
-	localizeNotes: string;
-};
-/** Menu item that hosts a submenu */
-export type MenuItemContainingSubmenu = MenuItemBase & {
-	/** ID for this menu item that holds a submenu */
-	id: ReferencedItem;
-};
-/** Menu item that runs a command */
-export type MenuItemContainingCommand = MenuItemBase & {
-	/** Name of the PAPI command to run when this menu item is selected. */
-	command: ReferencedItem;
-	/** Path to the icon to display after the menu text */
-	iconPathAfter?: string;
-	/** Path to the icon to display before the menu text */
-	iconPathBefore?: string;
-};
-/**
- * Group of menu items that can be combined with other groups to form a single context menu/submenu.
- * Groups are separated using a line within the menu/submenu.
- */
-export type GroupsInSingleColumnMenu = {
-	/** Named menu group */
-	[property: ReferencedItem]: OrderedExtensibleContainer | MenuGroupDetailsInSubMenu;
-};
-/**
- * Group of menu items that can be combined with other groups to form a single menu/submenu within a
- * multi-column menu. Groups are separated using a line within the menu/submenu.
- */
-export type GroupsInMultiColumnMenu = {
-	/** Named menu group */
-	[property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
-};
-/** Group of columns that can be combined with other columns to form a multi-column menu */
-export type ColumnsWithHeaders = {
-	/** Named column of a menu */
-	[property: ReferencedItem]: MenuColumnWithHeader;
-	/** Defines whether columns can be added to this multi-column menu */
-	isExtensible?: boolean;
-};
-/** Menu that contains a column without a header */
-export type SingleColumnMenu = {
-	/** Groups that belong in this menu */
-	groups: GroupsInSingleColumnMenu;
-	/** List of menu items that belong in this menu */
-	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
-};
-/** Menu that contains multiple columns with headers */
-export type MultiColumnMenu = {
-	/** Columns that belong in this menu */
-	columns: ColumnsWithHeaders;
-	/** Groups that belong in this menu */
-	groups: GroupsInMultiColumnMenu;
-	/** List of menu items that belong in this menu */
-	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
-};
-/**
- * Type that converts any menu type before it is localized to what it is after it is localized. This
- * can be applied to any menu type as needed.
- */
-export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
