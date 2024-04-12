@@ -14,12 +14,14 @@ import {
   settingsServiceObjectToProxy,
 } from '@shared/services/settings.service-model';
 import {
-  coreSettingsInfo,
   coreSettingsValidators,
+  platformSettings,
 } from '@extension-host/data/core-settings-info.data';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
+  Unsubscriber,
   createSyncProxyForAsyncObject,
+  debounce,
   deserialize,
   includes,
   serialize,
@@ -27,8 +29,19 @@ import {
 import { joinUriPaths } from '@node/utils/util';
 import * as nodeFS from '@node/services/node-file-system.service';
 import { serializeRequestType } from '@shared/utils/util';
+import SettingsDocumentCombiner from '@shared/utils/settings-document-combiner';
 
 const SETTINGS_FILE_URI = joinUriPaths('data://', 'settings.json');
+
+/**
+ * Object that keeps track of all settings contributions in the platform. To listen to updates to
+ * the settings contributions, subscribe to its `onDidRebuild` event (consider debouncing as each
+ * contribution will trigger a rebuild).
+ *
+ * Keeping this object separate from the data provider and disabling the `set` calls in the data
+ * provider prevents random services from changing system settings contributions unexpectedly.
+ */
+export const settingsDocumentCombiner = new SettingsDocumentCombiner(platformSettings);
 
 async function getSettingsDataFromFile() {
   const settingsFileExists = await nodeFS.getStats(SETTINGS_FILE_URI);
@@ -49,13 +62,17 @@ async function writeSettingsDataToFile(settingsData: Partial<AllSettingsData>) {
 function getDefaultValueForKey<SettingName extends SettingNames>(
   key: SettingName,
 ): SettingTypes[SettingName] {
-  const settingInfo = coreSettingsInfo[key];
+  const settingInfo = settingsDocumentCombiner.getSettingsContributionInfo()?.settings[key];
   if (!settingInfo) {
     throw new Error(`No setting exists for key ${key}`);
   }
+
+  // We shouldn't be able to hit this anymore since the settings document combiner should throw if
+  // this ever happened. But this is still here just in case because this would be a serious error
   if (!('default' in settingInfo)) {
     throw new Error(`No default value specified for key ${key}`);
   }
+
   return settingInfo.default;
 }
 
@@ -101,10 +118,20 @@ class SettingDataProviderEngine
   implements IDataProviderEngine<SettingDataTypes>
 {
   private settingsData: Partial<AllSettingsData>;
+  private unsubscribeOnDidRebuildSettings: Unsubscriber | undefined;
 
   constructor(settingsData: Partial<AllSettingsData>) {
     super();
     this.settingsData = deserialize(serialize(settingsData));
+
+    this.unsubscribeOnDidRebuildSettings = settingsDocumentCombiner.onDidRebuild(
+      debounce(() => {
+        // Make sure we haven't been disposed since being called and the debounce ended, then
+        // announce that settings have updated so anyone who has the default value gets an updated
+        // default
+        if (this.unsubscribeOnDidRebuildSettings) this.notifyUpdate('');
+      }, 100),
+    );
   }
 
   async get<SettingName extends SettingNames>(
@@ -147,6 +174,15 @@ class SettingDataProviderEngine
     } catch (error) {
       throw new Error(`Error resetting key ${key}: ${error}`);
     }
+  }
+
+  async dispose(): Promise<boolean> {
+    if (this.unsubscribeOnDidRebuildSettings) {
+      const success = this.unsubscribeOnDidRebuildSettings();
+      this.unsubscribeOnDidRebuildSettings = undefined;
+      return success;
+    }
+    return true;
   }
 }
 

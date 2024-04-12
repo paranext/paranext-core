@@ -41,6 +41,24 @@ class DocumentCombinerWithoutValidation extends TestDocumentCombinerEngine {
   protected validateOutput(): void {}
 }
 
+/** Combine array and non-array contributions to make a final array of contributions */
+class ArrayDocumentCombiner extends DocumentCombinerWithoutValidation {
+  // We just don't need `this` here
+  // eslint-disable-next-line class-methods-use-this
+  protected transformValidatedContribution(
+    _documentName: string,
+    document: JsonDocumentLike,
+  ): JsonDocumentLike {
+    return Array.isArray(document) ? document : [document];
+  }
+
+  // We just don't need `this` here
+  // eslint-disable-next-line class-methods-use-this
+  protected transformValidatedStartingDocument(baseDocument: JsonDocumentLike): JsonDocumentLike {
+    return Array.isArray(baseDocument) ? baseDocument : [baseDocument];
+  }
+}
+
 /** Throw a validation error on any operation, including construction */
 class AlwaysThrowingCombiner extends TestDocumentCombinerEngine {
   constructor(startingDocument: JsonDocumentLike) {
@@ -105,7 +123,7 @@ class OutputThrowingCombiner extends TestDocumentCombinerEngine {
 
 // #endregion
 
-describe('Simple combining', () => {
+describe('Simple object combining', () => {
   const hasA = { a: 1 };
   const hasB = { b: 2 };
   const hasC = { c: 3 };
@@ -113,8 +131,11 @@ describe('Simple combining', () => {
   const arrayD1 = { d: ['red', 'yellow'] };
   const arrayD2 = { d: ['blue', 'green'] };
 
-  test('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument works', () => {
+  test('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(hasA);
+    const rebuildCallbackMock = jest.fn(() => {});
+    const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
+
     expect(JSON.stringify(combiner.output)).toBe('{"a":1}');
     combiner.addOrUpdateContribution('B', hasB);
     expect(JSON.stringify(combiner.output)).toBe('{"a":1,"b":2}');
@@ -132,15 +153,82 @@ describe('Simple combining', () => {
     expect(JSON.stringify(combiner.output)).toBe('{"a":10,"d":["red","yellow"]}');
     combiner.addOrUpdateContribution('D2', arrayD2);
     expect(JSON.stringify(combiner.output)).toBe('{"a":10,"d":["red","yellow","blue","green"]}');
+    expect(rebuildCallbackMock).toHaveBeenCalledTimes(8);
+
+    unsubscriber();
   });
 
-  test('deleteAllContributions works', () => {
+  test('deleteAllContributions, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(hasA);
+    const rebuildCallbackMock = jest.fn(() => {});
+    const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
+
     combiner.addOrUpdateContribution('B', hasB);
     combiner.addOrUpdateContribution('C', newC);
     combiner.deleteAllContributions();
     expect(JSON.stringify(combiner.output)).toBe('{"a":1}');
+    expect(rebuildCallbackMock).toHaveBeenCalledTimes(3);
+
+    unsubscriber();
   });
+});
+
+describe('Simple array combining', () => {
+  const base = [1, 2, 3];
+  const has4 = [4];
+  const has5 = [5];
+  const has6 = [6];
+
+  test('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
+    const combiner = new DocumentCombinerWithoutValidation(base);
+    const rebuildCallbackMock = jest.fn(() => {});
+    const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
+
+    expect(JSON.stringify(combiner.output)).toBe('[1,2,3]');
+    combiner.addOrUpdateContribution('4', has4);
+    expect(JSON.stringify(combiner.output)).toBe('[1,2,3,4]');
+    combiner.addOrUpdateContribution('5', has5);
+    expect(JSON.stringify(combiner.output)).toBe('[1,2,3,4,5]');
+    combiner.addOrUpdateContribution('5', has6);
+    expect(JSON.stringify(combiner.output)).toBe('[1,2,3,4,6]');
+    combiner.deleteContribution('4');
+    expect(JSON.stringify(combiner.output)).toBe('[1,2,3,6]');
+    combiner.updateBaseDocument([0, 1, 2]);
+    expect(JSON.stringify(combiner.output)).toBe('[0,1,2,6]');
+    expect(rebuildCallbackMock).toHaveBeenCalledTimes(5);
+
+    unsubscriber();
+  });
+
+  test('deleteAllContributions, onDidRebuild works', () => {
+    const combiner = new DocumentCombinerWithoutValidation(base);
+    const rebuildCallbackMock = jest.fn(() => {});
+    const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
+
+    combiner.addOrUpdateContribution('4', has4);
+    combiner.addOrUpdateContribution('5', has5);
+    combiner.deleteAllContributions();
+    expect(JSON.stringify(combiner.output)).toBe('[1,2,3]');
+    expect(rebuildCallbackMock).toHaveBeenCalledTimes(3);
+
+    unsubscriber();
+  });
+});
+
+test('transformValidatedBaseDocument and transformValidatedContribution allow array or non-array docs to merge into an array together', () => {
+  const arrayBase = [1, 2, 3];
+  const numBase = 1;
+  const numContribution = 4;
+  const arrayContribution = [5, 6];
+
+  const combiner = new ArrayDocumentCombiner(arrayBase);
+  expect(JSON.stringify(combiner.output)).toBe('[1,2,3]');
+  combiner.addOrUpdateContribution('numContribution', numContribution);
+  expect(JSON.stringify(combiner.output)).toBe('[1,2,3,4]');
+  combiner.addOrUpdateContribution('arrayContribution', arrayContribution);
+  expect(JSON.stringify(combiner.output)).toBe('[1,2,3,4,5,6]');
+  combiner.updateBaseDocument(numBase);
+  expect(JSON.stringify(combiner.output)).toBe('[1,4,5,6]');
 });
 
 test('Collisions are not allowed', () => {
@@ -162,9 +250,8 @@ test('Collisions are not allowed', () => {
 test('Can handle various empty contributions', () => {
   const combiner = new DocumentCombinerWithoutValidation({});
   expect(() => combiner.addOrUpdateContribution('A', {})).not.toThrow();
-  // @ts-expect-error: Purposefully passing garbage
   expect(() => combiner.addOrUpdateContribution('A', undefined)).not.toThrow();
-  // @ts-expect-error: Purposefully passing garbage
+  // Purposefully passing garbage
   // eslint-disable-next-line no-null/no-null
   expect(() => combiner.addOrUpdateContribution('A', null)).not.toThrow();
 });

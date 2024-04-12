@@ -88,3 +88,25 @@ export type {
   Localized,
 } from './menus.model';
 export { menuDocumentSchema } from './menus.model';
+export type {
+  ExtensionControlledProjectSetting,
+  ExtensionControlledSetting,
+  ExtensionControlledState,
+  ModifierExtensionControlled,
+  ModifierProject,
+  ProjectSetting,
+  ProjectSettingBase,
+  ProjectSettingProperties,
+  ProjectSettingsContribution,
+  ProjectSettingsGroup,
+  ProjectStateContribution,
+  Setting,
+  SettingBase,
+  SettingProperties,
+  SettingsContribution,
+  SettingsGroup,
+  StateBase,
+  UserState,
+  UserStateContribution,
+} from './settings.model';
+export { projectSettingsDocumentSchema, settingsDocumentSchema } from './settings.model';

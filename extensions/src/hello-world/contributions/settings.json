@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "label": "%setting_hello-world.group1%",
+    "properties": {
+      "hello-world.personName": {
+        "label": "%setting_hello-world.personName_label%",
+        "default": "Bill"
+      }
+    }
+  }
+]

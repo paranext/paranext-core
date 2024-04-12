@@ -29,5 +29,11 @@
   "webView_resourceViewer_textColor": "Text Color",
   "webView_resourceViewer_thickBorders": "Thick Borders",
   "webView_resourceViewer_publisherInfo": "Publisher Info",
-  "webView_resourceViewer_copyrightInfo": "Copyright Info"
+  "webView_resourceViewer_copyrightInfo": "Copyright Info",
+  "settings_platform_group1": "Platform Settings",
+  "settings_platform_group1_description": "Settings pertaining to the software overall",
+  "settings_platform_verseRef_label": "Current Verse Reference",
+  "settings_platform_interfaceLanguage_label": "Interface Language",
+  "setting_hello-world.group1": "Hello World Settings",
+  "setting_hello-world.personName_label": "Selected Person's Name on Hello World Web View"
 }

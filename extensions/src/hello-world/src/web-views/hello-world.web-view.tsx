@@ -172,7 +172,7 @@ globalThis.webViewComponent = function HelloWorld({
     ),
   );
 
-  const [name, setName] = useState('Bill');
+  const [name, setName] = useSetting('hello-world.personName', 'Kathy');
 
   const peopleDataProvider = useDataProvider('helloSomeone.people');
 
