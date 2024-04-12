@@ -28,8 +28,6 @@ type BookChapterControlProps = {
   handleSubmit: (scrRef: ScriptureReference) => void;
 };
 
-// todo Can we type in the input when the menu is open? And will the menu be updated accordingly?
-
 // todo Get rid of the black border upon clicking the input
 // todo When a webview is set to full screen mode, the dropdown menu is hidden behind this webview, instead of floating over it
 
@@ -41,6 +39,8 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>('');
+
+  const [isOpen, setIsOpen] = useState<boolean>(false);
 
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -100,21 +100,33 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     });
   };
 
-  // Make sure input gets focus when it's clicked (now the dropdown content gets focus)
+  const controlMenuState = useCallback((open: boolean) => {
+    if (!open && document.activeElement === inputRef.current) {
+      setIsOpen(true);
+    } else {
+      setIsOpen(open);
+    }
+  }, []);
+
+  const giveFocusToInput = useCallback(() => inputRef.current.focus(), []);
+
+  // On clicking out of Input (focus loss?), also close menu
+  // On first key stroke in Input, when menu is closed, the menu will open but keystroke won't be captured
 
   return (
     <div>
-      <ShadDropdownMenu>
+      <ShadDropdownMenu modal={false} open={isOpen} onOpenChange={controlMenuState}>
         {/* Trigger sets input type as button */}
         <ShadDropdownMenuTrigger asChild>
           <BookChapterInput
             ref={inputRef}
             value={searchQuery}
             handleSearch={handleSearchInput}
+            handleKeyDown={() => setIsOpen(true)}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
           />
         </ShadDropdownMenuTrigger>
-        <ShadDropdownMenuContent className="menu-content">
+        <ShadDropdownMenuContent className="menu-content" onKeyDown={giveFocusToInput}>
           {bookTypeArray.map((bookType) => (
             <div key={bookType}>
               <ShadDropdownMenuLabel className="menu-label">
@@ -145,14 +157,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           ))}
         </ShadDropdownMenuContent>
       </ShadDropdownMenu>
-      {/* <button
-        type="button"
-        onClick={() => {
-          inputRef.current.focus();
-        }}
-      >
-        Focus input
-      </button> */}
     </div>
   );
 }
