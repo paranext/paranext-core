@@ -7,12 +7,11 @@ import {
   DropdownMenuContent as ShadDropdownMenuContent,
   DropdownMenuLabel as ShadDropdownMenuLabel,
   DropdownMenuSeparator as ShadDropdownMenuSeparator,
-  DropdownMenuItem as ShadDropdownMenuItem,
-} from '../shadcn-ui/dropdown-menu';
-import BookChapterInput from './book-chapter-input.component';
-import ChapterSelect from './chapter-select.component';
-import BookMenuItem, { BookType } from './book-menu-item.component';
-import './book-chapter-control.component.css';
+} from '@/components/shadcn-ui/dropdown-menu';
+import BookChapterInput from '@/components/book-chapter-control/book-chapter-input.component';
+import ChapterSelect from '@/components/book-chapter-control/chapter-select.component';
+import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-menu-item.component';
+import '@/components/book-chapter-control/book-chapter-control.component.css';
 
 type BookTypeLabels = {
   [bookType in BookType]: string;
@@ -30,11 +29,9 @@ type BookChapterControlProps = {
 };
 
 // todo Can we type in the input when the menu is open? And will the menu be updated accordingly?
-// todo History icon should appear inside Input component
 
 // todo Get rid of the black border upon clicking the input
 // todo When a webview is set to full screen mode, the dropdown menu is hidden behind this webview, instead of floating over it
-// todo CSS can be optimized (proper colors)
 
 // todo Dropdown menu does not close when a chapter number is clicked
 // todo Dropdown entries for books that don't have chapters defined should go to 1:1 when clicked, and the menu should be closed upon clicking one of them
@@ -117,19 +114,12 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
           />
         </ShadDropdownMenuTrigger>
-        <ShadDropdownMenuContent style={{ width: '300px', height: '500px', overflowY: 'auto' }}>
-          <ShadDropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault();
-              inputRef.current.focus();
-              console.log('Attempt to give focus to input');
-            }}
-          >
-            Give focus to input
-          </ShadDropdownMenuItem>
+        <ShadDropdownMenuContent className="menu-content">
           {bookTypeArray.map((bookType) => (
             <div key={bookType}>
-              <ShadDropdownMenuLabel>{bookTypeLabels[bookType]}</ShadDropdownMenuLabel>
+              <ShadDropdownMenuLabel className="menu-label">
+                {bookTypeLabels[bookType]}
+              </ShadDropdownMenuLabel>
               {fetchFilteredBooks(bookType).map((bookId) => (
                 <div key={bookId}>
                   <BookMenuItem
@@ -155,14 +145,14 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           ))}
         </ShadDropdownMenuContent>
       </ShadDropdownMenu>
-      <button
+      {/* <button
         type="button"
         onClick={() => {
           inputRef.current.focus();
         }}
       >
         Focus input
-      </button>
+      </button> */}
     </div>
   );
 }
