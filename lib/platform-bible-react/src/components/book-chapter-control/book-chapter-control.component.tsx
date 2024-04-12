@@ -7,10 +7,35 @@ import {
   DropdownMenuContent as ShadDropdownMenuContent,
   DropdownMenuLabel as ShadDropdownMenuLabel,
   DropdownMenuSeparator as ShadDropdownMenuSeparator,
+  DropdownMenuItem as ShadDropdownMenuItem,
 } from '@/components/shadcn-ui/dropdown-menu';
 import BookChapterInput from '@/components/book-chapter-control/book-chapter-input.component';
 import ChapterSelect from '@/components/book-chapter-control/chapter-select.component';
 import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-menu-item.component';
+import { Bookmark, Clock, ArrowDownWideNarrow } from 'lucide-react';
+
+// style todo's:
+// todo History icon positioning with Tailwind
+// todo Menu positioning- not aligned with input
+// todo When book selected- whole menu item should have same yellow bg as the chapter select
+// todo Correct fonts
+// todo Correct text sizing
+// todo Chapter numbers flow to fit the width of menu
+// todo Input looks like Figma input
+
+// functionality todo's:
+// todo selected book menu item stays open when you close and reopen the menu
+// ? ^ when no chapters book should be highlighted
+// ? Figma says "empty books" appear greyed out, does empty mean no chapters?
+// todo keyboard shortcuts- ^F9 previous book
+// todo keyboard shortcuts- F9 next book
+// todo When a webview is set to full screen mode, the dropdown menu is hidden behind this webview, instead of floating over it
+// todo Scrollbar not showing on dropdown menu
+// todo Input and menu focus sync
+// ^ On first key stroke in Input, when menu is closed, the menu will open but keystroke won't be captured
+
+// cleaning code todo's:
+// ? Is this the intended way to get and sort bookTypes and books, long term solution
 
 type BookTypeLabels = {
   [bookType in BookType]: string;
@@ -107,12 +132,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const giveFocusToInput = useCallback(() => inputRef.current.focus(), []);
 
-  // todo When a webview is set to full screen mode, the dropdown menu is hidden behind this webview, instead of floating over it
-  // todo Scrollbar not showing on dropdown menu
-
-  // On clicking out of Input (focus loss?), also close menu
-  // On first key stroke in Input, when menu is closed, the menu will open but keystroke won't be captured
-
   return (
     <div>
       <ShadDropdownMenu modal={false} open={isOpen} onOpenChange={controlMenuState}>
@@ -122,15 +141,24 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             ref={inputRef}
             value={searchQuery}
             handleSearch={handleSearchInput}
-            handleKeyDown={() => setIsOpen(true)}
+            handleKeyUp={() => setIsOpen(true)}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
           />
         </ShadDropdownMenuTrigger>
         <ShadDropdownMenuContent
-          className="pr-overflow-y-auto pr-font-sans pr-font-normal pr-text-slate-700"
+          className="pr-['Inter'] pr-overflow-y-auto pr-font-normal pr-text-slate-700"
           style={{ width: '300px', maxHeight: '500px' }}
           onKeyDown={giveFocusToInput}
         >
+          <ShadDropdownMenuItem
+            onClick={(e) => e.preventDefault()}
+            className="pr-flex pr-justify-between"
+          >
+            Go To
+            <div className="pr-flex pr-items-center">
+              <ArrowDownWideNarrow size={16} /> <Clock size={16} /> <Bookmark size={16} />
+            </div>
+          </ShadDropdownMenuItem>
           {bookTypeArray.map((bookType) => (
             <div key={bookType}>
               <ShadDropdownMenuLabel className="pr-font-semibold pr-text-slate-700">
