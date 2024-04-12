@@ -5,54 +5,27 @@
   align-content: flex-start;
   align-self: stretch;
   flex-wrap: wrap;
-  background: hsl(0, 0%, 96%);
+  background: #FFFBEB;
 }
 
 .chapter {
   display: flex;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   padding: 8px;
   justify-content: center;
   align-items: center;
   cursor: pointer;
+  color: #92400E;
+  border-radius: 4px;
 }
 
 .chapter:hover {
-  background: yellow;
+  background: #FDE68A;
 }
 
 .active {
-  border-radius: 4px;
-  background: yellow;
+  background: #FDE68A;
+  color: #78350F;
+  font-weight: 600;
 }
-
-/* .chapterSelector {
-  display: flex;
-  padding: 0px 8px 0px 24px;
-  align-items: flex-start;
-  align-content: flex-start;
-  align-self: stretch;
-  flex-wrap: wrap;
-  background-color: whitesmoke;
-}
-.chapterSelector.focus\:bg-accent:focus {
-  background-color: whitesmoke;
-}
-.chapterSelector > * {
-  display: flex;
-  width: 36px;
-  padding: 8px 12px 8px 4px;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-}
-.chapterSelector > *.active {
-  background-color: #fef3c7;
-}
-.chapterSelector > *:hover {
-  background-color: hsl(48 100% 96.1%);
-} */
-
-/* State=default, type=default */
