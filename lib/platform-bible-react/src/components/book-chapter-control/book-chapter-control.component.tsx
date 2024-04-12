@@ -14,13 +14,6 @@ import ChapterSelect from '@/components/book-chapter-control/chapter-select.comp
 import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-menu-item.component';
 import GoToMenuItem from './goTo-menu-item.component';
 
-// style todo's:
-// todo History icon positioning with Tailwind
-// todo Menu positioning- not aligned with input
-// todo Chapter numbers flow to fit the width of menu- Rolf's code
-// todo Chapter numbers centered- Rolf's code
-// todo book name not changing color
-
 // functionality todo's:
 // todo selected book menu item stays open when you close and reopen the menu
 // ? ^ when no chapters book should be highlighted
@@ -30,9 +23,7 @@ import GoToMenuItem from './goTo-menu-item.component';
 // todo When a webview is set to full screen mode, the dropdown menu is hidden behind this webview, instead of floating over it
 // todo Scrollbar not showing on dropdown menu
 // todo Input and menu focus sync
-// ^ On first key stroke in Input, when menu is closed, the menu will open but keystroke won't be captured
 // ability to disable menu items
-// todo Hide booktype label when no books match search criteria in input
 
 // cleaning code todo's:
 // ? Is this the intended way to get and sort bookTypes and books, long term solution
@@ -156,34 +147,40 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             handleLocationHistory={() => console.log('location history')}
             handleBookmarks={() => console.log('bookmarks')}
           />
-          {bookTypeArray.map((bookType) => (
-            <div key={bookType}>
-              <ShadDropdownMenuLabel className="pr-font-semibold pr-text-slate-700">
-                {bookTypeLabels[bookType]}
-              </ShadDropdownMenuLabel>
-              {fetchFilteredBooks(bookType).map((bookId) => (
-                <div key={bookId}>
-                  <BookMenuItem
-                    bookId={bookId}
-                    handleSelectBook={() => handleSelectBook(bookId)}
-                    isSelected={selectedBookId === bookId}
-                    bookType={bookType}
-                  >
-                    <ChapterSelect
-                      handleSelectChapter={handleSelectChapter}
-                      endChapter={fetchEndChapter(bookId)}
-                      // Without this condition- will highlight that chapterNum in every book- not just the selected book
-                      activeChapter={
-                        scrRef.bookNum === Canon.bookIdToNumber(bookId) ? scrRef.chapterNum : 0
-                      }
-                    />
-                  </BookMenuItem>
+          {bookTypeArray.map(
+            (bookType) =>
+              fetchFilteredBooks(bookType).length > 0 && (
+                <div key={bookType}>
+                  <ShadDropdownMenuLabel className="pr-font-semibold pr-text-slate-700">
+                    {bookTypeLabels[bookType]}
+                  </ShadDropdownMenuLabel>
+
+                  {fetchFilteredBooks(bookType).map((bookId) => (
+                    <div key={bookId}>
+                      <BookMenuItem
+                        bookId={bookId}
+                        handleSelectBook={() => handleSelectBook(bookId)}
+                        isSelected={selectedBookId === bookId}
+                        bookType={bookType}
+                      >
+                        <ChapterSelect
+                          handleSelectChapter={handleSelectChapter}
+                          endChapter={fetchEndChapter(bookId)}
+                          // Without this condition- will highlight that chapterNum in every book- not just the selected book
+                          activeChapter={
+                            scrRef.bookNum === Canon.bookIdToNumber(bookId) ? scrRef.chapterNum : 0
+                          }
+                        />
+                      </BookMenuItem>
+                    </div>
+                  ))}
+                  {/* We know this is right because the order of bookTypes will not change */}
+                  {bookType === 'OT' || bookType === 'NT' ? (
+                    <ShadDropdownMenuSeparator />
+                  ) : undefined}
                 </div>
-              ))}
-              {/* We know this is right because the order of bookTypes will not change */}
-              {bookType === 'OT' || bookType === 'NT' ? <ShadDropdownMenuSeparator /> : undefined}
-            </div>
-          ))}
+              ),
+          )}
         </ShadDropdownMenuContent>
       </ShadDropdownMenu>
     </div>
