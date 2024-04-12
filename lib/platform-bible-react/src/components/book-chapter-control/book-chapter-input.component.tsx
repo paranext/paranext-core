@@ -1,7 +1,6 @@
 import { forwardRef } from 'react';
 import { History } from 'lucide-react';
 import { Input as ShadInput } from '@/components/shadcn-ui/input';
-// import '@/components/book-chapter-control/book-chapter-input.component.css';
 
 export type BookChapterInputProps = {
   handleSearch: (searchString: string) => void;
