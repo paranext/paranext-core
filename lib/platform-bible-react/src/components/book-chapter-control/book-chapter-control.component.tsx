@@ -15,13 +15,9 @@ import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-m
 import { Bookmark, Clock, ArrowDownWideNarrow } from 'lucide-react';
 
 // style todo's:
+// todo Chapter numbers flow to fit the width of menu
 // todo History icon positioning with Tailwind
 // todo Menu positioning- not aligned with input
-// todo When book selected- whole menu item should have same yellow bg as the chapter select
-// todo Correct fonts
-// todo Correct text sizing
-// todo Chapter numbers flow to fit the width of menu
-// todo Input looks like Figma input
 
 // functionality todo's:
 // todo selected book menu item stays open when you close and reopen the menu
@@ -33,6 +29,7 @@ import { Bookmark, Clock, ArrowDownWideNarrow } from 'lucide-react';
 // todo Scrollbar not showing on dropdown menu
 // todo Input and menu focus sync
 // ^ On first key stroke in Input, when menu is closed, the menu will open but keystroke won't be captured
+// todo Hide booktype label when no books match search criteria in input
 
 // cleaning code todo's:
 // ? Is this the intended way to get and sort bookTypes and books, long term solution
@@ -147,7 +144,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         </ShadDropdownMenuTrigger>
         <ShadDropdownMenuContent
           className="pr-['Inter'] pr-overflow-y-auto pr-font-normal pr-text-slate-700"
-          style={{ width: '300px', maxHeight: '500px' }}
+          style={{ width: '233px', maxHeight: '500px' }}
           onKeyDown={giveFocusToInput}
         >
           <ShadDropdownMenuItem

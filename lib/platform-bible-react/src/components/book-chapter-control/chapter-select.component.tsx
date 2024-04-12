@@ -18,7 +18,7 @@ function ChapterSelect({ endChapter, activeChapter, handleSelectChapter }: Chapt
         <div
           key={chapter}
           className={cn(
-            'pr-h-5 pr-w-5 pr-cursor-pointer pr-items-center pr-justify-center pr-rounded pr-p-2 pr-text-amber-800',
+            'pr-m-1 pr-flex pr-h-4 pr-w-4 pr-cursor-pointer pr-items-center pr-justify-center pr-rounded-lg pr-bg-amber-100 pr-p-2 pr-text-center pr-align-middle pr-text-amber-800',
             {
               'hover:pr-bg-amber-200': chapter !== activeChapter,
               'pr-bg-amber-200 pr-font-semibold pr-text-amber-900': chapter === activeChapter,
