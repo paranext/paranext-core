@@ -14,20 +14,6 @@ import ChapterSelect from '@/components/book-chapter-control/chapter-select.comp
 import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-menu-item.component';
 import GoToMenuItem from './goTo-menu-item.component';
 
-// functionality todo's:
-// todo selected book menu item stays open when you close and reopen the menu
-// ? ^ when no chapters book should be highlighted
-// ? Figma says "empty books" appear greyed out, does empty mean no chapters?
-// todo keyboard shortcuts- ^F9 previous book
-// todo keyboard shortcuts- F9 next book
-// todo When a webview is set to full screen mode, the dropdown menu is hidden behind this webview, instead of floating over it
-// todo Scrollbar not showing on dropdown menu
-// todo Input and menu focus sync
-// ability to disable menu items
-
-// cleaning code todo's:
-// ? Is this the intended way to get and sort bookTypes and books, long term solution
-
 type BookTypeLabels = {
   [bookType in BookType]: string;
 };
