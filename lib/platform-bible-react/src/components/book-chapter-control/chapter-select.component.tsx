@@ -13,12 +13,12 @@ function ChapterSelect({ endChapter, activeChapter, handleSelectChapter }: Chapt
   const chapters = Array.from({ length: endChapter }, (_, i) => i + 1);
 
   return (
-    <div className="pr-flex pr-flex-wrap pr-content-start pr-items-start pr-self-stretch pr-bg-amber-50">
+    <div className="pr-flex pr-flex-wrap pr-items-start pr-justify-start pr-self-stretch pr-bg-amber-50">
       {chapters.map((chapter) => (
         <div
           key={chapter}
           className={cn(
-            'pr-m-1 pr-flex pr-h-4 pr-w-4 pr-cursor-pointer pr-items-center pr-justify-center pr-rounded-lg pr-bg-amber-100 pr-p-2 pr-text-center pr-align-middle pr-text-amber-800',
+            'pr-flex pr-h-4 pr-w-4 pr-cursor-pointer pr-items-center pr-justify-end pr-rounded-md pr-p-2 pr-text-amber-800',
             {
               'hover:pr-bg-amber-200': chapter !== activeChapter,
               'pr-bg-amber-200 pr-font-semibold pr-text-amber-900': chapter === activeChapter,
