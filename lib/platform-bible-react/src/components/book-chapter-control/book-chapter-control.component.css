@@ -10,7 +10,6 @@ body {
 .menu-content {
   width: 300px;
   height: 500px;
-  overflow-y: auto;
 }
 
 .menu-label {

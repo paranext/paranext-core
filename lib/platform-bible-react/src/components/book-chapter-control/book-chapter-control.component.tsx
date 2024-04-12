@@ -28,12 +28,6 @@ type BookChapterControlProps = {
   handleSubmit: (scrRef: ScriptureReference) => void;
 };
 
-// todo Get rid of the black border upon clicking the input
-// todo When a webview is set to full screen mode, the dropdown menu is hidden behind this webview, instead of floating over it
-
-// todo Dropdown menu does not close when a chapter number is clicked
-// todo Dropdown entries for books that don't have chapters defined should go to 1:1 when clicked, and the menu should be closed upon clicking one of them
-
 function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   const { allBookIds } = Canon;
 
@@ -89,6 +83,8 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         chapterNum: 1,
         verseNum: 1,
       });
+      setIsOpen(false);
+      setSearchQuery('');
     }
   };
 
@@ -98,6 +94,8 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
       chapterNum: chapterNumber,
       verseNum: 1,
     });
+    setIsOpen(false);
+    setSearchQuery('');
   };
 
   const controlMenuState = useCallback((open: boolean) => {
@@ -109,6 +107,9 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   }, []);
 
   const giveFocusToInput = useCallback(() => inputRef.current.focus(), []);
+
+  // todo When a webview is set to full screen mode, the dropdown menu is hidden behind this webview, instead of floating over it
+  // todo Scrollbar not showing on dropdown menu
 
   // On clicking out of Input (focus loss?), also close menu
   // On first key stroke in Input, when menu is closed, the menu will open but keystroke won't be captured
@@ -126,7 +127,11 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
           />
         </ShadDropdownMenuTrigger>
-        <ShadDropdownMenuContent className="menu-content" onKeyDown={giveFocusToInput}>
+        <ShadDropdownMenuContent
+          className="menu-content"
+          style={{ overflowY: 'auto' }}
+          onKeyDown={giveFocusToInput}
+        >
           {bookTypeArray.map((bookType) => (
             <div key={bookType}>
               <ShadDropdownMenuLabel className="menu-label">
