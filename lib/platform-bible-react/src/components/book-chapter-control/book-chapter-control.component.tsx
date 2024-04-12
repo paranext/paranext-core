@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
 import {
@@ -7,6 +7,7 @@ import {
   DropdownMenuContent as ShadDropdownMenuContent,
   DropdownMenuLabel as ShadDropdownMenuLabel,
   DropdownMenuSeparator as ShadDropdownMenuSeparator,
+  DropdownMenuItem as ShadDropdownMenuItem,
 } from '../shadcn-ui/dropdown-menu';
 import BookChapterInput from './book-chapter-input.component';
 import ChapterSelect from './chapter-select.component';
@@ -28,11 +29,25 @@ type BookChapterControlProps = {
   handleSubmit: (scrRef: ScriptureReference) => void;
 };
 
+// todo Can we type in the input when the menu is open? And will the menu be updated accordingly?
+// todo History icon should appear inside Input component
+
+// todo Get rid of the black border upon clicking the input
+// todo When a webview is set to full screen mode, the dropdown menu is hidden behind this webview, instead of floating over it
+// todo CSS can be optimized (proper colors)
+
+// todo Dropdown menu does not close when a chapter number is clicked
+// todo Dropdown entries for books that don't have chapters defined should go to 1:1 when clicked, and the menu should be closed upon clicking one of them
+
 function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   const { allBookIds } = Canon;
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>('');
+
+  // This ref will always be defined
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const inputRef = useRef<HTMLInputElement>(undefined!);
 
   const fetchGroupedBooks = useCallback(
     (bookType: BookType) => {
@@ -88,18 +103,30 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     });
   };
 
+  // Make sure input gets focus when it's clicked (now the dropdown content gets focus)
+
   return (
     <div>
       <ShadDropdownMenu>
         {/* Trigger sets input type as button */}
         <ShadDropdownMenuTrigger asChild>
           <BookChapterInput
+            ref={inputRef}
             value={searchQuery}
             handleSearch={handleSearchInput}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
           />
         </ShadDropdownMenuTrigger>
         <ShadDropdownMenuContent style={{ width: '300px', height: '500px', overflowY: 'auto' }}>
+          <ShadDropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              inputRef.current.focus();
+              console.log('Attempt to give focus to input');
+            }}
+          >
+            Give focus to input
+          </ShadDropdownMenuItem>
           {bookTypeArray.map((bookType) => (
             <div key={bookType}>
               <ShadDropdownMenuLabel>{bookTypeLabels[bookType]}</ShadDropdownMenuLabel>
@@ -128,6 +155,14 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           ))}
         </ShadDropdownMenuContent>
       </ShadDropdownMenu>
+      <button
+        type="button"
+        onClick={() => {
+          inputRef.current.focus();
+        }}
+      >
+        Focus input
+      </button>
     </div>
   );
 }
