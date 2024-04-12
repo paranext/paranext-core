@@ -1,0 +1,47 @@
+.menu-item {
+  font-size: 14px;
+}
+
+.selected-menu-item {
+  font-size: 14px;
+  background: #f9f9f9;
+}
+
+.tally-div {
+  margin-right: 24px;
+  margin-left: -24px;
+}
+
+.book-color-label {
+  height: 16px;
+  width: 2px;
+}
+
+.selected-book-color-label {
+  height: 16px;
+  width: 2px;
+}
+
+.book-color-label.ot {
+  background-color: orange;
+}
+
+.selected-book-color-label.ot {
+  background-color: orangered;
+}
+
+.book-color-label.nt {
+  background-color: lightpink;
+}
+
+.selected-book-color-label.nt {
+  background-color: pink;
+}
+
+.book-color-label.dc {
+  background-color: lightskyblue;
+}
+
+.selected-book-color-label.dc {
+  background-color: skyblue;
+}
