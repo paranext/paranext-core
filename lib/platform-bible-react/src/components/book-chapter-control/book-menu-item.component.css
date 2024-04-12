@@ -1,26 +1,16 @@
-.menu-item {
-  color: #334155;
-}
-
-.menu-item.selected {
+.selected {
   color: #78350F;
   background-color: #FFFBEB;
 }
 
-.book-color-label {
-  height: 16px;
-  width: 2px;
-  margin-right: 10px;
-}
-
-.book-color-label.ot {
+.ot {
   background-color: #FCA5A5;
 }
 
-.book-color-label.nt {
+.nt {
   background-color: #E9D5FF;
 }
 
-.book-color-label.dc {
+.dc {
   background-color: #C7D2FE;
 }

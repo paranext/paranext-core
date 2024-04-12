@@ -1,7 +1,7 @@
 import { forwardRef } from 'react';
 import { History } from 'lucide-react';
 import { Input as ShadInput } from '@/components/shadcn-ui/input';
-import '@/components/book-chapter-control/book-chapter-input.component.css';
+// import '@/components/book-chapter-control/book-chapter-input.component.css';
 
 export type BookChapterInputProps = {
   handleSearch: (searchString: string) => void;
@@ -14,17 +14,25 @@ export type BookChapterInputProps = {
 const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
   ({ handleSearch, handleKeyDown, ...props }: BookChapterInputProps, ref) => {
     return (
-      <div className="input-container">
+      <div style={{ position: 'relative', display: 'inline-block' }}>
         <ShadInput
           {...props}
-          style={{ outline: 0 }}
+          style={{ outline: 0, paddingRight: '40px' }}
           type="text"
-          className="book-chapter-input"
+          className="pr-box-border pr-rounded-lg pr-bg-white pr-text-slate-700 pr-shadow-none"
           onChange={(event) => handleSearch(event.target.value)}
           onKeyUp={handleKeyDown}
           ref={ref}
         />
-        <div className="history-icon-container">
+        <div
+          style={{
+            position: 'absolute',
+            transform: 'translateY(-50%)',
+            top: '20px',
+            right: '16px',
+          }}
+          className="pr-cursor-pointer"
+        >
           <History
             size={16}
             onClick={() => {
