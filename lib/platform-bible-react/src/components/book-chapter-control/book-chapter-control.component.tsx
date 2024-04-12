@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { useCallback, useRef, useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
@@ -7,17 +8,18 @@ import {
   DropdownMenuContent as ShadDropdownMenuContent,
   DropdownMenuLabel as ShadDropdownMenuLabel,
   DropdownMenuSeparator as ShadDropdownMenuSeparator,
-  DropdownMenuItem as ShadDropdownMenuItem,
 } from '@/components/shadcn-ui/dropdown-menu';
 import BookChapterInput from '@/components/book-chapter-control/book-chapter-input.component';
 import ChapterSelect from '@/components/book-chapter-control/chapter-select.component';
 import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-menu-item.component';
-import { Bookmark, Clock, ArrowDownWideNarrow } from 'lucide-react';
+import GoToMenuItem from './goTo-menu-item.component';
 
 // style todo's:
-// todo Chapter numbers flow to fit the width of menu
 // todo History icon positioning with Tailwind
 // todo Menu positioning- not aligned with input
+// todo Chapter numbers flow to fit the width of menu- Rolf's code
+// todo Chapter numbers centered- Rolf's code
+// todo book name not changing color
 
 // functionality todo's:
 // todo selected book menu item stays open when you close and reopen the menu
@@ -29,6 +31,7 @@ import { Bookmark, Clock, ArrowDownWideNarrow } from 'lucide-react';
 // todo Scrollbar not showing on dropdown menu
 // todo Input and menu focus sync
 // ^ On first key stroke in Input, when menu is closed, the menu will open but keystroke won't be captured
+// ability to disable menu items
 // todo Hide booktype label when no books match search criteria in input
 
 // cleaning code todo's:
@@ -143,19 +146,16 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           />
         </ShadDropdownMenuTrigger>
         <ShadDropdownMenuContent
-          className="pr-['Inter'] pr-overflow-y-auto pr-font-normal pr-text-slate-700"
+          className="pr-overflow-y-auto pr-font-normal pr-text-slate-700"
           style={{ width: '233px', maxHeight: '500px' }}
           onKeyDown={giveFocusToInput}
+          align="start"
         >
-          <ShadDropdownMenuItem
-            onClick={(e) => e.preventDefault()}
-            className="pr-flex pr-justify-between"
-          >
-            Go To
-            <div className="pr-flex pr-items-center">
-              <ArrowDownWideNarrow size={16} /> <Clock size={16} /> <Bookmark size={16} />
-            </div>
-          </ShadDropdownMenuItem>
+          <GoToMenuItem
+            handleSort={() => console.log('sorting')}
+            handleLocationHistory={() => console.log('location history')}
+            handleBookmarks={() => console.log('bookmarks')}
+          />
           {bookTypeArray.map((bookType) => (
             <div key={bookType}>
               <ShadDropdownMenuLabel className="pr-font-semibold pr-text-slate-700">
