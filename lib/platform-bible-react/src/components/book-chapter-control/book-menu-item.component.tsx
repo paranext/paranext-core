@@ -41,9 +41,12 @@ function BookMenuItem({
       <span
         className={cn(
           'pr-border-b-0 pr-border-l-2 pr-border-r-0 pr-border-t-0 pr-border-solid pr-px-2',
-          { 'pr-border-l-red-200': bookType.toLowerCase() === 'ot' },
-          { 'pr-border-l-purple-200': bookType.toLowerCase() === 'nt' },
-          { 'pr-border-l-indigo-200': bookType.toLowerCase() === 'dc' },
+          {
+            'pr-font-bold': isSelected,
+            'pr-border-l-red-200': bookType.toLowerCase() === 'ot',
+            'pr-border-l-purple-200': bookType.toLowerCase() === 'nt',
+            'pr-border-l-indigo-200': bookType.toLowerCase() === 'dc',
+          },
         )}
       >
         {Canon.bookIdToEnglishName(bookId)}
