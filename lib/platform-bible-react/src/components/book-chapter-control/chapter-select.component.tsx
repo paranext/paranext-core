@@ -15,16 +15,23 @@ function ChapterSelect({ endChapter, activeChapter, handleSelectChapter }: Chapt
   return (
     <div className="pr-flex pr-flex-wrap pr-content-start pr-items-start pr-self-stretch pr-bg-amber-50">
       {chapters.map((chapter) => (
-        // When adding onClick to <div> get error: Visible, non-interactive elements with click handlers must have at least one keyboard listener.
-        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div
+          key={chapter}
           className={cn(
             'pr-h-5 pr-w-5 pr-cursor-pointer pr-items-center pr-justify-center pr-rounded pr-p-2 pr-text-amber-800',
-            'hover:pr-bg-amber-200',
-            `${chapter === activeChapter ?? 'pr-bg-amber-200 pr-font-semibold pr-text-amber-900'}`,
+            {
+              'hover:pr-bg-amber-200': chapter !== activeChapter,
+              'pr-bg-amber-200 pr-font-semibold pr-text-amber-900': chapter === activeChapter,
+            },
           )}
-          key={chapter}
           onClick={() => handleSelectChapter(chapter)}
+          role="button"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleSelectChapter(chapter);
+            }
+          }}
+          tabIndex={0}
         >
           {chapter}
         </div>
