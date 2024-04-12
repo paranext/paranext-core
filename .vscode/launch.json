@@ -6,19 +6,19 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "npm: build:data",
-      "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/ParanextDataProvider",
+      "program": "${workspaceFolder}/c-sharp/bin/Debug/net8.0/ParanextDataProvider",
       "args": [],
       "cwd": "${workspaceFolder}",
       "stopAtEntry": false,
       "justMyCode": false,
       "windows": {
-        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/win-x64/ParanextDataProvider.exe"
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net8.0/win-x64/ParanextDataProvider.exe"
       },
       "linux": {
-        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/linux-x64/ParanextDataProvider"
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net8.0/linux-x64/ParanextDataProvider"
       },
       "osx": {
-        "program": "${workspaceFolder}/c-sharp/bin/Debug/net7.0/osx-x64/ParanextDataProvider"
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net8.0/osx-x64/ParanextDataProvider"
       }
     },
     {
