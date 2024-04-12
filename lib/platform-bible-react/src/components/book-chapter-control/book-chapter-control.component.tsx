@@ -11,7 +11,6 @@ import {
 import BookChapterInput from '@/components/book-chapter-control/book-chapter-input.component';
 import ChapterSelect from '@/components/book-chapter-control/chapter-select.component';
 import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-menu-item.component';
-// import '@/components/book-chapter-control/book-chapter-control.component.css';
 
 type BookTypeLabels = {
   [bookType in BookType]: string;
