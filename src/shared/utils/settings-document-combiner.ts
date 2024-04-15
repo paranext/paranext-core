@@ -1,5 +1,5 @@
 import {
-  DocumentCombinerEngine,
+  DocumentCombiner,
   JsonDocumentLike,
   Localized,
   Setting,
@@ -142,7 +142,7 @@ async function localizeSettingsContributionInfo(
 
 // #endregion
 
-export default class SettingsDocumentCombiner extends DocumentCombinerEngine {
+export default class SettingsDocumentCombiner extends DocumentCombiner {
   /** Cached promise for getting the localized output */
   private localizedOutputPromise:
     | Promise<LocalizedSettingsContributionInfo | undefined>
@@ -207,15 +207,15 @@ export default class SettingsDocumentCombiner extends DocumentCombinerEngine {
     return this.localizedOutputPromise;
   }
 
-  // We have to implement abstract methods but don't need to use `this`
+  // We don't need `this` on this override method
   // eslint-disable-next-line class-methods-use-this
-  protected validateStartingDocument(baseDocument: JsonDocumentLike): void {
+  protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {
     performSchemaValidation(baseDocument, PLATFORM_NAMESPACE);
   }
 
   // We don't need `this` on this override method
   // eslint-disable-next-line class-methods-use-this
-  protected override transformValidatedStartingDocument(
+  protected override transformBaseDocumentAfterValidation(
     baseDocument: JsonDocumentLike,
   ): JsonDocumentLike {
     return transformSettingsContributionToSettingsContributionInfo(
@@ -226,9 +226,9 @@ export default class SettingsDocumentCombiner extends DocumentCombinerEngine {
     );
   }
 
-  // We don't need `this` on this abstract method implementation
+  // We don't need `this` on this override method
   // eslint-disable-next-line class-methods-use-this
-  protected validateContribution(documentName: string, document: JsonDocumentLike): void {
+  protected override validateContribution(documentName: string, document: JsonDocumentLike): void {
     // Make sure it is a SettingsContribution
     performSchemaValidation(document, documentName);
 
@@ -261,7 +261,7 @@ export default class SettingsDocumentCombiner extends DocumentCombinerEngine {
 
   // We don't need `this` on this override method
   // eslint-disable-next-line class-methods-use-this
-  protected override transformValidatedContribution(
+  protected override transformContributionAfterValidation(
     documentName: string,
     document: JsonDocumentLike,
   ): JsonDocumentLike {
@@ -273,16 +273,19 @@ export default class SettingsDocumentCombiner extends DocumentCombinerEngine {
     );
   }
 
-  // We have to implement abstract methods but don't need to use `this`
+  // We don't need `this` on this override method
   // eslint-disable-next-line class-methods-use-this
-  protected validateOutput(): void {
+  protected override validateOutput(): void {
     // We already validated input documents and built the output ourselves, so we don't have any more
-    // validating to do
+    // validating to do. Unless someday we want to double check we have a properly formatted
+    // `SettingsContributionInfo`
   }
 
-  // We have to implement abstract methods but don't need to use `this`
+  // We don't need `this` on this override method
   // eslint-disable-next-line class-methods-use-this
-  protected transformFinalOutput(finalOutput: JsonDocumentLike): JsonDocumentLike {
+  protected override transformFinalOutputBeforeValidation(
+    finalOutput: JsonDocumentLike,
+  ): JsonDocumentLike {
     // We already transformed the input documents, so we don't have any transforming to do
     return finalOutput;
   }

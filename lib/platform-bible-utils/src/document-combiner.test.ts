@@ -1,13 +1,10 @@
 /* eslint-disable max-classes-per-file */
-import DocumentCombinerEngine, {
-  DocumentCombinerOptions,
-  JsonDocumentLike,
-} from './document-combiner-engine';
+import DocumentCombiner, { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 
 // #region Combiner implementations
 
 // Add a common getter to obtain the combined document
-abstract class TestDocumentCombinerEngine extends DocumentCombinerEngine {
+class TestDocumentCombiner extends DocumentCombiner {
   /** Gets the latest output of all composed documents */
   get output(): JsonDocumentLike | undefined {
     return this.latestOutput;
@@ -15,13 +12,13 @@ abstract class TestDocumentCombinerEngine extends DocumentCombinerEngine {
 
   // Implementing an abstract base class method
   // eslint-disable-next-line class-methods-use-this
-  protected transformFinalOutput(finalOutput: JsonDocumentLike): JsonDocumentLike {
+  protected transformFinalOutputBeforeValidation(finalOutput: JsonDocumentLike): JsonDocumentLike {
     return finalOutput;
   }
 }
 
 /** Combine all provided documents without any checking */
-class DocumentCombinerWithoutValidation extends TestDocumentCombinerEngine {
+class DocumentCombinerWithoutValidation extends TestDocumentCombiner {
   constructor(startingDocument: JsonDocumentLike, options?: DocumentCombinerOptions) {
     let optionsWithDefault = { copyDocuments: true, ignoreDuplicateProperties: false };
     if (options) optionsWithDefault = options;
@@ -30,7 +27,7 @@ class DocumentCombinerWithoutValidation extends TestDocumentCombinerEngine {
 
   // We have the implement this abstract function but don't want it to do anything
   // eslint-disable-next-line class-methods-use-this
-  protected validateStartingDocument(): void {}
+  protected validateBaseDocument(): void {}
 
   // We have the implement this abstract function but don't want it to do anything
   // eslint-disable-next-line class-methods-use-this
@@ -45,7 +42,7 @@ class DocumentCombinerWithoutValidation extends TestDocumentCombinerEngine {
 class ArrayDocumentCombiner extends DocumentCombinerWithoutValidation {
   // We just don't need `this` here
   // eslint-disable-next-line class-methods-use-this
-  protected transformValidatedContribution(
+  protected transformContributionAfterValidation(
     _documentName: string,
     document: JsonDocumentLike,
   ): JsonDocumentLike {
@@ -54,19 +51,19 @@ class ArrayDocumentCombiner extends DocumentCombinerWithoutValidation {
 
   // We just don't need `this` here
   // eslint-disable-next-line class-methods-use-this
-  protected transformValidatedStartingDocument(baseDocument: JsonDocumentLike): JsonDocumentLike {
+  protected transformBaseDocumentAfterValidation(baseDocument: JsonDocumentLike): JsonDocumentLike {
     return Array.isArray(baseDocument) ? baseDocument : [baseDocument];
   }
 }
 
 /** Throw a validation error on any operation, including construction */
-class AlwaysThrowingCombiner extends TestDocumentCombinerEngine {
+class AlwaysThrowingCombiner extends TestDocumentCombiner {
   constructor(startingDocument: JsonDocumentLike) {
     super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
   }
 
   // eslint-disable-next-line class-methods-use-this
-  protected validateStartingDocument(): void {
+  protected validateBaseDocument(): void {
     throw new Error();
   }
 
@@ -82,7 +79,7 @@ class AlwaysThrowingCombiner extends TestDocumentCombinerEngine {
 }
 
 /** Throw a validation error on any operation after construction is complete */
-class ThrowingCombiner extends TestDocumentCombinerEngine {
+class ThrowingCombiner extends TestDocumentCombiner {
   throwEnabled: boolean = false;
 
   constructor(startingDocument: JsonDocumentLike) {
@@ -90,7 +87,7 @@ class ThrowingCombiner extends TestDocumentCombinerEngine {
     this.throwEnabled = true;
   }
 
-  protected validateStartingDocument(): void {
+  protected validateBaseDocument(): void {
     if (this.throwEnabled) throw new Error();
   }
 
@@ -104,13 +101,13 @@ class ThrowingCombiner extends TestDocumentCombinerEngine {
 }
 
 /** Throw a validation error only when checking the output */
-class OutputThrowingCombiner extends TestDocumentCombinerEngine {
+class OutputThrowingCombiner extends TestDocumentCombiner {
   constructor(startingDocument: JsonDocumentLike) {
     super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
   }
 
   // eslint-disable-next-line class-methods-use-this
-  protected validateStartingDocument(): void {}
+  protected validateBaseDocument(): void {}
 
   // eslint-disable-next-line class-methods-use-this
   protected validateContribution(): void {}

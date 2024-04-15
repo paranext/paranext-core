@@ -92,7 +92,7 @@ export type JsonObjectLike = {
 export type JsonArrayLike = unknown[];
 export type JsonDocumentLike = JsonObjectLike | JsonArrayLike | number | string | null | undefined;
 /**
- * Options for DocumentCombinerEngine objects
+ * Options for DocumentCombiner objects
  *
  * - `copyDocuments`: If true, this instance will perform a deep copy of all provided documents before
  *   composing the output. If false, then changes made to provided documents after they are
@@ -109,7 +109,7 @@ export type DocumentCombinerOptions = {
  * Base class for any code that wants to compose JSON documents (primarily in the form of JS objects
  * or arrays) together into a single output document.
  */
-export declare abstract class DocumentCombinerEngine {
+export declare class DocumentCombiner {
 	protected baseDocument: JsonDocumentLike;
 	protected readonly contributions: Map<string, JsonDocumentLike>;
 	protected latestOutput: JsonDocumentLike | undefined;
@@ -118,7 +118,7 @@ export declare abstract class DocumentCombinerEngine {
 	/** Event that emits to announce that the document has been rebuilt and the output has been updated */
 	readonly onDidRebuild: PlatformEvent<undefined>;
 	/**
-	 * Create a DocumentCombinerEngine instance
+	 * Create a DocumentCombiner instance
 	 *
 	 * @param baseDocument This is the first document that will be used when composing the output
 	 * @param options Options used by this object when combining documents
@@ -133,6 +133,13 @@ export declare abstract class DocumentCombinerEngine {
 	updateBaseDocument(baseDocument: JsonDocumentLike): JsonDocumentLike | undefined;
 	/**
 	 * Add or update one of the contribution documents for the composition process
+	 *
+	 * Note: the order in which contribution documents are added can be considered to be indeterminate
+	 * as it is currently ordered by however `Map.forEach` provides the contributions. The order
+	 * matters when merging two arrays into one. Also, when `options.ignoreDuplicateProperties` is
+	 * `true`, the order also matters when adding the same property to an object that is already
+	 * provided previously. Please let us know if you have trouble because of indeterminate
+	 * contribution ordering.
 	 *
 	 * @param documentName Name of the contributed document to combine
 	 * @param document Content of the contributed document to combine
@@ -168,10 +175,10 @@ export declare abstract class DocumentCombinerEngine {
 	 * WARNING: If you do not create the combiner with option `copyDocuments: true` or clone inside
 	 * this method, this method will directly modify the `baseDocument` passed in.
 	 *
-	 * @param baseDocument Initial input document. Already validated via `validateStartingDocument`
+	 * @param baseDocument Initial input document. Already validated via `validateBaseDocument`
 	 * @returns Transformed base document
 	 */
-	protected transformValidatedStartingDocument(baseDocument: JsonDocumentLike): JsonDocumentLike;
+	protected transformBaseDocumentAfterValidation(baseDocument: JsonDocumentLike): JsonDocumentLike;
 	/**
 	 * Transform the contributed document associated with `documentName`. This transformation occurs
 	 * after validating the contributed document and before combining with other documents.
@@ -184,26 +191,26 @@ export declare abstract class DocumentCombinerEngine {
 	 *   `validateContribution`
 	 * @returns Transformed contributed document
 	 */
-	protected transformValidatedContribution(documentName: string, document: JsonDocumentLike): JsonDocumentLike;
+	protected transformContributionAfterValidation(documentName: string, document: JsonDocumentLike): JsonDocumentLike;
 	/**
 	 * Throw an error if the provided document is not a valid starting document.
 	 *
 	 * @param baseDocument Base JSON document/JS object that all other documents are added to
 	 */
-	protected abstract validateStartingDocument(baseDocument: JsonDocumentLike): void;
+	protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
 	/**
 	 * Throw an error if the provided document is not a valid contribution document.
 	 *
 	 * @param documentName Name of the contributed document to combine
 	 * @param document Content of the contributed document to combine
 	 */
-	protected abstract validateContribution(documentName: string, document: JsonDocumentLike): void;
+	protected validateContribution(documentName: string, document: JsonDocumentLike): void;
 	/**
 	 * Throw an error if the provided output is not valid.
 	 *
 	 * @param output Output document that could potentially be returned to callers
 	 */
-	protected abstract validateOutput(output: JsonDocumentLike): void;
+	protected validateOutput(output: JsonDocumentLike): void;
 	/**
 	 * Transform the document that is the composition of the base document and all contribution
 	 * documents. This is the last step that will be run prior to validation via `validateOutput`
@@ -212,15 +219,11 @@ export declare abstract class DocumentCombinerEngine {
 	 * @param finalOutput Final output document that could potentially be returned to callers. "Final"
 	 *   means no further contribution documents will be merged.
 	 */
-	protected abstract transformFinalOutput(finalOutput: JsonDocumentLike): JsonDocumentLike;
+	protected transformFinalOutputBeforeValidation(finalOutput: JsonDocumentLike): JsonDocumentLike;
 }
-export declare class NonValidatingDocumentCombiner extends DocumentCombinerEngine {
+export declare class NonValidatingDocumentCombiner extends DocumentCombiner {
 	constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions);
 	get output(): JsonDocumentLike | undefined;
-	protected transformFinalOutput(finalOutput: JsonDocumentLike): JsonDocumentLike;
-	protected validateStartingDocument(_startingDocument: JsonDocumentLike): void;
-	protected validateContribution(_documentName: string, _document: JsonDocumentLike): void;
-	protected validateOutput(_output: JsonDocumentLike): void;
 }
 /** Require a `dispose` function */
 export interface Dispose {

@@ -1,5 +1,5 @@
 import {
-  DocumentCombinerEngine,
+  DocumentCombiner,
   DocumentCombinerOptions,
   JsonDocumentLike,
   deepClone,
@@ -202,7 +202,7 @@ async function localizeMenuItems(menuItems: Localized<MenuItemBase>[] | undefine
  * represent menus in Platform.Bible. The starting document is expected to be provided by the
  * platform, and all the contribution documents are expected to be provided by extensions.
  */
-export default class MenuDocumentCombiner extends DocumentCombinerEngine {
+export default class MenuDocumentCombiner extends DocumentCombiner {
   private localizedOutput: LocalizedMenus | undefined;
   private originalOutputThatWasLocalized: JsonDocumentLike | undefined;
 
@@ -265,14 +265,14 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
     return retVal;
   }
 
-  // We have to implement abstract methods but don't need to use `this`
+  // We don't need `this` on this override method
   // eslint-disable-next-line class-methods-use-this
-  protected validateStartingDocument(baseDocument: JsonDocumentLike): void {
+  protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {
     // The starting document has to validate against the output schema, too
     performSchemaValidation(baseDocument, 'starting');
   }
 
-  protected validateContribution(documentName: string, document: JsonDocumentLike): void {
+  protected override validateContribution(documentName: string, document: JsonDocumentLike): void {
     // We know that latestOutput matches the type due to schema validation
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const currentMenus = this.latestOutput as PlatformMenus;
@@ -332,9 +332,9 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
     // TODO: Validate that extensions only add to objects that are marked as extensible
   }
 
-  // We have to implement abstract methods but don't need to use `this`
+  // We don't need `this` on this override method
   // eslint-disable-next-line class-methods-use-this
-  protected validateOutput(output: JsonDocumentLike): void {
+  protected override validateOutput(output: JsonDocumentLike): void {
     performSchemaValidation(output, 'output');
     // Once the schema has been validated, we know the type should match
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -360,9 +360,11 @@ export default class MenuDocumentCombiner extends DocumentCombinerEngine {
   }
 
   // Combine the webview menu defaults for any web views that indicate that is desired
-  // We have to implement abstract methods but don't need to use `this`
+  // We don't need `this` on this override method
   // eslint-disable-next-line class-methods-use-this
-  protected transformFinalOutput(finalOutput: JsonDocumentLike): JsonDocumentLike {
+  protected override transformFinalOutputBeforeValidation(
+    finalOutput: JsonDocumentLike,
+  ): JsonDocumentLike {
     // The document given to us should be of this type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const retVal = finalOutput as PlatformMenus;

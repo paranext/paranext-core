@@ -1,9 +1,9 @@
 [
   {
-    "label": "%setting_hello-world.group1%",
+    "label": "%settings_hello_world_group1_label%",
     "properties": {
       "hello-world.personName": {
-        "label": "%setting_hello-world.personName_label%",
+        "label": "%settings_hello_world_personName_label%",
         "default": "Bill"
       }
     }

@@ -14,7 +14,7 @@ export type JsonDocumentLike =
   | undefined;
 
 /**
- * Options for DocumentCombinerEngine objects
+ * Options for DocumentCombiner objects
  *
  * - `copyDocuments`: If true, this instance will perform a deep copy of all provided documents before
  *   composing the output. If false, then changes made to provided documents after they are
@@ -32,7 +32,7 @@ export type DocumentCombinerOptions = {
  * Base class for any code that wants to compose JSON documents (primarily in the form of JS objects
  * or arrays) together into a single output document.
  */
-export default abstract class DocumentCombinerEngine {
+export default class DocumentCombiner {
   protected baseDocument: JsonDocumentLike;
   protected readonly contributions = new Map<string, JsonDocumentLike>();
   protected latestOutput: JsonDocumentLike | undefined;
@@ -44,7 +44,7 @@ export default abstract class DocumentCombinerEngine {
   readonly onDidRebuild = this.onDidRebuildEmitter.subscribe;
 
   /**
-   * Create a DocumentCombinerEngine instance
+   * Create a DocumentCombiner instance
    *
    * @param baseDocument This is the first document that will be used when composing the output
    * @param options Options used by this object when combining documents
@@ -63,14 +63,21 @@ export default abstract class DocumentCombinerEngine {
    * @returns Recalculated output document given the new starting state and existing other documents
    */
   updateBaseDocument(baseDocument: JsonDocumentLike): JsonDocumentLike | undefined {
-    this.validateStartingDocument(baseDocument);
+    this.validateBaseDocument(baseDocument);
     this.baseDocument = this.options.copyDocuments ? deepClone(baseDocument) : baseDocument;
-    this.baseDocument = this.transformValidatedStartingDocument(this.baseDocument);
+    this.baseDocument = this.transformBaseDocumentAfterValidation(this.baseDocument);
     return this.rebuild();
   }
 
   /**
    * Add or update one of the contribution documents for the composition process
+   *
+   * Note: the order in which contribution documents are added can be considered to be indeterminate
+   * as it is currently ordered by however `Map.forEach` provides the contributions. The order
+   * matters when merging two arrays into one. Also, when `options.ignoreDuplicateProperties` is
+   * `true`, the order also matters when adding the same property to an object that is already
+   * provided previously. Please let us know if you have trouble because of indeterminate
+   * contribution ordering.
    *
    * @param documentName Name of the contributed document to combine
    * @param document Content of the contributed document to combine
@@ -84,7 +91,7 @@ export default abstract class DocumentCombinerEngine {
     this.validateContribution(documentName, document);
     const previousDocumentVersion = this.contributions.get(documentName);
     let documentToSet = this.options.copyDocuments && !!document ? deepClone(document) : document;
-    documentToSet = this.transformValidatedContribution(documentName, documentToSet);
+    documentToSet = this.transformContributionAfterValidation(documentName, documentToSet);
     this.contributions.set(documentName, documentToSet);
     try {
       return this.rebuild();
@@ -152,7 +159,7 @@ export default abstract class DocumentCombinerEngine {
     // The starting document is the output if there are no other contributions
     if (this.contributions.size === 0) {
       let potentialOutput = deepClone(this.baseDocument);
-      potentialOutput = this.transformFinalOutput(potentialOutput);
+      potentialOutput = this.transformFinalOutputBeforeValidation(potentialOutput);
       this.validateOutput(potentialOutput);
       this.latestOutput = potentialOutput;
       this.onDidRebuildEmitter.emit(undefined);
@@ -169,7 +176,7 @@ export default abstract class DocumentCombinerEngine {
       );
       this.validateOutput(outputIteration);
     });
-    outputIteration = this.transformFinalOutput(outputIteration);
+    outputIteration = this.transformFinalOutputBeforeValidation(outputIteration);
     this.validateOutput(outputIteration);
     this.latestOutput = outputIteration;
     this.onDidRebuildEmitter.emit(undefined);
@@ -183,13 +190,13 @@ export default abstract class DocumentCombinerEngine {
    * WARNING: If you do not create the combiner with option `copyDocuments: true` or clone inside
    * this method, this method will directly modify the `baseDocument` passed in.
    *
-   * @param baseDocument Initial input document. Already validated via `validateStartingDocument`
+   * @param baseDocument Initial input document. Already validated via `validateBaseDocument`
    * @returns Transformed base document
    */
   // We just don't need `this` here. This is basically a no-op function that is available to child
   // classes to override
   // eslint-disable-next-line class-methods-use-this
-  protected transformValidatedStartingDocument(baseDocument: JsonDocumentLike): JsonDocumentLike {
+  protected transformBaseDocumentAfterValidation(baseDocument: JsonDocumentLike): JsonDocumentLike {
     return baseDocument;
   }
 
@@ -208,7 +215,7 @@ export default abstract class DocumentCombinerEngine {
   // We just don't need `this` here. This is basically a no-op function that is available to child
   // classes to override
   // eslint-disable-next-line class-methods-use-this
-  protected transformValidatedContribution(
+  protected transformContributionAfterValidation(
     // @ts-expect-error this parameter is unused but may be used in child classes
     documentName: string,
     document: JsonDocumentLike,
@@ -221,7 +228,10 @@ export default abstract class DocumentCombinerEngine {
    *
    * @param baseDocument Base JSON document/JS object that all other documents are added to
    */
-  protected abstract validateStartingDocument(baseDocument: JsonDocumentLike): void;
+  // no-op intended to be overridden by child classes. Can't be static
+  // @ts-expect-error ts(6133) parameter doesn't need to be used but still needs the right name
+  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  protected validateBaseDocument(baseDocument: JsonDocumentLike): void {}
 
   /**
    * Throw an error if the provided document is not a valid contribution document.
@@ -229,14 +239,20 @@ export default abstract class DocumentCombinerEngine {
    * @param documentName Name of the contributed document to combine
    * @param document Content of the contributed document to combine
    */
-  protected abstract validateContribution(documentName: string, document: JsonDocumentLike): void;
+  // no-op intended to be overridden by child classes. Can't be static
+  // @ts-expect-error ts(6133) parameter doesn't need to be used but still needs the right name
+  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  protected validateContribution(documentName: string, document: JsonDocumentLike): void {}
 
   /**
    * Throw an error if the provided output is not valid.
    *
    * @param output Output document that could potentially be returned to callers
    */
-  protected abstract validateOutput(output: JsonDocumentLike): void;
+  // no-op intended to be overridden by child classes. Can't be static
+  // @ts-expect-error ts(6133) parameter doesn't need to be used but still needs the right name
+  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  protected validateOutput(output: JsonDocumentLike): void {}
 
   /**
    * Transform the document that is the composition of the base document and all contribution
@@ -246,7 +262,11 @@ export default abstract class DocumentCombinerEngine {
    * @param finalOutput Final output document that could potentially be returned to callers. "Final"
    *   means no further contribution documents will be merged.
    */
-  protected abstract transformFinalOutput(finalOutput: JsonDocumentLike): JsonDocumentLike;
+  // no-op intended to be overridden by child classes. Can't be static
+  // eslint-disable-next-line class-methods-use-this
+  protected transformFinalOutputBeforeValidation(finalOutput: JsonDocumentLike): JsonDocumentLike {
+    return finalOutput;
+  }
 }
 
 // #region Helper functions

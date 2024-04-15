@@ -3,7 +3,7 @@ import { ScriptureReference, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
 export const platformSettings: SettingsContribution = {
-  label: '%settings_platform_group1%',
+  label: '%settings_platform_group1_label%',
   description: '%settings_platform_group1_description%',
   properties: {
     'platform.verseRef': {
