@@ -1,9 +1,6 @@
-import DocumentCombinerEngine, {
-  DocumentCombinerOptions,
-  JsonDocumentLike,
-} from './document-combiner-engine';
+import DocumentCombiner, { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 
-export default class NonValidatingDocumentCombiner extends DocumentCombinerEngine {
+export default class NonValidatingDocumentCombiner extends DocumentCombiner {
   // Making the protected base constructor public
   // eslint-disable-next-line @typescript-eslint/no-useless-constructor
   constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions) {
@@ -13,17 +10,4 @@ export default class NonValidatingDocumentCombiner extends DocumentCombinerEngin
   get output(): JsonDocumentLike | undefined {
     return this.latestOutput;
   }
-
-  // Intentionally not using `this`
-  // eslint-disable-next-line class-methods-use-this
-  protected transformFinalOutput(finalOutput: JsonDocumentLike): JsonDocumentLike {
-    return finalOutput;
-  }
-
-  // These abstract methods from the base class are intentionally left blank
-  /* eslint-disable @typescript-eslint/no-unused-vars, class-methods-use-this */
-  protected validateStartingDocument(_startingDocument: JsonDocumentLike): void {}
-  protected validateContribution(_documentName: string, _document: JsonDocumentLike): void {}
-  protected validateOutput(_output: JsonDocumentLike): void {}
-  /* eslint-enable @typescript-eslint/no-unused-vars, class-methods-use-this */
 }

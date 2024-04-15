@@ -1,6 +1,6 @@
 // Classes
 export { default as AsyncVariable } from './async-variable';
-export { default as DocumentCombinerEngine } from './document-combiner-engine';
+export { default as DocumentCombiner } from './document-combiner';
 export { default as NonValidatingDocumentCombiner } from './non-validating-document-combiner';
 export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 export { default as PlatformEventEmitter } from './platform-event-emitter.model';
@@ -65,7 +65,7 @@ export type {
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
 export type { ScriptureReference, BookInfo } from './scripture.model';
 export type { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
-export type { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner-engine';
+export type { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 export type {
   LocalizeKey,
   ReferencedItem,
@@ -88,3 +88,25 @@ export type {
   Localized,
 } from './menus.model';
 export { menuDocumentSchema } from './menus.model';
+export type {
+  ExtensionControlledProjectSetting,
+  ExtensionControlledSetting,
+  ExtensionControlledState,
+  ModifierExtensionControlled,
+  ModifierProject,
+  ProjectSetting,
+  ProjectSettingBase,
+  ProjectSettingProperties,
+  ProjectSettingsContribution,
+  ProjectSettingsGroup,
+  ProjectStateContribution,
+  Setting,
+  SettingBase,
+  SettingProperties,
+  SettingsContribution,
+  SettingsGroup,
+  StateBase,
+  UserState,
+  UserStateContribution,
+} from './settings.model';
+export { projectSettingsDocumentSchema, settingsDocumentSchema } from './settings.model';

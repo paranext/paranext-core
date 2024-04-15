@@ -1,21 +1,20 @@
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
-import { SettingNames, SettingTypes } from 'papi-shared-types';
-import { ScriptureReference } from 'platform-bible-utils';
+import { ScriptureReference, SettingsContribution } from 'platform-bible-utils';
 
-/** Information about one setting */
-type SettingInfo<SettingName extends SettingNames> = {
-  default: SettingTypes[SettingName];
-};
-
-/** Information about all settings. Keys are setting keys, values are information for that setting */
-export type AllSettingsInfo = {
-  [SettingName in SettingNames]: SettingInfo<SettingName>;
-};
-
-/** Info about all settings built into core. Does not contain info for extensions' settings */
-export const coreSettingsInfo: Partial<AllSettingsInfo> = {
-  'platform.verseRef': { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } },
-  'platform.interfaceLanguage': { default: ['eng'] },
+/** Contribution of all settings built into core. Does not contain info for extensions' settings */
+export const platformSettings: SettingsContribution = {
+  label: '%settings_platform_group1_label%',
+  description: '%settings_platform_group1_description%',
+  properties: {
+    'platform.verseRef': {
+      label: '%settings_platform_verseRef_label%',
+      default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
+    },
+    'platform.interfaceLanguage': {
+      label: '%settings_platform_interfaceLanguage_label%',
+      default: ['eng'],
+    },
+  },
 };
 
 // TODO: Add range checking of BCV numbers given the current versification

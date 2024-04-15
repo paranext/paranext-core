@@ -1,4 +1,4 @@
-import { testingSettingService } from '@main/services/settings.service-host';
+import { testingSettingService } from '@extension-host/services/settings.service-host';
 
 const MOCK_SETTINGS_DATA = {
   'platform.interfaceLanguage': ['fre'],
@@ -25,13 +25,22 @@ jest.mock('@node/services/node-file-system.service', () => ({
     return Promise.resolve();
   },
 }));
-jest.mock('@main/data/core-settings-info.data', () => ({
-  ...jest.requireActual('@main/data/core-settings-info.data'),
+jest.mock('@extension-host/data/core-settings-info.data', () => ({
+  ...jest.requireActual('@extension-host/data/core-settings-info.data'),
   __esModule: true,
-  coreSettingsInfo: {
-    'platform.verseRef': { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } },
-    'platform.interfaceLanguage': { default: ['eng'] },
-    'settingsTest.noDefaultExists': {},
+  platformSettings: {
+    label: '%platform_group1%',
+    description: '%platform_group1_description%',
+    properties: {
+      'platform.verseRef': {
+        label: '%settings_platform_verseRef_label%',
+        default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
+      },
+      'platform.interfaceLanguage': {
+        label: '%settings_platform_interfaceLanguage_label%',
+        default: ['eng'],
+      },
+    },
   },
   coreSettingsValidators: {
     'platform.verseRef': async (): Promise<boolean> => {
@@ -68,14 +77,6 @@ test('Undefined returned as setting value', async () => {
   // @ts-expect-error ts(2345)
   const result = await settingsProviderEngine.get('settingsTest.valueIsUndefined');
   expect(result).toEqual(undefined);
-});
-
-test('No default specified for key', async () => {
-  // settingsTest.noDefaultExists does not exist on SettingNames
-  // @ts-expect-error ts(2345)
-  await expect(settingsProviderEngine.get('settingsTest.noDefaultExists')).rejects.toThrow(
-    'No default value specified for key settingsTest.noDefaultExists',
-  );
 });
 
 test('Set interfaceLanguage returns true', async () => {
