@@ -1,4 +1,4 @@
-import { testingProjectSettingsService } from '@main/services/project-settings.service-host';
+import { testingProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { ProjectSettingValidator } from '@shared/services/project-settings.service-model';
 
 jest.mock('@shared/services/network.service', () => ({
@@ -7,16 +7,22 @@ jest.mock('@shared/services/network.service', () => ({
     return {};
   },
 }));
-jest.mock('@main/data/core-project-settings-info.data', () => ({
-  ...jest.requireActual('@main/data/core-project-settings-info.data'),
+jest.mock('@extension-host/data/core-project-settings-info.data', () => ({
+  ...jest.requireActual('@extension-host/data/core-project-settings-info.data'),
   __esModule: true,
-  default: {
-    'platform.fullName': { default: '%test_project_full_name_missing%' },
-    'platform.language': { default: '%test_project_language_missing%' },
-    'platformScripture.booksPresent': {
-      default: 'thisIsNotActuallyBooksPresent',
+  platformProjectSettings: {
+    label: '%project_settings_platform_group1_label%',
+    description: '%project_settings_platform_group1_description%',
+    properties: {
+      'platform.fullName': {
+        label: '%project_settings_platform_fullName_label%',
+        default: '%test_project_full_name_missing%',
+      },
+      'platform.language': {
+        label: '%project_settings_platform_language_label%',
+        default: '%test_project_language_missing%',
+      },
     },
-    // Not present! Should throw error 'platformScripture.versification': { default: 1629326 },
   },
   coreProjectSettingsValidators: {
     'platform.language': async (newValue: string): Promise<boolean> => {
@@ -59,10 +65,12 @@ describe('getDefault', () => {
   });
 
   it('should throw if a default is not present', async () => {
-    const projectSettingKey = 'platformScripture.versification';
+    const projectSettingKey = 'platform.settingDoesNotExist';
     await expect(
+      // This key does not exist. We are testing what happens
+      // @ts-expect-error
       testingProjectSettingsService.getDefault(projectSettingKey, 'ParatextStandard'),
-    ).rejects.toThrow(new RegExp(`default value for project setting ${projectSettingKey}`));
+    ).rejects.toThrow(new RegExp(`Could not find project setting ${projectSettingKey}`));
   });
 });
 

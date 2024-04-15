@@ -34,6 +34,7 @@ import { menuDocumentCombiner } from '@extension-host/services/menu-data.service
 import menuDataService from '@shared/services/menu-data.service';
 import { settingsDocumentCombiner } from '@extension-host/services/settings.service-host';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
+import { projectSettingsDocumentCombiner } from './project-settings.service-host';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -760,6 +761,7 @@ async function resyncContributions(
 ) {
   menuDocumentCombiner.deleteAllContributions();
   settingsDocumentCombiner.deleteAllContributions();
+  projectSettingsDocumentCombiner.deleteAllContributions();
 
   await Promise.all(
     extensionsToAdd.map(async (extension) => {
@@ -785,6 +787,23 @@ async function resyncContributions(
           settingsDocumentCombiner.addOrUpdateContribution(extension.name, settingsDocument);
         } catch (error) {
           logger.warn(`Could not add settings contribution for ${extension.name}: ${error}`);
+        }
+      }
+      if (extension.projectSettings) {
+        try {
+          // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
+          const projectSettingsJson = await nodeFS.readFileText(
+            joinUriPaths(extension.dirUri, extension.projectSettings),
+          );
+          const projectSettingsDocument = JSON.parse(projectSettingsJson);
+          projectSettingsDocumentCombiner.addOrUpdateContribution(
+            extension.name,
+            projectSettingsDocument,
+          );
+        } catch (error) {
+          logger.warn(
+            `Could not add project settings contribution for ${extension.name}: ${error}`,
+          );
         }
       }
     }),
@@ -823,11 +842,11 @@ async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<vo
   });
   setExtensionUris(uriMap);
 
-  // Active the extensions
-  await activateExtensions(availableExtensions);
-
   // Update the menus, settings, etc. - all json contributions the extensions make
   await resyncContributions(allExtensions);
+
+  // Active the extensions
+  await activateExtensions(availableExtensions);
 }
 
 /**
