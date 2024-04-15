@@ -4,14 +4,7 @@ import { deepClone } from './util';
 type JsonObjectLike = { [key: string]: unknown };
 type JsonArrayLike = unknown[];
 
-export type JsonDocumentLike =
-  | JsonObjectLike
-  | JsonArrayLike
-  | number
-  | string
-  | null
-  // Undefined is not a valid JSON type. However, our deserialize can output this, so might as well support it
-  | undefined;
+export type JsonDocumentLike = JsonObjectLike | JsonArrayLike;
 
 /**
  * Options for DocumentCombiner objects

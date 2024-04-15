@@ -90,7 +90,7 @@ export type JsonObjectLike = {
 	[key: string]: unknown;
 };
 export type JsonArrayLike = unknown[];
-export type JsonDocumentLike = JsonObjectLike | JsonArrayLike | number | string | null | undefined;
+export type JsonDocumentLike = JsonObjectLike | JsonArrayLike;
 /**
  * Options for DocumentCombiner objects
  *
@@ -1186,7 +1186,7 @@ export interface StateBase {
  */
 export interface ModifierExtensionControlled {
 	[k: string]: unknown;
-	$ref?: undefined;
+	platformType?: undefined;
 	type?: undefined;
 }
 /** Group of related settings definitions */

@@ -195,8 +195,6 @@ export default class SettingsDocumentCombiner extends DocumentCombiner {
     // Return promise if cached
     if (this.localizedOutputPromise) return this.localizedOutputPromise;
 
-    if (!this.latestOutput) return undefined;
-
     // Not awaiting this promise, but we're catching inside the function and logging
     this.localizedOutputPromise = localizeSettingsContributionInfo(
       // We know the latest output is always SettingsContributionInfo because of our work in this combiner
@@ -279,14 +277,5 @@ export default class SettingsDocumentCombiner extends DocumentCombiner {
     // We already validated input documents and built the output ourselves, so we don't have any more
     // validating to do. Unless someday we want to double check we have a properly formatted
     // `SettingsContributionInfo`
-  }
-
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
-  protected override transformFinalOutputBeforeValidation(
-    finalOutput: JsonDocumentLike,
-  ): JsonDocumentLike {
-    // We already transformed the input documents, so we don't have any transforming to do
-    return finalOutput;
   }
 }

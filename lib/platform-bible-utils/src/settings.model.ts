@@ -62,7 +62,7 @@ export interface StateBase {
  */
 export interface ModifierExtensionControlled {
   [k: string]: unknown;
-  $ref?: undefined;
+  platformType?: undefined;
   type?: undefined;
 }
 /** Group of related settings definitions */
@@ -354,7 +354,7 @@ const settingsDefs = {
       anyOf: [
         {
           type: 'object',
-          required: ['$ref'],
+          required: ['platformType'],
         },
         {
           type: 'object',

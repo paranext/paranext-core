@@ -212,20 +212,20 @@ describe('Simple array combining', () => {
   });
 });
 
-test('transformValidatedBaseDocument and transformValidatedContribution allow array or non-array docs to merge into an array together', () => {
-  const arrayBase = [1, 2, 3];
-  const numBase = 1;
-  const numContribution = 4;
+test('transformBaseDocumentAfterValidation and transformContributionAfterValidation allow array or non-array docs to merge into an array together', () => {
+  const arrayBase = [{ thing: 0 }, [], [4]];
+  const objectBase = { thing: 1 };
+  const objectContribution = { stuff: 3 };
   const arrayContribution = [5, 6];
 
   const combiner = new ArrayDocumentCombiner(arrayBase);
-  expect(JSON.stringify(combiner.output)).toBe('[1,2,3]');
-  combiner.addOrUpdateContribution('numContribution', numContribution);
-  expect(JSON.stringify(combiner.output)).toBe('[1,2,3,4]');
+  expect(JSON.stringify(combiner.output)).toBe('[{"thing":0},[],[4]]');
+  combiner.addOrUpdateContribution('objectContribution', objectContribution);
+  expect(JSON.stringify(combiner.output)).toBe('[{"thing":0},[],[4],{"stuff":3}]');
   combiner.addOrUpdateContribution('arrayContribution', arrayContribution);
-  expect(JSON.stringify(combiner.output)).toBe('[1,2,3,4,5,6]');
-  combiner.updateBaseDocument(numBase);
-  expect(JSON.stringify(combiner.output)).toBe('[1,4,5,6]');
+  expect(JSON.stringify(combiner.output)).toBe('[{"thing":0},[],[4],{"stuff":3},5,6]');
+  combiner.updateBaseDocument(objectBase);
+  expect(JSON.stringify(combiner.output)).toBe('[{"thing":1},{"stuff":3},5,6]');
 });
 
 test('Collisions are not allowed', () => {
@@ -247,8 +247,9 @@ test('Collisions are not allowed', () => {
 test('Can handle various empty contributions', () => {
   const combiner = new DocumentCombinerWithoutValidation({});
   expect(() => combiner.addOrUpdateContribution('A', {})).not.toThrow();
+  // @ts-expect-error: Purposefully passing garbage
   expect(() => combiner.addOrUpdateContribution('A', undefined)).not.toThrow();
-  // Purposefully passing garbage
+  // @ts-expect-error: Purposefully passing garbage
   // eslint-disable-next-line no-null/no-null
   expect(() => combiner.addOrUpdateContribution('A', null)).not.toThrow();
 });
