@@ -9,12 +9,15 @@ import { newNonce } from '@shared/utils/util';
 import { Dispose, MutexMap, UnsubscriberAsyncList } from 'platform-bible-utils';
 import projectLookupService from '@shared/services/project-lookup.service';
 import logger from '@shared/services/logger.service';
+import IProjectDataProviderFactory from '@shared/models/project-data-provider-factory.interface';
 
 /**
  * Class that creates Project Data Providers of a specified `projectType`. Layers over
  * extension-provided {@link IProjectDataProviderEngineFactory}. Internal only
  */
-class ProjectDataProviderFactory<ProjectType extends ProjectTypes> {
+class ProjectDataProviderFactory<ProjectType extends ProjectTypes>
+  implements IProjectDataProviderFactory
+{
   private readonly pdpIdsMutexMap = new MutexMap();
   private readonly pdpIds: Map<string, string> = new Map();
   private readonly projectType: ProjectType;
