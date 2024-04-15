@@ -30,7 +30,7 @@ function BookMenuItem({
       textValue={bookId}
       className={cn('pr-font-normal pr-text-slate-700', {
         // Overriding `data-[highlighted]` changes the default gray background that is normally shown on hover
-        'pr-bg-amber-50 pr-text-yellow-900 data-[highlighted]:pr-bg-amber-50': isSelected,
+        'pr-bg-amber-50 pr-text-yellow-900 data-[highlighted]:pr-bg-amber-100': isSelected,
       })}
       onSelect={(e: Event) => {
         // preventDefault() here prevents the entire dropdown menu from closing when selecting this item
