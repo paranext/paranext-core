@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { useCallback, useRef, useState } from 'react';
+import { KeyboardEvent, useCallback, useRef, useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
 import {
@@ -34,12 +34,15 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>('');
+  const [highlightedChapter, setHighlightedChapter] = useState<number>(0);
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const inputRef = useRef<HTMLInputElement>(undefined!);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const contentRef = useRef<HTMLDivElement>(undefined!);
 
   const fetchGroupedBooks = useCallback(
     (bookType: BookType) => {
@@ -75,6 +78,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   }, []);
 
   const handleSelectBook = (bookId: string) => {
+    setHighlightedChapter(Canon.bookNumberToId(scrRef.bookNum) !== bookId ? 1 : scrRef.chapterNum);
     setSelectedBookId(selectedBookId !== bookId ? bookId : '');
     // If there are no chapters, then selecting the book will close the menu and set the
     // chapter and verse numbers to 1
@@ -107,7 +111,30 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     }
   }, []);
 
-  const giveFocusToInput = useCallback(() => inputRef.current.focus(), []);
+  const handleKeyDownInput = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+    const { key } = event;
+    if (key === 'ArrowDown' || key === 'ArrowUp') {
+      console.log('Shift focus from input to menu');
+      contentRef.current.focus();
+      return;
+    }
+    setIsOpen(true);
+    inputRef.current.focus();
+  }, []);
+
+  const handleKeyDownContent = (event: KeyboardEvent<HTMLInputElement>) => {
+    const { key } = event;
+    if (key === 'ArrowRight') {
+      setHighlightedChapter(
+        highlightedChapter < fetchEndChapter(selectedBookId) ? highlightedChapter + 1 : 1,
+      );
+    }
+    if (key === 'ArrowLeft') {
+      setHighlightedChapter(
+        highlightedChapter > 1 ? highlightedChapter - 1 : fetchEndChapter(selectedBookId),
+      );
+    }
+  };
 
   return (
     <div>
@@ -118,16 +145,20 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             ref={inputRef}
             value={searchQuery}
             handleSearch={handleSearchInput}
-            handleKeyUp={() => setIsOpen(true)}
-            handleOnClick={() => setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum))}
+            handleKeyDown={handleKeyDownInput}
+            handleOnClick={() => {
+              setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum));
+              setHighlightedChapter(scrRef.bookNum > 0 ? scrRef.bookNum : 0);
+            }}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
           />
         </ShadDropdownMenuTrigger>
         <ShadDropdownMenuContent
           className="pr-overflow-y-auto pr-font-normal pr-text-slate-700"
           style={{ width: '233px', maxHeight: '500px' }}
-          onKeyDown={giveFocusToInput}
+          onKeyDown={handleKeyDownContent}
           align="start"
+          ref={contentRef}
         >
           <GoToMenuItem
             handleSort={() => console.log('sorting')}
@@ -157,6 +188,10 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                           activeChapter={
                             scrRef.bookNum === Canon.bookIdToNumber(bookId) ? scrRef.chapterNum : 0
                           }
+                          highlightedChapter={highlightedChapter}
+                          handleHighlightedChapter={(chapterNumber: number): void => {
+                            setHighlightedChapter(chapterNumber);
+                          }}
                         />
                       </BookMenuItem>
                     </div>
