@@ -1,5 +1,5 @@
 import { Canon } from '@sillsdev/scripture';
-import { PropsWithChildren } from 'react';
+import { PropsWithChildren, KeyboardEvent } from 'react';
 import { DropdownMenuItem as ShadDropdownMenuItem } from '@/components/shadcn-ui/dropdown-menu';
 import { cn } from '@/utils/shadcn-ui.util';
 
@@ -9,9 +9,12 @@ type BookMenuItemProps = PropsWithChildren<{
   // String id of book
   bookId: string;
   // Callback to run when a book menu item is selected
-  handleSelectBook: (bookId: string) => void;
+  handleSelectBook: () => void;
   // True if this menu item is currently selected
   isSelected: boolean;
+  handleHighlightBook: () => void;
+  // isHighlighted: boolean;
+  handleKeyDown: (event: KeyboardEvent) => void;
   // Type of book associated with this menu item, coordinates color labels
   // ? Mock up has the labels coordinated to genre
   bookType: BookType;
@@ -21,9 +24,17 @@ function BookMenuItem({
   bookId,
   handleSelectBook,
   isSelected,
+  handleHighlightBook,
+  // isHighlighted,
+  handleKeyDown,
   bookType,
   children,
 }: BookMenuItemProps) {
+  const handleFocus = () => {
+    console.log('book ', Canon.bookIdToEnglishName(bookId), 'has focus');
+    handleHighlightBook();
+  };
+
   return (
     <ShadDropdownMenuItem
       key={bookId}
@@ -32,11 +43,16 @@ function BookMenuItem({
         // Overriding `data-[highlighted]` changes the default gray background that is normally shown on hover
         'pr-bg-amber-50 pr-text-yellow-900 data-[highlighted]:pr-bg-amber-100': isSelected,
       })}
-      onSelect={(e: Event) => {
+      onSelect={(event: Event) => {
         // preventDefault() here prevents the entire dropdown menu from closing when selecting this item
-        e.preventDefault();
-        handleSelectBook(bookId);
+        event.preventDefault();
+        handleSelectBook();
       }}
+      onKeyDown={(event: KeyboardEvent) => {
+        handleKeyDown(event);
+      }}
+      onFocus={handleFocus}
+      onMouseMove={handleFocus}
     >
       <span
         className={cn(
@@ -57,5 +73,3 @@ function BookMenuItem({
 }
 
 export default BookMenuItem;
-
-// gap-2

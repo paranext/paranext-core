@@ -2,20 +2,22 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { useCallback } from 'react';
 
 export type ChapterSelectProps = {
-  // The end chapter of the selected book
-  endChapter: number;
   // Callback to run when a chapter div is selected
   handleSelectChapter: (chapterNumber: number) => void;
+  // The end chapter of the selected book
+  endChapter: number;
   // The currently selected chapter
   activeChapter: number;
+  isHighlighted: boolean;
   highlightedChapter: number;
   handleHighlightedChapter: (chapterNumber: number) => void;
 };
 
 function ChapterSelect({
+  handleSelectChapter,
   endChapter,
   activeChapter,
-  handleSelectChapter,
+  isHighlighted,
   highlightedChapter,
   handleHighlightedChapter,
 }: ChapterSelectProps) {
@@ -29,11 +31,14 @@ function ChapterSelect({
     [handleHighlightedChapter],
   );
 
+  console.log('Chapter select re-rendered. isHighligthed value: ', isHighlighted);
+
   return (
     <div
-      className={cn(
-        'pr-flex pr-flex-wrap pr-items-start pr-justify-start pr-self-stretch pr-bg-amber-50',
-      )}
+      className={cn('pr-flex pr-flex-wrap pr-items-start pr-justify-start pr-self-stretch', {
+        'pr-bg-amber-50': !isHighlighted,
+        'pr-bg-amber-100': isHighlighted,
+      })}
     >
       {chapters.map((chapter) => (
         <div
@@ -53,11 +58,6 @@ function ChapterSelect({
             }
           }}
           tabIndex={0}
-          // onMouseOver wants onFocus to be added here, but onFocus will not be triggered until a chapter number is clicked
-          // so it is of no use to add it here
-          // eslint-disable-next-line jsx-a11y/mouse-events-have-key-events
-          onMouseOver={() => handleMouse(chapter)}
-          onMouseEnter={() => handleMouse(chapter)}
           onMouseMove={() => handleMouse(chapter)}
         >
           {chapter}
