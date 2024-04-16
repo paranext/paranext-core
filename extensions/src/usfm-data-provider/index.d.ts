@@ -5,9 +5,9 @@ declare module 'usfm-data-provider' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
     ExtensionDataScope,
-    IDataProvider,
     MandatoryProjectDataTypes,
   } from '@papi/core';
+  import type { IProjectDataProvider } from 'papi-shared-types';
   import { UnsubscriberAsync } from 'platform-bible-utils';
 
   export type UsfmProviderDataTypes = {
@@ -18,7 +18,7 @@ declare module 'usfm-data-provider' {
     Verse: DataProviderDataType<VerseRef, string | undefined, never>;
   };
 
-  export type UsfmDataProvider = IDataProvider<UsfmProviderDataTypes>;
+  export type UsfmDataProvider = IProjectDataProvider<UsfmProviderDataTypes>;
 
   /**
    * Provides project data for Paratext Scripture projects.
@@ -359,7 +359,8 @@ declare module 'usfm-data-provider' {
     ): Promise<UnsubscriberAsync>;
   } & ParatextStandardProjectDataProvider;
 
-  export type ParatextStandardProjectDataProvider = IDataProvider<ParatextStandardProjectDataTypes>;
+  export type ParatextStandardProjectDataProvider =
+    IProjectDataProvider<ParatextStandardProjectDataTypes>;
 }
 
 declare module 'papi-shared-types' {

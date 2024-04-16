@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+using Newtonsoft.Json.Linq;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 
@@ -23,11 +25,23 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         Getters.Add("getChapterUSX", GetChapterUSX);
         Setters.Add("setChapterUSX", SetChapterUSX);
+
+        Getters.Add("getSetting", GetProjectSetting);
+        Setters.Add("setSetting", SetProjectSetting);
     }
 
     protected override Task StartDataProvider()
     {
         return Task.CompletedTask;
+    }
+
+    protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
+    {
+        return functionName switch
+        {
+            "resetSetting" => ResetProjectSetting(args[0]!.ToJsonString()),
+            _ => base.HandleRequest(functionName, args)
+        };
     }
 
     protected override string GetProjectStorageInterpreterId()
@@ -43,6 +57,29 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     protected override ResponseToRequest SetExtensionData(ProjectDataScope dataScope, string data)
     {
         return _paratextPsi.SetExtensionData(dataScope, data);
+    }
+
+    private ResponseToRequest GetProjectSetting(string key)
+    {
+        return Get(ProjectDataType.SETTINGS, JToken.Parse(key).ToString());
+    }
+
+    private ResponseToRequest SetProjectSetting(string key, string value)
+    {
+        return Set(ProjectDataType.SETTINGS, JToken.Parse(key).ToString(), value);
+    }
+
+    private ResponseToRequest ResetProjectSetting(string key)
+    {
+        string settingName = JToken.Parse(key).ToString();
+        string? defaultValue = ProjectSettingsService.GetDefault(
+            PapiClient,
+            settingName,
+            ProjectType.Paratext
+        );
+        return (defaultValue != null)
+            ? Set(ProjectDataType.SETTINGS, settingName, defaultValue)
+            : ResponseToRequest.Failed($"Default value for {settingName} was null");
     }
 
     private ResponseToRequest Get(string dataType, string dataQualifier)
@@ -72,34 +109,34 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #region USFM handling methods
     private ResponseToRequest GetBookUSFM(string jsonString)
     {
-        return Get(ParatextProjectStorageInterpreter.BookUSFM, jsonString);
+        return Get(ProjectDataType.BOOK_USFM, jsonString);
     }
 
     private ResponseToRequest GetChapterUSFM(string jsonString)
     {
-        return Get(ParatextProjectStorageInterpreter.ChapterUSFM, jsonString);
+        return Get(ProjectDataType.CHAPTER_USFM, jsonString);
     }
 
     private ResponseToRequest GetVerseUSFM(string jsonString)
     {
-        return Get(ParatextProjectStorageInterpreter.VerseUSFM, jsonString);
+        return Get(ProjectDataType.VERSE_USFM, jsonString);
     }
 
     private ResponseToRequest SetChapterUSFM(string dataQualifier, string data)
     {
-        return Set(ParatextProjectStorageInterpreter.ChapterUSFM, dataQualifier, data);
+        return Set(ProjectDataType.BOOK_USFM, dataQualifier, data);
     }
     #endregion
 
     #region USX handling methods
     private ResponseToRequest GetChapterUSX(string jsonString)
     {
-        return Get(ParatextProjectStorageInterpreter.ChapterUSX, jsonString);
+        return Get(ProjectDataType.CHAPTER_USX, jsonString);
     }
 
     private ResponseToRequest SetChapterUSX(string dataQualifier, string data)
     {
-        return Set(ParatextProjectStorageInterpreter.ChapterUSX, dataQualifier, data);
+        return Set(ProjectDataType.CHAPTER_USX, dataQualifier, data);
     }
     #endregion
 }
