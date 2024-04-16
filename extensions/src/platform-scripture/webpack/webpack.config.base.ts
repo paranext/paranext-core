@@ -146,22 +146,10 @@ const configBase: webpack.Configuration = {
     // https://webpack.js.org/configuration/resolve/#resolvealias
     // TODO: Remove this when `platform-bible-react` is published to npm
     alias: {
-      '@emotion/react': path.resolve(
-        __dirname,
-        '..',
-        '../paranext-core/node_modules/@emotion/react',
-      ),
-      '@emotion/styled': path.resolve(
-        __dirname,
-        '..',
-        '../paranext-core/node_modules/@emotion/styled',
-      ),
-      '@mui/material': path.resolve(__dirname, '..', '../paranext-core/node_modules/@mui/material'),
-      'react-data-grid': path.resolve(
-        __dirname,
-        '..',
-        '../paranext-core/node_modules/react-data-grid',
-      ),
+      '@emotion/react': path.resolve(__dirname, '..', '../../../node_modules/@emotion/react'),
+      '@emotion/styled': path.resolve(__dirname, '..', '../../../node_modules/@emotion/styled'),
+      '@mui/material': path.resolve(__dirname, '..', '../../../node_modules/@mui/material'),
+      'react-data-grid': path.resolve(__dirname, '..', '../../../node_modules/react-data-grid'),
     },
   },
 };

@@ -1,10 +1,10 @@
 import { logger } from '@papi/backend';
 
 export async function activate() {
-  logger.info('Extension template is activating!');
+  logger.info('platformScripture is activating!');
 }
 
 export async function deactivate() {
-  logger.info('Extension template is deactivating!');
+  logger.info('platformScripture is deactivating!');
   return true;
 }
