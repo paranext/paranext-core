@@ -124,7 +124,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private ResponseToRequest SetChapterUSFM(string dataQualifier, string data)
     {
-        return Set(ProjectDataType.BOOK_USFM, dataQualifier, data);
+        return Set(ProjectDataType.CHAPTER_USFM, dataQualifier, data);
     }
     #endregion
 
