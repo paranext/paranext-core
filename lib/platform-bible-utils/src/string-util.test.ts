@@ -286,7 +286,7 @@ describe('slice', () => {
   });
   test('start (-L)-0 end L-inf', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -5, 100);
-    expect(result).toEqual('');
+    expect(result).toEqual('esome');
   });
   test('start 0-L end (-inf)-(-L)', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, -100);
@@ -323,6 +323,12 @@ describe('slice', () => {
   test('start L-inf end L-inf', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50, 100);
     expect(result).toEqual('');
+  });
+  test('starting index is 0', () => {
+    const str = 'hello-someone.d.ts';
+    expect(slice(str, 0)).toBe('hello-someone.d.ts');
+    expect(slice(str, 0, 2)).toBe('he');
+    expect(slice(str, 0, -stringLength('.d.ts'))).toBe('hello-someone');
   });
 });
 
