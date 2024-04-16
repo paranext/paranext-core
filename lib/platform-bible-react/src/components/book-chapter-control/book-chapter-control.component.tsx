@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { KeyboardEvent, useCallback, useRef, useState } from 'react';
+import { KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
 import {
@@ -34,9 +34,11 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>('');
-  const [highlightedChapter, setHighlightedChapter] = useState<number>(0);
 
-  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [highlightedChapter, setHighlightedChapter] = useState<number>(0);
+  const [highlightedBookId, setHighlightedBookId] = useState<string>('');
+
+  const [isContentOpen, setIsContentOpen] = useState<boolean>(false);
 
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -88,57 +90,115 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         chapterNum: 1,
         verseNum: 1,
       });
-      setIsOpen(false);
+      setIsContentOpen(false);
       setSearchQuery('');
     }
   };
 
   const handleSelectChapter = (chapterNumber: number) => {
+    if (chapterNumber <= 0 || chapterNumber > fetchEndChapter(selectedBookId)) {
+      return;
+    }
+
     handleSubmit({
       bookNum: Canon.bookIdToNumber(selectedBookId),
       chapterNum: chapterNumber,
       verseNum: 1,
     });
-    setIsOpen(false);
+    setIsContentOpen(false);
     setSearchQuery('');
   };
 
   const controlMenuState = useCallback((open: boolean) => {
     if (!open && document.activeElement === inputRef.current) {
-      setIsOpen(true);
+      setIsContentOpen(true);
     } else {
-      setIsOpen(open);
+      setIsContentOpen(open);
     }
   }, []);
 
-  const handleKeyDownInput = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
-    const { key } = event;
-    if (key === 'ArrowDown' || key === 'ArrowUp') {
-      console.log('Shift focus from input to menu');
-      contentRef.current.focus();
-      return;
-    }
-    setIsOpen(true);
-    inputRef.current.focus();
+  const handleKeyDownInput = useCallback(() => {
+    setIsContentOpen(true);
   }, []);
 
   const handleKeyDownContent = (event: KeyboardEvent<HTMLInputElement>) => {
+    console.log('content key down processed');
     const { key } = event;
-    if (key === 'ArrowRight') {
-      setHighlightedChapter(
-        highlightedChapter < fetchEndChapter(selectedBookId) ? highlightedChapter + 1 : 1,
-      );
+    if (
+      key === 'ArrowRight' ||
+      key === 'ArrowLeft' ||
+      key === 'ArrowDown' ||
+      key === 'ArrowUp' ||
+      key === 'Enter'
+    ) {
+      return;
     }
-    if (key === 'ArrowLeft') {
-      setHighlightedChapter(
-        highlightedChapter > 1 ? highlightedChapter - 1 : fetchEndChapter(selectedBookId),
-      );
+    inputRef.current.focus();
+  };
+
+  const handleKeyDownMenuItem = (event: KeyboardEvent) => {
+    const { key } = event;
+    if (highlightedBookId === selectedBookId) {
+      if (key === 'Enter') {
+        handleSelectChapter(highlightedChapter);
+        return;
+      }
+
+      let chapterOffSet = 0;
+      if (key === 'ArrowRight') {
+        if (highlightedChapter < fetchEndChapter(highlightedBookId)) {
+          chapterOffSet = 1;
+        } else {
+          event.preventDefault();
+          return;
+        }
+      } else if (key === 'ArrowLeft') {
+        if (highlightedChapter > 1) {
+          chapterOffSet = -1;
+        } else {
+          event.preventDefault();
+          return;
+        }
+      } else if (key === 'ArrowDown') {
+        chapterOffSet = 6;
+      } else if (key === 'ArrowUp') {
+        chapterOffSet = -6;
+      }
+      if (
+        highlightedChapter + chapterOffSet <= 0 ||
+        highlightedChapter + chapterOffSet > fetchEndChapter(highlightedBookId)
+      ) {
+        setHighlightedChapter(0);
+      } else {
+        setHighlightedChapter(highlightedChapter + chapterOffSet);
+        event.preventDefault();
+      }
     }
   };
 
+  useEffect(() => {
+    if (selectedBookId === highlightedBookId) {
+      if (selectedBookId === Canon.bookNumberToId(scrRef.bookNum)) {
+        setHighlightedChapter(scrRef.chapterNum);
+      } else {
+        setHighlightedChapter(1);
+      }
+    } else {
+      setHighlightedChapter(0);
+    }
+  }, [highlightedBookId, scrRef.bookNum, scrRef.chapterNum, selectedBookId]);
+
+  useEffect(() => {
+    if (isContentOpen) {
+      setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum));
+      // USE REF Here setHighlightedBookId(Canon.bookNumberToId(scrRef.bookNum)); // Does this work? Or should we control this with a ref that gives focus to the menu item?
+      setHighlightedChapter(scrRef.chapterNum);
+    }
+  }, [isContentOpen, scrRef.bookNum, scrRef.chapterNum]);
+
   return (
     <div>
-      <ShadDropdownMenu modal={false} open={isOpen} onOpenChange={controlMenuState}>
+      <ShadDropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
         {/* Trigger sets input type as button */}
         <ShadDropdownMenuTrigger asChild>
           <BookChapterInput
@@ -148,7 +208,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             handleKeyDown={handleKeyDownInput}
             handleOnClick={() => {
               setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum));
-              setHighlightedChapter(scrRef.bookNum > 0 ? scrRef.bookNum : 0);
+              setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
             }}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
           />
@@ -157,6 +217,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           className="pr-overflow-y-auto pr-font-normal pr-text-slate-700"
           style={{ width: '233px', maxHeight: '500px' }}
           onKeyDown={handleKeyDownContent}
+          onBlur={() => setHighlightedBookId('')}
           align="start"
           ref={contentRef}
         >
@@ -179,6 +240,9 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                         bookId={bookId}
                         handleSelectBook={() => handleSelectBook(bookId)}
                         isSelected={selectedBookId === bookId}
+                        handleHighlightBook={() => setHighlightedBookId(bookId)}
+                        // isHighlighted={highlightedBookId === bookId}
+                        handleKeyDown={handleKeyDownMenuItem}
                         bookType={bookType}
                       >
                         <ChapterSelect
@@ -188,6 +252,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                           activeChapter={
                             scrRef.bookNum === Canon.bookIdToNumber(bookId) ? scrRef.chapterNum : 0
                           }
+                          isHighlighted={selectedBookId === highlightedBookId}
                           highlightedChapter={highlightedChapter}
                           handleHighlightedChapter={(chapterNumber: number): void => {
                             setHighlightedChapter(chapterNumber);
