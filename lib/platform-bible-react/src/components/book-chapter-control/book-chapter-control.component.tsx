@@ -45,6 +45,8 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   const inputRef = useRef<HTMLInputElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const contentRef = useRef<HTMLDivElement>(undefined!);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const menuItemRef = useRef<HTMLDivElement>(undefined!);
 
   const fetchGroupedBooks = useCallback(
     (bookType: BookType) => {
@@ -117,9 +119,31 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     }
   }, []);
 
-  const handleKeyDownInput = useCallback(() => {
-    setIsContentOpen(true);
-  }, []);
+  const handleKeyDownInput = useCallback(
+    (event: KeyboardEvent) => {
+      if (!isContentOpen) {
+        setIsContentOpen(true);
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        if (
+          typeof menuItemRef !== 'undefined' &&
+          // Ref uses null
+          // eslint-disable-next-line no-null/no-null
+          menuItemRef.current !== null
+        ) {
+          menuItemRef.current.focus();
+        } else if (
+          typeof contentRef !== 'undefined' &&
+          // Ref uses null
+          // eslint-disable-next-line no-null/no-null
+          contentRef.current !== null
+        ) {
+          contentRef.current.focus();
+        }
+        event.preventDefault();
+      }
+    },
+    [isContentOpen],
+  );
 
   const handleKeyDownContent = (event: KeyboardEvent<HTMLInputElement>) => {
     console.log('content key down processed');
@@ -188,14 +212,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     }
   }, [highlightedBookId, scrRef.bookNum, scrRef.chapterNum, selectedBookId]);
 
-  useEffect(() => {
-    if (isContentOpen) {
-      setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum));
-      // USE REF Here setHighlightedBookId(Canon.bookNumberToId(scrRef.bookNum)); // Does this work? Or should we control this with a ref that gives focus to the menu item?
-      setHighlightedChapter(scrRef.chapterNum);
-    }
-  }, [isContentOpen, scrRef.bookNum, scrRef.chapterNum]);
-
   return (
     <div>
       <ShadDropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
@@ -209,6 +225,14 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             handleOnClick={() => {
               setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum));
               setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
+              if (
+                // Ref uses null
+                // eslint-disable-next-line no-null/no-null
+                menuItemRef.current !== null &&
+                menuItemRef.current !== undefined
+              ) {
+                menuItemRef.current.focus();
+              }
             }}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
           />
@@ -217,7 +241,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           className="pr-overflow-y-auto pr-font-normal pr-text-slate-700"
           style={{ width: '233px', maxHeight: '500px' }}
           onKeyDown={handleKeyDownContent}
-          onBlur={() => setHighlightedBookId('')}
           align="start"
           ref={contentRef}
         >
@@ -244,6 +267,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                         // isHighlighted={highlightedBookId === bookId}
                         handleKeyDown={handleKeyDownMenuItem}
                         bookType={bookType}
+                        ref={menuItemRef}
                       >
                         <ChapterSelect
                           handleSelectChapter={handleSelectChapter}
