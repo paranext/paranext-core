@@ -26,8 +26,10 @@ export type {
   IProjectDataProviderEngine,
   IProjectDataProviderEngineFactory,
 } from '@shared/models/project-data-provider-engine.model';
+export type { default as IProjectDataProviderFactory } from '@shared/models/project-data-provider-factory.interface';
 export type { ProjectMetadata } from '@shared/models/project-metadata.model';
 export type { MandatoryProjectStorageDataTypes } from '@shared/models/project-storage-interpreter.model';
+export type { SettingValidator } from '@shared/services/settings.service-model';
 export type {
   GetWebViewOptions,
   SavedWebViewDefinition,
@@ -39,4 +41,7 @@ export type {
 
 export type { IWebViewProvider } from '@shared/models/web-view-provider.model';
 
-export type { SimultaneousProjectSettingsChanges } from '@shared/services/project-settings.service-model';
+export type {
+  SimultaneousProjectSettingsChanges,
+  ProjectSettingValidator,
+} from '@shared/services/project-settings.service-model';

@@ -3965,6 +3965,34 @@ declare module 'shared/services/project-lookup.service' {
   const projectLookupService: ProjectLookupServiceType;
   export default projectLookupService;
 }
+declare module 'shared/models/project-data-provider-factory.interface' {
+  import { Dispose } from 'platform-bible-utils';
+  /**
+   * Network object that creates Project Data Providers of a specific `projectType` as requested on
+   * the `papi`. These are created internally within the platform to layer over
+   * TypeScript-extension-provided {@link IProjectDataProviderEngineFactory} or are created by
+   * independent processes on the `papi`.
+   */
+  interface IProjectDataProviderFactory extends Dispose {
+    /**
+     * Returns the registered network object name of a PDP for the given project ID and PSI. Called by
+     * the platform when someone uses the project data provider service to access a project's data.
+     *
+     * @param projectId Id of the project for which to return a project data provider.
+     * @param projectStorageInterpreterId Id of the project storage interpreter that corresponds to
+     *   the project to access
+     * @returns Id of the project data provider this `IProjectDataProviderFactory` created for this
+     *   project id. It should return the same project data provider for the same combination of
+     *   parameters throughout one session (in other words, in general, there should just be one
+     *   project data provider for one project id).
+     */
+    getProjectDataProviderId(
+      projectId: string,
+      projectStorageInterpreterId: string,
+    ): Promise<string>;
+  }
+  export default IProjectDataProviderFactory;
+}
 declare module 'shared/services/project-data-provider.service' {
   import { ProjectTypes, ProjectDataProviders } from 'papi-shared-types';
   import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
@@ -4711,6 +4739,139 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
   export default useDialogCallback;
 }
+declare module 'shared/services/settings.service-model' {
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
+  import IDataProvider from 'shared/models/data-provider.interface';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  /** Name prefix for registered commands that call settings validators */
+  export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
+  /**
+   *
+   * This name is used to register the settings service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
+   */
+  export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
+  export const settingsServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the settings service data provider on the papi. You can use this
+     * name to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.settingsServiceDataProvider';
+    /**
+     *
+     * Registers a function that validates whether a new setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator: <SettingName extends keyof SettingTypes>(
+      key: SettingName,
+      validator: SettingValidator<SettingName>,
+    ) => Promise<UnsubscriberAsync>;
+  }>;
+  /**
+   * SettingDataTypes handles getting and setting Platform.Bible core application and extension
+   * settings.
+   *
+   * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
+   * would not be able to create a generic type extending from `SettingNames` in order to return the
+   * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
+   * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
+   * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
+   * instead. However, do note that the unnamed data type (`''`) is fully functional.
+   *
+   * The closest possible representation of the unnamed (````) data type follows:
+   *
+   * ```typescript
+   * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
+   * ```
+   */
+  export type SettingDataTypes = {};
+  export type AllSettingsData = {
+    [SettingName in SettingNames]: SettingTypes[SettingName];
+  };
+  /** Function that validates whether a new setting value should be allowed to be set */
+  export type SettingValidator<SettingName extends SettingNames> = (
+    newValue: SettingTypes[SettingName],
+    currentValue: SettingTypes[SettingName],
+    allChanges: Partial<SettingTypes>,
+  ) => Promise<boolean>;
+  /** Validators for all settings. Keys are setting keys, values are functions to validate new settings */
+  export type AllSettingsValidators = {
+    [SettingName in SettingNames]: SettingValidator<SettingName>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [settingsServiceDataProviderName]: ISettingsService;
+    }
+  }
+  /** */
+  export type ISettingsService = {
+    /**
+     * Retrieves the value of the specified setting
+     *
+     * @param key The string id of the setting for which the value is being retrieved
+     * @returns The value of the specified setting, parsed to an object. Returns default setting if
+     *   setting does not exist
+     * @throws If no default value is available for the setting.
+     */
+    get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
+    /**
+     * Sets the value of the specified setting
+     *
+     * @param key The string id of the setting for which the value is being set
+     * @param newSetting The value that is to be set for the specified key
+     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
+     *   `true` (meaning send updates only for this data type).
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    set<SettingName extends SettingNames>(
+      key: SettingName,
+      newSetting: SettingTypes[SettingName],
+    ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
+    /**
+     * Removes the setting from memory and resets it to its default value
+     *
+     * @param key The string id of the setting for which the value is being removed
+     * @returns `true` if successfully reset the project setting. `false` otherwise
+     */
+    reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean>;
+    /**
+     * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
+     * callback function is executed.
+     *
+     * @param key The string id of the setting for which the value is being subscribed to
+     * @param callback The function that will be called whenever the specified setting is updated
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribe<SettingName extends SettingNames>(
+      key: SettingName,
+      callback: (newSetting: SettingTypes[SettingName]) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Registers a function that validates whether a new setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator<SettingName extends SettingNames>(
+      key: SettingName,
+      validator: SettingValidator<SettingName>,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    IDataProvider<SettingDataTypes> &
+    typeof settingsServiceObjectToProxy;
+}
 declare module 'shared/services/project-settings.service-model' {
   import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -4842,8 +5003,10 @@ declare module '@papi/core' {
     IProjectDataProviderEngine,
     IProjectDataProviderEngineFactory,
   } from 'shared/models/project-data-provider-engine.model';
+  export type { default as IProjectDataProviderFactory } from 'shared/models/project-data-provider-factory.interface';
   export type { ProjectMetadata } from 'shared/models/project-metadata.model';
   export type { MandatoryProjectStorageDataTypes } from 'shared/models/project-storage-interpreter.model';
+  export type { SettingValidator } from 'shared/services/settings.service-model';
   export type {
     GetWebViewOptions,
     SavedWebViewDefinition,
@@ -4853,7 +5016,10 @@ declare module '@papi/core' {
     WebViewProps,
   } from 'shared/models/web-view.model';
   export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
-  export type { SimultaneousProjectSettingsChanges } from 'shared/services/project-settings.service-model';
+  export type {
+    SimultaneousProjectSettingsChanges,
+    ProjectSettingValidator,
+  } from 'shared/services/project-settings.service-model';
 }
 declare module 'shared/services/menu-data.service-model' {
   import {
@@ -4979,139 +5145,6 @@ declare module 'shared/services/menu-data.service' {
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
   const menuDataService: IMenuDataService;
   export default menuDataService;
-}
-declare module 'shared/services/settings.service-model' {
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-    IDataProvider,
-  } from '@papi/core';
-  /** Name prefix for registered commands that call settings validators */
-  export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
-  /**
-   *
-   * This name is used to register the settings service data provider on the papi. You can use this
-   * name to find the data provider when accessing it using the useData hook
-   */
-  export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
-  export const settingsServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the settings service data provider on the papi. You can use this
-     * name to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.settingsServiceDataProvider';
-    /**
-     *
-     * Registers a function that validates whether a new setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator: <SettingName extends keyof SettingTypes>(
-      key: SettingName,
-      validator: SettingValidator<SettingName>,
-    ) => Promise<UnsubscriberAsync>;
-  }>;
-  /**
-   * SettingDataTypes handles getting and setting Platform.Bible core application and extension
-   * settings.
-   *
-   * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
-   * would not be able to create a generic type extending from `SettingNames` in order to return the
-   * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
-   * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
-   * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
-   * instead. However, do note that the unnamed data type (`''`) is fully functional.
-   *
-   * The closest possible representation of the unnamed (````) data type follows:
-   *
-   * ```typescript
-   * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
-   * ```
-   */
-  export type SettingDataTypes = {};
-  export type AllSettingsData = {
-    [SettingName in SettingNames]: SettingTypes[SettingName];
-  };
-  /** Function that validates whether a new setting value should be allowed to be set */
-  export type SettingValidator<SettingName extends SettingNames> = (
-    newValue: SettingTypes[SettingName],
-    currentValue: SettingTypes[SettingName],
-    allChanges: Partial<SettingTypes>,
-  ) => Promise<boolean>;
-  /** Validators for all settings. Keys are setting keys, values are functions to validate new settings */
-  export type AllSettingsValidators = {
-    [SettingName in SettingNames]: SettingValidator<SettingName>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [settingsServiceDataProviderName]: ISettingsService;
-    }
-  }
-  /** */
-  export type ISettingsService = {
-    /**
-     * Retrieves the value of the specified setting
-     *
-     * @param key The string id of the setting for which the value is being retrieved
-     * @returns The value of the specified setting, parsed to an object. Returns default setting if
-     *   setting does not exist
-     * @throws If no default value is available for the setting.
-     */
-    get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
-    /**
-     * Sets the value of the specified setting
-     *
-     * @param key The string id of the setting for which the value is being set
-     * @param newSetting The value that is to be set for the specified key
-     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
-     *   `true` (meaning send updates only for this data type).
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    set<SettingName extends SettingNames>(
-      key: SettingName,
-      newSetting: SettingTypes[SettingName],
-    ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
-    /**
-     * Removes the setting from memory and resets it to its default value
-     *
-     * @param key The string id of the setting for which the value is being removed
-     * @returns `true` if successfully reset the project setting. `false` otherwise
-     */
-    reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean>;
-    /**
-     * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
-     * callback function is executed.
-     *
-     * @param key The string id of the setting for which the value is being subscribed to
-     * @param callback The function that will be called whenever the specified setting is updated
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber that should be called whenever the subscription should be deleted
-     */
-    subscribe<SettingName extends SettingNames>(
-      key: SettingName,
-      callback: (newSetting: SettingTypes[SettingName]) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     *
-     * Registers a function that validates whether a new setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator<SettingName extends SettingNames>(
-      key: SettingName,
-      validator: SettingValidator<SettingName>,
-    ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    IDataProvider<SettingDataTypes> &
-    typeof settingsServiceObjectToProxy;
 }
 declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';

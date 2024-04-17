@@ -60,8 +60,10 @@ class MenuDataDataProviderEngine
 
   async getWebViewMenu(webViewName: ReferencedItem): Promise<Localized<WebViewMenu>> {
     const webViewMenu = this.webViewMenusMap.get(webViewName);
-    if (!webViewMenu)
-      throw new Error(`Missing/invalid web view menu data for web view ${webViewName}`);
+    if (!webViewMenu) {
+      logger.debug(`Missing/invalid web view menu data for web view ${webViewName}`);
+      return { contextMenu: undefined, includeDefaults: false, topMenu: undefined };
+    }
     return webViewMenu;
   }
 
