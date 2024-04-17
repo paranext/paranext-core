@@ -21,7 +21,7 @@ export const platformProjectSettings: ProjectSettingsContribution = {
 };
 
 const fullNameValidator: ProjectSettingValidator<'platform.fullName'> = async (newValue) => {
-  return typeof newValue === 'string';
+  return typeof newValue === 'string' && newValue.length > 0;
 };
 
 // TODO: Validate that strings in the array to match BCP 47 values once the i18n code is ready

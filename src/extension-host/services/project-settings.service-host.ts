@@ -61,7 +61,7 @@ async function isValid<ProjectSettingName extends ProjectSettingNames>(
     return true;
   }
   try {
-    return networkService.request(
+    return await networkService.request(
       serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key),
       newValue,
       currentValue,
