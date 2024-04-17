@@ -367,7 +367,7 @@ export default class MenuDocumentCombiner extends DocumentCombiner {
   ): JsonDocumentLike {
     // The document given to us should be of this type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const retVal = finalOutput as PlatformMenus;
+    const retVal = deepClone(finalOutput) as PlatformMenus;
     Object.getOwnPropertyNames(retVal.webViewMenus).forEach((webViewName: string) => {
       // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
       // eslint-disable-next-line no-type-assertion/no-type-assertion
