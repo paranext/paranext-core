@@ -1891,8 +1891,10 @@ declare module 'shared/models/project-data-provider.model' {
    *
    * The `Setting` data type handles getting and setting project settings. All Project Data Providers
    * must implement these methods `getSetting` and `setSetting` as well as `resetSetting` in order to
-   * properly support project settings. In most cases, the Project Data Provider only needs to pass
-   * the setting calls through to the Project Storage Interpreter.
+   * properly support project settings.
+   *
+   * In most cases, the Project Data Provider only needs to pass the setting calls through to the
+   * Project Storage Interpreter.
    *
    * Note: the `Setting` data type is not actually part of {@link MandatoryProjectDataTypes} because
    * the methods would not be able to create a generic type extending from `ProjectSettingNames` in
@@ -2067,10 +2069,12 @@ declare module 'shared/models/project-storage-interpreter.model' {
    *   throws. This functionality preserves the intended type of the setting and avoids returning
    *   `undefined` unexpectedly.
    * - `setSetting`: must call `papi.projectSettings.isValid` before setting the value and should return
-   *   false if the call returns `false`. This functionality preserves the intended intended type of
-   *   the setting and avoids allowing the setting to be set to the wrong type.
+   *   false if the call returns `false` and throw if the call throws. This functionality preserves
+   *   the intended intended type of the setting and avoids allowing the setting to be set to the
+   *   wrong type.
    * - `resetSetting`: deletes the value at the key and sends a setting update event. After this,
-   *   `getSetting` should see the setting value as not present and return the default value again.
+   *   `getSetting` should again see the setting value is not present, call
+   *   `papi.projectSettings.getDefault`, and return the default value.
    * - Note: see {@link IProjectStorageInterpreter} for method signatures for these three methods.
    *
    *   .---
@@ -2487,8 +2491,8 @@ declare module 'papi-shared-types' {
     /**
      * Set the value of the specified project setting on this project.
      *
-     * Note: `setSetting` must call `papi.projectSettings.isValid` before allowing the setting
-     * change.
+     * Note for implementing: In most cases, `setSetting` should just pass the call through to the
+     * Project Storage Interpreter's `setSetting`.
      *
      * @param key The string id of the project setting to change
      * @param newSetting The value that is to be set to the project setting.
@@ -2508,6 +2512,9 @@ declare module 'papi-shared-types' {
      * up-to-date, use `subscribeSetting` instead, which can immediately give you the value and keep
      * it up-to-date.
      *
+     * Note for implementing: In most cases, `getSetting` should just pass the call through to the
+     * Project Storage Interpreter's `getSetting`.
+     *
      * @param key The string id of the project setting to get
      * @returns The value of the specified project setting. Returns default setting value if the
      *   project setting does not exist on the project.
@@ -2518,6 +2525,9 @@ declare module 'papi-shared-types' {
     ) => Promise<ProjectSettingTypes[ProjectSettingName]>;
     /**
      * Deletes the specified project setting, setting it back to its default value.
+     *
+     * Note for implementing: In most cases, `resetSetting` should just pass the call through to the
+     * Project Storage Interpreter's `resetSetting`.
      *
      * @param key The string id of the project setting to reset
      * @returns `true` if successfully reset the project setting, `false` otherwise
@@ -2576,8 +2586,11 @@ declare module 'papi-shared-types' {
    * {@link IProjectDataProvider} types for each `projectType` supported by PAPI. Extensions can add
    * more Project Data Providers with corresponding `projectType`s by adding details to their
    * `.d.ts` file and registering a Project Data Provider factory with the corresponding
-   * `projectType`. Note that all Project Data Providers' data types should extend
-   * {@link MandatoryProjectDataTypes} like the following example.
+   * `projectType`.
+   *
+   * All Project Data Providers' data types **must** extend {@link MandatoryProjectDataTypes} like
+   * the following example. Please see its documentation for information on how Project Data
+   * Providers can implement this interface.
    *
    * Note: The keys of this interface are the `projectType`s for the associated Project Data
    * Providers.
@@ -2685,6 +2698,9 @@ declare module 'papi-shared-types' {
       /**
        * Set the value of the specified project setting on this project.
        *
+       * Note for implementing: `setSetting` must call `papi.projectSettings.isValid` before
+       * allowing the setting change.
+       *
        * @param settingDataScope The string id of the project setting to change and the project on
        *   which to change it
        * @param newSetting The value that is to be set to the project setting.
@@ -2702,6 +2718,9 @@ declare module 'papi-shared-types' {
        * Note: This is good for retrieving a project setting once. If you want to keep the value
        * up-to-date, use `subscribeSetting` instead, which can immediately give you the value and
        * keep it up-to-date.
+       *
+       * Note for implementing: `getSetting` must call `papi.projectSettings.getDefault` if this
+       * project does not have a value for this setting
        *
        * @param settingDataScope The string id of the project setting to get and the project from
        *   which to get it
@@ -2734,6 +2753,10 @@ declare module 'papi-shared-types' {
       /**
        * Deletes the specified project setting, setting it back to its default value.
        *
+       * Note for implementing: `resetSetting` should remove the value for this setting for this
+       * project such that calling `getSetting` later would cause it to call
+       * `papi.projectSettings.getDefault` and return the default value.
+       *
        * @param settingDataScope The string id of the project setting to reset and the project on
        *   which to reset it
        * @returns `true` if successfully reset the project setting, `false` otherwise
@@ -2746,8 +2769,12 @@ declare module 'papi-shared-types' {
    * {@link IProjectStorageInterpreter} types for each `projectType` supported by PAPI. Extensions
    * can add more Project Storage Interpreters that support corresponding `projectType`s by adding
    * details to their `.d.ts` file and registering a Project Storage Interpreter that supports the
-   * corresponding `projectType`. Note that all Project Storage Interpreters' data types should
-   * extend {@link MandatoryProjectStorageDataTypes} like the following example.
+   * corresponding `projectType`.
+   *
+   * All Project Storage Interpreters' data types **must** extend
+   * {@link MandatoryProjectStorageDataTypes} like the following example. Please see its
+   * documentation for information on how Project Storage Interpreters can implement this
+   * interface.
    *
    * Note: The keys of this interface are the `projectType`s supported by available Project Storage
    * Interpreters.

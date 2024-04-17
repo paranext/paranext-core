@@ -1,0 +1,19 @@
+[
+  {
+    "label": "%project_settings_platformScripture_group1_label%",
+    "properties": {
+      "platformScripture.booksPresent": {
+        "label": "%project_settings_platformScripture_booksPresent_label%",
+        "description": "%project_settings_platformScripture_booksPresent_description%",
+        "default": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "includeProjectTypes": ["Paratext", "Scripture"]
+      },
+      "platformScripture.versification": {
+        "label": "%project_settings_platformScripture_versification_label%",
+        "description": "%project_settings_platformScripture_versification_description%",
+        "default": 4,
+        "includeProjectTypes": ["Paratext", "Scripture"]
+      }
+    }
+  }
+]

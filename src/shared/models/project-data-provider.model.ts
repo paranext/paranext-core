@@ -32,8 +32,10 @@ export type ExtensionDataScope = {
  *
  * The `Setting` data type handles getting and setting project settings. All Project Data Providers
  * must implement these methods `getSetting` and `setSetting` as well as `resetSetting` in order to
- * properly support project settings. In most cases, the Project Data Provider only needs to pass
- * the setting calls through to the Project Storage Interpreter.
+ * properly support project settings.
+ *
+ * In most cases, the Project Data Provider only needs to pass the setting calls through to the
+ * Project Storage Interpreter.
  *
  * Note: the `Setting` data type is not actually part of {@link MandatoryProjectDataTypes} because
  * the methods would not be able to create a generic type extending from `ProjectSettingNames` in

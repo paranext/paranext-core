@@ -27,7 +27,6 @@ import { get } from '@shared/services/project-data-provider.service';
 import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startLocalizationService } from '@main/services/localization.service-host';
-import { startProjectSettingsService } from '@main/services/project-settings.service-host';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 
@@ -82,8 +81,6 @@ async function main() {
   await extensionHostService.start();
 
   await startLocalizationService();
-
-  await startProjectSettingsService();
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host

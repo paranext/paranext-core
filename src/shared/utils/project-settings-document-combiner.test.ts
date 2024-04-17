@@ -1,10 +1,9 @@
-import { Localized, SettingsContribution } from 'platform-bible-utils';
+import { Localized, ProjectSettingsContribution } from 'platform-bible-utils';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-import SettingsDocumentCombiner from '@shared/utils/settings-document-combiner';
-import {
-  LocalizedSettingsContributionInfo,
-  SettingsContributionInfo,
-} from '@shared/utils/settings-document-combiner-base';
+import ProjectSettingsDocumentCombiner, {
+  LocalizedProjectSettingsContributionInfo,
+  ProjectSettingsContributionInfo,
+} from '@shared/utils/project-settings-document-combiner';
 
 jest.mock('@shared/services/localization.service', () => ({
   __esModule: true,
@@ -18,37 +17,37 @@ jest.mock('@shared/services/localization.service', () => ({
 }));
 
 /** Info about all settings built into core. Does not contain info for extensions' settings */
-const platformSettings: SettingsContribution = {
-  label: '%platform_group1%',
-  description: '%platform_group1_description%',
+const platformSettings: ProjectSettingsContribution = {
+  label: '%project_settings_platform_group1_label%',
+  description: '%project_settings_platform_group1_description%',
   properties: {
-    'platform.verseRef': {
-      label: '%settings_platform_verseRef_label%',
-      default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
+    'platform.fullName': {
+      label: '%project_settings_platform_fullName_label%',
+      default: '%project_full_name_missing%',
     },
-    'platform.interfaceLanguage': {
-      label: '%settings_platform_interfaceLanguage_label%',
-      default: ['eng'],
+    'platform.language': {
+      label: '%project_settings_platform_language_label%',
+      default: '%project_language_missing%',
     },
   },
 };
-const platformSettingsLocalized: Localized<SettingsContribution> = {
-  label: 'platform_group1',
-  description: 'platform_group1_description',
+const platformSettingsLocalized: Localized<ProjectSettingsContribution> = {
+  label: 'project_settings_platform_group1_label',
+  description: 'project_settings_platform_group1_description',
   properties: {
-    'platform.verseRef': {
-      label: 'settings_platform_verseRef_label',
-      default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
+    'platform.fullName': {
+      label: 'project_settings_platform_fullName_label',
+      default: '%project_full_name_missing%',
     },
-    'platform.interfaceLanguage': {
-      label: 'settings_platform_interfaceLanguage_label',
-      default: ['eng'],
+    'platform.language': {
+      label: 'project_settings_platform_language_label',
+      default: '%project_language_missing%',
     },
   },
 };
 
 const test1ExtensionName = 'test1';
-const test1ExtensionContribution: SettingsContribution = {
+const test1ExtensionContribution: ProjectSettingsContribution = {
   label: '%test1_group1%',
   description: '%test1_group1_description%',
   properties: {
@@ -56,15 +55,17 @@ const test1ExtensionContribution: SettingsContribution = {
       label: '%test1.setting1_label%',
       description: '%test1.setting1_description%',
       default: 'hi',
+      includeProjectTypes: '^thing$',
     },
     'test1.setting2': {
       label: '%test1.setting2_label%',
       description: '%test1.setting2_description%',
       default: 5,
+      excludeProjectTypes: ['^stuff', 'b[oO]rk$'],
     },
   },
 };
-const test1ExtensionContributionLocalized: Localized<SettingsContribution> = {
+const test1ExtensionContributionLocalized: Localized<ProjectSettingsContribution> = {
   label: 'test1_group1',
   description: 'test1_group1_description',
   properties: {
@@ -72,17 +73,19 @@ const test1ExtensionContributionLocalized: Localized<SettingsContribution> = {
       label: 'test1.setting1_label',
       description: 'test1.setting1_description',
       default: 'hi',
+      includeProjectTypes: '^thing$',
     },
     'test1.setting2': {
       label: 'test1.setting2_label',
       description: 'test1.setting2_description',
       default: 5,
+      excludeProjectTypes: ['^stuff', 'b[oO]rk$'],
     },
   },
 };
 
 const test2ExtensionName = 'test2';
-const test2ExtensionContribution: SettingsContribution = [
+const test2ExtensionContribution: ProjectSettingsContribution = [
   {
     label: '%test2_group1%',
     description: '%test2_group1_description%',
@@ -109,7 +112,7 @@ const test2ExtensionContribution: SettingsContribution = [
     },
   },
 ];
-const test2ExtensionContributionLocalized: Localized<SettingsContribution> = [
+const test2ExtensionContributionLocalized: Localized<ProjectSettingsContribution> = [
   {
     label: 'test2_group1',
     description: 'test2_group1_description',
@@ -137,7 +140,7 @@ const test2ExtensionContributionLocalized: Localized<SettingsContribution> = [
   },
 ];
 
-const expectedOutput: SettingsContributionInfo = {
+const expectedOutput: ProjectSettingsContributionInfo = {
   contributions: {
     [PLATFORM_NAMESPACE]: [platformSettings],
     [test1ExtensionName]: [test1ExtensionContribution],
@@ -153,7 +156,7 @@ const expectedOutput: SettingsContributionInfo = {
     ),
   },
 };
-const expectedOutputLocalized: LocalizedSettingsContributionInfo = {
+const expectedOutputLocalized: LocalizedProjectSettingsContributionInfo = {
   contributions: {
     [PLATFORM_NAMESPACE]: [platformSettingsLocalized],
     [test1ExtensionName]: [test1ExtensionContributionLocalized],
@@ -171,17 +174,17 @@ const expectedOutputLocalized: LocalizedSettingsContributionInfo = {
 };
 
 test('Sample documents all validate', async () => {
-  const settingsCombiner = new SettingsDocumentCombiner(platformSettings);
+  const settingsCombiner = new ProjectSettingsDocumentCombiner(platformSettings);
   settingsCombiner.addOrUpdateContribution(test1ExtensionName, test1ExtensionContribution);
   settingsCombiner.addOrUpdateContribution(test2ExtensionName, test2ExtensionContribution);
-  expect(settingsCombiner.getSettingsContributionInfo()).toEqual(expectedOutput);
-  expect(await settingsCombiner.getLocalizedSettingsContributionInfo()).toEqual(
+  expect(settingsCombiner.getProjectSettingsContributionInfo()).toEqual(expectedOutput);
+  expect(await settingsCombiner.getLocalizedProjectSettingsContributionInfo()).toEqual(
     expectedOutputLocalized,
   );
 });
 
 test('JSON schema validation works', () => {
-  const settingsCombiner = new SettingsDocumentCombiner(platformSettings);
+  const settingsCombiner = new ProjectSettingsDocumentCombiner(platformSettings);
   expect(() =>
     settingsCombiner.addOrUpdateContribution('shouldFail-BadKey', {
       label: '%invalid_key',
@@ -198,7 +201,7 @@ test('JSON schema validation works', () => {
 });
 
 test('Duplicate settings are not allowed', () => {
-  const settingsCombiner = new SettingsDocumentCombiner(platformSettings);
+  const settingsCombiner = new ProjectSettingsDocumentCombiner(platformSettings);
   expect(() =>
     settingsCombiner.addOrUpdateContribution('shouldFail-DuplicateSettings', [
       {
@@ -221,12 +224,12 @@ test('Duplicate settings are not allowed', () => {
       },
     ]),
   ).toThrow(
-    'Settings contribution from shouldFail-DuplicateSettings provided Setting shouldFail-DuplicateSettings.thing more than once!',
+    'Project Settings contribution from shouldFail-DuplicateSettings provided Project Setting shouldFail-DuplicateSettings.thing more than once!',
   );
 });
 
 test('Setting namespace must match contribution name', () => {
-  const settingsCombiner = new SettingsDocumentCombiner(platformSettings);
+  const settingsCombiner = new ProjectSettingsDocumentCombiner(platformSettings);
   expect(() =>
     settingsCombiner.addOrUpdateContribution('shouldFail-WrongNamespace', {
       label: '%thing%',
@@ -238,6 +241,6 @@ test('Setting namespace must match contribution name', () => {
       },
     }),
   ).toThrow(
-    "Settings contribution from shouldFail-WrongNamespace provided Setting shouldFail-ThisIsTheWrongNamespace.thing which does not start with 'shouldFail-WrongNamespace.'",
+    "Project Settings contribution from shouldFail-WrongNamespace provided Project Setting shouldFail-ThisIsTheWrongNamespace.thing which does not start with 'shouldFail-WrongNamespace.'",
   );
 });
