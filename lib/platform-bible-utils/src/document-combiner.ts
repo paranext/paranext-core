@@ -293,8 +293,10 @@ function areArrayObjects(...values: unknown[]): boolean {
 }
 
 /**
- * Recursively merge the properties of one object (copyFrom) into another (startingPoint). Throws if
- * copyFrom would overwrite values already existing in startingPoint.
+ * Deep clone and recursively merge the properties of one object (copyFrom) into another
+ * (startingPoint). Throws if copyFrom would overwrite values already existing in startingPoint.
+ *
+ * Does not modify the objects passed in.
  *
  * @param startingPoint Object that is the starting point for the return value
  * @param copyFrom Object whose values are copied into the return value
@@ -306,21 +308,41 @@ function mergeObjects(
   ignoreDuplicateProperties: boolean,
 ): JsonDocumentLike {
   const retVal = deepClone(startingPoint);
+
   if (!copyFrom) return retVal;
+
+  return mergeObjectsInternal(retVal, deepClone(copyFrom), ignoreDuplicateProperties);
+}
+
+/**
+ * Recursively merge the properties of one object (copyFrom) into another (startingPoint). Throws if
+ * copyFrom would overwrite values already existing in startingPoint.
+ *
+ * WARNING: Modifies the argument objects in some way. Recommended to use `mergeObjects`
+ *
+ * @param startingPoint Object that is the starting point for the return value
+ * @param copyFrom Object whose values are copied into the return value
+ * @returns Object that is the combination of the two documents
+ */
+function mergeObjectsInternal(
+  startingPoint: JsonDocumentLike,
+  copyFrom: JsonDocumentLike,
+  ignoreDuplicateProperties: boolean,
+): JsonDocumentLike {
+  if (!copyFrom) return startingPoint;
 
   if (areNonArrayObjects(startingPoint, copyFrom)) {
     // Merge properties since they are both objects
 
     // We know these are objects from the `if` check
     /* eslint-disable no-type-assertion/no-type-assertion */
-    const retValObj = retVal as JsonObjectLike;
     const startingPointObj = startingPoint as JsonObjectLike;
     const copyFromObj = copyFrom as JsonObjectLike;
     /* eslint-enable no-type-assertion/no-type-assertion */
     Object.keys(copyFromObj).forEach((key: string | number) => {
       if (Object.hasOwn(startingPointObj, key)) {
         if (areNonArrayObjects(startingPointObj[key], copyFromObj[key])) {
-          retValObj[key] = mergeObjects(
+          startingPointObj[key] = mergeObjectsInternal(
             // We know these are objects from the `if` check
             /* eslint-disable no-type-assertion/no-type-assertion */
             startingPointObj[key] as JsonObjectLike,
@@ -333,7 +355,7 @@ function mergeObjects(
 
           // We know these are arrays from the `else if` check
           /* eslint-disable no-type-assertion/no-type-assertion */
-          retValObj[key] = (startingPointObj[key] as JsonArrayLike).concat(
+          startingPointObj[key] = (startingPointObj[key] as JsonArrayLike).concat(
             copyFromObj[key] as JsonArrayLike,
           );
           /* eslint-enable no-type-assertion/no-type-assertion */
@@ -342,16 +364,16 @@ function mergeObjects(
         // Note that the first non-object non-array value that gets placed in a property stays.
         // New values do not override existing ones
       } else {
-        retValObj[key] = copyFromObj[key];
+        startingPointObj[key] = copyFromObj[key];
       }
     });
   } else if (areArrayObjects(startingPoint, copyFrom)) {
     // Concat the arrays since they are both arrays
 
-    // Push the contents of copyFrom into retVal since it is a const and was already deep cloned
+    // Push the contents of copyFrom into startingPoint since it is a const and was already deep cloned
     // We know these are objects from the `else if` check
     /* eslint-disable no-type-assertion/no-type-assertion */
-    (retVal as JsonArrayLike).push(...(copyFrom as JsonArrayLike));
+    (startingPoint as JsonArrayLike).push(...(copyFrom as JsonArrayLike));
     /* eslint-enable no-type-assertion/no-type-assertion */
   }
 
@@ -360,7 +382,7 @@ function mergeObjects(
   // values into the array? Other? Maybe one day we can add some options to decide what to do in
   // this situation, but YAGNI for now
 
-  return retVal;
+  return startingPoint;
 }
 
 // #endregion
