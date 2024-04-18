@@ -15,6 +15,7 @@ describe('ContextMenu', () => {
   const topMenuCombiner = new NonValidatingDocumentCombiner(jsonMenu, {
     copyDocuments: false,
     ignoreDuplicateProperties: true,
+    ignoreDuplicateArrayItems: false,
   });
 
   // Assert the type that schema validation should have already sorted out
