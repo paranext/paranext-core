@@ -6,9 +6,9 @@ import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import {
   Editor,
+  EditorOptions,
   EditorRef,
   Usj,
-  getViewOptions,
   usjToUsxString,
   usxStringToUsj,
 } from '@biblionexus-foundation/platform-editor';
@@ -27,6 +27,8 @@ const defaultScrRef: ScriptureReference = {
   chapterNum: 1,
   verseNum: 1,
 };
+
+const options: EditorOptions = { hasSpellCheck: false };
 
 function scrollToScrRef(scrRef: ScriptureReference) {
   const verseElement = document.querySelector<HTMLElement>(
@@ -105,8 +107,6 @@ globalThis.webViewComponent = function ResourceViewer({
     }
   }, [usx, scrRef]);
 
-  const viewOptions = useMemo(() => getViewOptions('formatted'), []);
-
   // Scroll the selected verse into view
   useEffect(() => {
     // If we made this latest scrRef change, don't scroll
@@ -149,8 +149,8 @@ globalThis.webViewComponent = function ResourceViewer({
       ref={editorRef}
       scrRef={scrRef}
       setScrRef={setScrRef}
+      options={options}
       onChange={onChange}
-      viewOptions={viewOptions}
       logger={logger}
     />
   );

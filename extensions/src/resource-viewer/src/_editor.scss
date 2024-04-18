@@ -175,6 +175,31 @@
   color: #dd4a68;
 }
 
+/* stylelint-disable-next-line selector-class-pattern */
+.editor-mark {
+  background: rgba(255, 212, 0, 0.14);
+  border-bottom: 2px solid rgba(255, 212, 0, 0.3);
+  padding-bottom: 2px;
+}
+
+/* stylelint-disable-next-line selector-class-pattern */
+.editor-mark.selected {
+  background: rgba(255, 212, 0, 0.5);
+  border-bottom: 2px solid rgba(255, 212, 0, 1);
+}
+
+/* stylelint-disable-next-line selector-class-pattern */
+.editor-markOverlap {
+  background: rgba(255, 212, 0, 0.3);
+  border-bottom: 2px solid rgba(255, 212, 0, 0.7);
+}
+
+/* stylelint-disable-next-line selector-class-pattern */
+.editor-markOverlap.selected {
+  background: rgba(255, 212, 0, 0.7);
+  border-bottom: 2px solid rgba(255, 212, 0, 0.7);
+}
+
 .editor-paragraph {
   margin: 0;
   margin-bottom: 8px;
