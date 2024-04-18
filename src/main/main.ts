@@ -347,7 +347,7 @@ async function main() {
       { extensionName: 'foo', dataQualifier: 'fooData' },
       'This is the data from extension foo',
     );
-  }, 10000);
+  }, 20000);
   // #endregion
 }
 

@@ -8,6 +8,7 @@ declare module 'usfm-data-provider' {
     IDataProvider,
     MandatoryProjectDataTypes,
   } from '@papi/core';
+  import type { IProjectDataProvider } from 'papi-shared-types';
   import { UnsubscriberAsync } from 'platform-bible-utils';
 
   export type UsfmProviderDataTypes = {
@@ -359,7 +360,8 @@ declare module 'usfm-data-provider' {
     ): Promise<UnsubscriberAsync>;
   } & ParatextStandardProjectDataProvider;
 
-  export type ParatextStandardProjectDataProvider = IDataProvider<ParatextStandardProjectDataTypes>;
+  export type ParatextStandardProjectDataProvider =
+    IProjectDataProvider<ParatextStandardProjectDataTypes>;
 }
 
 declare module 'papi-shared-types' {
