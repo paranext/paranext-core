@@ -207,7 +207,11 @@ export default class MenuDocumentCombiner extends DocumentCombiner {
   private originalOutputThatWasLocalized: JsonDocumentLike | undefined;
 
   constructor(baseDocument: JsonDocumentLike) {
-    super(baseDocument, { copyDocuments: false, ignoreDuplicateProperties: false });
+    super(baseDocument, {
+      copyDocuments: false,
+      ignoreDuplicateProperties: false,
+      ignoreDuplicateArrayItems: false,
+    });
   }
 
   /**
@@ -379,6 +383,7 @@ export default class MenuDocumentCombiner extends DocumentCombiner {
       const options: DocumentCombinerOptions = {
         copyDocuments: false,
         ignoreDuplicateProperties: true,
+        ignoreDuplicateArrayItems: false,
       };
 
       const startingTopMenu = webViewMenu.topMenu ?? {};

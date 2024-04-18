@@ -1,3 +1,4 @@
+import deepEqual from './equality-checking';
 import PlatformEventEmitter from './platform-event-emitter.model';
 import { deepClone } from './util';
 
@@ -15,10 +16,14 @@ export type JsonDocumentLike = JsonObjectLike | JsonArrayLike;
  * - `ignoreDuplicateProperties`: If true, then duplicate properties are skipped if they are seen in
  *   contributed documents. If false, then throw when duplicate properties are seen in contributed
  *   documents.
+ * - `ignoreDuplicateArrayItems`: If true, then duplicate array items are allowed when combining
+ *   arrays from contributed documents. If false, then a deep value comparison is done on objects
+ *   when they are combined. Duplicates will not be copied into the output.
  */
 export type DocumentCombinerOptions = {
   copyDocuments: boolean;
   ignoreDuplicateProperties: boolean;
+  ignoreDuplicateArrayItems: boolean;
 };
 
 /**
@@ -166,6 +171,7 @@ export default class DocumentCombiner {
         outputIteration,
         contribution,
         this.options.ignoreDuplicateProperties,
+        this.options.ignoreDuplicateArrayItems,
       );
       this.validateOutput(outputIteration);
     });
@@ -293,19 +299,50 @@ function areArrayObjects(...values: unknown[]): boolean {
 }
 
 /**
+ * Merge the contents of two arrays into a single array, possibly filtering out duplicates
+ *
+ * @param ignoreDuplicates If true, allow duplicates from `copyFromArray` to be copied into the
+ *   output. If false, filter out duplicates by comparing with `startingArray`. Note that duplicates
+ *   within the same array are always ignored. Only comparisons between arrays are made.
+ * @param startingArray First set of array items to be placed in the output.
+ * @param copyFromArray Second set of potentially filtered items to be placed in the output.
+ * @returns Array that combines both input arrays
+ */
+function mergeArrays(
+  ignoreDuplicates: boolean,
+  startingArray: JsonArrayLike,
+  copyFromArray: JsonArrayLike,
+): JsonArrayLike {
+  if (!startingArray) return copyFromArray ?? [];
+  if (!copyFromArray) return startingArray;
+  if (ignoreDuplicates) return startingArray.concat(copyFromArray);
+  return [
+    ...startingArray,
+    ...copyFromArray.filter((item1) => {
+      return !startingArray.some((item2) => deepEqual(item1, item2));
+    }),
+  ];
+}
+
+/**
  * Recursively merge the properties of one object (copyFrom) into another (startingPoint). Throws if
  * copyFrom would overwrite values already existing in startingPoint.
  *
  * @param startingPoint Object that is the starting point for the return value
  * @param copyFrom Object whose values are copied into the return value
+ * @param ignoreDuplicateProperties Flag indicating whether to ignore or error if duplicate
+ *   properties are seen
+ * @param ignoreDuplicateArrayItems Flag indicating whether to filter out any duplicate array items
+ *   between documents
  * @returns Object that is the combination of the two documents
  */
 function mergeObjects(
   startingPoint: JsonDocumentLike,
   copyFrom: JsonDocumentLike,
   ignoreDuplicateProperties: boolean,
+  ignoreDuplicateArrayItems: boolean,
 ): JsonDocumentLike {
-  const retVal = deepClone(startingPoint);
+  let retVal = deepClone(startingPoint);
   if (!copyFrom) return retVal;
 
   if (areNonArrayObjects(startingPoint, copyFrom)) {
@@ -326,6 +363,7 @@ function mergeObjects(
             startingPointObj[key] as JsonObjectLike,
             copyFromObj[key] as JsonObjectLike,
             ignoreDuplicateProperties,
+            ignoreDuplicateArrayItems,
             /* eslint-enable no-type-assertion/no-type-assertion */
           );
         } else if (areArrayObjects(startingPointObj[key], copyFromObj[key])) {
@@ -333,7 +371,9 @@ function mergeObjects(
 
           // We know these are arrays from the `else if` check
           /* eslint-disable no-type-assertion/no-type-assertion */
-          retValObj[key] = (startingPointObj[key] as JsonArrayLike).concat(
+          retValObj[key] = mergeArrays(
+            ignoreDuplicateArrayItems,
+            startingPointObj[key] as JsonArrayLike,
             copyFromObj[key] as JsonArrayLike,
           );
           /* eslint-enable no-type-assertion/no-type-assertion */
@@ -347,11 +387,13 @@ function mergeObjects(
     });
   } else if (areArrayObjects(startingPoint, copyFrom)) {
     // Concat the arrays since they are both arrays
-
-    // Push the contents of copyFrom into retVal since it is a const and was already deep cloned
     // We know these are objects from the `else if` check
     /* eslint-disable no-type-assertion/no-type-assertion */
-    (retVal as JsonArrayLike).push(...(copyFrom as JsonArrayLike));
+    retVal = mergeArrays(
+      ignoreDuplicateArrayItems,
+      retVal as JsonArrayLike,
+      copyFrom as JsonArrayLike,
+    );
     /* eslint-enable no-type-assertion/no-type-assertion */
   }
 

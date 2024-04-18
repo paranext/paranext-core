@@ -143,7 +143,11 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
     | undefined;
 
   constructor(baseDocument: JsonDocumentLike) {
-    super(baseDocument, { copyDocuments: false, ignoreDuplicateProperties: false });
+    super(baseDocument, {
+      copyDocuments: false,
+      ignoreDuplicateProperties: false,
+      ignoreDuplicateArrayItems: true,
+    });
 
     this.onDidRebuild(() => {
       // If we rebuilt, bust the localized output cache since the non-localized output updated

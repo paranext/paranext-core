@@ -100,10 +100,14 @@ export type JsonDocumentLike = JsonObjectLike | JsonArrayLike;
  * - `ignoreDuplicateProperties`: If true, then duplicate properties are skipped if they are seen in
  *   contributed documents. If false, then throw when duplicate properties are seen in contributed
  *   documents.
+ * - `ignoreDuplicateArrayItems`: If true, then duplicate array items are allowed when combining
+ *   arrays from contributed documents. If false, then a deep value comparison is done on objects
+ *   when they are combined. Duplicates will not be copied into the output.
  */
 export type DocumentCombinerOptions = {
 	copyDocuments: boolean;
 	ignoreDuplicateProperties: boolean;
+	ignoreDuplicateArrayItems: boolean;
 };
 /**
  * Base class for any code that wants to compose JSON documents (primarily in the form of JS objects

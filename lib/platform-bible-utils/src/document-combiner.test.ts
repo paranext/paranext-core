@@ -20,7 +20,11 @@ class TestDocumentCombiner extends DocumentCombiner {
 /** Combine all provided documents without any checking */
 class DocumentCombinerWithoutValidation extends TestDocumentCombiner {
   constructor(startingDocument: JsonDocumentLike, options?: DocumentCombinerOptions) {
-    let optionsWithDefault = { copyDocuments: true, ignoreDuplicateProperties: false };
+    let optionsWithDefault = {
+      copyDocuments: true,
+      ignoreDuplicateProperties: false,
+      ignoreDuplicateArrayItems: true,
+    };
     if (options) optionsWithDefault = options;
     super(startingDocument, optionsWithDefault);
   }
@@ -59,7 +63,11 @@ class ArrayDocumentCombiner extends DocumentCombinerWithoutValidation {
 /** Throw a validation error on any operation, including construction */
 class AlwaysThrowingCombiner extends TestDocumentCombiner {
   constructor(startingDocument: JsonDocumentLike) {
-    super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
+    super(startingDocument, {
+      copyDocuments: true,
+      ignoreDuplicateProperties: false,
+      ignoreDuplicateArrayItems: true,
+    });
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -83,7 +91,11 @@ class ThrowingCombiner extends TestDocumentCombiner {
   throwEnabled: boolean = false;
 
   constructor(startingDocument: JsonDocumentLike) {
-    super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
+    super(startingDocument, {
+      copyDocuments: true,
+      ignoreDuplicateProperties: false,
+      ignoreDuplicateArrayItems: true,
+    });
     this.throwEnabled = true;
   }
 
@@ -103,7 +115,11 @@ class ThrowingCombiner extends TestDocumentCombiner {
 /** Throw a validation error only when checking the output */
 class OutputThrowingCombiner extends TestDocumentCombiner {
   constructor(startingDocument: JsonDocumentLike) {
-    super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
+    super(startingDocument, {
+      copyDocuments: true,
+      ignoreDuplicateProperties: false,
+      ignoreDuplicateArrayItems: true,
+    });
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -127,6 +143,7 @@ describe('Simple object combining', () => {
   const newC = { c: 4 };
   const arrayD1 = { d: ['red', 'yellow'] };
   const arrayD2 = { d: ['blue', 'green'] };
+  const arrayD3 = { d: ['red'] };
 
   test('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(hasA);
@@ -150,7 +167,11 @@ describe('Simple object combining', () => {
     expect(JSON.stringify(combiner.output)).toBe('{"a":10,"d":["red","yellow"]}');
     combiner.addOrUpdateContribution('D2', arrayD2);
     expect(JSON.stringify(combiner.output)).toBe('{"a":10,"d":["red","yellow","blue","green"]}');
-    expect(rebuildCallbackMock).toHaveBeenCalledTimes(8);
+    combiner.addOrUpdateContribution('D3', arrayD3);
+    expect(JSON.stringify(combiner.output)).toBe(
+      '{"a":10,"d":["red","yellow","blue","green","red"]}',
+    );
+    expect(rebuildCallbackMock).toHaveBeenCalledTimes(9);
 
     unsubscriber();
   });
@@ -168,6 +189,16 @@ describe('Simple object combining', () => {
 
     unsubscriber();
   });
+
+  test('array duplicate removal works', () => {
+    const combiner = new DocumentCombinerWithoutValidation(arrayD1, {
+      copyDocuments: false,
+      ignoreDuplicateProperties: false,
+      ignoreDuplicateArrayItems: false,
+    });
+    combiner.addOrUpdateContribution('D3', arrayD3);
+    expect(JSON.stringify(combiner.output)).toBe('{"d":["red","yellow"]}');
+  });
 });
 
 describe('Simple array combining', () => {
@@ -175,6 +206,22 @@ describe('Simple array combining', () => {
   const has4 = [4];
   const has5 = [5];
   const has6 = [6];
+
+  test('arrays can have duplicates', () => {
+    const combiner = new DocumentCombinerWithoutValidation(base);
+    combiner.addOrUpdateContribution('A', base);
+    expect(JSON.stringify(combiner.output)).toBe('[1,2,3,1,2,3]');
+  });
+
+  test('array duplicates are removed', () => {
+    const combiner = new DocumentCombinerWithoutValidation(base, {
+      copyDocuments: false,
+      ignoreDuplicateProperties: false,
+      ignoreDuplicateArrayItems: false,
+    });
+    combiner.addOrUpdateContribution('A', base);
+    expect(JSON.stringify(combiner.output)).toBe('[1,2,3]');
+  });
 
   test('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(base);
@@ -239,6 +286,7 @@ test('Collisions are not allowed', () => {
   const nonThrowingCombiner = new DocumentCombinerWithoutValidation(hasA, {
     copyDocuments: true,
     ignoreDuplicateProperties: true,
+    ignoreDuplicateArrayItems: false,
   });
   expect(() => nonThrowingCombiner.addOrUpdateContribution('A', newA)).not.toThrow();
   expect(JSON.stringify(nonThrowingCombiner.output)).toBe('{"a":1}');
@@ -298,6 +346,7 @@ test('Modifying contributed documents has an impact when not copying documents',
   const combiner = new DocumentCombinerWithoutValidation(emptyObject, {
     copyDocuments: false,
     ignoreDuplicateProperties: false,
+    ignoreDuplicateArrayItems: false,
   });
   combiner.addOrUpdateContribution('simple', simpleObject);
   simpleObject.a = 2;
