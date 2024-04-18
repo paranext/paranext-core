@@ -35,7 +35,7 @@ export const verseRefSettingsValidator: SettingValidator<'platform.verseRef'> = 
 };
 
 // TODO: Validate that strings in the array to match BCP 47 values once the i18n code is ready
-export const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'> = async (
+const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'> = async (
   newValue: string[],
 ): Promise<boolean> => {
   return (

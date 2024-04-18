@@ -23,6 +23,7 @@ import {
 import type { WebViewProps } from '@papi/core';
 import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
+import { debounce } from 'platform-bible-utils';
 import Clock from './components/clock.component';
 import Logo from '../../assets/offline.svg';
 
@@ -172,7 +173,30 @@ globalThis.webViewComponent = function HelloWorld({
     ),
   );
 
-  const [name, setName] = useSetting('hello-world.personName', 'Kathy');
+  const [name, setNameInternal] = useSetting('hello-world.personName', 'Kathy');
+
+  // Name used for display and editing in the input field while debouncing the actual setting change
+  const [nameTemp, setNameTemp] = useState(name);
+
+  useEffect(() => {
+    setNameTemp(name);
+  }, [name]);
+
+  const debouncedSetName = useMemo(
+    () =>
+      debounce((newName) => {
+        setNameInternal(newName);
+      }, 300),
+    [setNameInternal],
+  );
+
+  const setName = useCallback(
+    (newName: string) => {
+      setNameTemp(newName);
+      debouncedSetName(newName);
+    },
+    [debouncedSetName],
+  );
 
   const peopleDataProvider = useDataProvider('helloSomeone.people');
 
@@ -232,7 +256,7 @@ globalThis.webViewComponent = function HelloWorld({
       <div>{latestVerseText}</div>
       <Clock />
       <div>
-        <input value={name} onChange={(e) => setName(e.target.value)} />
+        <input value={nameTemp} onChange={(e) => setName(e.target.value)} />
         <Button onClick={() => peopleDataProvider?.deletePerson(name)}>Delete {name}</Button>
       </div>
       <div>{personGreeting}</div>

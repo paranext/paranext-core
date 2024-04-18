@@ -35,5 +35,13 @@
   "settings_platform_verseRef_label": "Current Verse Reference",
   "settings_platform_interfaceLanguage_label": "Interface Language",
   "settings_hello_world_group1_label": "Hello World Settings",
-  "settings_hello_world_personName_label": "Selected Person's Name on Hello World Web View"
+  "settings_hello_world_personName_label": "Selected Person's Name on Hello World Web View",
+  "project_settings_platform_group1_label": "Platform Settings",
+  "project_settings_platform_group1_description": "Project settings pertaining to the software overall",
+  "project_settings_platform_fullName_label": "Project Full Name",
+  "project_settings_platform_language_label": "Project Primary Language",
+  "project_settings_platformScripture_booksPresent_label": "Scripture Books Present",
+  "project_settings_platformScripture_booksPresent_description": "Which books of the Bible are present in this Scripture project",
+  "project_settings_platformScripture_versification_label": "Scripture Versification",
+  "project_settings_platformScripture_versification_description": "Which versification scheme this Scripture project follows"
 }

@@ -89,7 +89,7 @@ async function validateSetting<SettingName extends SettingNames>(
     return true;
   }
   try {
-    return networkService.request(
+    return await networkService.request(
       serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key),
       newValue,
       currentValue,

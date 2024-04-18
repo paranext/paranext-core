@@ -248,9 +248,8 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
     indexStart > length ||
     (indexEnd &&
       ((indexStart > indexEnd &&
-        !(indexStart > 0 && indexStart < length && indexEnd < 0 && indexEnd > -length)) ||
-        indexEnd < -length ||
-        (indexStart < 0 && indexStart > -length && indexEnd > 0)))
+        !(indexStart >= 0 && indexStart < length && indexEnd < 0 && indexEnd > -length)) ||
+        indexEnd < -length))
   )
     return '';
 

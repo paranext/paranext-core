@@ -1,8 +1,8 @@
 import * as networkService from '@shared/services/network.service';
-import coreProjectSettingsInfo, {
-  AllProjectSettingsInfo,
+import {
   coreProjectSettingsValidators,
-} from '@main/data/core-project-settings-info.data';
+  platformProjectSettings,
+} from '@extension-host/data/core-project-settings-info.data';
 import networkObjectService from '@shared/services/network-object.service';
 import {
   CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR,
@@ -14,13 +14,19 @@ import {
 import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
 import { includes } from 'platform-bible-utils';
+import ProjectSettingsDocumentCombiner from '@shared/utils/project-settings-document-combiner';
 
 /**
- * Our internal list of project settings information for each setting. Theoretically this should not
- * be partial, but it quite possibly will not have each setting in it. It just depends on if
- * extensions actually provide the settings definitions
+ * Object that keeps track of all project settings contributions in the platform. To listen to
+ * updates to the project settings contributions, subscribe to its `onDidRebuild` event (consider
+ * debouncing as each contribution will trigger a rebuild).
+ *
+ * Keeping this object separate from the network object prevents random services from changing
+ * system project settings contributions unexpectedly.
  */
-let projectSettingsInfo: Partial<AllProjectSettingsInfo>;
+export const projectSettingsDocumentCombiner = new ProjectSettingsDocumentCombiner(
+  platformProjectSettings,
+);
 
 let initializationPromise: Promise<void>;
 /** Do the setup this service needs to function */
@@ -29,8 +35,6 @@ async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          projectSettingsInfo = coreProjectSettingsInfo;
-          // TODO: Read projectSettingsInfo in from extensions in https://github.com/paranext/paranext-core/issues/721
           resolve();
         } catch (error) {
           reject(error);
@@ -57,7 +61,7 @@ async function isValid<ProjectSettingName extends ProjectSettingNames>(
     return true;
   }
   try {
-    return networkService.request(
+    return await networkService.request(
       serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key),
       newValue,
       currentValue,
@@ -77,12 +81,21 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
   projectType: ProjectTypes,
 ): Promise<ProjectSettingTypes[ProjectSettingName]> {
   await initialize();
-  const projectSettingInfo = projectSettingsInfo[key];
+  const projectSettingInfo =
+    projectSettingsDocumentCombiner.getProjectSettingsContributionInfo()?.settings[key];
 
-  if (!projectSettingInfo || !('default' in projectSettingInfo))
+  if (!projectSettingInfo) {
+    throw new Error(`Could not find project setting ${key}. projectType: ${projectType}`);
+  }
+
+  // We shouldn't be able to hit this anymore since the project settings document combiner should
+  // throw if this ever happened. But this is still here just in case because this would be a
+  // serious error
+  if (!('default' in projectSettingInfo)) {
     throw new Error(
       `Could not find default value for project setting ${key}. projectType: ${projectType}`,
     );
+  }
 
   return projectSettingInfo.default;
 }
