@@ -22,7 +22,6 @@ namespace Paranext.DataProvider.JsonUtils
             catch (Exception e)
             {
                 verseRef = new VerseRef();
-                Console.Error.Write(e.ToString());
                 errorMessage = $"Invalid VerseRef ({jsonString}): {e.Message}";
                 return false;
             }
