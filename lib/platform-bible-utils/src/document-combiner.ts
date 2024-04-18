@@ -300,6 +300,9 @@ function areArrayObjects(...values: unknown[]): boolean {
  *
  * @param startingPoint Object that is the starting point for the return value
  * @param copyFrom Object whose values are copied into the return value
+ * @param ignoreDuplicateProperties Whether to ignore object properties that are present in
+ *   `copyFrom` that are already present in `startingPoint`. If `false`, throws when an object
+ *   property in `copyFrom` is already present in `startingPoint`
  * @returns Object that is the combination of the two documents
  */
 function mergeObjects(
@@ -322,6 +325,9 @@ function mergeObjects(
  *
  * @param startingPoint Object that is the starting point for the return value
  * @param copyFrom Object whose values are copied into the return value
+ * @param ignoreDuplicateProperties Whether to ignore object properties that are present in
+ *   `copyFrom` that are already present in `startingPoint`. If `false`, throws when an object
+ *   property in `copyFrom` is already present in `startingPoint`
  * @returns Object that is the combination of the two documents
  */
 function mergeObjectsInternal(
