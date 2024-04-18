@@ -8,6 +8,7 @@ import {
   Editor,
   EditorRef,
   Usj,
+  getViewOptions,
   usjToUsxString,
   usxStringToUsj,
 } from '@biblionexus-foundation/platform-editor';
@@ -46,12 +47,15 @@ globalThis.webViewComponent = function ResourceViewer({
     if (usx) editorRef.current?.setUsj(usxStringToUsj(usx));
   }, [usx]);
 
+  const viewOptions = useMemo(() => getViewOptions('formatted'), []);
+
   return (
     <Editor
       ref={editorRef}
       scrRef={scrRef}
       setScrRef={setScrRef}
       onChange={onChange}
+      viewOptions={viewOptions}
       logger={logger}
     />
   );
