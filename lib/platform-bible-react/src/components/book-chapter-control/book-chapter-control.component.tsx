@@ -212,6 +212,21 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     }
   }, [highlightedBookId, scrRef.bookNum, scrRef.chapterNum, selectedBookId]);
 
+  useEffect(() => {
+    // console.log('entered useEffect');
+    // console.log(`isContentOpen === ${isContentOpen}`);
+    // console.log(`contentRef === ${contentRef.current}`);
+    // console.log(`menuItemRef === ${menuItemRef.current}`);
+    if (isContentOpen && contentRef.current && menuItemRef.current) {
+      // console.log('entered if statement');
+      const offset = 32 + 32 + 32; // Heights of three menu items, if I use clientHeight of menuItemRef then it includes height of chapters
+      const menuItemOffsetTop = menuItemRef.current.offsetTop;
+      const scrollPosition = menuItemOffsetTop - offset;
+      contentRef.current.scrollTo({ top: scrollPosition, behavior: 'instant' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isContentOpen, contentRef.current, menuItemRef.current]);
+
   return (
     <div>
       <ShadDropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>

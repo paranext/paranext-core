@@ -31,7 +31,7 @@ function ChapterSelect({
     [handleHighlightedChapter],
   );
 
-  console.log('Chapter select re-rendered. isHighligthed value: ', isHighlighted);
+  console.log('Chapter select re-rendered. isHighlighted value: ', isHighlighted);
 
   return (
     <div
