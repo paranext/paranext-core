@@ -10,6 +10,7 @@ import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 import { TAB_TYPE_SETTINGS_DIALOG } from '@renderer/components/settings-dialog/settings-tab.component';
 import { TAB_TYPE_RUN_BASIC_CHECKS } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
 import { TAB_TYPE_BASIC_LIST } from '@renderer/components/basic-list/basic-list.component';
+import LOREM_IPSUM from './lorem-ipsum';
 
 export const FIRST_TAB_ID = 'About';
 
@@ -28,6 +29,11 @@ const testLayout: LayoutBase = {
               { id: 'About', tabType: TAB_TYPE_ABOUT },
               { id: 'Test Tab Two', tabType: TAB_TYPE_TEST },
               { id: 'Test Tab One', tabType: TAB_TYPE_TEST },
+              {
+                id: 'Lorem Ipsum',
+                tabType: TAB_TYPE_TEST,
+                data: { content: LOREM_IPSUM },
+              },
             ] as SavedTabInfo[],
           },
         ],

@@ -13,6 +13,15 @@ import {
   usxStringToUsj,
 } from '@biblionexus-foundation/platform-editor';
 
+/** The offset in pixels from the top of the window to scroll to show the verse number */
+const VERSE_NUMBER_SCROLL_OFFSET = 80;
+
+/**
+ * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
+ * to listen for the editor to finish loading
+ */
+const EDITOR_LOAD_DELAY_TIME = 100;
+
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
   chapterNum: 1,
@@ -20,14 +29,20 @@ const defaultScrRef: ScriptureReference = {
 };
 
 function scrollToScrRef(scrRef: ScriptureReference) {
-  // We are querying for a span, so this Element will be an HTMLElement
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const verseElement = document.querySelector(
+  const verseElement = document.querySelector<HTMLElement>(
     `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
-  ) as HTMLElement | undefined;
-  if (verseElement) {
+  );
+
+  // Scroll if we find the verse or we're at the start of the chapter
+  if (verseElement || scrRef.verseNum === 1) {
+    // If we're at the first verse, scroll to the top so we can see intro material
+    let scrollTop = 0;
+    if (verseElement && scrRef.verseNum > 1)
+      scrollTop =
+        verseElement.getBoundingClientRect().top + window.scrollY - VERSE_NUMBER_SCROLL_OFFSET;
+
     window.scrollTo({
-      top: verseElement.getBoundingClientRect().top + window.scrollY - 55,
+      top: scrollTop,
       behavior: 'smooth',
     });
   }
@@ -38,7 +53,6 @@ globalThis.webViewComponent = function ResourceViewer({
   useWebViewState,
 }: WebViewProps): JSX.Element {
   const [projectId] = useWebViewState<string>('projectId', '');
-  logger.debug(`Resource Viewer project ID: ${projectId}`);
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
@@ -85,9 +99,9 @@ globalThis.webViewComponent = function ResourceViewer({
   useEffect(() => {
     if (usx && !hasFirstRetrievedScripture.current) {
       hasFirstRetrievedScripture.current = true;
-      // Wait 100 ms before scrolling to make sure there is plenty of time for the editor to load
+      // Wait before scrolling to make sure there is time for the editor to load
       // TODO: hook into the editor and detect when it has loaded somehow
-      setTimeout(() => scrollToScrRef(scrRef), 100);
+      setTimeout(() => scrollToScrRef(scrRef), EDITOR_LOAD_DELAY_TIME);
     }
   }, [usx, scrRef]);
 
@@ -106,13 +120,25 @@ globalThis.webViewComponent = function ResourceViewer({
       return () => {};
     }
 
-    // Add a highlight to the current verse element
-    const highlightedVerseElement = scrollToScrRef(scrRef);
-    if (highlightedVerseElement) highlightedVerseElement.classList.add('highlighted');
+    // Using react's ref api which uses null, so we must use null
+    // eslint-disable-next-line no-null/no-null
+    let highlightedVerseElement: HTMLElement | null;
 
-    internallySetScrRefRef.current = undefined;
+    // Wait before scrolling to make sure there is time for the editor to load
+    // TODO: hook into the editor and detect when it has loaded somehow
+    const scrollTimeout = setTimeout(() => {
+      // Scroll to and add a highlight to the current verse element
+      highlightedVerseElement = scrollToScrRef(scrRef);
+      if (highlightedVerseElement) highlightedVerseElement.classList.add('highlighted');
+
+      internallySetScrRefRef.current = undefined;
+    }, EDITOR_LOAD_DELAY_TIME);
 
     return () => {
+      // Cancel this timeout to scroll if it is running because the scrRef changed and we need to
+      // scroll somewhere else
+      clearTimeout(scrollTimeout);
+
       // Remove highlight from the current verse element
       if (highlightedVerseElement) highlightedVerseElement.classList.remove('highlighted');
     };
