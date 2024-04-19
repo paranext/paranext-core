@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
 import {
@@ -17,28 +17,32 @@ import GoToMenuItem from './goTo-menu-item.component';
 type BookTypeLabels = {
   [bookType in BookType]: string;
 };
-const bookTypeLabels: BookTypeLabels = {
-  OT: 'Old Testament',
-  NT: 'New Testament',
-  DC: 'Deuterocanon',
-};
-const bookTypeArray: BookType[] = ['OT', 'NT', 'DC'];
-
 type BookChapterControlProps = {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
 };
 
+const BOOK_TYPE_LABELS: BookTypeLabels = {
+  OT: 'Old Testament',
+  NT: 'New Testament',
+  DC: 'Deuterocanon',
+};
+const BOOK_TYPE_ARRAY: BookType[] = ['OT', 'NT', 'DC'];
+// This is the height of three menu items to offset scrolling to the selected menu item
+// If you use menuItemRef.clientHeight- includes height of chapter div which is too big
+const SCROLL_OFFSET = 32 + 32 + 32;
+
 function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   const { allBookIds } = Canon;
 
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedBookId, setSelectedBookId] = useState<string>('');
-
+  const [selectedBookId, setSelectedBookId] = useState<string>(
+    Canon.bookNumberToId(scrRef.bookNum),
+  );
   const [highlightedChapter, setHighlightedChapter] = useState<number>(0);
   const [highlightedBookId, setHighlightedBookId] = useState<string>('');
-
   const [isContentOpen, setIsContentOpen] = useState<boolean>(false);
+  const [isContentOpenDelayed, setIsContentOpenDelayed] = useState<boolean>(isContentOpen);
 
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -213,19 +217,17 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   }, [highlightedBookId, scrRef.bookNum, scrRef.chapterNum, selectedBookId]);
 
   useEffect(() => {
-    // console.log('entered useEffect');
-    // console.log(`isContentOpen === ${isContentOpen}`);
-    // console.log(`contentRef === ${contentRef.current}`);
-    // console.log(`menuItemRef === ${menuItemRef.current}`);
-    if (isContentOpen && contentRef.current && menuItemRef.current) {
-      // console.log('entered if statement');
-      const offset = 32 + 32 + 32; // Heights of three menu items, if I use clientHeight of menuItemRef then it includes height of chapters
+    setIsContentOpenDelayed(isContentOpen);
+  }, [isContentOpen]);
+
+  useLayoutEffect(() => {
+    if (isContentOpenDelayed && contentRef.current && menuItemRef.current) {
       const menuItemOffsetTop = menuItemRef.current.offsetTop;
-      const scrollPosition = menuItemOffsetTop - offset;
+      const scrollPosition = menuItemOffsetTop - SCROLL_OFFSET;
       contentRef.current.scrollTo({ top: scrollPosition, behavior: 'instant' });
+      menuItemRef.current.focus();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isContentOpen, contentRef.current, menuItemRef.current]);
+  }, [isContentOpenDelayed]);
 
   return (
     <div>
@@ -240,14 +242,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             handleOnClick={() => {
               setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum));
               setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
-              if (
-                // Ref uses null
-                // eslint-disable-next-line no-null/no-null
-                menuItemRef.current !== null &&
-                menuItemRef.current !== undefined
-              ) {
-                menuItemRef.current.focus();
-              }
             }}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
           />
@@ -264,12 +258,12 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             handleLocationHistory={() => console.log('location history')}
             handleBookmarks={() => console.log('bookmarks')}
           />
-          {bookTypeArray.map(
+          {BOOK_TYPE_ARRAY.map(
             (bookType) =>
               fetchFilteredBooks(bookType).length > 0 && (
                 <div key={bookType}>
                   <ShadDropdownMenuLabel className="pr-font-semibold pr-text-slate-700">
-                    {bookTypeLabels[bookType]}
+                    {BOOK_TYPE_LABELS[bookType]}
                   </ShadDropdownMenuLabel>
 
                   {fetchFilteredBooks(bookType).map((bookId) => (
