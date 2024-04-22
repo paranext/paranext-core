@@ -6,17 +6,24 @@ import { cn } from '@/utils/shadcn-ui.util';
 export type BookType = 'OT' | 'NT' | 'DC';
 
 type BookMenuItemProps = PropsWithChildren<{
-  // String id of book
+  /** String id of book */
   bookId: string;
-  // Callback to run when a book menu item is selected
+  /** Callback to run when a book menu item is selected */
   handleSelectBook: () => void;
-  // True if this menu item is currently selected
+  /** Indicates if this menu item is currently selected */
   isSelected: boolean;
+  /** Function that is called upon highlighting a book in the dropdown menu */
   handleHighlightBook: () => void;
-  // isHighlighted: boolean;
+  /**
+   * Function that is called on pressing a key
+   *
+   * @param event Event that contains information about the key stroke
+   */
   handleKeyDown: (event: KeyboardEvent) => void;
-  // Type of book associated with this menu item, coordinates color labels
-  // ? Mock up has the labels coordinated to genre
+  /**
+   * Type of book associated with this menu item, coordinates color labels ? Mock up has the labels
+   * coordinated to genre
+   */
   bookType: BookType;
 }>;
 
@@ -27,18 +34,12 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
       handleSelectBook,
       isSelected,
       handleHighlightBook,
-      // isHighlighted,
       handleKeyDown,
       bookType,
       children,
     }: BookMenuItemProps,
     ref,
   ) => {
-    const handleFocus = () => {
-      console.log('book ', Canon.bookIdToEnglishName(bookId), 'has focus');
-      handleHighlightBook();
-    };
-
     const currentBookRef = isSelected ? ref : undefined;
 
     return (
@@ -58,8 +59,8 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
         onKeyDown={(event: KeyboardEvent) => {
           handleKeyDown(event);
         }}
-        onFocus={handleFocus}
-        onMouseMove={handleFocus}
+        onFocus={handleHighlightBook}
+        onMouseMove={handleHighlightBook}
       >
         <span
           className={cn(
