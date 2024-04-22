@@ -16,7 +16,9 @@ const booksPresentValidator: ProjectSettingValidator<'platformScripture.booksPre
 const versificationValidator: ProjectSettingValidator<'platformScripture.versification'> = async (
   newValue: number,
 ): Promise<boolean> => {
-  return typeof newValue === 'number' && newValue >= 0 && newValue <= 6;
+  return (
+    typeof newValue === 'number' && newValue >= 0 && newValue <= 6 && Number.isInteger(newValue)
+  );
 };
 
 // #endregion
