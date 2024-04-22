@@ -8,5 +8,8 @@
   "license": "MIT",
   "volta": {
     "extends": "../../package.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
   }
 }

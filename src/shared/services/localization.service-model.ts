@@ -11,9 +11,9 @@ export type LocalizedStringMetadata = { [localizedStringKey: string]: Localizati
 
 export type LocalizationData = { [localizeKey: string]: string };
 
-export type LocalizationSelector = { localizeKey: string; languagesToSearch?: string[] };
+export type LocalizationSelector = { localizeKey: string; locales?: string[] };
 
-export type LocalizationSelectors = { localizeKeys: string[]; languagesToSearch?: string[] };
+export type LocalizationSelectors = { localizeKeys: string[]; locales?: string[] };
 
 /** JSDOC DESTINATION localizationServiceProviderName */
 export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
@@ -52,21 +52,20 @@ export type ILocalizationService = {
   /**
    * Look up localized string for specific localizeKey
    *
-   * @param localizeKey String key that corresponds to a localized value
-   * @param language ISO 639-2 code for the language, defaults to 'eng' if unspecified
+   * @param selector Made up of a string key that corresponds to a localized value and an array of
+   *   BCP 47 language codes
    * @returns Localized string
    */
-  getLocalizedString: (localizeKey: string, languagesToSearch?: string[]) => Promise<string>;
+  getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
   /**
    * Look up localized strings for all localizeKeys provided
    *
-   * @param localizeKeys Array of localize keys that correspond to localized values
-   * @param language ISO 639-2 code for the language, defaults to 'eng' if unspecified
+   * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
+   *   string key that corresponds to a localized value and an array of BCP 47 language codes
    * @returns Object whose keys are localizeKeys and values are localized strings
    */
   getLocalizedStrings: (
-    localizeKeys: string[],
-    languagesToSearch?: string[],
+    selectors: LocalizationSelectors,
   ) => Promise<{ [localizeKey: string]: string }>;
   /**
    * This data cannot be changed. Trying to use this setter this will always throw

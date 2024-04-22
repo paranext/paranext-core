@@ -1,6 +1,6 @@
 import { Canon } from '@sillsdev/scripture';
 import { BookInfo, ScriptureReference } from './scripture.model';
-import { startsWith } from './string-util';
+import { split, startsWith } from './string-util';
 
 const scrBookData: BookInfo[] = [
   { shortName: 'ERR', fullNames: ['ERROR'], chapters: -1 },
@@ -106,12 +106,14 @@ export const offsetVerse = (scrRef: ScriptureReference, offset: number): Scriptu
  *
  * Convert book number to a localized Id (a short description of the book). This should be used
  * whenever a book ID (short code) is shown to the user. It is primarily needed for people who do
- * not read Roman script well /// and need to have books identified in a alternate script (e.g.
+ * not read Roman script well and need to have books identified in a alternate script (e.g.
  * Chinese or Russian)
  *
  * @param bookNumber
- * @param localizationLanguage
- * @param getLocalizedString
+ * @param localizationLanguage in BCP 47 format
+ * @param getLocalizedString function that provides the localized versions of the book ids and names
+ * asynchronously. Sometimes provided a utility function in platform-bible-utils so it needs to
+ * avoid accessing the papi directly
  * @returns
  */
 export async function getLocalizedIdFromBookNumber(
@@ -124,9 +126,6 @@ export async function getLocalizedIdFromBookNumber(
 ) {
   const id = Canon.bookNumberToId(bookNumber);
 
-  // Intl.getCanonicalLocales is in the new typescript and is not in mainline VSCode yet so
-  // leaving this here for the future, but will eventually be able to remove the expects error
-  // @ts-expect-error
   if (!startsWith(Intl.getCanonicalLocales(localizationLanguage)[0], 'zh'))
     return getLocalizedString({
       localizeKey: `LocalizedId.${id}`,
@@ -138,9 +137,9 @@ export async function getLocalizedIdFromBookNumber(
     localizeKey: `Book.${id}`,
     languagesToSearch: [localizationLanguage],
   });
-  const parts = bookName.split('-');
+  const parts = split(bookName, '-');
   // some entries had a second name inside ideographic parenthesis
-  const parts2 = parts[0].split('\xff08');
+  const parts2 = split(parts[0], '\xff08')
   const retVal = parts2[0].trim();
   return retVal;
 }

@@ -32,18 +32,25 @@ function shouldThrowIfNotFound() {
   return !globalThis.isPackaged;
 }
 
+/**
+ * Take a specific BCP 47 locale and return its base general locale (e.g. en-GB (Great British
+ * English) returns en)
+ */
 async function getBaseLanguageCode(languageCode: string) {
   const match = languageCode.match(LANGUAGE_CODE_REGEX);
-  if (!match) {
+  const languageMatch = match?.groups?.language;
+  if (!match || !languageMatch) {
     if (shouldThrowIfNotFound())
       throw new Error(`Localization service - No match for language code ${languageCode}`);
     return languageCode;
   }
 
-  const baseCode = await getCanonicalLocales(match[1]);
+  const baseCode = await getCanonicalLocale(languageMatch);
   if (!baseCode) {
     if (shouldThrowIfNotFound())
-      throw new Error(`Localization service - No match for language code ${languageCode}`);
+      throw new Error(
+        `Localization service - No general locale found for specific locale: ${languageCode}`,
+      );
     return languageCode;
   }
   return baseCode;
@@ -73,12 +80,11 @@ async function getLocalizedFileUris(): Promise<string[]> {
 
 /** Map of BCP 47 code to localized values for that language */
 const languageLocalizedData = new Map<string, LocalizationData>();
-const localizedStringMetadata = new Map<string, LocalizedStringMetadata>();
+let localizedStringMetadata: LocalizedStringMetadata | undefined;
 
 /** Load the contents of all localization files from disk */
 async function loadAllLocalizationData() {
   languageLocalizedData.clear();
-  localizedStringMetadata.clear();
   const localizeFileUris = await getLocalizedFileUris();
 
   await Promise.all(
@@ -87,10 +93,7 @@ async function loadAllLocalizationData() {
         const localizeFileString = await nodeFS.readFileText(uri);
         const fileName = getFileNameFromUri(uri);
         if (fileName === 'metadata') {
-          localizedStringMetadata.set(
-            fileName,
-            convertToLocalizedStringMetadata(localizeFileString),
-          );
+          localizedStringMetadata = convertToLocalizedStringMetadata(localizeFileString);
           return;
         }
 
@@ -121,7 +124,7 @@ async function addLanguageIfNotThere(languages: string[], language: string, goes
   else languages.push(language);
 }
 
-async function getCanonicalLocales(languageCode: string) {
+async function getCanonicalLocale(languageCode: string) {
   try {
     return Intl.getCanonicalLocales(languageCode)[0];
   } catch (e) {
@@ -134,7 +137,7 @@ async function getCanonicalLocales(languageCode: string) {
 async function moveToFirstLanguageWithData(languages: string[]) {
   if (languages.length === 0) return undefined;
 
-  const standardizedLanguageCode = await getCanonicalLocales(languages[0]);
+  const standardizedLanguageCode = await getCanonicalLocale(languages[0]);
   if (languageLocalizedData.get(standardizedLanguageCode)) return standardizedLanguageCode;
 
   // Try to get data for base language by stripping the region from the language code
@@ -153,7 +156,7 @@ async function getNextDefinedLanguageData(languages: string[]) {
   // Note: This should never happen thanks to the english fallback, but is here just in case
   if (standardizedLanguage === undefined) {
     if (shouldThrowIfNotFound())
-      throw new Error(`Language code(s) invalid and/or does/do not exist`);
+      throw new Error(`No BCP 47 language code could found from the languages provided`);
     return undefined;
   }
 
@@ -161,38 +164,67 @@ async function getNextDefinedLanguageData(languages: string[]) {
   // Note: This should never happen thanks to the english fallback, but is here just in case
   if (languageData === undefined) {
     if (shouldThrowIfNotFound())
-      throw new Error(`Language code(s) invalid and/or does/do not exist`);
+      throw new Error(`Language data could not be found for ${standardizedLanguage}`);
   }
 
   return languageData;
 }
 
 async function getMetadata(localizeKey: string) {
-  const localizationMetadata: LocalizedStringMetadata | undefined =
-    localizedStringMetadata.get('metadata');
-
-  if (!localizationMetadata) {
+  if (!localizedStringMetadata) {
     if (shouldThrowIfNotFound()) throw new Error(`Metadata missing`);
     return undefined;
   }
 
-  const metadata = localizationMetadata[localizeKey];
-  if (!metadata) {
-    if (shouldThrowIfNotFound()) logger.warn(`No metadata exists for ${localizeKey}`);
-    return undefined;
-  }
+  const metadata = localizedStringMetadata[localizeKey];
   return metadata;
 }
 
 async function findFirstLocalization(localizeKey: string, languages: string[]) {
-  if (languages.length > 0) return undefined;
+  if (languages.length <= 0) return undefined;
 
   const tempLanguageData = await getNextDefinedLanguageData(languages);
   if (tempLanguageData === undefined) return undefined;
   const localization = tempLanguageData[localizeKey];
   if (localization) return localization;
-  languages.shift();
-  return findFirstLocalization(localizeKey, languages);
+  const [, ...remainingLanguages] = languages;
+  return findFirstLocalization(localizeKey, remainingLanguages);
+}
+
+async function findLocalizationForFallbackLanguageAndOrKey(
+  localizeKey: string,
+  languages: string[],
+  initialLanguageData: LocalizationData,
+) {
+  const metadata = await getMetadata(localizeKey);
+  if (metadata !== undefined && initialLanguageData) {
+    const { fallbackKey } = metadata;
+
+    // check fallback key in current language
+    const fallbackLocalizationInCurrentLanguage = initialLanguageData[fallbackKey];
+    if (fallbackLocalizationInCurrentLanguage) return fallbackLocalizationInCurrentLanguage;
+  }
+
+  // If the fallback key can't be found in the current language, check the localize key in the other
+  // fallback languages
+  const currentKeyLanguages = [...languages]; // Make a duplicate as array will get changed during search
+  const currentKeyFallbackLanguageLocalization = await findFirstLocalization(
+    localizeKey,
+    currentKeyLanguages,
+  );
+  if (currentKeyFallbackLanguageLocalization) return currentKeyFallbackLanguageLocalization;
+
+  // If the localize key can't be found in any language, look for a fallback key and look for that
+  // key in the fallback languages if it exists
+  if (metadata !== undefined) {
+    const { fallbackKey } = metadata;
+    const fallbackKeyFallbackLanguageLocalization = await findFirstLocalization(fallbackKey, [
+      ...languages,
+    ]);
+    if (fallbackKeyFallbackLanguageLocalization) return fallbackKeyFallbackLanguageLocalization;
+  }
+
+  return undefined;
 }
 
 class LocalizationDataProviderEngine
@@ -201,9 +233,8 @@ class LocalizationDataProviderEngine
 {
   // This method legitimately does not need to call anything else in this class as of now
   // eslint-disable-next-line class-methods-use-this
-  async getLocalizedString({ localizeKey, languagesToSearch = [] }: LocalizationSelector) {
-    const languages =
-      languagesToSearch.length > 0 ? languagesToSearch : await getDefaultLanguages();
+  async getLocalizedString({ localizeKey, locales = [] }: LocalizationSelector) {
+    const languages = locales.length > 0 ? [...locales] : await getDefaultLanguages();
 
     // English is always a backup
     addLanguageIfNotThere(languages, 'en', false);
@@ -211,39 +242,21 @@ class LocalizationDataProviderEngine
     const initialLanguageData = await getNextDefinedLanguageData(languages);
     // Note: This should never happen, but if it does then there are no languages with data so just
     // return the localize key so there is some text to display even if we can't find a localization
-    if (initialLanguageData === undefined) return localizeKey;
+    if (initialLanguageData === undefined) {
+      if (shouldThrowIfNotFound())
+        throw new Error(`No data found for any of the provided languages`);
+      return localizeKey;
+    }
 
     const initialLocalizationSearchResult = initialLanguageData[localizeKey];
     if (initialLocalizationSearchResult) return initialLocalizationSearchResult;
 
-    const metadata = await getMetadata(localizeKey);
-    if (metadata !== undefined) {
-      const { fallbackKey } = metadata;
-
-      // check fallback key in current language
-      const fallbackLocalizationInCurrentLanguage = initialLanguageData[fallbackKey];
-      if (fallbackLocalizationInCurrentLanguage) return fallbackLocalizationInCurrentLanguage;
-    }
-
-    // If the fallback key can't be found in the current language, check the localize key in the other
-    // fallback languages
-    const currentKeyLanguages = languages; // Make a duplicate as array will get changed during search
-    const currentKeyFallbackLanguageLocalization = await findFirstLocalization(
+    const fallbackLocalization = await findLocalizationForFallbackLanguageAndOrKey(
       localizeKey,
-      currentKeyLanguages,
+      languages,
+      initialLanguageData,
     );
-    if (currentKeyFallbackLanguageLocalization) return currentKeyFallbackLanguageLocalization;
-
-    // If the localize key can't be found in any language, look for a fallback key and look for that
-    // key in the fallback languages if it exists
-    if (metadata !== undefined) {
-      const { fallbackKey } = metadata;
-      const fallbackKeyFallbackLanguageLocalization = await findFirstLocalization(
-        fallbackKey,
-        languages,
-      );
-      if (fallbackKeyFallbackLanguageLocalization) return fallbackKeyFallbackLanguageLocalization;
-    }
+    if (fallbackLocalization) return fallbackLocalization;
 
     if (shouldThrowIfNotFound())
       throw new Error(
@@ -252,11 +265,9 @@ class LocalizationDataProviderEngine
     return localizeKey;
   }
 
-  async getLocalizedStrings({ localizeKeys, languagesToSearch = [] }: LocalizationSelectors) {
+  async getLocalizedStrings({ localizeKeys, locales = [] }: LocalizationSelectors) {
     const languages =
-      languagesToSearch.length > 0
-        ? languagesToSearch
-        : await settingsService.get('platform.interfaceLanguage');
+      locales.length > 0 ? locales : await settingsService.get('platform.interfaceLanguage');
 
     // This will remove languages with no data from languages so that work only needs to be done once
     // rather than doing it for every key.
@@ -272,7 +283,7 @@ class LocalizationDataProviderEngine
         const languagesForKey = languages;
         localizations.set(
           key,
-          await this.getLocalizedString({ localizeKey: key, languagesToSearch: languagesForKey }),
+          await this.getLocalizedString({ localizeKey: key, locales: languagesForKey }),
         );
       }),
     );

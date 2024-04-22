@@ -69,7 +69,7 @@ test('Correct localized value returned to match single localizeKey', async () =>
   const LOCALIZE_KEY: string = 'submitButton';
   const response = await localizationDataProviderEngine.getLocalizedString({
     localizeKey: LOCALIZE_KEY,
-    languagesToSearch: ['fr'],
+    locales: ['fr'],
   });
   expect(response).toEqual('Soumettre');
 });
@@ -78,7 +78,7 @@ test('Correct localized values returned to match array of localizeKeys', async (
   const LOCALIZE_KEYS: string[] = ['submitButton', 'some_localization_key'];
   const response = await localizationDataProviderEngine.getLocalizedStrings({
     localizeKeys: LOCALIZE_KEYS,
-    languagesToSearch: ['fr'],
+    locales: ['fr'],
   });
   expect(response).toEqual({
     submitButton: 'Soumettre',
@@ -91,7 +91,7 @@ test('Error returned with localizeKey that does not exist', async () => {
   await expect(
     localizationDataProviderEngine.getLocalizedString({
       localizeKey: LOCALIZE_KEY,
-      languagesToSearch: ['fr'],
+      locales: ['fr'],
     }),
   ).rejects.toThrow(
     'No localizations found for key or fallback key in any of the given languages for localize key: the_wrong_key',
@@ -103,7 +103,7 @@ test('Error returned with localizeKeys that do not exist', async () => {
   await expect(
     localizationDataProviderEngine.getLocalizedStrings({
       localizeKeys: LOCALIZE_KEYS,
-      languagesToSearch: ['fr'],
+      locales: ['fr'],
     }),
   ).rejects.toThrow(
     'No localizations found for key or fallback key in any of the given languages for localize key: the_wrong_key',
@@ -115,7 +115,7 @@ test('Error returned with localizeKeys where one exists but the other does not',
   await expect(
     localizationDataProviderEngine.getLocalizedStrings({
       localizeKeys: LOCALIZE_KEYS,
-      languagesToSearch: ['fr'],
+      locales: ['fr'],
     }),
   ).rejects.toThrow(
     'No localizations found for key or fallback key in any of the given languages for localize key: the_wrong_key',
@@ -127,10 +127,10 @@ test('Error returned with localizeKey and incorrectly formatted language code', 
   await expect(
     localizationDataProviderEngine.getLocalizedString({
       localizeKey: LOCALIZE_KEY,
-      languagesToSearch: ['IncorrectlyFormattedLanguage'],
+      locales: ['IncorrectlyFormattedLang001'],
     }),
   ).rejects.toThrow(
-    'Localization service - No match for language code IncorrectlyFormattedLanguage',
+    'Localization service - No match for language code IncorrectlyFormattedLang001',
   );
 });
 
@@ -139,10 +139,10 @@ test('Error returned with localizeKeys and incorrect language code', async () =>
   await expect(
     localizationDataProviderEngine.getLocalizedStrings({
       localizeKeys: LOCALIZE_KEYS,
-      languagesToSearch: ['Incorrect locale information provided'],
+      locales: ['Incorrect locale information provided001'],
     }),
   ).rejects.toThrow(
-    'Localization service - No match for language code Incorrect locale information provided',
+    'Localization service - No match for language code Incorrect locale information provided001',
   );
 });
 
@@ -170,7 +170,7 @@ test('Good key and missing but valid language code return default English', asyn
   globalThis.isPackaged = true;
   const response = await localizationDataProviderEngine.getLocalizedString({
     localizeKey: LOCALIZE_KEY,
-    languagesToSearch: ['qya-Latn'],
+    locales: ['qya-Latn'],
   });
   expect(response).toEqual('Submit');
 });
@@ -179,7 +179,7 @@ test('Good keys and missing but valid language code return default English', asy
   const LOCALIZE_KEYS = ['submitButton', 'some_localization_key'];
   const response = await localizationDataProviderEngine.getLocalizedStrings({
     localizeKeys: LOCALIZE_KEYS,
-    languagesToSearch: ['qya-Latn'],
+    locales: ['qya-Latn'],
   });
   expect(response).toEqual({
     some_localization_key: 'This is the English text for %some_localization_key%.',

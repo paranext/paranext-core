@@ -51,6 +51,8 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
+// const localizedGenesis = localizationDataService.
+
 // Test fetching
 papi
   .fetch('https://www.example.com', { mode: 'no-cors' })
@@ -195,6 +197,16 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading Verse',
   );
 
+  const [localizedString] = usePromise(
+    useCallback(() => {
+      return papi.localization.getLocalizedString({
+        localizeKey: 'submitButton',
+        locales: ['fr', 'en'],
+      });
+    }, []),
+    'defaultValue',
+  );
+
   return (
     <div>
       <div className="title">
@@ -292,6 +304,10 @@ globalThis.webViewComponent = function HelloWorld({
           rowHeight={60}
           headerRowHeight={50}
         />
+      </div>
+      <div>
+        <h3>French localization of Submit Button:</h3>
+        <div>{localizedString}</div>
       </div>
     </div>
   );

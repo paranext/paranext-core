@@ -1494,7 +1494,7 @@ declare module 'shared/services/network-object.service' {
    */
   const get: <T extends object>(
     id: string,
-    createLocalObjectToProxy?: LocalObjectToProxyCreator<T> | undefined,
+    createLocalObjectToProxy?: LocalObjectToProxyCreator<T>,
   ) => Promise<NetworkObject<T> | undefined>;
   /**
    * Set up an object to be shared on the network.
@@ -4952,11 +4952,11 @@ declare module 'shared/services/localization.service-model' {
   };
   export type LocalizationSelector = {
     localizeKey: string;
-    languagesToSearch?: string[];
+    locales?: string[];
   };
   export type LocalizationSelectors = {
     localizeKeys: string[];
-    languagesToSearch?: string[];
+    locales?: string[];
   };
   /**
    *
@@ -4995,22 +4995,19 @@ declare module 'shared/services/localization.service-model' {
     /**
      * Look up localized string for specific localizeKey
      *
-     * @param localizeKey String key that corresponds to a localized value
-     * @param language ISO 639-2 code for the language, defaults to 'eng' if unspecified
+     * @param selector Made up of a string key that corresponds to a localized value and an array of
+     *   BCP 47 language codes
      * @returns Localized string
      */
-    getLocalizedString: (localizeKey: string, languagesToSearch?: string[]) => Promise<string>;
+    getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
     /**
      * Look up localized strings for all localizeKeys provided
      *
-     * @param localizeKeys Array of localize keys that correspond to localized values
-     * @param language ISO 639-2 code for the language, defaults to 'eng' if unspecified
+     * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
+     *   string key that corresponds to a localized value and an array of BCP 47 language codes
      * @returns Object whose keys are localizeKeys and values are localized strings
      */
-    getLocalizedStrings: (
-      localizeKeys: string[],
-      languagesToSearch?: string[],
-    ) => Promise<{
+    getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<{
       [localizeKey: string]: string;
     }>;
     /**
