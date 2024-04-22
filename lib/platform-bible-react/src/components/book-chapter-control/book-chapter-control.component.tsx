@@ -12,7 +12,7 @@ import {
 import BookChapterInput from '@/components/book-chapter-control/book-chapter-input.component';
 import ChapterSelect from '@/components/book-chapter-control/chapter-select.component';
 import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-menu-item.component';
-import GoToMenuItem from './goTo-menu-item.component';
+import GoToMenuItem from './go-to-menu-item.component';
 
 type BookTypeLabels = {
   [bookType in BookType]: string;
@@ -20,6 +20,23 @@ type BookTypeLabels = {
 type BookChapterControlProps = {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
+};
+
+const { allBookIds } = Canon;
+
+const fetchGroupedBooks = (bookType: BookType) => {
+  const groupedBooks = {
+    OT: allBookIds.filter((bookId) => Canon.isBookOT(bookId)),
+    NT: allBookIds.filter((bookId) => Canon.isBookNT(bookId)),
+    DC: allBookIds.filter((bookId) => Canon.isBookDC(bookId)),
+  };
+  return groupedBooks[bookType];
+};
+
+const fetchEndChapter = (bookId: string) => {
+  // getChaptersForBook returns -1 if not found in scrBookData
+  // scrBookData only includes OT and NT, so all DC will return -1
+  return getChaptersForBook(Canon.bookIdToNumber(bookId));
 };
 
 const BOOK_TYPE_LABELS: BookTypeLabels = {
@@ -33,8 +50,6 @@ const BOOK_TYPE_ARRAY: BookType[] = ['OT', 'NT', 'DC'];
 const SCROLL_OFFSET = 32 + 32 + 32;
 
 function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
-  const { allBookIds } = Canon;
-
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>(
     Canon.bookNumberToId(scrRef.bookNum),
@@ -52,18 +67,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menuItemRef = useRef<HTMLDivElement>(undefined!);
 
-  const fetchGroupedBooks = useCallback(
-    (bookType: BookType) => {
-      const groupedBooks = {
-        OT: allBookIds.filter((bookId) => Canon.isBookOT(bookId)),
-        NT: allBookIds.filter((bookId) => Canon.isBookNT(bookId)),
-        DC: allBookIds.filter((bookId) => Canon.isBookDC(bookId)),
-      };
-      return groupedBooks[bookType];
-    },
-    [allBookIds],
-  );
-
   const fetchFilteredBooks = useCallback(
     (bookType: BookType) => {
       return fetchGroupedBooks(bookType).filter(
@@ -72,18 +75,12 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           bookId.toLowerCase().includes(searchQuery.toLowerCase()),
       );
     },
-    [fetchGroupedBooks, searchQuery],
+    [searchQuery],
   );
 
   const handleSearchInput = (searchString: string) => {
     setSearchQuery(searchString);
   };
-
-  const fetchEndChapter = useCallback((bookId: string) => {
-    // getChaptersForBook returns -1 if not found in scrBookData
-    // scrBookData only includes OT and NT, so all DC will return -1
-    return getChaptersForBook(Canon.bookIdToNumber(bookId));
-  }, []);
 
   const handleSelectBook = (bookId: string) => {
     setHighlightedChapter(Canon.bookNumberToId(scrRef.bookNum) !== bookId ? 1 : scrRef.chapterNum);
@@ -150,7 +147,8 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   );
 
   const handleKeyDownContent = (event: KeyboardEvent<HTMLInputElement>) => {
-    console.log('content key down processed');
+    // When the dropdown menu has focus, key strokes should give focus to the input component,
+    // unless they're navigation keys (arrows and enter)
     const { key } = event;
     if (
       key === 'ArrowRight' ||
@@ -232,7 +230,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   return (
     <div>
       <ShadDropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
-        {/* Trigger sets input type as button */}
         <ShadDropdownMenuTrigger asChild>
           <BookChapterInput
             ref={inputRef}
@@ -273,7 +270,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                         handleSelectBook={() => handleSelectBook(bookId)}
                         isSelected={selectedBookId === bookId}
                         handleHighlightBook={() => setHighlightedBookId(bookId)}
-                        // isHighlighted={highlightedBookId === bookId}
                         handleKeyDown={handleKeyDownMenuItem}
                         bookType={bookType}
                         ref={menuItemRef}
