@@ -6,16 +6,9 @@
 <li><input disabled="" type="checkbox"> Decide if this package will be public, if not it will probably need an NPM organization setup to publish it to privately.</li>
 <li><input disabled="" type="checkbox"> What NPM user login will we use to publish it (each developer or an app-wide user)?</li>
 </ul>
-<a id="md:building" class="tsd-anchor"></a><h3><a href="#md:building">Building</a></h3><a id="md:setting-up" class="tsd-anchor"></a><h4><a href="#md:setting-up">Setting up</a></h4><p>To set up the dev environment to build, you must do a couple of things <strong>in order</strong>:</p>
-<ol>
-<li><code>npm i</code> (here)</li>
-<li><code>npm i --ignore-scripts</code> (in <code>paranext-core</code> root)</li>
-</ol>
-<p>Note: <code>--ignore-scripts</code> is only to prevent unnecessary work. You can leave it out if you want.</p>
-<p>Note: any time you run any <code>npm</code> commands related to installing or uninstalling packages, you must
-run <code>npm i --ignore-scripts</code> in <code>paranext-core</code> root again in order to run commands in here
-successfully. This used to be run automatically, but linux developers were experiencing significant
-issues with it.</p>
+<a id="md:building" class="tsd-anchor"></a><h3><a href="#md:building">Building</a></h3><a id="md:setting-up" class="tsd-anchor"></a><h4><a href="#md:setting-up">Setting up</a></h4><p>To set up the dev environment to build, you must run the following:</p>
+<pre><code class="language-bash"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">i</span>
+</code><button>Copy</button></pre>
 <a id="md:building-platform-bible-utils" class="tsd-anchor"></a><h4><a href="#md:building-platform-bible-utils">Building <code>platform-bible-utils</code></a></h4><p>Once you have set up your environment, you can run the build command in this folder to build <code>platform-bible-utils</code>:</p>
 <pre><code class="language-bash"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">build</span>
 </code><button>Copy</button></pre>
