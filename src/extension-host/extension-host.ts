@@ -2,12 +2,8 @@ import '@extension-host/global-this.model';
 import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
 import * as extensionService from '@extension-host/services/extension.service';
-import { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import logger from '@shared/services/logger.service';
-import networkObjectService from '@shared/services/network-object.service';
-import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
-import { getErrorMessage, substring } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { startProjectLookupService } from '@extension-host/services/project-lookup.service-host';
 import { registerCommand } from '@shared/services/command.service';
@@ -78,9 +74,9 @@ networkService
 
 // #endregion
 
-// #region network object test
+/* // #region network object test
 
-(async () => {
+ (async () => {
   const testEH = await networkObjectService.set('testExtensionHost', {
     getVerse: async () => {
       try {
@@ -140,4 +136,4 @@ setTimeout(async () => {
   setTimeout(realDP.dispose, 3000);
 })();
 
-// #endregion
+// #endregion */

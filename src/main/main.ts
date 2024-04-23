@@ -17,14 +17,10 @@ import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
 import { resolveHtmlPath } from '@node/utils/util';
 import extensionHostService from '@main/services/extension-host.service';
-import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
-import { wait, serialize } from 'platform-bible-utils';
+import { wait } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
-import { get } from '@shared/services/project-data-provider.service';
-import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startLocalizationService } from '@main/services/localization.service-host';
 
@@ -284,7 +280,7 @@ async function main() {
 
   // #endregion
 
-  // #region Test network objects
+  /* // #region Test network objects
 
   const testMain = {
     doStuff: (stuff: string) => {
@@ -348,7 +344,7 @@ async function main() {
       'This is the data from extension foo',
     );
   }, 20000);
-  // #endregion
+  // #endregion */
 }
 
 async function restartExtensionHost() {

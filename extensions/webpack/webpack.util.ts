@@ -5,6 +5,8 @@ import fs from 'fs';
 import { Pattern } from 'copy-webpack-plugin';
 import { LIBRARY_TYPE } from './webpack.config.base';
 
+const FORBIDDEN_EXTENSIONS = ['evil', 'hello-someone', 'hello-world', 'quick-verse'];
+
 // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.util.ts
 
 /**
@@ -336,7 +338,8 @@ export async function getExtensions(): Promise<ExtensionInfo[]> {
     })
   )
     .filter((dirEntry) => dirEntry.isDirectory())
-    .map((dirEntry) => dirEntry.name);
+    .map((dirEntry) => dirEntry.name)
+    .filter((dirName) => !FORBIDDEN_EXTENSIONS.some((extName) => extName === dirName));
 
   // Return extension info for each extension folder
   // We're filtering out the `undefined` entries, so assert that there is no `undefined`
