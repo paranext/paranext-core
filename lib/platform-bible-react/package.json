@@ -88,6 +88,7 @@
     "stylelint-config-tailwindcss": "^0.0.7",
     "tailwindcss": "^3.4.3",
     "tailwindcss-scoped-preflight": "^2.1.0",
+    "ts-jest": "^29.1.2",
     "tslib": "^2.6.2",
     "typescript": "^5.3.3",
     "vite": "^4.5.3",
@@ -95,12 +96,5 @@
   },
   "volta": {
     "extends": "../../package.json"
-  },
-  "jest": {
-    "testEnvironment": "jsdom",
-    "moduleNameMapper": {
-      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "identity-obj-proxy",
-      "\\.(css|less)$": "identity-obj-proxy"
-    }
   }
 }
