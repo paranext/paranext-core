@@ -26,12 +26,9 @@ function ChapterSelect({
   const handleMouse = useCallback(
     (chapterNumber: number) => {
       handleHighlightedChapter(chapterNumber);
-      console.log('new highlighted chapter: ', chapterNumber);
     },
     [handleHighlightedChapter],
   );
-
-  console.log('Chapter select re-rendered. isHighlighted value: ', isHighlighted);
 
   return (
     <div
