@@ -15,9 +15,17 @@ import {
   WEBVIEW_IFRAME_SRCDOC_SANDBOX,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
-import { serialize } from 'platform-bible-utils';
+import { ScriptureReference, serialize } from 'platform-bible-utils';
+import { useSetting } from '@renderer/hooks/papi-hooks';
+import { RefSelector } from 'platform-bible-react';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
+
+const defaultScrRef: ScriptureReference = {
+  bookNum: 1,
+  chapterNum: 1,
+  verseNum: 1,
+};
 
 export function getTitle({ webViewType, title, contentType }: Partial<WebViewTabProps>): string {
   return title || `${webViewType || contentType} Web View`;
@@ -35,6 +43,8 @@ export default function WebView({
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const iframeRef = useRef<HTMLIFrameElement>(undefined!);
 
+  const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
+
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
   const shouldUseSrc = contentType === WebViewContentType.URL;
 
@@ -45,33 +55,38 @@ export default function WebView({
   // when it gets removed (if that does leak memory).
 
   return (
-    <iframe
-      ref={iframeRef}
-      title={getTitle({ webViewType, title, contentType })}
-      /**
-       * Sandbox attribute for the webview - controls what resources scripts and other things can
-       * access. See `ALLOWED_IFRAME_SRC_SANDBOX_VALUES` in `web-view.service.ts` for more info.
-       *
-       * Note that this does NOT change after the iframe is first added to the dom. We are relying
-       * on the `MutationObserver` in `web-view.service.ts` to catch if an extension tries to change
-       * its WebViewContentType and src/srcdoc to some combination that is forbidden (unless
-       * changing src or srcdoc re-adds the iframe to the dom, in which case it is fine)
-       *
-       * TODO: test this sometime to see what happens
-       *
-       * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
-       */
-      sandbox={`${shouldUseSrc ? WEBVIEW_IFRAME_SRC_SANDBOX : WEBVIEW_IFRAME_SRCDOC_SANDBOX}${
-        allowSameOrigin ? ` ${IFRAME_SANDBOX_ALLOW_SAME_ORIGIN}` : ''
-      }${allowScripts ? ` ${IFRAME_SANDBOX_ALLOW_SCRIPTS}` : ''}`}
-      // TODO: csp?
-      // TODO: credentialless?
-      // TODO: referrerpolicy?
-      src={shouldUseSrc ? content : undefined}
-      srcDoc={shouldUseSrc ? undefined : content}
-      // Allow WebViews to go fullscreen because why not (fullscreen YouTube video of Psalms LBL)
-      allow="fullscreen;"
-    />
+    <div className="web-view-panel">
+      <div className="web-view-toolbar">
+        <RefSelector handleSubmit={setScrRef} scrRef={scrRef} />
+      </div>
+      <iframe
+        ref={iframeRef}
+        title={getTitle({ webViewType, title, contentType })}
+        /**
+         * Sandbox attribute for the webview - controls what resources scripts and other things can
+         * access. See `ALLOWED_IFRAME_SRC_SANDBOX_VALUES` in `web-view.service.ts` for more info.
+         *
+         * Note that this does NOT change after the iframe is first added to the dom. We are relying
+         * on the `MutationObserver` in `web-view.service.ts` to catch if an extension tries to
+         * change its WebViewContentType and src/srcdoc to some combination that is forbidden
+         * (unless changing src or srcdoc re-adds the iframe to the dom, in which case it is fine)
+         *
+         * TODO: test this sometime to see what happens
+         *
+         * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+         */
+        sandbox={`${shouldUseSrc ? WEBVIEW_IFRAME_SRC_SANDBOX : WEBVIEW_IFRAME_SRCDOC_SANDBOX}${
+          allowSameOrigin ? ` ${IFRAME_SANDBOX_ALLOW_SAME_ORIGIN}` : ''
+        }${allowScripts ? ` ${IFRAME_SANDBOX_ALLOW_SCRIPTS}` : ''}`}
+        // TODO: csp?
+        // TODO: credentialless?
+        // TODO: referrerpolicy?
+        src={shouldUseSrc ? content : undefined}
+        srcDoc={shouldUseSrc ? undefined : content}
+        // Allow WebViews to go fullscreen because why not (fullscreen YouTube video of Psalms LBL)
+        allow="fullscreen;"
+      />
+    </div>
   );
 }
 
