@@ -112,8 +112,7 @@ export const offsetVerse = (scrRef: ScriptureReference, offset: number): Scriptu
  * @param bookNumber
  * @param localizationLanguage in BCP 47 format
  * @param getLocalizedString function that provides the localized versions of the book ids and names
- * asynchronously. Sometimes provided a utility function in platform-bible-utils so it needs to
- * avoid accessing the papi directly
+ * asynchronously.
  * @returns
  */
 export async function getLocalizedIdFromBookNumber(

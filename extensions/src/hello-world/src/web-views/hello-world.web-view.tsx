@@ -51,8 +51,6 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-// const localizedGenesis = localizationDataService.
-
 // Test fetching
 papi
   .fetch('https://www.example.com', { mode: 'no-cors' })
