@@ -6,13 +6,17 @@ export type BookChapterInputProps = {
   handleSearch: (searchString: string) => void;
   handleKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   handleOnClick: () => void;
+  handleSubmit: () => void;
   value: string;
   placeholder: string;
 };
 
 // Shadcn Input sets type to "button"- HAVE to prop spread before setting type
 const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
-  ({ handleSearch, handleKeyDown, handleOnClick, ...props }: BookChapterInputProps, ref) => {
+  (
+    { handleSearch, handleKeyDown, handleOnClick, handleSubmit, ...props }: BookChapterInputProps,
+    ref,
+  ) => {
     return (
       <div className="pr-relative">
         <ShadInput
@@ -20,7 +24,12 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
           type="text"
           className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none"
           onChange={(event) => handleSearch(event.target.value)}
-          onKeyDown={handleKeyDown}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleSubmit();
+            }
+            handleKeyDown(e);
+          }}
           onClick={handleOnClick}
           ref={ref}
         />
