@@ -6,12 +6,7 @@
 import { LocalizeKey } from 'menus.model';
 import { removeJsonToTypeScriptTypesStuff } from './settings.model';
 
-/**
- * Localized string value associated with this key
- *
- * This interface was referenced by `LanguageStrings`'s JSON-Schema definition via the
- * `patternProperty` "^%[\w-.]+%$".
- */
+/** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 
 /** The data an extension provides to inform Platform.Bible of the localized strings it provides. */
@@ -27,14 +22,9 @@ export interface LocalizedStringDataContribution {
  * information about the localized string key
  */
 export interface StringsMetadata {
-  [k: string]: StringMetadata;
+  [k: LocalizeKey]: StringMetadata;
 }
-/**
- * Additional non-locale-specific information about a localized string key
- *
- * This interface was referenced by `StringsMetadata`'s JSON-Schema definition via the
- * `patternProperty` "^%[\w-.]+%$".
- */
+/** Additional non-locale-specific information about a localized string key */
 export interface StringMetadata {
   [k: string]: unknown;
   /**
@@ -54,7 +44,7 @@ export interface StringMetadata {
  * localize strings for the localized string key
  */
 export interface LanguageStrings {
-  [k: string]: LocalizedStringValue;
+  [k: LocalizeKey]: LocalizedStringValue;
 }
 
 //----------------------------------------------------------------------------------------------
