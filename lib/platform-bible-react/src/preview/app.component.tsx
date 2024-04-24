@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './app.component.css';
 import { ScriptureReference } from 'platform-bible-utils';
-import { RefSelector } from '..';
+import { BookChapterControl, RefSelector } from '..';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -21,6 +21,9 @@ function App() {
       </p>
       <p>
         <RefSelector scrRef={scrRef} handleSubmit={setScrRef} />
+      </p>
+      <p>
+        <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
       </p>
     </>
   );

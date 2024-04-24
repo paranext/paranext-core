@@ -27,7 +27,7 @@ const BOOK_TYPE_LABELS: BookTypeLabels = {
   NT: 'New Testament',
   DC: 'Deuterocanon',
 };
-const BOOK_TYPE_ARRAY: BookType[] = ['OT', 'NT', 'DC'];
+const BOOK_TYPE_ARRAY: BookType[] = ['OT', 'NT'];
 // This is the height of three menu items to offset scrolling to the selected menu item
 // If you use menuItemRef.clientHeight- includes height of chapter div which is too big
 const SCROLL_OFFSET = 32 + 32 + 32;
@@ -367,9 +367,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                     </div>
                   ))}
                   {/* We know this is right because the order of bookTypes will not change */}
-                  {bookType === 'OT' || bookType === 'NT' ? (
-                    <ShadDropdownMenuSeparator />
-                  ) : undefined}
+                  {bookType === 'OT' ? <ShadDropdownMenuSeparator /> : undefined}
                 </div>
               ),
           )}
