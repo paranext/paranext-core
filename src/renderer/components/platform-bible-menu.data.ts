@@ -1,8 +1,7 @@
 import menuDataService from '@shared/services/menu-data.service';
-import { LocalizedMenus } from '@shared/utils/menu-document-combiner';
-import { Localized, MultiColumnMenu } from 'platform-bible-utils';
+import { Localized, MultiColumnMenu, PlatformMenus } from 'platform-bible-utils';
 
-type LocalizedMainMenu = LocalizedMenus['mainMenu'];
+type LocalizedMainMenu = Localized<PlatformMenus['mainMenu']>;
 
 const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
   columns: {

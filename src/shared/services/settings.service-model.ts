@@ -1,10 +1,15 @@
+import * as networkService from '@shared/services/network.service';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
+import { serializeRequestType } from '@shared/utils/util';
+import IDataProvider from '@shared/models/data-provider.interface';
 import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
-  IDataProvider,
-} from './papi-core.service';
+} from '@shared/models/data-provider.model';
+
+/** Name prefix for registered commands that call settings validators */
+export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
 
 /** JSDOC DESTINATION settingsServiceDataProviderName */
 export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
@@ -16,6 +21,25 @@ export const settingsServiceObjectToProxy = Object.freeze({
    * name to find the data provider when accessing it using the useData hook
    */
   dataProviderName: settingsServiceDataProviderName,
+
+  /**
+   * JSDOC SOURCE settingsServiceRegisterValidator
+   *
+   * Registers a function that validates whether a new setting value is allowed to be set.
+   *
+   * @param key The string id of the setting to validate
+   * @param validator Function to call to validate the new setting value
+   * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+   */
+  registerValidator: async <SettingName extends SettingNames>(
+    key: SettingName,
+    validator: SettingValidator<SettingName>,
+  ): Promise<UnsubscriberAsync> => {
+    return networkService.registerRequestHandler(
+      serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key),
+      validator,
+    );
+  },
 });
 /**
  * SettingDataTypes handles getting and setting Platform.Bible core application and extension
@@ -38,6 +62,18 @@ export type SettingDataTypes = {};
 
 export type AllSettingsData = {
   [SettingName in SettingNames]: SettingTypes[SettingName];
+};
+
+/** Function that validates whether a new setting value should be allowed to be set */
+export type SettingValidator<SettingName extends SettingNames> = (
+  newValue: SettingTypes[SettingName],
+  currentValue: SettingTypes[SettingName],
+  allChanges: Partial<SettingTypes>,
+) => Promise<boolean>;
+
+/** Validators for all settings. Keys are setting keys, values are functions to validate new settings */
+export type AllSettingsValidators = {
+  [SettingName in SettingNames]: SettingValidator<SettingName>;
 };
 
 declare module 'papi-shared-types' {
@@ -93,6 +129,12 @@ export type ISettingsService = {
     key: SettingName,
     callback: (newSetting: SettingTypes[SettingName]) => void,
     options?: DataProviderSubscriberOptions,
+  ): Promise<UnsubscriberAsync>;
+
+  /** JSDOC DESTINATION settingsServiceRegisterValidator */
+  registerValidator<SettingName extends SettingNames>(
+    key: SettingName,
+    validator: SettingValidator<SettingName>,
   ): Promise<UnsubscriberAsync>;
 } & OnDidDispose &
   IDataProvider<SettingDataTypes> &

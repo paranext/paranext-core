@@ -7,5 +7,5 @@ echo "Running Lint check..."
 npm run lint:staged
 echo "Lint check finished"
 
-echo "If the following fails run `npm run editor:unlink`"
+echo "If the following fails run npm run editor:unlink"
 npx yalc check

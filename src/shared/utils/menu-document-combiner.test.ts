@@ -633,6 +633,40 @@ test('Web view menu defaults are combined', () => {
       },
     },
   });
+  menuCombiner.addOrUpdateContribution('testWebView2', {
+    webViewMenus: {
+      'testWebView2.testWebView2': {
+        includeDefaults: true,
+        topMenu: {
+          columns: {
+            'testWebView2.topColumn': { label: '%video%', order: 2 },
+          },
+          groups: {
+            'testWebView2.topGroup': { column: 'testWebView2.topColumn', order: 1 },
+          },
+          items: [
+            {
+              label: '%testWebView2Item%',
+              group: 'testWebView2.topGroup',
+              order: 1,
+              command: 'platform.whatever',
+            },
+          ],
+        },
+        contextMenu: {
+          groups: {},
+          items: [
+            {
+              label: '%testWebView2Item%',
+              group: 'platform.contextGroup',
+              order: 2,
+              command: 'platform.whatever',
+            },
+          ],
+        },
+      },
+    },
+  });
   const expectedWebViewOutput = {
     mainMenu: {
       columns: {},
@@ -700,6 +734,50 @@ test('Web view menu defaults are combined', () => {
           items: [
             {
               label: '%testWebViewItem%',
+              group: 'platform.contextGroup',
+              order: 2,
+              command: 'platform.whatever',
+            },
+            {
+              label: '%test%',
+              group: 'platform.contextGroup',
+              order: 1,
+              command: 'platform.test',
+            },
+          ],
+        },
+      },
+      'testWebView2.testWebView2': {
+        includeDefaults: true,
+        topMenu: {
+          columns: {
+            'platform.topColumn': { label: '%test%', order: 1 },
+            'testWebView2.topColumn': { label: '%video%', order: 2 },
+          },
+          groups: {
+            'platform.topGroup': { column: 'platform.topColumn', order: 1 },
+            'testWebView2.topGroup': { column: 'testWebView2.topColumn', order: 1 },
+          },
+          items: [
+            {
+              label: '%testWebView2Item%',
+              group: 'testWebView2.topGroup',
+              order: 1,
+              command: 'platform.whatever',
+            },
+            {
+              label: '%test%',
+              group: 'platform.topGroup',
+              order: 1,
+              command: 'platform.test',
+            },
+          ],
+        },
+        contextMenu: {
+          groups: { 'platform.contextGroup': { order: 1, isExtensible: true } },
+          items: [
+            {
+              label: '%testWebView2Item%',
               group: 'platform.contextGroup',
               order: 2,
               command: 'platform.whatever',

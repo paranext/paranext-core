@@ -189,6 +189,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     openHelloWorldProjectWebView,
   );
 
+  const helloWorldPersonNamePromise = papi.settings.registerValidator(
+    'hello-world.personName',
+    async (newValue) => typeof newValue === 'string',
+  );
+
   const helloWorldProjectWebViewProviderPromise = papi.webViewProviders.register(
     helloWorldProjectWebViewProvider.webViewType,
     helloWorldProjectWebViewProvider,
@@ -249,6 +254,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await helloWorldPdpefPromise,
     await helloWorldProjectWebViewProviderPromise,
     await openHelloWorldProjectPromise,
+    await helloWorldPersonNamePromise,
     await htmlWebViewProviderPromise,
     await reactWebViewProviderPromise,
     await reactWebView2ProviderPromise,

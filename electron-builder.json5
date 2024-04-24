@@ -15,7 +15,7 @@
     },
     extraResources: [
       {
-        from: './c-sharp/bin/Release/net7.0/publish/osx-${arch}/',
+        from: './c-sharp/bin/Release/net8.0/publish/osx-${arch}/',
         to: './dotnet/',
       },
     ],
@@ -43,7 +43,7 @@
     target: ['nsis', 'nsis-web', 'portable'],
     extraResources: [
       {
-        from: './c-sharp/bin/Release/net7.0/publish/win-x64/',
+        from: './c-sharp/bin/Release/net8.0/publish/win-x64/',
         to: './dotnet/',
       },
     ],
@@ -53,7 +53,7 @@
     category: 'Development',
     extraResources: [
       {
-        from: './c-sharp/bin/Release/net7.0/publish/linux-x64/',
+        from: './c-sharp/bin/Release/net8.0/publish/linux-x64/',
         to: './dotnet/',
       },
     ],

@@ -63,4 +63,9 @@ declare module 'papi-shared-types' {
     /** Placeholder. Implementation TBD */
     helloWorld: IProjectStorageInterpreter;
   }
+
+  export interface SettingTypes {
+    /** Selected Person's Name on Hello World Web View */
+    'hello-world.personName': string;
+  }
 }

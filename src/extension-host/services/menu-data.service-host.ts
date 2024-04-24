@@ -48,7 +48,7 @@ class MenuDataDataProviderEngine
   }
 
   async getMainMenu(): Promise<Localized<MultiColumnMenu>> {
-    if (!this.mainMenu) throw new Error('Missing/invalid menu data');
+    if (!this.mainMenu) throw new Error('Missing/invalid main menu data');
     return this.mainMenu;
   }
 
@@ -60,7 +60,10 @@ class MenuDataDataProviderEngine
 
   async getWebViewMenu(webViewName: ReferencedItem): Promise<Localized<WebViewMenu>> {
     const webViewMenu = this.webViewMenusMap.get(webViewName);
-    if (!webViewMenu) throw new Error('Missing/invalid menu data');
+    if (!webViewMenu) {
+      logger.debug(`Missing/invalid web view menu data for web view ${webViewName}`);
+      return { contextMenu: undefined, includeDefaults: false, topMenu: undefined };
+    }
     return webViewMenu;
   }
 

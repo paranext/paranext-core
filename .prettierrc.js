@@ -7,7 +7,7 @@ module.exports = {
   singleQuote: true,
   // prettier-plugin-jsdoc options
   tsdoc: true,
-  plugins: ['prettier-plugin-jsdoc'],
+  plugins: ['prettier-plugin-jsdoc', 'prettier-plugin-tailwindcss'],
   overrides: [
     {
       files: '*.json',

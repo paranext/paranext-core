@@ -99,10 +99,12 @@ export type ProjectStorageExtensionDataScope = ExtensionDataScope & {
  *   throws. This functionality preserves the intended type of the setting and avoids returning
  *   `undefined` unexpectedly.
  * - `setSetting`: must call `papi.projectSettings.isValid` before setting the value and should return
- *   false if the call returns `false`. This functionality preserves the intended intended type of
- *   the setting and avoids allowing the setting to be set to the wrong type.
+ *   false if the call returns `false` and throw if the call throws. This functionality preserves
+ *   the intended intended type of the setting and avoids allowing the setting to be set to the
+ *   wrong type.
  * - `resetSetting`: deletes the value at the key and sends a setting update event. After this,
- *   `getSetting` should see the setting value as not present and return the default value again.
+ *   `getSetting` should again see the setting value is not present, call
+ *   `papi.projectSettings.getDefault`, and return the default value.
  * - Note: see {@link IProjectStorageInterpreter} for method signatures for these three methods.
  *
  *   .---

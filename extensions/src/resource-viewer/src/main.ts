@@ -58,9 +58,7 @@ const resourceWebViewProvider: IWebViewProvider = {
       undefined;
     return {
       title: projectId
-        ? `Resource Viewer : ${
-            (await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId
-          }`
+        ? (await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId
         : 'Resource Viewer',
       ...savedWebView,
       content: resourceViewerWebView,

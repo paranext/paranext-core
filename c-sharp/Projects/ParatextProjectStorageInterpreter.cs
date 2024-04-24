@@ -15,20 +15,15 @@ namespace Paranext.DataProvider.Projects;
 internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 {
     #region Constants / Member variables
-    public const string BookUSFM = "BookUSFM";
-    public const string ChapterUSFM = "ChapterUSFM";
-    public const string VerseUSFM = "VerseUSFM";
-    public const string ChapterUSX = "ChapterUSX";
-
     // All data types related to Scripture editing. Changes to any portion of Scripture should send
     // out updates to all these data types
-    public static readonly List<string> AllScriptureDataTypes = new List<string>
-    {
-        BookUSFM,
-        ChapterUSFM,
-        VerseUSFM,
-        ChapterUSX
-    };
+    public static readonly List<string> AllScriptureDataTypes =
+    [
+        ProjectDataType.BOOK_USFM,
+        ProjectDataType.CHAPTER_USFM,
+        ProjectDataType.VERSE_USFM,
+        ProjectDataType.CHAPTER_USX
+    ];
 
     private readonly LocalParatextProjects _paratextProjects;
     #endregion
@@ -140,22 +135,25 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
         return scope.DataType switch
         {
-            BookUSFM
+            ProjectDataType.BOOK_USFM
                 => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Succeeded(scrText.GetText(verseRef, false, true))
                     : ResponseToRequest.Failed(error),
-            ChapterUSFM
+            ProjectDataType.CHAPTER_USFM
                 => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Succeeded(scrText.GetText(verseRef, true, true))
                     : ResponseToRequest.Failed(error),
-            VerseUSFM
+            ProjectDataType.VERSE_USFM
                 => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Succeeded(scrText.Parser.GetVerseUsfmText(verseRef))
                     : ResponseToRequest.Failed(error),
-            ChapterUSX
+            ProjectDataType.CHAPTER_USX
                 => string.IsNullOrEmpty(error)
                     ? ResponseToRequest.Succeeded(GetChapterUsx(scrText, verseRef))
                     : ResponseToRequest.Failed(error),
+            ProjectDataType.SETTINGS
+                => ResponseToRequest.Succeeded(scrText.Settings.ParametersDictionary[
+                    ProjectSettings.GetParatextSettingNameFromPlatformBibleSettingName(scope.DataQualifier) ?? scope.DataQualifier]),
             _ => ResponseToRequest.Failed($"Unknown data type: {scope.DataType}")
         };
     }
@@ -184,7 +182,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
 
         switch (scope.DataType)
         {
-            case ChapterUSFM:
+            case ProjectDataType.CHAPTER_USFM:
                 if (!string.IsNullOrEmpty(error))
                     return ResponseToRequest.Failed(error);
                 RunWithinLock(
@@ -200,9 +198,9 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                         );
                     }
                 );
-                // The value of returned strings are case sensitive and cannot change unless data provider subscriptions change
+                // The value of returned strings are case-sensitive and cannot change unless data provider subscriptions change
                 return ResponseToRequest.Succeeded(AllScriptureDataTypes);
-            case ChapterUSX:
+            case ProjectDataType.CHAPTER_USX:
                 if (!string.IsNullOrEmpty(error))
                     return ResponseToRequest.Failed(error);
                 ResponseToRequest? response = null;
@@ -211,6 +209,51 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                     writeLock => response = SetChapterUsx(scrText, verseRef, data, writeLock)
                 );
                 return response ?? ResponseToRequest.Failed("Unknown error occurred");
+            case ProjectDataType.SETTINGS:
+                // If there is no Paratext setting for the name given, we'll create one lower down
+                ResponseToRequest? currentValueResponse = ResponseToRequest.Failed("");
+                try
+                {
+                    currentValueResponse = GetProjectData(scope);
+                }
+                catch (KeyNotFoundException) {}
+
+                // Make sure the value we're planning to set is valid
+                var currentValueJson = currentValueResponse.Success
+                    ? JsonConvert.SerializeObject(currentValueResponse.Contents)
+                    : "";
+                if (!ProjectSettingsService.IsValid(
+                        PapiClient,
+                        data,
+                        currentValueJson,
+                        scope.DataQualifier,
+                        "",
+                        ProjectType.Paratext))
+                    return ResponseToRequest.Failed($"Validation failed for {scope.DataQualifier}");
+
+                // Figure out which setting name to use
+                var paratextSettingName =
+                    ProjectSettings.GetParatextSettingNameFromPlatformBibleSettingName(
+                        scope.DataQualifier) ?? scope.DataQualifier;
+
+                // Now actually write the setting
+                string? errorMessage = null;
+                RunWithinLock(
+                    WriteScope.AllSettingsFiles(),
+                    _ => {
+                            try
+                            {
+                                scrText.Settings.SetSetting(paratextSettingName, data);
+                                scrText.Settings.Save();
+                            }
+                            catch (Exception ex)
+                            {
+                                errorMessage = ex.Message;
+                            }
+                        });
+                return (errorMessage != null)
+                    ? ResponseToRequest.Failed(errorMessage)
+                    : ResponseToRequest.Succeeded(ProjectDataType.SETTINGS);
             default:
                 return ResponseToRequest.Failed($"Unknown data type: {scope.DataType}");
         }
@@ -301,7 +344,7 @@ internal class ParatextProjectStorageInterpreter : ProjectStorageInterpreter
                     // ReSharper restore AccessToDisposedClosure
                 }
             );
-            // The value of returned string is case sensitive and cannot change unless data provider subscriptions change
+            // The value of returned string is case-sensitive and cannot change unless data provider subscriptions change
             return ResponseToRequest.Succeeded("ExtensionData");
         }
         catch (Exception e)
