@@ -138,24 +138,24 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const updateReference = useCallback(
     (bookId: string, shouldClose: boolean, chapter?: number, verse?: number) => {
-      if (bookId && (!chapter || fetchEndChapter(bookId) === -1)) {
-        setSelectedBookId(selectedBookId !== bookId ? bookId : '');
-        return;
-      }
-
       setHighlightedChapter(
         Canon.bookNumberToId(scrRef.bookNum) !== bookId ? 1 : scrRef.chapterNum,
       );
+
+      if (shouldClose || fetchEndChapter(bookId) === -1) {
+        handleSubmit({
+          bookNum: Canon.bookIdToNumber(bookId),
+          chapterNum: chapter || 1,
+          verseNum: verse || 1,
+        });
+
+        setIsContentOpen(false);
+        setSearchQuery('');
+        return;
+      }
+
       setSelectedBookId(selectedBookId !== bookId ? bookId : '');
-
-      handleSubmit({
-        bookNum: Canon.bookIdToNumber(bookId),
-        chapterNum: chapter || 1,
-        verseNum: verse || 1,
-      });
-
       setIsContentOpen(!shouldClose);
-      setSearchQuery('');
     },
     [handleSubmit, scrRef.bookNum, scrRef.chapterNum, selectedBookId],
   );
@@ -164,7 +164,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     if (chapterNumber <= 0 || chapterNumber > fetchEndChapter(selectedBookId)) {
       return;
     }
-
     updateReference(selectedBookId, true, chapterNumber);
   };
 
@@ -283,7 +282,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   }, [highlightedBookId, scrRef.bookNum, scrRef.chapterNum, selectedBookId]);
 
   // The purpose of these useLayoutEffects and timeout is to delay the scroll just
-  // enough so that the refs have time to be defined and it makes it through the check on 293
+  // enough so that the refs are defined and available when they are used after the timeout
   useLayoutEffect(() => {
     setIsContentOpenDelayed(isContentOpen);
   }, [isContentOpen]);
@@ -332,7 +331,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             handleBookmarks={() => console.log('bookmarks')}
           />
           {BOOK_TYPE_ARRAY.map(
-            (bookType) =>
+            (bookType, bookTypeIndex) =>
               fetchFilteredBooks(bookType).length > 0 && (
                 <div key={bookType}>
                   <ShadDropdownMenuLabel className="pr-font-semibold pr-text-slate-700">
@@ -348,7 +347,9 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                         handleHighlightBook={() => setHighlightedBookId(bookId)}
                         handleKeyDown={handleKeyDownMenuItem}
                         bookType={bookType}
-                        ref={menuItemRef}
+                        ref={(element: HTMLDivElement) => {
+                          if (selectedBookId === bookId) menuItemRef.current = element;
+                        }}
                       >
                         <ChapterSelect
                           handleSelectChapter={handleSelectChapter}
@@ -366,8 +367,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                       </BookMenuItem>
                     </div>
                   ))}
-                  {/* We know this is right because the order of bookTypes will not change */}
-                  {bookType === 'OT' || bookType === 'NT' ? (
+                  {BOOK_TYPE_ARRAY.length - 1 !== bookTypeIndex ? (
                     <ShadDropdownMenuSeparator />
                   ) : undefined}
                 </div>
