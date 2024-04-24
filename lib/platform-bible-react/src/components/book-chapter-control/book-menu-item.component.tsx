@@ -40,11 +40,9 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
     }: BookMenuItemProps,
     ref,
   ) => {
-    const currentBookRef = isSelected ? ref : undefined;
-
     return (
       <ShadDropdownMenuItem
-        ref={currentBookRef}
+        ref={ref}
         key={bookId}
         textValue={bookId}
         className={cn('pr-font-normal pr-text-slate-700', {

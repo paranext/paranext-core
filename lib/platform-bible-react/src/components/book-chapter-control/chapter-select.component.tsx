@@ -2,14 +2,25 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { useCallback } from 'react';
 
 export type ChapterSelectProps = {
-  // Callback to run when a chapter div is selected
+  /**
+   * Callback to run when a chapter div is selected
+   *
+   * @param chapterNumber Number of the chapter that has been selected
+   */
   handleSelectChapter: (chapterNumber: number) => void;
-  // The end chapter of the selected book
+  /** The highest chapter number in the book (of course equal to number of chapters in the book) */
   endChapter: number;
-  // The currently selected chapter
+  /** The chapter number that is currently selected */
   activeChapter: number;
+  /** Indicates if the chapter selector as a whole is highlighted or not */
   isHighlighted: boolean;
+  /** The chapter number that is currently highlighted using keyboard or mouse navigation */
   highlightedChapter: number;
+  /**
+   * Callback to run when a chapter is highlighted by the user
+   *
+   * @param chapterNumber The chapter that is highlighted
+   */
   handleHighlightedChapter: (chapterNumber: number) => void;
 };
 
@@ -47,10 +58,13 @@ function ChapterSelect({
               'pr-bg-amber-200': chapter === highlightedChapter,
             },
           )}
-          onClick={() => handleSelectChapter(chapter)}
+          onClick={(event) => {
+            event.preventDefault();
+            handleSelectChapter(chapter);
+          }}
           role="button"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
               handleSelectChapter(chapter);
             }
           }}
