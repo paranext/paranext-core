@@ -19,12 +19,10 @@ function App() {
         Edit <code>lib\platform-bible-react\src\preview\app.component.tsx</code> and save to see
         updates
       </p>
-      <p>
-        <RefSelector scrRef={scrRef} handleSubmit={setScrRef} />
-      </p>
-      <p>
+      <RefSelector scrRef={scrRef} handleSubmit={setScrRef} />
+      <div className="bcv-control-div">
         <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
-      </p>
+      </div>
     </>
   );
 }

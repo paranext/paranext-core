@@ -8,7 +8,6 @@ export type ChapterSelectProps = {
   endChapter: number;
   // The currently selected chapter
   activeChapter: number;
-  isHighlighted: boolean;
   highlightedChapter: number;
   handleHighlightedChapter: (chapterNumber: number) => void;
 };
@@ -17,7 +16,6 @@ function ChapterSelect({
   handleSelectChapter,
   endChapter,
   activeChapter,
-  isHighlighted,
   highlightedChapter,
   handleHighlightedChapter,
 }: ChapterSelectProps) {
@@ -31,12 +29,7 @@ function ChapterSelect({
   );
 
   return (
-    <div
-      className={cn('pr-flex pr-flex-wrap pr-items-start pr-justify-start pr-self-stretch', {
-        'pr-bg-amber-50': !isHighlighted,
-        'pr-bg-amber-100': isHighlighted,
-      })}
-    >
+    <div className={cn('pr-flex pr-flex-wrap pr-items-start pr-justify-start pr-self-stretch')}>
       {chapters.map((chapter) => (
         <div
           key={chapter}
