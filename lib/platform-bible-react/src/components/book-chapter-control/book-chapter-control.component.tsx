@@ -138,24 +138,24 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const updateReference = useCallback(
     (bookId: string, shouldClose: boolean, chapter?: number, verse?: number) => {
-      if (bookId && (!chapter || fetchEndChapter(bookId) === -1)) {
-        setSelectedBookId(selectedBookId !== bookId ? bookId : '');
-        return;
-      }
-
+      setSelectedBookId(selectedBookId !== bookId ? bookId : '');
       setHighlightedChapter(
         Canon.bookNumberToId(scrRef.bookNum) !== bookId ? 1 : scrRef.chapterNum,
       );
-      setSelectedBookId(selectedBookId !== bookId ? bookId : '');
 
-      handleSubmit({
-        bookNum: Canon.bookIdToNumber(bookId),
-        chapterNum: chapter || 1,
-        verseNum: verse || 1,
-      });
+      if (shouldClose || fetchEndChapter(bookId) === -1) {
+        handleSubmit({
+          bookNum: Canon.bookIdToNumber(bookId),
+          chapterNum: chapter || 1,
+          verseNum: verse || 1,
+        });
+
+        setIsContentOpen(false);
+        setSearchQuery('');
+        return;
+      }
 
       setIsContentOpen(!shouldClose);
-      setSearchQuery('');
     },
     [handleSubmit, scrRef.bookNum, scrRef.chapterNum, selectedBookId],
   );
@@ -164,7 +164,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     if (chapterNumber <= 0 || chapterNumber > fetchEndChapter(selectedBookId)) {
       return;
     }
-
     updateReference(selectedBookId, true, chapterNumber);
   };
 
@@ -283,7 +282,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   }, [highlightedBookId, scrRef.bookNum, scrRef.chapterNum, selectedBookId]);
 
   // The purpose of these useLayoutEffects and timeout is to delay the scroll just
-  // enough so that the refs have time to be defined and it makes it through the check on 293
+  // enough so that the refs are defined and available when they are used after the timeout
   useLayoutEffect(() => {
     setIsContentOpenDelayed(isContentOpen);
   }, [isContentOpen]);
