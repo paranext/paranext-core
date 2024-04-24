@@ -1,9 +1,9 @@
 import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import GridMenu from './grid-menu.component';
-import { Command } from './menu-item.component';
-import * as jsonMenu from './sample.composed.full.menu.json';
+import GridMenu from '@/components/grid-menu.component';
+import { Command } from '@/components/menu-item.component';
+import * as jsonMenu from '@/components/sample.composed.full.menu.json';
 
 let lastCommandHandled: string;
 let numberOfCommandsHandled: number = 0;

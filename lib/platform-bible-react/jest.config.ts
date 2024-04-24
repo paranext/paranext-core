@@ -2,7 +2,6 @@ import type { Config } from 'jest';
 import { pathsToModuleNameMapper } from 'ts-jest';
 import fs from 'fs';
 import typescript from 'typescript';
-import packageInfo from './package.json';
 
 // Get this tsconfig
 const {
@@ -20,20 +19,11 @@ const config: Config = {
     ...pathsToModuleNameMapper(compilerOptions.paths, {
       prefix: '<rootDir>/src',
     }),
-    '^platform-bible-react$': '<rootDir>/node_modules/platform-bible-react/dist/index.js',
-    '^platform-bible-utils$': '<rootDir>/node_modules/platform-bible-utils/dist/index.js',
   },
-  setupFiles: ['./.erb/scripts/check-build-exists.ts'],
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {
     url: 'http://localhost/',
   },
-  testPathIgnorePatterns: [
-    'release/app/dist',
-    '.erb/dll',
-    /* We are running the tests of all workspaces separately */
-    ...packageInfo.workspaces.map((w) => `<rootDir>/${w}`),
-  ],
   transform: {
     '\\.(ts|tsx|js|jsx)$': 'ts-jest',
   },

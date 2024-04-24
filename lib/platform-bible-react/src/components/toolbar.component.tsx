@@ -1,8 +1,10 @@
 import { useRef, PropsWithChildren } from 'react';
 import { AppBar, Toolbar as MuiToolbar } from '@mui/material';
-import { CommandHandler } from './menu-item.component';
-import HamburgerMenuButton, { MultiColumnMenuProvider } from './hamburger-menu-button.component';
-import './toolbar.component.css';
+import { CommandHandler } from '@/components/menu-item.component';
+import HamburgerMenuButton, {
+  MultiColumnMenuProvider,
+} from '@/components/hamburger-menu-button.component';
+import '@/components/toolbar.component.css';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
