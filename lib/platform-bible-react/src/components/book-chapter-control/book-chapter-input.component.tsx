@@ -1,12 +1,13 @@
-import { forwardRef, KeyboardEvent } from 'react';
+import { FocusEventHandler, forwardRef, KeyboardEvent, MouseEventHandler } from 'react';
 import { History } from 'lucide-react';
 import { Input as ShadInput } from '@/components/shadcn-ui/input';
 
 export type BookChapterInputProps = {
   handleSearch: (searchString: string) => void;
   handleKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
-  handleOnClick: () => void;
+  handleOnClick: MouseEventHandler<HTMLInputElement>;
   handleSubmit: () => void;
+  onFocus?: FocusEventHandler<HTMLInputElement>;
   value: string;
   placeholder: string;
 };
