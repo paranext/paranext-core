@@ -1,6 +1,6 @@
 import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
 import logger from '@shared/services/logger.service';
-import { Toolbar, RefSelector, ScriptureReference, Button } from 'platform-bible-react';
+import { Toolbar, BookChapterControl, ScriptureReference } from 'platform-bible-react';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
@@ -28,7 +28,7 @@ async function getMenuData(isSupportAndDevelopment: boolean): Promise<Localized<
 }
 
 export default function PlatformBibleToolbar() {
-  const [scrRef, setScrRef, resetScrRef] = useSetting('platform.verseRef', defaultScrRef);
+  const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
 
   const handleReferenceChanged = (newScrRef: ScriptureReference) => {
     setScrRef(newScrRef);
@@ -36,14 +36,7 @@ export default function PlatformBibleToolbar() {
 
   return (
     <Toolbar className="toolbar" menuProvider={getMenuData} commandHandler={handleMenuCommand}>
-      <RefSelector handleSubmit={handleReferenceChanged} scrRef={scrRef} />
-      <Button
-        onClick={() => {
-          resetScrRef();
-        }}
-      >
-        Reset
-      </Button>
+      <BookChapterControl scrRef={scrRef} handleSubmit={handleReferenceChanged} />
     </Toolbar>
   );
 }

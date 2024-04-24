@@ -2,8 +2,8 @@ import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-uti
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { PropsWithChildren } from 'react';
-import GridMenu from './grid-menu.component';
-import * as jsonMenu from './sample.composed.full.menu.json';
+import GridMenu from '@/components/grid-menu.component';
+import * as jsonMenu from '@/components/sample.composed.full.menu.json';
 
 jest.mock('@mui/material', () => {
   const mui = jest.requireActual('@mui/material'); // Import the actual MUI components

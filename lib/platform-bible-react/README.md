@@ -17,17 +17,19 @@ TODO:
 
 #### Setting up
 
-To set up the dev environment to build, you must do a couple of things **in order**:
+To set up the dev environment to build, you must run the following:
 
-1. `npm i` (here)
-2. `npm i --ignore-scripts` (in `paranext-core` root)
+```bash
+npm i
+```
 
-Note: `--ignore-scripts` is only to prevent unnecessary work. You can leave it out if you want.
+#### Previewing `platform-bible-react`
 
-Note: any time you run any `npm` commands related to installing or uninstalling packages, you must
-run `npm i --ignore-scripts` in `paranext-core` root again in order to run commands in here
-successfully. This used to be run automatically, but linux developers were experiencing significant
-issues with it.
+Once you have set up your environment, you can run the following command in this folder to preview `platform-bible-react` components (`src\preview\app.component.tsx`):
+
+```bash
+npm start
+```
 
 #### Building `platform-bible-react`
 

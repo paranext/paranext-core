@@ -20,7 +20,9 @@
     "skipLibCheck": false,
     "useDefineForClassFields": true,
     "outDir": "",
-    "paths": {}
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
   "include": ["src"],
   "exclude": ["node_modules"],

@@ -7,7 +7,7 @@ import Tooltip from '@mui/material/Tooltip';
 import ArrowRightIcon from '@mui/icons-material/ArrowRight';
 import { MouseEvent, PropsWithChildren } from 'react';
 import { Localized, ReferencedItem, SingleColumnMenu } from 'platform-bible-utils';
-import './menu-item.component.css';
+import '@/components/menu-item.component.css';
 
 type MenuItemInfoBase = {
   /** Text (displayable in the UI) as the name of the menu item */
