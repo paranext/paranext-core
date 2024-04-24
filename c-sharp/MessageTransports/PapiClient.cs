@@ -18,7 +18,7 @@ internal class PapiClient : IDisposable
     private const int RECEIVE_BUFFER_LENGTH = 2048;
     private const int MAX_OUTGOING_MESSAGES = 10;
     private static readonly Encoding s_utf8WithoutBom = new UTF8Encoding();
-    private static readonly Uri s_connectionUri = new("ws://localhost:8877");
+    private static readonly Uri s_connectionUri = new("ws://localhost:8878");
     private static readonly JsonSerializerOptions s_serializationOptions;
 
     protected readonly Dictionary<string, IMessageHandler> _messageHandlersByMessageType = new();
