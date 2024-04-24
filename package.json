@@ -215,7 +215,7 @@
     "tsconfig-paths": "^4.2.0",
     "tsconfig-paths-webpack-plugin": "^4.1.0",
     "tsx": "^4.7.1",
-    "typedoc": "^0.25.8",
+    "typedoc": "^0.25.13",
     "typescript": "^5.4.5",
     "url-loader": "^4.1.1",
     "webpack": "^5.90.3",
