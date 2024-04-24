@@ -138,11 +138,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const updateReference = useCallback(
     (bookId: string, shouldClose: boolean, chapter?: number, verse?: number) => {
-      if (bookId && !chapter && !verse) {
-        setSelectedBookId(selectedBookId !== bookId ? bookId : '');
-        return;
-      }
-
       setHighlightedChapter(
         Canon.bookNumberToId(scrRef.bookNum) !== bookId ? 1 : scrRef.chapterNum,
       );
@@ -159,6 +154,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         return;
       }
 
+      setSelectedBookId(selectedBookId !== bookId ? bookId : '');
       setIsContentOpen(!shouldClose);
     },
     [handleSubmit, scrRef.bookNum, scrRef.chapterNum, selectedBookId],
