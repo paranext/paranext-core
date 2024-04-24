@@ -1,9 +1,9 @@
 import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ContextMenu from './context-menu.component';
-import { Command } from './menu-item.component';
-import * as jsonMenu from './sample.composed.full.menu.json';
+import ContextMenu from '@/components/context-menu.component';
+import { Command } from '@/components/menu-item.component';
+import * as jsonMenu from '@/components/sample.composed.full.menu.json';
 
 let lastCommandHandled: string;
 

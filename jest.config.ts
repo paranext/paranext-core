@@ -2,6 +2,7 @@ import type { Config } from 'jest';
 import { pathsToModuleNameMapper } from 'ts-jest';
 import fs from 'fs';
 import typescript from 'typescript';
+import packageInfo from './package.json';
 
 // Get this tsconfig
 const {
@@ -27,7 +28,12 @@ const config: Config = {
   testEnvironmentOptions: {
     url: 'http://localhost/',
   },
-  testPathIgnorePatterns: ['release/app/dist', '.erb/dll', 'extensions/dist'],
+  testPathIgnorePatterns: [
+    'release/app/dist',
+    '.erb/dll',
+    /* We are running the tests of all workspaces separately */
+    ...packageInfo.workspaces.map((w) => `<rootDir>/${w}`),
+  ],
   transform: {
     '\\.(ts|tsx|js|jsx)$': 'ts-jest',
   },

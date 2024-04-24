@@ -6,10 +6,10 @@ import {
   MultiColumnMenu,
   ReferencedItem,
 } from 'platform-bible-utils';
-import { CommandHandler } from './menu-item.component';
-import { GroupedMenuPropsBase } from './grouped-menu-item-list.component';
-import TopLevelMenu from './top-level-menu.component';
-import './grid-menu.component.css';
+import { CommandHandler } from '@/components/menu-item.component';
+import { GroupedMenuPropsBase } from '@/components/grouped-menu-item-list.component';
+import TopLevelMenu from '@/components/top-level-menu.component';
+import '@/components/grid-menu.component.css';
 
 type ColumnInfo = {
   /*

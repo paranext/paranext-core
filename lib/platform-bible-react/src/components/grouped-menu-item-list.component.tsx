@@ -9,7 +9,11 @@ import {
   ReferencedItem,
   SingleColumnMenu,
 } from 'platform-bible-utils';
-import MenuItem, { MenuItemListProps, MenuItemProps, MenuPropsBase } from './menu-item.component';
+import MenuItem, {
+  MenuItemListProps,
+  MenuItemProps,
+  MenuPropsBase,
+} from '@/components/menu-item.component';
 
 /**
  * All the exported types in this file should be regarded as "internal" (i.e., they should not be
