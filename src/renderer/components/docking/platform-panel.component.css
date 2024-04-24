@@ -20,4 +20,6 @@
 .web-view-toolbar {
   padding: 5px;
   border-bottom: 1px solid #eee;
+  display: flex;
+  align-items: center;
 }

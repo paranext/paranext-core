@@ -17,7 +17,7 @@ import {
 import logger from '@shared/services/logger.service';
 import { ScriptureReference, serialize } from 'platform-bible-utils';
 import { useSetting } from '@renderer/hooks/papi-hooks';
-import { RefSelector } from 'platform-bible-react';
+import { BookChapterControl } from 'platform-bible-react';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -57,7 +57,7 @@ export default function WebView({
   return (
     <div className="web-view-panel">
       <div className="web-view-toolbar">
-        <RefSelector handleSubmit={setScrRef} scrRef={scrRef} />
+        <BookChapterControl handleSubmit={setScrRef} scrRef={scrRef} />
       </div>
       <iframe
         ref={iframeRef}
