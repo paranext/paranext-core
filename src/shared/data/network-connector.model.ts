@@ -16,7 +16,7 @@ import {
 } from '@shared/data/internal-connection.model';
 
 /** Port to use for the webSocket */
-export const WEBSOCKET_PORT = 8876;
+export const WEBSOCKET_PORT = 8877;
 
 /** Number of attempts a client will make to connect to the WebSocket server before failing */
 export const WEBSOCKET_ATTEMPTS_MAX = 5;
