@@ -18,7 +18,6 @@ import {
   DeepPartial,
   Localized,
   startsWith,
-  substring,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import localizationService from '@shared/services/localization.service';
@@ -33,11 +32,6 @@ const validate = ajv.compile(menuDocumentSchema);
 function performSchemaValidation(document: JsonDocumentLike, docType: string): void {
   if (!validate(document))
     throw new Error(`Invalid ${docType} menu document: ${ajv.errorsText(validate.errors)}`);
-}
-
-/** Remove '%' from the beginning and ending of the input string */
-function removePercentSigns(localizeKey: string): string {
-  return substring(localizeKey, 1, localizeKey.length - 1);
 }
 
 function checkNewColumns(
@@ -161,8 +155,7 @@ async function localizeColumns(columns: Localized<ColumnsWithHeaders> | undefine
     // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const column = columns[columnName as ReferencedItem];
-    if (!!column && typeof column === 'object')
-      strings = strings.concat([removePercentSigns(column.label)]);
+    if (!!column && typeof column === 'object') strings = strings.concat([column.label]);
   });
   if (strings.length <= 0) return;
 
@@ -171,8 +164,7 @@ async function localizeColumns(columns: Localized<ColumnsWithHeaders> | undefine
     // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const column = columns[columnName as ReferencedItem];
-    if (!!column && typeof column === 'object')
-      column.label = newStrings[removePercentSigns(column.label)];
+    if (!!column && typeof column === 'object') column.label = newStrings[column.label];
   });
 }
 
@@ -180,18 +172,17 @@ async function localizeMenuItems(menuItems: Localized<MenuItemBase>[] | undefine
   if (!menuItems) return;
   let strings: string[] = [];
   menuItems.forEach((menuItem) => {
-    strings = strings.concat([removePercentSigns(menuItem.label)]);
-    if (menuItem.tooltip) strings = strings.concat([removePercentSigns(menuItem.tooltip)]);
-    if (menuItem.searchTerms) strings = strings.concat([removePercentSigns(menuItem.searchTerms)]);
+    strings = strings.concat([menuItem.label]);
+    if (menuItem.tooltip) strings = strings.concat([menuItem.tooltip]);
+    if (menuItem.searchTerms) strings = strings.concat([menuItem.searchTerms]);
   });
   if (strings.length <= 0) return;
 
   const newStrings = await localizationService.getLocalizedStrings({ localizeKeys: strings });
   menuItems.forEach((menuItem) => {
-    menuItem.label = newStrings[removePercentSigns(menuItem.label)];
-    if (menuItem.tooltip) menuItem.tooltip = newStrings[removePercentSigns(menuItem.tooltip)];
-    if (menuItem.searchTerms)
-      menuItem.searchTerms = newStrings[removePercentSigns(menuItem.searchTerms)];
+    menuItem.label = newStrings[menuItem.label];
+    if (menuItem.tooltip) menuItem.tooltip = newStrings[menuItem.tooltip];
+    if (menuItem.searchTerms) menuItem.searchTerms = newStrings[menuItem.searchTerms];
   });
 }
 

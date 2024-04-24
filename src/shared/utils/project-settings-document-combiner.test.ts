@@ -1,4 +1,4 @@
-import { Localized, ProjectSettingsContribution } from 'platform-bible-utils';
+import { Localized, ProjectSettingsContribution, slice } from 'platform-bible-utils';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import ProjectSettingsDocumentCombiner, {
   LocalizedProjectSettingsContributionInfo,
@@ -12,7 +12,7 @@ jest.mock('@shared/services/localization.service', () => ({
     async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
       [localizeKey: string]: string;
     }> {
-      return Object.fromEntries(keys.map((key) => [key, key]));
+      return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
     },
   },
 }));

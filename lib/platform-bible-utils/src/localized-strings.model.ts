@@ -106,7 +106,7 @@ removeJsonToTypeScriptTypesStuff(localizedStringsDefs);
 
 /** JSON schema object that aligns with the LocalizedStringDataContribution type */
 export const localizedStringsDocumentSchema = {
-  $schema: 'https://json-schema.org/draft-07/schema',
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
   title: 'Localized String Data Contribution',
   description:
     'The data an extension provides to inform Platform.Bible of the localized strings it provides.',

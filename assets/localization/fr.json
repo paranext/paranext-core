@@ -1,5 +1,5 @@
 {
-  "some_localization_key": "Ceci est le texte en français pour %some_localization_key%.",
-  "submitButton": "Soumettre",
-  "Book.Gen": "Genèse"
+  "%some_localization_key%": "Ceci est le texte en français pour %some_localization_key%.",
+  "%submitButton%": "Soumettre",
+  "%Book.Gen%": "Genèse"
 }

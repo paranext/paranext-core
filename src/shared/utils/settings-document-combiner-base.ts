@@ -12,7 +12,6 @@ import {
   SettingsGroup,
   deepClone,
   startsWith,
-  substring,
 } from 'platform-bible-utils';
 
 /**
@@ -64,11 +63,6 @@ function transformSettingsContributionToSettingsContributionInfo(
   };
 }
 
-/** Remove '%' from the beginning and ending of the input string */
-function removePercentSigns(localizeKey: string): string {
-  return substring(localizeKey, 1, localizeKey.length - 1);
-}
-
 /** Deep clones and localizes settings contribution info */
 async function localizeSettingsContributionInfo(
   settings: SettingsContributionInfo,
@@ -79,13 +73,12 @@ async function localizeSettingsContributionInfo(
     const localizedStringKeys = new Set<string>();
     Object.values(settings.contributions).forEach((extensionSettings) =>
       extensionSettings?.forEach((settingsGroup) => {
-        localizedStringKeys.add(removePercentSigns(settingsGroup.label));
-        if (settingsGroup.description)
-          localizedStringKeys.add(removePercentSigns(settingsGroup.description));
+        localizedStringKeys.add(settingsGroup.label);
+        if (settingsGroup.description) localizedStringKeys.add(settingsGroup.description);
 
         Object.values(settingsGroup.properties).forEach((setting: Setting) => {
-          localizedStringKeys.add(removePercentSigns(setting.label));
-          if (setting.description) localizedStringKeys.add(removePercentSigns(setting.description));
+          localizedStringKeys.add(setting.label);
+          if (setting.description) localizedStringKeys.add(setting.description);
         });
       }),
     );
@@ -102,15 +95,13 @@ async function localizeSettingsContributionInfo(
 
     Object.values(localizedSettings.contributions).forEach((extensionSettings) =>
       extensionSettings?.forEach((settingsGroup) => {
-        settingsGroup.label = localizedStrings[removePercentSigns(settingsGroup.label)];
+        settingsGroup.label = localizedStrings[settingsGroup.label];
         if (settingsGroup.description)
-          settingsGroup.description =
-            localizedStrings[removePercentSigns(settingsGroup.description)];
+          settingsGroup.description = localizedStrings[settingsGroup.description];
 
         Object.values(settingsGroup.properties).forEach((setting: Localized<Setting>) => {
-          setting.label = localizedStrings[removePercentSigns(setting.label)];
-          if (setting.description)
-            setting.description = localizedStrings[removePercentSigns(setting.description)];
+          setting.label = localizedStrings[setting.label];
+          if (setting.description) setting.description = localizedStrings[setting.description];
         });
       }),
     );

@@ -68,6 +68,14 @@ export type { ScriptureReference, BookInfo } from './scripture.model';
 export type { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
 export type { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 export type {
+  LanguageStrings,
+  LocalizedStringDataContribution,
+  LocalizedStringValue,
+  StringMetadata,
+  StringsMetadata,
+} from './localized-strings.model';
+export { localizedStringsDocumentSchema } from './localized-strings.model';
+export type {
   LocalizeKey,
   ReferencedItem,
   OrderedItem,
