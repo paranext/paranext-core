@@ -45,10 +45,6 @@ function getFileNameFromUri(uriToMatch: string): string {
   return file.name;
 }
 
-function shouldThrowIfNotFound() {
-  return !globalThis.isPackaged;
-}
-
 /**
  * Take a specific BCP 47 locale and return its base general locale (e.g. en-GB (Great British
  * English) returns en)
@@ -57,17 +53,15 @@ async function getBaseLanguageCode(languageCode: string) {
   const match = languageCode.match(LANGUAGE_CODE_REGEX);
   const languageMatch = match?.groups?.language;
   if (!match || !languageMatch) {
-    if (shouldThrowIfNotFound())
-      throw new Error(`Localization service - No match for language code ${languageCode}`);
+    logger.warn(`Localization service - No match for language code ${languageCode}`);
     return languageCode;
   }
 
   const baseCode = await getCanonicalLocale(languageMatch);
   if (!baseCode) {
-    if (shouldThrowIfNotFound())
-      throw new Error(
-        `Localization service - No general locale found for specific locale: ${languageCode}`,
-      );
+    logger.warn(
+      `Localization service - No general locale found for specific locale: ${languageCode}`,
+    );
     return languageCode;
   }
   return baseCode;
@@ -173,8 +167,7 @@ async function getNextDefinedLanguageData(languages: string[]) {
   const standardizedLanguage = await moveToFirstLanguageWithData(languages);
   // Note: This should never happen thanks to the english fallback, but is here just in case
   if (standardizedLanguage === undefined) {
-    if (shouldThrowIfNotFound())
-      throw new Error(`No BCP 47 language code could found from the languages provided`);
+    logger.warn(`No BCP 47 language code could found from the languages provided`);
     return undefined;
   }
 
@@ -182,8 +175,7 @@ async function getNextDefinedLanguageData(languages: string[]) {
     localizedStringsDocumentCombiner.getLocalizedStringData(standardizedLanguage);
   // Note: This should never happen thanks to the english fallback, but is here just in case
   if (languageData === undefined) {
-    if (shouldThrowIfNotFound())
-      throw new Error(`Language data could not be found for ${standardizedLanguage}`);
+    logger.warn(`Language data could not be found for ${standardizedLanguage}`);
   }
 
   return languageData;
@@ -191,7 +183,7 @@ async function getNextDefinedLanguageData(languages: string[]) {
 
 async function getMetadata(localizeKey: LocalizeKey) {
   if (!localizedStringsDocumentCombiner.getLocalizedStringData().metadata) {
-    if (shouldThrowIfNotFound()) throw new Error(`Metadata missing`);
+    logger.warn(`Metadata missing`);
     return undefined;
   }
 
@@ -263,8 +255,7 @@ class LocalizationDataProviderEngine
     // Note: This should never happen, but if it does then there are no languages with data so just
     // return the localize key so there is some text to display even if we can't find a localization
     if (initialLanguageData === undefined) {
-      if (shouldThrowIfNotFound())
-        throw new Error(`No data found for any of the provided languages`);
+      logger.warn(`No data found for any of the provided languages`);
       return localizeKey;
     }
 
@@ -278,10 +269,9 @@ class LocalizationDataProviderEngine
     );
     if (fallbackLocalization) return fallbackLocalization;
 
-    if (shouldThrowIfNotFound())
-      throw new Error(
-        `No localizations found for key or fallback key in any of the given languages for localize key: ${localizeKey}`,
-      );
+    logger.warn(
+      `No localizations found for key or fallback key in any of the given languages for localize key: ${localizeKey}`,
+    );
     return localizeKey;
   }
 
