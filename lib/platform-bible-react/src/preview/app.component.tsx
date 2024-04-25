@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import './app.component.css';
 import { ScriptureReference } from 'platform-bible-utils';
 import { BookChapterControl, RefSelector } from '..';
 
