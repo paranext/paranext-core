@@ -1,4 +1,4 @@
-/**
+﻿/**
  * This module executes inside of electron's main process. You can start electron renderer process
  * from here and communicate with the other processes through IPC.
  *
@@ -26,7 +26,7 @@ import networkObjectStatusService from '@shared/services/network-object-status.s
 import { get } from '@shared/services/project-data-provider.service';
 import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
-import { startLocalizationService } from '@main/services/localization.service-host';
+import { initialize as initializeLocalizationService } from '@main/services/localization.service-host';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 
@@ -80,7 +80,7 @@ async function main() {
   // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
   await extensionHostService.start();
 
-  await startLocalizationService();
+  await initializeLocalizationService();
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host

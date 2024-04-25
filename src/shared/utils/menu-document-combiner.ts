@@ -166,7 +166,7 @@ async function localizeColumns(columns: Localized<ColumnsWithHeaders> | undefine
   });
   if (strings.length <= 0) return;
 
-  const newStrings = await localizationService.getLocalizedStrings(strings);
+  const newStrings = await localizationService.getLocalizedStrings({ localizeKeys: strings });
   Object.getOwnPropertyNames(columns).forEach((columnName: string) => {
     // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -186,7 +186,7 @@ async function localizeMenuItems(menuItems: Localized<MenuItemBase>[] | undefine
   });
   if (strings.length <= 0) return;
 
-  const newStrings = await localizationService.getLocalizedStrings(strings);
+  const newStrings = await localizationService.getLocalizedStrings({ localizeKeys: strings });
   menuItems.forEach((menuItem) => {
     menuItem.label = newStrings[removePercentSigns(menuItem.label)];
     if (menuItem.tooltip) menuItem.tooltip = newStrings[removePercentSigns(menuItem.tooltip)];

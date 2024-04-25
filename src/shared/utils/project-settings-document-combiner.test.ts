@@ -4,11 +4,12 @@ import ProjectSettingsDocumentCombiner, {
   LocalizedProjectSettingsContributionInfo,
   ProjectSettingsContributionInfo,
 } from '@shared/utils/project-settings-document-combiner';
+import { LocalizationSelectors } from '@shared/services/localization.service-model';
 
 jest.mock('@shared/services/localization.service', () => ({
   __esModule: true,
   default: {
-    async getLocalizedStrings(keys: string[]): Promise<{
+    async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
       [localizeKey: string]: string;
     }> {
       return Object.fromEntries(keys.map((key) => [key, key]));

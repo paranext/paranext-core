@@ -365,6 +365,23 @@ export declare const getChaptersForBook: (bookNum: number) => number;
 export declare const offsetBook: (scrRef: ScriptureReference, offset: number) => ScriptureReference;
 export declare const offsetChapter: (scrRef: ScriptureReference, offset: number) => ScriptureReference;
 export declare const offsetVerse: (scrRef: ScriptureReference, offset: number) => ScriptureReference;
+/**
+ * https://github.com/ubsicap/Paratext/blob/master/ParatextData/SILScriptureExtensions.cs#L72
+ *
+ * Convert book number to a localized Id (a short description of the book). This should be used
+ * whenever a book ID (short code) is shown to the user. It is primarily needed for people who do
+ * not read Roman script well /// and need to have books identified in a alternate script (e.g.
+ * Chinese or Russian)
+ *
+ * @param bookNumber
+ * @param localizationLanguage
+ * @param getLocalizedString
+ * @returns
+ */
+export declare function getLocalizedIdFromBookNumber(bookNumber: number, localizationLanguage: string, getLocalizedString: (item: {
+	localizeKey: string;
+	languagesToSearch?: string[];
+}) => Promise<string>): Promise<string>;
 /** Collection of functions, objects, and types that are used as helpers in other services. */
 export declare function newGuid(): string;
 /**
