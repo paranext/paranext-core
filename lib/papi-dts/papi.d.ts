@@ -1494,7 +1494,7 @@ declare module 'shared/services/network-object.service' {
    */
   const get: <T extends object>(
     id: string,
-    createLocalObjectToProxy?: LocalObjectToProxyCreator<T> | undefined,
+    createLocalObjectToProxy?: LocalObjectToProxyCreator<T>,
   ) => Promise<NetworkObject<T> | undefined>;
   /**
    * Set up an object to be shared on the network.
