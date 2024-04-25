@@ -233,6 +233,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     const { key } = event;
     if (highlightedBookId === selectedBookId) {
       if (key === 'Enter') {
+        event.preventDefault();
         updateReference(selectedBookId, true, highlightedChapter);
         return;
       }
