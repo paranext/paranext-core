@@ -18,6 +18,13 @@ export function fetchExtensions(): Extension[] {
       iconFilePath: undefined,
     },
     {
+      name: 'Scripture Editor',
+      description: 'Edit Scripture resources',
+      hasUpdateAvailable: false,
+      isInstalled: true,
+      iconFilePath: undefined,
+    },
+    {
       name: 'Resource Viewer',
       description: 'View Scripture resources',
       hasUpdateAvailable: false,

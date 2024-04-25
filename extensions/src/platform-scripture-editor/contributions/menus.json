@@ -1,0 +1,89 @@
+{
+  "mainMenu": {
+    "columns": {},
+    "groups": {},
+    "items": [
+      {
+        "label": "%mainMenu_openPlatformScriptureEditor%",
+        "localizeNotes": "Application main menu > Project > Open Scripture Editor",
+        "group": "platform.projectResources",
+        "order": -100,
+        "command": "platformScriptureEditor.open"
+      },
+      {
+        "label": "%mainMenu_openPlatformResourceViewer%",
+        "localizeNotes": "Application main menu > Project > Open Resource Viewer",
+        "group": "platform.projectResources",
+        "order": -100,
+        "command": "platformScriptureEditor.open" // TODO Rolf: Add args
+      }
+    ]
+  },
+  "webViewMenus": {
+    "platformScriptureEditor.react": {
+      "includeDefaults": true,
+      "topMenu": {
+        "columns": {
+          "platformScriptureEditor.options": {
+            "label": "%webView_platformScriptureEditor_options%",
+            "order": 3
+          },
+          "platformScriptureEditor.info": {
+            "label": "%webView_platformScriptureEditor_info%",
+            "order": 4
+          }
+        },
+        "groups": {
+          "platformScriptureEditor.colors": {
+            "column": "platformScriptureEditor.options",
+            "order": 1
+          },
+          "platformScriptureEditor.layout": {
+            "column": "platformScriptureEditor.options",
+            "order": 2
+          },
+          "platformScriptureEditor.general": {
+            "column": "platformScriptureEditor.info",
+            "order": 2
+          }
+        },
+        "items": [
+          {
+            "label": "%webView_platformScriptureEditor_backgroundColor%",
+            "group": "platformScriptureEditor.colors",
+            "order": 2,
+            "command": "platformScriptureEditor.changeBackgroundColor"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_textColor%",
+            "group": "platformScriptureEditor.colors",
+            "order": 1,
+            "command": "platformScriptureEditor.changeTextColor"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_thickBorders%",
+            "group": "platformScriptureEditor.layout",
+            "order": 1,
+            "command": "platformScriptureEditor.showThickBorders"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_publisherInfo%",
+            "group": "platformScriptureEditor.general",
+            "order": 1,
+            "command": "platformScriptureEditor.showPublisherInfo"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_copyrightInfo%",
+            "group": "platformScriptureEditor.general",
+            "order": 2,
+            "command": "platformScriptureEditor.showCopyrightInfo"
+          }
+        ]
+      },
+      "contextMenu": {
+        "groups": {},
+        "items": []
+      }
+    }
+  }
+}

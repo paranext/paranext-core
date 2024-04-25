@@ -51,7 +51,7 @@ function scrollToScrRef(scrRef: ScriptureReference) {
   return verseElement;
 }
 
-globalThis.webViewComponent = function ResourceViewer({
+globalThis.webViewComponent = function PlatformScriptureEditor({
   useWebViewState,
 }: WebViewProps): JSX.Element {
   const [projectId] = useWebViewState<string>('projectId', '');
