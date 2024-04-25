@@ -1,9 +1,9 @@
+import IDataProvider from '@shared/models/data-provider.interface';
 import {
   DataProviderDataType,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
 import { OnDidDispose } from 'platform-bible-utils';
-import { IDataProvider } from './papi-core.service';
 
 export type LocalizationMetadata = { notes: string; fallbackKey: string };
 
@@ -64,9 +64,7 @@ export type ILocalizationService = {
    *   string key that corresponds to a localized value and an array of BCP 47 language codes
    * @returns Object whose keys are localizeKeys and values are localized strings
    */
-  getLocalizedStrings: (
-    selectors: LocalizationSelectors,
-  ) => Promise<{ [localizeKey: string]: string }>;
+  getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
   /**
    * This data cannot be changed. Trying to use this setter this will always throw
    *
