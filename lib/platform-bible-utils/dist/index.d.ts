@@ -370,12 +370,13 @@ export declare const offsetVerse: (scrRef: ScriptureReference, offset: number) =
  *
  * Convert book number to a localized Id (a short description of the book). This should be used
  * whenever a book ID (short code) is shown to the user. It is primarily needed for people who do
- * not read Roman script well /// and need to have books identified in a alternate script (e.g.
+ * not read Roman script well and need to have books identified in a alternate script (e.g.
  * Chinese or Russian)
  *
  * @param bookNumber
- * @param localizationLanguage
- * @param getLocalizedString
+ * @param localizationLanguage in BCP 47 format
+ * @param getLocalizedString function that provides the localized versions of the book ids and names
+ * asynchronously.
  * @returns
  */
 export declare function getLocalizedIdFromBookNumber(bookNumber: number, localizationLanguage: string, getLocalizedString: (item: {

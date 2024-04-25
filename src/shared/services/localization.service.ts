@@ -38,7 +38,11 @@ const localizationDataService = createSyncProxyForAsyncObject<ILocalizationServi
       return getLocalizedIdFromBookNumber(
         bookNum,
         localizationLanguage,
-        localizationDataService.getLocalizedString,
+        ({ localizeKey, ...options }) =>
+          localizationDataService.getLocalizedString({
+            ...options,
+            localizeKey: `%${localizeKey}%`,
+          }),
       );
     },
   },

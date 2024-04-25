@@ -14,6 +14,7 @@ import { registerCommand } from '@shared/services/command.service';
 import { initialize as initializeMenuData } from '@extension-host/services/menu-data.service-host';
 import { initialize as initializeSettingsService } from '@extension-host/services/settings.service-host';
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
+import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
 
 // #region Test logs
 
@@ -64,6 +65,7 @@ networkService
     await startProjectLookupService();
 
     // Prepare for contributions to be contributed from extensions before the extensions come online
+    await initializeLocalizationService();
     await initializeMenuData();
     await initializeSettingsService();
     await startProjectSettingsService();

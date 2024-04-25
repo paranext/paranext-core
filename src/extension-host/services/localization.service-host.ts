@@ -5,23 +5,40 @@
   LocalizationDataDataTypes,
   LocalizationSelector,
   LocalizationSelectors,
-  LocalizedStringMetadata,
   localizationServiceObjectToProxy,
 } from '@shared/services/localization.service-model';
 import dataProviderService from '@shared/services/data-provider.service';
 import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import * as nodeFS from '@node/services/node-file-system.service';
-import { deserialize, createSyncProxyForAsyncObject } from 'platform-bible-utils';
+import {
+  deserialize,
+  createSyncProxyForAsyncObject,
+  LocalizedStringDataContribution,
+  StringsMetadata,
+  LocalizeKey,
+} from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
 import path from 'path';
 import settingsService from '@shared/services/settings.service';
+import LocalizedStringsDocumentCombiner from '@shared/utils/localized-strings-document-combiner';
 
 const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
 // BCP 47 validation regex from https://stackoverflow.com/questions/7035825/regular-expression-for-a-language-tag-as-defined-by-bcp47
 const LANGUAGE_CODE_REGEX =
   /^(?<grandfathered>(?:en-GB-oed|i-(?:ami|bnn|default|enochian|hak|klingon|lux|mingo|navajo|pwn|t(?:a[oy]|su))|sgn-(?:BE-(?:FR|NL)|CH-DE))|(?:art-lojban|cel-gaulish|no-(?:bok|nyn)|zh-(?:guoyu|hakka|min(?:-nan)?|xiang)))|(?:(?<language>(?:[A-Za-z]{2,3}(?:-(?<extlang>[A-Za-z]{3}(?:-[A-Za-z]{3}){0,2}))?)|[A-Za-z]{4}|[A-Za-z]{5,8})(?:-(?<script>[A-Za-z]{4}))?(?:-(?<region>[A-Za-z]{2}|[0-9]{3}))?(?:-(?<variant>[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*(?:-(?<extension>[0-9A-WY-Za-wy-z](?:-[A-Za-z0-9]{2,8})+))*)(?:-(?<privateUse>x(?:-[A-Za-z0-9]{1,8})+))?$/;
+
+/**
+ * Object that keeps track of all localized string contributions in the platform. To listen to
+ * updates to the localized string contributions, subscribe to its `onDidRebuild` event (consider
+ * debouncing as each contribution will trigger a rebuild).
+ *
+ * Keeping this object separate from the data provider and disabling the `set` calls in the data
+ * provider prevents random services from changing system localized string contributions
+ * unexpectedly.
+ */
+export const localizedStringsDocumentCombiner = new LocalizedStringsDocumentCombiner({});
 
 function getFileNameFromUri(uriToMatch: string): string {
   const file = path.parse(uriToMatch);
@@ -65,8 +82,8 @@ function convertToLocalizationData(jsonString: string, languageCode: string): Lo
 }
 
 /** Convert contents of a specific localized string metadata json file to an object */
-function convertToLocalizedStringMetadata(jsonString: string): LocalizedStringMetadata {
-  const localizationMetadata: LocalizedStringMetadata = deserialize(jsonString);
+function convertToLocalizedStringMetadata(jsonString: string): StringsMetadata {
+  const localizationMetadata: StringsMetadata = deserialize(jsonString);
   if (typeof localizationMetadata !== 'object')
     throw new Error(`Localization string metadata is invalid`);
   return localizationMetadata;
@@ -78,14 +95,10 @@ async function getLocalizedFileUris(): Promise<string[]> {
   return entries.file;
 }
 
-/** Map of BCP 47 code to localized values for that language */
-const languageLocalizedData = new Map<string, LocalizationData>();
-let localizedStringMetadata: LocalizedStringMetadata | undefined;
-
 /** Load the contents of all localization files from disk */
 async function loadAllLocalizationData() {
-  languageLocalizedData.clear();
   const localizeFileUris = await getLocalizedFileUris();
+  const baseLocalizedStringsDoc: LocalizedStringDataContribution = { localizedStrings: {} };
 
   await Promise.all(
     localizeFileUris.map(async (uri) => {
@@ -93,19 +106,23 @@ async function loadAllLocalizationData() {
         const localizeFileString = await nodeFS.readFileText(uri);
         const fileName = getFileNameFromUri(uri);
         if (fileName === 'metadata') {
-          localizedStringMetadata = convertToLocalizedStringMetadata(localizeFileString);
+          baseLocalizedStringsDoc.metadata = convertToLocalizedStringMetadata(localizeFileString);
           return;
         }
 
-        languageLocalizedData.set(
+        // We just made the `localizedStrings` property above
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        baseLocalizedStringsDoc.localizedStrings![fileName] = convertToLocalizationData(
+          localizeFileString,
           fileName,
-          convertToLocalizationData(localizeFileString, fileName),
         );
       } catch (error) {
         logger.warn(error);
       }
     }),
   );
+
+  localizedStringsDocumentCombiner.updateBaseDocument(baseLocalizedStringsDoc);
 }
 
 async function getDefaultLanguages() {
@@ -138,12 +155,13 @@ async function moveToFirstLanguageWithData(languages: string[]) {
   if (languages.length === 0) return undefined;
 
   const standardizedLanguageCode = await getCanonicalLocale(languages[0]);
-  if (languageLocalizedData.get(standardizedLanguageCode)) return standardizedLanguageCode;
+  if (localizedStringsDocumentCombiner.getLocalizedStringData(standardizedLanguageCode))
+    return standardizedLanguageCode;
 
   // Try to get data for base language by stripping the region from the language code
   // (e.g. en-US becomes en)
   const baseLanguage = await getBaseLanguageCode(languages[0]);
-  if (languageLocalizedData.get(baseLanguage)) return baseLanguage;
+  if (localizedStringsDocumentCombiner.getLocalizedStringData(baseLanguage)) return baseLanguage;
 
   // If no language data can be found for a language or its base, then we should remove it from
   // the languages to consider as it will not be useful for the fallback key either.
@@ -160,7 +178,8 @@ async function getNextDefinedLanguageData(languages: string[]) {
     return undefined;
   }
 
-  const languageData = languageLocalizedData.get(standardizedLanguage);
+  const languageData =
+    localizedStringsDocumentCombiner.getLocalizedStringData(standardizedLanguage);
   // Note: This should never happen thanks to the english fallback, but is here just in case
   if (languageData === undefined) {
     if (shouldThrowIfNotFound())
@@ -170,17 +189,18 @@ async function getNextDefinedLanguageData(languages: string[]) {
   return languageData;
 }
 
-async function getMetadata(localizeKey: string) {
-  if (!localizedStringMetadata) {
+async function getMetadata(localizeKey: LocalizeKey) {
+  if (!localizedStringsDocumentCombiner.getLocalizedStringData().metadata) {
     if (shouldThrowIfNotFound()) throw new Error(`Metadata missing`);
     return undefined;
   }
 
-  const metadata = localizedStringMetadata[localizeKey];
+  const metadata =
+    localizedStringsDocumentCombiner.getLocalizedStringData().metadata?.[localizeKey];
   return metadata;
 }
 
-async function findFirstLocalization(localizeKey: string, languages: string[]) {
+async function findFirstLocalization(localizeKey: LocalizeKey, languages: string[]) {
   if (languages.length <= 0) return undefined;
 
   const tempLanguageData = await getNextDefinedLanguageData(languages);
@@ -192,12 +212,12 @@ async function findFirstLocalization(localizeKey: string, languages: string[]) {
 }
 
 async function findLocalizationForFallbackLanguageAndOrKey(
-  localizeKey: string,
+  localizeKey: LocalizeKey,
   languages: string[],
   initialLanguageData: LocalizationData,
 ) {
   const metadata = await getMetadata(localizeKey);
-  if (metadata !== undefined && initialLanguageData) {
+  if (metadata?.fallbackKey && initialLanguageData) {
     const { fallbackKey } = metadata;
 
     // check fallback key in current language
@@ -216,7 +236,7 @@ async function findLocalizationForFallbackLanguageAndOrKey(
 
   // If the localize key can't be found in any language, look for a fallback key and look for that
   // key in the fallback languages if it exists
-  if (metadata !== undefined) {
+  if (metadata?.fallbackKey) {
     const { fallbackKey } = metadata;
     const fallbackKeyFallbackLanguageLocalization = await findFirstLocalization(fallbackKey, [
       ...languages,

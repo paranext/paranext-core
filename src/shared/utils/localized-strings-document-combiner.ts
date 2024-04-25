@@ -1,7 +1,9 @@
 import {
   DocumentCombiner,
   JsonDocumentLike,
+  LanguageStrings,
   LocalizedStringDataContribution,
+  isString,
   localizedStringsDocumentSchema,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
@@ -27,8 +29,6 @@ function transformLocalizedStringDataToCanonicalLocales(
     ...stringData,
     localizedStrings: Object.fromEntries(
       Object.entries(stringData.localizedStrings).map(([locale, langStrings]) => [
-        // TODO: REMOVE THIS ERROR IGNORE
-        // @ts-ignore
         Intl.getCanonicalLocales(locale)[0],
         langStrings,
       ]),
@@ -38,6 +38,7 @@ function transformLocalizedStringDataToCanonicalLocales(
 
 // #endregion
 
+/** Combines Localized String contributions. Normalizes locales to BCP 47 form */
 export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
   constructor(baseDocument: JsonDocumentLike) {
     super(baseDocument, { copyDocuments: false, ignoreDuplicateProperties: true });
@@ -53,13 +54,37 @@ export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
    * the current set of localized string contributions. If all the input documents are static, then
    * there is no need to ever rebuild once all the documents have been contributed to this
    * combiner.
+   *
+   * @param locale Optionally specify a locale to get the language strings for just that locale.
+   *   Internally converted to BCP 47
    */
-  getLocalizedStringData(): LocalizedStringDataContribution | undefined {
-    if (!this.latestOutput) return undefined;
+  getLocalizedStringData(): LocalizedStringDataContribution;
+  // This is an overload
+  // eslint-disable-next-line no-dupe-class-members
+  getLocalizedStringData(locale: string): LanguageStrings | undefined;
+  // This is the implementation of an overloaded method
+  // eslint-disable-next-line no-dupe-class-members
+  getLocalizedStringData<T extends string | undefined>(
+    locale?: T,
+  ): T extends string ? LanguageStrings | undefined : LocalizedStringDataContribution {
+    if (!this.latestOutput)
+      // TypeScript seems to dense to understand this is literally exactly the return signature
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      return (locale ? undefined : {}) as T extends string
+        ? LanguageStrings | undefined
+        : LocalizedStringDataContribution;
 
     // All our validation and stuff was to make this the case
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return this.latestOutput as LocalizedStringDataContribution;
+    const localizedStringData = this.latestOutput as LocalizedStringDataContribution;
+
+    // TypeScript seems to dense to understand this is literally exactly the return signature
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return (
+      locale && isString(locale)
+        ? localizedStringData.localizedStrings?.[Intl.getCanonicalLocales(locale)[0]]
+        : localizedStringData
+    ) as T extends string ? LanguageStrings | undefined : LocalizedStringDataContribution;
   }
 
   // We don't need `this` on this override method

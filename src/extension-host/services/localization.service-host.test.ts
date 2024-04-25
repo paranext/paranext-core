@@ -1,4 +1,4 @@
-import { testingLocalizationService } from '@main/services/localization.service-host';
+import { testingLocalizationService } from '@extension-host/services/localization.service-host';
 import { SettingNames } from 'papi-shared-types';
 
 const MOCK_FILES: { [uri: string]: string } = {
