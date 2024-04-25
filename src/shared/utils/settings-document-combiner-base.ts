@@ -91,9 +91,9 @@ async function localizeSettingsContributionInfo(
     );
 
     // Get strings for keys
-    const localizedStrings = await localizationService.getLocalizedStrings([
-      ...localizedStringKeys,
-    ]);
+    const localizedStrings = await localizationService.getLocalizedStrings({
+      localizeKeys: [...localizedStringKeys],
+    });
 
     // Deep clone then replace strings with localized versions
     // We're going through the process of localizing here

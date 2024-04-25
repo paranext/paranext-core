@@ -21,13 +21,6 @@ const MOCK_FILES: { [uri: string]: string } = {
   }`,
 };
 
-jest.mock('@main/data/core-settings-info.data', () => ({
-  __esModule: true,
-  default: {
-    'platform.interfaceLanguage': { default: ['en'] },
-  },
-}));
-
 jest.mock('@shared/services/settings.service', () => ({
   __esModule: true,
   default: {
