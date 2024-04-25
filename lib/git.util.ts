@@ -156,6 +156,9 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
       '**/.eslintcache',
       '**/dist/**/*',
       '**/release/**/*',
+      // With npm workspaces, child workspace package-lock.json files are not used. Let's not format
+      // them so they can stay the same as how they were in the template to avoid merge conflicts
+      '**/package-lock.json',
     ],
     from: /([^/])\.\.\/paranext-core/g,
     to: '$1../../../paranext-core',
