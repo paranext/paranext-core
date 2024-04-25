@@ -25,6 +25,8 @@ import * as papiReact from '@renderer/services/papi-frontend-react.service';
 import PapiRendererWebSocket from '@renderer/services/renderer-web-socket.service';
 import menuDataService from '@shared/services/menu-data.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
+import localizationDataService from '@shared/services/localization.service';
+import { ILocalizationService } from '@shared/services/localization.service-model';
 import PapiRendererXMLHttpRequest from './renderer-xml-http-request.service';
 
 // IMPORTANT NOTES:
@@ -76,6 +78,8 @@ const papi = {
   settings: settingsService as ISettingsService,
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
+  /** JSDOC DESTINATION localizationDataService */
+  localization: localizationDataService as ILocalizationService,
 };
 /* eslint-enable */
 
@@ -131,5 +135,8 @@ Object.freeze(papi.settings);
 /** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);
+/** JSDOC DESTINATION localizationDataService */
+export const { localization } = papi;
+Object.freeze(papi.localization);
 
 export type Papi = typeof papi;

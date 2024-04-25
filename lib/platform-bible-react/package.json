@@ -91,7 +91,8 @@
     "tailwindcss-scoped-preflight": "^2.1.0",
     "ts-jest": "^29.1.2",
     "tslib": "^2.6.2",
-    "typescript": "^5.3.3",
+    "typedoc": "^0.25.13",
+    "typescript": "^5.4.5",
     "vite": "^4.5.3",
     "vite-tsconfig-paths": "^4.3.2"
   },
