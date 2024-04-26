@@ -52,14 +52,14 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
       localizeNotes: 'Main application menu > Paratext column > Open Scripture Editor...',
       group: 'paratext.resourceTools',
       order: 1,
-      command: 'platformScriptureEditor.open',
+      command: 'platformScriptureEditor.openScriptureEditor',
     },
     {
       label: 'Open Resource Viewer',
       localizeNotes: 'Main application menu > Paratext column > Open Resource Viewer...',
       group: 'paratext.resourceTools',
       order: 1,
-      command: 'platformScriptureEditor.open', // TODO Rolf: Add args
+      command: 'platformScriptureEditor.openResourceViewer',
     },
     {
       label: 'Open Text Collection',

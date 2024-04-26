@@ -15,13 +15,29 @@ const scriptureEditorWebViewType = 'platformScriptureEditor.react';
 
 interface PlatformScriptureEditorOptions extends GetWebViewOptions {
   projectId: string | undefined;
-  isEditable: boolean;
+  isReadOnly: boolean;
 }
 
-/** Function to prompt for a project and open it in the editor. Registered as a command handler. */
+/** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
 async function openPlatformScriptureEditor(
   projectId: string | undefined,
-  isEditable: boolean,
+): Promise<string | undefined> {
+  // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
+  return open(projectId, false);
+}
+
+/** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
+async function openPlatformResourceViewer(
+  projectId: string | undefined,
+): Promise<string | undefined> {
+  // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
+  return open(projectId, true);
+}
+
+/** Function to prompt for a project and open it in the editor */
+async function open(
+  projectId: string | undefined,
+  isReadOnly: boolean,
 ): Promise<string | undefined> {
   let projectIdForWebView = projectId;
   if (!projectIdForWebView) {
@@ -32,7 +48,7 @@ async function openPlatformScriptureEditor(
     });
   }
   if (projectIdForWebView) {
-    const options: PlatformScriptureEditorOptions = { projectId: projectIdForWebView, isEditable };
+    const options: PlatformScriptureEditorOptions = { projectId: projectIdForWebView, isReadOnly };
     // REVIEW: If an editor is already open for the selected project, we open another.
     // This matches the current behavior in P9, though it might not be what we want long-term.
     return papi.webViews.getWebView(scriptureEditorWebViewType, undefined, options);
@@ -57,19 +73,20 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       (savedWebView.state?.projectId as string) ||
       undefined;
-    const isEditable = getWebViewOptions.isEditable || savedWebView.state?.isEditable;
-    const defaultTitle = isEditable ? 'Scripture Editor' : 'Resource Viewer';
-    const projectTitle = projectId
-      ? (await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId
-      : defaultTitle;
+    const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
+    let title = isReadOnly ? 'Resource Viewer' : 'Scripture Editor';
+    if (projectId) {
+      title += `: ${(await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId}`;
+    }
     return {
-      title: projectTitle,
+      title,
       ...savedWebView,
       content: platformScriptureEditorWebView,
       styles: platformScriptureEditorWebViewStyles,
       state: {
         ...savedWebView.state,
         projectId,
+        isReadOnly,
       },
     };
   },
@@ -79,8 +96,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   logger.info('Scripture editor is activating!');
 
   const openPlatformScriptureEditorPromise = papi.commands.registerCommand(
-    'platformScriptureEditor.open',
+    'platformScriptureEditor.openScriptureEditor',
     openPlatformScriptureEditor,
+  );
+
+  const openPlatformResourceViewerPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.openResourceViewer',
+    openPlatformResourceViewer,
   );
 
   const scriptureEditorWebViewProviderPromise = papi.webViewProviders.register(
@@ -92,6 +114,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
+    await openPlatformResourceViewerPromise,
   );
 
   logger.info('Scripture editor is finished activating!');

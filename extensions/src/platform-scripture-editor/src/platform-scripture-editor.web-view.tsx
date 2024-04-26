@@ -28,8 +28,6 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-const options: EditorOptions = { hasSpellCheck: false };
-
 function scrollToScrRef(scrRef: ScriptureReference) {
   const verseElement = document.querySelector<HTMLElement>(
     `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
@@ -55,6 +53,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useWebViewState,
 }: WebViewProps): JSX.Element {
   const [projectId] = useWebViewState<string>('projectId', '');
+  const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
@@ -143,6 +142,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (highlightedVerseElement) highlightedVerseElement.classList.remove('highlighted');
     };
   }, [scrRef]);
+
+  const options: EditorOptions = { hasSpellCheck: false, isReadonly: isReadOnly };
 
   return (
     <Editor
