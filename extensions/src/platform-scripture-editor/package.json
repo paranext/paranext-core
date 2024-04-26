@@ -1,9 +1,9 @@
 {
-  "name": "resource-viewer",
+  "name": "platform-scripture-editor",
   "version": "0.0.2",
-  "description": "Simple resource viewer extension for Platform.Bible",
+  "description": "Editor extension for Platform.Bible",
   "main": "src/main.js",
-  "types": "src/types/resource-viewer.d.ts",
+  "types": "src/types/platform-scripture-editor.d.ts",
   "author": "Katherine Jensen",
   "license": "MIT",
   "scripts": {

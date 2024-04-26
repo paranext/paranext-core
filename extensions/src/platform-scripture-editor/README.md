@@ -1,6 +1,6 @@
-# resource-viewer
+# platform-scripture-editor
 
-Simple resource viewer extension for Paranext
+Editor extension for Platform.Bible, that can also be used in read-only mode
 
 ## Summary
 

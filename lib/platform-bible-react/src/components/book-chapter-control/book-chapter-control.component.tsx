@@ -1,4 +1,11 @@
-import { KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
 import {
@@ -97,8 +104,10 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   const [selectedBookId, setSelectedBookId] = useState<string>(
     Canon.bookNumberToId(scrRef.bookNum),
   );
-  const [highlightedChapter, setHighlightedChapter] = useState<number>(0);
-  const [highlightedBookId, setHighlightedBookId] = useState<string>('');
+  const [highlightedChapter, setHighlightedChapter] = useState<number>(scrRef.chapterNum ?? 0);
+  const [highlightedBookId, setHighlightedBookId] = useState<string>(
+    Canon.bookNumberToId(scrRef.bookNum),
+  );
   const [isContentOpen, setIsContentOpen] = useState<boolean>(false);
   const [isContentOpenDelayed, setIsContentOpenDelayed] = useState<boolean>(isContentOpen);
 
@@ -128,12 +137,20 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     setSearchQuery(searchString);
   };
 
+  /**
+   * Whether to prevent radix's logic from closing the dropdown. This is important because radix
+   * tries to close the dropdown when the input first focuses, and we don't want it to do that. But
+   * we don't want to prevent the dropdown from closing when we click away from the input, so we
+   * don't want to just keep it open if the input is focused
+   */
+  const shouldPreventAutoClosing = useRef(false);
+
   const controlMenuState = useCallback((open: boolean) => {
-    if (!open && document.activeElement === inputRef.current) {
-      setIsContentOpen(true);
-    } else {
-      setIsContentOpen(open);
+    if (shouldPreventAutoClosing.current) {
+      shouldPreventAutoClosing.current = false;
+      return;
     }
+    setIsContentOpen(open);
   }, []);
 
   const updateReference = useCallback(
@@ -188,7 +205,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   }, [updateReference, searchQuery]);
 
   const handleKeyDownInput = useCallback(
-    (event: KeyboardEvent) => {
+    (event: ReactKeyboardEvent) => {
       if (!isContentOpen) {
         setIsContentOpen(true);
       } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -213,7 +230,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     [isContentOpen],
   );
 
-  const handleKeyDownContent = (event: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDownContent = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     // When the dropdown menu has focus, key strokes should give focus to the input component,
     // unless they're navigation keys (arrows and enter)
     const { key } = event;
@@ -226,10 +243,12 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     ) {
       return;
     }
+
+    inputRef.current.dispatchEvent(new KeyboardEvent('keydown', { key }));
     inputRef.current.focus();
   };
 
-  const handleKeyDownMenuItem = (event: KeyboardEvent) => {
+  const handleKeyDownMenuItem = (event: ReactKeyboardEvent) => {
     const { key } = event;
     if (highlightedBookId === selectedBookId) {
       if (key === 'Enter') {
@@ -263,7 +282,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         highlightedChapter + chapterOffSet > fetchEndChapter(highlightedBookId)
       ) {
         setHighlightedChapter(0);
-      } else {
+      } else if (chapterOffSet !== 0) {
         setHighlightedChapter(highlightedChapter + chapterOffSet);
         event.preventDefault();
       }
@@ -294,7 +313,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         const menuItemOffsetTop = menuItemRef.current.offsetTop;
         const scrollPosition = menuItemOffsetTop - SCROLL_OFFSET;
         contentRef.current.scrollTo({ top: scrollPosition, behavior: 'instant' });
-        menuItemRef.current.focus();
       }
     }, 10);
     return () => {
@@ -313,7 +331,14 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             handleKeyDown={handleKeyDownInput}
             handleOnClick={() => {
               setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum));
+              setHighlightedBookId(Canon.bookNumberToId(scrRef.bookNum));
               setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
+              setIsContentOpen(true);
+              inputRef.current.focus();
+            }}
+            onFocus={() => {
+              // Radix thinks we want to close because the input is being focused. Prevent that
+              shouldPreventAutoClosing.current = true;
             }}
             handleSubmit={handleInputSubmit}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
@@ -359,7 +384,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                           activeChapter={
                             scrRef.bookNum === Canon.bookIdToNumber(bookId) ? scrRef.chapterNum : 0
                           }
-                          isHighlighted={selectedBookId === highlightedBookId}
                           highlightedChapter={highlightedChapter}
                           handleHighlightedChapter={(chapterNumber: number): void => {
                             setHighlightedChapter(chapterNumber);

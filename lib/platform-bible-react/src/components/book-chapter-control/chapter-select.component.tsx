@@ -12,8 +12,6 @@ export type ChapterSelectProps = {
   endChapter: number;
   /** The chapter number that is currently selected */
   activeChapter: number;
-  /** Indicates if the chapter selector as a whole is highlighted or not */
-  isHighlighted: boolean;
   /** The chapter number that is currently highlighted using keyboard or mouse navigation */
   highlightedChapter: number;
   /**
@@ -28,7 +26,6 @@ function ChapterSelect({
   handleSelectChapter,
   endChapter,
   activeChapter,
-  isHighlighted,
   highlightedChapter,
   handleHighlightedChapter,
 }: ChapterSelectProps) {
@@ -42,12 +39,7 @@ function ChapterSelect({
   );
 
   return (
-    <div
-      className={cn('pr-flex pr-flex-wrap pr-items-start pr-justify-start pr-self-stretch', {
-        'pr-bg-amber-50': !isHighlighted,
-        'pr-bg-amber-100': isHighlighted,
-      })}
-    >
+    <div className={cn('pr-flex pr-flex-wrap pr-items-start pr-justify-start pr-self-stretch')}>
       {chapters.map((chapter) => (
         <div
           key={chapter}
@@ -60,6 +52,7 @@ function ChapterSelect({
           )}
           onClick={(event) => {
             event.preventDefault();
+            event.stopPropagation();
             handleSelectChapter(chapter);
           }}
           role="button"
