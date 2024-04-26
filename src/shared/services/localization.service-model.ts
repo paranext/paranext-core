@@ -3,17 +3,13 @@ import {
   DataProviderDataType,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
-import { OnDidDispose } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey, OnDidDispose } from 'platform-bible-utils';
 
-export type LocalizationMetadata = { notes: string; fallbackKey: string };
+export type LocalizationData = LanguageStrings;
 
-export type LocalizedStringMetadata = { [localizedStringKey: string]: LocalizationMetadata };
+export type LocalizationSelector = { localizeKey: LocalizeKey; locales?: string[] };
 
-export type LocalizationData = { [localizeKey: string]: string };
-
-export type LocalizationSelector = { localizeKey: string; locales?: string[] };
-
-export type LocalizationSelectors = { localizeKeys: string[]; locales?: string[] };
+export type LocalizationSelectors = { localizeKeys: LocalizeKey[]; locales?: string[] };
 
 /** JSDOC DESTINATION localizationServiceProviderName */
 export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
@@ -30,11 +26,7 @@ export const localizationServiceObjectToProxy = Object.freeze({
 // Data Type to initialize data provider engine with
 export type LocalizationDataDataTypes = {
   LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
-  LocalizedStrings: DataProviderDataType<
-    LocalizationSelectors,
-    { [localizeKey: string]: string },
-    never
-  >;
+  LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
 };
 
 declare module 'papi-shared-types' {

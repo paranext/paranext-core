@@ -9,5 +9,6 @@
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",
   "projectSettings": "contributions/projectSettings.json",
+  "localizedStrings": "contributions/localizedStrings.json",
   "activationEvents": ["onCommand:helloWorld.helloWorld", "onCommand:helloWorld.helloException"]
 }

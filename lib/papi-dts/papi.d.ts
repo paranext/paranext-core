@@ -4772,23 +4772,14 @@ declare module 'shared/services/localization.service-model' {
     DataProviderDataType,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
-  import { OnDidDispose } from 'platform-bible-utils';
-  export type LocalizationMetadata = {
-    notes: string;
-    fallbackKey: string;
-  };
-  export type LocalizedStringMetadata = {
-    [localizedStringKey: string]: LocalizationMetadata;
-  };
-  export type LocalizationData = {
-    [localizeKey: string]: string;
-  };
+  import { LanguageStrings, LocalizeKey, OnDidDispose } from 'platform-bible-utils';
+  export type LocalizationData = LanguageStrings;
   export type LocalizationSelector = {
-    localizeKey: string;
+    localizeKey: LocalizeKey;
     locales?: string[];
   };
   export type LocalizationSelectors = {
-    localizeKeys: string[];
+    localizeKeys: LocalizeKey[];
     locales?: string[];
   };
   /**
@@ -4807,13 +4798,7 @@ declare module 'shared/services/localization.service-model' {
   }>;
   export type LocalizationDataDataTypes = {
     LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
-    LocalizedStrings: DataProviderDataType<
-      LocalizationSelectors,
-      {
-        [localizeKey: string]: string;
-      },
-      never
-    >;
+    LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -5591,6 +5576,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
     settings?: string;
     /** Path to the JSON file that defines the project settings this extension is adding. */
     projectSettings?: string;
+    /** Path to the JSON file that defines the localized strings this extension is adding. */
+    localizedStrings?: string;
     /**
      * List of events that occur that should cause this extension to be activated. Not yet
      * implemented.

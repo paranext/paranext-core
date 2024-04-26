@@ -1,0 +1,9 @@
+{
+  "metadata": {},
+  "localizedStrings": {
+    "en": {
+      "%settings_hello_world_group1_label%": "Hello World Settings",
+      "%settings_hello_world_personName_label%": "Selected Person's Name on Hello World Web View"
+    }
+  }
+}

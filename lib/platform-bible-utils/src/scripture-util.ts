@@ -106,13 +106,13 @@ export const offsetVerse = (scrRef: ScriptureReference, offset: number): Scriptu
  *
  * Convert book number to a localized Id (a short description of the book). This should be used
  * whenever a book ID (short code) is shown to the user. It is primarily needed for people who do
- * not read Roman script well and need to have books identified in a alternate script (e.g.
- * Chinese or Russian)
+ * not read Roman script well and need to have books identified in a alternate script (e.g. Chinese
+ * or Russian)
  *
  * @param bookNumber
- * @param localizationLanguage in BCP 47 format
- * @param getLocalizedString function that provides the localized versions of the book ids and names
- * asynchronously.
+ * @param localizationLanguage In BCP 47 format
+ * @param getLocalizedString Function that provides the localized versions of the book ids and names
+ *   asynchronously.
  * @returns
  */
 export async function getLocalizedIdFromBookNumber(
@@ -138,7 +138,7 @@ export async function getLocalizedIdFromBookNumber(
   });
   const parts = split(bookName, '-');
   // some entries had a second name inside ideographic parenthesis
-  const parts2 = split(parts[0], '\xff08')
+  const parts2 = split(parts[0], '\xff08');
   const retVal = parts2[0].trim();
   return retVal;
 }

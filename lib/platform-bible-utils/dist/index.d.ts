@@ -370,12 +370,13 @@ export declare const offsetVerse: (scrRef: ScriptureReference, offset: number) =
  *
  * Convert book number to a localized Id (a short description of the book). This should be used
  * whenever a book ID (short code) is shown to the user. It is primarily needed for people who do
- * not read Roman script well /// and need to have books identified in a alternate script (e.g.
+ * not read Roman script well and need to have books identified in a alternate script (e.g.
  * Chinese or Russian)
  *
  * @param bookNumber
- * @param localizationLanguage
- * @param getLocalizedString
+ * @param localizationLanguage in BCP 47 format
+ * @param getLocalizedString function that provides the localized versions of the book ids and names
+ * asynchronously.
  * @returns
  */
 export declare function getLocalizedIdFromBookNumber(bookNumber: number, localizationLanguage: string, getLocalizedString: (item: {
@@ -1143,6 +1144,109 @@ export declare const menuDocumentSchema: {
 				};
 			};
 			additionalProperties: boolean;
+		};
+	};
+};
+/** Localized string value associated with this key */
+export type LocalizedStringValue = string;
+/** The data an extension provides to inform Platform.Bible of the localized strings it provides. */
+export interface LocalizedStringDataContribution {
+	[k: string]: unknown;
+	metadata?: StringsMetadata;
+	localizedStrings?: {
+		[k: string]: LanguageStrings;
+	};
+}
+/**
+ * Map whose keys are localized string keys and whose values provide additional non-locale-specific
+ * information about the localized string key
+ */
+export interface StringsMetadata {
+	[k: LocalizeKey]: StringMetadata;
+}
+/** Additional non-locale-specific information about a localized string key */
+export interface StringMetadata {
+	[k: string]: unknown;
+	/**
+	 * Localized string key from which to get this value if one does not exist in the specified
+	 * language. If a new key/value pair needs to be made to replace an existing one, this could help
+	 * smooth over the transition if the meanings are close enough
+	 */
+	fallbackKey?: LocalizeKey;
+	/**
+	 * Additional information provided by developers in English to help the translator to know how to
+	 * translate this localized string accurately
+	 */
+	notes?: string;
+}
+/**
+ * Map whose keys are localized string keys and whose values provide information about how to
+ * localize strings for the localized string key
+ */
+export interface LanguageStrings {
+	[k: LocalizeKey]: LocalizedStringValue;
+}
+/** JSON schema object that aligns with the LocalizedStringDataContribution type */
+export declare const localizedStringsDocumentSchema: {
+	$schema: string;
+	title: string;
+	description: string;
+	type: string;
+	properties: {
+		metadata: {
+			$ref: string;
+		};
+		localizedStrings: {
+			type: string;
+			additionalProperties: {
+				$ref: string;
+			};
+		};
+	};
+	$defs: {
+		languageStrings: {
+			description: string;
+			type: string;
+			patternProperties: {
+				"^%[\\w\\-\\.]+%$": {
+					$ref: string;
+				};
+			};
+			additionalProperties: boolean;
+		};
+		localizedStringValue: {
+			description: string;
+			type: string;
+		};
+		stringsMetadata: {
+			description: string;
+			type: string;
+			patternProperties: {
+				"^%[\\w\\-\\.]+%$": {
+					$ref: string;
+				};
+			};
+			additionalProperties: boolean;
+		};
+		stringMetadata: {
+			description: string;
+			type: string;
+			properties: {
+				fallbackKey: {
+					description: string;
+					$ref: string;
+				};
+				notes: {
+					description: string;
+					type: string;
+				};
+			};
+		};
+		localizeKey: {
+			description: string;
+			type: string;
+			pattern: string;
+			tsType: string;
 		};
 	};
 };

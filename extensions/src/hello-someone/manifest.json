@@ -9,6 +9,7 @@
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",
   "projectSettings": "contributions/projectSettings.json",
+  "localizedStrings": "contributions/localizedStrings.json",
   "activationEvents": [
     "onCommand:helloSomeone.helloSomeone",
     "onCommand:helloSomeone.echoSomeoneRenderer"
