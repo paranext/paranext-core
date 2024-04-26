@@ -313,7 +313,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         const menuItemOffsetTop = menuItemRef.current.offsetTop;
         const scrollPosition = menuItemOffsetTop - SCROLL_OFFSET;
         contentRef.current.scrollTo({ top: scrollPosition, behavior: 'instant' });
-        // menuItemRef.current.focus();
       }
     }, 10);
     return () => {
