@@ -1494,7 +1494,7 @@ declare module 'shared/services/network-object.service' {
    */
   const get: <T extends object>(
     id: string,
-    createLocalObjectToProxy?: LocalObjectToProxyCreator<T> | undefined,
+    createLocalObjectToProxy?: LocalObjectToProxyCreator<T>,
   ) => Promise<NetworkObject<T> | undefined>;
   /**
    * Set up an object to be shared on the network.
@@ -4766,6 +4766,102 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
   export default useDialogCallback;
 }
+declare module 'shared/services/localization.service-model' {
+  import IDataProvider from 'shared/models/data-provider.interface';
+  import {
+    DataProviderDataType,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { OnDidDispose } from 'platform-bible-utils';
+  export type LocalizationMetadata = {
+    notes: string;
+    fallbackKey: string;
+  };
+  export type LocalizedStringMetadata = {
+    [localizedStringKey: string]: LocalizationMetadata;
+  };
+  export type LocalizationData = {
+    [localizeKey: string]: string;
+  };
+  export type LocalizationSelector = {
+    localizeKey: string;
+    locales?: string[];
+  };
+  export type LocalizationSelectors = {
+    localizeKeys: string[];
+    locales?: string[];
+  };
+  /**
+   *
+   * This name is used to register the localization data provider on the papi. You can use this name
+   * to find the data provider when accessing it using the useData hook
+   */
+  export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
+  export const localizationServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the localization data provider on the papi. You can use this name
+     * to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.localizationDataServiceDataProvider';
+  }>;
+  export type LocalizationDataDataTypes = {
+    LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
+    LocalizedStrings: DataProviderDataType<
+      LocalizationSelectors,
+      {
+        [localizeKey: string]: string;
+      },
+      never
+    >;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [localizationServiceProviderName]: ILocalizationService;
+    }
+  }
+  /**
+   *
+   * Service that allows to get and store localizations
+   */
+  export type ILocalizationService = {
+    /**
+     * Look up localized string for specific localizeKey
+     *
+     * @param selector Made up of a string key that corresponds to a localized value and an array of
+     *   BCP 47 language codes
+     * @returns Localized string
+     */
+    getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
+    /**
+     * Look up localized strings for all localizeKeys provided
+     *
+     * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
+     *   string key that corresponds to a localized value and an array of BCP 47 language codes
+     * @returns Object whose keys are localizeKeys and values are localized strings
+     */
+    getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw
+     *
+     * @returns Unsubscriber function
+     */
+    setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw
+     *
+     * @returns Unsubscriber function
+     */
+    setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+  } & OnDidDispose &
+    typeof localizationServiceObjectToProxy & {
+      /**
+       * This function is used to take a book number from a verse ref and return the localized name of
+       * the book so that the book name can be displayed in the UI language within the UI
+       */
+      getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
+    } & IDataProvider<LocalizationDataDataTypes>;
+}
 declare module 'shared/services/settings.service-model' {
   import { SettingNames, SettingTypes } from 'papi-shared-types';
   import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
@@ -5033,6 +5129,11 @@ declare module '@papi/core' {
   export type { default as IProjectDataProviderFactory } from 'shared/models/project-data-provider-factory.interface';
   export type { ProjectMetadata } from 'shared/models/project-metadata.model';
   export type { MandatoryProjectStorageDataTypes } from 'shared/models/project-storage-interpreter.model';
+  export type {
+    LocalizationData,
+    LocalizationSelector,
+    LocalizationSelectors,
+  } from 'shared/services/localization.service-model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type {
     GetWebViewOptions,
@@ -5173,6 +5274,11 @@ declare module 'shared/services/menu-data.service' {
   const menuDataService: IMenuDataService;
   export default menuDataService;
 }
+declare module 'shared/services/localization.service' {
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  const localizationDataService: ILocalizationService;
+  export default localizationDataService;
+}
 declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   const settingsService: ISettingsService;
@@ -5204,6 +5310,7 @@ declare module '@papi/backend' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
   import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
+  import { ILocalizationService } from 'shared/services/localization.service-model';
   const papi: {
     /**
      *
@@ -5309,6 +5416,11 @@ declare module '@papi/backend' {
      * Service that allows to get and store menu data
      */
     menuData: IMenuDataService;
+    /**
+     *
+     * Service that allows to get and store localizations
+     */
+    localization: ILocalizationService;
   };
   export default papi;
   /**
@@ -5413,6 +5525,11 @@ declare module '@papi/backend' {
    * Service that allows to get and store menu data
    */
   export const menuData: IMenuDataService;
+  /**
+   *
+   * Service that allows to get and store localizations
+   */
+  export const localization: ILocalizationService;
 }
 declare module 'extension-host/extension-types/extension.interface' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -6056,6 +6173,7 @@ declare module '@papi/frontend' {
   import * as papiReact from '@papi/frontend/react';
   import PapiRendererWebSocket from 'renderer/services/renderer-web-socket.service';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { ILocalizationService } from 'shared/services/localization.service-model';
   import PapiRendererXMLHttpRequest from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
     /** This is just an alias for internet.fetch */
@@ -6138,6 +6256,11 @@ declare module '@papi/frontend' {
      * Service that allows to get and store menu data
      */
     menuData: IMenuDataService;
+    /**
+     *
+     * Service that allows to get and store localizations
+     */
+    localization: ILocalizationService;
   };
   export default papi;
   /** This is just an alias for internet.fetch */
@@ -6220,5 +6343,10 @@ declare module '@papi/frontend' {
    * Service that allows to get and store menu data
    */
   export const menuData: IMenuDataService;
+  /**
+   *
+   * Service that allows to get and store localizations
+   */
+  export const localization: ILocalizationService;
   export type Papi = typeof papi;
 }

@@ -42,7 +42,8 @@
   "devDependencies": {
     "escape-string-regexp": "^5.0.0",
     "rimraf": "^5.0.5",
-    "typescript": "^5.3.3"
+    "typedoc": "^0.25.13",
+    "typescript": "^5.4.5"
   },
   "dependencies": {
     "platform-bible-utils": "file:../platform-bible-utils"
