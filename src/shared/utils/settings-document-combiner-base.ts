@@ -5,6 +5,7 @@ import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
   DocumentCombiner,
   JsonDocumentLike,
+  LocalizeKey,
   Localized,
   Setting,
   SettingProperties,
@@ -70,7 +71,7 @@ async function localizeSettingsContributionInfo(
 ): Promise<LocalizedSettingsContributionInfo> {
   try {
     // Gather localized string keys
-    const localizedStringKeys = new Set<string>();
+    const localizedStringKeys = new Set<LocalizeKey>();
     Object.values(settings.contributions).forEach((extensionSettings) =>
       extensionSettings?.forEach((settingsGroup) => {
         localizedStringKeys.add(settingsGroup.label);
@@ -95,13 +96,22 @@ async function localizeSettingsContributionInfo(
 
     Object.values(localizedSettings.contributions).forEach((extensionSettings) =>
       extensionSettings?.forEach((settingsGroup) => {
-        settingsGroup.label = localizedStrings[settingsGroup.label];
+        // We are changing the type from LocalizeKey to the localized string here
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        settingsGroup.label = localizedStrings[settingsGroup.label as LocalizeKey];
         if (settingsGroup.description)
-          settingsGroup.description = localizedStrings[settingsGroup.description];
+          // We are changing the type from LocalizeKey to the localized string here
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          settingsGroup.description = localizedStrings[settingsGroup.description as LocalizeKey];
 
         Object.values(settingsGroup.properties).forEach((setting: Localized<Setting>) => {
-          setting.label = localizedStrings[setting.label];
-          if (setting.description) setting.description = localizedStrings[setting.description];
+          // We are changing the type from LocalizeKey to the localized string here
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          setting.label = localizedStrings[setting.label as LocalizeKey];
+          if (setting.description)
+            // We are changing the type from LocalizeKey to the localized string here
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            setting.description = localizedStrings[setting.description as LocalizeKey];
         });
       }),
     );

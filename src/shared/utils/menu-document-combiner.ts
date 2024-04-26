@@ -18,6 +18,7 @@ import {
   DeepPartial,
   Localized,
   startsWith,
+  LocalizeKey,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import localizationService from '@shared/services/localization.service';
@@ -150,12 +151,15 @@ function checkMenuItemsForDuplicateOrdering(menuItems: MenuItemBase[] | undefine
 
 async function localizeColumns(columns: Localized<ColumnsWithHeaders> | undefined) {
   if (!columns) return;
-  let strings: string[] = [];
+  let strings: LocalizeKey[] = [];
   Object.getOwnPropertyNames(columns).forEach((columnName: string) => {
     // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const column = columns[columnName as ReferencedItem];
-    if (!!column && typeof column === 'object') strings = strings.concat([column.label]);
+    if (!!column && typeof column === 'object')
+      // We are changing the type from LocalizeKey to the localized string here
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      strings = strings.concat([column.label as LocalizeKey]);
   });
   if (strings.length <= 0) return;
 
@@ -164,25 +168,41 @@ async function localizeColumns(columns: Localized<ColumnsWithHeaders> | undefine
     // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const column = columns[columnName as ReferencedItem];
-    if (!!column && typeof column === 'object') column.label = newStrings[column.label];
+    if (!!column && typeof column === 'object')
+      // We are changing the type from LocalizeKey to the localized string here
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      column.label = newStrings[column.label as LocalizeKey];
   });
 }
 
 async function localizeMenuItems(menuItems: Localized<MenuItemBase>[] | undefined) {
   if (!menuItems) return;
-  let strings: string[] = [];
+  let strings: LocalizeKey[] = [];
   menuItems.forEach((menuItem) => {
-    strings = strings.concat([menuItem.label]);
-    if (menuItem.tooltip) strings = strings.concat([menuItem.tooltip]);
-    if (menuItem.searchTerms) strings = strings.concat([menuItem.searchTerms]);
+    // We are changing the type from LocalizeKey to the localized string here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    strings = strings.concat([menuItem.label as LocalizeKey]);
+    // We are changing the type from LocalizeKey to the localized string here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (menuItem.tooltip) strings = strings.concat([menuItem.tooltip as LocalizeKey]);
+    // We are changing the type from LocalizeKey to the localized string here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (menuItem.searchTerms) strings = strings.concat([menuItem.searchTerms as LocalizeKey]);
   });
   if (strings.length <= 0) return;
 
   const newStrings = await localizationService.getLocalizedStrings({ localizeKeys: strings });
   menuItems.forEach((menuItem) => {
-    menuItem.label = newStrings[menuItem.label];
-    if (menuItem.tooltip) menuItem.tooltip = newStrings[menuItem.tooltip];
-    if (menuItem.searchTerms) menuItem.searchTerms = newStrings[menuItem.searchTerms];
+    // We are changing the type from LocalizeKey to the localized string here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    menuItem.label = newStrings[menuItem.label as LocalizeKey];
+    // We are changing the type from LocalizeKey to the localized string here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (menuItem.tooltip) menuItem.tooltip = newStrings[menuItem.tooltip as LocalizeKey];
+    if (menuItem.searchTerms)
+      // We are changing the type from LocalizeKey to the localized string here
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      menuItem.searchTerms = newStrings[menuItem.searchTerms as LocalizeKey];
   });
 }
 
