@@ -22,12 +22,13 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
 
     public async Task Initialize()
     {
+        await StartFactory();
         var name = $"platform.pdpFactory-{_projectType}";
         await RegisterNetworkObject(
             name,
             new MessageEventProjectDataProviderFactoryCreated(
                 name,
-                new[] { "getProjectDataProviderId" },
+                ["getAvailableProjects", "getProjectDataProviderId"],
                 _projectType
             ),
             FunctionHandler
@@ -58,17 +59,14 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
             return ResponseToRequest.Failed("Invalid function call data");
         }
 
-        if (functionName != "getProjectDataProviderId")
-            return ResponseToRequest.Failed($"Unknown function call: {functionName}");
-
-        if (jsonArray.Count < 2)
-            return ResponseToRequest.Failed(
-                $"Not enough arguments provided when calling PDP Factory for {_projectType}"
-            );
-
         try
         {
-            return GetProjectDataProviderID((string)jsonArray[0]!, (string)jsonArray[1]!);
+            return functionName switch
+            {
+                "getAvailableProjects" => GetAvailableProjects(),
+                "getProjectDataProviderId" => GetProjectDataProviderID((string)jsonArray[0]!),
+                _ => ResponseToRequest.Failed($"Unknown function call: {functionName}"),
+            };
         }
         catch (Exception e)
         {
@@ -77,10 +75,17 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
     }
 
     /// <summary>
-    /// Return the name of the PDP network object that corresponds to the given project ID and PSI ID
+    /// Perform all work needed to be able to respond to PDP requests
     /// </summary>
-    protected abstract ResponseToRequest GetProjectDataProviderID(
-        string projectID,
-        string projectStorageInterpreterId
-    );
+    protected abstract Task StartFactory();
+
+    /// <summary>
+    /// Return project metadata for all projects available through this PDP factory
+    /// </summary>
+    protected abstract ResponseToRequest GetAvailableProjects();
+
+    /// <summary>
+    /// Return the name of the PDP network object that corresponds to the given project ID
+    /// </summary>
+    protected abstract ResponseToRequest GetProjectDataProviderID(string projectID);
 }

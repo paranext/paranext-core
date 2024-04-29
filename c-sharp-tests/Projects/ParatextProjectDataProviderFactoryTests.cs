@@ -6,7 +6,7 @@ using Paranext.DataProvider.Projects;
 namespace TestParanextDataProvider.Projects
 {
     [ExcludeFromCodeCoverage]
-    internal class ParatextProjectDataProviderFactoryTests : PsiTestBase
+    internal class ParatextProjectDataProviderFactoryTests : PapiTestBase
     {
         private const string PDB_FACTORY_GET_REQUEST =
             "object:platform.pdpFactory-ParatextStandard.function";
@@ -16,13 +16,12 @@ namespace TestParanextDataProvider.Projects
         {
             const int requesterId = 47192;
 
-            ParatextProjectDataProviderFactory factory = new(Client, Psi, ParatextProjects);
+            ParatextProjectDataProviderFactory factory = new(Client, ParatextProjects);
             await factory.Initialize();
 
             JsonElement serverMessage = CreateRequestMessage(
                 "getProjectDataProviderId",
-                "unknownProj",
-                "paratextFolders"
+                "unknownProj"
             );
 
             Message result = Client
@@ -46,10 +45,10 @@ namespace TestParanextDataProvider.Projects
 
             ParatextProjects.FakeAddProject(CreateProjectDetails(projId, "Monkey Soup"));
 
-            ParatextProjectDataProviderFactory factory = new(Client, Psi, ParatextProjects);
+            ParatextProjectDataProviderFactory factory = new(Client, ParatextProjects);
             await factory.Initialize();
 
-            JsonElement serverMessage = CreateRequestMessage("getProjectDataProviderId", projId);
+            JsonElement serverMessage = CreateRequestMessage("getProjectDataProviderId");
 
             Message result = Client
                 .FakeMessageFromServer(
@@ -60,43 +59,9 @@ namespace TestParanextDataProvider.Projects
             Assert.That(result.Type, Is.EqualTo(MessageType.RESPONSE));
             MessageResponse response = (MessageResponse)result;
             Assert.That(
-                response.ErrorMessage,
-                Is.EqualTo(
-                    "Not enough arguments provided when calling PDP Factory for ParatextStandard"
-                )
-            );
-            Assert.That(response.RequestId, Is.EqualTo(requesterId));
-            Assert.That(response.Contents, Is.Null);
-        }
-
-        [Test]
-        public async Task InvalidType_ReturnsError()
-        {
-            const string projId = "monkey";
-            const int requesterId = 47281;
-
-            ParatextProjects.FakeAddProject(CreateProjectDetails(projId, "Monkey Soup"));
-
-            ParatextProjectDataProviderFactory factory = new(Client, Psi, ParatextProjects);
-            await factory.Initialize();
-
-            JsonElement serverMessage = CreateRequestMessage(
-                "getProjectDataProviderId",
-                projId,
-                "unknownType"
-            );
-
-            Message result = Client
-                .FakeMessageFromServer(
-                    new MessageRequest(PDB_FACTORY_GET_REQUEST, requesterId, serverMessage)
-                )
-                .First();
-
-            Assert.That(result.Type, Is.EqualTo(MessageType.RESPONSE));
-            MessageResponse response = (MessageResponse)result;
-            Assert.That(
-                response.ErrorMessage,
-                Is.EqualTo("Unexpected project storage interpreter requested: unknownType")
+                response.ErrorMessage != null
+                    && response.ErrorMessage.StartsWith("System.ArgumentOutOfRangeException"),
+                Is.True
             );
             Assert.That(response.RequestId, Is.EqualTo(requesterId));
             Assert.That(response.Contents, Is.Null);
@@ -110,14 +75,10 @@ namespace TestParanextDataProvider.Projects
 
             ParatextProjects.FakeAddProject(CreateProjectDetails(projId, "Monkey Soup"));
 
-            ParatextProjectDataProviderFactory factory = new(Client, Psi, ParatextProjects);
+            ParatextProjectDataProviderFactory factory = new(Client, ParatextProjects);
             await factory.Initialize();
 
-            JsonElement serverMessage = CreateRequestMessage(
-                "unknownFunction",
-                projId,
-                "paratextFolders"
-            );
+            JsonElement serverMessage = CreateRequestMessage("unknownFunction", projId);
 
             Message result = Client
                 .FakeMessageFromServer(
@@ -144,14 +105,10 @@ namespace TestParanextDataProvider.Projects
 
             ParatextProjects.FakeAddProject(CreateProjectDetails(projId, "Monkey Soup"));
 
-            ParatextProjectDataProviderFactory factory = new(Client, Psi, ParatextProjects);
+            ParatextProjectDataProviderFactory factory = new(Client, ParatextProjects);
             await factory.Initialize();
 
-            JsonElement serverMessage = CreateRequestMessage(
-                "getProjectDataProviderId",
-                projId,
-                "paratextFolders"
-            );
+            JsonElement serverMessage = CreateRequestMessage("getProjectDataProviderId", projId);
 
             Message result1 = Client
                 .FakeMessageFromServer(

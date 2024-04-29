@@ -182,6 +182,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const helloWorldPdpefPromise = papi.projectDataProviders.registerProjectDataProviderEngineFactory(
     'helloWorld',
     helloWorldProjectDataProviderEngineFactory,
+    async () => {
+      return [];
+    },
   );
 
   const openHelloWorldProjectPromise = papi.commands.registerCommand(

@@ -21,7 +21,10 @@ export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemot
    *   once the network object is registered, or rejects if a timeout is provided and the timeout is
    *   reached before the network object is registered
    */
-  waitForNetworkObject: (id: string, timeoutInMS?: number) => Promise<NetworkObjectDetails>;
+  waitForNetworkObject: (
+    objectDetailsToMatch: Partial<NetworkObjectDetails>,
+    timeoutInMS?: number,
+  ) => Promise<NetworkObjectDetails>;
 }
 
 export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';

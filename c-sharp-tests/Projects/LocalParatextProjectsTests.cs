@@ -104,6 +104,6 @@ public class LocalParatextProjectsTests
 
     private static ProjectMetadata CreateParatextProjectMetadata(string name)
     {
-        return new ProjectMetadata(TEST_ID, name, "paratextFolders", "paratext");
+        return new ProjectMetadata(TEST_ID, name, "paratext");
     }
 }

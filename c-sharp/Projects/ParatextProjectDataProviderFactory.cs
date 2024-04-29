@@ -6,33 +6,38 @@ namespace Paranext.DataProvider.Projects;
 
 internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
 {
-    private readonly ParatextProjectStorageInterpreter _paratextPsi;
     private readonly LocalParatextProjects _paratextProjects;
     private readonly ConcurrentDictionary<string, ParatextProjectDataProvider> _pdpMap = new();
-    private readonly object _creationLock = new object();
+    private readonly object _creationLock = new();
     private readonly Random _random = new((int)DateTime.Now.Ticks);
 
     public ParatextProjectDataProviderFactory(
         PapiClient papiClient,
-        ParatextProjectStorageInterpreter paratextPsi,
         LocalParatextProjects paratextProjects
     )
         : base(ProjectType.Paratext, papiClient)
     {
-        _paratextPsi = paratextPsi;
         _paratextProjects = paratextProjects;
     }
 
-    protected override ResponseToRequest GetProjectDataProviderID(
-        string projectID,
-        string projectStorageInterpreterId
-    )
+    protected override Task StartFactory()
     {
-        if (_paratextPsi.StorageType != projectStorageInterpreterId)
-            return ResponseToRequest.Failed(
-                $"Unexpected project storage interpreter requested: {projectStorageInterpreterId}"
-            );
+        _paratextProjects.Initialize();
+        return Task.CompletedTask;
+    }
 
+    protected override ResponseToRequest GetAvailableProjects()
+    {
+        var projectMetadata = _paratextProjects
+            .GetAllProjectDetails()
+            .Select(pd => pd.Metadata)
+            .Where(m => m.ProjectType == ProjectType.Paratext)
+            .ToList();
+        return ResponseToRequest.Succeeded(projectMetadata);
+    }
+
+    protected override ResponseToRequest GetProjectDataProviderID(string projectID)
+    {
         // If we already have a PDP for this project, just return it
         if (_pdpMap.TryGetValue(projectID, out var existingPdp))
             return ResponseToRequest.Succeeded(existingPdp.DataProviderName);
@@ -57,11 +62,16 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
 
             // Create a random 30 character string containing letters A-Z
             var name = new string(
-                Enumerable.Range(0, 30).Select(_ => (char)(_random.Next(65, 90))).ToArray()
+                Enumerable.Range(0, 30).Select(_ => (char)_random.Next(65, 90)).ToArray()
             );
 
             // Create and store the PDP in the map for future lookups
-            var newPdp = new ParatextProjectDataProvider(_paratextPsi, name, PapiClient, details);
+            var newPdp = new ParatextProjectDataProvider(
+                name,
+                PapiClient,
+                details,
+                _paratextProjects
+            );
             if (!_pdpMap.TryAdd(projectID, newPdp))
                 return ResponseToRequest.Failed("Internal error adding project data provider");
 

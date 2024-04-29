@@ -1,12 +1,13 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using Paranext.DataProvider.Projects;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Xml.Linq;
-using Paratext.Data;
-using Paranext.DataProvider.Messages;
 using System.Web;
-using System.Diagnostics.CodeAnalysis;
+using System.Xml.Linq;
+using Paranext.DataProvider.MessageHandlers;
+using Paranext.DataProvider.Messages;
+using Paranext.DataProvider.Projects;
+using Paratext.Data;
 
 namespace TestParanextDataProvider
 {
@@ -99,7 +100,7 @@ namespace TestParanextDataProvider
             string projectType = ""
         )
         {
-            ProjectMetadata metadata = new(id, name, "ParatextFolders", projectType);
+            ProjectMetadata metadata = new(id, name, projectType);
             return new ProjectDetails(metadata, "testDirectoryThatDoesNotExist");
         }
 
@@ -274,6 +275,25 @@ namespace TestParanextDataProvider
                 Assert.That(response.RequestId, Is.EqualTo(expectedRequestId));
             });
         }
+
+        /// <summary>
+        /// Verifies a ResponseToRequest from a PDP call
+        /// </summary>
+        protected static void VerifyResponseToRequest(
+            ResponseToRequest response,
+            string? expectedErrorMessage,
+            string? expectedContents
+        )
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(response.ErrorMessage, Is.EqualTo(expectedErrorMessage));
+                Assert.That(response.Success, Is.EqualTo(expectedErrorMessage == null));
+                string? contents = response.Contents as string;
+                Assert.That(contents, Is.EqualTo(expectedContents));
+            });
+        }
+
         #endregion
     }
 }

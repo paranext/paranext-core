@@ -3,11 +3,11 @@ import {
   networkObjectStatusServiceNetworkObjectName,
   NetworkObjectStatusRemoteServiceType,
   NetworkObjectStatusServiceType,
-} from '@shared/services/network-object-status.service-model';
+} from '@shared/models/network-object-status.service-model';
 import networkObjectService, {
   onDidCreateNetworkObject,
 } from '@shared/services/network-object.service';
-import { AsyncVariable } from 'platform-bible-utils';
+import { AsyncVariable, isSubset } from 'platform-bible-utils';
 
 let networkObject: NetworkObjectStatusRemoteServiceType;
 let initializationPromise: Promise<void>;
@@ -53,19 +53,22 @@ async function getAllNetworkObjectDetails(): Promise<Record<string, NetworkObjec
 // for code understandability we'll just leave it as-is and poll inside the network object service
 // `get` for now. Other services will have to call this directly if they want to be event based.
 async function waitForNetworkObject(
-  id: string,
+  objectDetailsToMatch: Partial<NetworkObjectDetails>,
   timeoutInMS?: number,
 ): Promise<NetworkObjectDetails> {
-  const asyncVar = new AsyncVariable<NetworkObjectDetails>(`waiting-for-${id}`, timeoutInMS ?? -1);
+  const asyncVar = new AsyncVariable<NetworkObjectDetails>(`wait-for-net-obj`, timeoutInMS ?? -1);
   // Watch the stream of incoming network objects before getting a snapshot to avoid race conditions
   const unsub = onDidCreateNetworkObject((networkObjectDetails) => {
-    if (networkObjectDetails.id === id) asyncVar.resolveToValue(networkObjectDetails, false);
+    if (isSubset(networkObjectDetails, objectDetailsToMatch))
+      asyncVar.resolveToValue(networkObjectDetails, false);
     if (asyncVar.hasSettled) unsub();
   });
   // Now check if the needed network object has already been created
   const existingNetworkObjectDetails = await getAllNetworkObjectDetails();
-  if (existingNetworkObjectDetails[id])
-    asyncVar.resolveToValue(existingNetworkObjectDetails[id], false);
+  const match = Object.values(existingNetworkObjectDetails).find((networkObjectDetails) =>
+    isSubset(networkObjectDetails, objectDetailsToMatch),
+  );
+  if (match) asyncVar.resolveToValue(match, false);
   return asyncVar.promise;
 }
 

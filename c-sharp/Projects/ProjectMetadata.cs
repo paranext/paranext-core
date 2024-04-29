@@ -3,41 +3,27 @@ using Newtonsoft.Json;
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
-/// Represents the data inside of a project's meta.json file
+/// Represents the data inside a project's meta.json file
 /// </summary>
-public class ProjectMetadata
+public class ProjectMetadata(string id, string name, string projectType)
 {
-    public ProjectMetadata(string id, string name, string projectStorageType, string projectType)
-    {
-        ID = id.ToUpperInvariant();
-        Name = name;
-        ProjectStorageType = projectStorageType;
-        ProjectType = projectType;
-    }
-
     /// <summary>
-    /// ID of the project (must be unique and case insensitive)
+    /// ID of the project (must be unique and case-insensitive)
     /// </summary>
     [JsonProperty("id")]
-    public string ID { get; }
+    public string ID { get; } = id.ToUpperInvariant();
 
     /// <summary>
     /// Short name of the project (not necessarily unique)
     /// </summary>
     [JsonProperty("name")]
-    public string Name { get; }
-
-    /// <summary>
-    /// Indicates how the project is persisted to storage
-    /// </summary>
-    [JsonProperty("storageType")]
-    public string ProjectStorageType { get; }
+    public string Name { get; } = name;
 
     /// <summary>
     /// Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
     /// </summary>
     [JsonProperty("projectType")]
-    public string ProjectType { get; }
+    public string ProjectType { get; } = projectType;
 
     public override bool Equals(object? obj)
     {
@@ -49,17 +35,16 @@ public class ProjectMetadata
     {
         return ID.Equals(other.ID)
             && Name == other.Name
-            && ProjectStorageType == other.ProjectStorageType
             && ProjectType == other.ProjectType;
     }
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(ID, Name, ProjectStorageType, ProjectType);
+        return HashCode.Combine(ID, Name, ProjectType);
     }
 
     public override string ToString()
     {
-        return $"[{Name} ({ID}): {ProjectStorageType}, {ProjectType}]";
+        return $"[{Name} ({ID}): {ProjectType}]";
     }
 }
