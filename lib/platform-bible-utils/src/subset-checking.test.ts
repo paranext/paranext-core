@@ -39,6 +39,6 @@ test('Subset checking works on objects with properties', () => {
   expect(isSubset(objB, objA)).toBeFalsy();
   expect(isSubset(objA, objC)).toBeTruthy();
   expect(isSubset(objC, objA)).toBeFalsy();
-  expect(isSubset(objA, objB)).toBeTruthy();
-  expect(isSubset(objB, objA)).toBeFalsy();
+  expect(isSubset(objB, objC)).toBeTruthy();
+  expect(isSubset(objC, objB)).toBeFalsy();
 });

@@ -219,18 +219,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Now actually write the setting
         string? errorMessage = null;
         RunWithinLock(
-        WriteScope.AllSettingsFiles(),
-        _ => {
-                try
-                {
-                    scrText.Settings.SetSetting(paratextSettingName, value);
-                    scrText.Settings.Save();
-                }
-                catch (Exception ex)
-                {
-                    errorMessage = ex.Message;
-                }
-        });
+            WriteScope.AllSettingsFiles(),
+            _ => {
+                    try
+                    {
+                        scrText.Settings.SetSetting(paratextSettingName, value);
+                        scrText.Settings.Save();
+                    }
+                    catch (Exception ex)
+                    {
+                        errorMessage = ex.Message;
+                    }
+            });
         return (errorMessage != null)
             ? ResponseToRequest.Failed(errorMessage)
             : ResponseToRequest.Succeeded(ProjectDataType.SETTINGS);

@@ -720,6 +720,11 @@ export function deepEqual(a: unknown, b: unknown): boolean;
  * objB = { name: 'Alice', address: { city: 'Seattle' } };
  * ```
  *
+ * It is important to note that only arrays of primitives (i.e., booleans, numbers, strings) are
+ * supported. In particular, objects in arrays will not be checked for deep equality. Also, presence
+ * in an array is all this checks, not the number of times that an item appears in an array. `[1,
+ * 1]` is a subset of `[1]`.
+ *
  * @param objectWithAllProperties Object to be checked if it is a superset of
  *   `objectWithPartialProperties`
  * @param objectWithPartialProperties Object to be checked if it is a subset of
