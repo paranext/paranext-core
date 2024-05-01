@@ -11,7 +11,7 @@ import { WebViewServiceType } from '@shared/services/web-view.service-model';
 import webViewService from '@shared/services/web-view.service';
 import internetService, { InternetService } from '@shared/services/internet.service';
 import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
-import { ProjectLookupServiceType } from '@shared/services/project-lookup.service-model';
+import { ProjectLookupServiceType } from '@shared/models/project-lookup.service-model';
 import projectLookupService from '@shared/services/project-lookup.service';
 import {
   papiFrontendProjectDataProviderService,

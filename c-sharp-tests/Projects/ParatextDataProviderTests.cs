@@ -1,16 +1,16 @@
 using System.Diagnostics.CodeAnalysis;
-using Paranext.DataProvider.Messages;
-using Paranext.DataProvider.Projects;
-using PtxUtils;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Paranext.DataProvider.MessageHandlers;
+using Paranext.DataProvider.Messages;
+using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.Projects
 {
     [ExcludeFromCodeCoverage]
-    internal class ParatextDataProviderTests : PsiTestBase
+    internal class ParatextDataProviderTests : PapiTestBase
     {
         private const string PdpName = "soup";
         private const string PdpDataRequest = "object:soup-pdp-data.function";
@@ -45,7 +45,8 @@ namespace TestParanextDataProvider.Projects
             Random random = new();
             int requesterId = random.Next();
 
-            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
             await provider.RegisterDataProvider();
 
             JsonElement serverMessage = CreateRequestMessage(function);
@@ -98,7 +99,8 @@ namespace TestParanextDataProvider.Projects
             Random random = new();
             int requesterId = random.Next();
 
-            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
             await provider.RegisterDataProvider();
 
             JsonElement serverMessage = CreateRequestMessage(
@@ -158,7 +160,8 @@ namespace TestParanextDataProvider.Projects
                 null
             );
 
-            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
             await provider.RegisterDataProvider();
 
             JsonElement serverMessage = CreateRequestMessage(
@@ -211,7 +214,8 @@ namespace TestParanextDataProvider.Projects
                 null
             );
 
-            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
             await provider.RegisterDataProvider();
 
             // Set up an event listener to listen for the update
@@ -242,14 +246,14 @@ namespace TestParanextDataProvider.Projects
                 null,
                 requestType,
                 requesterId,
-                ParatextProjectStorageInterpreter.AllScriptureDataTypes
+                ParatextProjectDataProvider.AllScriptureDataTypes
             );
 
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
             Assert.That(
                 updateEvents[0].Event,
-                Is.EqualTo(ParatextProjectStorageInterpreter.AllScriptureDataTypes)
+                Is.EqualTo(ParatextProjectDataProvider.AllScriptureDataTypes)
             );
 
             // Verify the new text was saved to disk
@@ -304,7 +308,8 @@ namespace TestParanextDataProvider.Projects
                 null
             );
 
-            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
             await provider.RegisterDataProvider();
 
             // Set up an event listener to listen for the update
@@ -335,14 +340,14 @@ namespace TestParanextDataProvider.Projects
                 null,
                 requestType,
                 requesterId,
-                ParatextProjectStorageInterpreter.AllScriptureDataTypes
+                ParatextProjectDataProvider.AllScriptureDataTypes
             );
 
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
             Assert.That(
                 updateEvents[0].Event,
-                Is.EqualTo(ParatextProjectStorageInterpreter.AllScriptureDataTypes)
+                Is.EqualTo(ParatextProjectDataProvider.AllScriptureDataTypes)
             );
 
             // Verify the new text was saved to disk
@@ -364,13 +369,65 @@ namespace TestParanextDataProvider.Projects
             VerifyUsfmSame(stringContents!, newValue, _scrText, 1);
         }
 
+        [TestCase(null, "myFile.txt", "Must provide an extension name")]
+        [TestCase("", "myFile.txt", "Must provide an extension name")]
+        [TestCase("myExtension", null, "Must provide a data qualifier")]
+        [TestCase("myExtension", "", "Must provide a data qualifier")]
+        public async Task GetExtensionData_InvalidParameters_ReturnsError(
+            string? extensionName,
+            string? dataQualifier,
+            string? expectedError
+        )
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            await provider.RegisterDataProvider();
+
+            ResponseToRequest response = provider.GetExtensionData(
+                new ProjectDataScope
+                {
+                    ExtensionName = extensionName,
+                    DataQualifier = dataQualifier
+                }
+            );
+
+            VerifyResponseToRequest(response, expectedError, null);
+        }
+
+        [TestCase(null, "myFile.txt", "Must provide an extension name")]
+        [TestCase("", "myFile.txt", "Must provide an extension name")]
+        [TestCase("myExtension", null, "Must provide a data qualifier")]
+        [TestCase("myExtension", "", "Must provide a data qualifier")]
+        public async Task SetExtensionData_InvalidParameters_ReturnsError(
+            string? extensionName,
+            string? dataQualifier,
+            string? expectedError
+        )
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            await provider.RegisterDataProvider();
+
+            ResponseToRequest response = provider.SetExtensionData(
+                new ProjectDataScope
+                {
+                    ExtensionName = extensionName,
+                    DataQualifier = dataQualifier
+                },
+                "Random data"
+            );
+
+            VerifyResponseToRequest(response, expectedError, null);
+        }
+
         [Test]
         public async Task GetExtensionData_NoData_ReturnsError()
         {
             Random random = new();
             int requesterId = random.Next();
 
-            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
             await provider.RegisterDataProvider();
 
             JsonNode scope = CreateDataScope("myExtension", "myFile.txt");
@@ -390,7 +447,8 @@ namespace TestParanextDataProvider.Projects
             Random random = new();
             int requesterId = random.Next();
 
-            ParatextProjectDataProvider provider = new(Psi, PdpName, Client, _projectDetails);
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
             await provider.RegisterDataProvider();
 
             JsonNode scope = CreateDataScope("myExtension", "myFile.txt");

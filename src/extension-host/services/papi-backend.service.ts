@@ -23,7 +23,7 @@ import {
 import extensionStorageService, {
   ExtensionStorageService,
 } from '@extension-host/services/extension-storage.service';
-import { ProjectLookupServiceType } from '@shared/services/project-lookup.service-model';
+import { ProjectLookupServiceType } from '@shared/models/project-lookup.service-model';
 import projectLookupService from '@shared/services/project-lookup.service';
 import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
@@ -34,7 +34,6 @@ import settingsService from '@shared/services/settings.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
 import projectSettingsService from '@shared/services/project-settings.service';
 import { IProjectSettingsService } from '@shared/services/project-settings.service-model';
-import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 import { ILocalizationService } from '@shared/services/localization.service-model';
 
 // IMPORTANT NOTES:
@@ -49,8 +48,6 @@ const papi = {
   // Classes
   /** JSDOC DESTINATION DataProviderEngine */
   DataProviderEngine: PapiDataProviderEngine,
-  /** JSDOC DESTINATION ProjectDataProviderEngine */
-  ProjectDataProviderEngine: PapiProjectDataProviderEngine,
 
   // Functions
   /** This is just an alias for internet.fetch */
@@ -101,9 +98,6 @@ export default papi;
 /** JSDOC DESTINATION DataProviderEngine */
 export const { DataProviderEngine } = papi;
 Object.freeze(papi.DataProviderEngine);
-/** JSDOC DESTINATION ProjectDataProviderEngine */
-export const { ProjectDataProviderEngine } = papi;
-Object.freeze(papi.ProjectDataProviderEngine);
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 Object.freeze(papi.fetch);

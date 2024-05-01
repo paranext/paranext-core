@@ -9,7 +9,6 @@ namespace Paranext.DataProvider.Projects;
 /// <summary>
 /// Manages reading/writing to a project
 /// Subclasses are expected to define and add get/set methods to the Getters/Setters
-/// Subclasses are also expected to use a ProjectStorageInterpreter for implementing all get/set methods as appropriate
 /// ProjectDataProviders are meant to be created/owned by ProjectDataProviderFactory instances
 /// </summary>
 internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
@@ -70,8 +69,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
             DataProviderName,
             functionNames.ToArray(),
             ProjectDetails.Metadata.ID,
-            ProjectDetails.Metadata.ProjectType,
-            GetProjectStorageInterpreterId()
+            ProjectDetails.Metadata.ProjectType
         );
     }
 
@@ -126,17 +124,12 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     }
 
     /// <summary>
-    /// Get the name/ID of the ProjectStorageInterpreter that provides data to this ProjectDataProvider
-    /// </summary>
-    protected abstract string GetProjectStorageInterpreterId();
-
-    /// <summary>
     /// Get an extension's data in a project identified by <param name="scope"></param>.
     /// </summary>
-    protected abstract ResponseToRequest GetExtensionData(ProjectDataScope scope);
+    public abstract ResponseToRequest GetExtensionData(ProjectDataScope scope);
 
     /// <summary>
     /// Set an extension's data in a project identified by <param name="scope"></param>.
     /// </summary>
-    protected abstract ResponseToRequest SetExtensionData(ProjectDataScope scope, string data);
+    public abstract ResponseToRequest SetExtensionData(ProjectDataScope scope, string data);
 }

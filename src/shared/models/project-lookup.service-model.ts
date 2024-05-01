@@ -1,4 +1,7 @@
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
+import { ProjectTypes } from 'papi-shared-types';
+
+export type ProjectMetadataWithFactoryId = ProjectMetadata & { pdpFactoryId: string };
 
 export type ProjectMetadataFilterOptions = {
   /** Project IDs to exclude */
@@ -33,19 +36,27 @@ export type ProjectMetadataFilterOptions = {
  */
 export interface ProjectLookupServiceType {
   /**
-   * Provide metadata for all projects found on the local system
+   * Provide metadata for all projects that have PDP factories
    *
    * @returns ProjectMetadata for all projects stored on the local system
    */
-  getMetadataForAllProjects: () => Promise<ProjectMetadata[]>;
+  getMetadataForAllProjects: () => Promise<ProjectMetadataWithFactoryId[]>;
 
   /**
    * Look up metadata for a specific project ID
    *
    * @param projectId ID of the project to load
-   * @returns ProjectMetadata from the 'meta.json' file for the given project
+   * @param projectType Optional type of the project to load. If not provided, then look at all
+   *   project types for the given project ID.
+   * @param pdpFactoryId Optional ID of the PDP factory where the project ID should be loaded. If
+   *   not provided, then look in all available PDP factories for the given project ID.
+   * @returns ProjectMetadata for the given project
    */
-  getMetadataForProject: (projectId: string) => Promise<ProjectMetadata>;
+  getMetadataForProject: (
+    projectId: string,
+    projectType?: ProjectTypes,
+    pdpFactoryId?: string,
+  ) => Promise<ProjectMetadataWithFactoryId>;
 }
 
 export const projectLookupServiceNetworkObjectName = 'ProjectLookupService';

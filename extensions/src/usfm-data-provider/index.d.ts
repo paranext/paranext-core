@@ -366,15 +366,9 @@ declare module 'usfm-data-provider' {
 
 declare module 'papi-shared-types' {
   import type { ParatextStandardProjectDataProvider, UsfmDataProvider } from 'usfm-data-provider';
-  import type { IProjectStorageInterpreter } from 'papi-shared-types';
 
   export interface ProjectDataProviders {
     ParatextStandard: ParatextStandardProjectDataProvider;
-  }
-
-  export interface ProjectStorageInterpreters {
-    /** Placeholder. Implementation TBD */
-    ParatextStandard: IProjectStorageInterpreter;
   }
 
   export interface DataProviders {

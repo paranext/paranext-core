@@ -9,7 +9,6 @@ import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
 import { getErrorMessage, substring } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
-import { startProjectLookupService } from '@extension-host/services/project-lookup.service-host';
 import { registerCommand } from '@shared/services/command.service';
 import { initialize as initializeMenuData } from '@extension-host/services/menu-data.service-host';
 import { initialize as initializeSettingsService } from '@extension-host/services/settings.service-host';
@@ -60,9 +59,6 @@ networkService
 
     // The extension host is the only one that can initialize the extensionAssetService
     await extensionAssetService.initialize();
-
-    // Make sure project lookups are available before extensions look for them on PAPI
-    await startProjectLookupService();
 
     // Prepare for contributions to be contributed from extensions before the extensions come online
     await initializeLocalizationService();

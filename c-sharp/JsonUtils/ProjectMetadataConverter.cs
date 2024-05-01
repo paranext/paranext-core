@@ -7,7 +7,6 @@ namespace Paranext.DataProvider.JsonUtils
     {
         private const string ID = "id";
         private const string NAME = "name";
-        private const string STORAGE_TYPE = "storageType";
         private const string PROJECT_TYPE = "projectType";
 
         public static bool TryGetMetadata(
@@ -21,9 +20,8 @@ namespace Paranext.DataProvider.JsonUtils
                 JObject parsedArgs = JObject.Parse(jsonString);
                 string id = Get(parsedArgs, ID);
                 string name = Get(parsedArgs, NAME);
-                string projectStorageType = Get(parsedArgs, STORAGE_TYPE);
                 string projectType = Get(parsedArgs, PROJECT_TYPE);
-                projectMetadata = new ProjectMetadata(id, name, projectStorageType, projectType);
+                projectMetadata = new ProjectMetadata(id, name, projectType);
             }
             catch (Exception ex)
             {
@@ -53,23 +51,16 @@ namespace Paranext.DataProvider.JsonUtils
             {
                 [ID] = projectMetadata.ID,
                 [NAME] = projectMetadata.Name,
-                [STORAGE_TYPE] = projectMetadata.ProjectStorageType,
                 [PROJECT_TYPE] = projectMetadata.ProjectType
             }.ToString();
         }
 
-        public static string ToJsonString(
-            string id,
-            string name,
-            string storageType,
-            string projectType
-        )
+        public static string ToJsonString(string id, string name, string projectType)
         {
             return new JObject
             {
                 [ID] = id,
                 [NAME] = name,
-                [STORAGE_TYPE] = storageType,
                 [PROJECT_TYPE] = projectType
             }.ToString();
         }

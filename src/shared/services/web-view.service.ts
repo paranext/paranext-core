@@ -22,7 +22,7 @@ async function initialize(): Promise<void> {
       const executor = async () => {
         try {
           await networkObjectStatusService.waitForNetworkObject(
-            NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+            { id: NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE },
             // Wait 30 seconds for the web view service to appear
             30000,
           );

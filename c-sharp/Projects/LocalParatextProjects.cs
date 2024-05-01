@@ -54,13 +54,13 @@ internal class LocalParatextProjects
 
         foreach (ProjectDetails projectDetails in allProjectDetails)
         {
-            if (projectDetails.Metadata.ProjectStorageType != ProjectStorageType.ParatextFolders)
-                continue;
-
             try
             {
-                AddProjectToMaps(projectDetails);
-                Console.WriteLine($"Loaded project metadata: {projectDetails}");
+                if (projectDetails.Metadata.ProjectType == ProjectType.Paratext)
+                {
+                    AddProjectToMaps(projectDetails);
+                    Console.WriteLine($"Loaded project metadata: {projectDetails}");
+                }
             }
             catch (Exception ex)
             {
@@ -225,12 +225,10 @@ internal class LocalParatextProjects
         string projectId = "32664dc3288a28df2e2bb75ded887fc8f17a15fb";
         string projectFolderName = projectName + "_" + projectId;
         string projectFolder = Path.Join(ProjectRootFolder, projectFolderName);
-        ProjectMetadata metadata =
-            new(projectId, projectName, "paratextFolders", "ParatextStandard");
+        ProjectMetadata metadata = new(projectId, projectName, "ParatextStandard");
         string metadataString = ProjectMetadataConverter.ToJsonString(
             metadata.ID,
             metadata.Name,
-            metadata.ProjectStorageType,
             metadata.ProjectType
         );
 
@@ -257,11 +255,10 @@ internal class LocalParatextProjects
         projectId = "helloworldtest";
         projectFolderName = projectName + "_" + projectId;
         projectFolder = Path.Join(ProjectRootFolder, projectFolderName);
-        metadata = new(projectId, projectName, "helloWorld", "helloWorld");
+        metadata = new(projectId, projectName, "helloWorld");
         metadataString = ProjectMetadataConverter.ToJsonString(
             metadata.ID,
             metadata.Name,
-            metadata.ProjectStorageType,
             metadata.ProjectType
         );
 

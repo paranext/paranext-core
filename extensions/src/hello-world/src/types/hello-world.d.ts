@@ -39,7 +39,6 @@ declare module 'hello-world' {
 
 declare module 'papi-shared-types' {
   import type { HelloWorldProjectDataProvider } from 'hello-world';
-  import type { IProjectStorageInterpreter } from 'papi-shared-types';
 
   export interface CommandHandlers {
     'helloWorld.helloWorld': () => string;
@@ -57,11 +56,6 @@ declare module 'papi-shared-types' {
 
   export interface ProjectDataProviders {
     helloWorld: HelloWorldProjectDataProvider;
-  }
-
-  export interface ProjectStorageInterpreters {
-    /** Placeholder. Implementation TBD */
-    helloWorld: IProjectStorageInterpreter;
   }
 
   export interface SettingTypes {

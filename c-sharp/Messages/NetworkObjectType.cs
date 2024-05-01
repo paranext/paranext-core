@@ -6,5 +6,4 @@ public static class NetworkObjectType
     public const string OBJECT = "object";
     public const string PROJECT_DATA_PROVIDER_FACTORY = "pdpFactory";
     public const string PROJECT_DATA_PROVIDER = "pdp";
-    public const string PROJECT_STORAGE_INTERPRETER = "psi";
 }
