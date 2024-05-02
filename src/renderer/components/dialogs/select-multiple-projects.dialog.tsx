@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import DoneIcon from '@mui/icons-material/Done';
 import ProjectList from '@renderer/components/projects/project-list.component';
-import './select-multiple-projects-dialog.component.scss';
+import '@renderer/components/dialogs/select-multiple-projects.dialog.scss';
 import projectLookupService, {
   filterProjectsMetadata,
 } from '@shared/services/project-lookup.service';
