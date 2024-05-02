@@ -1,11 +1,14 @@
 // Classes
 export { default as AsyncVariable } from './async-variable';
+export { default as Collator } from './intl-collator';
+export { default as DateTimeFormat } from './intl-date-time-format';
 export { default as DocumentCombiner } from './document-combiner';
-export { default as NonValidatingDocumentCombiner } from './non-validating-document-combiner';
-export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
-export { default as PlatformEventEmitter } from './platform-event-emitter.model';
 export { default as Mutex } from './mutex';
 export { default as MutexMap } from './mutex-map';
+export { default as NonValidatingDocumentCombiner } from './non-validating-document-combiner';
+export { default as NumberFormat } from './intl-number-format';
+export { default as PlatformEventEmitter } from './platform-event-emitter.model';
+export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 
 // Consts
 export {
@@ -55,6 +58,7 @@ export {
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
+export { getCurrentLocale, ordinalCompare } from './intl-util';
 
 // Types
 export type { DeepPartial, ReplaceType } from './util';
