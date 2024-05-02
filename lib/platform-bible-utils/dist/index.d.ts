@@ -704,6 +704,19 @@ export declare function stringLength(string: string): number;
  */
 export declare function normalize(string: string, form: "NFC" | "NFD" | "NFKC" | "NFKD" | "none"): string;
 /**
+ * Compares two strings using an ordinal comparison approach based on the specified collation
+ * options. This function uses the built-in `localeCompare` method with the 'en' locale and the
+ * provided collation options to compare the strings.
+ *
+ * @param string1 The first string to compare.
+ * @param string2 The second string to compare.
+ * @param options Optional. The collation options used for comparison.
+ * @returns A number indicating the result of the comparison: - Negative value if string1 precedes
+ *   string2 in sorting order. - Zero if string1 and string2 are equivalent in sorting order. -
+ *   Positive value if string1 follows string2 in sorting order.
+ */
+export declare function ordinalCompare(string1: string, string2: string, options?: Intl.CollatorOptions): number;
+/**
  * This function mirrors the `padEnd` function from the JavaScript Standard String object. It
  * handles Unicode code points instead of UTF-16 character codes.
  *
@@ -919,19 +932,6 @@ export declare const htmlEncode: (str: string) => string;
  *   function returns an empty string.
  */
 export declare function getCurrentLocale(): string;
-/**
- * Compares two strings using an ordinal comparison approach based on the specified collation
- * options. This function uses the built-in `localeCompare` method with the 'en' locale and the
- * provided collation options to compare the strings.
- *
- * @param string1 The first string to compare.
- * @param string2 The second string to compare.
- * @param options Optional. The collation options used for comparison.
- * @returns A number indicating the result of the comparison: - Negative value if string1 precedes
- *   string2 in sorting order. - Zero if string1 and string2 are equivalent in sorting order. -
- *   Positive value if string1 follows string2 in sorting order.
- */
-export declare function ordinalCompare(string1: string, string2: string, options?: Intl.CollatorOptions): number;
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;
 /** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */

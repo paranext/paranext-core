@@ -54,11 +54,12 @@ export {
   startsWith,
   substring,
   toArray,
+  ordinalCompare,
 } from './string-util';
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
-export { getCurrentLocale, ordinalCompare } from './intl-util';
+export { default as getCurrentLocale } from './intl-util';
 
 // Types
 export type { DeepPartial, ReplaceType } from './util';
