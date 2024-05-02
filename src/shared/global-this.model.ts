@@ -58,6 +58,8 @@ declare global {
   var getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
   /** JSDOC DESTINATION UpdateWebViewDefinition */
   var updateWebViewDefinition: UpdateWebViewDefinition;
+  /** Indicates whether test code meant just for developers to see should be run */
+  var isNoisyDevModeEnabled: boolean;
 }
 /* eslint-enable */
 

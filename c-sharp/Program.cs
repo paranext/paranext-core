@@ -23,22 +23,27 @@ public static class Program
                 return;
             }
 
-            var tdp = new TimeDataProvider(papi);
             var sdp = new UsfmDataProvider(papi, "assets", "WEB");
             var paratextProjects = new LocalParatextProjects();
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
-
-            // Higher priority tasks
             await Task.WhenAll(sdp.RegisterDataProvider(), paratextFactory.Initialize());
 
-            // Lower priority tasks
-            await Task.WhenAll(
-                tdp.RegisterDataProvider(),
-                //TODO: Delete this once we stop including test objects in the builds
-                papi.RegisterRequestHandler("command:test.addOne", RequestAddOne)
-            );
+            // Things that only run in our "noisy dev mode" go here
+            var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");
+            var isNoisyDevMode = noisyDevModeEnvVar != null && noisyDevModeEnvVar == "true";
+            if (isNoisyDevMode)
+            {
+                var tdp = new TimeDataProvider(papi);
+                await Task.WhenAll(
+                    tdp.RegisterDataProvider(),
+                    //TODO: Delete this once we stop including test objects in the builds
+                    papi.RegisterRequestHandler("command:test.addOne", RequestAddOne)
+                );
+            }
 
-            Console.WriteLine("Paranext data provider ready!");
+            Console.WriteLine(
+                $"Paranext data provider ready! {(isNoisyDevMode ? " (noisy dev mode)" : "")}"
+            );
             await papi.MessageHandlingCompleteTask;
             Console.WriteLine("Paranext data provider message handling complete");
         }

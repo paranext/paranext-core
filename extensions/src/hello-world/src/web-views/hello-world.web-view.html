@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
     <style>
@@ -10,14 +10,12 @@
   <body>
     <div class="title">Hello World!!</div>
     <div><button id="hello-world" type="button">Hello World 0</button></div>
-    <div><button id="echo-renderer" type="button">Echo Renderer</button></div>
-    <div id="echo-renderer-output"></div>
     <div><button id="hello-someone" type="button">Hello Someone</button></div>
     <div id="hello-someone-output"></div>
     <div id="root"></div>
     <!-- Test the papi-extension protocol in a webView -->
     <img
-      src="papi-extension://quick-verse/assets/letter-q.png"
+      src="papi-extension://quickVerse/assets/letter-q.png"
       alt="Q icon"
       style="max-height: 25px; max-width: 25px"
     />
@@ -44,14 +42,6 @@
           useCallback(({ times }) => setClicks(times), []),
         );
 
-        const [echoResult] = usePromise(
-          useCallback(async () => {
-            await new Promise((resolve) => setTimeout(() => resolve(), 3000));
-            return papi.commands.sendCommand('test.echoRenderer', `From ${NAME}`);
-          }, []),
-          'retrieving',
-        );
-
         return createElement(
           'div',
           null,
@@ -71,7 +61,6 @@
               clicks,
             ),
           ),
-          createElement('div', null, echoResult),
         );
       }
 
@@ -100,25 +89,6 @@
             print(message);
           });
           updateHelloWorldClicks(helloWorldClicks + 1);
-        });
-
-        // Attach handler for echo-renderer
-        const echoRendererButton = document.getElementById('echo-renderer');
-        echoRendererButton.addEventListener('click', () =>
-          papi.commands
-            .sendCommand('test.echoRenderer', 'From Hello World WebView')
-            .then((message) => {
-              const echoRendererOutput = document.getElementById('echo-renderer-output');
-              echoRendererOutput.textContent = papi.utils.htmlEncode(message);
-              print(message);
-            }),
-        );
-        echoRendererButton.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          const promises = new Array(10000);
-          for (let i = 0; i < 10000; i += 1)
-            promises[i] = papi.commands.sendCommand('echoRenderer', 'From Hello World WebView');
-          Promise.all(promises).then(() => print('Done'));
         });
 
         // Attach handler for hello-someone

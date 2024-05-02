@@ -5,6 +5,7 @@
  */
 
 import * as commandService from '@shared/services/command.service';
+import * as papiUtil from 'platform-bible-utils';
 import papiLogger from '@shared/services/logger.service';
 import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
@@ -51,6 +52,12 @@ const papi = {
   // Services/modules
   /** JSDOC DESTINATION commandService */
   commands: commandService,
+  /**
+   * JSDOC SOURCE papiUtil
+   *
+   * Miscellaneous utility functions and classes
+   */
+  utils: papiUtil,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: webViewService as WebViewServiceType,
   /** JSDOC DESTINATION dialogService */
@@ -102,6 +109,9 @@ Object.freeze(papi.XMLHttpRequest);
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 Object.freeze(papi.commands);
+/** JSDOC DESTINATION papiUtil */
+export const { utils } = papi;
+Object.freeze(papi.utils);
 /** JSDOC DESTINATION papiWebViewService */
 export const { webViews } = papi;
 Object.freeze(papi.webViews);
