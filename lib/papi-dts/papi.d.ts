@@ -5649,7 +5649,6 @@ declare module '@papi/frontend' {
    * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
    */
   import * as commandService from 'shared/services/command.service';
-  import * as papiUtil from 'platform-bible-utils';
   import { PapiNetworkService } from 'shared/services/network.service';
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { InternetService } from 'shared/services/internet.service';
@@ -5687,11 +5686,6 @@ declare module '@papi/frontend' {
      * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
-    /**
-     *
-     * Miscellaneous utility functions and classes
-     */
-    utils: typeof papiUtil;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -5779,11 +5773,6 @@ declare module '@papi/frontend' {
    * other services and extensions that have registered commands.
    */
   export const commands: typeof commandService;
-  /**
-   *
-   * Miscellaneous utility functions and classes
-   */
-  export const utils: typeof papiUtil;
   /**
    *
    * Service exposing various functions related to using webViews

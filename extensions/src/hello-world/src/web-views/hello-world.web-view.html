@@ -23,6 +23,7 @@
       // Test React component to render in the root
       const { createElement, useCallback, useState } = require('react');
       const { usePromise, useEvent } = require('platform-bible-react');
+      const { htmlEncode } = require('platform-bible-utils');
       const papi = require('@papi/frontend');
       const { logger } = require('@papi/frontend');
 
@@ -73,7 +74,7 @@
         function updateHelloWorldClicks(clicks) {
           helloWorldClicks = clicks;
           const helloWorldButton = document.getElementById('hello-world');
-          helloWorldButton.textContent = papi.utils.htmlEncode(`Hello World ${helloWorldClicks}`);
+          helloWorldButton.textContent = htmlEncode(`Hello World ${helloWorldClicks}`);
         }
 
         // Update the clicks when we are informed helloWorld has been run
@@ -98,7 +99,7 @@
             .sendCommand('helloSomeone.helloSomeone', "'Hello World WebView'")
             .then((message) => {
               const helloSomeoneOutput = document.getElementById('hello-someone-output');
-              helloSomeoneOutput.textContent = papi.utils.htmlEncode(message);
+              helloSomeoneOutput.textContent = htmlEncode(message);
               print(message);
             }),
         );
