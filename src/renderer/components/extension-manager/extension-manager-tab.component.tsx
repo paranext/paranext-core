@@ -64,7 +64,7 @@ export function fetchExtensions(): Extension[] {
       description: 'Example Bundled Extension',
       hasUpdateAvailable: false,
       isInstalled: false,
-      iconFilePath: 'papi-extension://quick-verse/assets/letter-q.png',
+      iconFilePath: 'papi-extension://quickVerse/assets/letter-q.png',
     },
   ];
 }

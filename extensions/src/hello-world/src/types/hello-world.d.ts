@@ -60,6 +60,6 @@ declare module 'papi-shared-types' {
 
   export interface SettingTypes {
     /** Selected Person's Name on Hello World Web View */
-    'hello-world.personName': string;
+    'helloWorld.personName': string;
   }
 }

@@ -25,15 +25,7 @@ const addOne = async (num: number) => commandService.sendCommand('test.addOne', 
 
 const echo = commandService.createSendCommandFunction('test.echo');
 
-const echoRenderer = commandService.createSendCommandFunction('test.echoRenderer');
-
 const echoExtensionHost = commandService.createSendCommandFunction('test.echoExtensionHost');
-
-const echoSomeoneRenderer = commandService.createSendCommandFunction(
-  'helloSomeone.echoSomeoneRenderer',
-);
-
-const addThree = commandService.createSendCommandFunction('test.addThree');
 
 const addMany = commandService.createSendCommandFunction('test.addMany');
 
@@ -206,22 +198,6 @@ export default function TestButtonsPanel() {
           className="test-button"
           onClick={async () => {
             const start = performance.now();
-            const result = await runPromise(() => echoRenderer('Echo Renderer Stuff'));
-            logger.debug(
-              `command:test.echoRenderer '${result}' took ${performance.now() - start} ms`,
-            );
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => echoRenderer('Echo Renderer Stuff'));
-          }}
-        >
-          Echo Renderer
-        </Button>
-        <Button
-          className="test-button"
-          onClick={async () => {
-            const start = performance.now();
             const result = await runPromise(() => echoExtensionHost('Echo Extension Host Stuff'));
             logger.debug(
               `command:test.echoExtensionHost '${result}' took ${performance.now() - start} ms`,
@@ -233,40 +209,6 @@ export default function TestButtonsPanel() {
           }}
         >
           Echo Extension Host
-        </Button>
-        <Button
-          className="test-button"
-          onClick={async () => {
-            const start = performance.now();
-            const result = await runPromise(() =>
-              echoSomeoneRenderer('Echo Someone Renderer Stuff'),
-            );
-            logger.debug(
-              `command:helloSomeone.echoSomeoneRenderer '${result}' took ${
-                performance.now() - start
-              } ms`,
-            );
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => echoSomeoneRenderer('Echo Someone Renderer Stuff'));
-          }}
-        >
-          Echo Someone Renderer
-        </Button>
-        <Button
-          className="test-button"
-          onClick={async () => {
-            const start = performance.now();
-            const result = await runPromise(() => addThree(1, 2, 3));
-            logger.debug(`command:test.addThree ${result} took ${performance.now() - start} ms`);
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            executeMany(() => addThree(1, 2, 3));
-          }}
-        >
-          AddThree (Renderer)
         </Button>
         <Button
           className="test-button"
