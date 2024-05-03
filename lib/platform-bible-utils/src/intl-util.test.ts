@@ -3,7 +3,7 @@ import getCurrentLocale from './intl-util';
 jest.mock('./intl-date-time-format', () => {
   return jest.fn().mockImplementation(() => ({
     resolvedOptions: jest.fn().mockImplementation(() => {
-      return { locale: 'en-GB' };
+      return { locale: 'he' };
     }),
   }));
 });
@@ -27,12 +27,12 @@ describe('getCurrentLocale', () => {
     // Set the languages so that navigator is defined
     Object.defineProperty(global, 'navigator', {
       value: {
-        languages: ['en-US', 'en'],
+        languages: ['en', 'fr'],
       },
       writable: true,
     });
 
-    expect(getCurrentLocale()).toEqual('en-US');
+    expect(getCurrentLocale()).toEqual('en');
   });
 
   it('should return the locale resolved by DateTimeFormat when navigator.languages is not available', () => {
@@ -44,6 +44,6 @@ describe('getCurrentLocale', () => {
       writable: true,
     });
 
-    expect(getCurrentLocale()).toEqual('en-GB');
+    expect(getCurrentLocale()).toEqual('he');
   });
 });

@@ -76,7 +76,7 @@ export declare class DateTimeFormat {
 	private dateTimeFormatter;
 	constructor(locales?: string | string[], options?: Intl.DateTimeFormatOptions);
 	/**
-	 * Formats a date according to the locale and formatting option fo this DateTimeFormat object
+	 * Formats a date according to the locale and formatting option for this DateTimeFormat object
 	 *
 	 * @param date The date to format
 	 * @returns String representing the given date formatted according to the locale and formatting
@@ -329,7 +329,7 @@ export declare class NumberFormat {
 	/**
 	 * Formats a number according to the locale and formatting options of this NumberFormat object
 	 *
-	 * @param value Number or BigIng to format
+	 * @param value Number or BigInt to format
 	 * @returns String representing the given number formatted according to the locale and formatting
 	 *   options of this NumberFormat object
 	 */
@@ -931,7 +931,7 @@ export declare const htmlEncode: (str: string) => string;
  * @returns A string representing the current locale. If the locale cannot be determined, the
  *   function returns an empty string.
  */
-export declare function getCurrentLocale(): string;
+export function getCurrentLocale(): string;
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;
 /** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */

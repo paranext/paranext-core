@@ -6,7 +6,7 @@ import DateTimeFormat from './intl-date-time-format';
  * @returns A string representing the current locale. If the locale cannot be determined, the
  *   function returns an empty string.
  */
-function getCurrentLocale(): string {
+export default function getCurrentLocale(): string {
   // Use navigator when available
   if (typeof navigator !== 'undefined' && navigator.languages) {
     return navigator.languages[0];
@@ -14,5 +14,3 @@ function getCurrentLocale(): string {
   // For Node.js
   return new DateTimeFormat().resolvedOptions().locale;
 }
-
-export default getCurrentLocale;

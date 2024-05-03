@@ -1,6 +1,6 @@
 import NumberFormat from './intl-number-format';
 
-const testNumberFormatter: NumberFormat = new NumberFormat('en-US');
+const testNumberFormatter: NumberFormat = new NumberFormat('en');
 const START_NUMBER = 654321.987;
 const FORMATTED_NUMBER = '654,321.987';
 const END_NUMBER = 754321.987;

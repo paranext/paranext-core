@@ -1,5 +1,5 @@
 /** Enables language-sensitive number formatting. Wraps Intl.NumberFormat */
-class NumberFormat {
+export default class NumberFormat {
   private numberFormatter: Intl.NumberFormat;
 
   constructor(locales?: string | string[], options?: Intl.NumberFormatOptions) {
@@ -9,7 +9,7 @@ class NumberFormat {
   /**
    * Formats a number according to the locale and formatting options of this NumberFormat object
    *
-   * @param value Number or BigIng to format
+   * @param value Number or BigInt to format
    * @returns String representing the given number formatted according to the locale and formatting
    *   options of this NumberFormat object
    */
@@ -66,5 +66,3 @@ class NumberFormat {
     return this.numberFormatter.resolvedOptions();
   }
 }
-
-export default NumberFormat;
