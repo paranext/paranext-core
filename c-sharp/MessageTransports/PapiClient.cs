@@ -203,7 +203,7 @@ internal class PapiClient : IDisposable
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        int requestId = Interlocked.Increment(ref _nextRequestId);
+        int requestId = GetRequestId();
         var requestMessage =
             (requestContents is JsonElement jse)
                 ? new MessageRequest(requestType, requestId, jse)
@@ -317,6 +317,10 @@ internal class PapiClient : IDisposable
         QueueOutgoingMessage(message);
     }
 
+    #endregion
+
+    #region Protected Methods
+    protected int GetRequestId() => Interlocked.Increment(ref _nextRequestId);
     #endregion
 
     #region Private helper methods for any thread to call

@@ -59,5 +59,84 @@ namespace Paranext.DataProvider.Projects.Tests
 
             Assert.That(result, Is.EqualTo($"default value for {ProjectSettings.PB_LANGUAGE}"));
         }
+
+        [Test]
+        public void GetDefault_UnknownProperty_ReturnsNull()
+        {
+            DummyPapiClient papiClient = new DummyPapiClient();
+            var result = ProjectSettingsService.GetDefault(papiClient, "wonky.setting",
+                ProjectType.Paratext);
+
+            Assert.That(result, Is.Null);
+        }
+
+        [Test]
+        public void RegisterValidator_NewProperty_ReturnsTrue()
+        {
+            const string settingKey = "testScripture.MonkeyCount";
+            (bool result, string? error) MonkeyCountValidator((string newValueJson, string currentValueJson,
+                string allChangesJson, string projectType) data)
+            {
+                try
+                {
+                    var value = JsonConvert.DeserializeObject(data.newValueJson);
+                    var result = true;
+                    string? error = null;
+                    if (value == null)
+                    {
+                        result = false;
+                        error = "New value must be an integer. It cannot be null";
+                    }
+                    else if ((long)value <= 4)
+                    {
+                        result = false;
+                        error = "Mama called the doctor, and the doctor said, you must have at" +
+                          "least 4 monkeys jumping on the bed!";
+                    }
+                    return (result, error);
+                }
+                catch (Exception ex)
+                {
+                    return (false, ex.Message);
+                }
+            }
+
+            DummyPapiClient papiClient = new DummyPapiClient();
+
+            // Before registering the validator, IsValid should return true.
+            Assert.That(ProjectSettingsService.IsValid(papiClient, JsonConvert.SerializeObject(2),
+                JsonConvert.SerializeObject(5), settingKey, "", ProjectType.Paratext), Is.True);
+
+            var result = ProjectSettingsService.RegisterValidator(papiClient,
+                settingKey, MonkeyCountValidator);
+
+            Assert.That(result, Is.EqualTo(true));
+
+            Assert.That(ProjectSettingsService.IsValid(papiClient, JsonConvert.SerializeObject(1),
+                JsonConvert.SerializeObject(5), settingKey, "", ProjectType.Paratext), Is.False);
+            Assert.That(ProjectSettingsService.IsValid(papiClient, JsonConvert.SerializeObject(6),
+                JsonConvert.SerializeObject(5), settingKey, "", ProjectType.Paratext), Is.True);
+        }
+
+        [Test]
+        public void RegisterValidator_ExistingProperty_ReturnsFalse()
+        {
+            const string settingKey = "testScripture.Oops";
+            (bool result, string? error) OopsValidator((string newValueJson, string currentValueJson,
+                string allChangesJson, string projectType) data)
+            {
+                return (false, "The Oops property has no valid values. Ha Ha!");
+            }
+
+            DummyPapiClient papiClient = new DummyPapiClient();
+
+            var result = ProjectSettingsService.RegisterValidator(papiClient,
+                settingKey, OopsValidator);
+
+            Assert.That(result, Is.EqualTo(true));
+
+            Assert.That(ProjectSettingsService.RegisterValidator(papiClient,
+                settingKey, OopsValidator), Is.EqualTo(false));
+        }
     }
 }

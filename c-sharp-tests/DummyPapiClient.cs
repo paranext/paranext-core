@@ -62,7 +62,14 @@ namespace TestParanextDataProvider
         {
             var responder = (MessageHandlerRequestByRequestType)
                 _messageHandlersByMessageType[MessageType.REQUEST];
-            responder.SetHandlerForRequestType(requestType, requestHandler);
+            try
+            {
+                responder.SetHandlerForRequestType(requestType, requestHandler);
+            }
+            catch (ArgumentException)
+            {
+                return Task.FromResult(false);
+            }
 
             return Task.FromResult(true);
         }
@@ -93,48 +100,87 @@ namespace TestParanextDataProvider
                 object? result = null;
 
                 if ((requestType == "object:ProjectSettingsService.function") &&
-                    (requestContents is string[] requestDetails) &&
-                    (requestDetails.Last() == ProjectType.Paratext))
-                    {
-                        var pbSettingName = ProjectSettings
-                            .GetPlatformBibleSettingNameFromParatextSettingName(requestDetails[1]);
+                    (requestContents is string[] details) &&
+                    (details.Length > 2))
+                {
+                    // If this is a setting known to both Platform.Bible and Paratext, do the
+                    // translation from the Paratext settings key to the PB setting id.
+                    // If it's a custom settings key, then perhaps it's one we've registered to
+                    // handle, and no translation is needed.
+                    var ourSettingName = details[1];
+                    var pbSettingName = ProjectSettings
+                        .GetPlatformBibleSettingNameFromParatextSettingName(ourSettingName);
 
-                        switch (requestDetails[0])
+                    if (ourSettingName != null)
+                    {
+                        switch (details[0])
                         {
                             case "isValid":
-                            {
-                                success = true;
-                                if (pbSettingName == null)
+                                if (details.Length == 6 && details[4] == ProjectType.Paratext)
                                 {
-                                    // per comment in isValid (in project-settings.service-host.ts),
-                                    // if there is no validator just let the change go through
-                                    result = true;
+                                    success = true;
+                                    // Might be a setting we've registered to handle.
+                                    var isValidRequestContents = new []
+                                        {details[2], details[3], details[5]};
+                                    if (TryValidationUsingRegisteredHandler(isValidRequestContents,
+                                        ourSettingName, out var isValid))
+                                    {
+                                        result = isValid;
+                                    }
+                                    else if (pbSettingName == null)
+                                    {
+                                        // Per comment in isValid (in
+                                        // project-settings.service-host.ts), if there is no
+                                        // validator just let the change go through
+                                        result = true;
+                                    }
+                                    else
+                                    {
+                                        result = _validSettings.TryGetValue(pbSettingName,
+                                            out var validValues) && validValues.Any(vv =>
+                                            vv.newValue == details[2] &&
+                                            vv.oldValue == details[3]);
+                                    }
                                 }
-                                else
-                                {
-                                    result = _validSettings.TryGetValue(pbSettingName, out var validValues) &&
-                                        validValues.Any(vv => vv.newValue == requestDetails[2] &&
-                                            vv.oldValue == requestDetails[3]);
-                                }
-                            }
-                            break;
+                                break;
                             case "getDefault":
-                            {
-                                if (pbSettingName != null)
+                                if (details.Length == 3 &&
+                                    details[2] == ProjectType.Paratext &&
+                                    pbSettingName != null)
                                 {
                                     success = true;
                                     result = $"default value for {pbSettingName}";
                                 }
-                            }
-                            break;
+                                break;
                             default:
-                            break;
+                                break;
                         }
                     }
+                }
 
                 await Task.Run(() => responseCallback(success,
                     JsonSerializer.SerializeToElement(result)));
             });
+        }
+
+        private bool TryValidationUsingRegisteredHandler(string[] requestContents, string settingName,
+            out bool isValid)
+        {
+            isValid = true;
+            if (!_messageHandlersByMessageType.TryGetValue(
+                MessageType.REQUEST, out var responder))
+                return false;
+
+            var msgRequest = new MessageRequest(ProjectSettingsService.GetValidatorKey(settingName),
+                GetRequestId(), requestContents);
+            var responseMsg = responder.HandleMessage(msgRequest).OfType<MessageResponse>()
+                .FirstOrDefault();
+
+            if (responseMsg == null)
+                return false;
+
+            isValid = responseMsg.Success;
+            return true;
         }
         #endregion
     }
