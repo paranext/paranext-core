@@ -3,7 +3,7 @@ import logger from '@shared/services/logger.service';
 import {
   NetworkObjectStatusRemoteServiceType,
   networkObjectStatusServiceNetworkObjectName,
-} from '@shared/services/network-object-status.service-model';
+} from '@shared/models/network-object-status.service-model';
 import networkObjectService, {
   onDidCreateNetworkObject,
   onDidDisposeNetworkObject,

@@ -53,6 +53,7 @@ export {
   toArray,
 } from './string-util';
 export { default as deepEqual } from './equality-checking';
+export { default as isSubset } from './subset-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
 
 // Types

@@ -3,11 +3,8 @@ import HelloWorldProjectDataProviderEngine from './hello-world-project-data-prov
 
 const helloWorldProjectDataProviderEngineFactory: IProjectDataProviderEngineFactory<'helloWorld'> =
   {
-    createProjectDataProviderEngine(
-      projectId: string,
-      projectStorageInterpreterId: string,
-    ): IProjectDataProviderEngine<'helloWorld'> {
-      return new HelloWorldProjectDataProviderEngine(projectId, projectStorageInterpreterId);
+    createProjectDataProviderEngine(): IProjectDataProviderEngine<'helloWorld'> {
+      return new HelloWorldProjectDataProviderEngine();
     },
   };
 

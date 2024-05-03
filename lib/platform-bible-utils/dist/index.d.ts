@@ -370,13 +370,13 @@ export declare const offsetVerse: (scrRef: ScriptureReference, offset: number) =
  *
  * Convert book number to a localized Id (a short description of the book). This should be used
  * whenever a book ID (short code) is shown to the user. It is primarily needed for people who do
- * not read Roman script well and need to have books identified in a alternate script (e.g.
- * Chinese or Russian)
+ * not read Roman script well and need to have books identified in a alternate script (e.g. Chinese
+ * or Russian)
  *
  * @param bookNumber
- * @param localizationLanguage in BCP 47 format
- * @param getLocalizedString function that provides the localized versions of the book ids and names
- * asynchronously.
+ * @param localizationLanguage In BCP 47 format
+ * @param getLocalizedString Function that provides the localized versions of the book ids and names
+ *   asynchronously.
  * @returns
  */
 export declare function getLocalizedIdFromBookNumber(bookNumber: number, localizationLanguage: string, getLocalizedString: (item: {
@@ -708,6 +708,31 @@ export declare function toArray(string: string): string[];
  * @returns True if a and b are deeply equal; false otherwise
  */
 export function deepEqual(a: unknown, b: unknown): boolean;
+/**
+ * Check if one object is a subset of the other object. "Subset" means that all properties of one
+ * object are present in to the other object, and if they are present that all values of those
+ * properties are deeply equal.
+ *
+ * @example ObjB is a subset of objA given these objects:
+ *
+ * ```ts
+ * objA = { name: 'Alice', age: 30, address: { city: 'Seattle' } };
+ * objB = { name: 'Alice', address: { city: 'Seattle' } };
+ * ```
+ *
+ * It is important to note that only arrays of primitives (i.e., booleans, numbers, strings) are
+ * supported. In particular, objects in arrays will not be checked for deep equality. Also, presence
+ * in an array is all this checks, not the number of times that an item appears in an array. `[1,
+ * 1]` is a subset of `[1]`.
+ *
+ * @param objectWithAllProperties Object to be checked if it is a superset of
+ *   `objectWithPartialProperties`
+ * @param objectWithPartialProperties Object to be checked if it is a subset of
+ *   `objectWithAllProperties`
+ * @returns True if `objectWithAllProperties` contains all the properties of
+ *   `objectWithPartialProperties` and all values of those properties are deeply equal
+ */
+export function isSubset(objectWithAllProperties: unknown, objectWithPartialProperties: unknown): boolean;
 /**
  * Converts a JavaScript value to a JSON string, changing `undefined` properties in the JavaScript
  * object to `null` properties in the JSON string.

@@ -23,16 +23,15 @@ export const projectSettingsServiceObjectToProxy = Object.freeze({
 /**
  * JSDOC SOURCE projectSettingsService
  *
- * Provides utility functions that project storage interpreters should call when handling project
- * settings
+ * Provides utility functions that project data providers should call when handling project settings
  */
 export interface IProjectSettingsService {
   /**
    * Calls registered project settings validators to determine whether or not a project setting
    * change is valid.
    *
-   * Every Project Storage Interpreter **must** run this function when it receives a request to set
-   * a project setting before changing the value of the setting.
+   * Every Project Data Provider **must** run this function when it receives a request to set a
+   * project setting before changing the value of the setting.
    *
    * @param newValue The new value requested to set the project setting value to
    * @param currentValue The current project setting value
@@ -51,8 +50,8 @@ export interface IProjectSettingsService {
   /**
    * Gets default value for a project setting
    *
-   * Every Project Storage Interpreter **must** run this function when it receives a request to get
-   * a project setting if the project does not have a value for the project setting requested. It
+   * Every Project Data Providers **must** run this function when it receives a request to get a
+   * project setting if the project does not have a value for the project setting requested. It
    * should return the response from this function directly, either the returned default value or
    * throw.
    *

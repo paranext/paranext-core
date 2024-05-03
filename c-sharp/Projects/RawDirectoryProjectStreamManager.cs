@@ -12,7 +12,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
 
     private readonly ProjectDetails _projectDetails;
 
-    // This is the directory that a PSI is intended to be able read/write project data
+    // This is the directory that is intended for reading/writing project data
     private readonly string _writableRootDir;
 
     public RawDirectoryProjectStreamManager(ProjectDetails projectDetails)

@@ -1,17 +1,21 @@
+using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.Projects;
-using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider
 {
     [ExcludeFromCodeCoverage]
-    internal class DummyParatextProjectStorageInterpreter : ParatextProjectStorageInterpreter
+    internal class DummyParatextProjectDataProvider : ParatextProjectDataProvider
     {
         private readonly Dictionary<string, byte[]> _inMemoryFiles = new();
-        
-        public DummyParatextProjectStorageInterpreter(PapiClient papiClient, DummyLocalParatextProjects paratextProjects) : base(papiClient, paratextProjects)
-        {
-        }
+
+        public DummyParatextProjectDataProvider(
+            string name,
+            PapiClient papiClient,
+            ProjectDetails projectDetails,
+            LocalParatextProjects paratextProjects
+        )
+            : base(name, papiClient, projectDetails, paratextProjects) { }
 
         protected override IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails)
         {
@@ -19,16 +23,18 @@ namespace TestParanextDataProvider
         }
 
         #region InMemoryStreamManager class
+
         private sealed class InMemoryStreamManager : IProjectStreamManager
         {
-            private readonly DummyParatextProjectStorageInterpreter _owner;
+            private readonly DummyParatextProjectDataProvider _owner;
 
-            public InMemoryStreamManager(DummyParatextProjectStorageInterpreter owner)
+            public InMemoryStreamManager(DummyParatextProjectDataProvider owner)
             {
                 _owner = owner;
             }
 
             #region Implementation of IProjectStreamManager
+
             public void Initialize()
             {
                 // Nothing to do
@@ -51,24 +57,31 @@ namespace TestParanextDataProvider
             {
                 throw new NotImplementedException();
             }
+
             #endregion
         }
+
         #endregion
 
         #region InMemoryFile class
+
         private sealed class InMemoryFile : MemoryStream
         {
-            private readonly DummyParatextProjectStorageInterpreter _owner;
+            private readonly DummyParatextProjectDataProvider _owner;
             private readonly string _streamName;
 
-            public InMemoryFile(DummyParatextProjectStorageInterpreter owner, string streamName,
-                byte[] existingData) : base(existingData)
+            public InMemoryFile(
+                DummyParatextProjectDataProvider owner,
+                string streamName,
+                byte[] existingData
+            )
+                : base(existingData)
             {
                 _owner = owner;
                 _streamName = streamName;
             }
-            
-            public InMemoryFile(DummyParatextProjectStorageInterpreter owner, string streamName)
+
+            public InMemoryFile(DummyParatextProjectDataProvider owner, string streamName)
             {
                 _owner = owner;
                 _streamName = streamName;
@@ -82,6 +95,7 @@ namespace TestParanextDataProvider
                 base.Dispose(disposing);
             }
         }
+
         #endregion
     }
 }
