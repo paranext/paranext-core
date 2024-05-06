@@ -92,3 +92,11 @@ export function joinUriPaths(uri: Uri, ...paths: string[]): Uri {
   const { scheme, uriPath } = getPathInfoFromUri(uri);
   return `${scheme}${PROTOCOL_PART}${path.join(uriPath, ...paths)}`;
 }
+
+/**
+ * Determines if running in noisy dev mode
+ *
+ * @returns True if the process is running in noisy dev mode, false otherwise
+ */
+export const isNoisyDevModeEnvVariableSet = (): boolean =>
+  !!process.env.DEV_NOISY && process.env.DEV_NOISY === 'true';

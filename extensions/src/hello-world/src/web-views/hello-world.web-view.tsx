@@ -89,16 +89,6 @@ globalThis.webViewComponent = function HelloWorld({
     updateWebViewDefinition({ title: `Hello World ${clicks}` });
   }, [getWebViewDefinitionUpdatableProperties, updateWebViewDefinition, clicks]);
 
-  const [echoResult] = usePromise(
-    useCallback(async () => {
-      // Not using the promise's resolved value
-      // eslint-disable-next-line no-promise-executor-return
-      await new Promise<void>((resolve) => setTimeout(() => resolve(), 3000));
-      return papi.commands.sendCommand('test.echoRenderer', `From ${NAME}`);
-    }, []),
-    'retrieving',
-  );
-
   const [project, setProject] = useWebViewState<string>('project', '');
 
   const currentRender = useRef(-1);
@@ -110,7 +100,7 @@ globalThis.webViewComponent = function HelloWorld({
     // testing below to make sure `useDialogCallback` returns the same callback every time
     {
       prompt: `Please select a Scripture project for Hello World WebView: (Render ${currentRender.current})`,
-      iconUrl: 'papi-extension://hello-world/assets/offline.svg',
+      iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
       title: 'Select Hello World Project',
       maximumOpenDialogs: 2,
       // Test ref parameter properly getting latest value
@@ -158,7 +148,7 @@ globalThis.webViewComponent = function HelloWorld({
     useMemo(
       () => ({
         prompt: 'Please select one or more Scripture projects for Hello World WebView:',
-        iconUrl: 'papi-extension://hello-world/assets/offline.svg',
+        iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
         title: 'Select List of Hello World Projects',
         selectedProjectIds: projects,
         includeProjectTypes: '^ParatextStandard$',
@@ -173,7 +163,7 @@ globalThis.webViewComponent = function HelloWorld({
     ),
   );
 
-  const [name, setNameInternal] = useSetting('hello-world.personName', 'Kathy');
+  const [name, setNameInternal] = useSetting('helloWorld.personName', 'Kathy');
 
   // Name used for display and editing in the input field while debouncing the actual setting change
   const [nameTemp, setNameTemp] = useState(name);
@@ -222,7 +212,7 @@ globalThis.webViewComponent = function HelloWorld({
   const [localizedString] = usePromise(
     useCallback(() => {
       return papi.localization.getLocalizedString({
-        localizeKey: 'submitButton',
+        localizeKey: '%submitButton%',
         locales: ['fr', 'en'],
       });
     }, []),
@@ -253,7 +243,6 @@ globalThis.webViewComponent = function HelloWorld({
           Hello World {clicks}
         </Button>
       </div>
-      <div>{echoResult}</div>
       <div>
         <Button
           onClick={() => {

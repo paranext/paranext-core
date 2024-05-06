@@ -42,7 +42,6 @@ declare module 'papi-shared-types' {
     // These commands are provided in `main.ts`. They are only here because I needed them to use in
     // other places, but building `papi-dts` wasn't working because it didn't see `main.ts`
     'test.echo': (message: string) => string;
-    'test.echoRenderer': (message: string) => Promise<string>;
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;

@@ -15,40 +15,57 @@ import { initialize as initializeSettingsService } from '@extension-host/service
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
 
-// #region Test logs
-
-logger.info('Starting extension-host');
-logger.info(`Extension host is${isClient() ? '' : ' not'} client`);
+logger.info(
+  `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,
+);
 logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
-logger.warn('Extension host example warning');
-
-// #endregion
 
 // #region Services setup
 
-// `extension-host.ts`'s command handler declarations are in `command.service.ts` so they can be
-// picked up by papi-dts
-// This map should allow any functions because commands can be any function type
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
-  // Set up test handlers
-  'test.addMany': async (...nums: number[]) => {
-    /* const start = performance.now(); */
-    /* const result = await papi.commands.sendCommand('test.addThree', 1, 4, 9); */
-    /* logger.info(
-      `test.addThree(...) = ${result} took ${performance.now() - start} ms`,
-    ); */
-    return nums.reduce((acc, current) => acc + current, 0);
-  },
-  'test.throwErrorExtensionHost': async (message: string) => {
-    throw new Error(`Test Error thrown in throwErrorExtensionHost command: ${message}`);
-  },
-};
+(async () => {
+  try {
+    // The network service has to be running before anything else
+    await networkService.initialize();
 
-networkService
-  .initialize()
-  .then(async () => {
-    // Set up network commands
+    // Prepare all services that need to be running because extensions might rely on them
+    await Promise.all([
+      extensionAssetService.initialize(),
+      initializeLocalizationService(),
+      initializeMenuData(),
+      initializeSettingsService(),
+      startProjectSettingsService(),
+    ]);
+
+    // The extension service locks down importing other modules, so be careful what runs after it
+    await extensionService.initialize();
+  } catch (error) {
+    logger.error(error);
+  }
+})();
+
+// #endregion
+
+// #region Noisy dev tests
+
+if (globalThis.isNoisyDevModeEnabled) {
+  logger.info(`Extension host is${isClient() ? '' : ' not'} client`);
+  logger.warn('Extension host example warning');
+
+  // `extension-host.ts`'s command handler declarations are in `command.service.ts` so they can be
+  // picked up by papi-dts
+  // This map should allow any functions because commands can be any function type
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
+    // Set up test handlers
+    'test.addMany': async (...nums: number[]) => {
+      return nums.reduce((acc, current) => acc + current, 0);
+    },
+    'test.throwErrorExtensionHost': async (message: string) => {
+      throw new Error(`Test Error thrown in throwErrorExtensionHost command: ${message}`);
+    },
+  };
+
+  (async () => {
     await Promise.all(
       Object.entries(commandHandlers).map(async ([commandName, handler]) => {
         // Re-assert type after passing through `map`.
@@ -56,86 +73,67 @@ networkService
         await registerCommand(commandName as CommandNames, handler);
       }),
     );
+  })();
 
-    // The extension host is the only one that can initialize the extensionAssetService
-    await extensionAssetService.initialize();
-
-    // Prepare for contributions to be contributed from extensions before the extensions come online
-    await initializeLocalizationService();
-    await initializeMenuData();
-    await initializeSettingsService();
-    await startProjectSettingsService();
-
-    // The extension service locks down importing other modules, so be careful what runs after it
-    await extensionService.initialize();
-
-    // TODO: Probably should return Promise.all of these registrations
-    return undefined;
-  })
-  .catch(logger.error);
-
-// #endregion
-
-// #region network object test
-
-(async () => {
-  const testEH = await networkObjectService.set('testExtensionHost', {
-    getVerse: async () => {
-      try {
-        const exampleData = await (await papiFetch('https://www.example.com')).text();
-        const results = `testExtensionHost got data: ${substring(exampleData, 0, 100)}`;
-        logger.debug(results);
-        return results;
-      } catch (e) {
-        logger.error(`testExtensionHost.getVerse() threw ${e}`);
-        return getErrorMessage(e);
-      }
-    },
-  });
-
-  if (testEH) {
-    testEH.onDidDispose(() => {
-      logger.info('testExtensionHost disposed in extension-host');
+  (async () => {
+    const testEH = await networkObjectService.set('testExtensionHost', {
+      getVerse: async () => {
+        try {
+          const exampleData = await (await papiFetch('https://www.example.com')).text();
+          const results = `testExtensionHost got data: ${substring(exampleData, 0, 100)}`;
+          logger.debug(results);
+          return results;
+        } catch (e) {
+          logger.error(`testExtensionHost.getVerse() threw ${e}`);
+          return getErrorMessage(e);
+        }
+      },
     });
-  }
 
-  setTimeout(testEH.dispose, 10000);
-})();
+    if (testEH) {
+      testEH.onDidDispose(() => {
+        logger.info('testExtensionHost disposed in extension-host');
+      });
+    }
 
-setTimeout(async () => {
-  let testMain = await networkObjectService.get<{
-    doStuff: (stuff: string) => Promise<string>;
-  }>('testMain');
-  if (testMain) {
-    testMain?.onDidDispose(async () => {
-      logger.debug('testMain disposed in extension-host');
-      testMain = undefined;
+    setTimeout(testEH.dispose, 10000);
+  })();
+
+  setTimeout(async () => {
+    let testMain = await networkObjectService.get<{
+      doStuff: (stuff: string) => Promise<string>;
+    }>('testMain');
+    if (testMain) {
+      testMain?.onDidDispose(async () => {
+        logger.debug('testMain disposed in extension-host');
+        testMain = undefined;
+      });
+    } else logger.error('Could not get testMain from extension host');
+
+    logger.debug(`do stuff: ${await testMain?.doStuff('extension host things')}`);
+  }, 5000);
+
+  // This is just testing dispose on data providers
+  (async () => {
+    const testDP = {
+      setPlaceholder: () => {
+        throw new Error('I am a bad data provider');
+      },
+      getPlaceholder: () => {
+        throw new Error('I am a bad data provider');
+      },
+      dispose: async () => {
+        logger.debug('Inside testDP dispose');
+        return Promise.resolve(true);
+      },
+    };
+
+    const realDP = await dataProviderService.registerEngine('platform.placeholder', testDP);
+    realDP.onDidDispose(() => {
+      logger.debug('testDP onDidDispose ran');
     });
-  } else logger.error('Could not get testMain from extension host');
-
-  logger.debug(`do stuff: ${await testMain?.doStuff('extension host things')}`);
-}, 5000);
-
-// This is just testing dispose on data providers
-(async () => {
-  const testDP = {
-    setPlaceholder: () => {
-      throw new Error('I am a bad data provider');
-    },
-    getPlaceholder: () => {
-      throw new Error('I am a bad data provider');
-    },
-    dispose: async () => {
-      logger.debug('Inside testDP dispose');
-      return Promise.resolve(true);
-    },
-  };
-
-  const realDP = await dataProviderService.registerEngine('platform.placeholder', testDP);
-  realDP.onDidDispose(() => {
-    logger.debug('testDP onDidDispose ran');
-  });
-  setTimeout(realDP.dispose, 3000);
-})();
+    setTimeout(realDP.dispose, 3000);
+  })();
+}
 
 // #endregion
