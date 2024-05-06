@@ -9,6 +9,8 @@ using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paratext.Data;
+using Paratext.Data.ProjectSettingsAccess;
+using PtxUtils.Tenuto.Grammar;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Projects;
@@ -52,6 +54,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         Getters.Add("getSetting", GetProjectSetting);
         Setters.Add("setSetting", SetProjectSetting);
+
+        RegisterSettingsValidators();
     }
 
     #endregion
@@ -175,6 +179,38 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #endregion
 
     #region Settings
+    private void RegisterSettingsValidators()
+    {
+        (bool result, string? error) VisibilityValidator((string newValueJson, string currentValueJson,
+            string allChangesJson, string projectType) data)
+        {
+            try
+            {
+                var value = JsonConvert.DeserializeObject(data.newValueJson);
+                var result = true;
+                string? error = null;
+                if (value == null)
+                {
+                    result = false;
+                    error = "New Visibility value cannot be null.";
+                }
+                else if (value is not ProjectVisibility && (value is not string valueStr ||
+                    !Enum.TryParse<ProjectVisibility>(valueStr, out var visibility)))
+                {
+                    result = false;
+                    error = "New Visibility value is not valid.";
+                }
+                return (result, error);
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message);
+            }
+        }
+
+        ProjectSettingsService.RegisterValidator(PapiClient, DataProviderName + ".Visibility",
+            VisibilityValidator);
+    }
 
     public ResponseToRequest GetProjectSetting(string jsonKey)
     {
