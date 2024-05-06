@@ -57,6 +57,7 @@ export type {
   TableSortColumn,
   TableProps,
 } from './components/table.component';
+export { default as DataTable } from './components/table-v2.component';
 export { default as TextField } from './components/text-field.component';
 export type { TextFieldProps } from './components/text-field.component';
 export { default as Toolbar } from './components/toolbar.component';
