@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Newtonsoft.Json;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 
@@ -92,8 +91,8 @@ namespace Paranext.DataProvider.Projects
         /// </param>
         /// <param name="projectType">The `projectType` to get default setting value for (probably
         /// always "ParatextStandard")</param>
-        /// <remarks>Every Project Storage Interpreter **must** run this function when it receives
-        /// a request to get a project setting if the project does not have a value for the project
+        /// <remarks>Every Project Data Provider **must** run this function when it receives a
+        /// request to get a project setting if the project does not have a value for the project
         /// setting requested. It should return the response from this function directly, either
         /// the returned default value or throw.</remarks>
         public static string? GetDefault(PapiClient papiClient, string key, string projectType)
@@ -157,31 +156,35 @@ namespace Paranext.DataProvider.Projects
             > validatorCallback
         )
         {
-            Func<JsonElement, ResponseToRequest> requestHandler = (jsonElement) =>
+            ResponseToRequest requestHandler(JsonElement jsonElement)
             {
                 // Check if the JsonElement is an array
                 if (
                     jsonElement.ValueKind != JsonValueKind.Array
                     || jsonElement.GetArrayLength() != 3
                 )
-                    return ResponseToRequest.Failed(
-                        $"Validator for {key} expected a JSON array " + "with 3 items: "
-                    );
                 {
-                    string newValueJson = jsonElement[0].GetString() ?? "";
-                    string currentValueJson = jsonElement[1].GetString() ?? "";
-                    string allChangesJson = jsonElement[2].GetString() ?? "";
-
-                    var validationResponse = validatorCallback(
-                        (newValueJson, currentValueJson, allChangesJson, ProjectType.Paratext)
+                    return ResponseToRequest.Failed(
+                        $"Validator for {key} expected a JSON array with 3 items: newValueJson"
+                            + "currentValueJson, allChangesJson."
                     );
-                    return validationResponse.result
-                        ? ResponseToRequest.Succeeded()
-                        : ResponseToRequest.Failed(
-                            validationResponse.error ?? "Invalid - No details."
-                        );
                 }
-            };
+
+                string newValueJson = jsonElement[0].GetString() ?? "";
+                string currentValueJson = jsonElement[1].GetString() ?? "";
+                string allChangesJson = jsonElement[2].GetString() ?? "";
+
+                var validationResponse = validatorCallback(
+                    (newValueJson, currentValueJson, allChangesJson, ProjectType.Paratext)
+                );
+                return validationResponse.result
+                    ? ResponseToRequest.Succeeded()
+                    : ResponseToRequest.Failed(
+                        validationResponse.error
+                            ?? "Parameter validation failed for {key}. Error response provided no details."
+                    );
+            }
+            ;
 
             var t = papiClient.RegisterRequestHandler(GetValidatorKey(key), requestHandler);
 

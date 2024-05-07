@@ -25,7 +25,7 @@ internal class MessageHandlerRequestByRequestType : IMessageHandler
     {
         if (!_handlersByRequestType.TryAdd(requestType, handler))
             throw new ArgumentException(
-                "Attempt to set handler for a request type that already " + "has a handler.",
+                "Attempt to set handler for a request type that already has a handler.",
                 nameof(requestType)
             );
     }

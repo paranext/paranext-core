@@ -8,6 +8,7 @@ using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
+using static Paranext.DataProvider.Projects.ParatextProjectDataProvider;
 
 namespace TestParanextDataProvider.Projects
 {
@@ -248,14 +249,14 @@ namespace TestParanextDataProvider.Projects
                 null,
                 requestType,
                 requesterId,
-                ParatextProjectDataProvider.AllScriptureDataTypes
+                AllScriptureDataTypes
             );
 
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
             Assert.That(
                 updateEvents[0].Event,
-                Is.EqualTo(ParatextProjectDataProvider.AllScriptureDataTypes)
+                Is.EqualTo(AllScriptureDataTypes)
             );
 
             // Verify the new text was saved to disk
@@ -342,14 +343,14 @@ namespace TestParanextDataProvider.Projects
                 null,
                 requestType,
                 requesterId,
-                ParatextProjectDataProvider.AllScriptureDataTypes
+                AllScriptureDataTypes
             );
 
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
             Assert.That(
                 updateEvents[0].Event,
-                Is.EqualTo(ParatextProjectDataProvider.AllScriptureDataTypes)
+                Is.EqualTo(AllScriptureDataTypes)
             );
 
             // Verify the new text was saved to disk
@@ -475,7 +476,7 @@ namespace TestParanextDataProvider.Projects
 
             VerifyResponse(result2, null, requestType, requesterId, "Random file contents");
         }
-        
+
         /// <summary>
         /// Tests that the ParatextProjectDataProvider has successfully registered a validator for
         /// the Validity property and that the validator is called to determine that the new value
@@ -489,7 +490,7 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             var result = provider.SetProjectSetting(
-                JsonConvert.SerializeObject(provider.DataProviderName + ".Visibility"),
+                JsonConvert.SerializeObject(VisibilitySettingName),
                 JsonConvert.SerializeObject(ProjectVisibility.Public.ToString()));
 
             Assert.That(result.Success, Is.True);
@@ -508,7 +509,7 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             var result = provider.SetProjectSetting(
-                JsonConvert.SerializeObject(provider.DataProviderName + ".Visibility"),
+                JsonConvert.SerializeObject(VisibilitySettingName),
                 JsonConvert.SerializeObject(89));
 
             Assert.That(result.Success, Is.False);
