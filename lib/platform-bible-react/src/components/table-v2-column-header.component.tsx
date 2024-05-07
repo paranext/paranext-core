@@ -47,8 +47,10 @@ function DataTableColumnHeader<TData, TValue>({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
-            <ArrowUpIcon className="pr-mr-2 pr-h-3.5 pr-w-3.5 pr-text-muted-foreground/70" />
-            Asc
+            <div className="pr-flex">
+              <ArrowUpIcon className="pr-mr-2 pr-h-3.5 pr-w-3.5 pr-text-muted-foreground/70" />
+              Asc
+            </div>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
             <ArrowDownIcon className="pr-mr-2 pr-h-3.5 pr-w-3.5 pr-text-muted-foreground/70" />

@@ -72,13 +72,13 @@ function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValu
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           value={(table.getColumn('email')?.getFilterValue() as string) ?? ''}
           onChange={(event) => table.getColumn('email')?.setFilterValue(event.target.value)}
-          className="pr-max-w-sm"
+          className="pr-max-w-sm pr-border pr-border-b-slate-100"
         />
       </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="pr-ml-auto">
+          <Button variant="outline" className="pr-m-3 pr-ml-auto">
             Columns
           </Button>
         </DropdownMenuTrigger>
