@@ -4,10 +4,12 @@ import {
   DialogTypes,
   INVENTORY_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
+import { DataTable } from 'platform-bible-react';
 
 function SelectProjectDialog(props: DialogTypes[typeof INVENTORY_DIALOG_TYPE]['props']) {
   const { isDialog } = props;
-  return <p>{isDialog}</p>;
+  console.log(isDialog);
+  return <DataTable columns={[]} data={[]} />;
 }
 
 const INVENTORY_DIALOG: DialogDefinition<typeof INVENTORY_DIALOG_TYPE> = Object.freeze({

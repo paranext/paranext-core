@@ -22,7 +22,6 @@ import {
   TableRow,
 } from '@/components/shadcn-ui/table';
 import { Button } from '@/components/shadcn-ui/button';
-import { Input } from '@/components/shadcn-ui/input';
 import DataTablePagination from './data-table-pagination.component';
 import DataTableViewOptions from './data-table-column-toggle.component';
 
@@ -65,16 +64,6 @@ function DataTable<TData, TValue>({
 
   return (
     <div>
-      <div className="pr-flex pr-items-center pr-py-4">
-        <Input
-          placeholder="Filter emails..."
-          // We are certain the value is a string
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          value={(table.getColumn('email')?.getFilterValue() as string) ?? ''}
-          onChange={(event) => table.getColumn('email')?.setFilterValue(event.target.value)}
-          className="pr-max-w pr-border pr-border-b-slate-100"
-        />
-      </div>
       {showColumnVisibilityControls && <DataTableViewOptions table={table} />}
       <div className="pr-rounded-md pr-border">
         <Table>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ScriptureReference } from 'platform-bible-utils';
-import { randomlyGeneratedData, columns } from '@/preview/table/table-contents';
+import { randomlyGeneratedData, columns } from '@/preview/table/inventory-contents';
 import { BookChapterControl, DataTable } from '..';
 
 const defaultScrRef: ScriptureReference = {
@@ -27,7 +27,7 @@ function App() {
       <div className="pr-m-3 pr-flex">
         <DataTable
           columns={columns}
-          data={randomlyGeneratedData(100)}
+          data={randomlyGeneratedData(200)}
           showPaginationControls
           showColumnVisibilityControls
         />
