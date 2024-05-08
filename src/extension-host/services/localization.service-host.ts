@@ -17,6 +17,7 @@ import {
   LocalizedStringDataContribution,
   StringsMetadata,
   LocalizeKey,
+  getCurrentLocale,
 } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
@@ -123,9 +124,7 @@ async function getDefaultLanguages() {
   const languagesFromSetting = await settingsService.get('platform.interfaceLanguage');
   if (languagesFromSetting) return languagesFromSetting;
 
-  // TODO: Replace 'en' with function to find current language
-  // when https://github.com/paranext/paranext-core/issues/735 is done
-  const currentLocaleLanguage = 'en';
+  const currentLocaleLanguage = getCurrentLocale();
   return [currentLocaleLanguage];
 }
 

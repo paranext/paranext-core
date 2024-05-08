@@ -44,6 +44,15 @@ import { projectSettingsDocumentCombiner } from './project-settings.service-host
 // eslint-disable-next-line camelcase, no-underscore-dangle
 declare const __non_webpack_require__: typeof require;
 
+/** These are names of extensions that should only be loaded if "noisy dev mode" is enabled */
+const TEST_EXTENSION_NAMES = [
+  'c-sharp-provider-test',
+  'evil',
+  'helloSomeone',
+  'helloWorld',
+  'quickVerse',
+];
+
 /**
  * Information about an extension and extra metadata about it that we generate
  *
@@ -383,6 +392,8 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
         );
         return false;
       }
+      if (!globalThis.isNoisyDevModeEnabled && TEST_EXTENSION_NAMES.includes(settled.value.name))
+        return false;
       return true;
     })
     // Assert the fulfilled type since the unfulfilled ones have been filtered out.

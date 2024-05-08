@@ -29,7 +29,6 @@ declare module 'papi-shared-types' {
 
   export interface CommandHandlers {
     'helloSomeone.helloSomeone': (name: string) => string;
-    'helloSomeone.echoSomeoneRenderer': (message: string) => Promise<string>;
   }
 
   export interface DataProviders {

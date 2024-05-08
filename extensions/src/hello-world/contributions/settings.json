@@ -2,7 +2,7 @@
   {
     "label": "%settings_hello_world_group1_label%",
     "properties": {
-      "hello-world.personName": {
+      "helloWorld.personName": {
         "label": "%settings_hello_world_personName_label%",
         "default": "Bill"
       }

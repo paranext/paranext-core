@@ -303,18 +303,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  const echoSomeoneRendererPromise = papi.commands.registerCommand(
-    'helloSomeone.echoSomeoneRenderer',
-    async (message: string) => {
-      return `echoSomeoneRenderer: ${await papi.commands.sendCommand(
-        'test.addThree',
-        2,
-        4,
-        6,
-      )}! ${message}`;
-    },
-  );
-
   // Create a webview or get the existing webview if ours already exists
   // Note: here, we are storing a created webview's id when we create it, and using that id on
   // `existingId` to look specifically for the webview that we previously created if we have ever
@@ -355,7 +343,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await peopleWebViewProviderPromise,
     await emotionTestWebViewProviderPromise,
     await helloSomeoneCommandPromise,
-    await echoSomeoneRendererPromise,
     papi.webViews.onDidAddWebView((addWebViewEvent) => {
       if (addWebViewEvent.webView.webViewType === peopleWebViewType)
         logger.info(

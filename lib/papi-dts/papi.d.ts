@@ -441,6 +441,8 @@ declare module 'shared/global-this.model' {
      * ```
      */
     var updateWebViewDefinition: UpdateWebViewDefinition;
+    /** Indicates whether test code meant just for developers to see should be run */
+    var isNoisyDevModeEnabled: boolean;
   }
   /** Type of Paranext process */
   export enum ProcessType {
@@ -2242,7 +2244,6 @@ declare module 'papi-shared-types' {
    */
   interface CommandHandlers {
     'test.echo': (message: string) => string;
-    'test.echoRenderer': (message: string) => Promise<string>;
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
@@ -2591,14 +2592,6 @@ declare module 'papi-shared-types' {
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
   import { CommandHandlers, CommandNames } from 'papi-shared-types';
-  module 'papi-shared-types' {
-    interface CommandHandlers {
-      'test.addThree': typeof addThree;
-      'test.squareAndConcat': typeof squareAndConcat;
-    }
-  }
-  function addThree(a: number, b: number, c: number): Promise<number>;
-  function squareAndConcat(a: number, b: string): Promise<string>;
   /** Sets up the CommandService. Only runs once and always returns the same promise after that */
   export const initialize: () => Promise<void>;
   /** Send a command to the backend. */
@@ -4464,6 +4457,12 @@ declare module 'node/utils/util' {
    * @returns One uri that combines the uri and the paths in left-to-right order
    */
   export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
+  /**
+   * Determines if running in noisy dev mode
+   *
+   * @returns True if the process is running in noisy dev mode, false otherwise
+   */
+  export const isNoisyDevModeEnvVariableSet: () => boolean;
 }
 declare module 'node/services/node-file-system.service' {
   /** File system calls from Node */

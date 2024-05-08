@@ -13,6 +13,7 @@ import { ProcessType } from '@shared/global-this.model';
 import { app } from 'electron';
 import { getCommandLineArgument, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';
 import { LogLevel } from 'electron-log';
+import { isNoisyDevModeEnvVariableSet } from '@node/utils/util';
 
 // #region globalThis setup
 
@@ -24,6 +25,7 @@ globalThis.logLevel =
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   (getCommandLineArgument(COMMAND_LINE_ARGS.LogLevel) as LogLevel) ??
   (globalThis.isPackaged ? 'info' : 'debug');
+globalThis.isNoisyDevModeEnabled = isNoisyDevModeEnvVariableSet();
 
 // #endregion
 

@@ -52,7 +52,7 @@ const reactWebViewProvider: IWebViewProviderWithType = {
         `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     return {
-      iconUrl: 'papi-extension://hello-world/assets/offline.svg',
+      iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
       title: 'Hello World React',
       ...savedWebView,
       content: helloWorldReactWebView,
@@ -191,7 +191,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const helloWorldPersonNamePromise = papi.settings.registerValidator(
-    'hello-world.personName',
+    'helloWorld.personName',
     async (newValue) => typeof newValue === 'string',
   );
 
