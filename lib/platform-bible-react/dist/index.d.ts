@@ -500,12 +500,6 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
-export interface ScrRefSelectorProps {
-	scrRef: ScriptureReference;
-	handleSubmit: (scrRef: ScriptureReference) => void;
-	id?: string;
-}
-export declare function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type SearchBarProps = {
 	/**
 	 * Callback fired to handle the search query when button pressed
@@ -897,8 +891,10 @@ export declare function Table<R>({ columns, sortColumns, onSortColumnsChange, on
 export interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
 	data: TData[];
+	showPaginationControls?: boolean;
+	showColumnVisibilityControls?: boolean;
 }
-export declare function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare function DataTable<TData, TValue>({ columns, data, showPaginationControls, showColumnVisibilityControls, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 export type TextFieldProps = {
 	/**
 	 * The variant to use.
