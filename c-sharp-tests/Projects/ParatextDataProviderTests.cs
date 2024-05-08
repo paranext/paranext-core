@@ -1,11 +1,14 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Newtonsoft.Json;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
+using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
+using static Paranext.DataProvider.Projects.ParatextProjectDataProvider;
 
 namespace TestParanextDataProvider.Projects
 {
@@ -246,14 +249,14 @@ namespace TestParanextDataProvider.Projects
                 null,
                 requestType,
                 requesterId,
-                ParatextProjectDataProvider.AllScriptureDataTypes
+                AllScriptureDataTypes
             );
 
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
             Assert.That(
                 updateEvents[0].Event,
-                Is.EqualTo(ParatextProjectDataProvider.AllScriptureDataTypes)
+                Is.EqualTo(AllScriptureDataTypes)
             );
 
             // Verify the new text was saved to disk
@@ -340,14 +343,14 @@ namespace TestParanextDataProvider.Projects
                 null,
                 requestType,
                 requesterId,
-                ParatextProjectDataProvider.AllScriptureDataTypes
+                AllScriptureDataTypes
             );
 
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
             Assert.That(
                 updateEvents[0].Event,
-                Is.EqualTo(ParatextProjectDataProvider.AllScriptureDataTypes)
+                Is.EqualTo(AllScriptureDataTypes)
             );
 
             // Verify the new text was saved to disk
@@ -472,6 +475,44 @@ namespace TestParanextDataProvider.Projects
                 .First();
 
             VerifyResponse(result2, null, requestType, requesterId, "Random file contents");
+        }
+
+        /// <summary>
+        /// Tests that the ParatextProjectDataProvider has successfully registered a validator for
+        /// the Validity property and that the validator is called to determine that the new value
+        /// for that property is indeed valid.
+        /// </summary>
+        [Test]
+        public async Task SetProjectSetting_ValidVisibility_Succeeds()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            await provider.RegisterDataProvider();
+
+            var result = provider.SetProjectSetting(
+                JsonConvert.SerializeObject(VisibilitySettingName),
+                JsonConvert.SerializeObject(ProjectVisibility.Public.ToString()));
+
+            Assert.That(result.Success, Is.True);
+        }
+
+        /// <summary>
+        /// Tests that the ParatextProjectDataProvider has successfully registered a validator for
+        /// the Validity property and that the validator is called to determine that the new value
+        /// for that property is indeed invalid.
+        /// </summary>
+        [Test]
+        public async Task SetProjectSetting_InvalidVisibility_DoesNotSucceed()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            await provider.RegisterDataProvider();
+
+            var result = provider.SetProjectSetting(
+                JsonConvert.SerializeObject(VisibilitySettingName),
+                JsonConvert.SerializeObject(89));
+
+            Assert.That(result.Success, Is.False);
         }
     }
 }
