@@ -1,4 +1,4 @@
-import { ArrowDownIcon, ArrowUpIcon, CarrotIcon, EyeOffIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, ArrowUpDownIcon, EyeOffIcon } from 'lucide-react';
 import { Column } from '@tanstack/react-table';
 
 import { cn } from '@/utils/shadcn-ui.util';
@@ -29,7 +29,7 @@ function DataTableColumnHeader<TData, TValue>({
   const getSortIcon = (isSorted: string | boolean): ReactNode => {
     if (isSorted === 'desc') return <ArrowDownIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
     if (isSorted === 'asc') return <ArrowUpIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
-    return <CarrotIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
+    return <ArrowUpDownIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
   };
 
   return (
@@ -49,17 +49,22 @@ function DataTableColumnHeader<TData, TValue>({
           <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
             <div className="pr-flex">
               <ArrowUpIcon className="pr-mr-2 pr-h-3.5 pr-w-3.5 pr-text-muted-foreground/70" />
-              Asc
+              Ascending
             </div>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
-            <ArrowDownIcon className="pr-mr-2 pr-h-3.5 pr-w-3.5 pr-text-muted-foreground/70" />
-            Desc
+            <div className="pr-flex">
+              <ArrowDownIcon className="pr-mr-2 pr-h-3.5 pr-w-3.5 pr-text-muted-foreground/70" />
+              Descending
+            </div>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => column.toggleVisibility(false)}>
-            <EyeOffIcon className="pr-mr-2 pr-h-3.5 pr-w-3.5 pr-text-muted-foreground/70" />
-            Hide
+            <div className="pr-flex">
+              {' '}
+              <EyeOffIcon className="pr-mr-2 pr-h-3.5 pr-w-3.5 pr-text-muted-foreground/70" />
+              Hide
+            </div>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

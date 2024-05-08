@@ -16,7 +16,7 @@ interface DataTablePaginationProps<TData> {
 
 function DataTablePagination<TData>({ table }: DataTablePaginationProps<TData>) {
   return (
-    <div className="pr-flex pr-items-center pr-justify-between pr-px-2">
+    <div className="pr-flex pr-items-center pr-justify-between pr-px-2 pr-pb-3 pr-pt-3">
       <div className="pr-flex pr-items-center pr-space-x-6 lg:pr-space-x-8">
         <div className="pr-flex-1 pr-text-sm pr-text-muted-foreground">
           {table.getFilteredSelectedRowModel().rows.length} of{' '}

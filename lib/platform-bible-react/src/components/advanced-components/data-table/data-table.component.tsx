@@ -22,22 +22,23 @@ import {
   TableRow,
 } from '@/components/shadcn-ui/table';
 import { Button } from '@/components/shadcn-ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/shadcn-ui/dropdown-menu';
 import { Input } from '@/components/shadcn-ui/input';
-import DataTablePagination from './table-v2-pagination.component';
-import DataTableViewOptions from './table-v2-column-toggle.component';
+import DataTablePagination from './data-table-pagination.component';
+import DataTableViewOptions from './data-table-column-toggle.component';
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  showPaginationControls?: boolean;
+  showColumnVisibilityControls?: boolean;
 }
 
-function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
+function DataTable<TData, TValue>({
+  columns,
+  data,
+  showPaginationControls = false,
+  showColumnVisibilityControls = false,
+}: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -48,7 +49,6 @@ function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValu
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
@@ -72,34 +72,10 @@ function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValu
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           value={(table.getColumn('email')?.getFilterValue() as string) ?? ''}
           onChange={(event) => table.getColumn('email')?.setFilterValue(event.target.value)}
-          className="pr-max-w-sm pr-border pr-border-b-slate-100"
+          className="pr-max-w pr-border pr-border-b-slate-100"
         />
       </div>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="pr-m-3 pr-ml-auto">
-            Columns
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {table
-            .getAllColumns()
-            .filter((column) => column.getCanHide())
-            .map((column) => {
-              return (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className="pr-capitalize"
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                >
-                  {column.id}
-                </DropdownMenuCheckboxItem>
-              );
-            })}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {showColumnVisibilityControls && <DataTableViewOptions table={table} />}
       <div className="pr-rounded-md pr-border">
         <Table>
           <TableHeader>
@@ -109,9 +85,7 @@ function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValu
                   return (
                     <TableHead key={header.id}>
                       {header.isPlaceholder
-                        ? // Library component uses null
-                          // eslint-disable-next-line no-null/no-null
-                          null
+                        ? undefined
                         : flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   );
@@ -158,8 +132,7 @@ function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValu
           Next
         </Button>
       </div>
-      <DataTablePagination table={table} />
-      <DataTableViewOptions table={table} />
+      {showPaginationControls && <DataTablePagination table={table} />}
     </div>
   );
 }
