@@ -1,4 +1,4 @@
-import { Button as MuiButton } from '@mui/material';
+import { Button as ShadButton } from '@/components/shadcn-ui/button';
 import { MouseEventHandler, PropsWithChildren } from 'react';
 import '@/components/button.component.css';
 
@@ -22,8 +22,7 @@ export type ButtonProps = PropsWithChildren<{
 /**
  * Button a user can click to do something
  *
- * Thanks to MUI for heavy inspiration and documentation
- * https://mui.com/material-ui/getting-started/overview/
+ * Thanks to Shadcn for heavy inspiration and documentation https://ui.shadcn.com/docs
  */
 function Button({
   id,
@@ -34,7 +33,7 @@ function Button({
   children,
 }: ButtonProps) {
   return (
-    <MuiButton
+    <ShadButton
       id={id}
       disabled={isDisabled}
       className={`papi-button ${className ?? ''}`}
@@ -42,7 +41,7 @@ function Button({
       onContextMenu={onContextMenu}
     >
       {children}
-    </MuiButton>
+    </ShadButton>
   );
 }
 
