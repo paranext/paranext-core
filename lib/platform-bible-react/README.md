@@ -17,7 +17,7 @@ TODO:
 
 #### Setting up
 
-To set up the dev environment to build, you must run the following:
+To set up the dev environment to build, you must run the following from `paranext-core`:
 
 ```bash
 npm i
