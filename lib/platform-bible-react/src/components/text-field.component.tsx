@@ -68,7 +68,7 @@ function TextField({
     <div className="pr-inline-grid pr-items-center pr-gap-1.5">
       <ShadLabel
         htmlFor={id}
-        className={hasError ? 'pr-text-red-600' : ''}
+        className={`${hasError ? 'pr-text-red-600' : ''}${label ? '' : 'pr-hidden'}`}
       >{`${label}${isRequired ? '*' : ''}`}</ShadLabel>
       <ShadInput
         id={id}
