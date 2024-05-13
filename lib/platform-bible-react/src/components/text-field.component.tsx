@@ -46,7 +46,8 @@ export type TextFieldProps = {
 /**
  * Text input field
  *
- * Thanks to Shadcn for heavy inspiration and documentation https://ui.shadcn.com/docs
+ * Thanks to Shadcn for heavy inspiration and documentation
+ * https://ui.shadcn.com/docs/components/input#with-label
  */
 function TextField({
   id,

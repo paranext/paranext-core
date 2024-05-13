@@ -22,7 +22,8 @@ export type ButtonProps = PropsWithChildren<{
 /**
  * Button a user can click to do something
  *
- * Thanks to Shadcn for heavy inspiration and documentation https://ui.shadcn.com/docs
+ * Thanks to Shadcn for heavy inspiration and documentation
+ * https://ui.shadcn.com/docs/components/button
  */
 function Button({
   id,
