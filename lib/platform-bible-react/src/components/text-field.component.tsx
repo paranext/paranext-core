@@ -1,6 +1,7 @@
 import { Input as ShadInput } from '@/components/shadcn-ui/input';
 import { Label as ShadLabel } from '@/components/shadcn-ui/label';
 import { ChangeEventHandler, FocusEventHandler } from 'react';
+import { cn } from '@/utils/shadcn-ui.util';
 
 export type TextFieldProps = {
   /** Optional unique identifier */
@@ -68,21 +69,24 @@ function TextField({
     <div className="pr-inline-grid pr-items-center pr-gap-1.5">
       <ShadLabel
         htmlFor={id}
-        className={`${hasError ? 'pr-text-red-600' : ''}${label ? '' : 'pr-hidden'}`}
+        className={cn({
+          'pr-text-red-600': hasError,
+          'pr-hidden': !label,
+        })}
       >{`${label}${isRequired ? '*' : ''}`}</ShadLabel>
       <ShadInput
         id={id}
         disabled={isDisabled}
         placeholder={placeholder}
         required={isRequired}
-        className={`papi-textfield ${className ?? ''} ${hasError ? 'pr-border-red-600' : ''}`}
+        className={cn('papi-textfield', className, { 'pr-border-red-600': hasError })}
         defaultValue={defaultValue}
         value={value}
         onChange={onChange}
         onFocus={onFocus}
         onBlur={onBlur}
       />
-      <p className={placeholder ? '' : 'pr-hidden'}>{helperText}</p>
+      <p className={cn({ 'pr-hidden': !helperText })}>{helperText}</p>
     </div>
   );
 }
