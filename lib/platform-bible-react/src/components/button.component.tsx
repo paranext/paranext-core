@@ -1,4 +1,5 @@
 import { Button as ShadButton } from '@/components/shadcn-ui/button';
+import { cn } from '@/utils/shadcn-ui.util';
 import { MouseEventHandler, PropsWithChildren } from 'react';
 import '@/components/button.component.css';
 
@@ -37,7 +38,7 @@ function Button({
     <ShadButton
       id={id}
       disabled={isDisabled}
-      className={`papi-button ${className ?? ''}`}
+      className={cn('papi-button', className)}
       onClick={onClick}
       onContextMenu={onContextMenu}
     >
