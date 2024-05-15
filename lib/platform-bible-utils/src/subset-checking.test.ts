@@ -32,7 +32,7 @@ test('Subset checking works on arrays of simple types', () => {
 });
 
 test('Subset checking works on objects with properties', () => {
-  const objA = { name: 'Alice', age: 30, address: { city: 'Seattle' } };
+  const objA = { name: 'Alice', age: 30, address: { city: 'Seattle', state: 'Washington' } };
   const objB = { name: 'Alice', address: { city: 'Seattle' } };
   const objC = {};
   expect(isSubset(objA, objB)).toBeTruthy();
