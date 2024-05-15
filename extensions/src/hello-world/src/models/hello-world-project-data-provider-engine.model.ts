@@ -1,4 +1,4 @@
-import papi, { DataProviderEngine } from '@papi/backend';
+import papi, { ProjectDataProviderEngine } from '@papi/backend';
 import {
   IProjectDataProviderEngine,
   DataProviderUpdateInstructions,
@@ -7,7 +7,7 @@ import {
 import type { ProjectDataTypes, ProjectSettingTypes } from 'papi-shared-types';
 
 class HelloWorldProjectDataProviderEngine
-  extends DataProviderEngine<ProjectDataTypes['helloWorld']>
+  extends ProjectDataProviderEngine<'helloWorld'>
   implements IProjectDataProviderEngine<'helloWorld'>
 {
   private numbers: { [max: string]: number | undefined };

@@ -1913,7 +1913,24 @@ declare module 'shared/models/project-data-provider.model' {
    * >;
    * ```
    *
-   *     ---
+   * WARNING: Each Project Data Provider **must** fulfill the following requirements for its
+   * settings-related methods:
+   *
+   * - `getSetting`: if a project setting value is present for the key requested, return it. Otherwise,
+   *   you must call `papi.projectSettings.getDefault` to get the default value or throw if that call
+   *   throws. This functionality preserves the intended type of the setting and avoids returning
+   *   `undefined` unexpectedly.
+   * - `setSetting`: must call `papi.projectSettings.isValid` before setting the value and should return
+   *   false if the call returns `false` and throw if the call throws. This functionality preserves
+   *   the intended intended type of the setting and avoids allowing the setting to be set to the
+   *   wrong type.
+   * - `resetSetting`: deletes the value at the key and sends a setting update event. After this,
+   *   `getSetting` should again see the setting value is not present, call
+   *   `papi.projectSettings.getDefault`, and return the default value.
+   * - Note: see {@link WithProjectDataProviderEngineSettingMethods} for method signatures for these
+   *   three methods.
+   *
+   *   .---
    *
    * ### ExtensionData
    *
@@ -2101,41 +2118,46 @@ declare module 'shared/models/data-provider-engine.model' {
    * DataProviderService creates an {@link IDataProvider} on the papi that layers over this engine,
    * providing special functionality.
    *
-   * @type TDataTypes - The data types that this data provider engine serves. For each data type
-   *   defined, the engine must have corresponding `get<data_type>` and `set<data_type> function`
-   *   functions.
-   * @see {@link DataProviderDataTypes} for information on how to make powerful types that work well with
-   * Intellisense.
+   * See {@link DataProviderDataTypes} for information on how to make powerful types that work well
+   * with Intellisense.
    *
-   * Note: papi creates a `notifyUpdate` function on the data provider engine if one is not provided, so it
-   * is not necessary to provide one in order to call `this.notifyUpdate`. However, TypeScript does
-   * not understand that papi will create one as you are writing your data provider engine, so you can
-   * avoid type errors with one of the following options:
+   * Note: papi creates a `notifyUpdate` function on the data provider engine if one is not provided,
+   * so it is not necessary to provide one in order to call `this.notifyUpdate`. However, TypeScript
+   * does not understand that papi will create one as you are writing your data provider engine, so
+   * you can avoid type errors with one of the following options:
    *
    * 1. If you are using a class to create a data provider engine, you can extend the
-   * {@link DataProviderEngine} class, and it will provide `notifyUpdate` for you:
+   *    {@link DataProviderEngine} class, and it will provide `notifyUpdate` for you:
+   *
    * ```typescript
    * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
    *   ...
    * }
    * ```
    *
-   * 2. If you are using an object or class not extending {@link DataProviderEngine} to create a data provider engine, you can add a
-   * `notifyUpdate` function (and, with an object, add the {@link WithNotifyUpdate} type) to
-   * your data provider engine like so:
+   * 2. If you are using an object or class not extending {@link DataProviderEngine} to create a data
+   *    provider engine, you can add a `notifyUpdate` function (and, with an object, add the
+   *    {@link WithNotifyUpdate} type) to your data provider engine like so:
+   *
    * ```typescript
    * const myDPE: IDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
    *   notifyUpdate(updateInstructions) {},
    *   ...
    * }
    * ```
+   *
    * OR
+   *
    * ```typescript
    * class MyDPE implements IDataProviderEngine<MyDataTypes> {
    *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
    *   ...
    * }
    * ```
+   *
+   * @type `TDataTypes` - The data types that this data provider engine serves. For each data type
+   *   defined, the engine must have corresponding `get<data_type>` and `set<data_type> function`
+   *   functions.
    */
   type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
     NetworkableObject &
@@ -2350,6 +2372,9 @@ declare module 'papi-shared-types' {
     /**
      * Set the value of the specified project setting on this project.
      *
+     * Note for implementing: `setSetting` must call `papi.projectSettings.isValid` before allowing
+     * the setting change.
+     *
      * @param key The string id of the project setting to change
      * @param newSetting The value that is to be set to the project setting.
      * @returns Information that papi uses to interpret whether to send out updates. Defaults to
@@ -2368,6 +2393,9 @@ declare module 'papi-shared-types' {
      * up-to-date, use `subscribeSetting` instead, which can immediately give you the value and keep
      * it up-to-date.
      *
+     * Note for implementing: `getSetting` must call `papi.projectSettings.getDefault` if this
+     * project does not have a value for this setting
+     *
      * @param key The string id of the project setting to get
      * @returns The value of the specified project setting. Returns default setting value if the
      *   project setting does not exist on the project.
@@ -2378,6 +2406,10 @@ declare module 'papi-shared-types' {
     ) => Promise<ProjectSettingTypes[ProjectSettingName]>;
     /**
      * Deletes the specified project setting, setting it back to its default value.
+     *
+     * Note for implementing: `resetSetting` should remove the value for this setting for this
+     * project such that calling `getSetting` later would cause it to call
+     * `papi.projectSettings.getDefault` and return the default value.
      *
      * @param key The string id of the project setting to reset
      * @returns `true` if successfully reset the project setting, `false` otherwise
@@ -2439,6 +2471,10 @@ declare module 'papi-shared-types' {
    *
    * Note: The keys of this interface are the `projectType`s for the associated Project Data
    * Providers.
+   *
+   * WARNING: Each Project Storage Interpreter **must** fulfill certain requirements for its
+   * `getSetting`, `setSetting`, and `resetSetting` methods. See {@link MandatoryProjectDataTypes}
+   * for more information.
    *
    * An extension can extend this interface to add types for the Project Data Providers its
    * registered factory provides by adding the following to its `.d.ts` file (in this example, we
@@ -3357,12 +3393,17 @@ declare module 'shared/models/project-data-provider-engine.model' {
     ProjectTypes,
     ProjectDataTypes,
     WithProjectDataProviderEngineSettingMethods,
+    ProjectSettingNames,
+    ProjectSettingTypes,
   } from 'papi-shared-types';
   import {
     MandatoryProjectDataTypes,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from 'shared/models/project-data-provider.model';
-  import IDataProviderEngine from 'shared/models/data-provider-engine.model';
+  import IDataProviderEngine, {
+    DataProviderEngine,
+  } from 'shared/models/data-provider-engine.model';
+  import { DataProviderDataType } from 'shared/models/data-provider.model';
   /** All possible types for ProjectDataProviderEngines: IProjectDataProviderEngine<ProjectDataType> */
   export type ProjectDataProviderEngineTypes = {
     [ProjectType in ProjectTypes]: IProjectDataProviderEngine<ProjectType>;
@@ -3398,24 +3439,37 @@ declare module 'shared/models/project-data-provider-engine.model' {
    * an {@link IProjectDataProvider} on the papi that layers over this engine, providing special
    * functionality.
    *
-   * @type TProjectDataTypes - The data types that this Project Data Provider Engine serves. For each
-   *   data type defined, the engine must have corresponding `get<data_type>` and `set<data_type>
-   *   function` functions. These data types correspond to the `projectType` of the project.
-   * @see {@link DataProviderDataTypes} for information on how to make powerful types that work well with
-   * Intellisense.
+   * See {@link DataProviderDataTypes} for information on how to make powerful types that work well
+   * with Intellisense.
    *
    * Note: papi creates a `notifyUpdate` function on the Project Data Provider Engine if one is not
    * provided, so it is not necessary to provide one in order to call `this.notifyUpdate`. However,
    * TypeScript does not understand that papi will create one as you are writing your Project Data
-   * Provider Engine, so you can avoid type errors by adding add a `notifyUpdate` function (and, with
-   * an object, add the {@link WithNotifyUpdate} type) to your Project Data Provider Engine like so:
+   * Provider Engine, so you can avoid type errors with one of the following options:
+   *
+   * 1. If you are using a class to create a Project Data Provider Engine, you can extend the
+   *    {@link ProjectDataProviderEngine} class, and it will provide `notifyUpdate` as well as inform
+   *    Intellisense that you can run `notifyUpdate` with the `Setting` data type for you:
+   *
+   * ```typescript
+   * class MyPDPE extends ProjectDataProviderEngine<'MyProjectData'> implements IProjectDataProviderEngine<'MyProjectData'> {
+   *   ...
+   * }
+   * ```
+   *
+   * 2. If you are using an object or class not extending {@link ProjectDataProviderEngine} to create a
+   *    Project Data Provider Engine, you can add a `notifyUpdate` function (and, with an object, add
+   *    the {@link WithNotifyUpdate} type) to your Project Data Provider Engine like so:
+   *
    * ```typescript
    * const myPDPE: IProjectDataProviderEngine<'MyProjectData'> & WithNotifyUpdate<ProjectDataTypes['MyProjectData']> = {
    *   notifyUpdate(updateInstructions) {},
    *   ...
    * }
    * ```
+   *
    * OR
+   *
    * ```typescript
    * class MyPDPE implements IProjectDataProviderEngine<'MyProjectData'> {
    *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<ProjectDataTypes['MyProjectData']>) {}
@@ -3428,6 +3482,32 @@ declare module 'shared/models/project-data-provider-engine.model' {
   > &
     WithProjectDataProviderEngineSettingMethods<ProjectDataTypes[ProjectType]> &
     WithProjectDataProviderEngineExtensionDataMethods<ProjectDataTypes[ProjectType]>;
+  /**
+   *
+   * Abstract class that provides a placeholder `notifyUpdate` for Project Data Provider Engine
+   * classes. If a Project Data Provider Engine class extends this class, it doesn't have to specify
+   * its own `notifyUpdate` function in order to use `notifyUpdate`.
+   *
+   * Additionally, extending this class informs Intellisense that you can run `notifyUpdate` with the
+   * `Setting` data type if needed like so:
+   *
+   * ```typescript
+   * this.notifyUpdate('Setting');
+   * ```
+   *
+   * @see {@link IProjectDataProviderEngine} for more information on extending this class.
+   */
+  export abstract class ProjectDataProviderEngine<
+    ProjectType extends ProjectTypes,
+  > extends DataProviderEngine<
+    ProjectDataTypes[ProjectType] & {
+      Setting: DataProviderDataType<
+        ProjectSettingNames,
+        ProjectSettingTypes[ProjectSettingNames],
+        ProjectSettingTypes[ProjectSettingNames]
+      >;
+    }
+  > {}
 }
 declare module 'shared/models/project-metadata.model' {
   import { ProjectTypes } from 'papi-shared-types';
@@ -4368,10 +4448,10 @@ declare module 'shared/services/project-data-provider.service' {
    * pdp.getVerse(new VerseRef('JHN', '1', '1'));
    * ```
    *
-   * @param projectType Indicates what you expect the `projectType` to be for the project with the
-   *   specified id. The TypeScript type for the returned project data provider will have the project
-   *   data provider type associated with this project type. If this argument does not match the
-   *   project's actual `projectType` (according to its metadata), a warning will be logged
+   * @param projectType Type of the project to load. The TypeScript type for the returned project data
+   *   provider will have the project data provider type associated with this project type. If this
+   *   argument does not match the project's actual `projectType` (according to its metadata), an
+   *   error will be thrown.
    * @param projectId ID for the project to load
    * @returns Data provider with types that are associated with the given project type
    */
@@ -4822,6 +4902,7 @@ declare module '@papi/backend' {
   import { InternetService } from 'shared/services/internet.service';
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { DataProviderEngine as PapiDataProviderEngine } from 'shared/models/data-provider-engine.model';
+  import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
@@ -4840,6 +4921,22 @@ declare module '@papi/backend' {
      * @see {@link IDataProviderEngine} for more information on extending this class.
      */
     DataProviderEngine: typeof PapiDataProviderEngine;
+    /**
+     *
+     * Abstract class that provides a placeholder `notifyUpdate` for Project Data Provider Engine
+     * classes. If a Project Data Provider Engine class extends this class, it doesn't have to specify
+     * its own `notifyUpdate` function in order to use `notifyUpdate`.
+     *
+     * Additionally, extending this class informs Intellisense that you can run `notifyUpdate` with the
+     * `Setting` data type if needed like so:
+     *
+     * ```typescript
+     * this.notifyUpdate('Setting');
+     * ```
+     *
+     * @see {@link IProjectDataProviderEngine} for more information on extending this class.
+     */
+    ProjectDataProviderEngine: typeof PapiProjectDataProviderEngine;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
     /**
@@ -4934,6 +5031,22 @@ declare module '@papi/backend' {
    * @see {@link IDataProviderEngine} for more information on extending this class.
    */
   export const DataProviderEngine: typeof PapiDataProviderEngine;
+  /**
+   *
+   * Abstract class that provides a placeholder `notifyUpdate` for Project Data Provider Engine
+   * classes. If a Project Data Provider Engine class extends this class, it doesn't have to specify
+   * its own `notifyUpdate` function in order to use `notifyUpdate`.
+   *
+   * Additionally, extending this class informs Intellisense that you can run `notifyUpdate` with the
+   * `Setting` data type if needed like so:
+   *
+   * ```typescript
+   * this.notifyUpdate('Setting');
+   * ```
+   *
+   * @see {@link IProjectDataProviderEngine} for more information on extending this class.
+   */
+  export const ProjectDataProviderEngine: typeof PapiProjectDataProviderEngine;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
   /**

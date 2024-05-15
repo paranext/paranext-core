@@ -838,13 +838,14 @@ export declare function toArray(string: string): string[];
 export function deepEqual(a: unknown, b: unknown): boolean;
 /**
  * Check if one object is a subset of the other object. "Subset" means that all properties of one
- * object are present in to the other object, and if they are present that all values of those
- * properties are deeply equal.
+ * object are present in the other object, and if they are present that all values of those
+ * properties are deeply equal. Sub-objects are also checked to be subsets of the corresponding
+ * sub-object in the other object.
  *
  * @example ObjB is a subset of objA given these objects:
  *
  * ```ts
- * objA = { name: 'Alice', age: 30, address: { city: 'Seattle' } };
+ * objA = { name: 'Alice', age: 30, address: { city: 'Seattle', state: 'Washington' } };
  * objB = { name: 'Alice', address: { city: 'Seattle' } };
  * ```
  *

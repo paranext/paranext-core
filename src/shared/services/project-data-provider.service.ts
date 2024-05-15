@@ -150,10 +150,10 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
  * pdp.getVerse(new VerseRef('JHN', '1', '1'));
  * ```
  *
- * @param projectType Indicates what you expect the `projectType` to be for the project with the
- *   specified id. The TypeScript type for the returned project data provider will have the project
- *   data provider type associated with this project type. If this argument does not match the
- *   project's actual `projectType` (according to its metadata), a warning will be logged
+ * @param projectType Type of the project to load. The TypeScript type for the returned project data
+ *   provider will have the project data provider type associated with this project type. If this
+ *   argument does not match the project's actual `projectType` (according to its metadata), an
+ *   error will be thrown.
  * @param projectId ID for the project to load
  * @returns Data provider with types that are associated with the given project type
  */
