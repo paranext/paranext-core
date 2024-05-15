@@ -79,7 +79,7 @@ function TextField({
         disabled={isDisabled}
         placeholder={placeholder}
         required={isRequired}
-        className={cn('papi-textfield', className, { 'pr-border-red-600': hasError })}
+        className={cn(className, { 'pr-border-red-600': hasError })}
         defaultValue={defaultValue}
         value={value}
         onChange={onChange}
