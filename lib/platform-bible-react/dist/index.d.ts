@@ -163,14 +163,12 @@ export type ButtonProps = React$1.PropsWithChildren<{
  */
 export declare function Button({ id, isDisabled, className, onClick, onContextMenu, children, }: ButtonProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
-	startChapter: number;
-	endChapter: number;
 	handleSelectStartChapter: (chapter: number) => void;
 	handleSelectEndChapter: (chapter: number) => void;
 	isDisabled?: boolean;
 	chapterCount: number;
 };
-export function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function ChapterRangeSelector({ handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export declare enum LabelPosition {
 	After = "after",
 	Before = "before",
@@ -227,6 +225,30 @@ export type CheckboxProps = {
 };
 /** Primary UI component for user interaction */
 export declare function Checkbox({ id, isChecked, labelText, labelPosition, isIndeterminate, isDefaultChecked, isDisabled, hasError, className, onChange, }: CheckboxProps): import("react/jsx-runtime").JSX.Element;
+export type ChecklistProps = {
+	/** Optional string representing the id attribute of the fieldset element */
+	id?: string;
+	/** Optional string representing CSS class name(s) for styling */
+	className?: string;
+	/** Optional string representing legend for fieldset element */
+	legend?: string;
+	/** Array of strings representing the legend text for the fieldset element */
+	listItems: string[];
+	/** Array of strings representing items to be displayed as checkboxes in the checklist */
+	selectedListItems: string[];
+	/** Function that takes a string param and is called when a checkbox item is selected or deselected */
+	handleSelectListItem: (item: string) => void;
+	/**
+	 * Optional function that takes a string param and returns a string representing the label text
+	 * for the checkbox associated with that item
+	 */
+	createLabel?: (item: string) => string;
+};
+/**
+ * Renders a list of checkboxes wrapped in a fieldset element. Each checkbox corresponds to an item
+ * from the `listItems` array.
+ */
+export function Checklist({ id, className, legend, listItems, selectedListItems, handleSelectListItem, createLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
 export type ComboBoxLabelOption = {
 	label: string;
 };

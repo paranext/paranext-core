@@ -3,8 +3,6 @@ import { FormControlLabel } from '@mui/material';
 import ComboBox from '@/components/combo-box.component';
 
 export type ChapterRangeSelectorProps = {
-  startChapter: number;
-  endChapter: number;
   handleSelectStartChapter: (chapter: number) => void;
   handleSelectEndChapter: (chapter: number) => void;
   isDisabled?: boolean;
@@ -12,8 +10,6 @@ export type ChapterRangeSelectorProps = {
 };
 
 export default function ChapterRangeSelector({
-  startChapter,
-  endChapter,
   handleSelectStartChapter,
   handleSelectEndChapter,
   isDisabled,
@@ -23,6 +19,8 @@ export default function ChapterRangeSelector({
     () => Array.from({ length: chapterCount }, (_, index) => index + 1),
     [chapterCount],
   );
+  const startChapter = useMemo(() => numberArray[0], [numberArray]);
+  const endChapter = useMemo(() => numberArray[chapterCount - 1], [chapterCount, numberArray]);
 
   const onChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
     handleSelectStartChapter(value);
