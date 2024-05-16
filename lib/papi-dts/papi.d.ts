@@ -3428,9 +3428,12 @@ declare module 'shared/models/project-data-provider-engine.model' {
      * this Project Data Provider Engine Factory
      *
      * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-     * @returns A {@link IProjectDataProviderEngine} for the project passed in
+     * @returns A {@link IProjectDataProviderEngine} for the project passed in or a Promise that
+     *   resolves to one
      */
-    createProjectDataProviderEngine(projectId: string): ProjectDataProviderEngineTypes[ProjectType];
+    createProjectDataProviderEngine(
+      projectId: string,
+    ): Promise<ProjectDataProviderEngineTypes[ProjectType]>;
   }
   /**
    * The object to return from

@@ -70,7 +70,7 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes>
       let pdpId = this.pdpIds.get(key);
       if (!pdpId) {
         pdpId = await this.registerProjectDataProvider(
-          this.pdpEngineFactory.createProjectDataProviderEngine(projectId),
+          await this.pdpEngineFactory.createProjectDataProviderEngine(projectId),
           projectId,
         );
         if (!pdpId) throw new Error(`Could not register project data provider for ${projectId}`);

@@ -2,9 +2,16 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
+      "%mainMenu_helloWorldSubmenu%": "Hello World Projects",
       "%mainMenu_openHelloWorldProject%": "Open Hello World Project",
+      "%mainMenu_createNewHelloWorldProject%": "Create New Hello World Project",
       "%settings_hello_world_group1_label%": "Hello World Settings",
-      "%settings_hello_world_personName_label%": "Selected Person's Name on Hello World Web View"
+      "%settings_hello_world_personName_label%": "Selected Person's Name on Hello World Web View",
+      "%project_settings_helloWorld_group1_label%": "Hello World Project Settings",
+      "%project_settings_helloWorld_headerSize_label%": "Header Size",
+      "%project_settings_helloWorld_headerSize_description%": "Size of the header font in `em`",
+      "%project_settings_helloWorld_headerColor_label%": "Header Color",
+      "%project_settings_helloWorld_headerColor_description%": "Color of the headers (must be a valid [HTML color name](https://htmlcolorcodes.com/color-names/))"
     }
   }
 }

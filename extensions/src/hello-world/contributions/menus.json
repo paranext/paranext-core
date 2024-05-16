@@ -1,14 +1,34 @@
 {
   "mainMenu": {
     "columns": {},
-    "groups": {},
+    "groups": {
+      "helloWorld.helloWorldProjects": {
+        "order": 1.5,
+        "isExtensible": true,
+        "menuItem": "helloWorld.projectSubmenu"
+      }
+    },
     "items": [
       {
-        "label": "%mainMenu_openHelloWorldProject%",
-        "localizeNotes": "Application main menu > Project > Open Hello World Project",
+        "id": "helloWorld.projectSubmenu",
+        "label": "%mainMenu_helloWorldSubmenu%",
+        "localizeNotes": "Application main menu > Project > Hello World Projects",
         "group": "platform.projectProjects",
-        "order": 1000.1,
+        "order": 1000.1
+      },
+      {
+        "label": "%mainMenu_openHelloWorldProject%",
+        "localizeNotes": "Application main menu > Project > Hello World Projects > Open Hello World Project",
+        "group": "helloWorld.helloWorldProjects",
+        "order": 1,
         "command": "helloWorld.openProject"
+      },
+      {
+        "label": "%mainMenu_createNewHelloWorldProject%",
+        "localizeNotes": "Application main menu > Project > Hello World Projects > Create New Hello World Project",
+        "group": "helloWorld.helloWorldProjects",
+        "order": 2,
+        "command": "helloWorld.createNewProject"
       }
     ]
   },
