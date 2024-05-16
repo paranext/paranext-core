@@ -83,6 +83,70 @@ export function endsWith(
 }
 
 /**
+ * This function executes a regex and applies a function to each match found in the search string.
+ *
+ * @param regex The regular expression that will be used to search the string for matches
+ * @param searchString The string to search for regex matches in
+ * @param functionToApply A function with logic to apply to every regex match found in the search
+ *   string
+ * @returns The searchString with found matches modified according to the specifications in
+ *   functionToApply. E.g. a search string of 'abcabc' with a regex that matches on 'a's and a
+ *   function that replaces 'a' with 'b' would return 'bbcbbc'
+ */
+export function applyToRegexMatches(
+  regex: RegExp,
+  searchString: string,
+  functionToApply: (result: RegExpExecArray) => string,
+): string {
+  let result = regex.exec(searchString);
+  let modifiedStr = searchString;
+  // Regex explicitly returns null, so need to check for that in this case
+  // eslint-disable-next-line no-null/no-null
+  while (result !== null) {
+    modifiedStr = functionToApply(result);
+    result = regex.exec(modifiedStr);
+  }
+  return modifiedStr;
+}
+
+/**
+ * Formats a string, replacing {localization key} with the localization (or multiple localizations
+ * if there are multiple in the string). Will also remove \ before curly braces if curly braces are
+ * escaped in order to preserve the curly braces. E.g. 'Hi, this is {name}! I like {curly braces}!
+ * would become Hi, this is Jim! I like {curly braces}!
+ *
+ * If the key in unescaped braces is not found, just return the key without the braces. Empty
+ * unescaped curly braces will just return a string without the braces e.g. ('I am {Nemo}', {
+ * 'name': 'Jim'}) would return 'I am Nemo'.
+ *
+ * @param str String to format
+ * @returns Formatted string
+ */
+export function formatReplacementString(str: string, replacers: { [key: string]: string }): string {
+  const keyRegex = /[{}\\]*((\\){0}\{([^{}\\]*)(\\){0}\})/g;
+  let updatedStr = str;
+  updatedStr = applyToRegexMatches(keyRegex, str, (result: RegExpExecArray) => {
+    if (result.length > 3) {
+      const replacementKey = result[3];
+      let replacement = '';
+      if (replacementKey?.length > 0) replacement = replacers[replacementKey] ?? replacementKey;
+      const replacementKeyWithBraces = result[0];
+      updatedStr = updatedStr.replace(replacementKeyWithBraces, replacement);
+      return updatedStr;
+    }
+    return str;
+  });
+
+  const backslashRegex = /[{}\\]*(\\)+\{[^{}\\]*(\\)+\}/g;
+  updatedStr = applyToRegexMatches(backslashRegex, updatedStr, (result: RegExpExecArray) => {
+    updatedStr = updatedStr.replace(result[1], ''); // slashes before opening curly brace
+    updatedStr = updatedStr.replace(result[2], ''); // slashes before closing curly brace
+    return updatedStr;
+  });
+
+  return updatedStr;
+}
+/**
  * This function mirrors the `includes` function from the JavaScript Standard String object. It
  * handles Unicode code points instead of UTF-16 character codes.
  *
