@@ -3,7 +3,7 @@ import { Button, ScriptureReference, usePromise, Checklist } from 'platform-bibl
 import { getChaptersForBook } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import BookSelector from '@renderer/components/run-basic-checks-dialog/book-selector.component';
 import './run-basic-checks-tab.component.scss';
 import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
@@ -89,16 +89,21 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
   const basicChecks = fetchChecks();
 
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
-  const currentBookId = useMemo(() => Canon.bookNumberToId(scrRef.bookNum), [scrRef.bookNum]);
-  const chapterCount = useMemo(() => getChaptersForBook(scrRef.bookNum), [scrRef.bookNum]);
-
+  const currentBookId = useMemo(() => Canon.bookNumberToId(scrRef.bookNum), [scrRef]);
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+
+  const chapterCount = useMemo(() => getChaptersForBook(scrRef.bookNum), [scrRef]);
+  const [startChapter, setStartChapter] = useState<number>(1);
+  const [endChapter, setEndChapter] = useState<number>(chapterCount);
+
+  useEffect(() => {
+    setSelectedBookIds([currentBookId]);
+    setStartChapter(1);
+    setEndChapter(chapterCount);
+  }, [chapterCount, currentBookId]);
 
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
   const [useCurrentBook, setUseCurrentBook] = useState<boolean>(true);
-
-  const [startChapter, setStartChapter] = useState<number>(1);
-  const [endChapter, setEndChapter] = useState<number>(chapterCount);
 
   const handleSelectStart = (chapter: number) => {
     setStartChapter(chapter);
@@ -171,16 +176,10 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
           handleSelectEndChapter={handleSelectEnd}
         />
       </fieldset>
-      {/* <div className="basic-checks-dialog-actions">
-        <Button onClick={() => handleSubmit()}>Run</Button>
-        <Button onClick={() => logger.info(`Canceled`)}>Cancel</Button>
-      </div> */}
-      {/* <footer className="basic-checks-dialog-footer"> */}
       <div className="basic-checks-dialog-actions">
         <Button onClick={() => handleSubmit()}>Run</Button>
         <Button onClick={() => logger.info(`Canceled`)}>Cancel</Button>
       </div>
-      {/* </footer> */}
     </div>
   );
 }

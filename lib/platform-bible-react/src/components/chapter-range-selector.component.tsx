@@ -1,4 +1,4 @@
-import { SyntheticEvent, useMemo } from 'react';
+import { SyntheticEvent, useMemo, useState } from 'react';
 import { FormControlLabel } from '@mui/material';
 import ComboBox from '@/components/combo-box.component';
 
@@ -19,19 +19,27 @@ export default function ChapterRangeSelector({
     () => Array.from({ length: chapterCount }, (_, index) => index + 1),
     [chapterCount],
   );
-  const startChapter = useMemo(() => numberArray[0], [numberArray]);
-  const endChapter = useMemo(() => numberArray[chapterCount - 1], [chapterCount, numberArray]);
+
+  const [startChapter, setStartChapter] = useState<number>(numberArray[0]);
+  const [endChapter, setEndChapter] = useState<number>(numberArray[chapterCount - 1]);
+
+  // const startChapter = useMemo(() => numberArray[0], [numberArray]);
+  // const endChapter = useMemo(() => numberArray[chapterCount - 1], [chapterCount, numberArray]);
 
   const onChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
+    setStartChapter(value);
     handleSelectStartChapter(value);
     if (value > endChapter) {
+      setEndChapter(value);
       handleSelectEndChapter(value);
     }
   };
 
   const onChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
+    setEndChapter(value);
     handleSelectEndChapter(value);
     if (value < startChapter) {
+      setStartChapter(value);
       handleSelectStartChapter(value);
     }
   };
