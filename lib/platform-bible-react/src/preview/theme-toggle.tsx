@@ -27,7 +27,8 @@ const ThemeToggle = React.forwardRef<
           </Button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="end">
+        {/* pr-font-sans is added to mitigate issue introduced by scopedPreflightStyles */}
+        <DropdownMenuContent align="end" className="pr-font-sans">
           <DropdownMenuItem onClick={() => setTheme('light')}>Light</DropdownMenuItem>
           <DropdownMenuItem onClick={() => setTheme('dark')}>Dark</DropdownMenuItem>
           <DropdownMenuItem onClick={() => setTheme('system')}>System</DropdownMenuItem>
