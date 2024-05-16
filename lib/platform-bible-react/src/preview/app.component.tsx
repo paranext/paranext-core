@@ -10,15 +10,13 @@ import Playground from './components/playground';
 function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <div className="pr-twp pr-p-2">
+      {/* pr-font-sans is added to mitigate issue introduced by scopedPreflightStyles */}
+      <div className="pr-twp pr-p-2 pr-font-sans">
         <ThemeToggle className="pr-fixed pr-right-4 pr-top-4" />
         <h1 className="pr-pb-4 pr-uppercase">platform-bible-react Preview</h1>
         <p>
-          Edit <code>lib\platform-bible-react\src\preview\components</code> and save to see updates
-        </p>
-        <p>
-          Caution, things will look distorted if <i>scopedPreflightStyles</i> is activated in&nbsp;
-          <code>tailwind.config.ts</code>
+          Edit <code>lib/platform-bible-react/src/preview/components/...</code> and save to see
+          updates
         </p>
         <Tabs defaultValue="Playground" className="pr-pt-4">
           <TabsList>
@@ -27,7 +25,7 @@ function App() {
             <TabsTrigger value="Examples">Example Layouts</TabsTrigger>
             <TabsTrigger value="Playground">Playground</TabsTrigger>
           </TabsList>
-          <hr />
+
           <TabsContent value="Basics">
             <Basics />
           </TabsContent>
