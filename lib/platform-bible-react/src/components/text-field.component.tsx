@@ -1,13 +1,9 @@
-import { TextField as MuiTextField } from '@mui/material';
+import { Input as ShadInput } from '@/components/shadcn-ui/input';
+import { Label as ShadLabel } from '@/components/shadcn-ui/label';
 import { ChangeEventHandler, FocusEventHandler } from 'react';
+import { cn } from '@/utils/shadcn-ui.util';
 
 export type TextFieldProps = {
-  /**
-   * The variant to use.
-   *
-   * @default 'outlined'
-   */
-  variant?: 'outlined' | 'filled';
   /** Optional unique identifier */
   id?: string;
   /**
@@ -22,12 +18,6 @@ export type TextFieldProps = {
    * @default false
    */
   hasError?: boolean;
-  /**
-   * If `true`, the input will take up the full width of its container.
-   *
-   * @default false
-   */
-  isFullWidth?: boolean;
   /** Text that gives the user instructions on what contents the TextField expects */
   helperText?: string;
   /** The title of the TextField */
@@ -43,9 +33,9 @@ export type TextFieldProps = {
   /** Additional css classes to help with unique styling of the text field */
   className?: string;
   /** Starting value for the text field if it is not controlled */
-  defaultValue?: unknown;
+  defaultValue?: string | number;
   /** Value of the text field if controlled */
-  value?: unknown;
+  value?: string | number;
   /** Triggers when content of textfield is changed */
   onChange?: ChangeEventHandler<HTMLInputElement>;
   /** Triggers when textfield gets focus */
@@ -57,15 +47,13 @@ export type TextFieldProps = {
 /**
  * Text input field
  *
- * Thanks to MUI for heavy inspiration and documentation
- * https://mui.com/material-ui/getting-started/overview/
+ * Thanks to Shadcn for heavy inspiration and documentation
+ * https://ui.shadcn.com/docs/components/input#with-label
  */
 function TextField({
-  variant = 'outlined',
   id,
   isDisabled = false,
   hasError = false,
-  isFullWidth = false,
   helperText,
   label,
   placeholder,
@@ -78,23 +66,28 @@ function TextField({
   onBlur,
 }: TextFieldProps) {
   return (
-    <MuiTextField
-      variant={variant}
-      id={id}
-      disabled={isDisabled}
-      error={hasError}
-      fullWidth={isFullWidth}
-      helperText={helperText}
-      label={label}
-      placeholder={placeholder}
-      required={isRequired}
-      className={`papi-textfield ${className ?? ''}`}
-      defaultValue={defaultValue}
-      value={value}
-      onChange={onChange}
-      onFocus={onFocus}
-      onBlur={onBlur}
-    />
+    <div className="pr-inline-grid pr-items-center pr-gap-1.5">
+      <ShadLabel
+        htmlFor={id}
+        className={cn({
+          'pr-text-red-600': hasError,
+          'pr-hidden': !label,
+        })}
+      >{`${label}${isRequired ? '*' : ''}`}</ShadLabel>
+      <ShadInput
+        id={id}
+        disabled={isDisabled}
+        placeholder={placeholder}
+        required={isRequired}
+        className={cn(className, { 'pr-border-red-600': hasError })}
+        defaultValue={defaultValue}
+        value={value}
+        onChange={onChange}
+        onFocus={onFocus}
+        onBlur={onBlur}
+      />
+      <p className={cn({ 'pr-hidden': !helperText })}>{helperText}</p>
+    </div>
   );
 }
 
