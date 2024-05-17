@@ -1,3 +1,5 @@
+// source: https://ui.shadcn.com/docs/dark-mode/vite
+
 import * as React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 
