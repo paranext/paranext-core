@@ -1,3 +1,5 @@
+// source: https://ui.shadcn.com/docs/dark-mode/vite
+
 /* eslint-disable react/prop-types */
 import * as React from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
@@ -9,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../components/shadcn-ui/dropdown-menu';
-import { useTheme } from './theme-provider';
+import { useTheme } from './theme-provider.component';
 
 const ThemeToggle = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,

@@ -15,7 +15,7 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-function Compositions() {
+function Example() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
 
   return (
@@ -73,4 +73,4 @@ function Compositions() {
   );
 }
 
-export default Compositions;
+export default Example;

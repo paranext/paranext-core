@@ -1,11 +1,11 @@
 import './app.component.css';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '..';
-import { ThemeProvider } from './theme-provider';
-import ThemeToggle from './theme-toggle';
-import Basics from './components/basics';
-import Compositions from './components/compositions';
-import Examples from './components/examples';
-import Playground from './components/playground';
+import { ThemeProvider } from './theme-provider.component';
+import ThemeToggle from './theme-toggle.component';
+import Basics from './components/basics.component';
+import Compositions from './components/compositions.component';
+import Examples from './components/examples.component';
+import Playground from './components/playground.component';
 
 function App() {
   return (
