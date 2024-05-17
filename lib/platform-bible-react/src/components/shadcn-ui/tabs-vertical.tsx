@@ -15,7 +15,7 @@ const VerticalTabs = React.forwardRef<
   <TabsPrimitive.Root
     orientation="vertical"
     ref={ref}
-    className={cn('pr-flex pr-gap-1 pr-rounded-md pr-p-1 pr-text-muted-foreground', className)}
+    className={cn('pr-flex pr-gap-1 pr-rounded-md pr-text-muted-foreground', className)}
     {...props}
   />
 ));
@@ -29,7 +29,7 @@ const VerticalTabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'pr-flex-fit pr-mlk-items-center pr-w-[125px] pr-justify-center pr-rounded-md pr-bg-muted pr-p-1 pr-text-muted-foreground',
+      'pr-flex-fit pr-mlk-items-center pr-w-[124px] pr-justify-center pr-rounded-md pr-bg-muted pr-p-1 pr-text-muted-foreground',
       className,
     )}
     {...props}
