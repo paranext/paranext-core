@@ -3388,6 +3388,24 @@ declare module 'shared/services/data-provider.service' {
   const dataProviderService: DataProviderService;
   export default dataProviderService;
 }
+declare module 'shared/models/project-metadata.model' {
+  import { ProjectTypes } from 'papi-shared-types';
+  /**
+   * Low-level information describing a project that Platform.Bible directly manages and uses to load
+   * project data
+   */
+  export type ProjectMetadata = {
+    /** ID of the project (must be unique and case insensitive) */
+    id: string;
+    /** Short name of the project (not necessarily unique) */
+    name: string;
+    /**
+     * Indicates what sort of project this is which implies its data shape (e.g., what data streams
+     * should be available)
+     */
+    projectType: ProjectTypes;
+  };
+}
 declare module 'shared/models/project-data-provider-engine.model' {
   import {
     ProjectTypes,
@@ -3404,6 +3422,7 @@ declare module 'shared/models/project-data-provider-engine.model' {
     DataProviderEngine,
   } from 'shared/models/data-provider-engine.model';
   import { DataProviderDataType } from 'shared/models/data-provider.model';
+  import { ProjectMetadata } from 'shared/models/project-metadata.model';
   /** All possible types for ProjectDataProviderEngines: IProjectDataProviderEngine<ProjectDataType> */
   export type ProjectDataProviderEngineTypes = {
     [ProjectType in ProjectTypes]: IProjectDataProviderEngine<ProjectType>;
@@ -3423,13 +3442,18 @@ declare module 'shared/models/project-data-provider-engine.model' {
    */
   export interface IProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
     /**
+     * Get a list of metadata objects for all projects that can be the targets of PDPs created by this
+     * factory engine
+     */
+    getAvailableProjects(): Promise<ProjectMetadata[]>;
+    /**
      * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
      * {@link IProjectDataProvider} for the project. This project will have the same `projectType` as
      * this Project Data Provider Engine Factory
      *
      * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-     * @returns A {@link IProjectDataProviderEngine} for the project passed in or a Promise that
-     *   resolves to one
+     * @returns A promise that resolves to a {@link IProjectDataProviderEngine} for the project passed
+     *   in
      */
     createProjectDataProviderEngine(
       projectId: string,
@@ -3511,24 +3535,6 @@ declare module 'shared/models/project-data-provider-engine.model' {
       >;
     }
   > {}
-}
-declare module 'shared/models/project-metadata.model' {
-  import { ProjectTypes } from 'papi-shared-types';
-  /**
-   * Low-level information describing a project that Platform.Bible directly manages and uses to load
-   * project data
-   */
-  export type ProjectMetadata = {
-    /** ID of the project (must be unique and case insensitive) */
-    id: string;
-    /** Short name of the project (not necessarily unique) */
-    name: string;
-    /**
-     * Indicates what sort of project this is which implies its data shape (e.g., what data streams
-     * should be available)
-     */
-    projectType: ProjectTypes;
-  };
 }
 declare module 'shared/models/project-data-provider-factory.interface' {
   import { Dispose } from 'platform-bible-utils';
@@ -4425,21 +4431,17 @@ declare module 'shared/services/project-data-provider.service' {
   import { ProjectTypes, ProjectDataProviders } from 'papi-shared-types';
   import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
   import { Dispose } from 'platform-bible-utils';
-  import { ProjectMetadata } from '@papi/core';
   /**
    * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
    * existing factory already that handles the same project type or this operation will fail.
    *
    * @param projectType Type of project that pdpEngineFactory supports
    * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
-   * @param projectMetadataProvider Used in a ProjectDataProviderFactory to create
-   *   ProjectDataProviders
    * @returns Promise that resolves to a disposable object when the registration operation completes
    */
   export function registerProjectDataProviderEngineFactory<ProjectType extends ProjectTypes>(
     projectType: ProjectType,
     pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>,
-    projectMetadataProvider: () => Promise<ProjectMetadata[]>,
   ): Promise<Dispose>;
   /**
    * Get a Project Data Provider for the given project ID.

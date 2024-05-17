@@ -205,9 +205,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const helloWorldPdpefPromise = papi.projectDataProviders.registerProjectDataProviderEngineFactory(
     'helloWorld',
     helloWorldProjectDataProviderEngineFactory,
-    helloWorldProjectDataProviderEngineFactory.getAvailableProjects.bind(
-      helloWorldProjectDataProviderEngineFactory,
-    ),
   );
 
   const openHelloWorldProjectPromise = papi.commands.registerCommand(
@@ -223,6 +220,25 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       if (openWebView) papi.commands.sendCommand('helloWorld.openProject', projectId);
 
       return projectId;
+    },
+  );
+
+  const deleteHelloWorldProjectPromise = papi.commands.registerCommand(
+    'helloWorld.deleteProject',
+    async (projectId) => {
+      const projectIdToDelete =
+        projectId ??
+        (await papi.dialogs.selectProject({
+          includeProjectTypes: 'helloWorld',
+          title: 'Delete Hello World Project',
+          prompt: 'Please choose a project to delete:',
+        }));
+
+      if (!projectIdToDelete) return false;
+
+      // TODO: close web views if this is successful (we don't currently have a way to close them or
+      // to query for open ones)
+      return helloWorldProjectDataProviderEngineFactory.deleteProject(projectIdToDelete);
     },
   );
 
@@ -302,6 +318,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await helloWorldProjectWebViewProviderPromise,
     await openHelloWorldProjectPromise,
     await createNewHelloWorldProjectPromise,
+    await deleteHelloWorldProjectPromise,
     await helloWorldPersonNamePromise,
     await helloWorldHeaderSizePromise,
     await helloWorldHeaderColorPromise,

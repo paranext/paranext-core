@@ -195,7 +195,7 @@ declare module 'papi-shared-types' {
      * @returns WebView id for new Hello World Project WebView or `undefined` if the user canceled
      *   the dialog
      */
-    'helloWorld.openProject': (projectId: string | undefined) => Promise<string | undefined>;
+    'helloWorld.openProject': (projectId?: string) => Promise<string | undefined>;
     /**
      * Creates a new Hello World project with a random name
      *
@@ -203,6 +203,14 @@ declare module 'papi-shared-types' {
      * @returns Project id of the new hello world project
      */
     'helloWorld.createNewProject': (openWebView?: boolean) => Promise<string>;
+    /**
+     * Deletes a Hello World project
+     *
+     * @param projectId Optional project ID of the project to delete. Prompts the user to select a
+     *   project if not provided
+     * @returns `true` if successfully deleted
+     */
+    'helloWorld.deleteProject': (projectId?: string) => Promise<boolean>;
   }
 
   export interface ProjectDataProviders {

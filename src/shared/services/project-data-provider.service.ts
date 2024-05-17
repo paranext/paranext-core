@@ -25,25 +25,20 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes>
   private readonly projectType: ProjectType;
   private readonly pdpCleanupList: UnsubscriberAsyncList;
   private readonly pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>;
-  private readonly projectMetadataProvider: () => Promise<ProjectMetadata[]>;
 
   /**
    * Create a new PDP factory that is used to create PDPs
    *
    * @param projectType Specified which project type this PDP factory supports
    * @param pdpEngineFactory Object that can create the engines for PDPs
-   * @param projectMetadataProvider Function that returns a list of metadata objects for all
-   *   projects that can be the targets of PDPs created by this factory.
    */
   constructor(
     projectType: ProjectType,
     pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>,
-    projectMetadataProvider: () => Promise<ProjectMetadata[]>,
   ) {
     this.projectType = projectType;
     this.pdpCleanupList = new UnsubscriberAsyncList(`PDP Factory for ${projectType}`);
     this.pdpEngineFactory = pdpEngineFactory;
-    this.projectMetadataProvider = projectMetadataProvider;
   }
 
   /**
@@ -51,7 +46,7 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes>
    * this factory
    */
   getAvailableProjects(): Promise<ProjectMetadata[]> {
-    return this.projectMetadataProvider();
+    return this.pdpEngineFactory.getAvailableProjects();
   }
 
   /** Disposes of all PDPs that were created by this PDP Factory */
@@ -117,21 +112,14 @@ function getProjectDataProviderFactoryId(projectType: ProjectTypes) {
  *
  * @param projectType Type of project that pdpEngineFactory supports
  * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
- * @param projectMetadataProvider Used in a ProjectDataProviderFactory to create
- *   ProjectDataProviders
  * @returns Promise that resolves to a disposable object when the registration operation completes
  */
 export async function registerProjectDataProviderEngineFactory<ProjectType extends ProjectTypes>(
   projectType: ProjectType,
   pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>,
-  projectMetadataProvider: () => Promise<ProjectMetadata[]>,
 ): Promise<Dispose> {
   const factoryId = getProjectDataProviderFactoryId(projectType);
-  const factory = new ProjectDataProviderFactory(
-    projectType,
-    pdpEngineFactory,
-    projectMetadataProvider,
-  );
+  const factory = new ProjectDataProviderFactory(projectType, pdpEngineFactory);
   return networkObjectService.set<ProjectDataProviderFactory<ProjectType>>(
     factoryId,
     factory,

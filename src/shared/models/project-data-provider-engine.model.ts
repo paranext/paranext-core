@@ -11,6 +11,7 @@ import {
 } from '@shared/models/project-data-provider.model';
 import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderDataType } from '@shared/models/data-provider.model';
+import { ProjectMetadata } from '@shared/models/project-metadata.model';
 
 /** All possible types for ProjectDataProviderEngines: IProjectDataProviderEngine<ProjectDataType> */
 export type ProjectDataProviderEngineTypes = {
@@ -32,13 +33,18 @@ export type ProjectDataProviderEngineTypes = {
  */
 export interface IProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
   /**
+   * Get a list of metadata objects for all projects that can be the targets of PDPs created by this
+   * factory engine
+   */
+  getAvailableProjects(): Promise<ProjectMetadata[]>;
+  /**
    * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
    * {@link IProjectDataProvider} for the project. This project will have the same `projectType` as
    * this Project Data Provider Engine Factory
    *
    * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-   * @returns A {@link IProjectDataProviderEngine} for the project passed in or a Promise that
-   *   resolves to one
+   * @returns A promise that resolves to a {@link IProjectDataProviderEngine} for the project passed
+   *   in
    */
   createProjectDataProviderEngine(
     projectId: string,

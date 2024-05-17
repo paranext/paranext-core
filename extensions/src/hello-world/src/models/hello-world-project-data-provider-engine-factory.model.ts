@@ -66,10 +66,6 @@ class HelloWorldProjectDataProviderEngineFactory
     await this.saveAllProjectData();
   }
 
-  /**
-   * Returns a list of metadata objects for all projects that can be the targets of PDPs created by
-   * this factory
-   */
   async getAvailableProjects(): Promise<ProjectMetadata[]> {
     const allAvailableProjects = Object.entries(await this.getAllProjectData());
     return allAvailableProjects.map(([projectId, projectData]) => ({
@@ -110,23 +106,56 @@ class HelloWorldProjectDataProviderEngineFactory
     return newProjectId;
   }
 
+  /**
+   * Deletes a Hello World project
+   *
+   * @param projectId Optional project ID of the project to delete. Prompts the user to select a
+   *   project if not provided
+   * @returns `true` if successfully deleted
+   */
+  async deleteProject(projectId: string): Promise<boolean> {
+    const allProjectData = await this.getAllProjectData();
+
+    if (!allProjectData[projectId]) return false;
+
+    delete allProjectData[projectId];
+    this.allProjectDataCached = allProjectData;
+    await this.saveAllProjectData();
+    return true;
+  }
+
   async #getUniqueProjectName(): Promise<string> {
     const projectName = ELIGIBLE_NEW_NAMES[Math.floor(ELIGIBLE_NEW_NAMES.length * Math.random())];
-    let projectNameCount = 0;
 
     const allProjectData = await this.getAllProjectData();
 
-    while (
-      Object.entries(allProjectData).some(
-        // I don't think there is another way to increment projectNameCount indefinitely and to
-        // check for uniqueness. Not really sure why this rule is flagging this
-        // eslint-disable-next-line no-loop-func
-        ([, projectData]) =>
-          projectData?.projectName ===
-          `${projectName}${projectNameCount !== 0 ? ` ${projectNameCount}` : ''}`,
-      )
-    ) {
-      projectNameCount += 1;
+    // Look for all projects with the same name and a number after their name, and find the first number missing
+    const projectNameRegex = new RegExp(`${projectName} ?(?<number>\\d*)`);
+
+    const nameNumbers = new Set<number>();
+    Object.entries(allProjectData).forEach(([, projectData]) => {
+      if (!projectData?.projectName) return;
+      const matches = projectNameRegex.exec(projectData.projectName);
+      if (!matches) return;
+
+      if (matches.groups?.number) {
+        const nameNumber = parseInt(matches.groups.number, 10);
+        if (typeof nameNumber === 'number') nameNumbers.add(nameNumber);
+      }
+      // There was no number, so consider that to be 0
+      else nameNumbers.add(0);
+    });
+
+    let projectNameCount = 0;
+
+    if (nameNumbers.size > 0) {
+      const nameNumbersArray = [...nameNumbers];
+      nameNumbersArray.sort((a, b) => (a > b ? 1 : -1));
+      const nameNumberMissingIndex = nameNumbersArray.findIndex(
+        (nameNumber, i) => nameNumber !== i,
+      );
+      projectNameCount =
+        nameNumberMissingIndex === -1 ? nameNumbersArray.length : nameNumberMissingIndex;
     }
 
     return `${projectName}${projectNameCount !== 0 ? ` ${projectNameCount}` : ''}`;
