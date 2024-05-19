@@ -4,7 +4,7 @@ import { BookChapterControl, RefSelector } from '..';
 import './app.component.css';
 
 const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
+  bookNum: 9,
   chapterNum: 1,
   verseNum: 1,
 };

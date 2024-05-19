@@ -1,5 +1,5 @@
 import { Canon } from '@sillsdev/scripture';
-import { PropsWithChildren, KeyboardEvent, forwardRef } from 'react';
+import { PropsWithChildren, KeyboardEvent, forwardRef, useLayoutEffect } from 'react';
 import { DropdownMenuItem as ShadDropdownMenuItem } from '@/components/shadcn-ui/dropdown-menu';
 import { cn } from '@/utils/shadcn-ui.util';
 
@@ -25,6 +25,8 @@ type BookMenuItemProps = PropsWithChildren<{
    * coordinated to genre
    */
   bookType: BookType;
+  /** Function to run on first `useLayoutEffect` meaning the component is in the DOM */
+  onMount?: () => void;
 }>;
 
 const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
@@ -37,9 +39,16 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
       handleKeyDown,
       bookType,
       children,
+      onMount,
     }: BookMenuItemProps,
     ref,
   ) => {
+    useLayoutEffect(() => {
+      if (onMount) onMount();
+      // We are intentionally running this once
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     return (
       <ShadDropdownMenuItem
         ref={ref}

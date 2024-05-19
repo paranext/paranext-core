@@ -1,4 +1,3 @@
-import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './app.component';
 
@@ -7,8 +6,4 @@ if (!container) {
   throw new Error('Document root element not found!');
 }
 
-createRoot(container).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+createRoot(container).render(<App />);

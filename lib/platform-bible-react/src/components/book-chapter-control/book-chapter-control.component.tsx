@@ -2,7 +2,6 @@ import {
   KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -109,7 +108,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     Canon.bookNumberToId(scrRef.bookNum),
   );
   const [isContentOpen, setIsContentOpen] = useState<boolean>(false);
-  const [isContentOpenDelayed, setIsContentOpenDelayed] = useState<boolean>(isContentOpen);
 
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -301,24 +299,30 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     }
   }, [highlightedBookId, scrRef.bookNum, scrRef.chapterNum, selectedBookId]);
 
-  // The purpose of these useLayoutEffects and timeout is to delay the scroll just
-  // enough so that the refs are defined and available when they are used after the timeout
-  useLayoutEffect(() => {
-    setIsContentOpenDelayed(isContentOpen);
-  }, [isContentOpen]);
-
-  useLayoutEffect(() => {
-    const scrollTimeout = setTimeout(() => {
-      if (isContentOpenDelayed && contentRef.current && menuItemRef.current) {
-        const menuItemOffsetTop = menuItemRef.current.offsetTop;
-        const scrollPosition = menuItemOffsetTop - SCROLL_OFFSET;
-        contentRef.current.scrollTo({ top: scrollPosition, behavior: 'instant' });
+  const scrollToSelectedMenuItem = useCallback(() => {
+    // Need null since that's what the dom functions use
+    let contentElement: HTMLDivElement | null = contentRef.current;
+    if (menuItemRef.current) {
+      if (!contentElement) {
+        // Get the content element directly from the menuItemRef since it seems maybe there's a bug
+        // in radix where the contentRef doesn't get set soon enough
+        // The content element is a parent of the menuItemRef and has [data-radix-menu-content]
+        contentElement = menuItemRef.current.closest('[data-radix-menu-content]');
       }
-    }, 10);
-    return () => {
-      clearTimeout(scrollTimeout);
-    };
-  }, [isContentOpenDelayed]);
+    }
+
+    console.log(
+      `contentRef.current: ${contentRef.current}\ncontentElement: ${contentElement}\nmenuItemRef.current: ${menuItemRef.current}`,
+    );
+
+    if (contentElement && menuItemRef.current) {
+      const menuItemOffsetTop = menuItemRef.current.offsetTop;
+      const scrollPosition = menuItemOffsetTop - SCROLL_OFFSET;
+      console.log(`contentElement.offsetTop: ${contentElement.offsetTop}`);
+      console.log(`menuItemOffsetTop: ${menuItemOffsetTop}\nscrollPosition: ${scrollPosition}`);
+      contentElement.scrollTo({ top: scrollPosition, behavior: 'instant' });
+    }
+  }, []);
 
   return (
     <div>
@@ -376,6 +380,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                         ref={(element: HTMLDivElement) => {
                           if (selectedBookId === bookId) menuItemRef.current = element;
                         }}
+                        onMount={selectedBookId === bookId ? scrollToSelectedMenuItem : undefined}
                       >
                         <ChapterSelect
                           handleSelectChapter={handleSelectChapter}
