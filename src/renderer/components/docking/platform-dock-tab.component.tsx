@@ -25,6 +25,7 @@ export default function createRCDockTabFromTabInfo(tabInfo: TabInfo) {
     title: (
       <PlatformTabTitle
         webViewType={webViewType}
+        tabId={tabInfo.id}
         iconUrl={tabInfo.tabIconUrl}
         text={tabInfo.tabTitle}
         tooltip={tabInfo.tabTooltip}

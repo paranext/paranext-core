@@ -15,8 +15,9 @@ import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
 import helloWorldReactWebView2Styles from './web-views/hello-world-2.web-view.scss?inline';
 import helloWorldHtmlWebView from './web-views/hello-world.web-view.html?inline';
 import HelloWorldProjectDataProviderEngineFactory from './models/hello-world-project-data-provider-engine-factory.model';
-import helloWorldProjectWebView from './web-views/hello-world-project.web-view?inline';
-import helloWorldProjectWebViewStyles from './web-views/hello-world-project.web-view.scss?inline';
+import helloWorldProjectWebView from './web-views/hello-world-project/hello-world-project.web-view?inline';
+import helloWorldProjectWebViewStyles from './web-views/hello-world-project/hello-world-project.web-view.scss?inline';
+import helloWorldProjectViewerWebView from './web-views/hello-world-project/hello-world-project-viewer.web-view?inline';
 import { HTML_COLOR_NAMES } from './util';
 
 /** User data storage key for all hello world project data */
@@ -103,11 +104,7 @@ const helloWorldProjectWebViewProvider: IWebViewProviderWithType = {
       );
 
     // We know that the projectId (if present in the state) will be a string.
-    const projectId =
-      getWebViewOptions.projectId ||
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      (savedWebView.state?.projectId as string) ||
-      undefined;
+    const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     return {
       title: projectId
         ? `Hello World Project: ${
@@ -117,10 +114,7 @@ const helloWorldProjectWebViewProvider: IWebViewProviderWithType = {
       ...savedWebView,
       content: helloWorldProjectWebView,
       styles: helloWorldProjectWebViewStyles,
-      state: {
-        ...savedWebView.state,
-        projectId,
-      },
+      projectId,
     };
   },
 };
@@ -144,18 +138,52 @@ async function openHelloWorldProjectWebView(
       includeProjectTypes: '^helloWorld$',
     });
   }
-  if (projectIdForWebView) {
-    const options: HelloWorldProjectViewerOptions = { projectId: projectIdForWebView };
-    return papi.webViews.getWebView(
-      helloWorldProjectWebViewProvider.webViewType,
-      undefined,
-      options,
-    );
-  }
-  return undefined;
+  if (!projectIdForWebView) return undefined;
+
+  const options: HelloWorldProjectViewerOptions = { projectId: projectIdForWebView };
+  return papi.webViews.getWebView(helloWorldProjectWebViewProvider.webViewType, undefined, options);
 }
 
 // #endregion
+
+function selectProjectToDelete(): Promise<string | undefined> {
+  return papi.dialogs.selectProject({
+    includeProjectTypes: 'helloWorld',
+    title: 'Delete Hello World Project',
+    prompt: 'Please choose a project to delete:',
+  });
+}
+
+/**
+ * Simple web view provider that provides helloWorld project viewer web views when papi requests
+ * them
+ */
+const helloWorldProjectViewerProvider: IWebViewProviderWithType = {
+  webViewType: 'helloWorld.projectViewer',
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: HelloWorldProjectViewerOptions,
+  ): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== this.webViewType)
+      throw new Error(
+        `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+
+    // We know that the projectId (if present in the state) will be a string.
+    const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
+    return {
+      title: projectId
+        ? `Hello World Project Viewer: ${
+            (await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId
+          }`
+        : 'Hello World Project Viewer',
+      ...savedWebView,
+      content: helloWorldProjectViewerWebView,
+      styles: helloWorldProjectWebViewStyles,
+      projectId,
+    };
+  },
+};
 
 /** Number of times the `helloWorld` function has been called */
 let helloWorldCount = 0;
@@ -226,19 +254,58 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const deleteHelloWorldProjectPromise = papi.commands.registerCommand(
     'helloWorld.deleteProject',
     async (projectId) => {
-      const projectIdToDelete =
-        projectId ??
-        (await papi.dialogs.selectProject({
-          includeProjectTypes: 'helloWorld',
-          title: 'Delete Hello World Project',
-          prompt: 'Please choose a project to delete:',
-        }));
+      const projectIdToDelete = projectId ?? (await selectProjectToDelete());
 
       if (!projectIdToDelete) return false;
 
       // TODO: close web views if this is successful (we don't currently have a way to close them or
       // to query for open ones)
       return helloWorldProjectDataProviderEngineFactory.deleteProject(projectIdToDelete);
+    },
+  );
+
+  const deleteHelloWorldProjectByWebViewIdPromise = papi.commands.registerCommand(
+    'helloWorld.deleteProjectByWebViewId',
+    async (webViewId) => {
+      let projectId: string | undefined;
+      if (webViewId) {
+        const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+        projectId = webViewDefinition?.projectId;
+      }
+      const projectIdToDelete = projectId ?? (await selectProjectToDelete());
+
+      if (!projectIdToDelete) return false;
+
+      // TODO: close web views if this is successful (we don't currently have a way to close them or
+      // to query for open ones)
+      return helloWorldProjectDataProviderEngineFactory.deleteProject(projectIdToDelete);
+    },
+  );
+
+  const openHelloWorldProjectViewerByWebViewIdPromise = papi.commands.registerCommand(
+    'helloWorld.openViewerByWebViewId',
+    async (webViewId) => {
+      let projectId: string | undefined;
+      if (webViewId) {
+        const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+        projectId = webViewDefinition?.projectId;
+      }
+      const projectIdForWebView =
+        projectId ??
+        (await papi.dialogs.selectProject({
+          includeProjectTypes: 'helloWorld',
+          title: 'Open Hello World Project Viewer',
+          prompt: 'Please choose a project for which to open the viewer:',
+        }));
+
+      if (!projectIdForWebView) return undefined;
+
+      const options: HelloWorldProjectViewerOptions = { projectId: projectIdForWebView };
+      return papi.webViews.getWebView(
+        helloWorldProjectViewerProvider.webViewType,
+        { type: 'float', position: 'center' },
+        options,
+      );
     },
   );
 
@@ -260,6 +327,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const helloWorldProjectWebViewProviderPromise = papi.webViewProviders.register(
     helloWorldProjectWebViewProvider.webViewType,
     helloWorldProjectWebViewProvider,
+  );
+
+  const helloWorldProjectViewerProviderPromise = papi.webViewProviders.register(
+    helloWorldProjectViewerProvider.webViewType,
+    helloWorldProjectViewerProvider,
   );
 
   const htmlWebViewProviderPromise = papi.webViewProviders.register(
@@ -316,9 +388,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   context.registrations.add(
     await helloWorldPdpefPromise,
     await helloWorldProjectWebViewProviderPromise,
+    await helloWorldProjectViewerProviderPromise,
     await openHelloWorldProjectPromise,
     await createNewHelloWorldProjectPromise,
     await deleteHelloWorldProjectPromise,
+    await deleteHelloWorldProjectByWebViewIdPromise,
+    await openHelloWorldProjectViewerByWebViewIdPromise,
     await helloWorldPersonNamePromise,
     await helloWorldHeaderSizePromise,
     await helloWorldHeaderColorPromise,

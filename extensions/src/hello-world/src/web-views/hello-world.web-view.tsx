@@ -60,8 +60,10 @@ papi
   .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
 globalThis.webViewComponent = function HelloWorld({
+  title,
+  projectId,
+  projectIds,
   useWebViewState,
-  getWebViewDefinitionUpdatableProperties,
   updateWebViewDefinition,
 }: WebViewProps) {
   const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
@@ -85,13 +87,9 @@ globalThis.webViewComponent = function HelloWorld({
   );
 
   useEffect(() => {
-    logger.debug(
-      `Hello World WebView previous title: ${getWebViewDefinitionUpdatableProperties()?.title}`,
-    );
+    logger.debug(`Hello World WebView previous title: ${title}`);
     updateWebViewDefinition({ title: `Hello World ${clicks}` });
-  }, [getWebViewDefinitionUpdatableProperties, updateWebViewDefinition, clicks]);
-
-  const [project, setProject] = useWebViewState<string>('project', '');
+  }, [title, updateWebViewDefinition, clicks]);
 
   const currentRender = useRef(-1);
   currentRender.current += 1;
@@ -112,13 +110,13 @@ globalThis.webViewComponent = function HelloWorld({
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
-        if (selectedProject) setProject(selectedProject);
+        if (selectedProject) updateWebViewDefinition({ projectId: selectedProject });
 
         logger.info(
           `Show project dialog resolved to ${selectedProject}. Dialog was shown at render ${dialogRender} with options from ${optionsSource}`,
         );
       },
-      [setProject],
+      [updateWebViewDefinition],
     ),
   );
 
@@ -143,8 +141,6 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading latest Scripture text...',
   );
 
-  const [projects, setProjects] = useWebViewState('projects', ['None']);
-
   const selectProjects = useDialogCallback(
     'platform.selectMultipleProjects',
     useMemo(
@@ -152,16 +148,16 @@ globalThis.webViewComponent = function HelloWorld({
         prompt: 'Please select one or more Scripture projects for Hello World WebView:',
         iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
         title: 'Select List of Hello World Projects',
-        selectedProjectIds: projects,
+        selectedProjectIds: projectIds,
         includeProjectTypes: '^ParatextStandard$',
       }),
-      [projects],
+      [projectIds],
     ),
     useCallback(
       (selectedProjects) => {
-        if (selectedProjects) setProjects(selectedProjects);
+        if (selectedProjects) updateWebViewDefinition({ projectIds: selectedProjects });
       },
-      [setProjects],
+      [updateWebViewDefinition],
     ),
   );
 
@@ -206,10 +202,10 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading John 1:1...',
   );
 
-  const [currentProjectVerse] = useProjectData('ParatextStandard', project ?? undefined).VerseUSFM(
-    verseRef,
-    'Loading Verse',
-  );
+  const [currentProjectVerse] = useProjectData(
+    'ParatextStandard',
+    projectId ?? undefined,
+  ).VerseUSFM(verseRef, 'Loading Verse');
 
   const helloWorldProjectSettings = useHelloWorldProjectSettings('ParatextStandard', project);
   const { headerStyle } = helloWorldProjectSettings;
@@ -270,7 +266,7 @@ globalThis.webViewComponent = function HelloWorld({
       <h3>Psalm 1</h3>
       <div>{psalm1}</div>
       <br />
-      <div>Selected Project: {project ?? 'None'}</div>
+      <div>Selected Project: {projectId ?? 'None'}</div>
       <div>
         <Button onClick={selectProject}>Select Project</Button>
       </div>
@@ -294,7 +290,7 @@ globalThis.webViewComponent = function HelloWorld({
       <div>{currentProjectVerse}</div>
       <ProjectSettingsEditor {...helloWorldProjectSettings} />
       <h3>List of Selected Project Id(s):</h3>
-      <div>{projects.join(', ')}</div>
+      <div>{(projectIds && projectIds.length > 0 ? projectIds : ['None']).join(', ')}</div>
       <div>
         <Button onClick={() => selectProjects()}>Select Projects</Button>
       </div>
