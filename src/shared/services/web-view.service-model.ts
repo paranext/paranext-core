@@ -1,4 +1,9 @@
-import { GetWebViewOptions, WebViewId, WebViewType } from '@shared/models/web-view.model';
+import {
+  GetWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewId,
+  WebViewType,
+} from '@shared/models/web-view.model';
 import { AddWebViewEvent, Layout } from '@shared/models/docking-framework.model';
 import { PlatformEvent } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
@@ -32,6 +37,14 @@ export interface WebViewServiceType {
     layout?: Layout,
     options?: GetWebViewOptions,
   ) => Promise<WebViewId | undefined>;
+  /**
+   * Gets the saved properties on the WebView definition with the specified ID
+   *
+   * @param webViewId The ID of the WebView whose saved properties to get
+   * @returns Saved properties of the WebView definition with the specified ID or undefined if not
+   *   found
+   */
+  getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
 }
 
 /** Prefix on requests that indicates that the request is related to webView operations */

@@ -26,9 +26,11 @@ import {
   WebViewDefinition,
   WebViewDefinitionReact,
   WebViewDefinitionUpdateInfo,
-  WebViewDefinitionUpdatableProperties,
   WebViewId,
   WebViewType,
+  WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
+  SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS,
+  SavedWebViewDefinitionOmittedKeys,
 } from '@shared/models/web-view.model';
 import {
   AddWebViewEvent,
@@ -604,7 +606,8 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
  * @param webViewId The ID of the WebView to update
  * @param webViewDefinitionUpdateInfo Properties to update on the WebView. Any unspecified
  *   properties will stay the same
- * @returns True if successfully found the WebView to update; false otherwise
+ * @returns True if successfully found the WebView to update and actually updated any properties;
+ *   false otherwise
  * @throws If the papi dock layout has not been registered
  */
 export function updateWebViewDefinitionSync(
@@ -615,71 +618,42 @@ export function updateWebViewDefinitionSync(
 }
 
 /**
- * Get just the updatable properties of a web view definition
- *
- * @param webViewDefinition Web view definition or update info to get updatable properties from
- * @returns Updatable properties of the web view definition
- */
-export function getUpdatablePropertiesFromWebViewDefinition(
-  webViewDefinition:
-    | SavedWebViewDefinition
-    | WebViewDefinition
-    | WebViewDefinitionUpdatableProperties
-    | WebViewDefinitionUpdateInfo,
-): WebViewDefinitionUpdatableProperties {
-  // Make sure we're only including the specific properties we allow updates on
-  const { iconUrl, title, tooltip } = webViewDefinition;
-  return { iconUrl, title, tooltip };
-}
-
-/**
  * Merges web view definition updates into a web view definition. Does not modify the original web
  * view definition but returns a new object.
  *
+ * Please note that this method returns `undefined` if and only if no properties updated (properties
+ * are compared by simple reference equality ===).
+ *
  * @param webViewDefinition Web view definition to merge into
  * @param updateInfo Updates to merge into the web view definition
- * @returns New copy of web view definition with updates applied
+ * @returns New copy of web view definition with updates applied OR `undefined` IF NO PROPERTIES
+ *   WERE UPDATED
  */
-export function mergeUpdatablePropertiesIntoWebViewDefinition<T extends SavedWebViewDefinition>(
-  webViewDefinition: T,
-  updateInfo: WebViewDefinitionUpdateInfo,
-): T {
-  const webViewUpdate = getUpdatablePropertiesFromWebViewDefinition(updateInfo);
+export function mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent<
+  T extends SavedWebViewDefinition,
+>(webViewDefinition: T, updateInfo: WebViewDefinitionUpdateInfo): T | undefined {
+  let didUpdateAnyProperties = false;
+  const updatedWebViewDefinition = { ...webViewDefinition };
+  // For each updatable property that is specified, overwrite the webViewDefinition's property
   // If update properties aren't specified, keep the original values
-  const mergedProperties = Object.fromEntries(
-    Object.entries(webViewUpdate).map(([key, value]) => [
-      key,
-      // Reminding TypeScript that key is from entries of updatable properties
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      value || webViewDefinition[key as keyof WebViewDefinitionUpdatableProperties],
-    ]),
-  );
-  return {
-    ...webViewDefinition,
-    ...mergedProperties,
-  };
+  WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS.forEach((key) => {
+    if (key in updateInfo && updatedWebViewDefinition[key] !== updateInfo[key]) {
+      // Everything worked until I added multiple different types for the properties of
+      // WebViewDefinitionUpdateInfo. Now I guess TypeScript isn't smart enough to realize that the
+      // property is going to be the same between these two objects since they both have all the
+      // possible properties of the key with the same types and are using the same key. Too bad :/
+      // @ts-expect-error ts(2322)
+      updatedWebViewDefinition[key] = updateInfo[key];
+      didUpdateAnyProperties = true;
+    }
+  });
+  return didUpdateAnyProperties ? updatedWebViewDefinition : undefined;
 }
 
 /**
- * Gets the updatable properties on the WebView definition with the specified ID
- *
- * @param webViewId The ID of the WebView whose updatable properties to get
- * @returns Updatable properties of the WebView definition with the specified ID or undefined if not
- *   found
- * @throws If the papi dock layout has not been registered
- */
-export function getWebViewDefinitionUpdatablePropertiesSync(
-  webViewId: string,
-): WebViewDefinitionUpdatableProperties | undefined {
-  const webViewDefinition = getDockLayoutSync().getWebViewDefinition(webViewId);
-  if (webViewDefinition === undefined) return undefined;
-
-  return getUpdatablePropertiesFromWebViewDefinition(webViewDefinition);
-}
-
-/**
- * Converts web view definition used in an actual docking tab into saveable web view information by
- * stripping out the members we don't want to save
+ * Clones and converts web view definition used in an actual docking tab into saveable web view
+ * information by stripping out the members we don't want to save. Does not modify the original web
+ * view definition.
  *
  * @param webViewDefinition Web view to save
  * @returns Saveable web view information based on `webViewDefinition`
@@ -688,24 +662,40 @@ export function convertWebViewDefinitionToSaved(
   webViewDefinition: WebViewDefinition,
 ): SavedWebViewDefinition {
   const webViewDefinitionCloned: Omit<WebViewDefinition, 'content'> &
-    Partial<
-      Pick<
-        WebViewDefinition,
-        'content' | 'allowScripts' | 'allowSameOrigin' | 'allowedFrameSources'
-      >
-    > &
+    Partial<Pick<WebViewDefinition, Exclude<SavedWebViewDefinitionOmittedKeys, 'styles'>>> &
     Partial<Pick<WebViewDefinitionReact, 'styles'>> = { ...webViewDefinition };
-  // We don't want to keep the webView content so the web view provider can provide it again when
-  // deserializing
-  delete webViewDefinitionCloned.content;
-  delete webViewDefinitionCloned.styles;
-  // We don't want to keep security-related properties so the web view doesn't get loaded with the
-  // wrong security somehow. The web view provider should provide this every time it provides the
-  // content
-  delete webViewDefinitionCloned.allowScripts;
-  delete webViewDefinitionCloned.allowSameOrigin;
-  delete webViewDefinitionCloned.allowedFrameSources;
+
+  SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS.forEach((key) => {
+    delete webViewDefinitionCloned[key];
+  });
   return webViewDefinitionCloned;
+}
+
+/** Explanation in web-view.service-model.ts */
+async function getSavedWebViewDefinition(
+  webViewId: string,
+): Promise<SavedWebViewDefinition | undefined> {
+  const webViewDefinition = (await getDockLayout()).getWebViewDefinition(webViewId);
+  if (webViewDefinition === undefined) return undefined;
+
+  return convertWebViewDefinitionToSaved(webViewDefinition);
+}
+
+/**
+ * Gets the saved properties on the WebView definition with the specified ID
+ *
+ * @param webViewId The ID of the WebView whose saved properties to get
+ * @returns Saved properties of the WebView definition with the specified ID or undefined if not
+ *   found
+ * @throws If the papi dock layout has not been registered
+ */
+export function getSavedWebViewDefinitionSync(
+  webViewId: string,
+): SavedWebViewDefinition | undefined {
+  const webViewDefinition = getDockLayoutSync().getWebViewDefinition(webViewId);
+  if (webViewDefinition === undefined) return undefined;
+
+  return convertWebViewDefinitionToSaved(webViewDefinition);
 }
 
 // #endregion
@@ -725,8 +715,7 @@ function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOption
 
 // #region Set up global variables to use in `getWebView`'s `imports` below
 
-globalThis.getWebViewDefinitionUpdatablePropertiesById =
-  getWebViewDefinitionUpdatablePropertiesSync;
+globalThis.getSavedWebViewDefinitionById = getSavedWebViewDefinitionSync;
 globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
 
 // #endregion
@@ -871,8 +860,8 @@ export const getWebView = async (
   window.setWebViewState = (stateKey, stateValue) => { setWebViewStateById('${webView.id}', stateKey, stateValue) };
   window.resetWebViewState = (stateKey) => { resetWebViewStateById('${webView.id}', stateKey) };
   window.useWebViewState = window.parent.useWebViewState.bind(window);
-  var getWebViewDefinitionUpdatablePropertiesById = window.parent.getWebViewDefinitionUpdatablePropertiesById;
-  window.getWebViewDefinitionUpdatableProperties = () => { return getWebViewDefinitionUpdatablePropertiesById('${webView.id}')}
+  var getSavedWebViewDefinitionById = window.parent.getSavedWebViewDefinitionById;
+  window.getSavedWebViewDefinition = () => { return getSavedWebViewDefinitionById('${webView.id}')}
   var updateWebViewDefinitionById = window.parent.updateWebViewDefinitionById;
   window.updateWebViewDefinition = (webViewDefinitionUpdateInfo) => { return updateWebViewDefinitionById('${webView.id}', webViewDefinitionUpdateInfo)}
   window.fetch = papi.fetch;
@@ -937,14 +926,29 @@ export const getWebView = async (
                 const container = document.getElementById('root');
                 const root = createRoot(container);
 
-                // Set up WebViewProps to pass into the WebView component
-                const webViewProps = {
-                  useWebViewState: window.useWebViewState,
-                  getWebViewDefinitionUpdatableProperties: window.getWebViewDefinitionUpdatableProperties,
-                  updateWebViewDefinition: window.updateWebViewDefinition,
-                };
+                function renderRoot() {
+                  // Set up WebViewProps to pass into the WebView component
+                  const savedWebViewDefinition = window.getSavedWebViewDefinition();
 
-                root.render(React.createElement(globalThis.webViewComponent, webViewProps));
+                  const webViewProps = {
+                    ...savedWebViewDefinition,
+                    useWebViewState: window.useWebViewState,
+                    updateWebViewDefinition: updateWebViewDefinitionAndRender,
+                  };
+
+                  root.render(React.createElement(globalThis.webViewComponent, webViewProps));
+                }
+
+                function updateWebViewDefinitionAndRender(...params) {
+                  const didSuccessfullyUpdate = window.updateWebViewDefinition(...params);
+
+                  if (didSuccessfullyUpdate)
+                    renderRoot();
+
+                  return didSuccessfullyUpdate;
+                }
+
+                renderRoot();
 
                 window.addEventListener('unload', () => {root.unmount()});
               }
@@ -1217,6 +1221,7 @@ export const initialize = () => {
 const papiWebViewService: WebViewServiceType = {
   onDidAddWebView,
   getWebView,
+  getSavedWebViewDefinition,
 };
 
 /** Register the network object that backs the PAPI webview service */
