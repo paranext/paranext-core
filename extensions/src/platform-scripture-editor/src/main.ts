@@ -68,11 +68,7 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
       );
 
     // We know that the projectId (if present in the state) will be a string.
-    const projectId =
-      getWebViewOptions.projectId ||
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      (savedWebView.state?.projectId as string) ||
-      undefined;
+    const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
     let title = '';
     if (projectId) {
@@ -86,9 +82,9 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
       styles: platformScriptureEditorWebViewStyles,
       state: {
         ...savedWebView.state,
-        projectId,
         isReadOnly,
       },
+      projectId,
     };
   },
 };
