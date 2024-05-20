@@ -35,10 +35,154 @@ declare module 'hello-world' {
      */
     times: number;
   };
+
+  /** All html color names according to https://htmlcolorcodes.com/color-names/ */
+  type HTMLColorNames =
+    | 'IndianRed'
+    | 'LightCoral'
+    | 'Salmon'
+    | 'DarkSalmon'
+    | 'LightSalmon'
+    | 'Crimson'
+    | 'Red'
+    | 'FireBrick'
+    | 'DarkRed'
+    | 'Pink'
+    | 'LightPink'
+    | 'HotPink'
+    | 'DeepPink'
+    | 'MediumVioletRed'
+    | 'PaleVioletRed'
+    | 'Coral'
+    | 'Tomato'
+    | 'OrangeRed'
+    | 'DarkOrange'
+    | 'Orange'
+    | 'Gold'
+    | 'Yellow'
+    | 'LightYellow'
+    | 'LemonChiffon'
+    | 'LightGoldenrodYellow'
+    | 'PapayaWhip'
+    | 'Moccasin'
+    | 'PeachPuff'
+    | 'PaleGoldenrod'
+    | 'Khaki'
+    | 'DarkKhaki'
+    | 'Lavender'
+    | 'Thistle'
+    | 'Plum'
+    | 'Violet'
+    | 'Orchid'
+    | 'Fuchsia'
+    | 'Magenta'
+    | 'MediumOrchid'
+    | 'MediumPurple'
+    | 'RebeccaPurple'
+    | 'BlueViolet'
+    | 'DarkViolet'
+    | 'DarkOrchid'
+    | 'DarkMagenta'
+    | 'Purple'
+    | 'Indigo'
+    | 'SlateBlue'
+    | 'DarkSlateBlue'
+    | 'MediumSlateBlue'
+    | 'GreenYellow'
+    | 'Chartreuse'
+    | 'LawnGreen'
+    | 'Lime'
+    | 'LimeGreen'
+    | 'PaleGreen'
+    | 'LightGreen'
+    | 'MediumSpringGreen'
+    | 'SpringGreen'
+    | 'MediumSeaGreen'
+    | 'SeaGreen'
+    | 'ForestGreen'
+    | 'Green'
+    | 'DarkGreen'
+    | 'YellowGreen'
+    | 'OliveDrab'
+    | 'Olive'
+    | 'DarkOliveGreen'
+    | 'MediumAquamarine'
+    | 'DarkSeaGreen'
+    | 'LightSeaGreen'
+    | 'DarkCyan'
+    | 'Teal'
+    | 'Aqua'
+    | 'Cyan'
+    | 'LightCyan'
+    | 'PaleTurquoise'
+    | 'Aquamarine'
+    | 'Turquoise'
+    | 'MediumTurquoise'
+    | 'DarkTurquoise'
+    | 'CadetBlue'
+    | 'SteelBlue'
+    | 'LightSteelBlue'
+    | 'PowderBlue'
+    | 'LightBlue'
+    | 'SkyBlue'
+    | 'LightSkyBlue'
+    | 'DeepSkyBlue'
+    | 'DodgerBlue'
+    | 'CornflowerBlue'
+    | 'RoyalBlue'
+    | 'Blue'
+    | 'MediumBlue'
+    | 'DarkBlue'
+    | 'Navy'
+    | 'MidnightBlue'
+    | 'Cornsilk'
+    | 'BlanchedAlmond'
+    | 'Bisque'
+    | 'NavajoWhite'
+    | 'Wheat'
+    | 'BurlyWood'
+    | 'Tan'
+    | 'RosyBrown'
+    | 'SandyBrown'
+    | 'Goldenrod'
+    | 'DarkGoldenrod'
+    | 'Peru'
+    | 'Chocolate'
+    | 'SaddleBrown'
+    | 'Sienna'
+    | 'Brown'
+    | 'Maroon'
+    | 'White'
+    | 'Snow'
+    | 'HoneyDew'
+    | 'MintCream'
+    | 'Azure'
+    | 'AliceBlue'
+    | 'GhostWhite'
+    | 'WhiteSmoke'
+    | 'SeaShell'
+    | 'Beige'
+    | 'OldLace'
+    | 'FloralWhite'
+    | 'Ivory'
+    | 'AntiqueWhite'
+    | 'Linen'
+    | 'LavenderBlush'
+    | 'MistyRose'
+    | 'Gainsboro'
+    | 'LightGray'
+    | 'Silver'
+    | 'DarkGray'
+    | 'Gray'
+    | 'DimGray'
+    | 'LightSlateGray'
+    | 'SlateGray'
+    | 'DarkSlateGray'
+    | 'Black';
 }
 
 declare module 'papi-shared-types' {
-  import type { HelloWorldProjectDataProvider } from 'hello-world';
+  import type { HelloWorldProjectDataProvider, HTMLColorNames } from 'hello-world';
 
   export interface CommandHandlers {
     'helloWorld.helloWorld': () => string;
@@ -51,7 +195,22 @@ declare module 'papi-shared-types' {
      * @returns WebView id for new Hello World Project WebView or `undefined` if the user canceled
      *   the dialog
      */
-    'helloWorld.openProject': (projectId: string | undefined) => Promise<string | undefined>;
+    'helloWorld.openProject': (projectId?: string) => Promise<string | undefined>;
+    /**
+     * Creates a new Hello World project with a random name
+     *
+     * @param openWebView Whether to open a web view for the new project. Defaults to true
+     * @returns Project id of the new hello world project
+     */
+    'helloWorld.createNewProject': (openWebView?: boolean) => Promise<string>;
+    /**
+     * Deletes a Hello World project
+     *
+     * @param projectId Optional project ID of the project to delete. Prompts the user to select a
+     *   project if not provided
+     * @returns `true` if successfully deleted
+     */
+    'helloWorld.deleteProject': (projectId?: string) => Promise<boolean>;
   }
 
   export interface ProjectDataProviders {
@@ -61,5 +220,15 @@ declare module 'papi-shared-types' {
   export interface SettingTypes {
     /** Selected Person's Name on Hello World Web View */
     'helloWorld.personName': string;
+  }
+
+  export interface ProjectSettingTypes {
+    /** Size of the header font in `em`. Must be an integer */
+    'helloWorld.headerSize': number;
+    /**
+     * Color of the headers (must be a valid [HTML color
+     * name](https://htmlcolorcodes.com/color-names/))
+     */
+    'helloWorld.headerColor': HTMLColorNames;
   }
 }

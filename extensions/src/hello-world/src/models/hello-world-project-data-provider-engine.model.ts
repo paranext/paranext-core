@@ -4,71 +4,106 @@ import {
   DataProviderUpdateInstructions,
   ExtensionDataScope,
 } from '@papi/core';
-import type { ProjectDataTypes, ProjectSettingTypes } from 'papi-shared-types';
+import type { ProjectDataTypes, ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
+
+export type HelloWorldProjectData = {
+  projectName: string;
+  numbers: { [max: string]: number | undefined };
+  names: Set<string>;
+  settings: {
+    [ProjectSettingName in ProjectSettingNames]?: ProjectSettingTypes[ProjectSettingName];
+  };
+  extensionData: { [key: string]: string | undefined };
+};
+
+function getExtensionDataKey(scope: ExtensionDataScope): string {
+  return `${scope.extensionName}/${scope.dataQualifier}`;
+}
 
 class HelloWorldProjectDataProviderEngine
   extends ProjectDataProviderEngine<'helloWorld'>
   implements IProjectDataProviderEngine<'helloWorld'>
 {
-  private numbers: { [max: string]: number | undefined };
-  private names: Set<string>;
+  private saveProjectData: () => Promise<void>;
 
-  constructor() {
+  constructor(
+    private projectData: HelloWorldProjectData,
+    saveProjectDataWithData: (data: HelloWorldProjectData) => Promise<void>,
+  ) {
     super();
 
-    this.numbers = {};
-    this.names = new Set();
+    this.saveProjectData = () => saveProjectDataWithData(this.projectData);
   }
 
   @papi.dataProviders.decorators.ignore
   async getAnyRandomNumber() {
-    const keys = Object.keys(this.numbers);
+    const keys = Object.keys(this.projectData.numbers);
     return keys[Math.random() * keys.length] ?? Math.random();
   }
 
-  /* eslint-disable class-methods-use-this */
-  /* eslint-disable @typescript-eslint/no-unused-vars */
   async getSetting<ProjectSettingName extends keyof ProjectSettingTypes>(
-    _key: ProjectSettingName,
+    key: ProjectSettingName,
   ): Promise<ProjectSettingTypes[ProjectSettingName]> {
-    throw new Error('No settings available');
+    // We are checking in this same line that it is there. TypeScript :/
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (key in this.projectData.settings) return this.projectData.settings[key]!;
+
+    return papi.projectSettings.getDefault(key, 'helloWorld');
   }
 
   async setSetting<ProjectSettingName extends keyof ProjectSettingTypes>(
-    _key: ProjectSettingName,
-    _newSetting: ProjectSettingTypes[ProjectSettingName],
+    key: ProjectSettingName,
+    newSetting: ProjectSettingTypes[ProjectSettingName],
   ): Promise<DataProviderUpdateInstructions<ProjectDataTypes['helloWorld']>> {
-    throw new Error('No settings available');
+    if (
+      !(await papi.projectSettings.isValid(
+        key,
+        newSetting,
+        await this.getSetting(key),
+        'helloWorld',
+      ))
+    )
+      return false;
+
+    this.projectData.settings[key] = newSetting;
+    await this.saveProjectData();
+    return true;
   }
 
   async resetSetting<ProjectSettingName extends keyof ProjectSettingTypes>(
-    _key: ProjectSettingName,
+    key: ProjectSettingName,
   ): Promise<boolean> {
-    throw new Error('No settings available');
+    if (!(key in this.projectData.settings)) return false;
+
+    delete this.projectData.settings[key];
+    await this.saveProjectData();
+    this.notifyUpdate('Setting');
+    return true;
   }
 
-  async getExtensionData(_scope: ExtensionDataScope): Promise<string | undefined> {
-    throw new Error('No extension data available');
+  async getExtensionData(scope: ExtensionDataScope): Promise<string | undefined> {
+    return this.projectData.extensionData[getExtensionDataKey(scope)];
   }
 
   async setExtensionData(
-    _scope: ExtensionDataScope,
-    _data: string,
+    scope: ExtensionDataScope,
+    data: string,
   ): Promise<DataProviderUpdateInstructions<ProjectDataTypes['helloWorld']>> {
-    throw new Error('No extension data available');
+    this.projectData.extensionData[getExtensionDataKey(scope)] = data;
+    await this.saveProjectData();
+    return true;
   }
-  /* eslint-enable class-methods-use-this */
-  /* eslint-enable @typescript-eslint/no-unused-vars */
 
   async setRandomNumber(max: number, newNum: number) {
-    if (newNum === this.numbers[max] || newNum > max) return false;
+    if (newNum === this.projectData.numbers[max] || newNum > max) return false;
 
-    this.numbers[max] = newNum;
+    this.projectData.numbers[max] = newNum;
+    await this.saveProjectData();
     return true;
   }
 
   async getRandomNumber(max: number) {
-    const currentNumber = this.numbers[max];
+    const currentNumber = this.projectData.numbers[max];
     if (currentNumber !== undefined) return currentNumber;
 
     const newNumber = Math.random() * max;
@@ -85,12 +120,13 @@ class HelloWorldProjectDataProviderEngine
   }
 
   async getNames() {
-    return Array.from(this.names);
+    return Array.from(this.projectData.names);
   }
 
   async addName(name: string) {
-    if (!this.names.has(name)) {
-      this.names.add(name);
+    if (!this.projectData.names.has(name)) {
+      this.projectData.names.add(name);
+      await this.saveProjectData();
       this.notifyUpdate('Names');
       return true;
     }
@@ -98,8 +134,9 @@ class HelloWorldProjectDataProviderEngine
   }
 
   async removeName(name: string) {
-    if (this.names.has(name)) {
-      this.names.delete(name);
+    if (this.projectData.names.has(name)) {
+      this.projectData.names.delete(name);
+      await this.saveProjectData();
       this.notifyUpdate('Names');
       return true;
     }
