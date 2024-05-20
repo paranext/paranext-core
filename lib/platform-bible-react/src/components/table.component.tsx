@@ -102,8 +102,13 @@ function TableTextEditor<R>({ onRowChange, row, column }: TableEditorProps<R>): 
     onRowChange({ ...row, [column.key]: e.target.value });
   };
 
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return <TextField defaultValue={row[column.key as keyof R]} onChange={changeHandler} />;
+  return (
+    // `as keyof R` reminds TypeScript of what it actually is
+    // `as string` is just asserting that the input is a string because this is the default editor
+    // used for all values. It will probably break on non-strings
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    <TextField defaultValue={row[column.key as keyof R] as string} onChange={changeHandler} />
+  );
 }
 
 const renderCheckbox = ({ onChange, disabled, checked, ...props }: RenderCheckboxProps) => {
