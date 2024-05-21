@@ -3,8 +3,8 @@ import { Button, ScriptureReference, usePromise, Checklist } from 'platform-bibl
 import { getChaptersForBook } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
-import { useState, useMemo, useEffect } from 'react';
-import BookSelector from '@renderer/components/run-basic-checks-dialog/book-selector.component';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import BookSelection from '@renderer/components/run-basic-checks-dialog/book-selection.component';
 import './run-basic-checks-tab.component.scss';
 import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
 import { Canon, VerseRef } from '@sillsdev/scripture';
@@ -22,7 +22,11 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-export type BasicCheck = {
+export type BookSelectionStatus = {
+  [bookId: string]: boolean;
+};
+
+type BasicCheck = {
   name: string;
 };
 
@@ -87,23 +91,48 @@ export function fetchChecks(): BasicCheck[] {
 
 export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTabProps) {
   const basicChecks = fetchChecks();
-
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
-  const currentBookId = useMemo(() => Canon.bookNumberToId(scrRef.bookNum), [scrRef]);
-  const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
-
-  const chapterCount = useMemo(() => getChaptersForBook(scrRef.bookNum), [scrRef]);
-  const [startChapter, setStartChapter] = useState<number>(1);
-  const [endChapter, setEndChapter] = useState<number>(chapterCount);
-
-  useEffect(() => {
-    setSelectedBookIds([currentBookId]);
-    setStartChapter(1);
-    setEndChapter(chapterCount);
-  }, [chapterCount, currentBookId]);
 
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
   const [useCurrentBook, setUseCurrentBook] = useState<boolean>(true);
+  const chapterCount = useMemo(() => getChaptersForBook(scrRef.bookNum), [scrRef]);
+  const [startChapter, setStartChapter] = useState<number>(1);
+  const [endChapter, setEndChapter] = useState<number>(chapterCount);
+  const currentBookId = useMemo(() => Canon.bookNumberToId(scrRef.bookNum), [scrRef]);
+
+  // Current book true, rest of the books false
+  const getInitialBookSelectionStatus = useCallback(() => {
+    return Canon.allBookIds.reduce<BookSelectionStatus>((acc, bookId) => {
+      if (bookId === currentBookId) acc[bookId] = true;
+      else acc[bookId] = false;
+      return acc;
+    }, {});
+  }, [currentBookId]);
+
+  const [bookIdsSelectionStatus, setBookIdsSelectionStatus] = useState<BookSelectionStatus>(
+    getInitialBookSelectionStatus(),
+  );
+
+  // Needed so that the currentBook is correct and not the default.
+  useEffect(() => {
+    setStartChapter(1);
+    setEndChapter(chapterCount);
+    setBookIdsSelectionStatus(getInitialBookSelectionStatus());
+  }, [chapterCount, currentBookId, getInitialBookSelectionStatus]);
+
+  // Only used in handleSubmit
+  const selectedBookIds = useMemo(
+    () => Object.keys(bookIdsSelectionStatus).filter((bookId) => bookIdsSelectionStatus[bookId]),
+    [bookIdsSelectionStatus],
+  );
+
+  const toggleShouldUseCurrentBook = (newRadioValue: string) => {
+    if (newRadioValue === 'current book') {
+      setUseCurrentBook(true);
+    } else {
+      setUseCurrentBook(false);
+    }
+  };
 
   const handleSelectStart = (chapter: number) => {
     setStartChapter(chapter);
@@ -114,24 +143,22 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
   };
 
   const handleSelectBooks = (bookIds: string[]) => {
-    setSelectedBookIds(bookIds);
+    setBookIdsSelectionStatus((prevStatus) => {
+      const newStatus = { ...prevStatus };
+      Object.keys(newStatus).forEach((bookId) => {
+        newStatus[bookId] = false;
+      });
+      bookIds.forEach((bookId) => {
+        newStatus[bookId] = true;
+      });
+      return newStatus;
+    });
   };
 
   const handleSelectCheck = (label: string) => {
     if (selectedChecks.includes(label))
       setSelectedChecks(selectedChecks.filter((check) => check !== label));
     else setSelectedChecks((prevSelectedChecks) => [...prevSelectedChecks, label]);
-  };
-
-  const toggleShouldUseCurrentBook = (newRadioValue: string) => {
-    if (newRadioValue === 'current book') {
-      setUseCurrentBook(true);
-      setSelectedBookIds([currentBookId]);
-    } else {
-      setUseCurrentBook(false);
-      setStartChapter(1);
-      setEndChapter(chapterCount);
-    }
   };
 
   const handleSubmit = () => {
@@ -166,7 +193,7 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
         handleSelectListItem={handleSelectCheck}
       />
       <fieldset className="run-basic-checks-books">
-        <BookSelector
+        <BookSelection
           handleRadioChange={toggleShouldUseCurrentBook}
           currentBookName={Canon.bookIdToEnglishName(currentBookId)}
           selectedBookIds={selectedBookIds}

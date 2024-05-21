@@ -2,7 +2,7 @@ import { RadioGroup, Radio, Typography } from '@mui/material';
 import { Canon } from '@sillsdev/scripture';
 import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
-import './book-selector.component.scss';
+import './book-selection.component.scss';
 import { useDialogCallback } from '@renderer/hooks/papi-hooks';
 
 type BookSelectionProps = ChapterRangeSelectorProps & {
@@ -12,7 +12,7 @@ type BookSelectionProps = ChapterRangeSelectorProps & {
   handleSelectBooks: (bookIds: string[]) => void;
 };
 
-export default function BookSelector({
+export default function BookSelection({
   handleRadioChange,
   currentBookName,
   selectedBookIds,
@@ -48,16 +48,16 @@ export default function BookSelector({
 
   return (
     <RadioGroup value={radioValue} onChange={(e) => onRadioChange(e.target.value)}>
-      <div className="book-selector-radio">
+      <div className="book-selection-radio">
         <Radio value="current book" />
-        <Typography className="book-selector-radio-label">Current Book</Typography>
-        <div className="book-selector-radio-content">
+        <Typography className="book-selection-radio-label">Current Book</Typography>
+        <div className="book-selection-radio-content">
           <div className="book-typography">
             <Typography padding={0.5} border={1}>
               {currentBookName}
             </Typography>
           </div>
-          <div className="book-selector-radio-action">
+          <div className="book-selection-radio-action">
             <ChapterRangeSelector
               isDisabled={radioValue === 'choose books'}
               handleSelectStartChapter={handleSelectStartChapter}
@@ -67,10 +67,10 @@ export default function BookSelector({
           </div>
         </div>
       </div>
-      <div className="book-selector-radio">
+      <div className="book-selection-radio">
         <Radio value="choose books" />
-        <Typography className="book-selector-radio-label">Choose Books</Typography>
-        <div className="book-selector-radio-content">
+        <Typography className="book-selection-radio-label">Choose Books</Typography>
+        <div className="book-selection-radio-content">
           <div className="book-typography">
             <Typography padding={0.5} border={1}>
               {selectedBookIds
@@ -78,7 +78,7 @@ export default function BookSelector({
                 .join(', ')}
             </Typography>
           </div>
-          <div className="book-selector-radio-action">
+          <div className="book-selection-radio-action">
             <Button isDisabled={radioValue === 'current book'} onClick={() => selectBooks()}>
               Choose...
             </Button>
