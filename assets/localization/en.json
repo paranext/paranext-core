@@ -25,5 +25,7 @@
   "%project_settings_platform_group1_label%": "Platform Settings",
   "%project_settings_platform_group1_description%": "Project settings pertaining to the software overall",
   "%project_settings_platform_fullName_label%": "Project Full Name",
-  "%project_settings_platform_language_label%": "Project Primary Language"
+  "%project_settings_platform_language_label%": "Project Primary Language",
+  "%project_settings_platform_isEditable_label%": "Is Editable",
+  "%project_settings_platform_isEditable_description%": "Whether this project is editable. A project that is not editable is sometimes called a resource."
 }

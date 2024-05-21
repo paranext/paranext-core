@@ -219,12 +219,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettings.GetParatextSettingNameFromPlatformBibleSettingName(settingName) ??
             settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
-        return ResponseToRequest.Succeeded(scrText.Settings.ParametersDictionary[settingName]);
+
+        var settingValue = scrText.Settings.ParametersDictionary[settingName];
+
+        return settingValue switch
+        {
+            "T" => ResponseToRequest.Succeeded(true),
+            "F" => ResponseToRequest.Succeeded(false),
+            _ => ResponseToRequest.Succeeded(settingValue)
+        };
     }
 
     public ResponseToRequest SetProjectSetting(string jsonKey, string value)
     {
         var settingName = JToken.Parse(jsonKey).ToString();
+
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
 
         // If there is no Paratext setting for the name given, we'll create one lower down

@@ -14,6 +14,9 @@ public sealed class ProjectSettings
     public const string PB_VERSIFICATION = "platformScripture.versification";
     public const string PT_VERSIFICATION = "Versification";
 
+    public const string PB_IS_EDITABLE = "platform.isEditable";
+    public const string PT_IS_EDITABLE = "Editable";
+
     // Make sure this dictionary gets updated whenever new settings are added
     private static readonly Dictionary<string, string> s_platformBibleToParatextSettingsNames =
         new()
@@ -22,6 +25,7 @@ public sealed class ProjectSettings
             { PB_FULL_NAME, PT_FULL_NAME },
             { PB_LANGUAGE, PT_LANGUAGE },
             { PB_VERSIFICATION, PT_VERSIFICATION },
+            { PB_IS_EDITABLE, PT_IS_EDITABLE },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =
