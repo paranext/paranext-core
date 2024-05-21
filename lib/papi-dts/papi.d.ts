@@ -3775,6 +3775,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
   /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
+  /** The tabType for the select books dialog in `select-books.dialog.tsx` */
+  export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -3782,6 +3784,11 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
     /** Project IDs that should start selected in the dialog */
     selectedProjectIds?: string[];
+  };
+  /** Options to provide when showing the Select Books dialog */
+  export type SelectBooksDialogOptions = ProjectDialogOptionsBase & {
+    /** Books IDs that should start selected in the dialog */
+    selectedBookIds?: string[];
   };
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs
@@ -3796,6 +3803,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
       SelectMultipleProjectsDialogOptions,
       string[]
     >;
+    [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
   }
   /** Each type of dialog. These are the tab types used in the dock layout */
   export type DialogTabTypes = keyof DialogTypes;
