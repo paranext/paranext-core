@@ -143,6 +143,13 @@ declare module 'papi-shared-types' {
      * @example 'World English Bible'
      */
     'platform.fullName': string;
+    /**
+     * Whether or not the project is editable. This is a general "editable", not necessarily that it
+     * is editable by the current user.
+     *
+     * Projects that are not editable are sometimes called "resources".
+     */
+    'platform.isEditable': boolean;
   }
 
   /**

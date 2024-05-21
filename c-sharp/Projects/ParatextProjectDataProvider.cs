@@ -220,7 +220,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
         if (scrText.Settings.ParametersDictionary.TryGetValue(settingName, out string? settingValue)) {
-            return ResponseToRequest.Succeeded(settingValue);
+            return settingValue switch
+            {
+                "T" => ResponseToRequest.Succeeded(true),
+                "F" => ResponseToRequest.Succeeded(false),
+                _ => ResponseToRequest.Succeeded(settingValue)
+            };
         }
 
         // Setting not found, so get the default value
@@ -238,6 +243,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public ResponseToRequest SetProjectSetting(string jsonKey, string value)
     {
         var settingName = JToken.Parse(jsonKey).ToString();
+
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
 
         // If there is no Paratext setting for the name given, we'll create one lower down
