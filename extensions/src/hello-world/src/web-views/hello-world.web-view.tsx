@@ -6,6 +6,7 @@ import {
   useSetting,
   useDialogCallback,
   useDataProvider,
+  useLocalizedStrings,
 } from '@papi/frontend/react';
 import {
   Button,
@@ -219,15 +220,12 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading Verse',
   );
 
-  const [localizedString] = usePromise(
-    useCallback(() => {
-      return papi.localization.getLocalizedString({
-        localizeKey: 'submitButton',
-        locales: ['fr', 'en'],
-      });
-    }, []),
-    'defaultValue',
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => ['submitButton'], []),
+    useMemo(() => ['fr', 'en'], []),
   );
+
+  const localizedString = localizedStrings.submitButton;
 
   return (
     <div>
