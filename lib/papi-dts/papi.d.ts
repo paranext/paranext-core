@@ -6083,7 +6083,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   ): (DataProviders[EachDataProviderName[number]] | undefined)[];
   export default useDataProviderMulti;
 }
-declare module 'renderer/hooks/papi-hooks/use-localization-hook' {
+declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
   import { LocalizationData } from 'shared/services/localization.service-model';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
   /**
@@ -6122,7 +6122,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
-  export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localization-hook';
+  export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
 }
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
