@@ -26,6 +26,8 @@ import type { HelloWorldEvent } from 'hello-world';
 import { debounce } from 'platform-bible-utils';
 import Clock from './components/clock.component';
 import Logo from '../../assets/offline.svg';
+import ProjectSettingsEditor from './hello-world-project/project-settings-editor.component';
+import useHelloWorldProjectSettings from './hello-world-project/use-hello-world-project-settings.hook';
 
 type Row = {
   id: string;
@@ -209,6 +211,9 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading Verse',
   );
 
+  const helloWorldProjectSettings = useHelloWorldProjectSettings('ParatextStandard', project);
+  const { headerStyle } = helloWorldProjectSettings;
+
   const [localizedString] = usePromise(
     useCallback(() => {
       return papi.localization.getLocalizedString({
@@ -269,8 +274,9 @@ globalThis.webViewComponent = function HelloWorld({
       <div>
         <Button onClick={selectProject}>Select Project</Button>
       </div>
-      <h3>{verseRef.toString()}</h3>
+      <h3 style={headerStyle}>{verseRef.toString()}</h3>
       <div>{currentProjectVerse}</div>
+      <ProjectSettingsEditor {...helloWorldProjectSettings} />
       <h3>List of Selected Project Id(s):</h3>
       <div>{projects.join(', ')}</div>
       <div>

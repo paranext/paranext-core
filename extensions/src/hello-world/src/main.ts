@@ -249,7 +249,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   const helloWorldHeaderSizePromise = papi.projectSettings.registerValidator(
     'helloWorld.headerSize',
-    async (newValue) => typeof newValue === 'number' && Number.isInteger(newValue) && newValue > 0,
+    async (newValue, currentValue) => {
+      logger.log(`newValue: ${newValue}. currentValue: ${currentValue}`);
+      logger.log(
+        `typeof newValue: ${typeof newValue}. Number.isInteger(newValue): ${Number.isInteger(newValue)}`,
+      );
+      return typeof newValue === 'number' && Number.isInteger(newValue) && newValue > 0;
+    },
   );
 
   const helloWorldHeaderColorPromise = papi.projectSettings.registerValidator(

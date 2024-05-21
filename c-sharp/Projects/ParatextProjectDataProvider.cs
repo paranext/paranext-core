@@ -219,7 +219,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettings.GetParatextSettingNameFromPlatformBibleSettingName(settingName) ??
             settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
-        return ResponseToRequest.Succeeded(scrText.Settings.ParametersDictionary[settingName]);
+        if (scrText.Settings.ParametersDictionary.TryGetValue(settingName, out string? settingValue)) {
+            return ResponseToRequest.Succeeded(settingValue);
+        }
+
+        // Setting not found, so get the default value
+        string? defaultValue = ProjectSettingsService.GetDefault(
+            PapiClient,
+            settingName,
+            ProjectType.Paratext
+        );
+        if (defaultValue == null)
+            return ResponseToRequest.Failed($"Default value for {settingName} was null");
+
+        return ResponseToRequest.Succeeded(defaultValue);
     }
 
     public ResponseToRequest SetProjectSetting(string jsonKey, string value)
@@ -269,7 +282,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             });
         return (errorMessage != null)
             ? ResponseToRequest.Failed(errorMessage)
-            : ResponseToRequest.Succeeded(ProjectDataType.SETTINGS);
+            : ResponseToRequest.Succeeded(ProjectDataType.SETTING);
     }
 
     // Typically for "reset" we would want to erase the setting and then call "getDefault" if a
