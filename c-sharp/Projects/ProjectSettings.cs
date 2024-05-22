@@ -14,6 +14,12 @@ public sealed class ProjectSettings
     public const string PB_VERSIFICATION = "platformScripture.versification";
     public const string PT_VERSIFICATION = "Versification";
 
+    public const string PB_VALID_CHARACTERS = "platformScripture.validCharacters";
+    public const string PT_VALID_CHARACTERS = "ValidCharacters";
+
+    public const string PB_INVALID_CHARACTERS = "platformScripture.invalidCharacters";
+    public const string PT_INVALID_CHARACTERS = "InvalidCharacters";
+
     // Make sure this dictionary gets updated whenever new settings are added
     private static readonly Dictionary<string, string> s_platformBibleToParatextSettingsNames =
         new()
@@ -22,6 +28,8 @@ public sealed class ProjectSettings
             { PB_FULL_NAME, PT_FULL_NAME },
             { PB_LANGUAGE, PT_LANGUAGE },
             { PB_VERSIFICATION, PT_VERSIFICATION },
+            { PB_VALID_CHARACTERS, PT_VALID_CHARACTERS },
+            { PB_INVALID_CHARACTERS, PT_INVALID_CHARACTERS },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =

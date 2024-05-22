@@ -3,7 +3,9 @@ import { useState } from 'react';
 import {
   ColumnDef,
   ColumnFiltersState,
+  Row,
   SortingState,
+  Table as TanStackTable,
   VisibilityState,
   flexRender,
   getCoreRowModel,
@@ -28,15 +30,20 @@ import DataTableViewOptions from './data-table-column-toggle.component';
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  enablePagination?: boolean;
   showPaginationControls?: boolean;
   showColumnVisibilityControls?: boolean;
+  onRowClickHandler?: (table: TanStackTable<TData>, row: Row<TData>) => void;
 }
 
 function DataTable<TData, TValue>({
   columns,
   data,
+  enablePagination = false,
   showPaginationControls = false,
   showColumnVisibilityControls = false,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onRowClickHandler = (_table: TanStackTable<TData>, _row: Row<TData>) => {},
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -47,7 +54,7 @@ function DataTable<TData, TValue>({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    ...(enablePagination && { getPaginationRowModel: getPaginationRowModel() }),
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
@@ -85,7 +92,11 @@ function DataTable<TData, TValue>({
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
+                <TableRow
+                  onClick={() => onRowClickHandler(table, row)}
+                  key={row.id}
+                  data-state={row.getIsSelected() && 'selected'}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -103,25 +114,27 @@ function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <div className="pr-flex pr-items-center pr-justify-end pr-space-x-2 pr-py-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          Next
-        </Button>
-      </div>
-      {showPaginationControls && <DataTablePagination table={table} />}
+      {enablePagination && (
+        <div className="pr-flex pr-items-center pr-justify-end pr-space-x-2 pr-py-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            Next
+          </Button>
+        </div>
+      )}
+      {enablePagination && showPaginationControls && <DataTablePagination table={table} />}
     </div>
   );
 }

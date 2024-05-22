@@ -1,32 +1,24 @@
-import { ColumnDef, SortDirection } from '@tanstack/react-table';
+import { ReactNode, useEffect, useState } from 'react';
+import { Button } from '@/components/shadcn-ui/button';
+
+import { ColumnDef, Row, SortDirection, Table } from '@tanstack/react-table';
 import {
   ArrowUpDownIcon,
   ArrowDownIcon,
   ArrowUpIcon,
-  CheckIcon,
-  XIcon,
-  ShieldQuestionIcon,
+  CircleCheckIcon,
+  CircleXIcon,
+  CircleHelpIcon,
 } from 'lucide-react';
-
-import { Button } from '@/components/shadcn-ui/button';
-
-import { ReactNode } from 'react';
-
-//  DATA
+import { DataTable } from '../..';
 
 type Status = true | false | undefined;
 
-type CharacterData = {
+export type CharacterData = {
   character: string;
   unicodeValue: string;
   count: number;
   status: Status;
-};
-
-const getRandomStatus = (): Status => {
-  const statuses: Status[] = [true, false, undefined];
-  const randomIndex = Math.floor(Math.random() * statuses.length);
-  return statuses[randomIndex];
 };
 
 const getRandomString = (length: number): string[] => {
@@ -53,15 +45,13 @@ export const randomlyGeneratedData = (length: number): CharacterData[] => {
         character,
         unicodeValue: character.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0'),
         count: 1,
-        status: getRandomStatus(),
+        status: undefined,
       });
     }
   });
 
   return dataArray;
 };
-
-export default randomlyGeneratedData;
 
 // COLUMNS
 
@@ -76,7 +66,9 @@ const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
   return <ArrowUpDownIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
 };
 
-export const columns: ColumnDef<CharacterData>[] = [
+export const columns = (
+  updateStatus: (table: Table<CharacterData>, status: Status) => void,
+): ColumnDef<CharacterData>[] => [
   {
     accessorKey: 'character',
     header: ({ column }) => {
@@ -93,7 +85,7 @@ export const columns: ColumnDef<CharacterData>[] = [
     header: ({ column }) => {
       return (
         <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-          Unicode Value
+          Unicode
           {getSortingIcon(column.getIsSorted())}
         </Button>
       );
@@ -104,52 +96,88 @@ export const columns: ColumnDef<CharacterData>[] = [
     header: ({ column }) => {
       return (
         <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-          Count
-          {getSortingIcon(column.getIsSorted())}
+          #{getSortingIcon(column.getIsSorted())}
         </Button>
       );
     },
   },
   {
     accessorKey: 'status',
-    header: () => {
+    header: ({ table }) => {
       return (
-        <Button variant="ghost">
-          <div className="pr-flex pr-flex-col">
-            <div>Status</div>
-            <div className="pr-flex">
-              <CheckIcon
-                className="pr-ml-2 pr-h-4 pr-w-4"
+        <div className="pr-flex pr-flex-col">
+          <Button variant="ghost">Status</Button>
+          <div className="pr-flex">
+            <Button variant="ghost">
+              <CircleCheckIcon
+                className="pr-h-4 pr-w-4"
                 onClick={() => {
-                  console.log('Set accepted');
+                  updateStatus(table, true);
                 }}
               />
-              <XIcon
-                className="pr-ml-2 pr-h-4 pr-w-4"
+            </Button>
+            <Button variant="ghost">
+              <CircleXIcon
+                className="pr-h-4 pr-w-4"
                 onClick={() => {
-                  console.log('Set rejected');
+                  updateStatus(table, false);
                 }}
               />
-              <ShieldQuestionIcon
-                className="pr-ml-2 pr-h-4 pr-w-4"
+            </Button>
+            <Button variant="ghost">
+              <CircleHelpIcon
+                className="pr-h-4 pr-w-4"
                 onClick={() => {
-                  console.log('Set undefined');
+                  updateStatus(table, undefined);
                 }}
               />
-            </div>
+            </Button>
           </div>
-        </Button>
+        </div>
       );
     },
     cell: ({ row }) => {
       const status = row.getValue('status');
       if (status === true) {
-        return <CheckIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
+        return <CircleCheckIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
       }
       if (status === false) {
-        return <XIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
+        return <CircleXIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
       }
-      return <ShieldQuestionIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
+      return <CircleHelpIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
     },
   },
 ];
+
+// Event handlers
+
+const rowClickHandler = (table: Table<CharacterData>, row: Row<CharacterData>) => {
+  table.toggleAllRowsSelected(false);
+  row.toggleSelected(true);
+};
+
+function DataTablePreview() {
+  const [data, setData] = useState<CharacterData[]>([]);
+
+  useEffect(() => {
+    setData(randomlyGeneratedData(200));
+  }, []);
+
+  const setStatus = (table: Table<CharacterData>, status: Status) => {
+    const { rowSelection } = table.getState();
+    const selectedRows: number[] = Object.entries(rowSelection)
+      .filter(([, value]) => value === true)
+      .map(([key]) => Number(key));
+    const newData = data.map((character: CharacterData, index: number) => {
+      if (selectedRows.includes(index)) {
+        character.status = status;
+      }
+      return character;
+    });
+    setData(newData);
+  };
+
+  return <DataTable columns={columns(setStatus)} data={data} onRowClickHandler={rowClickHandler} />;
+}
+
+export default DataTablePreview;

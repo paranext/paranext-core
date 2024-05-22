@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ScriptureReference } from 'platform-bible-utils';
-import { randomlyGeneratedData, columns } from '@/preview/table/inventory-contents';
-import { BookChapterControl, DataTable } from '..';
+import { BookChapterControl } from '..';
+import DataTablePreview from './table/data-table-preview.component';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -25,12 +25,7 @@ function App() {
         <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
       </div>
       <div className="pr-m-3 pr-flex">
-        <DataTable
-          columns={columns}
-          data={randomlyGeneratedData(200)}
-          showPaginationControls
-          showColumnVisibilityControls
-        />
+        <DataTablePreview />
       </div>
     </>
     // </div>
