@@ -241,12 +241,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
 
         // If there is no Paratext setting for the name given, we'll create one lower down
-        var currentValueResponse = ResponseToRequest.Failed("");
-        try
-        {
-            currentValueResponse = GetProjectSetting(jsonKey);
-        }
-        catch (KeyNotFoundException) { }
+        var currentValueResponse = GetProjectSetting(jsonKey);
 
         // Make sure the value we're planning to set is valid
         var currentValueJson = currentValueResponse.Success
