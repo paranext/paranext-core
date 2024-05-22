@@ -1,4 +1,4 @@
-import { SyntheticEvent, useEffect, useMemo, useState } from 'react';
+import { SyntheticEvent, useEffect, useState } from 'react';
 import { FormControlLabel } from '@mui/material';
 import ComboBox from '@/components/combo-box.component';
 
@@ -15,18 +15,19 @@ export default function ChapterRangeSelector({
   isDisabled = false,
   chapterCount,
 }: ChapterRangeSelectorProps) {
-  const numberArray = useMemo(
-    () => Array.from({ length: chapterCount }, (_, index) => index + 1),
-    [chapterCount],
+  const [startChapter, setStartChapter] = useState<number>(1);
+  const [endChapter, setEndChapter] = useState<number>(chapterCount);
+  const [chapterOptions, setChapterOptions] = useState<number[]>(
+    Array.from({ length: chapterCount }, (_, i) => i + 1),
   );
 
-  const [startChapter, setStartChapter] = useState<number>(numberArray[0]);
-  const [endChapter, setEndChapter] = useState<number>(numberArray[numberArray.length - 1]);
-
   useEffect(() => {
-    setStartChapter(numberArray[0]);
-    setEndChapter(numberArray[numberArray.length - 1]);
-  }, [numberArray]);
+    setStartChapter(1);
+    handleSelectStartChapter(1);
+    setEndChapter(chapterCount);
+    handleSelectEndChapter(chapterCount);
+    setChapterOptions(Array.from({ length: chapterCount }, (_, i) => i + 1));
+  }, [chapterCount, handleSelectEndChapter, handleSelectStartChapter]);
 
   const onChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
     setStartChapter(value);
@@ -60,7 +61,7 @@ export default function ChapterRangeSelector({
             className="book-selection-chapter"
             key="start chapter"
             isClearable={false}
-            options={numberArray}
+            options={chapterOptions}
             getOptionLabel={(option) => option.toString()}
             value={startChapter}
             isDisabled={isDisabled}
@@ -81,7 +82,7 @@ export default function ChapterRangeSelector({
             className="book-selection-chapter"
             key="end chapter"
             isClearable={false}
-            options={numberArray}
+            options={chapterOptions}
             getOptionLabel={(option) => option.toString()}
             value={endChapter}
             isDisabled={isDisabled}

@@ -115,10 +115,8 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
 
   // Needed so that the currentBook is correct and not the default.
   useEffect(() => {
-    setStartChapter(1);
-    setEndChapter(chapterCount);
     setBookIdsSelectionStatus(getInitialBookSelectionStatus());
-  }, [chapterCount, currentBookId, getInitialBookSelectionStatus]);
+  }, [getInitialBookSelectionStatus]);
 
   // Only used in handleSubmit
   const selectedBookIds = useMemo(
