@@ -222,12 +222,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         var settingValue = scrText.Settings.ParametersDictionary[settingName];
 
-        return settingValue switch
+        if (ProjectSettings.IsParatextSettingABoolean(settingName))
         {
-            "T" => ResponseToRequest.Succeeded(true),
-            "F" => ResponseToRequest.Succeeded(false),
-            _ => ResponseToRequest.Succeeded(settingValue)
-        };
+            return settingValue switch
+            {
+                "T" => ResponseToRequest.Succeeded(true),
+                "F" => ResponseToRequest.Succeeded(false),
+                _ => ResponseToRequest.Failed($"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"),
+            };
+        }
+
+        return ResponseToRequest.Succeeded(settingValue);
     }
 
     public ResponseToRequest SetProjectSetting(string jsonKey, string value)

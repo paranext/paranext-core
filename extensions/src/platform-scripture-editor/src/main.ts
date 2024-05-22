@@ -56,13 +56,15 @@ async function open(
     );
 
     projectForWebView.projectId = await papi.dialogs.selectProject({
-      title: `Open ${isReadOnly ? 'Resource Viewer' : 'Scripture Editor'}`,
-      prompt: `Choose a ${isReadOnly ? 'resource' : 'project'} to open:`,
-      includeProjectTypes: '^ParatextStandard$',
-      // Exclude projects whose editable matches readonly (double negative to include only the
-      // things that match readonly because sadly there is no includeProjectIds)
-      excludeProjectIds: projectsWithEditable
-        .filter(({ isEditable }) => isEditable === isReadOnly)
+      title: isReadOnly
+        ? '%platformScriptureEditor_dialog_openResourceViewer_title%'
+        : '%platformScriptureEditor_dialog_openScriptureEditor_title%',
+      prompt: isReadOnly
+        ? '%platformScriptureEditor_dialog_openResourceViewer_prompt%'
+        : '%platformScriptureEditor_dialog_openScriptureEditor_prompt%',
+      // Include projects whose editable matches readonly
+      includeProjectIds: projectsWithEditable
+        .filter(({ isEditable }) => isEditable !== isReadOnly)
         .map(({ projectId: pId }) => pId),
     });
   } else {
