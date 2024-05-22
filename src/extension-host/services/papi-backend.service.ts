@@ -29,7 +29,7 @@ import projectLookupService from '@shared/services/project-lookup.service';
 import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
 import menuDataService from '@shared/services/menu-data.service';
-import localizationDataService from '@shared/services/localization.service';
+import localizationService from '@shared/services/localization.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import settingsService from '@shared/services/settings.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
@@ -87,7 +87,7 @@ const papi = {
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
   /** JSDOC DESTINATION localizationDataService */
-  localization: localizationDataService as ILocalizationService,
+  localization: localizationService as ILocalizationService,
 };
 /* eslint-enable */
 

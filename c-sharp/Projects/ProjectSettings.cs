@@ -17,6 +17,11 @@ public sealed class ProjectSettings
     public const string PB_IS_EDITABLE = "platform.isEditable";
     public const string PT_IS_EDITABLE = "Editable";
 
+    /// <summary>
+    /// Paratext setting names that are either T or F and need to be converted to booleans
+    /// </summary>
+    private static readonly List<string> PT_SETTING_BOOLEANS = ["Editable", "MatchBasedOnStems", "AllowReadAccess", "AllowSharingWithSLDR", ];
+
     // Make sure this dictionary gets updated whenever new settings are added
     private static readonly Dictionary<string, string> s_platformBibleToParatextSettingsNames =
         new()
@@ -53,5 +58,15 @@ public sealed class ProjectSettings
         return s_paratextToPlatformBibleSettingsNames.TryGetValue(ptSettingName, out string? retVal)
             ? retVal
             : null;
+    }
+
+    /// <summary>
+    /// Determines whether a Paratext Setting is expected to be a boolean ("T" or "F" only)
+    /// </summary>
+    /// <param name="ptSettingName"></param>
+    /// <returns></returns>
+    public static bool IsParatextSettingABoolean(string ptSettingName)
+    {
+        return PT_SETTING_BOOLEANS.Contains(ptSettingName);
     }
 }

@@ -25,7 +25,7 @@ import * as papiReact from '@renderer/services/papi-frontend-react.service';
 import PapiRendererWebSocket from '@renderer/services/renderer-web-socket.service';
 import menuDataService from '@shared/services/menu-data.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
-import localizationDataService from '@shared/services/localization.service';
+import localizationService from '@shared/services/localization.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
 import PapiRendererXMLHttpRequest from './renderer-xml-http-request.service';
 
@@ -79,7 +79,7 @@ const papi = {
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
   /** JSDOC DESTINATION localizationDataService */
-  localization: localizationDataService as ILocalizationService,
+  localization: localizationService as ILocalizationService,
 };
 /* eslint-enable */
 

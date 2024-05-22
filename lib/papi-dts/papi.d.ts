@@ -3579,6 +3579,8 @@ declare module 'shared/models/project-lookup.service-model' {
   export type ProjectMetadataFilterOptions = {
     /** Project IDs to exclude */
     excludeProjectIds?: string | string[];
+    /** Project IDs to include */
+    includeProjectIds?: string | string[];
     /**
      * String representation of `RegExp` pattern(s) to match against projects' `projectType` (using
      * the
@@ -3670,15 +3672,28 @@ declare module 'extension-host/extension-types/extension-activation-context.mode
   };
 }
 declare module 'shared/models/dialog-options.model' {
+  import { LocalizeKey } from 'platform-bible-utils';
   /** General options to adjust dialogs (created from `papi.dialogs`) */
   export type DialogOptions = {
-    /** Dialog title to display in the header. Default depends on the dialog */
-    title?: string;
+    /**
+     * Dialog title to display in the header. If you provide a {@link LocalizeKey}, it will be
+     * localized before displaying.
+     *
+     * Default depends on the dialog
+     */
+    title?: string | LocalizeKey;
     /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
     iconUrl?: string;
-    /** The message to show the user in the dialog. Default depends on the dialog */
-    prompt?: string;
+    /**
+     * The message to show the user in the dialog. If you provide a {@link LocalizeKey}, it will be
+     * localized before displaying.
+     *
+     * Default depends on the dialog
+     */
+    prompt?: string | LocalizeKey;
   };
+  /** Keys of properties on {@link DialogOptions} that should be localized if they are LocalizeKeys */
+  export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS: readonly ['title', 'prompt'];
   /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
   export type DialogData = DialogOptions & {
     isDialog: true;
@@ -4888,8 +4903,8 @@ declare module 'shared/services/menu-data.service' {
 }
 declare module 'shared/services/localization.service' {
   import { ILocalizationService } from 'shared/services/localization.service-model';
-  const localizationDataService: ILocalizationService;
-  export default localizationDataService;
+  const localizationService: ILocalizationService;
+  export default localizationService;
 }
 declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';

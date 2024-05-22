@@ -1,13 +1,23 @@
-import { DialogData } from '@shared/models/dialog-options.model';
+import {
+  DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS,
+  DialogData,
+} from '@shared/models/dialog-options.model';
 import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service-model';
 import * as networkService from '@shared/services/network.service';
-import { aggregateUnsubscriberAsyncs, serialize, newGuid } from 'platform-bible-utils';
+import {
+  aggregateUnsubscriberAsyncs,
+  isLocalizeKey,
+  serialize,
+  newGuid,
+  LocalizeKey,
+} from 'platform-bible-utils';
 import * as webViewService from '@renderer/services/web-view.service-host';
 import { serializeRequestType } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
+import localizationService from '@shared/services/localization.service';
 
 /** A live dialog request. Includes the dialog's id and the functions to run on receiving results */
 // TODO: preserve requests between refreshes - save the request id or something?
@@ -139,12 +149,43 @@ export function rejectDialogRequest(id: string, message: string) {
     throw new Error(`DialogService error: request ${id} not found to reject. Message: ${message}`);
 }
 
+async function localizeDialogOptions<T extends DialogTypes[keyof DialogTypes]['options']>(
+  options?: T,
+) {
+  if (!options) return options;
+
+  // Get all the LocalizeKey values of props that can be localized
+  // Filter doesn't realize we are getting rid of undefined and taking only LocalizeKeys
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const propValuesToLocalize = DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS.map(
+    (localizableKey) => options[localizableKey],
+  ).filter((optionPropValue) => optionPropValue && isLocalizeKey(optionPropValue)) as LocalizeKey[];
+
+  // Get localized strings for the LocalizeKey prop values
+  const localizedPropValues = await localizationService.getLocalizedStrings({
+    localizeKeys: propValuesToLocalize,
+  });
+
+  // Reconnect the localized strings to the prop names via the LocalizeKeys
+  const localizedProps: Partial<T> = {};
+  Object.entries(localizedPropValues).forEach(([localizeKey, localizedString]) => {
+    const optionPropName = DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS.find(
+      (localizableKey) => options[localizableKey] === localizeKey,
+    );
+    if (optionPropName) localizedProps[optionPropName] = localizedString;
+  });
+
+  return { ...options, ...localizedProps };
+}
+
 // on the dialogService - see `dialog.service-model.ts` for JSDoc
 async function showDialog<DialogTabType extends DialogTabTypes>(
   dialogType: DialogTabType,
   options?: DialogTypes[DialogTabType]['options'],
 ): Promise<DialogTypes[DialogTabType]['responseType'] | undefined> {
   await initialize();
+
+  const optionsLocalized = await localizeDialogOptions(options);
 
   // Set up a DialogRequest
   let dialogId = newGuid();
@@ -170,7 +211,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
       {
         id: dialogId,
         tabType: dialogType,
-        data: { ...options, isDialog: true },
+        data: { ...optionsLocalized, isDialog: true },
       },
       {
         type: 'float',
