@@ -2,17 +2,17 @@ import { RadioGroup, Radio, Typography } from '@mui/material';
 import { Canon } from '@sillsdev/scripture';
 import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
-import './book-selection.component.scss';
+import './book-selector.component.scss';
 import { useDialogCallback } from '@renderer/hooks/papi-hooks';
 
-type BookSelectionProps = ChapterRangeSelectorProps & {
+type BookSelectorProps = ChapterRangeSelectorProps & {
   handleRadioChange: (newRadioValue: string) => void;
   currentBookName: string;
   selectedBookIds: string[];
   handleSelectBooks: (bookIds: string[]) => void;
 };
 
-export default function BookSelection({
+export default function BookSelector({
   handleRadioChange,
   currentBookName,
   selectedBookIds,
@@ -20,7 +20,7 @@ export default function BookSelection({
   chapterCount,
   handleSelectEndChapter,
   handleSelectStartChapter,
-}: BookSelectionProps) {
+}: BookSelectorProps) {
   const [radioValue, setRadioValue] = useState<string>('current book');
 
   const onRadioChange = (newRadioValue: string) => {
