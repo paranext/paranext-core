@@ -1,5 +1,5 @@
 {
-  "name": "hello-world",
+  "name": "helloWorld",
   "version": "0.0.1",
   "description": "Simple hello world extension for Platform.Bible",
   "author": "Paranext",
@@ -9,5 +9,6 @@
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",
   "projectSettings": "contributions/projectSettings.json",
+  "localizedStrings": "contributions/localizedStrings.json",
   "activationEvents": ["onCommand:helloWorld.helloWorld", "onCommand:helloWorld.helloException"]
 }

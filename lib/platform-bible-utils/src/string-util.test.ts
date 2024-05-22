@@ -16,6 +16,7 @@ import {
   startsWith,
   substring,
   toArray,
+  ordinalCompare,
 } from './string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At🦄';
@@ -252,6 +253,20 @@ describe('normalize', () => {
   test('normalize surrogate pairs string as its own form', () => {
     const result = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFD');
     expect(result).toEqual(NORMALIZE_SURROGATE_PAIRS);
+  });
+});
+
+describe('ordinalCompare', () => {
+  it('should return a negative number if string1 comes before string2', () => {
+    expect(ordinalCompare('🦄', '😉')).toBeLessThan(0);
+  });
+
+  it('should return a positive number if string1 comes after string2', () => {
+    expect(ordinalCompare('😉', '🦄')).toBeGreaterThan(0);
+  });
+
+  it('should return 0 if string1 is equal to string2', () => {
+    expect(ordinalCompare('🦄', '🦄')).toBe(0);
   });
 });
 

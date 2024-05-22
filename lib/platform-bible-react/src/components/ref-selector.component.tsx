@@ -71,7 +71,7 @@ function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
   const currentBookName = useMemo(() => getBookNameOptions()[scrRef.bookNum - 1], [scrRef.bookNum]);
 
   return (
-    <span id={id}>
+    <span id={id} className="pr-flex pr-place-items-center">
       <ComboBox
         title="Book"
         className="papi-ref-selector book"

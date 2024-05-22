@@ -63,23 +63,39 @@ import createRCDockTabFromTabInfo from './platform-dock-tab.component';
 import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './error-tab.component';
 
 /** Tab loader functions for each Platform tab type */
-const tabLoaderMap = new Map<TabType, TabLoader>([
-  [TAB_TYPE_ABOUT, loadAboutTab],
-  [TAB_TYPE_BUTTONS, loadButtonsTab],
-  [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
-  [TAB_TYPE_TEST, loadTestTab],
-  [TAB_TYPE_WEBVIEW, loadWebViewTab],
-  [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
-  [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
-  [TAB_TYPE_SETTINGS_DIALOG, loadSettingsDialog],
-  [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
-  [TAB_TYPE_BASIC_LIST, loadBasicListTab],
-  ...Object.entries(DIALOGS).map(
-    ([dialogTabType, dialogDefinition]) =>
-      // The default implementation of `loadDialog` uses `this`, so bind it to the definition
-      [dialogTabType, dialogDefinition.loadDialog.bind(dialogDefinition)] as const,
-  ),
-]);
+let tabLoaderMap: Map<TabType, TabLoader>;
+if (globalThis.isNoisyDevModeEnabled) {
+  tabLoaderMap = new Map<TabType, TabLoader>([
+    [TAB_TYPE_ABOUT, loadAboutTab],
+    [TAB_TYPE_BUTTONS, loadButtonsTab],
+    [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
+    [TAB_TYPE_TEST, loadTestTab],
+    [TAB_TYPE_WEBVIEW, loadWebViewTab],
+    [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
+    [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
+    [TAB_TYPE_SETTINGS_DIALOG, loadSettingsDialog],
+    [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
+    [TAB_TYPE_BASIC_LIST, loadBasicListTab],
+    ...Object.entries(DIALOGS).map(
+      ([dialogTabType, dialogDefinition]) =>
+        // The default implementation of `loadDialog` uses `this`, so bind it to the definition
+        [dialogTabType, dialogDefinition.loadDialog.bind(dialogDefinition)] as const,
+    ),
+  ]);
+} else {
+  tabLoaderMap = new Map<TabType, TabLoader>([
+    [TAB_TYPE_ABOUT, loadAboutTab],
+    [TAB_TYPE_BUTTONS, loadButtonsTab],
+    [TAB_TYPE_WEBVIEW, loadWebViewTab],
+    [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
+    [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
+    ...Object.entries(DIALOGS).map(
+      ([dialogTabType, dialogDefinition]) =>
+        // The default implementation of `loadDialog` uses `this`, so bind it to the definition
+        [dialogTabType, dialogDefinition.loadDialog.bind(dialogDefinition)] as const,
+    ),
+  ]);
+}
 
 /** Tab saver functions for each Platform tab type that wants to override the default */
 const tabSaverMap = new Map<TabType, TabSaver>([

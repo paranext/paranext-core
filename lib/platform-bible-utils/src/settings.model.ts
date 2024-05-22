@@ -401,7 +401,7 @@ const settingsDefs = {
  */
 // JSON schema types are weird, so we'll just be careful
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function removeJsonToTypeScriptTypesStuff(defs: any) {
+export function removeJsonToTypeScriptTypesStuff(defs: any) {
   if (!defs) return;
 
   // JSON schema types are weird, so we'll just be careful

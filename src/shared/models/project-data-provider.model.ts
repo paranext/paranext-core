@@ -24,7 +24,7 @@ export type ExtensionDataScope = {
 
 /**
  * `DataProviderDataTypes` that each project data provider **must** implement. They are assumed to
- * exist and are used by project storage interpreters and other data providers
+ * exist and are used by other data providers.
  *
  *     ---
  *
@@ -33,9 +33,6 @@ export type ExtensionDataScope = {
  * The `Setting` data type handles getting and setting project settings. All Project Data Providers
  * must implement these methods `getSetting` and `setSetting` as well as `resetSetting` in order to
  * properly support project settings.
- *
- * In most cases, the Project Data Provider only needs to pass the setting calls through to the
- * Project Storage Interpreter.
  *
  * Note: the `Setting` data type is not actually part of {@link MandatoryProjectDataTypes} because
  * the methods would not be able to create a generic type extending from `ProjectSettingNames` in
@@ -55,7 +52,24 @@ export type ExtensionDataScope = {
  * >;
  * ```
  *
- *     ---
+ * WARNING: Each Project Data Provider **must** fulfill the following requirements for its
+ * settings-related methods:
+ *
+ * - `getSetting`: if a project setting value is present for the key requested, return it. Otherwise,
+ *   you must call `papi.projectSettings.getDefault` to get the default value or throw if that call
+ *   throws. This functionality preserves the intended type of the setting and avoids returning
+ *   `undefined` unexpectedly.
+ * - `setSetting`: must call `papi.projectSettings.isValid` before setting the value and should return
+ *   false if the call returns `false` and throw if the call throws. This functionality preserves
+ *   the intended intended type of the setting and avoids allowing the setting to be set to the
+ *   wrong type.
+ * - `resetSetting`: deletes the value at the key and sends a setting update event. After this,
+ *   `getSetting` should again see the setting value is not present, call
+ *   `papi.projectSettings.getDefault`, and return the default value.
+ * - Note: see {@link WithProjectDataProviderEngineSettingMethods} for method signatures for these
+ *   three methods.
+ *
+ *   .---
  *
  * ### ExtensionData
  *
@@ -65,8 +79,6 @@ export type ExtensionDataScope = {
  *
  * Benefits of following this standard:
  *
- * - All project storage interpreters that support this `projectType` can use a standardized
- *   `ExtensionData` interface
  * - If an extension uses the `ExtensionData` endpoint for any project, it will likely use this
  *   standardized interface, so using this interface on your Project Data Provider data types
  *   enables your PDP to support generic extension data

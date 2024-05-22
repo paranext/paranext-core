@@ -246,6 +246,26 @@ export function normalize(string: string, form: 'NFC' | 'NFD' | 'NFKC' | 'NFKD' 
 }
 
 /**
+ * Compares two strings using an ordinal comparison approach based on the specified collation
+ * options. This function uses the built-in `localeCompare` method with the 'en' locale and the
+ * provided collation options to compare the strings.
+ *
+ * @param string1 The first string to compare.
+ * @param string2 The second string to compare.
+ * @param options Optional. The collation options used for comparison.
+ * @returns A number indicating the result of the comparison: - Negative value if string1 precedes
+ *   string2 in sorting order. - Zero if string1 and string2 are equivalent in sorting order. -
+ *   Positive value if string1 follows string2 in sorting order.
+ */
+export function ordinalCompare(
+  string1: string,
+  string2: string,
+  options?: Intl.CollatorOptions,
+): number {
+  return string1.localeCompare(string2, 'en', options);
+}
+
+/**
  * This function mirrors the `padEnd` function from the JavaScript Standard String object. It
  * handles Unicode code points instead of UTF-16 character codes.
  *

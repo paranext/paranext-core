@@ -8,6 +8,7 @@ import {
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
 import { ProcessType } from '@shared/global-this.model';
+import { isNoisyDevModeEnvVariableSet } from '@node/utils/util';
 
 // #region command-line arguments
 
@@ -18,6 +19,7 @@ const logLevel =
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   (getCommandLineArgument(COMMAND_LINE_ARGS.LogLevel) as LogLevel) ??
   (isPackaged ? 'error' : 'info');
+globalThis.isNoisyDevModeEnabled = isNoisyDevModeEnvVariableSet();
 
 // #endregion
 

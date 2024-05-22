@@ -49,6 +49,74 @@ export declare class AsyncVariable<T> {
 	/** Prevent any further updates to this variable */
 	private complete;
 }
+/** Enables language-sensitive string comparison. Wraps Intl.Collator */
+export declare class Collator {
+	private collator;
+	constructor(locales?: string | string[], options?: Intl.CollatorOptions);
+	/**
+	 * Compares two strings according to the sort order of this Collator object
+	 *
+	 * @param string1 String to compare
+	 * @param string2 String to compare
+	 * @returns A number indicating how string1 and string2 compare to each other according to the
+	 *   sort order of this Collator object. Negative value if string1 comes before string2. Positive
+	 *   value if string1 comes after string2. 0 if they are considered equal.
+	 */
+	compare(string1: string, string2: string): number;
+	/**
+	 * Returns a new object with properties reflecting the locale and collation options computed
+	 * during initialization of this collator object.
+	 *
+	 * @returns ResolvedCollatorOptions object
+	 */
+	resolvedOptions(): Intl.ResolvedCollatorOptions;
+}
+/** Enables language-sensitive data and time formatting. Wraps Intl.DateTimeFormat */
+export declare class DateTimeFormat {
+	private dateTimeFormatter;
+	constructor(locales?: string | string[], options?: Intl.DateTimeFormatOptions);
+	/**
+	 * Formats a date according to the locale and formatting option for this DateTimeFormat object
+	 *
+	 * @param date The date to format
+	 * @returns String representing the given date formatted according to the locale and formatting
+	 *   options of this DateTimeFormat object
+	 */
+	format(date: Date): string;
+	/**
+	 * Formats a date range in the most concise way based on the locales and options provided when
+	 * instantiating this DateTimeFormat object
+	 *
+	 * @param startDate Date object representing start of the date range
+	 * @param endDate Date object representing the end of the date range
+	 * @returns String representing the given date range formatted according to the locale and
+	 *   formatting options of this DateTimeFormat object
+	 */
+	formatRange(startDate: Date, endDate: Date): string;
+	/**
+	 * Returns an array of locale-specific tokens representing each part of the formatted date range
+	 * produced by this DateTimeFormat object
+	 *
+	 * @param startDate Date object representing start of the date range
+	 * @param endDate Date object representing the end of the date range
+	 * @returns Array of DateTimeRangeFormatPart objects
+	 */
+	formatRangeToParts(startDate: Date, endDate: Date): Intl.DateTimeRangeFormatPart[];
+	/**
+	 * Allows locale-aware formatting of strings produced by this DateTimeFormat object
+	 *
+	 * @param date The date to format
+	 * @returns Array of DateTimeFormatPart objects
+	 */
+	formatToParts(date: Date): Intl.DateTimeFormatPart[];
+	/**
+	 * Returns a new object with properties reflecting the locale and date and time formatting options
+	 * computed during initialization of this DateTimeFormat object
+	 *
+	 * @returns ResolvedDateTimeFormatOptions object
+	 */
+	resolvedOptions(): Intl.ResolvedDateTimeFormatOptions;
+}
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
 /**
@@ -221,9 +289,85 @@ export declare class DocumentCombiner {
 	 */
 	protected transformFinalOutputBeforeValidation(finalOutput: JsonDocumentLike): JsonDocumentLike;
 }
+/**
+ * Class that allows calling asynchronous functions multiple times at once while only running one at
+ * a time.
+ *
+ * @example
+ *
+ * ```typescript
+ * const mutex = new Mutex();
+ *
+ * mutex.runExclusive(async () => {
+ *   // Do some asynchronous stuff
+ *   console.log('These run one-at-a-time');
+ * });
+ *
+ * mutex.runExclusive(async () => {
+ *   // Do some asynchronous stuff
+ *   console.log('These run one-at-a-time');
+ * });
+ * ```
+ *
+ * See [`async-mutex`](https://www.npmjs.com/package/async-mutex) for more information.
+ */
+export declare class Mutex extends AsyncMutex {
+}
+/** Map of {@link Mutex}es that automatically (lazily) generates a new {@link Mutex} for any new key */
+export declare class MutexMap {
+	private mutexesByID;
+	get(mutexID: string): Mutex;
+}
 export declare class NonValidatingDocumentCombiner extends DocumentCombiner {
 	constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions);
 	get output(): JsonDocumentLike | undefined;
+}
+/** Enables language-sensitive number formatting. Wraps Intl.NumberFormat */
+export declare class NumberFormat {
+	private numberFormatter;
+	constructor(locales?: string | string[], options?: Intl.NumberFormatOptions);
+	/**
+	 * Formats a number according to the locale and formatting options of this NumberFormat object
+	 *
+	 * @param value Number or BigInt to format
+	 * @returns String representing the given number formatted according to the locale and formatting
+	 *   options of this NumberFormat object
+	 */
+	format(value: number | bigint): string;
+	/**
+	 * Formats a range of numbers according to the locale and formatting options of this NumberFormat
+	 * object
+	 *
+	 * @param startRange Number or bigint representing the start of the range
+	 * @param endRange Number or bigint representing the end of the range
+	 * @returns String representing the given range of numbers formatted according to the locale and
+	 *   formatting options of this NumberFormat object
+	 */
+	formatRange(startRange: number | bigint, endRange: number | bigint): string;
+	/**
+	 * Returns an array of objects containing the locale-specific tokens from which it is possible to
+	 * build custom strings while preserving the locale-specific parts.
+	 *
+	 * @param startRange Number or bigint representing start of the range
+	 * @param endRange Number or bigint representing end of the range
+	 * @returns Array of NumberRangeFormatPart objects containing the formatted range of numbers in
+	 *   parts
+	 */
+	formatRangeToParts(startRange: number | bigint, endRange: number | bigint): Intl.NumberRangeFormatPart[];
+	/**
+	 * Allows locale-aware formatting of strings produced by this NumberFormat object
+	 *
+	 * @param value Number or bigint to format
+	 * @returns Array of NumberFormatPart objects containing the formatted number in parts
+	 */
+	formatToParts(value: number | bigint): Intl.NumberFormatPart[];
+	/**
+	 * Returns a new object with properties reflecting the locale and number formatting options
+	 * computed during initialization of this NumberFormat object
+	 *
+	 * @returns ResolvedNumberFormatOptions object
+	 */
+	resolvedOptions(): Intl.ResolvedNumberFormatOptions;
 }
 /** Require a `dispose` function */
 export interface Dispose {
@@ -247,24 +391,6 @@ export interface CannotHaveOnDidDispose {
 }
 /** Allow onDidDispose to exist on the type if it was previously disallowed by CannotHaveOnDidDispose */
 export type CanHaveOnDidDispose<T extends CannotHaveOnDidDispose> = Omit<T, "onDidDispose">;
-/** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
-export declare class UnsubscriberAsyncList {
-	private name;
-	readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
-	constructor(name?: string);
-	/**
-	 * Add unsubscribers to the list. Note that duplicates are not added twice.
-	 *
-	 * @param unsubscribers - Objects that were returned from a registration process.
-	 */
-	add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
-	/**
-	 * Run all unsubscribers added to this list and then clear the list.
-	 *
-	 * @returns `true` if all unsubscribers succeeded, `false` otherwise.
-	 */
-	runAllUnsubscribers(): Promise<boolean>;
-}
 /**
  * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
  * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
@@ -318,34 +444,23 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 */
 	protected disposeFn(): Promise<boolean>;
 }
-/**
- * Class that allows calling asynchronous functions multiple times at once while only running one at
- * a time.
- *
- * @example
- *
- * ```typescript
- * const mutex = new Mutex();
- *
- * mutex.runExclusive(async () => {
- *   // Do some asynchronous stuff
- *   console.log('These run one-at-a-time');
- * });
- *
- * mutex.runExclusive(async () => {
- *   // Do some asynchronous stuff
- *   console.log('These run one-at-a-time');
- * });
- * ```
- *
- * See [`async-mutex`](https://www.npmjs.com/package/async-mutex) for more information.
- */
-export declare class Mutex extends AsyncMutex {
-}
-/** Map of {@link Mutex}es that automatically (lazily) generates a new {@link Mutex} for any new key */
-export declare class MutexMap {
-	private mutexesByID;
-	get(mutexID: string): Mutex;
+/** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
+export declare class UnsubscriberAsyncList {
+	private name;
+	readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
+	constructor(name?: string);
+	/**
+	 * Add unsubscribers to the list. Note that duplicates are not added twice.
+	 *
+	 * @param unsubscribers - Objects that were returned from a registration process.
+	 */
+	add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
+	/**
+	 * Run all unsubscribers added to this list and then clear the list.
+	 *
+	 * @returns `true` if all unsubscribers succeeded, `false` otherwise.
+	 */
+	runAllUnsubscribers(): Promise<boolean>;
 }
 export interface ScriptureReference {
 	bookNum: number;
@@ -370,12 +485,13 @@ export declare const offsetVerse: (scrRef: ScriptureReference, offset: number) =
  *
  * Convert book number to a localized Id (a short description of the book). This should be used
  * whenever a book ID (short code) is shown to the user. It is primarily needed for people who do
- * not read Roman script well /// and need to have books identified in a alternate script (e.g.
- * Chinese or Russian)
+ * not read Roman script well and need to have books identified in a alternate script (e.g. Chinese
+ * or Russian)
  *
  * @param bookNumber
- * @param localizationLanguage
- * @param getLocalizedString
+ * @param localizationLanguage In BCP 47 format
+ * @param getLocalizedString Function that provides the localized versions of the book ids and names
+ *   asynchronously.
  * @returns
  */
 export declare function getLocalizedIdFromBookNumber(bookNumber: number, localizationLanguage: string, getLocalizedString: (item: {
@@ -588,6 +704,19 @@ export declare function stringLength(string: string): number;
  */
 export declare function normalize(string: string, form: "NFC" | "NFD" | "NFKC" | "NFKD" | "none"): string;
 /**
+ * Compares two strings using an ordinal comparison approach based on the specified collation
+ * options. This function uses the built-in `localeCompare` method with the 'en' locale and the
+ * provided collation options to compare the strings.
+ *
+ * @param string1 The first string to compare.
+ * @param string2 The second string to compare.
+ * @param options Optional. The collation options used for comparison.
+ * @returns A number indicating the result of the comparison: - Negative value if string1 precedes
+ *   string2 in sorting order. - Zero if string1 and string2 are equivalent in sorting order. -
+ *   Positive value if string1 follows string2 in sorting order.
+ */
+export declare function ordinalCompare(string1: string, string2: string, options?: Intl.CollatorOptions): number;
+/**
  * This function mirrors the `padEnd` function from the JavaScript Standard String object. It
  * handles Unicode code points instead of UTF-16 character codes.
  *
@@ -708,6 +837,32 @@ export declare function toArray(string: string): string[];
  */
 export function deepEqual(a: unknown, b: unknown): boolean;
 /**
+ * Check if one object is a subset of the other object. "Subset" means that all properties of one
+ * object are present in the other object, and if they are present that all values of those
+ * properties are deeply equal. Sub-objects are also checked to be subsets of the corresponding
+ * sub-object in the other object.
+ *
+ * @example ObjB is a subset of objA given these objects:
+ *
+ * ```ts
+ * objA = { name: 'Alice', age: 30, address: { city: 'Seattle', state: 'Washington' } };
+ * objB = { name: 'Alice', address: { city: 'Seattle' } };
+ * ```
+ *
+ * It is important to note that only arrays of primitives (i.e., booleans, numbers, strings) are
+ * supported. In particular, objects in arrays will not be checked for deep equality. Also, presence
+ * in an array is all this checks, not the number of times that an item appears in an array. `[1,
+ * 1]` is a subset of `[1]`.
+ *
+ * @param objectWithAllProperties Object to be checked if it is a superset of
+ *   `objectWithPartialProperties`
+ * @param objectWithPartialProperties Object to be checked if it is a subset of
+ *   `objectWithAllProperties`
+ * @returns True if `objectWithAllProperties` contains all the properties of
+ *   `objectWithPartialProperties` and all values of those properties are deeply equal
+ */
+export function isSubset(objectWithAllProperties: unknown, objectWithPartialProperties: unknown): boolean;
+/**
  * Converts a JavaScript value to a JSON string, changing `undefined` properties in the JavaScript
  * object to `null` properties in the JSON string.
  *
@@ -771,6 +926,13 @@ export declare function isSerializable(value: unknown): boolean;
  * @returns HTML-encoded string
  */
 export declare const htmlEncode: (str: string) => string;
+/**
+ * Retrieves the current locale of the user's environment.
+ *
+ * @returns A string representing the current locale. If the locale cannot be determined, the
+ *   function returns an empty string.
+ */
+export function getCurrentLocale(): string;
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;
 /** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
@@ -1143,6 +1305,109 @@ export declare const menuDocumentSchema: {
 				};
 			};
 			additionalProperties: boolean;
+		};
+	};
+};
+/** Localized string value associated with this key */
+export type LocalizedStringValue = string;
+/** The data an extension provides to inform Platform.Bible of the localized strings it provides. */
+export interface LocalizedStringDataContribution {
+	[k: string]: unknown;
+	metadata?: StringsMetadata;
+	localizedStrings?: {
+		[k: string]: LanguageStrings;
+	};
+}
+/**
+ * Map whose keys are localized string keys and whose values provide additional non-locale-specific
+ * information about the localized string key
+ */
+export interface StringsMetadata {
+	[k: LocalizeKey]: StringMetadata;
+}
+/** Additional non-locale-specific information about a localized string key */
+export interface StringMetadata {
+	[k: string]: unknown;
+	/**
+	 * Localized string key from which to get this value if one does not exist in the specified
+	 * language. If a new key/value pair needs to be made to replace an existing one, this could help
+	 * smooth over the transition if the meanings are close enough
+	 */
+	fallbackKey?: LocalizeKey;
+	/**
+	 * Additional information provided by developers in English to help the translator to know how to
+	 * translate this localized string accurately
+	 */
+	notes?: string;
+}
+/**
+ * Map whose keys are localized string keys and whose values provide information about how to
+ * localize strings for the localized string key
+ */
+export interface LanguageStrings {
+	[k: LocalizeKey]: LocalizedStringValue;
+}
+/** JSON schema object that aligns with the LocalizedStringDataContribution type */
+export declare const localizedStringsDocumentSchema: {
+	$schema: string;
+	title: string;
+	description: string;
+	type: string;
+	properties: {
+		metadata: {
+			$ref: string;
+		};
+		localizedStrings: {
+			type: string;
+			additionalProperties: {
+				$ref: string;
+			};
+		};
+	};
+	$defs: {
+		languageStrings: {
+			description: string;
+			type: string;
+			patternProperties: {
+				"^%[\\w\\-\\.]+%$": {
+					$ref: string;
+				};
+			};
+			additionalProperties: boolean;
+		};
+		localizedStringValue: {
+			description: string;
+			type: string;
+		};
+		stringsMetadata: {
+			description: string;
+			type: string;
+			patternProperties: {
+				"^%[\\w\\-\\.]+%$": {
+					$ref: string;
+				};
+			};
+			additionalProperties: boolean;
+		};
+		stringMetadata: {
+			description: string;
+			type: string;
+			properties: {
+				fallbackKey: {
+					description: string;
+					$ref: string;
+				};
+				notes: {
+					description: string;
+					type: string;
+				};
+			};
+		};
+		localizeKey: {
+			description: string;
+			type: string;
+			pattern: string;
+			tsType: string;
 		};
 	};
 };

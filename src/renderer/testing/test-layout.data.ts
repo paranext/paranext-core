@@ -16,105 +16,122 @@ export const FIRST_TAB_ID = 'About';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
-const testLayout: LayoutBase = {
-  dockbox: {
-    mode: 'horizontal',
-    children: [
-      {
-        mode: 'vertical',
-        size: 250,
+const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
+  ? {
+      dockbox: {
+        mode: 'horizontal',
         children: [
           {
-            tabs: [
-              { id: 'About', tabType: TAB_TYPE_ABOUT },
-              { id: 'Test Tab Two', tabType: TAB_TYPE_TEST },
-              { id: 'Test Tab One', tabType: TAB_TYPE_TEST },
+            mode: 'vertical',
+            size: 250,
+            children: [
               {
-                id: 'Lorem Ipsum',
-                tabType: TAB_TYPE_TEST,
-                data: { content: LOREM_IPSUM },
+                tabs: [
+                  { id: 'About', tabType: TAB_TYPE_ABOUT },
+                  { id: 'Test Tab Two', tabType: TAB_TYPE_TEST },
+                  { id: 'Test Tab One', tabType: TAB_TYPE_TEST },
+                  {
+                    id: 'Lorem Ipsum',
+                    tabType: TAB_TYPE_TEST,
+                    data: { content: LOREM_IPSUM },
+                  },
+                ] as SavedTabInfo[],
               },
-            ] as SavedTabInfo[],
+            ],
+          },
+          {
+            tabs: [{ id: 'Test Buttons', tabType: TAB_TYPE_BUTTONS }] as SavedTabInfo[],
+          },
+          {
+            tabs: [{ id: 'Basic List', tabType: TAB_TYPE_BASIC_LIST }] as SavedTabInfo[],
           },
         ],
       },
-      {
-        tabs: [{ id: 'Test Buttons', tabType: TAB_TYPE_BUTTONS }] as SavedTabInfo[],
-      },
-      {
-        tabs: [{ id: 'Basic List', tabType: TAB_TYPE_BASIC_LIST }] as SavedTabInfo[],
-      },
-    ],
-  },
-  floatbox: {
-    mode: 'float',
-    children: [
-      // {
-      //   tabs: [
-      //     { id: 'Test Quick Verse Heresy', tabType: TAB_TYPE_QUICK_VERSE_HERESY },
-      //   ] as SavedTabInfo[],
-      //   x: 300,
-      //   y: 170,
-      //   w: 320,
-      //   h: 190,
-      // },
-      // {
-      //   tabs: [
-      //     {
-      //       id: 'Download/Update Project Dialog',
-      //       tabType: TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
-      //     },
-      //   ] as SavedTabInfo[],
-      //   x: 350,
-      //   y: 170,
-      //   w: 320,
-      //   h: 190,
-      // },
-      // {
-      //   tabs: [
-      //     {
-      //       id: 'Open Multiple Projects Dialog',
-      //       tabType: TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG,
-      //     },
-      //   ] as SavedTabInfo[],
-      //   x: 400,
-      //   y: 170,
-      //   w: 320,
-      //   h: 190,
-      // },
-      // {
-      //   tabs: [
-      //     {
-      //       id: 'Extension Toggle',
-      //       tabType: TAB_TYPE_EXTENSION_MANAGER,
-      //     },
-      //   ] as SavedTabInfo[],
-      //   x: 300,
-      //   y: 170,
-      //   w: 320,
-      //   h: 190,
-      // },
-      {
-        tabs: [{ id: 'Settings', tabType: TAB_TYPE_SETTINGS_DIALOG }] as SavedTabInfo[],
-        x: 300,
-        y: 170,
-        w: 600,
-        h: 400,
-      },
-      {
-        tabs: [
+      floatbox: {
+        mode: 'float',
+        children: [
+          // {
+          //   tabs: [
+          //     { id: 'Test Quick Verse Heresy', tabType: TAB_TYPE_QUICK_VERSE_HERESY },
+          //   ] as SavedTabInfo[],
+          //   x: 300,
+          //   y: 170,
+          //   w: 320,
+          //   h: 190,
+          // },
+          // {
+          //   tabs: [
+          //     {
+          //       id: 'Download/Update Project Dialog',
+          //       tabType: TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
+          //     },
+          //   ] as SavedTabInfo[],
+          //   x: 350,
+          //   y: 170,
+          //   w: 320,
+          //   h: 190,
+          // },
+          // {
+          //   tabs: [
+          //     {
+          //       id: 'Open Multiple Projects Dialog',
+          //       tabType: TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG,
+          //     },
+          //   ] as SavedTabInfo[],
+          //   x: 400,
+          //   y: 170,
+          //   w: 320,
+          //   h: 190,
+          // },
+          // {
+          //   tabs: [
+          //     {
+          //       id: 'Extension Toggle',
+          //       tabType: TAB_TYPE_EXTENSION_MANAGER,
+          //     },
+          //   ] as SavedTabInfo[],
+          //   x: 300,
+          //   y: 170,
+          //   w: 320,
+          //   h: 190,
+          // },
           {
-            id: 'Run Basic Checks',
-            tabType: TAB_TYPE_RUN_BASIC_CHECKS,
+            tabs: [{ id: 'Settings', tabType: TAB_TYPE_SETTINGS_DIALOG }] as SavedTabInfo[],
+            x: 300,
+            y: 170,
+            w: 600,
+            h: 400,
           },
-        ] as SavedTabInfo[],
-        x: 300,
-        y: 170,
-        w: 320,
-        h: 190,
+          {
+            tabs: [
+              {
+                id: 'Run Basic Checks',
+                tabType: TAB_TYPE_RUN_BASIC_CHECKS,
+              },
+            ] as SavedTabInfo[],
+            x: 300,
+            y: 170,
+            w: 320,
+            h: 190,
+          },
+        ],
       },
-    ],
-  },
-};
+    }
+  : {
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          {
+            mode: 'vertical',
+            size: 250,
+            children: [
+              {
+                tabs: [{ id: 'About', tabType: TAB_TYPE_ABOUT }] as SavedTabInfo[],
+              },
+            ],
+          },
+        ],
+      },
+    };
 /* eslint-enable */
 export default testLayout;

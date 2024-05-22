@@ -18,6 +18,13 @@ export function fetchExtensions(): Extension[] {
       iconFilePath: undefined,
     },
     {
+      name: 'Scripture Editor',
+      description: 'Edit Scripture resources',
+      hasUpdateAvailable: false,
+      isInstalled: true,
+      iconFilePath: undefined,
+    },
+    {
       name: 'Resource Viewer',
       description: 'View Scripture resources',
       hasUpdateAvailable: false,
@@ -57,7 +64,7 @@ export function fetchExtensions(): Extension[] {
       description: 'Example Bundled Extension',
       hasUpdateAvailable: false,
       isInstalled: false,
-      iconFilePath: 'papi-extension://quick-verse/assets/letter-q.png',
+      iconFilePath: 'papi-extension://quickVerse/assets/letter-q.png',
     },
   ];
 }

@@ -32,6 +32,7 @@ import LogError from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 import { menuDocumentCombiner } from '@extension-host/services/menu-data.service-host';
 import menuDataService from '@shared/services/menu-data.service';
+import { localizedStringsDocumentCombiner } from '@extension-host/services/localization.service-host';
 import { settingsDocumentCombiner } from '@extension-host/services/settings.service-host';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import { projectSettingsDocumentCombiner } from './project-settings.service-host';
@@ -42,6 +43,15 @@ import { projectSettingsDocumentCombiner } from './project-settings.service-host
  */
 // eslint-disable-next-line camelcase, no-underscore-dangle
 declare const __non_webpack_require__: typeof require;
+
+/** These are names of extensions that should only be loaded if "noisy dev mode" is enabled */
+const TEST_EXTENSION_NAMES = [
+  'c-sharp-provider-test',
+  'evil',
+  'helloSomeone',
+  'helloWorld',
+  'quickVerse',
+];
 
 /**
  * Information about an extension and extra metadata about it that we generate
@@ -382,6 +392,8 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
         );
         return false;
       }
+      if (!globalThis.isNoisyDevModeEnabled && TEST_EXTENSION_NAMES.includes(settled.value.name))
+        return false;
       return true;
     })
     // Assert the fulfilled type since the unfulfilled ones have been filtered out.
@@ -762,9 +774,27 @@ async function resyncContributions(
   menuDocumentCombiner.deleteAllContributions();
   settingsDocumentCombiner.deleteAllContributions();
   projectSettingsDocumentCombiner.deleteAllContributions();
+  localizedStringsDocumentCombiner.deleteAllContributions();
 
   await Promise.all(
     extensionsToAdd.map(async (extension) => {
+      if (extension.localizedStrings) {
+        try {
+          // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
+          const localizedStringsJson = await nodeFS.readFileText(
+            joinUriPaths(extension.dirUri, extension.localizedStrings),
+          );
+          const localizedStringsDocument = JSON.parse(localizedStringsJson);
+          localizedStringsDocumentCombiner.addOrUpdateContribution(
+            extension.name,
+            localizedStringsDocument,
+          );
+        } catch (error) {
+          logger.warn(
+            `Could not add localized strings contribution for ${extension.name}: ${error}`,
+          );
+        }
+      }
       if (extension.menus) {
         try {
           // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir

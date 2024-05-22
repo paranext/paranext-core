@@ -1,12 +1,12 @@
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { filterProjectsMetadata } from '@shared/services/project-lookup.service';
-import { ProjectMetadataFilterOptions } from './project-lookup.service-model';
+import { ProjectMetadataFilterOptions } from '../models/project-lookup.service-model';
 
 describe('filterProjectsMetadata', () => {
   const projectsMetadata: ProjectMetadata[] = [
-    { id: 'asdf', name: 'fdsa', projectType: 'helloWorld', storageType: 'qwer' },
-    { id: 'asdfg', name: 'fdsag', projectType: 'ParatextStandard', storageType: 'qwert' },
-    { id: 'asdfgh', name: 'fdsagh', projectType: 'platform.placeholder', storageType: 'qwerty' },
+    { id: 'asdf', name: 'fdsa', projectType: 'helloWorld' },
+    { id: 'asdfg', name: 'fdsag', projectType: 'ParatextStandard' },
+    { id: 'asdfgh', name: 'fdsagh', projectType: 'platform.placeholder' },
   ];
 
   test('should return a shallow clone if there are no filters', () => {

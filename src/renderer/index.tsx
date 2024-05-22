@@ -15,7 +15,7 @@ window.addEventListener('error', (errorEvent: ErrorEvent) => {
   logger.error(`Unhandled error in renderer from ${filename}:${lineno}:${colno}, '${error}'`);
 });
 
-logger.info('Starting renderer');
+logger.info(`Starting renderer${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`);
 
 // This is a little different than Promise.all in that the error message will have all the reasons
 // that all promises were rejected (if they didn't resolve).

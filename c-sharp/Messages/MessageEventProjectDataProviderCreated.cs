@@ -23,8 +23,7 @@ public sealed class MessageEventProjectDataProviderCreated
         string id,
         string[] functions,
         string projectID,
-        string projectType,
-        string projectStorageInterpreterId
+        string projectType
     )
         : base(
             Messages.EventType.OBJECT_CREATE,
@@ -37,7 +36,6 @@ public sealed class MessageEventProjectDataProviderCreated
                 {
                     ProjectId = projectID,
                     ProjectType = projectType,
-                    ProjectStorageInterpreterId = projectStorageInterpreterId
                 }
             }
         ) { }
@@ -52,7 +50,7 @@ public sealed record MessageEventProjectDataProviderCreatedContents
 
     public override string ToString()
     {
-        return $"Id = {Id}, ObjectType = {ObjectType}, Functions = {(Functions != null ? string.Join(',', Functions) : "[null]")}, ProjectID = {Attributes?.ProjectId}, ProjectType = {Attributes?.ProjectType}, ProjectStorageInterpreterId = {Attributes?.ProjectStorageInterpreterId}";
+        return $"Id = {Id}, ObjectType = {ObjectType}, Functions = {(Functions != null ? string.Join(',', Functions) : "[null]")}, ProjectID = {Attributes?.ProjectId}, ProjectType = {Attributes?.ProjectType}";
     }
 }
 
@@ -60,5 +58,4 @@ public sealed record ProjectDataProviderAttributes
 {
     public string? ProjectId { get; set; }
     public string? ProjectType { get; set; }
-    public string? ProjectStorageInterpreterId { get; set; }
 }

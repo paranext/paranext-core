@@ -29,7 +29,7 @@ public sealed class MessageEventProjectDataProviderFactoryCreated
             new MessageEventProjectDataProviderFactoryCreatedContents
             {
                 Id = id,
-                ObjectType = NetworkObjectType.PROJECT_DATA_PROVIDER,
+                ObjectType = NetworkObjectType.PROJECT_DATA_PROVIDER_FACTORY,
                 Functions = functions,
                 Attributes = new ProjectDataProviderFactoryAttributes { ProjectType = projectType }
             }

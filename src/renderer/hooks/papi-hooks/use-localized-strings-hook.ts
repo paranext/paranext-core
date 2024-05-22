@@ -5,6 +5,7 @@ import {
 } from '@shared/services/localization.service-model';
 import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
 import { useMemo } from 'react';
+import { LocalizeKey } from 'platform-bible-utils';
 import useData from './use-data.hook';
 
 /**
@@ -28,7 +29,7 @@ import useData from './use-data.hook';
  *       state on the papi, if any
  */
 const useLocalizedStrings = (
-  localizationKeys: string[],
+  localizationKeys: LocalizeKey[],
   localizationLocales?: string[],
   subscriberOptions?: DataProviderSubscriberOptions,
 ): [localizedStrings: LocalizationData, isLoading: boolean] => {

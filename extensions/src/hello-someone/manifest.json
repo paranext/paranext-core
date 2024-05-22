@@ -1,5 +1,5 @@
 {
-  "name": "hello-someone",
+  "name": "helloSomeone",
   "version": "0.0.1",
   "description": "Simple hello someone extension for Platform.Bible",
   "author": "Paranext",
@@ -9,8 +9,6 @@
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",
   "projectSettings": "contributions/projectSettings.json",
-  "activationEvents": [
-    "onCommand:helloSomeone.helloSomeone",
-    "onCommand:helloSomeone.echoSomeoneRenderer"
-  ]
+  "localizedStrings": "contributions/localizedStrings.json",
+  "activationEvents": ["onCommand:helloSomeone.helloSomeone"]
 }

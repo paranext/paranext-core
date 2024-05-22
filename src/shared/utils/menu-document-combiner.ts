@@ -18,7 +18,7 @@ import {
   DeepPartial,
   Localized,
   startsWith,
-  substring,
+  LocalizeKey,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import localizationService from '@shared/services/localization.service';
@@ -33,11 +33,6 @@ const validate = ajv.compile(menuDocumentSchema);
 function performSchemaValidation(document: JsonDocumentLike, docType: string): void {
   if (!validate(document))
     throw new Error(`Invalid ${docType} menu document: ${ajv.errorsText(validate.errors)}`);
-}
-
-/** Remove '%' from the beginning and ending of the input string */
-function removePercentSigns(localizeKey: string): string {
-  return substring(localizeKey, 1, localizeKey.length - 1);
 }
 
 function checkNewColumns(
@@ -156,13 +151,15 @@ function checkMenuItemsForDuplicateOrdering(menuItems: MenuItemBase[] | undefine
 
 async function localizeColumns(columns: Localized<ColumnsWithHeaders> | undefined) {
   if (!columns) return;
-  let strings: string[] = [];
+  let strings: LocalizeKey[] = [];
   Object.getOwnPropertyNames(columns).forEach((columnName: string) => {
     // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const column = columns[columnName as ReferencedItem];
     if (!!column && typeof column === 'object')
-      strings = strings.concat([removePercentSigns(column.label)]);
+      // We are changing the type from LocalizeKey to the localized string here
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      strings = strings.concat([column.label as LocalizeKey]);
   });
   if (strings.length <= 0) return;
 
@@ -172,26 +169,40 @@ async function localizeColumns(columns: Localized<ColumnsWithHeaders> | undefine
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const column = columns[columnName as ReferencedItem];
     if (!!column && typeof column === 'object')
-      column.label = newStrings[removePercentSigns(column.label)];
+      // We are changing the type from LocalizeKey to the localized string here
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      column.label = newStrings[column.label as LocalizeKey];
   });
 }
 
 async function localizeMenuItems(menuItems: Localized<MenuItemBase>[] | undefined) {
   if (!menuItems) return;
-  let strings: string[] = [];
+  let strings: LocalizeKey[] = [];
   menuItems.forEach((menuItem) => {
-    strings = strings.concat([removePercentSigns(menuItem.label)]);
-    if (menuItem.tooltip) strings = strings.concat([removePercentSigns(menuItem.tooltip)]);
-    if (menuItem.searchTerms) strings = strings.concat([removePercentSigns(menuItem.searchTerms)]);
+    // We are changing the type from LocalizeKey to the localized string here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    strings = strings.concat([menuItem.label as LocalizeKey]);
+    // We are changing the type from LocalizeKey to the localized string here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (menuItem.tooltip) strings = strings.concat([menuItem.tooltip as LocalizeKey]);
+    // We are changing the type from LocalizeKey to the localized string here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (menuItem.searchTerms) strings = strings.concat([menuItem.searchTerms as LocalizeKey]);
   });
   if (strings.length <= 0) return;
 
   const newStrings = await localizationService.getLocalizedStrings({ localizeKeys: strings });
   menuItems.forEach((menuItem) => {
-    menuItem.label = newStrings[removePercentSigns(menuItem.label)];
-    if (menuItem.tooltip) menuItem.tooltip = newStrings[removePercentSigns(menuItem.tooltip)];
+    // We are changing the type from LocalizeKey to the localized string here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    menuItem.label = newStrings[menuItem.label as LocalizeKey];
+    // We are changing the type from LocalizeKey to the localized string here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (menuItem.tooltip) menuItem.tooltip = newStrings[menuItem.tooltip as LocalizeKey];
     if (menuItem.searchTerms)
-      menuItem.searchTerms = newStrings[removePercentSigns(menuItem.searchTerms)];
+      // We are changing the type from LocalizeKey to the localized string here
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      menuItem.searchTerms = newStrings[menuItem.searchTerms as LocalizeKey];
   });
 }
 

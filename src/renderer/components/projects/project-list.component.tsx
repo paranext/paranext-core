@@ -34,7 +34,6 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 1',
       isDownloadable: true,
       isDownloaded: false,
-      storageType: 'test',
       projectType: 'test' as ProjectTypes,
     },
     {
@@ -43,7 +42,6 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 2',
       isDownloadable: false,
       isDownloaded: true,
-      storageType: 'test',
       projectType: 'test' as ProjectTypes,
     },
     {
@@ -52,7 +50,6 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 3',
       isDownloadable: true,
       isDownloaded: false,
-      storageType: 'test',
       projectType: 'test' as ProjectTypes,
     },
     {
@@ -61,7 +58,6 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 4',
       isDownloadable: false,
       isDownloaded: false,
-      storageType: 'test',
       projectType: 'test' as ProjectTypes,
     },
     {
@@ -70,7 +66,6 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 5',
       isDownloadable: false,
       isDownloaded: true,
-      storageType: 'test',
       projectType: 'test' as ProjectTypes,
     },
   ];

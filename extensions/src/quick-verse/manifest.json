@@ -1,5 +1,5 @@
 {
-  "name": "quick-verse",
+  "name": "quickVerse",
   "version": "0.0.1",
   "description": "Simple quick verse extension for Platform.Bible",
   "author": "Paranext",
@@ -9,5 +9,6 @@
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",
   "projectSettings": "contributions/projectSettings.json",
+  "localizedStrings": "contributions/localizedStrings.json",
   "activationEvents": []
 }

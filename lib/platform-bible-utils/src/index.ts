@@ -1,11 +1,14 @@
 // Classes
 export { default as AsyncVariable } from './async-variable';
+export { default as Collator } from './intl-collator';
+export { default as DateTimeFormat } from './intl-date-time-format';
 export { default as DocumentCombiner } from './document-combiner';
-export { default as NonValidatingDocumentCombiner } from './non-validating-document-combiner';
-export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
-export { default as PlatformEventEmitter } from './platform-event-emitter.model';
 export { default as Mutex } from './mutex';
 export { default as MutexMap } from './mutex-map';
+export { default as NonValidatingDocumentCombiner } from './non-validating-document-combiner';
+export { default as NumberFormat } from './intl-number-format';
+export { default as PlatformEventEmitter } from './platform-event-emitter.model';
+export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 
 // Consts
 export {
@@ -51,9 +54,12 @@ export {
   startsWith,
   substring,
   toArray,
+  ordinalCompare,
 } from './string-util';
 export { default as deepEqual } from './equality-checking';
+export { default as isSubset } from './subset-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
+export { default as getCurrentLocale } from './intl-util';
 
 // Types
 export type { DeepPartial, ReplaceType } from './util';
@@ -67,6 +73,14 @@ export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './
 export type { ScriptureReference, BookInfo } from './scripture.model';
 export type { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
 export type { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
+export type {
+  LanguageStrings,
+  LocalizedStringDataContribution,
+  LocalizedStringValue,
+  StringMetadata,
+  StringsMetadata,
+} from './localized-strings.model';
+export { localizedStringsDocumentSchema } from './localized-strings.model';
 export type {
   LocalizeKey,
   ReferencedItem,
