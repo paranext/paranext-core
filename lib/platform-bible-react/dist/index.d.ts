@@ -159,8 +159,8 @@ export type ButtonProps = React$1.PropsWithChildren<{
 /**
  * Button a user can click to do something
  *
- * Thanks to MUI for heavy inspiration and documentation
- * https://mui.com/material-ui/getting-started/overview/
+ * Thanks to Shadcn for heavy inspiration and documentation
+ * https://ui.shadcn.com/docs/components/button
  */
 export declare function Button({ id, isDisabled, className, onClick, onContextMenu, children, }: ButtonProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
@@ -509,10 +509,8 @@ export type SearchBarProps = {
 	onSearch: (searchQuery: string) => void;
 	/** Optional string that appears in the search bar without a search string */
 	placeholder?: string;
-	/** Optional boolean to set the input base to full width */
-	isFullWidth?: boolean;
 };
-export function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ onSearch, placeholder }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SliderProps = {
 	/** Optional unique identifier */
 	id?: string;
@@ -898,12 +896,6 @@ export interface DataTableProps<TData, TValue> {
 }
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 export type TextFieldProps = {
-	/**
-	 * The variant to use.
-	 *
-	 * @default 'outlined'
-	 */
-	variant?: "outlined" | "filled";
 	/** Optional unique identifier */
 	id?: string;
 	/**
@@ -918,12 +910,6 @@ export type TextFieldProps = {
 	 * @default false
 	 */
 	hasError?: boolean;
-	/**
-	 * If `true`, the input will take up the full width of its container.
-	 *
-	 * @default false
-	 */
-	isFullWidth?: boolean;
 	/** Text that gives the user instructions on what contents the TextField expects */
 	helperText?: string;
 	/** The title of the TextField */
@@ -939,9 +925,9 @@ export type TextFieldProps = {
 	/** Additional css classes to help with unique styling of the text field */
 	className?: string;
 	/** Starting value for the text field if it is not controlled */
-	defaultValue?: unknown;
+	defaultValue?: string | number;
 	/** Value of the text field if controlled */
-	value?: unknown;
+	value?: string | number;
 	/** Triggers when content of textfield is changed */
 	onChange?: React$1.ChangeEventHandler<HTMLInputElement>;
 	/** Triggers when textfield gets focus */
@@ -952,10 +938,10 @@ export type TextFieldProps = {
 /**
  * Text input field
  *
- * Thanks to MUI for heavy inspiration and documentation
- * https://mui.com/material-ui/getting-started/overview/
+ * Thanks to Shadcn for heavy inspiration and documentation
+ * https://ui.shadcn.com/docs/components/input#with-label
  */
-export declare function TextField({ variant, id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
+export declare function TextField({ id, isDisabled, hasError, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
 export type ToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	commandHandler: CommandHandler;

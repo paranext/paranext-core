@@ -349,7 +349,7 @@ export default function SettingsDialog({
   return (
     <div className="settings-dialog">
       <div className="settings-search-bar">
-        <SearchBar onSearch={handleSearchInput} placeholder="Search Settings..." isFullWidth />
+        <SearchBar onSearch={handleSearchInput} placeholder="Search Settings..." />
       </div>
       <div className="settings-tabs-and-content">
         <div className="settings-tabs">

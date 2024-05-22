@@ -52,7 +52,24 @@ export type ExtensionDataScope = {
  * >;
  * ```
  *
- *     ---
+ * WARNING: Each Project Data Provider **must** fulfill the following requirements for its
+ * settings-related methods:
+ *
+ * - `getSetting`: if a project setting value is present for the key requested, return it. Otherwise,
+ *   you must call `papi.projectSettings.getDefault` to get the default value or throw if that call
+ *   throws. This functionality preserves the intended type of the setting and avoids returning
+ *   `undefined` unexpectedly.
+ * - `setSetting`: must call `papi.projectSettings.isValid` before setting the value and should return
+ *   false if the call returns `false` and throw if the call throws. This functionality preserves
+ *   the intended intended type of the setting and avoids allowing the setting to be set to the
+ *   wrong type.
+ * - `resetSetting`: deletes the value at the key and sends a setting update event. After this,
+ *   `getSetting` should again see the setting value is not present, call
+ *   `papi.projectSettings.getDefault`, and return the default value.
+ * - Note: see {@link WithProjectDataProviderEngineSettingMethods} for method signatures for these
+ *   three methods.
+ *
+ *   .---
  *
  * ### ExtensionData
  *
