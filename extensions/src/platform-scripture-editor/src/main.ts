@@ -39,16 +39,47 @@ async function open(
   projectId: string | undefined,
   isReadOnly: boolean,
 ): Promise<string | undefined> {
-  let projectIdForWebView = projectId;
-  if (!projectIdForWebView) {
-    projectIdForWebView = await papi.dialogs.selectProject({
-      title: 'Select Resource',
-      prompt: 'Choose the resource project:',
-      includeProjectTypes: '^ParatextStandard$',
+  const projectForWebView = { projectId, isEditable: !isReadOnly };
+  if (!projectForWebView.projectId) {
+    // Get a list of projects that are editable or not editable to show in the select project dialog
+    const projectMetadatas = (await papi.projectLookup.getMetadataForAllProjects()).filter(
+      (projectMetadata) => projectMetadata.projectType === 'ParatextStandard',
+    );
+    const projectsWithEditable = await Promise.all(
+      projectMetadatas.map(async (projectMetadata) => {
+        const pdp = await papi.projectDataProviders.get('ParatextStandard', projectMetadata.id);
+        return {
+          projectId: projectMetadata.id,
+          isEditable: await pdp.getSetting('platform.isEditable'),
+        };
+      }),
+    );
+
+    projectForWebView.projectId = await papi.dialogs.selectProject({
+      title: isReadOnly
+        ? '%platformScriptureEditor_dialog_openResourceViewer_title%'
+        : '%platformScriptureEditor_dialog_openScriptureEditor_title%',
+      prompt: isReadOnly
+        ? '%platformScriptureEditor_dialog_openResourceViewer_prompt%'
+        : '%platformScriptureEditor_dialog_openScriptureEditor_prompt%',
+      // Include projects whose editable matches readonly
+      includeProjectIds: projectsWithEditable
+        .filter(({ isEditable }) => isEditable !== isReadOnly)
+        .map(({ projectId: pId }) => pId),
     });
+  } else {
+    // Get whether the provided project is editable
+    const pdp = await papi.projectDataProviders.get(
+      'ParatextStandard',
+      projectForWebView.projectId,
+    );
+    projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
-  if (projectIdForWebView) {
-    const options: PlatformScriptureEditorOptions = { projectId: projectIdForWebView, isReadOnly };
+  if (projectForWebView.projectId) {
+    const options: PlatformScriptureEditorOptions = {
+      projectId: projectForWebView.projectId,
+      isReadOnly: !projectForWebView.isEditable,
+    };
     // REVIEW: If an editor is already open for the selected project, we open another.
     // This matches the current behavior in P9, though it might not be what we want long-term.
     return papi.webViews.getWebView(scriptureEditorWebViewType, undefined, options);

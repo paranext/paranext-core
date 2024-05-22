@@ -274,6 +274,22 @@ globalThis.webViewComponent = function HelloWorld({
       <div>
         <Button onClick={selectProject}>Select Project</Button>
       </div>
+      <div>
+        <Button
+          onClick={() =>
+            papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', project)
+          }
+        >
+          Open in Scripture Editor
+        </Button>
+        <Button
+          onClick={() =>
+            papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', project)
+          }
+        >
+          Open in Resource Viewer
+        </Button>
+      </div>
       <h3 style={headerStyle}>{verseRef.toString()}</h3>
       <div>{currentProjectVerse}</div>
       <ProjectSettingsEditor {...helloWorldProjectSettings} />

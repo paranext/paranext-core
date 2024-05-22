@@ -19,6 +19,7 @@ function SelectMultipleProjectsDialog({
   prompt,
   submitDialog,
   excludeProjectIds,
+  includeProjectIds,
   includeProjectTypes,
   excludeProjectTypes,
   selectedProjectIds: initialSelectedProjectIds,
@@ -28,10 +29,11 @@ function SelectMultipleProjectsDialog({
       const allProjectsMetadata = await projectLookupService.getMetadataForAllProjects();
       return filterProjectsMetadata(allProjectsMetadata, {
         excludeProjectIds,
+        includeProjectIds,
         includeProjectTypes,
         excludeProjectTypes,
       });
-    }, [excludeProjectIds, includeProjectTypes, excludeProjectTypes]),
+    }, [excludeProjectIds, includeProjectIds, includeProjectTypes, excludeProjectTypes]),
     useMemo(() => [], []),
   );
 

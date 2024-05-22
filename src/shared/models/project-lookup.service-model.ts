@@ -6,6 +6,8 @@ export type ProjectMetadataWithFactoryId = ProjectMetadata & { pdpFactoryId: str
 export type ProjectMetadataFilterOptions = {
   /** Project IDs to exclude */
   excludeProjectIds?: string | string[];
+  /** Project IDs to include */
+  includeProjectIds?: string | string[];
   /**
    * String representation of `RegExp` pattern(s) to match against projects' `projectType` (using
    * the

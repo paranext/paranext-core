@@ -17,6 +17,11 @@ export const platformProjectSettings: ProjectSettingsContribution = {
       label: '%project_settings_platform_language_label%',
       default: '%project_language_missing%',
     },
+    'platform.isEditable': {
+      label: '%project_settings_platform_isEditable_label%',
+      description: '%project_settings_platform_isEditable_description%',
+      default: true,
+    },
   },
 };
 
@@ -31,8 +36,13 @@ const languageValidator: ProjectSettingValidator<'platform.language'> = async (
   return typeof newValue === 'string';
 };
 
+const isEditableValidator: ProjectSettingValidator<'platform.isEditable'> = async (
+  newValue: boolean,
+) => typeof newValue === 'boolean';
+
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 export const coreProjectSettingsValidators: Partial<AllProjectSettingsValidators> = {
   'platform.fullName': fullNameValidator,
   'platform.language': languageValidator,
+  'platform.isEditable': isEditableValidator,
 };

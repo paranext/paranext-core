@@ -27,7 +27,7 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const localizationDataService = createSyncProxyForAsyncObject<ILocalizationService>(
+const localizationService = createSyncProxyForAsyncObject<ILocalizationService>(
   async () => {
     await initialize();
     return dataProvider;
@@ -39,7 +39,7 @@ const localizationDataService = createSyncProxyForAsyncObject<ILocalizationServi
         bookNum,
         localizationLanguage,
         ({ localizeKey, ...options }) =>
-          localizationDataService.getLocalizedString({
+          localizationService.getLocalizedString({
             ...options,
             localizeKey: `%${localizeKey}%`,
           }),
@@ -48,4 +48,4 @@ const localizationDataService = createSyncProxyForAsyncObject<ILocalizationServi
   },
 );
 
-export default localizationDataService;
+export default localizationService;
