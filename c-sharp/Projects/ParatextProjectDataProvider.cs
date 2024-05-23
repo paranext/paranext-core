@@ -219,7 +219,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettings.GetParatextSettingNameFromPlatformBibleSettingName(settingName) ??
             settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
+
         if (scrText.Settings.ParametersDictionary.TryGetValue(settingName, out string? settingValue)) {
+            // Paratext project setting value found, so return the value with the appropriate type
+            if (ProjectSettings.IsParatextSettingABoolean(settingName))
+            {
+                return settingValue switch
+                {
+                    "T" => ResponseToRequest.Succeeded(true),
+                    "F" => ResponseToRequest.Succeeded(false),
+                    _ => ResponseToRequest.Failed($"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"),
+                };
+            }
             return ResponseToRequest.Succeeded(settingValue);
         }
 
@@ -238,6 +249,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public ResponseToRequest SetProjectSetting(string jsonKey, string value)
     {
         var settingName = JToken.Parse(jsonKey).ToString();
+
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
 
         // If there is no Paratext setting for the name given, we'll create one lower down

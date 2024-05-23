@@ -45,6 +45,7 @@ export {
   formatReplacementString,
   includes,
   indexOf,
+  isLocalizeKey,
   lastIndexOf,
   stringLength,
   normalize,

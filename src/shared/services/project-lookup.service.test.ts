@@ -51,6 +51,40 @@ describe('filterProjectsMetadata', () => {
     expect(filteredMetadata.length).toEqual(1);
   });
 
+  test('should include only ids matching includeProjectIds', () => {
+    // Single string that exact matches one project
+
+    let options: ProjectMetadataFilterOptions = {
+      includeProjectIds: 'asdf',
+    };
+
+    let filteredMetadata = filterProjectsMetadata(projectsMetadata, options);
+
+    expect(filteredMetadata.length).toEqual(1);
+
+    // Multiple strings that match two project types
+
+    options = {
+      includeProjectIds: ['asdf', 'asdfg'],
+    };
+
+    filteredMetadata = filterProjectsMetadata(projectsMetadata, options);
+
+    expect(filteredMetadata.length).toEqual(2);
+
+    // other filters work even if this includes
+
+    options = {
+      includeProjectIds: ['asdf', 'asdfg', 'asdfgh'],
+      excludeProjectIds: 'asdfg',
+      includeProjectTypes: ['^ParatextStandard$', '^platform\\.placeholder$'],
+    };
+
+    filteredMetadata = filterProjectsMetadata(projectsMetadata, options);
+
+    expect(filteredMetadata.length).toEqual(1);
+  });
+
   test('should remove ids matching excludeProjectTypes', () => {
     // Single RegExp that exact matches one project
 

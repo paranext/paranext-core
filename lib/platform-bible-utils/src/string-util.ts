@@ -1,3 +1,4 @@
+import { LocalizeKey } from 'menus.model';
 import {
   indexOf as stringzIndexOf,
   substring as stringzSubstring,
@@ -469,4 +470,9 @@ export function substring(
  */
 export function toArray(string: string): string[] {
   return stringzToArray(string);
+}
+
+/** Determine whether the string is a `LocalizeKey` meant to be localized in Platform.Bible. */
+export function isLocalizeKey(str: string): str is LocalizeKey {
+  return startsWith(str, '%') && endsWith(str, '%');
 }
