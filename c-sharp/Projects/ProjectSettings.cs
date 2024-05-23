@@ -14,11 +14,19 @@ public sealed class ProjectSettings
     public const string PB_VERSIFICATION = "platformScripture.versification";
     public const string PT_VERSIFICATION = "Versification";
 
+    public const string PB_IS_EDITABLE = "platform.isEditable";
+    public const string PT_IS_EDITABLE = "Editable";
+
     public const string PB_VALID_CHARACTERS = "platformScripture.validCharacters";
     public const string PT_VALID_CHARACTERS = "ValidCharacters";
 
     public const string PB_INVALID_CHARACTERS = "platformScripture.invalidCharacters";
     public const string PT_INVALID_CHARACTERS = "InvalidCharacters";
+
+    /// <summary>
+    /// Paratext setting names that are either T or F and need to be converted to booleans
+    /// </summary>
+    private static readonly List<string> PT_SETTING_BOOLEANS = ["Editable", "MatchBasedOnStems", "AllowReadAccess", "AllowSharingWithSLDR", ];
 
     // Make sure this dictionary gets updated whenever new settings are added
     private static readonly Dictionary<string, string> s_platformBibleToParatextSettingsNames =
@@ -28,6 +36,7 @@ public sealed class ProjectSettings
             { PB_FULL_NAME, PT_FULL_NAME },
             { PB_LANGUAGE, PT_LANGUAGE },
             { PB_VERSIFICATION, PT_VERSIFICATION },
+            { PB_IS_EDITABLE, PT_IS_EDITABLE },
             { PB_VALID_CHARACTERS, PT_VALID_CHARACTERS },
             { PB_INVALID_CHARACTERS, PT_INVALID_CHARACTERS },
         };
@@ -57,5 +66,15 @@ public sealed class ProjectSettings
         return s_paratextToPlatformBibleSettingsNames.TryGetValue(ptSettingName, out string? retVal)
             ? retVal
             : null;
+    }
+
+    /// <summary>
+    /// Determines whether a Paratext Setting is expected to be a boolean ("T" or "F" only)
+    /// </summary>
+    /// <param name="ptSettingName"></param>
+    /// <returns></returns>
+    public static bool IsParatextSettingABoolean(string ptSettingName)
+    {
+        return PT_SETTING_BOOLEANS.Contains(ptSettingName);
     }
 }
