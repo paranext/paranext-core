@@ -26,10 +26,12 @@ export default function BookSelector({
   handleSelectEndChapter,
   handleSelectStartChapter,
 }: BookSelectorProps) {
-  const [radioValue, setRadioValue] = useState<BookSelectionMode>(BookSelectionMode.CURRENT_BOOK);
+  const [bookSelectionMode, setBookSelectionMode] = useState<BookSelectionMode>(
+    BookSelectionMode.CURRENT_BOOK,
+  );
 
   const onSelectionModeChange = (newMode: BookSelectionMode) => {
-    setRadioValue(newMode);
+    setBookSelectionMode(newMode);
     handleBookSelectionModeChange(newMode);
   };
 
@@ -53,7 +55,7 @@ export default function BookSelector({
 
   return (
     <RadioGroup
-      value={radioValue}
+      value={bookSelectionMode}
       // event.target.value is always a string but we need it to be BookSelectionMode
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       onChange={(e) => onSelectionModeChange(e.target.value as BookSelectionMode)}
@@ -69,7 +71,7 @@ export default function BookSelector({
           </div>
           <div className="book-selection-radio-action">
             <ChapterRangeSelector
-              isDisabled={radioValue === BookSelectionMode.CHOOSE_BOOKS}
+              isDisabled={bookSelectionMode === BookSelectionMode.CHOOSE_BOOKS}
               handleSelectStartChapter={handleSelectStartChapter}
               handleSelectEndChapter={handleSelectEndChapter}
               chapterCount={chapterCount}
@@ -90,7 +92,7 @@ export default function BookSelector({
           </div>
           <div className="book-selection-radio-action">
             <Button
-              isDisabled={radioValue === BookSelectionMode.CURRENT_BOOK}
+              isDisabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
               onClick={() => selectBooks()}
             >
               Choose...
