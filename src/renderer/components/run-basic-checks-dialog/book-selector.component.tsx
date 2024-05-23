@@ -5,15 +5,20 @@ import { useCallback, useMemo, useState } from 'react';
 import './book-selector.component.scss';
 import { useDialogCallback } from '@renderer/hooks/papi-hooks';
 
+export enum BookSelectionMode {
+  CURRENT_BOOK = 'current book',
+  CHOOSE_BOOKS = 'choose books',
+}
+
 type BookSelectorProps = ChapterRangeSelectorProps & {
-  handleRadioChange: (newRadioValue: string) => void;
+  handleBookSelectionModeChange: (newMode: BookSelectionMode) => void;
   currentBookName: string;
   selectedBookIds: string[];
   handleSelectBooks: (bookIds: string[]) => void;
 };
 
 export default function BookSelector({
-  handleRadioChange,
+  handleBookSelectionModeChange,
   currentBookName,
   selectedBookIds,
   handleSelectBooks,
@@ -21,11 +26,11 @@ export default function BookSelector({
   handleSelectEndChapter,
   handleSelectStartChapter,
 }: BookSelectorProps) {
-  const [radioValue, setRadioValue] = useState<string>('current book');
+  const [radioValue, setRadioValue] = useState<BookSelectionMode>(BookSelectionMode.CURRENT_BOOK);
 
-  const onRadioChange = (newRadioValue: string) => {
-    setRadioValue(newRadioValue);
-    handleRadioChange(newRadioValue);
+  const onSelectionModeChange = (newMode: BookSelectionMode) => {
+    setRadioValue(newMode);
+    handleBookSelectionModeChange(newMode);
   };
 
   const selectBooks = useDialogCallback(
@@ -47,9 +52,14 @@ export default function BookSelector({
   );
 
   return (
-    <RadioGroup value={radioValue} onChange={(e) => onRadioChange(e.target.value)}>
+    <RadioGroup
+      value={radioValue}
+      // event.target.value is always a string but we need it to be BookSelectionMode
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      onChange={(e) => onSelectionModeChange(e.target.value as BookSelectionMode)}
+    >
       <div className="book-selection-radio">
-        <Radio value="current book" />
+        <Radio value={BookSelectionMode.CURRENT_BOOK} />
         <Typography className="book-selection-radio-label">Current Book</Typography>
         <div className="book-selection-radio-content">
           <div className="book-typography">
@@ -59,7 +69,7 @@ export default function BookSelector({
           </div>
           <div className="book-selection-radio-action">
             <ChapterRangeSelector
-              isDisabled={radioValue === 'choose books'}
+              isDisabled={radioValue === BookSelectionMode.CHOOSE_BOOKS}
               handleSelectStartChapter={handleSelectStartChapter}
               handleSelectEndChapter={handleSelectEndChapter}
               chapterCount={chapterCount}
@@ -68,7 +78,7 @@ export default function BookSelector({
         </div>
       </div>
       <div className="book-selection-radio">
-        <Radio value="choose books" />
+        <Radio value={BookSelectionMode.CHOOSE_BOOKS} />
         <Typography className="book-selection-radio-label">Choose Books</Typography>
         <div className="book-selection-radio-content">
           <div className="book-typography">
@@ -79,7 +89,10 @@ export default function BookSelector({
             </Typography>
           </div>
           <div className="book-selection-radio-action">
-            <Button isDisabled={radioValue === 'current book'} onClick={() => selectBooks()}>
+            <Button
+              isDisabled={radioValue === BookSelectionMode.CURRENT_BOOK}
+              onClick={() => selectBooks()}
+            >
               Choose...
             </Button>
           </div>

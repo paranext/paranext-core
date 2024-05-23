@@ -22,7 +22,7 @@ export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
 };
 
 /** Options to provide when showing the Select Books dialog */
-export type SelectBooksDialogOptions = ProjectDialogOptionsBase & {
+export type SelectBooksDialogOptions = DialogOptions & {
   /** Books IDs that should start selected in the dialog */
   selectedBookIds?: string[];
 };

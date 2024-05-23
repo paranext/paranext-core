@@ -4,7 +4,9 @@ import { getChaptersForBook } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import BookSelector from '@renderer/components/run-basic-checks-dialog/book-selector.component';
+import BookSelector, {
+  BookSelectionMode,
+} from '@renderer/components/run-basic-checks-dialog/book-selector.component';
 import './run-basic-checks-tab.component.scss';
 import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
 import { Canon, VerseRef } from '@sillsdev/scripture';
@@ -124,8 +126,8 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
     [bookIdsSelectionStatus],
   );
 
-  const toggleShouldUseCurrentBook = (newRadioValue: string) => {
-    if (newRadioValue === 'current book') {
+  const toggleShouldUseCurrentBook = (newMode: string) => {
+    if (newMode === BookSelectionMode.CURRENT_BOOK) {
       setUseCurrentBook(true);
     } else {
       setUseCurrentBook(false);
@@ -192,7 +194,7 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
       />
       <fieldset className="run-basic-checks-books">
         <BookSelector
-          handleRadioChange={toggleShouldUseCurrentBook}
+          handleBookSelectionModeChange={toggleShouldUseCurrentBook}
           currentBookName={Canon.bookIdToEnglishName(currentBookId)}
           selectedBookIds={selectedBookIds}
           handleSelectBooks={handleSelectBooks}
