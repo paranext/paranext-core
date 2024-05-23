@@ -33,10 +33,27 @@ export interface ScriptureReference {
 	chapterNum: number;
 	verseNum: number;
 }
+export type ScriptureNode = ScriptureReference & {
+	jsonPath: string;
+};
+export type ScriptureTextAnchor = ScriptureNode & {
+	offset: number;
+};
+export type ScriptureSelection = {
+	start: ScriptureNode | ScriptureTextAnchor;
+	end?: ScriptureNode | ScriptureTextAnchor;
+};
+export type ScriptureCheckDefinition = {
+	id: string;
+	displayName: string;
+};
 /** Within type T, recursively change properties that were of type A to be of type B */
 export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
 	[K in keyof T]: ReplaceType<T[K], A, B>;
 } : T;
+export type ScriptureItemDetail = ScriptureSelection & {
+	detail: string | React$1.ReactElement;
+};
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;
 /** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
@@ -505,6 +522,47 @@ export interface ScrRefSelectorProps {
 	id?: string;
 }
 export declare function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps): import("react/jsx-runtime").JSX.Element;
+export interface ResultsEventTarget<T> {
+	addEventListener: (type: "resultsUpdated", listener: (event: CustomEvent<T>) => void) => void;
+	removeEventListener: (type: "resultsUpdated", listener: (event: CustomEvent<T>) => void) => void;
+	dispatchEvent: (event: CustomEvent<T>) => void;
+}
+export declare class ResultsSource {
+	id: string;
+	checkDefinition?: ScriptureCheckDefinition;
+	data: ScriptureItemDetail[];
+	resultsUpdated: ResultsEventTarget<ResultsSource>;
+	constructor(initialData: ScriptureItemDetail[], id?: string, checkDefinition?: ScriptureCheckDefinition);
+	updateData(newData: ScriptureItemDetail[]): void;
+	addEventListener(type: "resultsUpdated", listener: (event: CustomEvent<ResultsSource>) => void): void;
+	removeEventListener(type: "resultsUpdated", listener: (event: CustomEvent<ResultsSource>) => void): void;
+}
+export type ScriptureSrcItemDetail = ScriptureItemDetail & {
+	/** Source/type of detail. Can be used for grouping. */
+	source: string | ScriptureCheckDefinition;
+};
+export type ScriptureRefKeyedListColumnInfo = {
+	/** Optional header to display for the Reference column. Default value: 'Scripture Reference'. */
+	scriptureReferenceColumnName?: string;
+	/** Optional text to display to refer to the Scripture book group. Default value: 'Scripture Book'. */
+	scriptureBookGroupName?: string;
+	/** Optional header to display for the Type column. Default value: 'Type'. */
+	typeColumnName?: string;
+	/** Optional header to display for the Details column. Default value: 'Details' */
+	detailsColumnName?: string;
+};
+export type ScriptureRefKeyedListProps = ScriptureRefKeyedListColumnInfo & {
+	/**
+	 * Instances of Scripture checks or other objects that emit resultsUpdated events and provide
+	 * ScriptureItemDetail objects
+	 */
+	sources: ResultsSource[];
+	/** Flag indicating whether to display column headers. Default is false. */
+	showColumnHeaders?: boolean;
+	/** Flag indicating whether to display source column. Default is false. */
+	showSourceColumn?: boolean;
+};
+export function ScriptureRefKeyedList({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, }: ScriptureRefKeyedListProps): import("react/jsx-runtime").JSX.Element;
 export type SearchBarProps = {
 	/**
 	 * Callback fired to handle the search query when button pressed

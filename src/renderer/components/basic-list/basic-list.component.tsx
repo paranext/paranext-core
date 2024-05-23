@@ -11,8 +11,6 @@ import {
 import { Canon } from '@sillsdev/scripture';
 import { faker } from '@faker-js/faker';
 
-import './basic-list.component.scss';
-
 export const TAB_TYPE_BASIC_LIST = 'basic-list';
 
 type CheckResult = {

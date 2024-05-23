@@ -142,3 +142,58 @@ export async function getLocalizedIdFromBookNumber(
   const retVal = parts2[0].trim();
   return retVal;
 }
+
+/**
+ * Compares two Scripture references canonically.
+ *
+ * @param scrRef1 The first Scripture reference to compare.
+ * @param scrRef2 The second Scripture reference to compare.
+ * @returns A number indicating the result of the comparison: - Negative value if scrRef1 precedes
+ *   scrRef2 in sorting order. - Zero if scrRef1 and scrRef2 are equivalent in sorting order. -
+ *   Positive value if scrRef1 follows scrRef2 in sorting order.
+ */
+export function compare(scrRef1: ScriptureReference, scrRef2: ScriptureReference): number {
+  // TODO: consider edge cases for invalid references
+  return (
+    scrRef1.bookNum * 100000 +
+    scrRef1.chapterNum * 100 +
+    scrRef1.verseNum -
+    (scrRef2.bookNum * 100000 + scrRef2.chapterNum * 100 + scrRef2.verseNum)
+  );
+}
+
+/**
+ * Formats a Scripture reference.
+ *
+ * @param scrRef The Scripture reference to format.
+ * @param optionOrLocalizedBookName Either 'id' (the default) to format using the "standard" (as
+ *   defined by SIL/UBS) 3-letter book ID, 'English' to format using the English book name spelled
+ *   out, or some other string (e.g., a localized book name, vernacular abbreviation, FCBH book id,
+ *   etc.) to use.
+ * @param chapterVerseSeparator The character used to separate the chapter number from the verse
+ *   number. Default is a colon (:). Note: More than one character is allowed.
+ * @param bookChapterSeparator The character used to separate the book from the chapter number.
+ *   Default is a single space. Note: More than one character is allowed.
+ * @returns The formatted reference.
+ */
+export function format(
+  scrRef: ScriptureReference,
+  optionOrLocalizedBookName?: 'id' | 'English' | string,
+  chapterVerseSeparator?: string,
+  bookChapterSeparator?: string,
+): string {
+  let book: string;
+  switch (optionOrLocalizedBookName ?? 'id') {
+    case 'English':
+      book = Canon.bookNumberToEnglishName(scrRef.bookNum);
+      break;
+    case 'id':
+      book = Canon.bookNumberToId(scrRef.bookNum);
+      break;
+    default:
+      // We already dealt with undefined about in the switch, but TS is getting confused.
+      book = optionOrLocalizedBookName ?? '';
+      break;
+  }
+  return `${book}${bookChapterSeparator ?? ' '}${scrRef.chapterNum}${chapterVerseSeparator ?? ':'}${scrRef.verseNum}`;
+}

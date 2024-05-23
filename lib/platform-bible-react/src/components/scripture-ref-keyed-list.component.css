@@ -9,3 +9,11 @@
 .basic-list-expand-button {
   cursor: pointer;
 }
+
+.indent1 {
+  padding-left: 20px;
+}
+
+.indent2 {
+  padding-left: 40px;
+}

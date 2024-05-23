@@ -29,6 +29,13 @@ export { default as MenuItem } from './components/menu-item.component';
 export type { CommandHandler, MenuItemListProps } from './components/menu-item.component';
 export { default as RefSelector } from './components/ref-selector.component';
 export type { ScrRefSelectorProps } from './components/ref-selector.component';
+export { default as ResultsSource } from './components/results-source.class';
+export { default as ScriptureRefKeyedList } from './components/scripture-ref-keyed-list.component';
+export type {
+  ScriptureRefKeyedListColumnInfo,
+  ScriptureRefKeyedListProps,
+  ScriptureSrcItemDetail,
+} from './components/scripture-ref-keyed-list.component';
 export { default as SearchBar } from './components/search-bar.component';
 export type { SearchBarProps } from './components/search-bar.component';
 export { default as Slider } from './components/slider.component';
