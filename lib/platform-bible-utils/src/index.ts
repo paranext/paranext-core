@@ -42,6 +42,7 @@ export {
   charAt,
   codePointAt,
   endsWith,
+  formatReplacementString,
   includes,
   indexOf,
   lastIndexOf,

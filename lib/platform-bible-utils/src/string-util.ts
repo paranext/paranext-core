@@ -93,7 +93,7 @@ export function endsWith(
  *   functionToApply. E.g. a search string of 'abcabc' with a regex that matches on 'a's and a
  *   function that replaces 'a' with 'b' would return 'bbcbbc'
  */
-export function applyToRegexMatches(
+function applyToRegexMatches(
   regex: RegExp,
   searchString: string,
   functionToApply: (result: RegExpExecArray) => string,
@@ -112,8 +112,8 @@ export function applyToRegexMatches(
 /**
  * Formats a string, replacing {localization key} with the localization (or multiple localizations
  * if there are multiple in the string). Will also remove \ before curly braces if curly braces are
- * escaped in order to preserve the curly braces. E.g. 'Hi, this is {name}! I like {curly braces}!
- * would become Hi, this is Jim! I like {curly braces}!
+ * escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this is {name}! I like
+ * `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
  *
  * If the key in unescaped braces is not found, just return the key without the braces. Empty
  * unescaped curly braces will just return a string without the braces e.g. ('I am {Nemo}', {

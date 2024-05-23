@@ -11,12 +11,14 @@ import useData from './use-data.hook';
 /**
  * Gets localizations on the papi.
  *
- * @param keys LocalizationSelectors which are two arrays, one of keys to get localizations of and
- *   one of localization languages to look up the keys in
+ * @param localizationKeys Array of keys to get localizations of
  *
  *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
  *   updated every render
- * @param defaultState The initial value to return while first awaiting the localization values
+ * @param localizationLocales Array of localization languages to look up the keys in
+ *
+ *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+ *   updated every render
  * @param subscriberOptions Various options to adjust how the subscriber emits updates
  *
  *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
