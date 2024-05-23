@@ -62,7 +62,6 @@ papi
 globalThis.webViewComponent = function HelloWorld({
   title,
   projectId,
-  projectIds,
   useWebViewState,
   updateWebViewDefinition,
 }: WebViewProps) {
@@ -141,6 +140,8 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading latest Scripture text...',
   );
 
+  const [projects, setProjects] = useWebViewState<string[]>('projects', []);
+
   const selectProjects = useDialogCallback(
     'platform.selectMultipleProjects',
     useMemo(
@@ -148,16 +149,16 @@ globalThis.webViewComponent = function HelloWorld({
         prompt: 'Please select one or more Scripture projects for Hello World WebView:',
         iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
         title: 'Select List of Hello World Projects',
-        selectedProjectIds: projectIds,
+        selectedProjectIds: projects,
         includeProjectTypes: '^ParatextStandard$',
       }),
-      [projectIds],
+      [projects],
     ),
     useCallback(
       (selectedProjects) => {
-        if (selectedProjects) updateWebViewDefinition({ projectIds: selectedProjects });
+        if (selectedProjects) setProjects(selectedProjects);
       },
-      [updateWebViewDefinition],
+      [setProjects],
     ),
   );
 
@@ -290,7 +291,7 @@ globalThis.webViewComponent = function HelloWorld({
       <div>{currentProjectVerse}</div>
       <ProjectSettingsEditor {...helloWorldProjectSettings} />
       <h3>List of Selected Project Id(s):</h3>
-      <div>{(projectIds && projectIds.length > 0 ? projectIds : ['None']).join(', ')}</div>
+      <div>{(projects.length > 0 ? projects : ['None']).join(', ')}</div>
       <div>
         <Button onClick={() => selectProjects()}>Select Projects</Button>
       </div>

@@ -41,15 +41,12 @@ declare module 'shared/models/web-view.model' {
     /** Tooltip that is shown when hovering over the webview title */
     tooltip?: string;
     /**
-     * Project id relevant to this web view. If this web view has multiple relevant project ids, it
-     * should use `projectIds`
+     * Project id associated with this web view.
+     *
+     * Note: This field may be used in other contexts (like menu commands) for project-specific
+     * operations related to this web view.
      */
     projectId?: string;
-    /**
-     * List of project ids relevant to this web view. If this web view can only have one relevant
-     * project id, it should use `projectId`
-     */
-    projectIds?: string[];
     /**
      * General object to store unique state for this webview.
      *
@@ -201,7 +198,6 @@ declare module 'shared/models/web-view.model' {
     'title',
     'tooltip',
     'projectId',
-    'projectIds',
   ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
