@@ -8,6 +8,8 @@ export { default as ChapterRangeSelector } from './components/chapter-range-sele
 export type { ChapterRangeSelectorProps } from './components/chapter-range-selector.component';
 export { default as Checkbox } from './components/checkbox.component';
 export type { CheckboxProps } from './components/checkbox.component';
+export { default as Checklist } from './components/checklist.component';
+export type { ChecklistProps } from './components/checklist.component';
 export { default as ComboBox } from './components/combo-box.component';
 export type {
   ComboBoxChangeDetails,

@@ -3797,6 +3797,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
   /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
+  /** The tabType for the select books dialog in `select-books.dialog.tsx` */
+  export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -3805,8 +3807,11 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     /** Project IDs that should start selected in the dialog */
     selectedProjectIds?: string[];
   };
-  /** Options to provide when showing the Select Project dialog */
-  export type InventoryDialogOptions = ProjectDialogOptionsBase & {};
+  /** Options to provide when showing the Select Books dialog */
+  export type SelectBooksDialogOptions = DialogOptions & {
+    /** Books IDs that should start selected in the dialog */
+    selectedBookIds?: string[];
+  };
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs
    *
@@ -3820,6 +3825,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
       SelectMultipleProjectsDialogOptions,
       string[]
     >;
+    [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
   }
   /** Each type of dialog. These are the tab types used in the dock layout */
   export type DialogTabTypes = keyof DialogTypes;
@@ -5712,6 +5718,39 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   ): (DataProviders[EachDataProviderName[number]] | undefined)[];
   export default useDataProviderMulti;
 }
+declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
+  import { LocalizationData } from 'shared/services/localization.service-model';
+  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import { LocalizeKey } from 'platform-bible-utils';
+  /**
+   * Gets localizations on the papi.
+   *
+   * @param localizationKeys Array of keys to get localizations of
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param localizationLocales Array of localization languages to look up the keys in
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param subscriberOptions Various options to adjust how the subscriber emits updates
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   *   until `dataProviderSource` or `selector` changes.
+   * @returns `[localizedStrings]`
+   *
+   *   - `localizedStrings`: The current state of the localizations, either `defaultState` or the stored
+   *       state on the papi, if any
+   */
+  const useLocalizedStrings: (
+    localizationKeys: LocalizeKey[],
+    localizationLocales?: string[],
+    subscriberOptions?: DataProviderSubscriberOptions,
+  ) => [localizedStrings: LocalizationData, isLoading: boolean];
+  export default useLocalizedStrings;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
@@ -5721,6 +5760,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
+  export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
 }
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';

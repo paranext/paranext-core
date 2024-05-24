@@ -1,5 +1,5 @@
 .run-basic-checks-dialog {
-  padding: 5%;
+  padding: 5% 5% 0;
   overflow-y: auto;
   overflow-x: hidden;
   gap: 20px;
@@ -18,12 +18,14 @@
 }
 
 .run-basic-checks-books {
-  display: flex;
-  flex-wrap: wrap;
-  flex-direction: column;
   width: 100%;
 }
 
 .basic-checks-dialog-actions {
-  margin-left: auto;
+  display: flex;
+  justify-content: end;
+  position: sticky;
+  bottom: 0;
+  background: white;
+  width: 100%;
 }
