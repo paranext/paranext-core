@@ -6,6 +6,7 @@ import {
   useSetting,
   useDialogCallback,
   useDataProvider,
+  useLocalizedStrings,
 } from '@papi/frontend/react';
 import {
   Button,
@@ -17,7 +18,6 @@ import {
   TextField,
   Table,
   ScriptureReference,
-  usePromise,
   useEvent,
 } from 'platform-bible-react';
 import type { WebViewProps } from '@papi/core';
@@ -213,16 +213,12 @@ globalThis.webViewComponent = function HelloWorld({
 
   const helloWorldProjectSettings = useHelloWorldProjectSettings('ParatextStandard', project);
   const { headerStyle } = helloWorldProjectSettings;
-
-  const [localizedString] = usePromise(
-    useCallback(() => {
-      return papi.localization.getLocalizedString({
-        localizeKey: '%submitButton%',
-        locales: ['fr', 'en'],
-      });
-    }, []),
-    'defaultValue',
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => ['%submitButton%'], []),
+    useMemo(() => ['fr', 'en'], []),
   );
+
+  const localizedString = localizedStrings['%submitButton%'];
 
   return (
     <div>

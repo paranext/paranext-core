@@ -3,6 +3,7 @@ import {
   charAt,
   codePointAt,
   endsWith,
+  formatReplacementString,
   includes,
   indexOf,
   lastIndexOf,
@@ -106,6 +107,74 @@ describe('endsWith', () => {
   test('endsWith with position', () => {
     const result = endsWith(LONG_SURROGATE_PAIRS_STRING, 'At🦄', 8);
     expect(result).toEqual(true);
+  });
+});
+
+describe('formatLocalizationString', () => {
+  test('formatLocalizationString with curly braces', () => {
+    const result = formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing😉Its𐐷Awesome', {
+      'one-horned': 'Unicorn',
+    });
+    expect(result).toEqual('Look𐐷At🦄This𐐷UnicornThing😉Its𐐷Awesome');
+  });
+
+  test('formatLocalizationString with multiple pairs of curly braces', () => {
+    const result = formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing😉Its𐐷Awesome{sauce}', {
+      'one-horned': 'Unicorn',
+      sauce: 'ness',
+    });
+    expect(result).toEqual('Look𐐷At🦄This𐐷UnicornThing😉Its𐐷Awesomeness');
+  });
+
+  test('formatLocalizationString with empty curly braces', () => {
+    const result = formatReplacementString('Look𐐷At🦄This𐐷{}', {
+      'one-horned': 'Unicorn',
+    });
+    expect(result).toEqual('Look𐐷At🦄This𐐷');
+  });
+
+  test('formatLocalizationString with unknown word in curly braces', () => {
+    const result = formatReplacementString('Look𐐷At🦄This𐐷{UFO}', {
+      'one-horned': 'Unicorn',
+    });
+    expect(result).toEqual('Look𐐷At🦄This𐐷UFO');
+  });
+
+  test('formatLocalizationString with escaped curly braces', () => {
+    const result = formatReplacementString('Look𐐷At🦄This𐐷\\{one-horned\\}Thing😉Its𐐷Awesome', {
+      'one-horned': 'Unicorn',
+    });
+    expect(result).toEqual('Look𐐷At🦄This𐐷{one-horned}Thing😉Its𐐷Awesome');
+  });
+
+  test('formatLocalizationString with multiple pairs of escaped curly braces', () => {
+    const result = formatReplacementString(
+      'Look𐐷At🦄This𐐷\\{one-horned\\}Thing😉Its𐐷Awesome\\{:)\\}',
+      {
+        'one-horned': 'Unicorn',
+        ':)': 'smiley face',
+      },
+    );
+    expect(result).toEqual('Look𐐷At🦄This𐐷{one-horned}Thing😉Its𐐷Awesome{:)}');
+  });
+
+  test('formatLocalizedString with curly braces and escaped curly braces', () => {
+    const result = formatReplacementString('Hi, this is {name}! I like \\{curly braces\\}!', {
+      name: 'Jim',
+    });
+    expect(result).toEqual('Hi, this is Jim! I like {curly braces}!');
+  });
+
+  test('formatLocalizedString with multiple pairs of curly braces and escaped curly braces', () => {
+    const result = formatReplacementString(
+      'Hi, this is {name}! I like \\{curly braces\\}!Hi, this is {name}! I like \\{curly braces\\}!',
+      {
+        name: 'Jim',
+      },
+    );
+    expect(result).toEqual(
+      'Hi, this is Jim! I like {curly braces}!Hi, this is Jim! I like {curly braces}!',
+    );
   });
 });
 
