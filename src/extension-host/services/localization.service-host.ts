@@ -348,7 +348,7 @@ export const testingLocalizationService = {
 // remove code that will be used later
 // @ts-ignore 6133
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const localizationDataService = createSyncProxyForAsyncObject<ILocalizationService>(async () => {
+const localizationService = createSyncProxyForAsyncObject<ILocalizationService>(async () => {
   await initialize();
   return dataProvider;
 }, localizationServiceObjectToProxy);

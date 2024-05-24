@@ -219,21 +219,41 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettings.GetParatextSettingNameFromPlatformBibleSettingName(settingName) ??
             settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
-        return ResponseToRequest.Succeeded(scrText.Settings.ParametersDictionary[settingName]);
+
+        if (scrText.Settings.ParametersDictionary.TryGetValue(settingName, out string? settingValue)) {
+            // Paratext project setting value found, so return the value with the appropriate type
+            if (ProjectSettings.IsParatextSettingABoolean(settingName))
+            {
+                return settingValue switch
+                {
+                    "T" => ResponseToRequest.Succeeded(true),
+                    "F" => ResponseToRequest.Succeeded(false),
+                    _ => ResponseToRequest.Failed($"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"),
+                };
+            }
+            return ResponseToRequest.Succeeded(settingValue);
+        }
+
+        // Setting not found, so get the default value
+        string? defaultValue = ProjectSettingsService.GetDefault(
+            PapiClient,
+            settingName,
+            ProjectType.Paratext
+        );
+        if (defaultValue == null)
+            return ResponseToRequest.Failed($"Default value for {settingName} was null");
+
+        return ResponseToRequest.Succeeded(defaultValue);
     }
 
     public ResponseToRequest SetProjectSetting(string jsonKey, string value)
     {
         var settingName = JToken.Parse(jsonKey).ToString();
+
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
 
         // If there is no Paratext setting for the name given, we'll create one lower down
-        var currentValueResponse = ResponseToRequest.Failed("");
-        try
-        {
-            currentValueResponse = GetProjectSetting(jsonKey);
-        }
-        catch (KeyNotFoundException) { }
+        var currentValueResponse = GetProjectSetting(jsonKey);
 
         // Make sure the value we're planning to set is valid
         var currentValueJson = currentValueResponse.Success
@@ -269,7 +289,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             });
         return (errorMessage != null)
             ? ResponseToRequest.Failed(errorMessage)
-            : ResponseToRequest.Succeeded(ProjectDataType.SETTINGS);
+            : ResponseToRequest.Succeeded(ProjectDataType.SETTING);
     }
 
     // Typically for "reset" we would want to erase the setting and then call "getDefault" if a

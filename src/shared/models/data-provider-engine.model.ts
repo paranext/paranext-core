@@ -70,41 +70,46 @@ export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
  * DataProviderService creates an {@link IDataProvider} on the papi that layers over this engine,
  * providing special functionality.
  *
- * @type TDataTypes - The data types that this data provider engine serves. For each data type
- *   defined, the engine must have corresponding `get<data_type>` and `set<data_type> function`
- *   functions.
- * @see {@link DataProviderDataTypes} for information on how to make powerful types that work well with
- * Intellisense.
+ * See {@link DataProviderDataTypes} for information on how to make powerful types that work well
+ * with Intellisense.
  *
- * Note: papi creates a `notifyUpdate` function on the data provider engine if one is not provided, so it
- * is not necessary to provide one in order to call `this.notifyUpdate`. However, TypeScript does
- * not understand that papi will create one as you are writing your data provider engine, so you can
- * avoid type errors with one of the following options:
+ * Note: papi creates a `notifyUpdate` function on the data provider engine if one is not provided,
+ * so it is not necessary to provide one in order to call `this.notifyUpdate`. However, TypeScript
+ * does not understand that papi will create one as you are writing your data provider engine, so
+ * you can avoid type errors with one of the following options:
  *
  * 1. If you are using a class to create a data provider engine, you can extend the
- * {@link DataProviderEngine} class, and it will provide `notifyUpdate` for you:
+ *    {@link DataProviderEngine} class, and it will provide `notifyUpdate` for you:
+ *
  * ```typescript
  * class MyDPE extends DataProviderEngine<MyDataTypes> implements IDataProviderEngine<MyDataTypes> {
  *   ...
  * }
  * ```
  *
- * 2. If you are using an object or class not extending {@link DataProviderEngine} to create a data provider engine, you can add a
- * `notifyUpdate` function (and, with an object, add the {@link WithNotifyUpdate} type) to
- * your data provider engine like so:
+ * 2. If you are using an object or class not extending {@link DataProviderEngine} to create a data
+ *    provider engine, you can add a `notifyUpdate` function (and, with an object, add the
+ *    {@link WithNotifyUpdate} type) to your data provider engine like so:
+ *
  * ```typescript
  * const myDPE: IDataProviderEngine<MyDataTypes> & WithNotifyUpdate<MyDataTypes> = {
  *   notifyUpdate(updateInstructions) {},
  *   ...
  * }
  * ```
+ *
  * OR
+ *
  * ```typescript
  * class MyDPE implements IDataProviderEngine<MyDataTypes> {
  *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<MyDataTypes>) {}
  *   ...
  * }
  * ```
+ *
+ * @type `TDataTypes` - The data types that this data provider engine serves. For each data type
+ *   defined, the engine must have corresponding `get<data_type>` and `set<data_type> function`
+ *   functions.
  */
 // Try using DataProviderName here instead of TDataTypes?
 type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =

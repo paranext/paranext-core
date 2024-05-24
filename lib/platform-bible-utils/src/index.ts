@@ -44,6 +44,7 @@ export {
   endsWith,
   includes,
   indexOf,
+  isLocalizeKey,
   lastIndexOf,
   stringLength,
   normalize,

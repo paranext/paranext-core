@@ -16,6 +16,7 @@ import {
 import internetService, { InternetService } from '@shared/services/internet.service';
 import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine as PapiDataProviderEngine } from '@shared/models/data-provider-engine.model';
+import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 import {
   papiBackendProjectDataProviderService,
   PapiBackendProjectDataProviderService,
@@ -28,7 +29,7 @@ import projectLookupService from '@shared/services/project-lookup.service';
 import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
 import menuDataService from '@shared/services/menu-data.service';
-import localizationDataService from '@shared/services/localization.service';
+import localizationService from '@shared/services/localization.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import settingsService from '@shared/services/settings.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
@@ -48,6 +49,8 @@ const papi = {
   // Classes
   /** JSDOC DESTINATION DataProviderEngine */
   DataProviderEngine: PapiDataProviderEngine,
+  /** JSDOC DESTINATION ProjectDataProviderEngine */
+  ProjectDataProviderEngine: PapiProjectDataProviderEngine,
 
   // Functions
   /** This is just an alias for internet.fetch */
@@ -84,7 +87,7 @@ const papi = {
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
   /** JSDOC DESTINATION localizationDataService */
-  localization: localizationDataService as ILocalizationService,
+  localization: localizationService as ILocalizationService,
 };
 /* eslint-enable */
 
@@ -98,6 +101,9 @@ export default papi;
 /** JSDOC DESTINATION DataProviderEngine */
 export const { DataProviderEngine } = papi;
 Object.freeze(papi.DataProviderEngine);
+/** JSDOC DESTINATION ProjectDataProviderEngine */
+export const { ProjectDataProviderEngine } = papi;
+Object.freeze(papi.ProjectDataProviderEngine);
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 Object.freeze(papi.fetch);

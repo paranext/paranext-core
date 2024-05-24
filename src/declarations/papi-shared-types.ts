@@ -143,6 +143,13 @@ declare module 'papi-shared-types' {
      * @example 'World English Bible'
      */
     'platform.fullName': string;
+    /**
+     * Whether or not the project is editable. This is a general "editable", not necessarily that it
+     * is editable by the current user.
+     *
+     * Projects that are not editable are sometimes called "resources".
+     */
+    'platform.isEditable': boolean;
   }
 
   /**
@@ -169,6 +176,9 @@ declare module 'papi-shared-types' {
     /**
      * Set the value of the specified project setting on this project.
      *
+     * Note for implementing: `setSetting` must call `papi.projectSettings.isValid` before allowing
+     * the setting change.
+     *
      * @param key The string id of the project setting to change
      * @param newSetting The value that is to be set to the project setting.
      * @returns Information that papi uses to interpret whether to send out updates. Defaults to
@@ -187,6 +197,9 @@ declare module 'papi-shared-types' {
      * up-to-date, use `subscribeSetting` instead, which can immediately give you the value and keep
      * it up-to-date.
      *
+     * Note for implementing: `getSetting` must call `papi.projectSettings.getDefault` if this
+     * project does not have a value for this setting
+     *
      * @param key The string id of the project setting to get
      * @returns The value of the specified project setting. Returns default setting value if the
      *   project setting does not exist on the project.
@@ -197,6 +210,10 @@ declare module 'papi-shared-types' {
     ) => Promise<ProjectSettingTypes[ProjectSettingName]>;
     /**
      * Deletes the specified project setting, setting it back to its default value.
+     *
+     * Note for implementing: `resetSetting` should remove the value for this setting for this
+     * project such that calling `getSetting` later would cause it to call
+     * `papi.projectSettings.getDefault` and return the default value.
      *
      * @param key The string id of the project setting to reset
      * @returns `true` if successfully reset the project setting, `false` otherwise
@@ -261,6 +278,10 @@ declare module 'papi-shared-types' {
    *
    * Note: The keys of this interface are the `projectType`s for the associated Project Data
    * Providers.
+   *
+   * WARNING: Each Project Storage Interpreter **must** fulfill certain requirements for its
+   * `getSetting`, `setSetting`, and `resetSetting` methods. See {@link MandatoryProjectDataTypes}
+   * for more information.
    *
    * An extension can extend this interface to add types for the Project Data Providers its
    * registered factory provides by adding the following to its `.d.ts` file (in this example, we

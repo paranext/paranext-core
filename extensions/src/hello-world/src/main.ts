@@ -14,9 +14,13 @@ import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?
 import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
 import helloWorldReactWebView2Styles from './web-views/hello-world-2.web-view.scss?inline';
 import helloWorldHtmlWebView from './web-views/hello-world.web-view.html?inline';
-import helloWorldProjectDataProviderEngineFactory from './models/hello-world-project-data-provider-engine-factory.model';
+import HelloWorldProjectDataProviderEngineFactory from './models/hello-world-project-data-provider-engine-factory.model';
 import helloWorldProjectWebView from './web-views/hello-world-project.web-view?inline';
 import helloWorldProjectWebViewStyles from './web-views/hello-world-project.web-view.scss?inline';
+import { HTML_COLOR_NAMES } from './util';
+
+/** User data storage key for all hello world project data */
+const allProjectDataStorageKey = 'allHelloWorldProjectData';
 
 type IWebViewProviderWithType = IWebViewProvider & { webViewType: string };
 
@@ -179,10 +183,28 @@ function helloException(message: string) {
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello world is activating!');
 
+  async function readRawDataForAllProjects(): Promise<string> {
+    try {
+      return await papi.storage.readUserData(context.executionToken, allProjectDataStorageKey);
+    } catch {
+      // No project data found or some other issue. With more important project data, we would be
+      // more careful not to do something that would overwrite project data if there were an error
+      return '{}';
+    }
+  }
+
+  async function writeRawDataForAllProjects(data: string): Promise<void> {
+    return papi.storage.writeUserData(context.executionToken, allProjectDataStorageKey, data);
+  }
+
+  const helloWorldProjectDataProviderEngineFactory = new HelloWorldProjectDataProviderEngineFactory(
+    readRawDataForAllProjects,
+    writeRawDataForAllProjects,
+  );
+
   const helloWorldPdpefPromise = papi.projectDataProviders.registerProjectDataProviderEngineFactory(
     'helloWorld',
     helloWorldProjectDataProviderEngineFactory,
-    async () => [],
   );
 
   const openHelloWorldProjectPromise = papi.commands.registerCommand(
@@ -190,9 +212,49 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     openHelloWorldProjectWebView,
   );
 
+  const createNewHelloWorldProjectPromise = papi.commands.registerCommand(
+    'helloWorld.createNewProject',
+    async (openWebView = true) => {
+      const projectId = await helloWorldProjectDataProviderEngineFactory.createNewProject();
+
+      if (openWebView) papi.commands.sendCommand('helloWorld.openProject', projectId);
+
+      return projectId;
+    },
+  );
+
+  const deleteHelloWorldProjectPromise = papi.commands.registerCommand(
+    'helloWorld.deleteProject',
+    async (projectId) => {
+      const projectIdToDelete =
+        projectId ??
+        (await papi.dialogs.selectProject({
+          includeProjectTypes: 'helloWorld',
+          title: 'Delete Hello World Project',
+          prompt: 'Please choose a project to delete:',
+        }));
+
+      if (!projectIdToDelete) return false;
+
+      // TODO: close web views if this is successful (we don't currently have a way to close them or
+      // to query for open ones)
+      return helloWorldProjectDataProviderEngineFactory.deleteProject(projectIdToDelete);
+    },
+  );
+
   const helloWorldPersonNamePromise = papi.settings.registerValidator(
     'helloWorld.personName',
     async (newValue) => typeof newValue === 'string',
+  );
+
+  const helloWorldHeaderSizePromise = papi.projectSettings.registerValidator(
+    'helloWorld.headerSize',
+    async (newValue) => typeof newValue === 'number' && Number.isInteger(newValue) && newValue > 0,
+  );
+
+  const helloWorldHeaderColorPromise = papi.projectSettings.registerValidator(
+    'helloWorld.headerColor',
+    async (newValue) => HTML_COLOR_NAMES.includes(newValue),
   );
 
   const helloWorldProjectWebViewProviderPromise = papi.webViewProviders.register(
@@ -255,7 +317,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await helloWorldPdpefPromise,
     await helloWorldProjectWebViewProviderPromise,
     await openHelloWorldProjectPromise,
+    await createNewHelloWorldProjectPromise,
+    await deleteHelloWorldProjectPromise,
     await helloWorldPersonNamePromise,
+    await helloWorldHeaderSizePromise,
+    await helloWorldHeaderColorPromise,
     await htmlWebViewProviderPromise,
     await reactWebViewProviderPromise,
     await reactWebView2ProviderPromise,

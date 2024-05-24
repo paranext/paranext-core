@@ -631,350 +631,6 @@ export type DeepPartial<T> = T extends object ? {
 export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
 	[K in keyof T]: ReplaceType<T[K], A, B>;
 } : T;
-/**
- * This function mirrors the `at` function from the JavaScript Standard String object. It handles
- * Unicode code points instead of UTF-16 character codes.
- *
- * Finds the Unicode code point at the given index.
- *
- * @param string String to index
- * @param index Position of the character to be returned in range of -length(string) to
- *   length(string)
- * @returns New string consisting of the Unicode code point located at the specified offset,
- *   undefined if index is out of bounds
- */
-export declare function at(string: string, index: number): string | undefined;
-/**
- * This function mirrors the `charAt` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Returns a new string consisting of the single unicode code point at the given index.
- *
- * @param string String to index
- * @param index Position of the string character to be returned, in the range of 0 to
- *   length(string)-1
- * @returns New string consisting of the Unicode code point located at the specified offset, empty
- *   string if index is out of bounds
- */
-export declare function charAt(string: string, index: number): string;
-/**
- * This function mirrors the `codePointAt` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Returns a non-negative integer that is the Unicode code point value of the character starting at
- * the given index.
- *
- * @param string String to index
- * @param index Position of the string character to be returned, in the range of 0 to
- *   length(string)-1
- * @returns Non-negative integer representing the code point value of the character at the given
- *   index, or undefined if there is no element at that position
- */
-export declare function codePointAt(string: string, index: number): number | undefined;
-/**
- * This function mirrors the `endsWith` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Determines whether a string ends with the characters of this string.
- *
- * @param string String to search through
- * @param searchString Characters to search for at the end of the string
- * @param endPosition End position where searchString is expected to be found. Default is
- *   `length(string)`
- * @returns True if it ends with searchString, false if it does not
- */
-export declare function endsWith(string: string, searchString: string, endPosition?: number): boolean;
-/**
- * This function mirrors the `includes` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Performs a case-sensitive search to determine if searchString is found in string.
- *
- * @param string String to search through
- * @param searchString String to search for
- * @param position Position within the string to start searching for searchString. Default is `0`
- * @returns True if search string is found, false if it is not
- */
-export declare function includes(string: string, searchString: string, position?: number): boolean;
-/**
- * This function mirrors the `indexOf` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Returns the index of the first occurrence of a given string.
- *
- * @param string String to search through
- * @param searchString The string to search for
- * @param position Start of searching. Default is `0`
- * @returns Index of the first occurrence of a given string
- */
-export declare function indexOf(string: string, searchString: string, position?: number | undefined): number;
-/**
- * This function mirrors the `lastIndexOf` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Searches this string and returns the index of the last occurrence of the specified substring.
- *
- * @param string String to search through
- * @param searchString Substring to search for
- * @param position The index at which to begin searching. If omitted, the search begins at the end
- *   of the string. Default is `undefined`
- * @returns Index of the last occurrence of searchString found, or -1 if not found.
- */
-export declare function lastIndexOf(string: string, searchString: string, position?: number): number;
-/**
- * This function mirrors the `length` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes. Since `length` appears to be a
- * reserved keyword, the function was renamed to `stringLength`
- *
- * Returns the length of a string.
- *
- * @param string String to return the length for
- * @returns Number that is length of the starting string
- */
-export declare function stringLength(string: string): number;
-/**
- * This function mirrors the `normalize` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Returns the Unicode Normalization Form of this string.
- *
- * @param string The starting string
- * @param form Form specifying the Unicode Normalization Form. Default is `'NFC'`
- * @returns A string containing the Unicode Normalization Form of the given string.
- */
-export declare function normalize(string: string, form: "NFC" | "NFD" | "NFKC" | "NFKD" | "none"): string;
-/**
- * Compares two strings using an ordinal comparison approach based on the specified collation
- * options. This function uses the built-in `localeCompare` method with the 'en' locale and the
- * provided collation options to compare the strings.
- *
- * @param string1 The first string to compare.
- * @param string2 The second string to compare.
- * @param options Optional. The collation options used for comparison.
- * @returns A number indicating the result of the comparison: - Negative value if string1 precedes
- *   string2 in sorting order. - Zero if string1 and string2 are equivalent in sorting order. -
- *   Positive value if string1 follows string2 in sorting order.
- */
-export declare function ordinalCompare(string1: string, string2: string, options?: Intl.CollatorOptions): number;
-/**
- * This function mirrors the `padEnd` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Pads this string with another string (multiple times, if needed) until the resulting string
- * reaches the given length. The padding is applied from the end of this string.
- *
- * @param string String to add padding too
- * @param targetLength The length of the resulting string once the starting string has been padded.
- *   If value is less than or equal to length(string), then string is returned as is.
- * @param padString The string to pad the current string with. If padString is too long to stay
- *   within targetLength, it will be truncated. Default is `" "`
- * @returns String with appropriate padding at the end
- */
-export declare function padEnd(string: string, targetLength: number, padString?: string): string;
-/**
- * This function mirrors the `padStart` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Pads this string with another string (multiple times, if needed) until the resulting string
- * reaches the given length. The padding is applied from the start of this string.
- *
- * @param string String to add padding too
- * @param targetLength The length of the resulting string once the starting string has been padded.
- *   If value is less than or equal to length(string), then string is returned as is.
- * @param padString The string to pad the current string with. If padString is too long to stay
- *   within the targetLength, it will be truncated from the end. Default is `" "`
- * @returns String with of specified targetLength with padString applied from the start
- */
-export declare function padStart(string: string, targetLength: number, padString?: string): string;
-/**
- * This function mirrors the `slice` function from the JavaScript Standard String object. It handles
- * Unicode code points instead of UTF-16 character codes.
- *
- * Extracts a section of this string and returns it as a new string, without modifying the original
- * string.
- *
- * @param string The starting string
- * @param indexStart The index of the first character to include in the returned substring.
- * @param indexEnd The index of the first character to exclude from the returned substring.
- * @returns A new string containing the extracted section of the string.
- */
-export declare function slice(string: string, indexStart: number, indexEnd?: number): string;
-/**
- * This function mirrors the `split` function from the JavaScript Standard String object. It handles
- * Unicode code points instead of UTF-16 character codes.
- *
- * Takes a pattern and divides the string into an ordered list of substrings by searching for the
- * pattern, puts these substrings into an array, and returns the array.
- *
- * @param string The string to split
- * @param separator The pattern describing where each split should occur
- * @param splitLimit Limit on the number of substrings to be included in the array. Splits the
- *   string at each occurrence of specified separator, but stops when limit entries have been placed
- *   in the array.
- * @returns An array of strings, split at each point where separator occurs in the starting string.
- *   Returns undefined if separator is not found in string.
- */
-export declare function split(string: string, separator: string | RegExp, splitLimit?: number): string[];
-/**
- * This function mirrors the `startsWith` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Determines whether the string begins with the characters of a specified string, returning true or
- * false as appropriate.
- *
- * @param string String to search through
- * @param searchString The characters to be searched for at the start of this string.
- * @param position The start position at which searchString is expected to be found (the index of
- *   searchString's first character). Default is `0`
- * @returns True if the given characters are found at the beginning of the string, including when
- *   searchString is an empty string; otherwise, false.
- */
-export declare function startsWith(string: string, searchString: string, position?: number): boolean;
-/**
- * This function mirrors the `substring` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Returns a substring by providing start and end position.
- *
- * @param string String to be divided
- * @param begin Start position
- * @param end End position. Default is `End of string`
- * @returns Substring from starting string
- */
-export declare function substring(string: string, begin: number, end?: number): string;
-/**
- * This function mirrors the `toArray` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
- *
- * Converts a string to an array of string characters.
- *
- * @param string String to convert to array
- * @returns An array of characters from the starting string
- */
-export declare function toArray(string: string): string[];
-/**
- * Check that two objects are deeply equal, comparing members of each object and such
- *
- * @param a The first object to compare
- * @param b The second object to compare
- *
- *   WARNING: Objects like arrays from different iframes have different constructor function
- *   references even if they do the same thing, so this deep equality comparison fails objects that
- *   look the same but have different constructors because different constructors could produce
- *   false positives in [a few specific
- *   situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
- *   This means that two objects like arrays from different iframes that look the same will fail
- *   this check. Please use some other means to check deep equality in those situations.
- *
- *   Note: This deep equality check considers `undefined` values on keys of objects NOT to be equal to
- *   not specifying the key at all. For example, `{ stuff: 3, things: undefined }` and `{ stuff: 3
- *   }` are not considered equal in this case
- *
- *   - For more information and examples, see [this
- *       CodeSandbox](https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs).
- *
- * @returns True if a and b are deeply equal; false otherwise
- */
-export function deepEqual(a: unknown, b: unknown): boolean;
-/**
- * Check if one object is a subset of the other object. "Subset" means that all properties of one
- * object are present in to the other object, and if they are present that all values of those
- * properties are deeply equal.
- *
- * @example ObjB is a subset of objA given these objects:
- *
- * ```ts
- * objA = { name: 'Alice', age: 30, address: { city: 'Seattle' } };
- * objB = { name: 'Alice', address: { city: 'Seattle' } };
- * ```
- *
- * It is important to note that only arrays of primitives (i.e., booleans, numbers, strings) are
- * supported. In particular, objects in arrays will not be checked for deep equality. Also, presence
- * in an array is all this checks, not the number of times that an item appears in an array. `[1,
- * 1]` is a subset of `[1]`.
- *
- * @param objectWithAllProperties Object to be checked if it is a superset of
- *   `objectWithPartialProperties`
- * @param objectWithPartialProperties Object to be checked if it is a subset of
- *   `objectWithAllProperties`
- * @returns True if `objectWithAllProperties` contains all the properties of
- *   `objectWithPartialProperties` and all values of those properties are deeply equal
- */
-export function isSubset(objectWithAllProperties: unknown, objectWithPartialProperties: unknown): boolean;
-/**
- * Converts a JavaScript value to a JSON string, changing `undefined` properties in the JavaScript
- * object to `null` properties in the JSON string.
- *
- * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
- * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
- * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
- * values, you should wrap them yourself in a string before using this function. Alternatively, you
- * can write your own replacer that will preserve `null` in a way that you can recover later.
- *
- * @param value A JavaScript value, usually an object or array, to be converted.
- * @param replacer A function that transforms the results. Note that all `undefined` values returned
- *   by the replacer will be further transformed into `null` in the JSON string.
- * @param space Adds indentation, white space, and line break characters to the return-value JSON
- *   text to make it easier to read. See the `space` parameter of `JSON.stringify` for more
- *   details.
- */
-export declare function serialize(value: unknown, replacer?: (this: unknown, key: string, value: unknown) => unknown, space?: string | number): string;
-/**
- * Converts a JSON string into a value, converting all `null` properties from JSON into `undefined`
- * in the returned JavaScript value/object.
- *
- * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
- * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
- * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
- * values, you should wrap them yourself in a string before using this function. Alternatively, you
- * can write your own replacer that will preserve `null` in a way that you can recover later.
- *
- * @param value A valid JSON string.
- * @param reviver A function that transforms the results. This function is called for each member of
- *   the object. If a member contains nested objects, the nested objects are transformed before the
- *   parent object is. Note that `null` values are converted into `undefined` values after the
- *   reviver has run.
- */
-export declare function deserialize(value: string, reviver?: (this: unknown, key: string, value: unknown) => unknown): any;
-/**
- * Check to see if the value is serializable without losing information
- *
- * @param value Value to test
- * @returns True if serializable; false otherwise
- *
- *   Note: the values `undefined` and `null` are serializable (on their own or in an array), but
- *   `null` values get transformed into `undefined` when serializing/deserializing.
- *
- *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
- *   Please only use this if you need to
- *
- *   DISCLAIMER: this does not successfully detect that values are not serializable in some cases:
- *
- *   - Losses of removed properties like functions and `Map`s
- *   - Class instances (not deserializable into class instances without special code)
- *
- *   We intend to improve this in the future if it becomes important to do so. See [`JSON.stringify`
- *   documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#description)
- *   for more information.
- */
-export declare function isSerializable(value: unknown): boolean;
-/**
- * HTML Encodes the provided string. Thanks to ChatGPT
- *
- * @param str String to HTML encode
- * @returns HTML-encoded string
- */
-export declare const htmlEncode: (str: string) => string;
-/**
- * Retrieves the current locale of the user's environment.
- *
- * @returns A string representing the current locale. If the locale cannot be determined, the
- *   function returns an empty string.
- */
-export function getCurrentLocale(): string;
-export type ScriptureItemDetail = ScriptureSelection & {
-	detail: string | ReactElement;
-};
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;
 /** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
@@ -1349,6 +1005,353 @@ export declare const menuDocumentSchema: {
 			additionalProperties: boolean;
 		};
 	};
+};
+/**
+ * This function mirrors the `at` function from the JavaScript Standard String object. It handles
+ * Unicode code points instead of UTF-16 character codes.
+ *
+ * Finds the Unicode code point at the given index.
+ *
+ * @param string String to index
+ * @param index Position of the character to be returned in range of -length(string) to
+ *   length(string)
+ * @returns New string consisting of the Unicode code point located at the specified offset,
+ *   undefined if index is out of bounds
+ */
+export declare function at(string: string, index: number): string | undefined;
+/**
+ * This function mirrors the `charAt` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Returns a new string consisting of the single unicode code point at the given index.
+ *
+ * @param string String to index
+ * @param index Position of the string character to be returned, in the range of 0 to
+ *   length(string)-1
+ * @returns New string consisting of the Unicode code point located at the specified offset, empty
+ *   string if index is out of bounds
+ */
+export declare function charAt(string: string, index: number): string;
+/**
+ * This function mirrors the `codePointAt` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Returns a non-negative integer that is the Unicode code point value of the character starting at
+ * the given index.
+ *
+ * @param string String to index
+ * @param index Position of the string character to be returned, in the range of 0 to
+ *   length(string)-1
+ * @returns Non-negative integer representing the code point value of the character at the given
+ *   index, or undefined if there is no element at that position
+ */
+export declare function codePointAt(string: string, index: number): number | undefined;
+/**
+ * This function mirrors the `endsWith` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Determines whether a string ends with the characters of this string.
+ *
+ * @param string String to search through
+ * @param searchString Characters to search for at the end of the string
+ * @param endPosition End position where searchString is expected to be found. Default is
+ *   `length(string)`
+ * @returns True if it ends with searchString, false if it does not
+ */
+export declare function endsWith(string: string, searchString: string, endPosition?: number): boolean;
+/**
+ * This function mirrors the `includes` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Performs a case-sensitive search to determine if searchString is found in string.
+ *
+ * @param string String to search through
+ * @param searchString String to search for
+ * @param position Position within the string to start searching for searchString. Default is `0`
+ * @returns True if search string is found, false if it is not
+ */
+export declare function includes(string: string, searchString: string, position?: number): boolean;
+/**
+ * This function mirrors the `indexOf` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Returns the index of the first occurrence of a given string.
+ *
+ * @param string String to search through
+ * @param searchString The string to search for
+ * @param position Start of searching. Default is `0`
+ * @returns Index of the first occurrence of a given string
+ */
+export declare function indexOf(string: string, searchString: string, position?: number | undefined): number;
+/**
+ * This function mirrors the `lastIndexOf` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Searches this string and returns the index of the last occurrence of the specified substring.
+ *
+ * @param string String to search through
+ * @param searchString Substring to search for
+ * @param position The index at which to begin searching. If omitted, the search begins at the end
+ *   of the string. Default is `undefined`
+ * @returns Index of the last occurrence of searchString found, or -1 if not found.
+ */
+export declare function lastIndexOf(string: string, searchString: string, position?: number): number;
+/**
+ * This function mirrors the `length` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes. Since `length` appears to be a
+ * reserved keyword, the function was renamed to `stringLength`
+ *
+ * Returns the length of a string.
+ *
+ * @param string String to return the length for
+ * @returns Number that is length of the starting string
+ */
+export declare function stringLength(string: string): number;
+/**
+ * This function mirrors the `normalize` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Returns the Unicode Normalization Form of this string.
+ *
+ * @param string The starting string
+ * @param form Form specifying the Unicode Normalization Form. Default is `'NFC'`
+ * @returns A string containing the Unicode Normalization Form of the given string.
+ */
+export declare function normalize(string: string, form: "NFC" | "NFD" | "NFKC" | "NFKD" | "none"): string;
+/**
+ * Compares two strings using an ordinal comparison approach based on the specified collation
+ * options. This function uses the built-in `localeCompare` method with the 'en' locale and the
+ * provided collation options to compare the strings.
+ *
+ * @param string1 The first string to compare.
+ * @param string2 The second string to compare.
+ * @param options Optional. The collation options used for comparison.
+ * @returns A number indicating the result of the comparison: - Negative value if string1 precedes
+ *   string2 in sorting order. - Zero if string1 and string2 are equivalent in sorting order. -
+ *   Positive value if string1 follows string2 in sorting order.
+ */
+export declare function ordinalCompare(string1: string, string2: string, options?: Intl.CollatorOptions): number;
+/**
+ * This function mirrors the `padEnd` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Pads this string with another string (multiple times, if needed) until the resulting string
+ * reaches the given length. The padding is applied from the end of this string.
+ *
+ * @param string String to add padding too
+ * @param targetLength The length of the resulting string once the starting string has been padded.
+ *   If value is less than or equal to length(string), then string is returned as is.
+ * @param padString The string to pad the current string with. If padString is too long to stay
+ *   within targetLength, it will be truncated. Default is `" "`
+ * @returns String with appropriate padding at the end
+ */
+export declare function padEnd(string: string, targetLength: number, padString?: string): string;
+/**
+ * This function mirrors the `padStart` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Pads this string with another string (multiple times, if needed) until the resulting string
+ * reaches the given length. The padding is applied from the start of this string.
+ *
+ * @param string String to add padding too
+ * @param targetLength The length of the resulting string once the starting string has been padded.
+ *   If value is less than or equal to length(string), then string is returned as is.
+ * @param padString The string to pad the current string with. If padString is too long to stay
+ *   within the targetLength, it will be truncated from the end. Default is `" "`
+ * @returns String with of specified targetLength with padString applied from the start
+ */
+export declare function padStart(string: string, targetLength: number, padString?: string): string;
+/**
+ * This function mirrors the `slice` function from the JavaScript Standard String object. It handles
+ * Unicode code points instead of UTF-16 character codes.
+ *
+ * Extracts a section of this string and returns it as a new string, without modifying the original
+ * string.
+ *
+ * @param string The starting string
+ * @param indexStart The index of the first character to include in the returned substring.
+ * @param indexEnd The index of the first character to exclude from the returned substring.
+ * @returns A new string containing the extracted section of the string.
+ */
+export declare function slice(string: string, indexStart: number, indexEnd?: number): string;
+/**
+ * This function mirrors the `split` function from the JavaScript Standard String object. It handles
+ * Unicode code points instead of UTF-16 character codes.
+ *
+ * Takes a pattern and divides the string into an ordered list of substrings by searching for the
+ * pattern, puts these substrings into an array, and returns the array.
+ *
+ * @param string The string to split
+ * @param separator The pattern describing where each split should occur
+ * @param splitLimit Limit on the number of substrings to be included in the array. Splits the
+ *   string at each occurrence of specified separator, but stops when limit entries have been placed
+ *   in the array.
+ * @returns An array of strings, split at each point where separator occurs in the starting string.
+ *   Returns undefined if separator is not found in string.
+ */
+export declare function split(string: string, separator: string | RegExp, splitLimit?: number): string[];
+/**
+ * This function mirrors the `startsWith` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Determines whether the string begins with the characters of a specified string, returning true or
+ * false as appropriate.
+ *
+ * @param string String to search through
+ * @param searchString The characters to be searched for at the start of this string.
+ * @param position The start position at which searchString is expected to be found (the index of
+ *   searchString's first character). Default is `0`
+ * @returns True if the given characters are found at the beginning of the string, including when
+ *   searchString is an empty string; otherwise, false.
+ */
+export declare function startsWith(string: string, searchString: string, position?: number): boolean;
+/**
+ * This function mirrors the `substring` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Returns a substring by providing start and end position.
+ *
+ * @param string String to be divided
+ * @param begin Start position
+ * @param end End position. Default is `End of string`
+ * @returns Substring from starting string
+ */
+export declare function substring(string: string, begin: number, end?: number): string;
+/**
+ * This function mirrors the `toArray` function from the JavaScript Standard String object. It
+ * handles Unicode code points instead of UTF-16 character codes.
+ *
+ * Converts a string to an array of string characters.
+ *
+ * @param string String to convert to array
+ * @returns An array of characters from the starting string
+ */
+export declare function toArray(string: string): string[];
+/** Determine whether the string is a `LocalizeKey` meant to be localized in Platform.Bible. */
+export declare function isLocalizeKey(str: string): str is LocalizeKey;
+/**
+ * Check that two objects are deeply equal, comparing members of each object and such
+ *
+ * @param a The first object to compare
+ * @param b The second object to compare
+ *
+ *   WARNING: Objects like arrays from different iframes have different constructor function
+ *   references even if they do the same thing, so this deep equality comparison fails objects that
+ *   look the same but have different constructors because different constructors could produce
+ *   false positives in [a few specific
+ *   situations](https://github.com/planttheidea/fast-equals/blob/a41afc0a240ad5a472e47b53791e9be017f52281/src/comparator.ts#L96).
+ *   This means that two objects like arrays from different iframes that look the same will fail
+ *   this check. Please use some other means to check deep equality in those situations.
+ *
+ *   Note: This deep equality check considers `undefined` values on keys of objects NOT to be equal to
+ *   not specifying the key at all. For example, `{ stuff: 3, things: undefined }` and `{ stuff: 3
+ *   }` are not considered equal in this case
+ *
+ *   - For more information and examples, see [this
+ *       CodeSandbox](https://codesandbox.io/s/deepequallibrarycomparison-4g4kk4?file=/src/index.mjs).
+ *
+ * @returns True if a and b are deeply equal; false otherwise
+ */
+export function deepEqual(a: unknown, b: unknown): boolean;
+/**
+ * Check if one object is a subset of the other object. "Subset" means that all properties of one
+ * object are present in the other object, and if they are present that all values of those
+ * properties are deeply equal. Sub-objects are also checked to be subsets of the corresponding
+ * sub-object in the other object.
+ *
+ * @example ObjB is a subset of objA given these objects:
+ *
+ * ```ts
+ * objA = { name: 'Alice', age: 30, address: { city: 'Seattle', state: 'Washington' } };
+ * objB = { name: 'Alice', address: { city: 'Seattle' } };
+ * ```
+ *
+ * It is important to note that only arrays of primitives (i.e., booleans, numbers, strings) are
+ * supported. In particular, objects in arrays will not be checked for deep equality. Also, presence
+ * in an array is all this checks, not the number of times that an item appears in an array. `[1,
+ * 1]` is a subset of `[1]`.
+ *
+ * @param objectWithAllProperties Object to be checked if it is a superset of
+ *   `objectWithPartialProperties`
+ * @param objectWithPartialProperties Object to be checked if it is a subset of
+ *   `objectWithAllProperties`
+ * @returns True if `objectWithAllProperties` contains all the properties of
+ *   `objectWithPartialProperties` and all values of those properties are deeply equal
+ */
+export function isSubset(objectWithAllProperties: unknown, objectWithPartialProperties: unknown): boolean;
+/**
+ * Converts a JavaScript value to a JSON string, changing `undefined` properties in the JavaScript
+ * object to `null` properties in the JSON string.
+ *
+ * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
+ * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
+ * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
+ * values, you should wrap them yourself in a string before using this function. Alternatively, you
+ * can write your own replacer that will preserve `null` in a way that you can recover later.
+ *
+ * @param value A JavaScript value, usually an object or array, to be converted.
+ * @param replacer A function that transforms the results. Note that all `undefined` values returned
+ *   by the replacer will be further transformed into `null` in the JSON string.
+ * @param space Adds indentation, white space, and line break characters to the return-value JSON
+ *   text to make it easier to read. See the `space` parameter of `JSON.stringify` for more
+ *   details.
+ */
+export declare function serialize(value: unknown, replacer?: (this: unknown, key: string, value: unknown) => unknown, space?: string | number): string;
+/**
+ * Converts a JSON string into a value, converting all `null` properties from JSON into `undefined`
+ * in the returned JavaScript value/object.
+ *
+ * WARNING: `null` values will become `undefined` values after passing through {@link serialize} then
+ * {@link deserialize}. For example, `{ a: 1, b: undefined, c: null }` will become `{ a: 1, b:
+ * undefined, c: undefined }`. If you are passing around user data that needs to retain `null`
+ * values, you should wrap them yourself in a string before using this function. Alternatively, you
+ * can write your own replacer that will preserve `null` in a way that you can recover later.
+ *
+ * @param value A valid JSON string.
+ * @param reviver A function that transforms the results. This function is called for each member of
+ *   the object. If a member contains nested objects, the nested objects are transformed before the
+ *   parent object is. Note that `null` values are converted into `undefined` values after the
+ *   reviver has run.
+ */
+export declare function deserialize(value: string, reviver?: (this: unknown, key: string, value: unknown) => unknown): any;
+/**
+ * Check to see if the value is serializable without losing information
+ *
+ * @param value Value to test
+ * @returns True if serializable; false otherwise
+ *
+ *   Note: the values `undefined` and `null` are serializable (on their own or in an array), but
+ *   `null` values get transformed into `undefined` when serializing/deserializing.
+ *
+ *   WARNING: This is inefficient right now as it stringifies, parses, stringifies, and === the value.
+ *   Please only use this if you need to
+ *
+ *   DISCLAIMER: this does not successfully detect that values are not serializable in some cases:
+ *
+ *   - Losses of removed properties like functions and `Map`s
+ *   - Class instances (not deserializable into class instances without special code)
+ *
+ *   We intend to improve this in the future if it becomes important to do so. See [`JSON.stringify`
+ *   documentation](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#description)
+ *   for more information.
+ */
+export declare function isSerializable(value: unknown): boolean;
+/**
+ * HTML Encodes the provided string. Thanks to ChatGPT
+ *
+ * @param str String to HTML encode
+ * @returns HTML-encoded string
+ */
+export declare const htmlEncode: (str: string) => string;
+/**
+ * Retrieves the current locale of the user's environment.
+ *
+ * @returns A string representing the current locale. If the locale cannot be determined, the
+ *   function returns an empty string.
+ */
+export function getCurrentLocale(): string;
+export type ScriptureItemDetail = ScriptureSelection & {
+	detail: string | ReactElement;
 };
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;

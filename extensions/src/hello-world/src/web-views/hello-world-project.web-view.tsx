@@ -1,8 +1,16 @@
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useProjectDataProvider } from '@papi/frontend/react';
+import { useCallback } from 'react';
+import useHelloWorldProjectSettings from './hello-world-project/use-hello-world-project-settings.hook';
+import ProjectSettingsEditor from './hello-world-project/project-settings-editor.component';
 
 const namesDefault: string[] = [];
+
+const testExtensionDataScope = {
+  extensionName: 'helloWorld',
+  dataQualifier: 'webViewTestExtensionData',
+};
 
 globalThis.webViewComponent = function HelloWorldProjectWebView({ useWebViewState }: WebViewProps) {
   const [projectId] = useWebViewState('projectId', '');
@@ -15,10 +23,26 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({ useWebViewStat
 
   const [names] = useProjectData('helloWorld', pdp).Names(undefined, namesDefault);
 
+  const [extensionData, setExtensionData] = useProjectData('helloWorld', pdp).ExtensionData(
+    testExtensionDataScope,
+    '',
+  );
+
   const [currentName, setCurrentName] = useWebViewState('currentName', '');
+
+  const addCurrentName = useCallback(() => {
+    if (!pdp) return;
+
+    pdp.addName(currentName);
+    setCurrentName('');
+  }, [pdp, currentName, setCurrentName]);
+
+  const helloWorldProjectSettings = useHelloWorldProjectSettings('helloWorld', pdp);
+  const { headerStyle } = helloWorldProjectSettings;
 
   return (
     <div className="top">
+      <h3 style={headerStyle}>Project Data</h3>
       <div>
         Max:{' '}
         <input type="number" value={max} onChange={(e) => setMax(parseInt(e.target.value, 10))} />
@@ -41,16 +65,12 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({ useWebViewStat
         />
       </div>
       <div>Names: {names.join(', ')}</div>
-      <input value={currentName} onChange={(e) => setCurrentName(e.target.value)} />
-      <button
-        type="button"
-        onClick={() => {
-          if (!pdp) return;
-
-          pdp.addName(currentName);
-          setCurrentName('');
-        }}
-      >
+      <input
+        value={currentName}
+        onChange={(e) => setCurrentName(e.target.value)}
+        onSubmit={addCurrentName}
+      />
+      <button type="button" onClick={addCurrentName}>
         Add Name
       </button>
       <button
@@ -64,6 +84,12 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({ useWebViewStat
       >
         Remove Name
       </button>
+      <hr />
+      <h3 style={headerStyle}>Extension Data</h3>
+      <input value={extensionData} onChange={(e) => setExtensionData?.(e.target.value)} />
+      <hr />
+      <h3 style={headerStyle}>Project Settings</h3>
+      <ProjectSettingsEditor {...helloWorldProjectSettings} />
     </div>
   );
 };

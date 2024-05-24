@@ -18,6 +18,7 @@ function SelectProjectDialog({
   prompt,
   submitDialog,
   excludeProjectIds,
+  includeProjectIds,
   includeProjectTypes,
   excludeProjectTypes,
 }: DialogTypes[typeof SELECT_PROJECT_DIALOG_TYPE]['props']) {
@@ -26,10 +27,11 @@ function SelectProjectDialog({
       const allProjectsMetadata = await projectLookupService.getMetadataForAllProjects();
       return filterProjectsMetadata(allProjectsMetadata, {
         excludeProjectIds,
+        includeProjectIds,
         includeProjectTypes,
         excludeProjectTypes,
       });
-    }, [excludeProjectIds, includeProjectTypes, excludeProjectTypes]),
+    }, [excludeProjectIds, includeProjectIds, includeProjectTypes, excludeProjectTypes]),
     useMemo(() => [], []),
   );
 

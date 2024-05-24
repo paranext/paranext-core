@@ -102,9 +102,10 @@ export function filterProjectsMetadata(
 ): ProjectMetadata[] {
   if (!options) return [...projectsMetadata];
 
-  const { excludeProjectIds, includeProjectTypes, excludeProjectTypes } = options;
+  const { excludeProjectIds, includeProjectIds, includeProjectTypes, excludeProjectTypes } =
+    options;
 
-  if (!excludeProjectIds && !includeProjectTypes && !excludeProjectTypes)
+  if (!excludeProjectIds && !includeProjectIds && !includeProjectTypes && !excludeProjectTypes)
     return [...projectsMetadata];
 
   // Get array of excludeProjectIds
@@ -113,6 +114,13 @@ export function filterProjectsMetadata(
     excludeProjectIdsArray = Array.isArray(excludeProjectIds)
       ? excludeProjectIds
       : [excludeProjectIds];
+
+  // Get array of includeProjectIds
+  let includeProjectIdsArray: string[] | undefined;
+  if (includeProjectIds)
+    includeProjectIdsArray = Array.isArray(includeProjectIds)
+      ? includeProjectIds
+      : [includeProjectIds];
 
   // Get array of excludeProjectTypes RegExps
   let excludeProjectTypesArray: string[] | undefined;
@@ -137,6 +145,10 @@ export function filterProjectsMetadata(
   return projectsMetadata.filter((projectMetadata) => {
     // If the project ID is excluded, it's out
     if (excludeProjectIdsArray?.some((id) => projectMetadata.id === id)) return false;
+
+    // If the project ID is not included, it's out
+    if (includeProjectIdsArray && !includeProjectIdsArray.some((id) => projectMetadata.id === id))
+      return false;
 
     // If the project type is excluded, it's out
     if (
