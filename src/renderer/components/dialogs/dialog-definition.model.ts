@@ -7,8 +7,6 @@ import { ProjectMetadataFilterOptions } from '@shared/models/project-lookup.serv
 export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
 export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
-/** The tabType for the inventories dialog in `inventory-base.dialog.tsx` */
-export const INVENTORY_DIALOG_TYPE = 'platform.inventory';
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
@@ -40,7 +38,6 @@ export interface DialogTypes {
     SelectMultipleProjectsDialogOptions,
     string[]
   >;
-  [INVENTORY_DIALOG_TYPE]: DialogDataTypes<InventoryDialogOptions, string>;
 }
 
 /** Each type of dialog. These are the tab types used in the dock layout */

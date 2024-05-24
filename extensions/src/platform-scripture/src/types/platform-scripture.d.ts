@@ -24,5 +24,15 @@ declare module 'papi-shared-types' {
      * '100111000000000000110000001000000000010111111111111111111111111111000000000000000000000000000000000000000000100000000000000'
      */
     'platformScripture.booksPresent': string;
+
+    'platformScripture.validCharacters': string;
+
+    'platformScripture.invalidCharacters': string;
+  }
+
+  export interface CommandHandlers {
+    'platformScripture.openCharactersInventory': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 }

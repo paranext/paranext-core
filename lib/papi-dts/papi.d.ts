@@ -3797,8 +3797,6 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
   /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
-  /** The tabType for the inventories dialog in `inventory-base.dialog.tsx` */
-  export const INVENTORY_DIALOG_TYPE = 'platform.inventory';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -3822,7 +3820,6 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
       SelectMultipleProjectsDialogOptions,
       string[]
     >;
-    [INVENTORY_DIALOG_TYPE]: DialogDataTypes<InventoryDialogOptions, string>;
   }
   /** Each type of dialog. These are the tab types used in the dock layout */
   export type DialogTabTypes = keyof DialogTypes;

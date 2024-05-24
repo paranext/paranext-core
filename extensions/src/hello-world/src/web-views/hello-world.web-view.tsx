@@ -165,21 +165,6 @@ globalThis.webViewComponent = function HelloWorld({
     ),
   );
 
-  const openInventory = useDialogCallback(
-    'platform.inventory',
-    useMemo(
-      () => ({
-        prompt: 'This is the prompt',
-        iconUrl: 'papi-extension://hello-world/assets/offline.svg',
-        title: 'This is the title',
-      }),
-      [],
-    ),
-    useCallback(() => {
-      // console.log('Callback is called');
-    }, []),
-  );
-
   const [name, setNameInternal] = useSetting('helloWorld.personName', 'Kathy');
 
   // Name used for display and editing in the input field while debouncing the actual setting change
@@ -312,9 +297,6 @@ globalThis.webViewComponent = function HelloWorld({
       <div>{projects.join(', ')}</div>
       <div>
         <Button onClick={() => selectProjects()}>Select Projects</Button>
-      </div>
-      <div>
-        <Button onClick={() => openInventory()}>Open Checks Inventory Dialog</Button>
       </div>
       <br />
       <div>
