@@ -1,10 +1,8 @@
-import { SyntheticEvent, useMemo } from 'react';
+import { SyntheticEvent, useEffect, useState } from 'react';
 import { FormControlLabel } from '@mui/material';
 import ComboBox from '@/components/combo-box.component';
 
 export type ChapterRangeSelectorProps = {
-  startChapter: number;
-  endChapter: number;
   handleSelectStartChapter: (chapter: number) => void;
   handleSelectEndChapter: (chapter: number) => void;
   isDisabled?: boolean;
@@ -12,28 +10,39 @@ export type ChapterRangeSelectorProps = {
 };
 
 export default function ChapterRangeSelector({
-  startChapter,
-  endChapter,
   handleSelectStartChapter,
   handleSelectEndChapter,
-  isDisabled,
+  isDisabled = false,
   chapterCount,
 }: ChapterRangeSelectorProps) {
-  const numberArray = useMemo(
-    () => Array.from({ length: chapterCount }, (_, index) => index + 1),
-    [chapterCount],
+  const [startChapter, setStartChapter] = useState<number>(1);
+  const [endChapter, setEndChapter] = useState<number>(chapterCount);
+  const [chapterOptions, setChapterOptions] = useState<number[]>(
+    Array.from({ length: chapterCount }, (_, i) => i + 1),
   );
 
+  useEffect(() => {
+    setStartChapter(1);
+    handleSelectStartChapter(1);
+    setEndChapter(chapterCount);
+    handleSelectEndChapter(chapterCount);
+    setChapterOptions(Array.from({ length: chapterCount }, (_, i) => i + 1));
+  }, [chapterCount, handleSelectEndChapter, handleSelectStartChapter]);
+
   const onChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
+    setStartChapter(value);
     handleSelectStartChapter(value);
     if (value > endChapter) {
+      setEndChapter(value);
       handleSelectEndChapter(value);
     }
   };
 
   const onChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
+    setEndChapter(value);
     handleSelectEndChapter(value);
     if (value < startChapter) {
+      setStartChapter(value);
       handleSelectStartChapter(value);
     }
   };
@@ -52,7 +61,7 @@ export default function ChapterRangeSelector({
             className="book-selection-chapter"
             key="start chapter"
             isClearable={false}
-            options={numberArray}
+            options={chapterOptions}
             getOptionLabel={(option) => option.toString()}
             value={startChapter}
             isDisabled={isDisabled}
@@ -73,7 +82,7 @@ export default function ChapterRangeSelector({
             className="book-selection-chapter"
             key="end chapter"
             isClearable={false}
-            options={numberArray}
+            options={chapterOptions}
             getOptionLabel={(option) => option.toString()}
             value={endChapter}
             isDisabled={isDisabled}

@@ -7,6 +7,8 @@ import { ProjectMetadataFilterOptions } from '@shared/models/project-lookup.serv
 export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
 export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
+/** The tabType for the select books dialog in `select-books.dialog.tsx` */
+export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
@@ -17,6 +19,12 @@ export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
 export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
   /** Project IDs that should start selected in the dialog */
   selectedProjectIds?: string[];
+};
+
+/** Options to provide when showing the Select Books dialog */
+export type SelectBooksDialogOptions = DialogOptions & {
+  /** Books IDs that should start selected in the dialog */
+  selectedBookIds?: string[];
 };
 
 /**
@@ -32,6 +40,7 @@ export interface DialogTypes {
     SelectMultipleProjectsDialogOptions,
     string[]
   >;
+  [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
 }
 
 /** Each type of dialog. These are the tab types used in the dock layout */
