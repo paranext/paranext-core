@@ -208,7 +208,7 @@ globalThis.webViewComponent = function HelloWorld({
     projectId ?? undefined,
   ).VerseUSFM(verseRef, 'Loading Verse');
 
-  const helloWorldProjectSettings = useHelloWorldProjectSettings('ParatextStandard', project);
+  const helloWorldProjectSettings = useHelloWorldProjectSettings('ParatextStandard', projectId);
   const { headerStyle } = helloWorldProjectSettings;
 
   const [localizedString] = usePromise(
@@ -274,14 +274,14 @@ globalThis.webViewComponent = function HelloWorld({
       <div>
         <Button
           onClick={() =>
-            papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', project)
+            papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId)
           }
         >
           Open in Scripture Editor
         </Button>
         <Button
           onClick={() =>
-            papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', project)
+            papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId)
           }
         >
           Open in Resource Viewer

@@ -642,7 +642,7 @@ export function mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent
       // WebViewDefinitionUpdateInfo. Now I guess TypeScript isn't smart enough to realize that the
       // property is going to be the same between these two objects since they both have all the
       // possible properties of the key with the same types and are using the same key. Too bad :/
-      // @ts-expect-error ts(2322)
+      // @ts-ignore ts(2322)
       updatedWebViewDefinition[key] = updateInfo[key];
       didUpdateAnyProperties = true;
     }
