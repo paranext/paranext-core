@@ -50,9 +50,9 @@ function scrollToScrRef(scrRef: ScriptureReference) {
 }
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
+  projectId,
   useWebViewState,
 }: WebViewProps): JSX.Element {
-  const [projectId] = useWebViewState<string>('projectId', '');
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
 
   // Using react's ref api which uses null, so we must use null

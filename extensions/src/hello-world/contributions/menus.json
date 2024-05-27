@@ -48,5 +48,44 @@
     "groups": {},
     "items": []
   },
-  "webViewMenus": {}
+  "webViewMenus": {
+    "helloWorld.projectWebView": {
+      "topMenu": {
+        "columns": {
+          "helloWorld.project": {
+            "label": "%helloWorld_webViewMenu_project%",
+            "order": 1
+          },
+          "helloWorld.view": {
+            "label": "%helloWorld_webViewMenu_view%",
+            "order": 2
+          }
+        },
+        "groups": {
+          "helloWorld.projectGroup": {
+            "column": "helloWorld.project",
+            "order": 1
+          },
+          "helloWorld.viewGroup": {
+            "column": "helloWorld.view",
+            "order": 1
+          }
+        },
+        "items": [
+          {
+            "label": "%helloWorld_webViewMenu_deleteProject%",
+            "group": "helloWorld.projectGroup",
+            "order": 1,
+            "command": "helloWorld.deleteProjectByWebViewId"
+          },
+          {
+            "label": "%helloWorld_webViewMenu_openViewer%",
+            "group": "helloWorld.viewGroup",
+            "order": 1,
+            "command": "helloWorld.openViewerByWebViewId"
+          }
+        ]
+      }
+    }
+  }
 }

@@ -211,6 +211,26 @@ declare module 'papi-shared-types' {
      * @returns `true` if successfully deleted
      */
     'helloWorld.deleteProject': (projectId?: string) => Promise<boolean>;
+    /**
+     * Deletes a Hello World project
+     *
+     * Note: this command is intended to work from the web view menu
+     *
+     * @param webViewId Optional web view ID of a hello world project web view associated with the
+     *   project to delete. Prompts the user to select a project if not provided
+     * @returns `true` if successfully deleted
+     */
+    'helloWorld.deleteProjectByWebViewId': (webViewId?: string) => Promise<boolean>;
+    /**
+     * Opens the viewer for a Hello World project
+     *
+     * Note: this command is intended to work from the web view menu
+     *
+     * @param webViewId Optional web view ID of a hello world project web view associated with the
+     *   project to open the viewer for. Prompts the user to select a project if not provided
+     * @returns WebView id for new viewer or `undefined` if the user canceled the dialog
+     */
+    'helloWorld.openViewerByWebViewId': (webViewId?: string) => Promise<string | undefined>;
   }
 
   export interface ProjectDataProviders {
