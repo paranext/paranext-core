@@ -1,6 +1,6 @@
-import { Button } from '@/components/shadcn-ui/button';
+import { Button as ShadcnButton } from '@/components/shadcn-ui/button';
 import {
-  Button as MUIButton,
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -14,6 +14,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  TextField,
   VerticalTabs,
   VerticalTabsContent,
   VerticalTabsList,
@@ -25,25 +26,34 @@ function Basics() {
     <div>
       <VerticalTabs>
         <VerticalTabsList>
-          <VerticalTabsTrigger value="MUI Button">MUI Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
         </VerticalTabsList>
 
-        <VerticalTabsContent value="MUI Button">
-          {/* eslint-disable-next-line no-alert */}
-          <MUIButton onClick={() => alert('Hello World')}>Hello MUI</MUIButton>
-        </VerticalTabsContent>
-
         <VerticalTabsContent value="Button">
-          {/* eslint-disable-next-line no-alert */}
-          <Button onClick={() => alert('Hello World')}>Hello Shadcn</Button>
+          <div>
+            {/* eslint-disable-next-line no-alert */}
+            <Button onClick={() => alert('Hello World')}>Wrapped Button</Button>
+          </div>
+          <div>
+            {/* eslint-disable-next-line no-alert */}
+            <ShadcnButton onClick={() => alert('Hello World')}>Plain Shadcn Button</ShadcnButton>
+          </div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Input">
           <table>
+            <tr>
+              <td>
+                Text Field <div className="pr-text-xs">(wrapped)</div>
+              </td>
+              {/* eslint-disable-next-line jsx-a11y/control-has-associated-label */}
+              <td>
+                <TextField />
+              </td>
+            </tr>
             <tr>
               <td>
                 Shadcn Default Input
@@ -79,7 +89,7 @@ function Basics() {
         <VerticalTabsContent value="Dropdown Menu">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button>Open</Button>
+              <ShadcnButton>Open</ShadcnButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuLabel>DropdownMenuLabel</DropdownMenuLabel>
