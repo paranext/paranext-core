@@ -1,29 +1,46 @@
-import { useState } from 'react';
-import { ScriptureReference } from 'platform-bible-utils';
-import { BookChapterControl, RefSelector } from '..';
 import './app.component.css';
-
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '..';
+import { ThemeProvider } from './theme-provider.component';
+import ThemeToggle from './theme-toggle.component';
+import Basics from './components/basics.component';
+import Compositions from './components/compositions.component';
+import Examples from './components/examples.component';
+import Playground from './components/playground.component';
 
 function App() {
-  const [scrRef, setScrRef] = useState(defaultScrRef);
-
   return (
-    <>
-      <h1>platform-bible-react Preview</h1>
-      <p>
-        Edit <code>lib\platform-bible-react\src\preview\app.component.tsx</code> and save to see
-        updates
-      </p>
-      <RefSelector scrRef={scrRef} handleSubmit={setScrRef} />
-      <div className="bcv-control-div">
-        <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      {/* pr-font-sans is added to mitigate issue introduced by scopedPreflightStyles */}
+      <div className="pr-twp pr-p-2 pr-font-sans">
+        <ThemeToggle className="pr-fixed pr-right-4 pr-top-4" />
+        <h1 className="pr-pb-4 pr-uppercase">platform-bible-react Preview</h1>
+        <p>
+          Edit <code>lib/platform-bible-react/src/preview/components/...</code> and save to see
+          updates
+        </p>
+        <Tabs defaultValue="Playground" className="pr-pt-4">
+          <TabsList>
+            <TabsTrigger value="Basics">Basic Components</TabsTrigger>
+            <TabsTrigger value="Compositions">Composition Components</TabsTrigger>
+            <TabsTrigger value="Examples">Example Layouts</TabsTrigger>
+            <TabsTrigger value="Playground">Playground</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="Basics">
+            <Basics />
+          </TabsContent>
+          <TabsContent value="Compositions">
+            <Compositions />
+          </TabsContent>
+          <TabsContent value="Examples">
+            <Examples />
+          </TabsContent>
+          <TabsContent value="Playground">
+            <Playground />
+          </TabsContent>
+        </Tabs>
       </div>
-    </>
+    </ThemeProvider>
   );
 }
 
