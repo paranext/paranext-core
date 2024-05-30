@@ -561,8 +561,10 @@ export type ScriptureRefKeyedListProps = ScriptureRefKeyedListColumnInfo & {
 	showColumnHeaders?: boolean;
 	/** Flag indicating whether to display source column. Default is false. */
 	showSourceColumn?: boolean;
+	/** Callback function to notify when a row is selected */
+	onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
 };
-export function ScriptureRefKeyedList({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, }: ScriptureRefKeyedListProps): import("react/jsx-runtime").JSX.Element;
+export function ScriptureRefKeyedList({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureRefKeyedListProps): import("react/jsx-runtime").JSX.Element;
 export type SearchBarProps = {
 	/**
 	 * Callback fired to handle the search query when button pressed

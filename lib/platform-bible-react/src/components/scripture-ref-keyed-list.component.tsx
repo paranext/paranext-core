@@ -1,4 +1,4 @@
-import { useState, ChangeEvent, useMemo, useEffect } from 'react';
+import { useState, ChangeEvent, useMemo, useEffect, useCallback, MouseEvent } from 'react';
 import {
   GroupingState,
   useReactTable,
@@ -11,6 +11,7 @@ import {
   SortingState,
   Row,
   Cell,
+  RowSelectionState,
 } from '@tanstack/react-table';
 import { Canon } from '@sillsdev/scripture';
 import '@/components/scripture-ref-keyed-list.component.css';
@@ -19,6 +20,7 @@ import {
   format,
   ScriptureCheckDefinition,
   ScriptureItemDetail,
+  ScriptureReference,
 } from 'platform-bible-utils';
 import ResultsSource from './results-source.class';
 
@@ -63,6 +65,9 @@ export type ScriptureRefKeyedListProps = ScriptureRefKeyedListColumnInfo & {
 
   /** Flag indicating whether to display source column. Default is false. */
   showSourceColumn?: boolean;
+
+  /** Callback function to notify when a row is selected */
+  onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
 };
 
 function getColumns(
@@ -130,6 +135,7 @@ export default function ScriptureRefKeyedList({
   scriptureBookGroupName,
   typeColumnName,
   detailsColumnName,
+  onRowSelected,
 }: ScriptureRefKeyedListProps) {
   const [grouping, setGrouping] = useState<GroupingState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: scrBookColId, desc: false }]);
@@ -143,6 +149,7 @@ export default function ScriptureRefKeyedList({
       }));
     });
   });
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   useEffect(() => {
     const handleUpdatedResults = (event: CustomEvent<ResultsSource>) => {
@@ -188,20 +195,54 @@ export default function ScriptureRefKeyedList({
     [scriptureReferenceColumnName, typeColumnName, detailsColumnName, showSourceColumn],
   );
 
+  function toBCV(ref: ScriptureReference) {
+    return ref.bookNum * 1000000 + ref.chapterNum * 1000 + ref.verseNum;
+  }
+
+  const toRefOrRange = useCallback(
+    (start: ScriptureReference, end: ScriptureReference | undefined) => {
+      if (!end || compare(start, end) === 0) return `${toBCV(start)}`;
+      return `${toBCV(start)}-${toBCV(end)}`;
+    },
+    [],
+  );
+
+  const getRowKey = useCallback(
+    (row: ScriptureSrcItemDetail) =>
+      `${toRefOrRange(row.start, row.end)} ${row.source} ${row.detail}`,
+    [toRefOrRange],
+  );
+
   const table = useReactTable({
     data,
     columns,
     state: {
       grouping,
       sorting,
+      rowSelection,
     },
     onGroupingChange: setGrouping,
     onSortingChange: setSorting,
+    onRowSelectionChange: setRowSelection,
     getExpandedRowModel: getExpandedRowModel(),
     getGroupedRowModel: getGroupedRowModel(),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getRowId: getRowKey,
+    enableMultiRowSelection: false,
+    enableSubRowSelection: false,
   });
+
+  useEffect(() => {
+    if (onRowSelected) {
+      const selectedRows = table.getSelectedRowModel().rowsById;
+      const keys = Object.keys(selectedRows);
+      if (keys.length === 1) {
+        const selectedRow = data.find((row) => getRowKey(row) === keys[0]) || undefined;
+        if (selectedRow) onRowSelected(selectedRow);
+      }
+    }
+  }, [rowSelection, data, getRowKey, onRowSelected, table]);
 
   // Define possible grouping options
   const scrBookGroupName = scriptureBookGroupName ?? defaultScrBookGroupName;
@@ -226,6 +267,17 @@ export default function ScriptureRefKeyedList({
     setGrouping(selectedGrouping);
   };
 
+  const handleRowClick = (row: Row<ScriptureSrcItemDetail>, event: MouseEvent) => {
+    if (!row.getIsGrouped() && !row.getIsSelected()) {
+      row.getToggleSelectedHandler()(event);
+    }
+  };
+
+  const getEvenOrOddBandingStyle = (row: Row<ScriptureSrcItemDetail>, index: number) => {
+    if (row.getIsGrouped()) return '';
+    return index % 2 === 0 ? 'banded-row-even' : 'banded-row-odd';
+  };
+
   const getIndent = (
     row: Row<ScriptureItemDetail>,
     cell: Cell<ScriptureSrcItemDetail, unknown>,
@@ -237,7 +289,7 @@ export default function ScriptureRefKeyedList({
     <div className="p-2">
       <div className="h-2" />
       {!showColumnHeaders && (
-        <select onChange={handleSelectChange}>
+        <select value={JSON.stringify(grouping)} onChange={handleSelectChange}>
           {groupingOptions.map((option) => (
             <option key={option.label} value={JSON.stringify(option.value)}>
               {option.label}
@@ -276,13 +328,19 @@ export default function ScriptureRefKeyedList({
           </thead>
         )}
         <tbody>
-          {table.getRowModel().rows.map((row) => {
+          {table.getRowModel().rows.map((row, rowIndex) => {
             return (
-              <tr key={row.id}>
+              <tr
+                key={row.id}
+                className={`${row.getIsSelected() ? 'selected ' : ''} ${getEvenOrOddBandingStyle(row, rowIndex)}`}
+                onClick={(event) => handleRowClick(row, event)}
+              >
                 {row.getVisibleCells().map((cell) => {
                   if (
                     cell.getIsPlaceholder() ||
-                    (cell.column.columnDef.enableGrouping && !cell.getIsGrouped())
+                    (cell.column.columnDef.enableGrouping &&
+                      !cell.getIsGrouped() &&
+                      (cell.column.columnDef.id !== typeColId || !showSourceColumn))
                   )
                     return undefined;
                   return (
