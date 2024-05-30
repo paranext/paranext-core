@@ -1,7 +1,7 @@
 // source: https://ui.shadcn.com/docs/dark-mode/vite
 
 /* eslint-disable react/prop-types */
-import * as React from 'react';
+import React from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Moon, Sun } from 'lucide-react';
 import { Button } from '../components/shadcn-ui/button';
