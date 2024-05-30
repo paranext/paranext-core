@@ -1,16 +1,24 @@
 // adapted from: https://github.com/shadcn-ui/ui/discussions/752
-/* eslint-disable react/prop-types */
 
 'use client';
 
 import React from 'react';
-import * as TabsPrimitive from '@radix-ui/react-tabs';
-
+import TabsPrimitive from '@radix-ui/react-tabs';
 import { cn } from '@/utils/shadcn-ui.util';
+import { TabsContentProps, TabsListProps, TabsTriggerProps } from './tabs';
 
-const VerticalTabs = React.forwardRef<
+export type VerticalTabsProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root> & {
+  className?: string;
+};
+
+export type LeftTabsTriggerProps = TabsTriggerProps & {
+  value: string;
+  ref?: React.Ref<HTMLButtonElement>;
+};
+
+export const VerticalTabs = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root>
+  VerticalTabsProps
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Root
     orientation="vertical"
@@ -22,9 +30,9 @@ const VerticalTabs = React.forwardRef<
 
 VerticalTabs.displayName = TabsPrimitive.List.displayName;
 
-const VerticalTabsList = React.forwardRef<
+export const VerticalTabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
-  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
+  TabsListProps
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
@@ -37,11 +45,7 @@ const VerticalTabsList = React.forwardRef<
 ));
 VerticalTabsList.displayName = TabsPrimitive.List.displayName;
 
-type LeftTabsTriggerProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
-  value: string;
-};
-
-const VerticalTabsTrigger = React.forwardRef<
+export const VerticalTabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   LeftTabsTriggerProps
 >(({ className, ...props }, ref) => (
@@ -59,9 +63,9 @@ const VerticalTabsTrigger = React.forwardRef<
   </TabsPrimitive.Trigger>
 ));
 
-const VerticalTabsContent = React.forwardRef<
+export const VerticalTabsContent = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
+  TabsContentProps
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
@@ -73,5 +77,3 @@ const VerticalTabsContent = React.forwardRef<
   />
 ));
 VerticalTabsContent.displayName = TabsPrimitive.Content.displayName;
-
-export { VerticalTabs, VerticalTabsList, VerticalTabsTrigger, VerticalTabsContent };

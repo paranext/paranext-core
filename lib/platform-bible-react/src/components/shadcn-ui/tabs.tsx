@@ -1,14 +1,25 @@
-/* eslint-disable react/prop-types */
 import React from 'react';
-import * as TabsPrimitive from '@radix-ui/react-tabs';
+import TabsPrimitive from '@radix-ui/react-tabs';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
-const Tabs = TabsPrimitive.Root;
+export const Tabs = TabsPrimitive.Root;
 
-const TabsList = React.forwardRef<
+export type TabsListProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & {
+  className?: string;
+};
+
+export type TabsTriggerProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
+  className?: string;
+};
+
+export type TabsContentProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content> & {
+  className?: string;
+};
+
+export const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
-  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
+  TabsListProps
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
@@ -21,9 +32,9 @@ const TabsList = React.forwardRef<
 ));
 TabsList.displayName = TabsPrimitive.List.displayName;
 
-const TabsTrigger = React.forwardRef<
+export const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
+  TabsTriggerProps
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Trigger
     ref={ref}
@@ -36,9 +47,9 @@ const TabsTrigger = React.forwardRef<
 ));
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
-const TabsContent = React.forwardRef<
+export const TabsContent = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
+  TabsContentProps
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
@@ -50,5 +61,3 @@ const TabsContent = React.forwardRef<
   />
 ));
 TabsContent.displayName = TabsPrimitive.Content.displayName;
-
-export { Tabs, TabsList, TabsTrigger, TabsContent };
