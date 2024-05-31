@@ -2,7 +2,7 @@
 
 import { AutocompleteChangeDetails, AutocompleteChangeReason, AutocompleteValue, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
-import TabsPrimitive from '@radix-ui/react-tabs';
+import * as TabsPrimitive from '@radix-ui/react-tabs';
 import React$1 from 'react';
 import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
 import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';

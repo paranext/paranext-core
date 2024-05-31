@@ -1,5 +1,5 @@
 import React from 'react';
-import TabsPrimitive from '@radix-ui/react-tabs';
+import * as TabsPrimitive from '@radix-ui/react-tabs';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
