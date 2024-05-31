@@ -1,17 +1,19 @@
 import { Dispose } from 'platform-bible-utils';
-import { ProjectMetadata } from './project-metadata.model';
+import { ProjectMetadataWithoutFactoryInfo } from './project-metadata.model';
 
 export const PDP_FACTORY_OBJECT_TYPE: string = 'pdpFactory';
 
 /**
- * Network object that creates Project Data Providers of a specific `projectType` as requested on
- * the `papi`. These are created internally within the platform to layer over
+ * Network object that creates Project Data Providers of a specific set of `projectInterface`s as
+ * requested on the `papi`. These are created internally within the platform to layer over
  * TypeScript-extension-provided {@link IProjectDataProviderEngineFactory} or are created by
  * independent processes on the `papi`.
+ *
+ * See {@link IProjectDataProvider} for more information.
  */
 interface IProjectDataProviderFactory extends Dispose {
   /** Get data about all projects that can be created by this PDP factory */
-  getAvailableProjects(): Promise<ProjectMetadata[]>;
+  getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]>;
   /**
    * Returns the registered network object name of a PDP for the given project ID. Called by the
    * platform when someone uses the project data provider service to access a project's data.

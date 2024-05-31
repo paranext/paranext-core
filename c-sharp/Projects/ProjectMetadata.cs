@@ -5,7 +5,7 @@ namespace Paranext.DataProvider.Projects;
 /// <summary>
 /// Represents the data inside a project's meta.json file
 /// </summary>
-public class ProjectMetadata(string id, string name, string projectType)
+public class ProjectMetadata(string id, string name, List<string> projectInterfaces)
 {
     /// <summary>
     /// ID of the project (must be unique and case-insensitive)
@@ -22,29 +22,30 @@ public class ProjectMetadata(string id, string name, string projectType)
     /// <summary>
     /// Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
     /// </summary>
-    [JsonProperty("projectType")]
-    public string ProjectType { get; } = projectType;
+    [JsonProperty("projectInterfaces")]
+    public List<string> ProjectInterfaces { get; } = projectInterfaces;
 
     public override bool Equals(object? obj)
     {
         ProjectMetadata? that = obj as ProjectMetadata;
-        return that != null && (this.Equals(that));
+        return that != null && this.Equals(that);
     }
 
     protected bool Equals(ProjectMetadata other)
     {
         return ID.Equals(other.ID)
             && Name == other.Name
-            && ProjectType == other.ProjectType;
+            && ProjectInterfaces.Count == other.ProjectInterfaces.Count &&
+            ProjectInterfaces.All(other.ProjectInterfaces.Contains);
     }
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(ID, Name, ProjectType);
+        return HashCode.Combine(ID, Name, string.Join(',', ProjectInterfaces));
     }
 
     public override string ToString()
     {
-        return $"[{Name} ({ID}): {ProjectType}]";
+        return $"[{Name} ({ID}): {string.Join(',', ProjectInterfaces)}]";
     }
 }

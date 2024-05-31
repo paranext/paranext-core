@@ -78,23 +78,105 @@ export interface ProjectSettingsGroup {
 export interface ProjectSettingProperties {
   [k: ReferencedItem]: ProjectSetting;
 }
-/** Modifies setting type to be project setting */
+
+// Note: we removed the index signature on ModifierProject to avoid having it on
+// `ProjectMetadataFilterOptions`. Unfortunately adding "additionalProperties": false on the json
+// schema messes up validation. Please remove the index signature again in the future if you
+// regenerate types
 export interface ModifierProject {
-  [k: string]: unknown;
   /**
-   * `RegExp` pattern(s) to match against `projectType` (using the
+   * String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s
+   * (using the
    * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
-   * function) to determine whether this project setting should be displayed in the Project Settings
-   * Dialog of that `projectType`. null means do not show on any Project Settings dialog
+   * function) to determine if they should be included.
+   *
+   * If this is one string, it will be matched against `projectInterface`s. If this is an array,
+   * each entry is handled based on its type (at least one entry must match for this filter
+   * condition to pass):
+   *
+   * - If the entry is a string, it will be matched against each `projectInterface`. If any match, the
+   *   project will pass this filter condition
+   * - If the entry is an array of strings, each will be matched against each `projectInterface`. If
+   *   every string matches against at least one `projectInterface`, the project will pass this
+   *   filter condition
+   *
+   * In other words, each entry in the first-level array is `OR`'ed together. Each entry in
+   * second-level arrays (arrays within the first-level array) are `AND`'ed together.
+   *
+   * Defaults to all {@link ProjectInterfaces}, so all projects that do not match
+   * `excludeProjectInterfaces` will be included
+   *
+   * @example
+   *
+   * ```typescript
+   * includeProjectInterfaces: ['one', ['two', 'three']];
+   * ```
+   *
+   * This filter condition will succeed on projects whose `projectInterface`s fulfill at least one
+   * of the following conditions (At least one entry in the array must match):
+   *
+   * - Include `one`
+   * - Include both `two` and `three`.
    */
-  includeProjectTypes?: undefined | string | string[];
+  includeProjectInterfaces?: undefined | string | (string | string[])[];
   /**
-   * `RegExp` pattern to match against `projectType` to determine if this project setting should
-   * absolutely not be displayed in the Project Settings dialog of that `projectType` even if it
-   * matches with `includeProjectTypes`
+   * String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s
+   * (using the
+   * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+   * function) to determine if they should absolutely not be included even if they match with
+   * `includeProjectInterfaces`.
+   *
+   * If this is one string, it will be matched against `projectInterface`s. If this is an array,
+   * each entry is handled based on its type (at least one entry must match for this filter
+   * condition to exclude the project):
+   *
+   * - If the entry is a string, it will be matched against each `projectInterface`. If any match, the
+   *   project will pass this filter condition and exclude the project
+   * - If the entry is an array of strings, each will be matched against each `projectInterface`. If
+   *   every string matches against at least one `projectInterface`, the project will pass this
+   *   filter condition and exclude the project
+   *
+   * In other words, each entry in the first-level array is `OR`'ed together. Each entry in
+   * second-level arrays (arrays within the first-level array) are `AND`'ed together.
+   *
+   * Defaults to no {@link ProjectInterfaces}, so all projects that match `includeProjectInterfaces`
+   * will be included
+   *
+   * @example
+   *
+   * ```typescript
+   * excludeProjectInterfaces: ['one', ['two', 'three']];
+   * ```
+   *
+   * This filter condition will succeed and exclude projects whose `projectInterface`s fulfill at
+   * least one of the following conditions (At least one entry in the array must match):
+   *
+   * - Include `one`
+   * - Include both `two` and `three`.
    */
-  excludeProjectTypes?: undefined | string | string[];
+  excludeProjectInterfaces?: undefined | string | (string | string[])[];
+  /**
+   * String representation of `RegExp` pattern(s) to match against the Project Data Provider Factory
+   * Ids that provided each project's metadata (using the
+   * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+   * function) to determine if the projects should be included.
+   *
+   * Defaults to all Project Data Provider Factory Ids, so all projects that do not match
+   * `excludePdpFactoryIds` will be included
+   */
+  includePdpFactoryIds?: undefined | string | string[];
+  /**
+   * String representation of `RegExp` pattern(s) to match against the Project Data Provider Factory
+   * Ids that provided each project's metadata (using the
+   * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+   * function) to determine if the projects should absolutely not be included even if they match
+   * with `includeProjectInterfaces`.
+   *
+   * Defaults to none, so all projects that match `includePdpFactoryIds` will be included
+   */
+  excludePdpFactoryIds?: undefined | string | string[];
 }
+
 /** The data an extension provides to inform Platform.Bible of the user state it provides */
 export interface UserStateContribution {
   [k: ReferencedItem]: UserState;
@@ -186,9 +268,9 @@ const settingsDefs = {
     description: 'Modifies setting type to be project setting',
     type: 'object',
     properties: {
-      includeProjectTypes: {
+      includeProjectInterfaces: {
         description:
-          '`RegExp` pattern(s) to match against `projectType` (using the [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test) function) to determine whether this project setting should be displayed in the Project Settings Dialog of that `projectType`. null means do not show on any Project Settings dialog',
+          "String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s (using the [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test) function) to determine if they should be included.\n\nIf this is one string, it will be matched against `projectInterface`s. If this is an array, each entry is handled based on its type (at least one entry must match for this filter condition to pass):\n\n- If the entry is a string, it will be matched against each `projectInterface`. If any match, the project will pass this filter condition\n- If the entry is an array of strings, each will be matched against each `projectInterface`. If every string matches against at least one `projectInterface`, the project will pass this filter condition\n\nIn other words, each entry in the first-level array is `OR`'ed together. Each entry in second-level arrays (arrays within the first-level array) are `AND`'ed together.\n\nDefaults to all {@link ProjectInterfaces}, so all projects that do not match `excludeProjectInterfaces` will be included\n\n@example\n\n```typescript\nincludeProjectInterfaces: ['one', ['two', 'three']];\n```\n\nThis filter condition will succeed on projects whose `projectInterface`s fulfill at least one of the following conditions (At least one entry in the array must match):\n\n- Include `one`\n- Include both `two` and `three`.",
         anyOf: [
           {
             type: 'null',
@@ -199,14 +281,22 @@ const settingsDefs = {
           {
             type: 'array',
             items: {
-              type: 'string',
+              anyOf: [
+                {
+                  type: 'string',
+                },
+                {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+              ],
             },
           },
         ],
       },
-      excludeProjectTypes: {
+      excludeProjectInterfaces: {
         description:
-          '`RegExp` pattern to match against `projectType` to determine if this project setting should absolutely not be displayed in the Project Settings dialog of that `projectType` even if it matches with `includeProjectTypes`',
+          "String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s (using the [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test) function) to determine if they should absolutely not be included even if they match with `includeProjectInterfaces`.\n\nIf this is one string, it will be matched against `projectInterface`s. If this is an array, each entry is handled based on its type (at least one entry must match for this filter condition to exclude the project):\n\n- If the entry is a string, it will be matched against each `projectInterface`. If any match, the project will pass this filter condition and exclude the project\n- If the entry is an array of strings, each will be matched against each `projectInterface`. If every string matches against at least one `projectInterface`, the project will pass this filter condition and exclude the project\n\nIn other words, each entry in the first-level array is `OR`'ed together. Each entry in second-level arrays (arrays within the first-level array) are `AND`'ed together.\n\nDefaults to no {@link ProjectInterfaces}, so all projects that match `includeProjectInterfaces` will be included\n\n@example\n\n```typescript\nexcludeProjectInterfaces: ['one', ['two', 'three']];\n```\n\nThis filter condition will succeed and exclude projects whose `projectInterface`s fulfill at least one of the following conditions (At least one entry in the array must match):\n\n- Include `one`\n- Include both `two` and `three`.",
         anyOf: [
           {
             type: 'null',
@@ -217,8 +307,48 @@ const settingsDefs = {
           {
             type: 'array',
             items: {
-              type: 'string',
+              anyOf: [
+                {
+                  type: 'string',
+                },
+                {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+              ],
             },
+          },
+        ],
+      },
+      includePdpFactoryIds: {
+        description:
+          "String representation of `RegExp` pattern(s) to match against the Project Data Provider Factory Ids that provided each project's metadata (using the [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test) function) to determine if the projects should be included.\n\nDefaults to all Project Data Provider Factory Ids, so all projects that do not match `excludePdpFactoryIds` will be included",
+        anyOf: [
+          {
+            type: 'null',
+          },
+          {
+            type: 'string',
+          },
+          {
+            type: 'array',
+            items: { type: 'string' },
+          },
+        ],
+      },
+      excludePdpFactoryIds: {
+        description:
+          "String representation of `RegExp` pattern(s) to match against the Project Data Provider Factory Ids that provided each project's metadata (using the [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test) function) to determine if the projects should absolutely not be included even if they match with `includeProjectInterfaces`.\n\nDefaults to none, so all projects that match `includePdpFactoryIds` will be included",
+        anyOf: [
+          {
+            type: 'null',
+          },
+          {
+            type: 'string',
+          },
+          {
+            type: 'array',
+            items: { type: 'string' },
           },
         ],
       },

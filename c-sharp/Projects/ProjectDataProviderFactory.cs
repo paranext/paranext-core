@@ -8,28 +8,28 @@ using Paranext.DataProvider.NetworkObjects;
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
-/// Provides a ProjectDataProvider object for a specified project type
+/// Provides a ProjectDataProvider object for a specified set of projectInterfaces
 /// </summary>
 internal abstract class ProjectDataProviderFactory : NetworkObject
 {
-    private readonly string _projectType;
+    private readonly List<string> _projectInterfaces;
 
-    protected ProjectDataProviderFactory(string projectType, PapiClient papiClient)
+    protected ProjectDataProviderFactory(List<string> projectInterfaces, PapiClient papiClient)
         : base(papiClient)
     {
-        _projectType = projectType;
+        _projectInterfaces = projectInterfaces;
     }
 
     public async Task Initialize()
     {
         await StartFactory();
-        var name = $"platform.pdpFactory-{_projectType}";
+        var name = $"platform.pdpFactory-{string.Join(',', _projectInterfaces)}";
         await RegisterNetworkObject(
             name,
             new MessageEventProjectDataProviderFactoryCreated(
                 name,
                 ["getAvailableProjects", "getProjectDataProviderId"],
-                _projectType
+                _projectInterfaces
             ),
             FunctionHandler
         );
@@ -48,7 +48,7 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
             jsonArray = request.Deserialize<JsonNode>()!.AsArray();
             if (jsonArray.Count == 0)
                 return ResponseToRequest.Failed(
-                    $"No function name provided when calling PDP Factory for {_projectType}"
+                    $"No function name provided when calling PDP Factory for {string.Join(',', _projectInterfaces)}"
                 );
             functionName = (string)jsonArray[0]!;
             jsonArray.RemoveAt(0);

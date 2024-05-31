@@ -56,13 +56,13 @@ const test1ExtensionContribution: ProjectSettingsContribution = {
       label: '%test1.setting1_label%',
       description: '%test1.setting1_description%',
       default: 'hi',
-      includeProjectTypes: '^thing$',
+      includeProjectInterfaces: '^thing$',
     },
     'test1.setting2': {
       label: '%test1.setting2_label%',
       description: '%test1.setting2_description%',
       default: 5,
-      excludeProjectTypes: ['^stuff', 'b[oO]rk$'],
+      excludeProjectInterfaces: ['^stuff', 'b[oO]rk$'],
     },
   },
 };
@@ -74,13 +74,13 @@ const test1ExtensionContributionLocalized: Localized<ProjectSettingsContribution
       label: 'test1.setting1_label',
       description: 'test1.setting1_description',
       default: 'hi',
-      includeProjectTypes: '^thing$',
+      includeProjectInterfaces: '^thing$',
     },
     'test1.setting2': {
       label: 'test1.setting2_label',
       description: 'test1.setting2_description',
       default: 5,
-      excludeProjectTypes: ['^stuff', 'b[oO]rk$'],
+      excludeProjectInterfaces: ['^stuff', 'b[oO]rk$'],
     },
   },
 };

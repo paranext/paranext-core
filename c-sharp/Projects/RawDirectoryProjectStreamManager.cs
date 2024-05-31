@@ -18,7 +18,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
     public RawDirectoryProjectStreamManager(ProjectDetails projectDetails)
     {
         _projectDetails = projectDetails;
-        _writableRootDir = Path.Join(projectDetails.HomeDirectory, "project");
+        _writableRootDir = projectDetails.HomeDirectory;
     }
 
     public void Initialize() // TODO: This doesn't seem to be used

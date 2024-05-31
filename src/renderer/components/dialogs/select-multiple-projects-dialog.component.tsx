@@ -20,8 +20,8 @@ function SelectMultipleProjectsDialog({
   submitDialog,
   excludeProjectIds,
   includeProjectIds,
-  includeProjectTypes,
-  excludeProjectTypes,
+  includeProjectInterfaces,
+  excludeProjectInterfaces,
   selectedProjectIds: initialSelectedProjectIds,
 }: DialogTypes[typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]['props']) {
   const [projects, isLoadingProjects] = usePromise(
@@ -30,10 +30,10 @@ function SelectMultipleProjectsDialog({
       return filterProjectsMetadata(allProjectsMetadata, {
         excludeProjectIds,
         includeProjectIds,
-        includeProjectTypes,
-        excludeProjectTypes,
+        includeProjectInterfaces,
+        excludeProjectInterfaces,
       });
-    }, [excludeProjectIds, includeProjectIds, includeProjectTypes, excludeProjectTypes]),
+    }, [excludeProjectIds, includeProjectIds, includeProjectInterfaces, excludeProjectInterfaces]),
     useMemo(() => [], []),
   );
 

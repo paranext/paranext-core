@@ -27,7 +27,11 @@ export type {
   IProjectDataProviderEngineFactory,
 } from '@shared/models/project-data-provider-engine.model';
 export type { default as IProjectDataProviderFactory } from '@shared/models/project-data-provider-factory.interface';
-export type { ProjectMetadata } from '@shared/models/project-metadata.model';
+export type {
+  ProjectDataProviderFactoryMetadataInfo,
+  ProjectMetadata,
+  ProjectMetadataWithoutFactoryInfo,
+} from '@shared/models/project-metadata.model';
 export type {
   LocalizationData,
   LocalizationSelector,

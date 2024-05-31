@@ -1,10 +1,11 @@
 import {
   IProjectDataProviderEngine,
   IProjectDataProviderEngineFactory,
-  ProjectMetadata,
+  ProjectMetadataWithoutFactoryInfo,
 } from '@papi/core';
 import { newGuid } from 'platform-bible-utils';
 import HelloWorldProjectDataProviderEngine, {
+  HELLO_WORLD_PROJECT_INTERFACES,
   HelloWorldProjectData,
 } from './hello-world-project-data-provider-engine.model';
 import { ELIGIBLE_NEW_NAMES } from '../util';
@@ -22,7 +23,7 @@ function createEmptyHelloWorldProjectData(projectName: string): HelloWorldProjec
 }
 
 class HelloWorldProjectDataProviderEngineFactory
-  implements IProjectDataProviderEngineFactory<'helloWorld'>
+  implements IProjectDataProviderEngineFactory<typeof HELLO_WORLD_PROJECT_INTERFACES>
 {
   /** Do not use directly as it may not have a value. Use `getAllProjectData` */
   private allProjectDataCached: AllHelloWorldProjectData | undefined;
@@ -66,10 +67,10 @@ class HelloWorldProjectDataProviderEngineFactory
     await this.saveAllProjectData();
   }
 
-  async getAvailableProjects(): Promise<ProjectMetadata[]> {
+  async getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
     const allAvailableProjects = Object.entries(await this.getAllProjectData());
     return allAvailableProjects.map(([projectId, projectData]) => ({
-      projectType: 'helloWorld',
+      projectInterfaces: HELLO_WORLD_PROJECT_INTERFACES,
       id: projectId,
       name: projectData?.projectName ?? projectId,
     }));
@@ -77,7 +78,7 @@ class HelloWorldProjectDataProviderEngineFactory
 
   async createProjectDataProviderEngine(
     projectId: string,
-  ): Promise<IProjectDataProviderEngine<'helloWorld'>> {
+  ): Promise<IProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>> {
     const allProjectData = await this.getAllProjectData();
     const projectData: HelloWorldProjectData =
       allProjectData[projectId] ?? createEmptyHelloWorldProjectData(projectId);

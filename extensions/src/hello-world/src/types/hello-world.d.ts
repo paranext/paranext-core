@@ -233,7 +233,7 @@ declare module 'papi-shared-types' {
     'helloWorld.openViewerByWebViewId': (webViewId?: string) => Promise<string | undefined>;
   }
 
-  export interface ProjectDataProviders {
+  export interface ProjectDataProviderInterfaces {
     helloWorld: HelloWorldProjectDataProvider;
   }
 

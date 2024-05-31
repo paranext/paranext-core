@@ -244,3 +244,11 @@ export type ReplaceType<T, A, B> = T extends A
   : T extends object
     ? { [K in keyof T]: ReplaceType<T[K], A, B> }
     : T;
+
+// Thanks to jcalz at https://stackoverflow.com/a/50375286
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (
+  x: infer I,
+) => void
+  ? I
+  : never;
