@@ -8,6 +8,8 @@ export { default as ChapterRangeSelector } from './components/chapter-range-sele
 export type { ChapterRangeSelectorProps } from './components/chapter-range-selector.component';
 export { default as Checkbox } from './components/checkbox.component';
 export type { CheckboxProps } from './components/checkbox.component';
+export { default as Checklist } from './components/checklist.component';
+export type { ChecklistProps } from './components/checklist.component';
 export { default as ComboBox } from './components/combo-box.component';
 export type {
   ComboBoxChangeDetails,
@@ -74,3 +76,12 @@ export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
+export { Input } from '@/components/shadcn-ui/input';
+export * from '@/components/shadcn-ui/dropdown-menu';
+export { Tabs, TabsList, TabsContent, TabsTrigger } from '@/components/shadcn-ui/tabs';
+export {
+  VerticalTabs,
+  VerticalTabsList,
+  VerticalTabsContent,
+  VerticalTabsTrigger,
+} from '@/components/shadcn-ui/tabs-vertical';

@@ -40,7 +40,19 @@ declare module 'shared/models/web-view.model' {
     title?: string;
     /** Tooltip that is shown when hovering over the webview title */
     tooltip?: string;
-    /** General object to store unique state for this webview */
+    /**
+     * Project id associated with this web view.
+     *
+     * Note: This field may be used in other contexts (like menu commands) for project-specific
+     * operations related to this web view.
+     */
+    projectId?: string;
+    /**
+     * General object to store unique state for this webview.
+     *
+     * WARNING: This storage is not private; other extensions can access this data. Do not store
+     * secrets in here
+     */
     state?: Record<string, unknown>;
     /**
      * Whether to allow the WebView iframe to interact with its parent as a same-origin website.
@@ -150,20 +162,47 @@ declare module 'shared/models/web-view.model' {
     | WebViewDefinitionHtml
     | WebViewDefinitionURL;
   /**
+   * The keys of properties on a WebViewDefinition that are omitted when converting to a
+   * {@link SavedWebViewDefinition}
+   */
+  export const SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS: readonly [
+    'content',
+    'styles',
+    'allowScripts',
+    'allowSameOrigin',
+    'allowedFrameSources',
+  ];
+  /**
+   * The keys of properties on a WebViewDefinition that are omitted when converting to a
+   * {@link SavedWebViewDefinition}
+   */
+  export type SavedWebViewDefinitionOmittedKeys =
+    (typeof SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS)[number];
+  /**
    * Saved WebView information that does not contain the actual content of the WebView. Saved into
    * layouts. Could have as little as the type and ID. WebView providers load these into actual
    * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
    */
   export type SavedWebViewDefinition = (
-    | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles' | 'allowScripts'>>
-    | Partial<Omit<WebViewDefinitionHtml, 'content' | 'allowScripts'>>
-    | Partial<Omit<WebViewDefinitionURL, 'content' | 'allowScripts'>>
+    | Partial<Omit<WebViewDefinitionReact, SavedWebViewDefinitionOmittedKeys>>
+    | Partial<Omit<WebViewDefinitionHtml, SavedWebViewDefinitionOmittedKeys>>
+    | Partial<Omit<WebViewDefinitionURL, SavedWebViewDefinitionOmittedKeys>>
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+  /**
+   * The keys of properties on a WebViewDefinition that may be updated when that webview is already
+   * displayed
+   */
+  export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS: readonly [
+    'iconUrl',
+    'title',
+    'tooltip',
+    'projectId',
+  ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
     WebViewDefinitionBase,
-    'iconUrl' | 'title' | 'tooltip'
+    (typeof WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS)[number]
   >;
   /**
    * WebViewDefinition properties for updating a WebView that is already displayed. Any unspecified
@@ -217,14 +256,12 @@ declare module 'shared/models/web-view.model' {
   ];
   /**
    *
-   * Gets the updatable properties on this WebView's WebView definition
+   * Gets the saved properties on this WebView's WebView definition
    *
-   * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found for
-   * some reason
+   * _＠returns_ saved properties this WebView's WebView definition or undefined if not found for some
+   * reason
    */
-  export type GetWebViewDefinitionUpdatableProperties = () =>
-    | WebViewDefinitionUpdatableProperties
-    | undefined;
+  export type GetSavedWebViewDefinition = () => SavedWebViewDefinition | undefined;
   /**
    *
    * Updates this WebView with the specified properties
@@ -232,7 +269,8 @@ declare module 'shared/models/web-view.model' {
    * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
    * the same
    *
-   * _＠returns_ true if successfully found the WebView to update; false otherwise
+   * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
+   * false otherwise
    *
    * _＠example_
    *
@@ -242,7 +280,7 @@ declare module 'shared/models/web-view.model' {
    */
   export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) => boolean;
   /** Props that are passed into the web view itself inside the iframe in the web view tab component */
-  export type WebViewProps = {
+  export type WebViewProps = SavedWebViewDefinition & {
     /**
      *
      * A React hook for working with a state object tied to a webview. Returns a WebView state value and
@@ -283,20 +321,13 @@ declare module 'shared/models/web-view.model' {
     useWebViewState: UseWebViewStateHook;
     /**
      *
-     * Gets the updatable properties on this WebView's WebView definition
-     *
-     * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found for
-     * some reason
-     */
-    getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
-    /**
-     *
      * Updates this WebView with the specified properties
      *
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
      * the same
      *
-     * _＠returns_ true if successfully found the WebView to update; false otherwise
+     * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
+     * false otherwise
      *
      * _＠example_
      *
@@ -335,10 +366,10 @@ declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';
   import {
-    GetWebViewDefinitionUpdatableProperties,
+    GetSavedWebViewDefinition,
+    SavedWebViewDefinition,
     UpdateWebViewDefinition,
     UseWebViewStateHook,
-    WebViewDefinitionUpdatableProperties,
     WebViewDefinitionUpdateInfo,
     WebViewProps,
   } from 'shared/models/web-view.model';
@@ -410,21 +441,19 @@ declare module 'shared/global-this.model' {
     var setWebViewState: <T>(stateKey: string, stateValue: T) => void;
     /** Remove the value for a given key in the web view state */
     var resetWebViewState: (stateKey: string) => void;
-    var getWebViewDefinitionUpdatablePropertiesById: (
-      webViewId: string,
-    ) => WebViewDefinitionUpdatableProperties | undefined;
+    var getSavedWebViewDefinitionById: (webViewId: string) => SavedWebViewDefinition | undefined;
     var updateWebViewDefinitionById: (
       webViewId: string,
       webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
     ) => boolean;
     /**
      *
-     * Gets the updatable properties on this WebView's WebView definition
+     * Gets the saved properties on this WebView's WebView definition
      *
-     * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found for
-     * some reason
+     * _＠returns_ saved properties this WebView's WebView definition or undefined if not found for some
+     * reason
      */
-    var getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
+    var getSavedWebViewDefinition: GetSavedWebViewDefinition;
     /**
      *
      * Updates this WebView with the specified properties
@@ -432,7 +461,8 @@ declare module 'shared/global-this.model' {
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
      * the same
      *
-     * _＠returns_ true if successfully found the WebView to update; false otherwise
+     * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
+     * false otherwise
      *
      * _＠example_
      *
@@ -2864,7 +2894,12 @@ declare module 'shared/models/docking-framework.model' {
   };
 }
 declare module 'shared/services/web-view.service-model' {
-  import { GetWebViewOptions, WebViewId, WebViewType } from 'shared/models/web-view.model';
+  import {
+    GetWebViewOptions,
+    SavedWebViewDefinition,
+    WebViewId,
+    WebViewType,
+  } from 'shared/models/web-view.model';
   import { AddWebViewEvent, Layout } from 'shared/models/docking-framework.model';
   import { PlatformEvent } from 'platform-bible-utils';
   /**
@@ -2894,6 +2929,14 @@ declare module 'shared/services/web-view.service-model' {
       layout?: Layout,
       options?: GetWebViewOptions,
     ) => Promise<WebViewId | undefined>;
+    /**
+     * Gets the saved properties on the WebView definition with the specified ID
+     *
+     * @param webViewId The ID of the WebView whose saved properties to get
+     * @returns Saved properties of the WebView definition with the specified ID or undefined if not
+     *   found
+     */
+    getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
   }
   /** Name to use when creating a network event that is fired when webViews are created */
   export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
@@ -3797,6 +3840,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
   /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
+  /** The tabType for the select books dialog in `select-books.dialog.tsx` */
+  export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -3804,6 +3849,11 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
     /** Project IDs that should start selected in the dialog */
     selectedProjectIds?: string[];
+  };
+  /** Options to provide when showing the Select Books dialog */
+  export type SelectBooksDialogOptions = DialogOptions & {
+    /** Books IDs that should start selected in the dialog */
+    selectedBookIds?: string[];
   };
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs
@@ -3818,6 +3868,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
       SelectMultipleProjectsDialogOptions,
       string[]
     >;
+    [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
   }
   /** Each type of dialog. These are the tab types used in the dock layout */
   export type DialogTabTypes = keyof DialogTypes;
@@ -5710,6 +5761,39 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   ): (DataProviders[EachDataProviderName[number]] | undefined)[];
   export default useDataProviderMulti;
 }
+declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
+  import { LocalizationData } from 'shared/services/localization.service-model';
+  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import { LocalizeKey } from 'platform-bible-utils';
+  /**
+   * Gets localizations on the papi.
+   *
+   * @param localizationKeys Array of keys to get localizations of
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param localizationLocales Array of localization languages to look up the keys in
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param subscriberOptions Various options to adjust how the subscriber emits updates
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   *   until `dataProviderSource` or `selector` changes.
+   * @returns `[localizedStrings]`
+   *
+   *   - `localizedStrings`: The current state of the localizations, either `defaultState` or the stored
+   *       state on the papi, if any
+   */
+  const useLocalizedStrings: (
+    localizationKeys: LocalizeKey[],
+    localizationLocales?: string[],
+    subscriberOptions?: DataProviderSubscriberOptions,
+  ) => [localizedStrings: LocalizationData, isLoading: boolean];
+  export default useLocalizedStrings;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
@@ -5719,6 +5803,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
+  export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
 }
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';

@@ -1,100 +1,105 @@
-import { RadioGroup, FormControlLabel, Radio, Typography, Grid } from '@mui/material';
+import { RadioGroup, Radio, Typography } from '@mui/material';
 import { Canon } from '@sillsdev/scripture';
 import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'platform-bible-react';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import './book-selector.component.scss';
+import { useDialogCallback } from '@renderer/hooks/papi-hooks';
 
-type BookSelectionProps = ChapterRangeSelectorProps & {
-  shouldUseCurrentBook: boolean;
-  toggleShouldUseCurrentBook: (newValue: boolean) => void;
-  currentBookNumber: number;
-  selectedBooks: number[];
-  handleSelectBooks: (bookNumbers: number[]) => void;
+export enum BookSelectionMode {
+  CURRENT_BOOK = 'current book',
+  CHOOSE_BOOKS = 'choose books',
+}
+
+type BookSelectorProps = ChapterRangeSelectorProps & {
+  handleBookSelectionModeChange: (newMode: BookSelectionMode) => void;
+  currentBookName: string;
+  selectedBookIds: string[];
+  handleSelectBooks: (bookIds: string[]) => void;
 };
 
 export default function BookSelector({
-  shouldUseCurrentBook,
-  toggleShouldUseCurrentBook,
-  currentBookNumber,
-  selectedBooks,
+  handleBookSelectionModeChange,
+  currentBookName,
+  selectedBookIds,
   handleSelectBooks,
-  startChapter,
-  endChapter,
   chapterCount,
   handleSelectEndChapter,
   handleSelectStartChapter,
-}: BookSelectionProps) {
-  const currentBookName = useMemo(
-    () => Canon.bookNumberToEnglishName(currentBookNumber),
-    [currentBookNumber],
+}: BookSelectorProps) {
+  const [bookSelectionMode, setBookSelectionMode] = useState<BookSelectionMode>(
+    BookSelectionMode.CURRENT_BOOK,
   );
 
-  const listChosenBooksTypography = useMemo(
-    () =>
-      (selectedBooks.length === 1 && selectedBooks[0] === currentBookNumber) || shouldUseCurrentBook
-        ? 'All Books'
-        : selectedBooks
-            .map((bookNumber: number) => Canon.bookNumberToEnglishName(bookNumber))
-            .join(', '),
-    [currentBookNumber, selectedBooks, shouldUseCurrentBook],
+  const onSelectionModeChange = (newMode: BookSelectionMode) => {
+    setBookSelectionMode(newMode);
+    handleBookSelectionModeChange(newMode);
+  };
+
+  const selectBooks = useDialogCallback(
+    'platform.selectBooks',
+    useMemo(
+      () => ({
+        prompt: 'Select one or more books to run basic checks on',
+        title: 'Select Books',
+        selectedBookIds,
+      }),
+      [selectedBookIds],
+    ),
+    useCallback(
+      (newSelectedBooks) => {
+        if (newSelectedBooks) handleSelectBooks(newSelectedBooks);
+      },
+      [handleSelectBooks],
+    ),
   );
 
   return (
-    <RadioGroup defaultValue="current book">
-      <Grid container alignItems="center">
-        <Grid item xs={4}>
-          <FormControlLabel
-            key="current book"
-            value="current book"
-            control={
-              <Radio
-                checked={shouldUseCurrentBook}
-                onChange={(e) => toggleShouldUseCurrentBook(e.target.checked)}
-              />
-            }
-            label="Current Book"
-            labelPlacement="end"
-          />
-        </Grid>
-        <Grid item xs="auto" className="book-selection-option">
-          <Typography padding={0.5} marginRight={2} border={1}>
-            {currentBookName}
-          </Typography>
-          <ChapterRangeSelector
-            isDisabled={!shouldUseCurrentBook}
-            startChapter={startChapter}
-            endChapter={endChapter}
-            handleSelectStartChapter={handleSelectStartChapter}
-            handleSelectEndChapter={handleSelectEndChapter}
-            chapterCount={chapterCount}
-          />
-        </Grid>
-      </Grid>
-      <Grid container>
-        <Grid item xs={4}>
-          <FormControlLabel
-            key="selected books"
-            value="selected books"
-            control={
-              <Radio
-                checked={!shouldUseCurrentBook}
-                onChange={(e) => toggleShouldUseCurrentBook(!e.target.checked)}
-              />
-            }
-            label="Choose Books"
-            labelPlacement="end"
-          />
-        </Grid>
-        <Grid item xs className="book-selection-option">
-          {/* Book 1 ... Book N, default is all books */}
-          <Typography padding={0.5} border={1}>
-            {listChosenBooksTypography}
-          </Typography>
-          {/* OnClick - opens a dialog where we send the list of selectedBooks and the handleSelectBooks
-          so passing 4 and 10 here is irrelevant and for testing purposes */}
-          <Button onClick={() => handleSelectBooks([4, 10])}>Choose...</Button>
-        </Grid>
-      </Grid>
+    <RadioGroup
+      value={bookSelectionMode}
+      // event.target.value is always a string but we need it to be BookSelectionMode
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      onChange={(e) => onSelectionModeChange(e.target.value as BookSelectionMode)}
+    >
+      <div className="book-selection-radio">
+        <Radio value={BookSelectionMode.CURRENT_BOOK} />
+        <Typography className="book-selection-radio-label">Current Book</Typography>
+        <div className="book-selection-radio-content">
+          <div className="book-typography">
+            <Typography padding={0.5} border={1}>
+              {currentBookName}
+            </Typography>
+          </div>
+          <div className="book-selection-radio-action">
+            <ChapterRangeSelector
+              isDisabled={bookSelectionMode === BookSelectionMode.CHOOSE_BOOKS}
+              handleSelectStartChapter={handleSelectStartChapter}
+              handleSelectEndChapter={handleSelectEndChapter}
+              chapterCount={chapterCount}
+            />
+          </div>
+        </div>
+      </div>
+      <div className="book-selection-radio">
+        <Radio value={BookSelectionMode.CHOOSE_BOOKS} />
+        <Typography className="book-selection-radio-label">Choose Books</Typography>
+        <div className="book-selection-radio-content">
+          <div className="book-typography">
+            <Typography padding={0.5} border={1}>
+              {selectedBookIds
+                .map((bookId: string) => Canon.bookIdToEnglishName(bookId))
+                .join(', ')}
+            </Typography>
+          </div>
+          <div className="book-selection-radio-action">
+            <Button
+              isDisabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
+              onClick={() => selectBooks()}
+            >
+              Choose...
+            </Button>
+          </div>
+        </div>
+      </div>
     </RadioGroup>
   );
 }

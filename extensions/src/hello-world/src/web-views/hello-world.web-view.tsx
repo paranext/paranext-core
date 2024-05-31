@@ -6,6 +6,7 @@ import {
   useSetting,
   useDialogCallback,
   useDataProvider,
+  useLocalizedStrings,
 } from '@papi/frontend/react';
 import {
   Button,
@@ -17,7 +18,6 @@ import {
   TextField,
   Table,
   ScriptureReference,
-  usePromise,
   useEvent,
 } from 'platform-bible-react';
 import type { WebViewProps } from '@papi/core';
@@ -60,8 +60,9 @@ papi
   .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
 globalThis.webViewComponent = function HelloWorld({
+  title,
+  projectId,
   useWebViewState,
-  getWebViewDefinitionUpdatableProperties,
   updateWebViewDefinition,
 }: WebViewProps) {
   const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
@@ -85,13 +86,9 @@ globalThis.webViewComponent = function HelloWorld({
   );
 
   useEffect(() => {
-    logger.debug(
-      `Hello World WebView previous title: ${getWebViewDefinitionUpdatableProperties()?.title}`,
-    );
+    logger.debug(`Hello World WebView previous title: ${title}`);
     updateWebViewDefinition({ title: `Hello World ${clicks}` });
-  }, [getWebViewDefinitionUpdatableProperties, updateWebViewDefinition, clicks]);
-
-  const [project, setProject] = useWebViewState<string>('project', '');
+  }, [title, updateWebViewDefinition, clicks]);
 
   const currentRender = useRef(-1);
   currentRender.current += 1;
@@ -112,13 +109,13 @@ globalThis.webViewComponent = function HelloWorld({
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
-        if (selectedProject) setProject(selectedProject);
+        if (selectedProject) updateWebViewDefinition({ projectId: selectedProject });
 
         logger.info(
           `Show project dialog resolved to ${selectedProject}. Dialog was shown at render ${dialogRender} with options from ${optionsSource}`,
         );
       },
-      [setProject],
+      [updateWebViewDefinition],
     ),
   );
 
@@ -143,7 +140,7 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading latest Scripture text...',
   );
 
-  const [projects, setProjects] = useWebViewState('projects', ['None']);
+  const [projects, setProjects] = useWebViewState<string[]>('projects', []);
 
   const selectProjects = useDialogCallback(
     'platform.selectMultipleProjects',
@@ -206,23 +203,19 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading John 1:1...',
   );
 
-  const [currentProjectVerse] = useProjectData('ParatextStandard', project ?? undefined).VerseUSFM(
-    verseRef,
-    'Loading Verse',
-  );
+  const [currentProjectVerse] = useProjectData(
+    'ParatextStandard',
+    projectId ?? undefined,
+  ).VerseUSFM(verseRef, 'Loading Verse');
 
-  const helloWorldProjectSettings = useHelloWorldProjectSettings('ParatextStandard', project);
+  const helloWorldProjectSettings = useHelloWorldProjectSettings('ParatextStandard', projectId);
   const { headerStyle } = helloWorldProjectSettings;
-
-  const [localizedString] = usePromise(
-    useCallback(() => {
-      return papi.localization.getLocalizedString({
-        localizeKey: '%submitButton%',
-        locales: ['fr', 'en'],
-      });
-    }, []),
-    'defaultValue',
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => ['%submitButton%'], []),
+    useMemo(() => ['fr', 'en'], []),
   );
+
+  const localizedString = localizedStrings['%submitButton%'];
 
   return (
     <div>
@@ -270,21 +263,21 @@ globalThis.webViewComponent = function HelloWorld({
       <h3>Psalm 1</h3>
       <div>{psalm1}</div>
       <br />
-      <div>Selected Project: {project ?? 'None'}</div>
+      <div>Selected Project: {projectId ?? 'None'}</div>
       <div>
         <Button onClick={selectProject}>Select Project</Button>
       </div>
       <div>
         <Button
           onClick={() =>
-            papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', project)
+            papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId)
           }
         >
           Open in Scripture Editor
         </Button>
         <Button
           onClick={() =>
-            papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', project)
+            papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId)
           }
         >
           Open in Resource Viewer
@@ -294,7 +287,7 @@ globalThis.webViewComponent = function HelloWorld({
       <div>{currentProjectVerse}</div>
       <ProjectSettingsEditor {...helloWorldProjectSettings} />
       <h3>List of Selected Project Id(s):</h3>
-      <div>{projects.join(', ')}</div>
+      <div>{(projects.length > 0 ? projects : ['None']).join(', ')}</div>
       <div>
         <Button onClick={() => selectProjects()}>Select Projects</Button>
       </div>

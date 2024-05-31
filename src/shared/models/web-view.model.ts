@@ -39,7 +39,19 @@ type WebViewDefinitionBase = {
   title?: string;
   /** Tooltip that is shown when hovering over the webview title */
   tooltip?: string;
-  /** General object to store unique state for this webview */
+  /**
+   * Project id associated with this web view.
+   *
+   * Note: This field may be used in other contexts (like menu commands) for project-specific
+   * operations related to this web view.
+   */
+  projectId?: string;
+  /**
+   * General object to store unique state for this webview.
+   *
+   * WARNING: This storage is not private; other extensions can access this data. Do not store
+   * secrets in here
+   */
   state?: Record<string, unknown>;
   /**
    * Whether to allow the WebView iframe to interact with its parent as a same-origin website.
@@ -154,23 +166,63 @@ export type WebViewDefinition =
   | WebViewDefinitionURL;
 
 /**
+ * The keys of properties on a WebViewDefinition that are omitted when converting to a
+ * {@link SavedWebViewDefinition}
+ */
+// If you add to these, please make sure they are in `WebViewDefinition`
+// See also the following function that makes use of these omitted properties:
+// `web-view.service.ts` -> `convertWebViewDefinitionToSaved`
+export const SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS = [
+  // We don't want to keep the webView content so the web view provider can provide it again when
+  // deserializing
+  'content',
+  'styles',
+  // We don't want to keep security-related properties so the web view doesn't get loaded with the
+  // wrong security somehow. The web view provider should provide this every time it provides the
+  // content
+  'allowScripts',
+  'allowSameOrigin',
+  'allowedFrameSources',
+] as const;
+
+/**
+ * The keys of properties on a WebViewDefinition that are omitted when converting to a
+ * {@link SavedWebViewDefinition}
+ */
+export type SavedWebViewDefinitionOmittedKeys =
+  (typeof SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS)[number];
+
+/**
  * Saved WebView information that does not contain the actual content of the WebView. Saved into
  * layouts. Could have as little as the type and ID. WebView providers load these into actual
  * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
  */
 export type SavedWebViewDefinition = (
-  | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles' | 'allowScripts'>>
-  | Partial<Omit<WebViewDefinitionHtml, 'content' | 'allowScripts'>>
-  | Partial<Omit<WebViewDefinitionURL, 'content' | 'allowScripts'>>
+  | Partial<Omit<WebViewDefinitionReact, SavedWebViewDefinitionOmittedKeys>>
+  | Partial<Omit<WebViewDefinitionHtml, SavedWebViewDefinitionOmittedKeys>>
+  | Partial<Omit<WebViewDefinitionURL, SavedWebViewDefinitionOmittedKeys>>
 ) &
+  // Required properties
   Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
 
+/**
+ * The keys of properties on a WebViewDefinition that may be updated when that webview is already
+ * displayed
+ */
+// If you add to these, please make sure they are in `WebViewDefinition`
+// See also the following function that makes use of these updatable properties:
+// `web-view.service.ts` -> `mergeUpdatablePropertiesIntoWebViewDefinition`
+export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
+  'iconUrl',
+  'title',
+  'tooltip',
+  'projectId',
+] as const;
+
 /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
-// To allow more properties to be updated, add them in
-// `web-view.service.ts` -> `getUpdatablePropertiesFromWebViewDefinition`
 export type WebViewDefinitionUpdatableProperties = Pick<
   WebViewDefinitionBase,
-  'iconUrl' | 'title' | 'tooltip'
+  (typeof WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS)[number]
 >;
 
 /**
@@ -238,16 +290,14 @@ export type UseWebViewStateHook = <T>(
 // such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
 // destructured members of object types. See comment above UseWebViewStateHook for more info.
 /**
- * JSDOC SOURCE GetWebViewDefinitionUpdatableProperties
+ * JSDOC SOURCE GetSavedWebViewDefinition
  *
- * Gets the updatable properties on this WebView's WebView definition
+ * Gets the saved properties on this WebView's WebView definition
  *
- * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found for
- * some reason
+ * _＠returns_ saved properties this WebView's WebView definition or undefined if not found for some
+ * reason
  */
-export type GetWebViewDefinitionUpdatableProperties = () =>
-  | WebViewDefinitionUpdatableProperties
-  | undefined;
+export type GetSavedWebViewDefinition = () => SavedWebViewDefinition | undefined;
 
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
@@ -260,7 +310,8 @@ export type GetWebViewDefinitionUpdatableProperties = () =>
  * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
  * the same
  *
- * _＠returns_ true if successfully found the WebView to update; false otherwise
+ * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
+ * false otherwise
  *
  * _＠example_
  *
@@ -271,11 +322,9 @@ export type GetWebViewDefinitionUpdatableProperties = () =>
 export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) => boolean;
 
 /** Props that are passed into the web view itself inside the iframe in the web view tab component */
-export type WebViewProps = {
+export type WebViewProps = SavedWebViewDefinition & {
   /** JSDOC DESTINATION UseWebViewStateHook */
   useWebViewState: UseWebViewStateHook;
-  /** JSDOC DESTINATION GetWebViewDefinitionUpdatableProperties */
-  getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
   /** JSDOC DESTINATION UpdateWebViewDefinition */
   updateWebViewDefinition: UpdateWebViewDefinition;
 };

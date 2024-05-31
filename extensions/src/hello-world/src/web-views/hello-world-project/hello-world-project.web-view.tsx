@@ -2,8 +2,8 @@ import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useProjectDataProvider } from '@papi/frontend/react';
 import { useCallback } from 'react';
-import useHelloWorldProjectSettings from './hello-world-project/use-hello-world-project-settings.hook';
-import ProjectSettingsEditor from './hello-world-project/project-settings-editor.component';
+import useHelloWorldProjectSettings from './use-hello-world-project-settings.hook';
+import ProjectSettingsEditor from './project-settings-editor.component';
 
 const namesDefault: string[] = [];
 
@@ -12,9 +12,10 @@ const testExtensionDataScope = {
   dataQualifier: 'webViewTestExtensionData',
 };
 
-globalThis.webViewComponent = function HelloWorldProjectWebView({ useWebViewState }: WebViewProps) {
-  const [projectId] = useWebViewState('projectId', '');
-
+globalThis.webViewComponent = function HelloWorldProjectWebView({
+  projectId,
+  useWebViewState,
+}: WebViewProps) {
   const [max, setMax] = useWebViewState('max', 1);
 
   const pdp = useProjectDataProvider('helloWorld', projectId);
@@ -64,7 +65,21 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({ useWebViewStat
           }}
         />
       </div>
-      <div>Names: {names.join(', ')}</div>
+      <div>
+        Names:{' '}
+        {names.map((name) => (
+          <span>
+            {name}
+            <button
+              type="button"
+              className="remove-name-button"
+              onClick={() => pdp?.removeName(name)}
+            >
+              -
+            </button>
+          </span>
+        ))}
+      </div>
       <input
         value={currentName}
         onChange={(e) => setCurrentName(e.target.value)}
@@ -72,17 +87,6 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({ useWebViewStat
       />
       <button type="button" onClick={addCurrentName}>
         Add Name
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          if (!pdp) return;
-
-          pdp.removeName(currentName);
-          setCurrentName('');
-        }}
-      >
-        Remove Name
       </button>
       <hr />
       <h3 style={headerStyle}>Extension Data</h3>
