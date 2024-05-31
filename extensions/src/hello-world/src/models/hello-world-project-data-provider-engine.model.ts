@@ -4,7 +4,16 @@ import {
   DataProviderUpdateInstructions,
   ExtensionDataScope,
 } from '@papi/core';
-import type { ProjectDataTypes, ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
+import type {
+  ProjectInterfaceDataTypes,
+  ProjectSettingNames,
+  ProjectSettingTypes,
+} from 'papi-shared-types';
+
+/** The `projectInterface`s the hello world pdpf serves */
+// TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
+// needs to be used in ProjectMetadata as not readonly :p
+export const HELLO_WORLD_PROJECT_INTERFACES = ['helloWorld'] as const satisfies ['helloWorld'];
 
 export type HelloWorldProjectData = {
   projectName: string;
@@ -21,8 +30,8 @@ function getExtensionDataKey(scope: ExtensionDataScope): string {
 }
 
 class HelloWorldProjectDataProviderEngine
-  extends ProjectDataProviderEngine<'helloWorld'>
-  implements IProjectDataProviderEngine<'helloWorld'>
+  extends ProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>
+  implements IProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>
 {
   private saveProjectData: () => Promise<void>;
 
@@ -48,20 +57,17 @@ class HelloWorldProjectDataProviderEngine
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     if (key in this.projectData.settings) return this.projectData.settings[key]!;
 
-    return papi.projectSettings.getDefault(key, 'helloWorld');
+    return papi.projectSettings.getDefault(key, HELLO_WORLD_PROJECT_INTERFACES);
   }
 
   async setSetting<ProjectSettingName extends keyof ProjectSettingTypes>(
     key: ProjectSettingName,
     newSetting: ProjectSettingTypes[ProjectSettingName],
-  ): Promise<DataProviderUpdateInstructions<ProjectDataTypes['helloWorld']>> {
+  ): Promise<DataProviderUpdateInstructions<ProjectInterfaceDataTypes['helloWorld']>> {
     if (
-      !(await papi.projectSettings.isValid(
-        key,
-        newSetting,
-        await this.getSetting(key),
+      !(await papi.projectSettings.isValid(key, newSetting, await this.getSetting(key), [
         'helloWorld',
-      ))
+      ]))
     )
       return false;
 
@@ -88,7 +94,7 @@ class HelloWorldProjectDataProviderEngine
   async setExtensionData(
     scope: ExtensionDataScope,
     data: string,
-  ): Promise<DataProviderUpdateInstructions<ProjectDataTypes['helloWorld']>> {
+  ): Promise<DataProviderUpdateInstructions<ProjectInterfaceDataTypes['helloWorld']>> {
     this.projectData.extensionData[getExtensionDataKey(scope)] = data;
     await this.saveProjectData();
     return true;
@@ -115,7 +121,9 @@ class HelloWorldProjectDataProviderEngine
   }
 
   // eslint-disable-next-line class-methods-use-this
-  async setNames(): Promise<DataProviderUpdateInstructions<ProjectDataTypes['helloWorld']>> {
+  async setNames(): Promise<
+    DataProviderUpdateInstructions<ProjectInterfaceDataTypes['helloWorld']>
+  > {
     throw new Error(`Cannot use setNames! Use addName and removeName`);
   }
 

@@ -1,7 +1,7 @@
 import { List, ListItem, ListItemButton, ListItemText, ListSubheader } from '@mui/material';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { Checkbox } from 'platform-bible-react';
-import { ProjectTypes } from 'papi-shared-types';
+import { ProjectInterfaces } from 'papi-shared-types';
 import { PropsWithChildren, useCallback, JSX } from 'react';
 
 export type Project = ProjectMetadata & {
@@ -34,7 +34,12 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 1',
       isDownloadable: true,
       isDownloaded: false,
-      projectType: 'test' as ProjectTypes,
+      projectInterfaces: ['test' as ProjectInterfaces],
+      pdpFactoryInfo: {
+        'test-pdpf': {
+          projectInterfaces: ['test' as ProjectInterfaces],
+        },
+      },
     },
     {
       id: 'project-2',
@@ -42,7 +47,12 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 2',
       isDownloadable: false,
       isDownloaded: true,
-      projectType: 'test' as ProjectTypes,
+      projectInterfaces: ['test' as ProjectInterfaces],
+      pdpFactoryInfo: {
+        'test-pdpf': {
+          projectInterfaces: ['test' as ProjectInterfaces],
+        },
+      },
     },
     {
       id: 'project-3',
@@ -50,7 +60,12 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 3',
       isDownloadable: true,
       isDownloaded: false,
-      projectType: 'test' as ProjectTypes,
+      projectInterfaces: ['test' as ProjectInterfaces],
+      pdpFactoryInfo: {
+        'test-pdpf': {
+          projectInterfaces: ['test' as ProjectInterfaces],
+        },
+      },
     },
     {
       id: 'project-4',
@@ -58,7 +73,12 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 4',
       isDownloadable: false,
       isDownloaded: false,
-      projectType: 'test' as ProjectTypes,
+      projectInterfaces: ['test' as ProjectInterfaces],
+      pdpFactoryInfo: {
+        'test-pdpf': {
+          projectInterfaces: ['test' as ProjectInterfaces],
+        },
+      },
     },
     {
       id: 'project-5',
@@ -66,7 +86,12 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 5',
       isDownloadable: false,
       isDownloaded: true,
-      projectType: 'test' as ProjectTypes,
+      projectInterfaces: ['test' as ProjectInterfaces],
+      pdpFactoryInfo: {
+        'test-pdpf': {
+          projectInterfaces: ['test' as ProjectInterfaces],
+        },
+      },
     },
   ];
   /* eslint-enable */

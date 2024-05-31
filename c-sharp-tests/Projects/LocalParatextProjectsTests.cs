@@ -42,7 +42,7 @@ public class LocalParatextProjectsTests
     {
         CreateTempProject(folder, CreateParatextProjectMetadata("ABC"));
 
-        _localProjects.Initialize();
+        _localProjects.Initialize(false);
         var details = _localProjects.GetAllProjectDetails().Single();
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
@@ -57,7 +57,7 @@ public class LocalParatextProjectsTests
     {
         var metadata = CreateParatextProjectMetadata(name);
         CreateTempProject(folder, metadata);
-        _localProjects.Initialize();
+        _localProjects.Initialize(false);
         var details = _localProjects.GetAllProjectDetails().Single();
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
@@ -71,7 +71,7 @@ public class LocalParatextProjectsTests
     {
         var metadata = CreateParatextProjectMetadata(name);
         CreateTempProject(folder, metadata);
-        _localProjects.Initialize();
+        _localProjects.Initialize(false);
         var details = _localProjects.GetAllProjectDetails().Single();
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
@@ -87,7 +87,7 @@ public class LocalParatextProjectsTests
     {
         var metadata = CreateParatextProjectMetadata(name);
         CreateTempProject(folder, metadata);
-        _localProjects.Initialize();
+        _localProjects.Initialize(false);
         var details = _localProjects.GetAllProjectDetails().Single();
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
@@ -104,6 +104,6 @@ public class LocalParatextProjectsTests
 
     private static ProjectMetadata CreateParatextProjectMetadata(string name)
     {
-        return new ProjectMetadata(TEST_ID, name, "paratext");
+        return new ProjectMetadata(TEST_ID, name, ["paratext"]);
     }
 }

@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import {
-  ProjectDataProviders,
-  ProjectDataTypes,
+  ProjectDataProviderInterfaces,
+  ProjectInterfaceDataTypes,
   ProjectSettingNames,
   ProjectSettingTypes,
-  ProjectTypes,
+  ProjectInterfaces,
 } from 'papi-shared-types';
 import useProjectData from '@renderer/hooks/papi-hooks/use-project-data.hook';
 import {
@@ -19,10 +19,10 @@ import useProjectDataProvider from './use-project-data-provider.hook';
  * subscribers when the project setting changes and gets updated when the project setting is changed
  * by others.
  *
- * @param projectType Indicates what you expect the `projectType` to be for the project with the
- *   specified id. The TypeScript type for the returned Project Data Provider will have the Project
- *   Data Provider type associated with this `projectType`. If this argument does not match the
- *   project's actual `projectType` (according to its metadata), a warning will be logged
+ * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
+ *   type for the returned project data provider will have the project data provider interface type
+ *   associated with this `projectInterface`. If the project does not implement this
+ *   `projectInterface` (according to its metadata), an error will be thrown.
  * @param projectDataProviderSource `projectDataProviderSource` String name of the id of the project
  *   to get OR projectDataProvider (result of `useProjectDataProvider` if you want to consolidate
  *   and only get the Project Data Provider once)
@@ -53,11 +53,11 @@ import useProjectDataProvider from './use-project-data-provider.hook';
  *   message type
  */
 const useProjectSetting = <
-  ProjectType extends ProjectTypes,
+  ProjectInterface extends ProjectInterfaces,
   ProjectSettingName extends ProjectSettingNames,
 >(
-  projectType: ProjectType,
-  projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+  projectInterface: ProjectInterface,
+  projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
   key: ProjectSettingName,
   defaultValue: ProjectSettingTypes[ProjectSettingName],
   subscriberOptions?: DataProviderSubscriberOptions,
@@ -67,14 +67,14 @@ const useProjectSetting = <
   resetSetting: (() => void) | undefined,
   isLoading: boolean,
 ] => {
-  const projectDataProvider = useProjectDataProvider(projectType, projectDataProviderSource);
+  const projectDataProvider = useProjectDataProvider(projectInterface, projectDataProviderSource);
 
   // Unfortunately `Setting` isn't an actual `DataProviderDataType` on Project Data Providers. They
   // instead manually implement on `IProjectDataProvider` with a generic `ProjectSettingName`.
   // We must type assert to use it because `useProjectData` only sees actual `DataProviderDataType`s
   /* eslint-disable no-type-assertion/no-type-assertion */
   const [setting, setSetting, isLoading] = (
-    useProjectData(projectType, projectDataProvider) as {
+    useProjectData(projectInterface, projectDataProvider) as {
       Setting: (
         selector: ProjectSettingName,
         defaultValue: ProjectSettingTypes[ProjectSettingName],
@@ -86,7 +86,7 @@ const useProjectSetting = <
               newData: ProjectSettingTypes[ProjectSettingName],
             ) => Promise<
               DataProviderUpdateInstructions<
-                ExtractDataProviderDataTypes<ProjectDataTypes[ProjectType]>
+                ExtractDataProviderDataTypes<ProjectInterfaceDataTypes[ProjectInterface]>
               >
             >)
           | undefined,

@@ -97,10 +97,10 @@ namespace TestParanextDataProvider
         protected static ProjectDetails CreateProjectDetails(
             string id,
             string name,
-            string projectType = ""
+            List<string>? projectInterfaces = null
         )
         {
-            ProjectMetadata metadata = new(id, name, projectType);
+            ProjectMetadata metadata = new(id, name, projectInterfaces ?? []);
             return new ProjectDetails(metadata, "testDirectoryThatDoesNotExist");
         }
 

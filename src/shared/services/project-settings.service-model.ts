@@ -1,6 +1,6 @@
 import { serializeRequestType } from '@shared/utils/util';
 import * as networkService from '@shared/services/network.service';
-import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
+import { ProjectSettingNames, ProjectSettingTypes, ProjectInterfaces } from 'papi-shared-types';
 import { UnsubscriberAsync } from 'platform-bible-utils';
 
 /** Name prefix for registered commands that call project settings validators */
@@ -36,15 +36,16 @@ export interface IProjectSettingsService {
    * @param newValue The new value requested to set the project setting value to
    * @param currentValue The current project setting value
    * @param key The project setting key being set
+   * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
+   *   whose setting is being changed
    * @param allChanges All project settings changes being set in one batch
-   * @param projectType The `projectType` for the project whose setting is being changed
    * @returns `true` if change is valid, `false` otherwise
    */
   isValid<ProjectSettingName extends ProjectSettingNames>(
     key: ProjectSettingName,
     newValue: ProjectSettingTypes[ProjectSettingName],
     currentValue: ProjectSettingTypes[ProjectSettingName],
-    projectType: ProjectTypes,
+    projectInterfaces: ProjectInterfaces[],
     allChanges?: SimultaneousProjectSettingsChanges,
   ): Promise<boolean>;
   /**
@@ -56,13 +57,14 @@ export interface IProjectSettingsService {
    * throw.
    *
    * @param key The project setting key for which to get the default value
-   * @param projectType The `projectType` to get default setting value for
+   * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
+   *   for which to get the default setting value
    * @returns The default value for the setting if a default value is registered
    * @throws If a default value is not registered for the setting
    */
   getDefault<ProjectSettingName extends ProjectSettingNames>(
     key: ProjectSettingName,
-    projectType: ProjectTypes,
+    projectInterfaces: ProjectInterfaces[],
   ): Promise<ProjectSettingTypes[ProjectSettingName]>;
   /**
    * JSDOC SOURCE projectSettingsServiceRegisterValidator
@@ -93,12 +95,20 @@ export type SimultaneousProjectSettingsChanges = {
     currentValue: ProjectSettingTypes[ProjectSettingName];
   };
 };
-/** Function that validates whether a new project setting value should be allowed to be set */
+/**
+ * Function that validates whether a new project setting value should be allowed to be set
+ *
+ * @param newValue The new value requested to set the project setting value to
+ * @param currentValue The current project setting value
+ * @param allChanges All project settings changes being set in one batch
+ * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
+ *   whose setting is being changed
+ */
 export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNames> = (
   newValue: ProjectSettingTypes[ProjectSettingName],
   currentValue: ProjectSettingTypes[ProjectSettingName],
   allChanges: SimultaneousProjectSettingsChanges,
-  projectType: ProjectTypes,
+  projectInterfaces: ProjectInterfaces[],
 ) => Promise<boolean>;
 
 /**

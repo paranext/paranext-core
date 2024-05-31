@@ -2460,10 +2460,10 @@ declare module 'papi-shared-types' {
    * over an {@link IProjectDataProviderEngine} provided by an extension. Returned from getting a
    * project data provider with `papi.projectDataProviders.get`.
    *
-   * Project Data Providers are a specialized version of {@link IDataProvider} that works with a
-   * project of a specific `projectType`. For each project available, a new instance of a PDP with
-   * that project's `projectType` is created by the Project Data Provider Factory with that
-   * project's `projectType`.
+   * Project Data Providers are a specialized version of {@link IDataProvider} that work with
+   * projects by exposing methods according to a set of `projectInterface`s. For each project
+   * available, a Project Data Provider Factory that supports that project with some set of
+   * `projectInterface`s creates a new instance of a PDP with the supported `projectInterface`s.
    *
    * Every PDP **must** fulfill the requirements of all PDPs according to
    * {@link MandatoryProjectDataTypes}.
@@ -2497,25 +2497,26 @@ declare module 'papi-shared-types' {
     Notes: DataProviderDataType<string, string | undefined, string>;
   };
   /**
-   * {@link IProjectDataProvider} types for each `projectType` supported by PAPI. Extensions can add
-   * more Project Data Providers with corresponding `projectType`s by adding details to their
-   * `.d.ts` file and registering a Project Data Provider factory with the corresponding
-   * `projectType`.
+   * {@link IProjectDataProvider} types for each `projectInterface` supported by PAPI. Extensions can
+   * add more Project Data Providers with corresponding `projectInterface`s by adding details to
+   * their `.d.ts` file and registering a Project Data Provider factory with the corresponding
+   * `projectInterface`.
    *
-   * All Project Data Providers' data types **must** extend {@link MandatoryProjectDataTypes} like
-   * the following example. Please see its documentation for information on how Project Data
-   * Providers can implement this interface.
+   * All Project Data Provider Interfaces' data types **must** extend
+   * {@link MandatoryProjectDataTypes} like the following example. Please see its documentation for
+   * information on how Project Data Providers can implement this interface.
    *
-   * Note: The keys of this interface are the `projectType`s for the associated Project Data
-   * Providers.
+   * Note: The keys of this interface are the `projectInterface`s for the associated Project Data
+   * Provider Interfaces. `projectInterface`s represent standardized sets of methods on a PDP.
    *
-   * WARNING: Each Project Storage Interpreter **must** fulfill certain requirements for its
-   * `getSetting`, `setSetting`, and `resetSetting` methods. See {@link MandatoryProjectDataTypes}
-   * for more information.
+   * WARNING: Each Project Data Provider **must** fulfill certain requirements for its `getSetting`,
+   * `setSetting`, and `resetSetting` methods. See {@link MandatoryProjectDataTypes} for more
+   * information.
    *
-   * An extension can extend this interface to add types for the Project Data Providers its
-   * registered factory provides by adding the following to its `.d.ts` file (in this example, we
-   * are adding a Project Data Provider type for the `MyExtensionProjectTypeName` `projectType`):
+   * An extension can extend this interface to add types for the Project Data Provider Interfaces
+   * its registered factory provides by adding the following to its `.d.ts` file (in this example,
+   * we are adding a Project Data Provider interface for the `MyExtensionProjectInterfaceName`
+   * `projectInterface`):
    *
    * @example
    *
@@ -2525,47 +2526,51 @@ declare module 'papi-shared-types' {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   };
    *
-   *   export interface ProjectDataProviders {
-   *     MyExtensionProjectTypeName: IDataProvider<MyProjectDataTypes>;
+   *   export interface ProjectDataProviderInterfaces {
+   *     MyExtensionProjectInterfaceName: IDataProvider<MyProjectDataTypes>;
    *   }
    * }
    * ```
    */
-  interface ProjectDataProviders {
+  interface ProjectDataProviderInterfaces {
     'platform.notesOnly': IProjectDataProvider<NotesOnlyProjectDataTypes>;
     'platform.placeholder': IProjectDataProvider<PlaceholderDataTypes>;
   }
   /**
-   * Names for each `projectType` available on the papi. Each of the `projectType`s should have a
-   * registered Project Data Provider Factory that provides Project Data Providers for the
-   * `projectType`.
+   * Names for each `projectInterface` available on the papi. `projectInterface`s represent
+   * standardized sets of methods on a PDP. Extensions can register a Project Data Provider Factory
+   * with one or more `projectInterface`s to indicate that factory provides Project Data Providers
+   * that have the methods associated with those `projectInterface`s.
    *
-   * Automatically includes all extensions' `projectTypes` that are added to
-   * {@link ProjectDataProviders}.
+   * Automatically includes all extensions' `projectInterface`s that are added to
+   * {@link ProjectDataProviderInterfaces}.
    *
    * @example 'platform.notesOnly'
    */
-  type ProjectTypes = keyof ProjectDataProviders;
+  type ProjectInterfaces = keyof ProjectDataProviderInterfaces;
   /**
-   * `DataProviderDataTypes` for each Project Data Provider supported by PAPI. These are the data
-   * types served by Project Data Providers for each `projectType`.
+   * `DataProviderDataTypes` for each Project Data Provider Interface supported by PAPI. These are
+   * the data types served by Project Data Providers for each `projectInterface`.
    *
-   * Automatically includes all extensions' `projectTypes` that are added to
-   * {@link ProjectDataProviders}.
+   * Automatically includes all extensions' `projectInterface`s that are added to
+   * {@link ProjectDataProviderInterfaces}.
    *
-   * Note: The keys of this interface are the `projectType`s for the associated project data
-   * provider data types.
+   * Note: The keys of this interface are the `projectInterface`s for the associated project data
+   * provider interface data types. `projectInterface`s represent standardized sets of methods on a
+   * PDP.
    *
    * @example
    *
    * ```typescript
-   * ProjectDataTypes['MyExtensionProjectTypeName'] => MandatoryProjectDataTypes & {
+   * ProjectInterfaceDataTypes['MyExtensionProjectInterfaceName'] => MandatoryProjectDataTypes & {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   }
    * ```
    */
-  type ProjectDataTypes = {
-    [ProjectType in ProjectTypes]: ExtractDataProviderDataTypes<ProjectDataProviders[ProjectType]>;
+  type ProjectInterfaceDataTypes = {
+    [ProjectInterface in ProjectInterfaces]: ExtractDataProviderDataTypes<
+      ProjectDataProviderInterfaces[ProjectInterface]
+    >;
   };
   type StuffDataTypes = {
     Stuff: DataProviderDataType<string, number, never>;
@@ -3439,27 +3444,64 @@ declare module 'shared/services/data-provider.service' {
   export default dataProviderService;
 }
 declare module 'shared/models/project-metadata.model' {
-  import { ProjectTypes } from 'papi-shared-types';
+  import { ProjectInterfaces } from 'papi-shared-types';
   /**
    * Low-level information describing a project that Platform.Bible directly manages and uses to load
    * project data
+   *
+   * Returned from Project Data Provider Factories in order to inform others about what projects they
+   * support in what form. Layered over to create {@link ProjectMetadata}
    */
-  export type ProjectMetadata = {
+  export type ProjectMetadataWithoutFactoryInfo = {
     /** ID of the project (must be unique and case insensitive) */
     id: string;
     /** Short name of the project (not necessarily unique) */
     name: string;
     /**
-     * Indicates what sort of project this is which implies its data shape (e.g., what data streams
-     * should be available)
+     * All `projectInterface`s (aka standardized sets of methods on a PDP) that Project Data Providers
+     * for this project support. Indicates what sort of project data should be available on this
+     * project.
      */
-    projectType: ProjectTypes;
+    projectInterfaces: ProjectInterfaces[];
+  };
+  export type ProjectDataProviderFactoryMetadataInfo = {
+    /**
+     * Which `projectInterface`s (aka standardized sets of methods on a PDP) the Project Data Provider
+     * for this project created by this Project Data Provider Factory supports. Indicates what sort of
+     * project data should be available on this project from this PDP Factory.
+     */
+    projectInterfaces: ProjectInterfaces[];
+  };
+  /**
+   * Low-level information describing a project that Platform.Bible directly manages and uses to load
+   * project data
+   *
+   * `papi.projectLookup` retrieves, aggregates, and augments
+   * {@link ProjectMetadataWithoutFactoryInfo}s from Project Data Provider Factories to create these in
+   * order to inform others about what projects are available and in what forms. This metadata may be
+   * merged from metadata provided by multiple PDPFs.
+   */
+  export type ProjectMetadata = ProjectMetadataWithoutFactoryInfo & {
+    /**
+     * Specifics regarding which Project Data Provider Factories provide which `projectInterface`s.
+     * This is additional metadata in addition to the `projectInterfaces` property that may be useful
+     * in a few specific situations. All `projectInterfaces` contained in this data are already listed
+     * in `projectInterfaces`, so you can use that unless you have a specific need to use this extra
+     * information.
+     *
+     * The keys of this object are ids of the PDP Factories that provide the metadata, namely the
+     * `projectInterface`s for this project (meaning this PDPF can provide a Project Data Provider for
+     * this project with these `projectInterfaces`)
+     */
+    pdpFactoryInfo: {
+      [pdpFactoryId: string]: ProjectDataProviderFactoryMetadataInfo | undefined;
+    };
   };
 }
 declare module 'shared/models/project-data-provider-engine.model' {
   import {
-    ProjectTypes,
-    ProjectDataTypes,
+    ProjectInterfaces,
+    ProjectInterfaceDataTypes,
     WithProjectDataProviderEngineSettingMethods,
     ProjectSettingNames,
     ProjectSettingTypes,
@@ -3472,34 +3514,34 @@ declare module 'shared/models/project-data-provider-engine.model' {
     DataProviderEngine,
   } from 'shared/models/data-provider-engine.model';
   import { DataProviderDataType } from 'shared/models/data-provider.model';
-  import { ProjectMetadata } from 'shared/models/project-metadata.model';
-  /** All possible types for ProjectDataProviderEngines: IProjectDataProviderEngine<ProjectDataType> */
-  export type ProjectDataProviderEngineTypes = {
-    [ProjectType in ProjectTypes]: IProjectDataProviderEngine<ProjectType>;
-  };
+  import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
+  import { UnionToIntersection } from 'platform-bible-utils';
   /**
    * A factory object registered with the papi that creates a Project Data Provider Engine for each
-   * project of the factory's `projectType` when the papi requests. Used by the papi to create
-   * {@link IProjectDataProviderEngine}s for a specific project when someone gets a project data
-   * provider with `papi.projectDataProviders.get`. When this factory object is registered with
-   * `papi.projectDataProviders.registerProjectDataProviderEngineFactory`, the papi creates a
-   * {@link ProjectDataProviderFactory} that layers over this engine to create
+   * project with the factory's specified `projectInterface`s when the papi requests. Used by the papi
+   * to create {@link IProjectDataProviderEngine}s for a specific project and `projectInterface` when
+   * someone gets a project data provider with `papi.projectDataProviders.get`. When this factory
+   * object is registered with `papi.projectDataProviders.registerProjectDataProviderEngineFactory`,
+   * the papi creates a {@link ProjectDataProviderFactory} that layers over this engine to create
    * {@link IProjectDataProvider}s.
    *
-   * Project Data Provider Engine Factories create Project Data Provider Engines for a specific
-   * `projectType`. For each project available, a new instance of a PDP with that project's
-   * `projectType` is created by the Project Data Provider Factory with that project's `projectType`.
+   * Project Data Provider Engine Factories create Project Data Provider Engines for specific
+   * `projectInterface`s. For each project available, a Project Data Provider Factory that supports
+   * that project with some set of `projectInterface`s creates a new instance of a PDP with the
+   * supported `projectInterface`s.
    */
-  export interface IProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
+  export interface IProjectDataProviderEngineFactory<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  > {
     /**
      * Get a list of metadata objects for all projects that can be the targets of PDPs created by this
      * factory engine
      */
-    getAvailableProjects(): Promise<ProjectMetadata[]>;
+    getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]>;
     /**
      * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
-     * {@link IProjectDataProvider} for the project. This project will have the same `projectType` as
-     * this Project Data Provider Engine Factory
+     * {@link IProjectDataProvider} for the project. This project will have the same
+     * `projectInterface`s as this Project Data Provider Engine Factory
      *
      * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
      * @returns A promise that resolves to a {@link IProjectDataProviderEngine} for the project passed
@@ -3507,7 +3549,7 @@ declare module 'shared/models/project-data-provider-engine.model' {
      */
     createProjectDataProviderEngine(
       projectId: string,
-    ): Promise<ProjectDataProviderEngineTypes[ProjectType]>;
+    ): Promise<IProjectDataProviderEngine<SupportedProjectInterfaces>>;
   }
   /**
    * The object to return from
@@ -3529,7 +3571,7 @@ declare module 'shared/models/project-data-provider-engine.model' {
    *    Intellisense that you can run `notifyUpdate` with the `Setting` data type for you:
    *
    * ```typescript
-   * class MyPDPE extends ProjectDataProviderEngine<'MyProjectData'> implements IProjectDataProviderEngine<'MyProjectData'> {
+   * class MyPDPE extends ProjectDataProviderEngine<['MyProjectData']> implements IProjectDataProviderEngine<['MyProjectData']> {
    *   ...
    * }
    * ```
@@ -3539,7 +3581,7 @@ declare module 'shared/models/project-data-provider-engine.model' {
    *    the {@link WithNotifyUpdate} type) to your Project Data Provider Engine like so:
    *
    * ```typescript
-   * const myPDPE: IProjectDataProviderEngine<'MyProjectData'> & WithNotifyUpdate<ProjectDataTypes['MyProjectData']> = {
+   * const myPDPE: IProjectDataProviderEngine<['MyProjectData']> & WithNotifyUpdate<ProjectDataTypes['MyProjectData']> = {
    *   notifyUpdate(updateInstructions) {},
    *   ...
    * }
@@ -3548,17 +3590,25 @@ declare module 'shared/models/project-data-provider-engine.model' {
    * OR
    *
    * ```typescript
-   * class MyPDPE implements IProjectDataProviderEngine<'MyProjectData'> {
+   * class MyPDPE implements IProjectDataProviderEngine<['MyProjectData']> {
    *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<ProjectDataTypes['MyProjectData']>) {}
    *   ...
    * }
    * ```
    */
-  export type IProjectDataProviderEngine<ProjectType extends ProjectTypes> = IDataProviderEngine<
-    ProjectDataTypes[ProjectType] & MandatoryProjectDataTypes
-  > &
-    WithProjectDataProviderEngineSettingMethods<ProjectDataTypes[ProjectType]> &
-    WithProjectDataProviderEngineExtensionDataMethods<ProjectDataTypes[ProjectType]>;
+  export type IProjectDataProviderEngine<SupportedProjectInterfaces extends ProjectInterfaces[]> =
+    IDataProviderEngine<
+      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> &
+        MandatoryProjectDataTypes
+    > &
+      WithProjectDataProviderEngineSettingMethods<
+        // @ts-ignore TypeScript thinks there is some unknown data type getting in, but there is not
+        UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]>
+      > &
+      WithProjectDataProviderEngineExtensionDataMethods<
+        // @ts-ignore TypeScript thinks there is some unknown data type getting in, but there is not
+        UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]>
+      >;
   /**
    *
    * Abstract class that provides a placeholder `notifyUpdate` for Project Data Provider Engine
@@ -3575,9 +3625,9 @@ declare module 'shared/models/project-data-provider-engine.model' {
    * @see {@link IProjectDataProviderEngine} for more information on extending this class.
    */
   export abstract class ProjectDataProviderEngine<
-    ProjectType extends ProjectTypes,
+    SupportedProjectInterfaces extends ProjectInterfaces[],
   > extends DataProviderEngine<
-    ProjectDataTypes[ProjectType] & {
+    UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {
       Setting: DataProviderDataType<
         ProjectSettingNames,
         ProjectSettingTypes[ProjectSettingNames],
@@ -3588,17 +3638,19 @@ declare module 'shared/models/project-data-provider-engine.model' {
 }
 declare module 'shared/models/project-data-provider-factory.interface' {
   import { Dispose } from 'platform-bible-utils';
-  import { ProjectMetadata } from 'shared/models/project-metadata.model';
+  import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
   export const PDP_FACTORY_OBJECT_TYPE: string;
   /**
-   * Network object that creates Project Data Providers of a specific `projectType` as requested on
-   * the `papi`. These are created internally within the platform to layer over
+   * Network object that creates Project Data Providers of a specific set of `projectInterface`s as
+   * requested on the `papi`. These are created internally within the platform to layer over
    * TypeScript-extension-provided {@link IProjectDataProviderEngineFactory} or are created by
    * independent processes on the `papi`.
+   *
+   * See {@link IProjectDataProvider} for more information.
    */
   interface IProjectDataProviderFactory extends Dispose {
     /** Get data about all projects that can be created by this PDP factory */
-    getAvailableProjects(): Promise<ProjectMetadata[]>;
+    getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]>;
     /**
      * Returns the registered network object name of a PDP for the given project ID. Called by the
      * platform when someone uses the project data provider service to access a project's data.
@@ -3614,37 +3666,14 @@ declare module 'shared/models/project-data-provider-factory.interface' {
   export default IProjectDataProviderFactory;
 }
 declare module 'shared/models/project-lookup.service-model' {
+  import { ProjectInterfaces } from 'papi-shared-types';
   import { ProjectMetadata } from 'shared/models/project-metadata.model';
-  import { ProjectTypes } from 'papi-shared-types';
-  export type ProjectMetadataWithFactoryId = ProjectMetadata & {
-    pdpFactoryId: string;
-  };
-  export type ProjectMetadataFilterOptions = {
-    /** Project IDs to exclude */
-    excludeProjectIds?: string | string[];
+  import { ModifierProject } from 'platform-bible-utils';
+  export type ProjectMetadataFilterOptions = ModifierProject & {
     /** Project IDs to include */
     includeProjectIds?: string | string[];
-    /**
-     * String representation of `RegExp` pattern(s) to match against projects' `projectType` (using
-     * the
-     * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
-     * function) to determine if they should be included.
-     *
-     * Defaults to all {@link ProjectTypes}, so all projects that do not match `excludeProjectTypes`
-     * will be included
-     */
-    includeProjectTypes?: string | string[];
-    /**
-     * String representation of `RegExp` pattern(s) to match against projects' `projectType` (using
-     * the
-     * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
-     * function) to determine if they should absolutely not be included even if they match with
-     * `includeProjectTypes`
-     *
-     * Defaults to no {@link ProjectTypes}, so all projects that match `includeProjectTypes` will be
-     * included
-     */
-    excludeProjectTypes?: string | string[];
+    /** Project IDs to exclude */
+    excludeProjectIds?: string | string[];
   };
   /**
    *
@@ -3654,24 +3683,36 @@ declare module 'shared/models/project-lookup.service-model' {
     /**
      * Provide metadata for all projects that have PDP factories
      *
+     * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
+     * the parameters, their project metadata will all be combined, so all available
+     * `projectInterface`s provided by the PDP Factory with the matching id (or all PDP Factories if
+     * no id is specified) for the project will be returned. If you need `projectInterface`s supported
+     * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+     *
      * @returns ProjectMetadata for all projects stored on the local system
      */
-    getMetadataForAllProjects: () => Promise<ProjectMetadataWithFactoryId[]>;
+    getMetadataForAllProjects: () => Promise<ProjectMetadata[]>;
     /**
      * Look up metadata for a specific project ID
      *
+     * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
+     * the parameters, their project metadata will all be combined, so all available
+     * `projectInterface`s provided by the PDP Factory with the matching id (or all PDP Factories if
+     * no id is specified) for the project will be returned. If you need `projectInterface`s supported
+     * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+     *
      * @param projectId ID of the project to load
-     * @param projectType Optional type of the project to load. If not provided, then look at all
-     *   project types for the given project ID.
+     * @param projectInterface Optional `projectInterface` of the project to load. If not provided,
+     *   then look at all `projectInterface`s for the given project ID.
      * @param pdpFactoryId Optional ID of the PDP factory where the project ID should be loaded. If
      *   not provided, then look in all available PDP factories for the given project ID.
      * @returns ProjectMetadata for the given project
      */
     getMetadataForProject: (
       projectId: string,
-      projectType?: ProjectTypes,
+      projectInterface?: ProjectInterfaces,
       pdpFactoryId?: string,
-    ) => Promise<ProjectMetadataWithFactoryId>;
+    ) => Promise<ProjectMetadata>;
   }
   export const projectLookupServiceNetworkObjectName = 'ProjectLookupService';
 }
@@ -4336,7 +4377,7 @@ declare module 'shared/services/settings.service-model' {
     typeof settingsServiceObjectToProxy;
 }
 declare module 'shared/services/project-settings.service-model' {
-  import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
+  import { ProjectSettingNames, ProjectSettingTypes, ProjectInterfaces } from 'papi-shared-types';
   import { UnsubscriberAsync } from 'platform-bible-utils';
   /** Name prefix for registered commands that call project settings validators */
   export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
@@ -4370,15 +4411,16 @@ declare module 'shared/services/project-settings.service-model' {
      * @param newValue The new value requested to set the project setting value to
      * @param currentValue The current project setting value
      * @param key The project setting key being set
+     * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
+     *   whose setting is being changed
      * @param allChanges All project settings changes being set in one batch
-     * @param projectType The `projectType` for the project whose setting is being changed
      * @returns `true` if change is valid, `false` otherwise
      */
     isValid<ProjectSettingName extends ProjectSettingNames>(
       key: ProjectSettingName,
       newValue: ProjectSettingTypes[ProjectSettingName],
       currentValue: ProjectSettingTypes[ProjectSettingName],
-      projectType: ProjectTypes,
+      projectInterfaces: ProjectInterfaces[],
       allChanges?: SimultaneousProjectSettingsChanges,
     ): Promise<boolean>;
     /**
@@ -4390,13 +4432,14 @@ declare module 'shared/services/project-settings.service-model' {
      * throw.
      *
      * @param key The project setting key for which to get the default value
-     * @param projectType The `projectType` to get default setting value for
+     * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
+     *   for which to get the default setting value
      * @returns The default value for the setting if a default value is registered
      * @throws If a default value is not registered for the setting
      */
     getDefault<ProjectSettingName extends ProjectSettingNames>(
       key: ProjectSettingName,
-      projectType: ProjectTypes,
+      projectInterfaces: ProjectInterfaces[],
     ): Promise<ProjectSettingTypes[ProjectSettingName]>;
     /**
      *
@@ -4425,12 +4468,20 @@ declare module 'shared/services/project-settings.service-model' {
       currentValue: ProjectSettingTypes[ProjectSettingName];
     };
   };
-  /** Function that validates whether a new project setting value should be allowed to be set */
+  /**
+   * Function that validates whether a new project setting value should be allowed to be set
+   *
+   * @param newValue The new value requested to set the project setting value to
+   * @param currentValue The current project setting value
+   * @param allChanges All project settings changes being set in one batch
+   * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
+   *   whose setting is being changed
+   */
   export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNames> = (
     newValue: ProjectSettingTypes[ProjectSettingName],
     currentValue: ProjectSettingTypes[ProjectSettingName],
     allChanges: SimultaneousProjectSettingsChanges,
-    projectType: ProjectTypes,
+    projectInterfaces: ProjectInterfaces[],
   ) => Promise<boolean>;
   /**
    * Validators for all project settings. Keys are setting keys, values are functions to validate new
@@ -4466,7 +4517,11 @@ declare module '@papi/core' {
     IProjectDataProviderEngineFactory,
   } from 'shared/models/project-data-provider-engine.model';
   export type { default as IProjectDataProviderFactory } from 'shared/models/project-data-provider-factory.interface';
-  export type { ProjectMetadata } from 'shared/models/project-metadata.model';
+  export type {
+    ProjectDataProviderFactoryMetadataInfo,
+    ProjectMetadata,
+    ProjectMetadataWithoutFactoryInfo,
+  } from 'shared/models/project-metadata.model';
   export type {
     LocalizationData,
     LocalizationSelector,
@@ -4492,29 +4547,84 @@ declare module 'shared/services/project-lookup.service' {
     ProjectLookupServiceType,
     ProjectMetadataFilterOptions,
   } from 'shared/models/project-lookup.service-model';
-  import { ProjectMetadata } from 'shared/models/project-metadata.model';
+  import {
+    ProjectDataProviderFactoryMetadataInfo,
+    ProjectMetadata,
+  } from 'shared/models/project-metadata.model';
+  import { ProjectInterfaces } from 'papi-shared-types';
+  /**
+   * Note: If there are multiple PDPs available whose metadata matches the conditions provided by the
+   * parameters, their project metadata will all be combined, so all available `projectInterface`s
+   * provided by the PDP Factory with the matching id (or all PDP Factories if no id is specified) for
+   * the project will be returned. If you need `projectInterface`s supported by specific PDP
+   * Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+   */
+  function internalGetMetadata(
+    onlyProjectId?: string,
+    onlyProjectInterface?: string,
+    onlyPdpFactoryId?: string,
+  ): Promise<ProjectMetadata[]>;
   export function filterProjectsMetadata(
     projectsMetadata: ProjectMetadata[],
     options: ProjectMetadataFilterOptions,
   ): ProjectMetadata[];
+  /**
+   * Compare function (for array sorting and such) that compares two PDPF Metadata infos by most
+   * minimal match to the `projectInterface` in question.
+   *
+   * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s to
+   * avoid unnecessary redirects through layered PDPs
+   *
+   * @param pdpFMetadataInfoA First ProjectDataProviderFactoryMetadataInfo to compare
+   * @param pdpFMetadataInfoB Second ProjectDataProviderFactoryMetadataInfo to compare
+   * @returns -1 if a is less than b, 0 if equal, and 1 otherwise
+   */
+  function compareProjectDataProviderFactoryMetadataInfoMinimalMatch(
+    pdpFMetadataInfoA: ProjectDataProviderFactoryMetadataInfo | undefined,
+    pdpFMetadataInfoB: ProjectDataProviderFactoryMetadataInfo | undefined,
+  ): -1 | 0 | 1;
+  /**
+   * Get the PDP Factory info whose `projectInterface`s are most minimally matching to the provided
+   * `projectInterface`
+   *
+   * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s to
+   * avoid unnecessary redirects through layered PDPs
+   *
+   * @param projectMetadata Metadata for project for which to get minimally matching PDPF
+   * @param projectInterface Which `projectInterface` to minimally match for
+   * @returns PDP Factory id whose `projectInterface`s minimally match the provided `projectInterface`
+   *   if at least one PDP Factory was found that supports the `projectInterface` provided
+   */
+  export function getMinimalMatchPdpFactoryId(
+    projectMetadata: ProjectMetadata,
+    projectInterface: ProjectInterfaces,
+  ): string | undefined;
+  /** This is an internal-only export for testing purposes and should not be used in development */
+  export const testingProjectLookupService: {
+    internalGetMetadata: typeof internalGetMetadata;
+    compareProjectDataProviderFactoryMetadataInfoMinimalMatch: typeof compareProjectDataProviderFactoryMetadataInfoMinimalMatch;
+  };
   const projectLookupService: ProjectLookupServiceType;
   export default projectLookupService;
 }
 declare module 'shared/services/project-data-provider.service' {
-  import { ProjectTypes, ProjectDataProviders } from 'papi-shared-types';
+  import { ProjectInterfaces, ProjectDataProviderInterfaces } from 'papi-shared-types';
   import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
   import { Dispose } from 'platform-bible-utils';
   /**
-   * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
-   * existing factory already that handles the same project type or this operation will fail.
+   * Add a new Project Data Provider Factory to PAPI that uses the given engine.
    *
-   * @param projectType Type of project that pdpEngineFactory supports
+   * @param projectInterfaces The standardized sets of methods (`projectInterface`s) supported by the
+   *   Project Data Provider Engines produced by this factory. Indicates what sort of project data
+   *   should be available on the PDPEs created by this factory.
    * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
    * @returns Promise that resolves to a disposable object when the registration operation completes
    */
-  export function registerProjectDataProviderEngineFactory<ProjectType extends ProjectTypes>(
-    projectType: ProjectType,
-    pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>,
+  export function registerProjectDataProviderEngineFactory<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  >(
+    projectInterfaces: SupportedProjectInterfaces,
+    pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>,
   ): Promise<Dispose>;
   /**
    * Get a Project Data Provider for the given project ID.
@@ -4526,17 +4636,23 @@ declare module 'shared/services/project-data-provider.service' {
    * pdp.getVerse(new VerseRef('JHN', '1', '1'));
    * ```
    *
-   * @param projectType Type of the project to load. The TypeScript type for the returned project data
-   *   provider will have the project data provider type associated with this project type. If this
-   *   argument does not match the project's actual `projectType` (according to its metadata), an
-   *   error will be thrown.
+   * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
+   *   type for the returned project data provider will have the project data provider interface type
+   *   associated with this `projectInterface`. If the project does not implement this
+   *   `projectInterface` (according to its metadata), an error will be thrown.
    * @param projectId ID for the project to load
-   * @returns Data provider with types that are associated with the given project type
+   * @param pdpFactoryId Optional ID of the PDP factory from which to get the project data provider if
+   *   the PDP factory supports this project id and project interface. If not provided, then look in
+   *   all available PDP factories for the given project ID.
+   * @returns Project data provider with types that are associated with the given `projectInterface`
+   * @throws If did not find a project data provider for the project id that supports the requested
+   *   `projectInterface` (and from the requested PDP factory if specified)
    */
-  export function get<ProjectType extends ProjectTypes>(
-    projectType: ProjectType,
+  export function get<ProjectInterface extends ProjectInterfaces>(
+    projectInterface: ProjectInterface,
     projectId: string,
-  ): Promise<ProjectDataProviders[ProjectType]>;
+    pdpFactoryId?: string,
+  ): Promise<ProjectDataProviderInterfaces[ProjectInterface]>;
   export interface PapiBackendProjectDataProviderService {
     registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
     get: typeof get;
@@ -5533,25 +5649,29 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
-  import { ProjectDataProviders } from 'papi-shared-types';
+  import { ProjectDataProviderInterfaces } from 'papi-shared-types';
   /**
    * Gets a project data provider with specified provider name
    *
-   * @param projectType Indicates what you expect the `projectType` to be for the project with the
-   *   specified id. The TypeScript type for the returned Project Data Provider will have the Project
-   *   Data Provider type associated with this `projectType`. If this argument does not match the
-   *   project's actual `projectType` (according to its metadata), a warning will be logged
+   * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
+   *   type for the returned project data provider will have the project data provider interface type
+   *   associated with this `projectInterface`. If the project does not implement this
+   *   `projectInterface` (according to its metadata), an error will be thrown.
    * @param projectDataProviderSource String name of the id of the project to get OR
    *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
    *   data provider again)
+   * @param pdpFactoryId Optional ID of the PDP factory from which to get the project data provider if
+   *   the PDP factory supports this project id and project interface. If not provided, then look in
+   *   all available PDP factories for the given project ID.
    * @returns `undefined` if the Project Data Provider has not been retrieved, the requested Project
    *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
    *   Data Provider is disposed
    */
-  const useProjectDataProvider: <ProjectType extends keyof ProjectDataProviders>(
-    projectType: ProjectType,
-    projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
-  ) => ProjectDataProviders[ProjectType] | undefined;
+  const useProjectDataProvider: <ProjectInterface extends keyof ProjectDataProviderInterfaces>(
+    projectInterface: ProjectInterface,
+    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+    pdpFactoryId?: string,
+  ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
   export default useProjectDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
@@ -5559,31 +5679,40 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
-  import { ProjectDataProviders, ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
+  import {
+    ProjectDataProviderInterfaces,
+    ProjectInterfaceDataTypes,
+    ProjectInterfaces,
+  } from 'papi-shared-types';
   /**
    * React hook to use data from a Project Data Provider
    *
    * @example `useProjectData('ParatextStandard', 'project id').VerseUSFM(...);`
    */
   type UseProjectDataHook = {
-    <ProjectType extends ProjectTypes>(
-      projectType: ProjectType,
-      projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+    <ProjectInterface extends ProjectInterfaces>(
+      projectInterface: ProjectInterface,
+      projectDataProviderSource:
+        | string
+        | ProjectDataProviderInterfaces[ProjectInterface]
+        | undefined,
     ): {
-      [TDataType in keyof ProjectDataTypes[ProjectType]]: (
+      [TDataType in keyof ProjectInterfaceDataTypes[ProjectInterface]]: (
         // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
-        selector: ProjectDataTypes[ProjectType][TDataType]['selector'],
+        selector: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['selector'],
         // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        defaultValue: ProjectDataTypes[ProjectType][TDataType]['getData'],
+        defaultValue: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        ProjectDataTypes[ProjectType][TDataType]['getData'],
+        ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
         (
           | ((
               // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
-              newData: ProjectDataTypes[ProjectType][TDataType]['setData'],
-            ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+              newData: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['setData'],
+            ) => Promise<
+              DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>
+            >)
           | undefined
         ),
         boolean,
@@ -5592,19 +5721,19 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   };
   /**
    * ```typescript
-   * useProjectData<ProjectType extends ProjectTypes>(
-   *     projectType: ProjectType,
-   *     projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+   * useProjectData<ProjectInterface extends ProjectInterfaces>(
+   *     projectInterface: ProjectInterface,
+   *     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
    *   ).DataType(
-   *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
-   *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
+   *       selector: ProjectInterfaceDataTypes[ProjectInterface][DataType]['selector'],
+   *       defaultValue: ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
    *       subscriberOptions?: DataProviderSubscriberOptions,
    *     ) => [
-   *       ProjectDataTypes[ProjectType][DataType]['getData'],
+   *       ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
    *       (
    *         | ((
-   *             newData: ProjectDataTypes[ProjectType][DataType]['setData'],
-   *           ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+   *             newData: ProjectInterfaceDataTypes[ProjectInterface][DataType]['setData'],
+   *           ) => Promise<DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>>)
    *         | undefined
    *       ),
    *       boolean,
@@ -5613,11 +5742,11 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *
    * React hook to use data from a Project Data Provider. Subscribes to run a callback on a Project
    * Data Provider's data with specified selector on the specified data type that the Project Data
-   * Provider serves according to its `projectType`.
+   * Provider serves according to its supported `projectInterface`s.
    *
-   * Usage: Specify the project type, the project id, and the data type on the Project Data Provider
-   * with `useProjectData('<project_type>', '<project_id>').<data_type>` and use like any other React
-   * hook.
+   * Usage: Specify the `projectInterface`, the project id, and the data type on the Project Data
+   * Provider with `useProjectData('<projectInterface>', '<project_id>').<data_type>` and use like any
+   * other React hook.
    *
    * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `ParatextStandard` project with
    * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
@@ -5632,10 +5761,10 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * );
    * ```
    *
-   * _＠param_ `projectType` Indicates what you expect the `projectType` to be for the project with the
-   * specified id. The TypeScript type for the returned Project Data Provider will have the Project
-   * Data Provider type associated with this project type. If this argument does not match the
-   * project's actual `projectType` (according to its metadata), a warning will be logged
+   * _＠param_ `projectInterface` `projectInterface` that the project to load must support. The
+   * TypeScript type for the returned project data provider will have the project data provider
+   * interface type associated with this `projectInterface`. If the project does not implement this
+   * `projectInterface` (according to its metadata), an error will be thrown.
    *
    * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
    * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
@@ -5670,17 +5799,17 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   export default useProjectData;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
-  import { ProjectDataProviders, ProjectSettingTypes } from 'papi-shared-types';
+  import { ProjectDataProviderInterfaces, ProjectSettingTypes } from 'papi-shared-types';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
   /**
    * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
    * subscribers when the project setting changes and gets updated when the project setting is changed
    * by others.
    *
-   * @param projectType Indicates what you expect the `projectType` to be for the project with the
-   *   specified id. The TypeScript type for the returned Project Data Provider will have the Project
-   *   Data Provider type associated with this `projectType`. If this argument does not match the
-   *   project's actual `projectType` (according to its metadata), a warning will be logged
+   * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
+   *   type for the returned project data provider will have the project data provider interface type
+   *   associated with this `projectInterface`. If the project does not implement this
+   *   `projectInterface` (according to its metadata), an error will be thrown.
    * @param projectDataProviderSource `projectDataProviderSource` String name of the id of the project
    *   to get OR projectDataProvider (result of `useProjectDataProvider` if you want to consolidate
    *   and only get the Project Data Provider once)
@@ -5711,11 +5840,11 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    *   message type
    */
   const useProjectSetting: <
-    ProjectType extends keyof ProjectDataProviders,
+    ProjectInterface extends keyof ProjectDataProviderInterfaces,
     ProjectSettingName extends keyof ProjectSettingTypes,
   >(
-    projectType: ProjectType,
-    projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+    projectInterface: ProjectInterface,
+    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
     key: ProjectSettingName,
     defaultValue: ProjectSettingTypes[ProjectSettingName],
     subscriberOptions?: DataProviderSubscriberOptions,

@@ -135,7 +135,7 @@ async function openHelloWorldProjectWebView(
     projectIdForWebView = await papi.dialogs.selectProject({
       title: 'Open Hello World Project',
       prompt: 'Choose the Hello World project to view:',
-      includeProjectTypes: '^helloWorld$',
+      includeProjectInterfaces: '^helloWorld$',
     });
   }
   if (!projectIdForWebView) return undefined;
@@ -148,7 +148,7 @@ async function openHelloWorldProjectWebView(
 
 function selectProjectToDelete(): Promise<string | undefined> {
   return papi.dialogs.selectProject({
-    includeProjectTypes: 'helloWorld',
+    includeProjectInterfaces: 'helloWorld',
     title: 'Delete Hello World Project',
     prompt: 'Please choose a project to delete:',
   });
@@ -293,7 +293,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       const projectIdForWebView =
         projectId ??
         (await papi.dialogs.selectProject({
-          includeProjectTypes: 'helloWorld',
+          includeProjectInterfaces: 'helloWorld',
           title: 'Open Hello World Project Viewer',
           prompt: 'Please choose a project for which to open the viewer:',
         }));

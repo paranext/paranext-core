@@ -20,7 +20,7 @@ public sealed class ProjectSettings
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
-    private static readonly List<string> PT_SETTING_BOOLEANS = ["Editable", "MatchBasedOnStems", "AllowReadAccess", "AllowSharingWithSLDR", ];
+    private static readonly List<string> _ptSettingBooleans = ["Editable", "MatchBasedOnStems", "AllowReadAccess", "AllowSharingWithSLDR", ];
 
     // Make sure this dictionary gets updated whenever new settings are added
     private static readonly Dictionary<string, string> s_platformBibleToParatextSettingsNames =
@@ -67,6 +67,6 @@ public sealed class ProjectSettings
     /// <returns></returns>
     public static bool IsParatextSettingABoolean(string ptSettingName)
     {
-        return PT_SETTING_BOOLEANS.Contains(ptSettingName);
+        return _ptSettingBooleans.Contains(ptSettingName);
     }
 }

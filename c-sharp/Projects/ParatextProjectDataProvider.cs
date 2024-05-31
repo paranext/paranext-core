@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
+using Paranext.DataProvider.ServiceClients;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
@@ -63,7 +64,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     protected override Task StartDataProvider()
     {
-        _paratextProjects.Initialize();
+        var shouldIncludePT9Projects = false;
+        if (OperatingSystem.IsWindows())
+        {
+            var shouldIncludePT9ProjectsElement = SettingsServiceClient.GetSetting(PapiClient, "platformScripture.includeMyParatext9Projects");
+            shouldIncludePT9Projects = shouldIncludePT9ProjectsElement!.Value.GetBoolean();
+        }
+        _paratextProjects.Initialize(shouldIncludePT9Projects);
         return Task.CompletedTask;
     }
 
@@ -165,7 +172,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
         return extensionStreamManager.GetDataStream(
-            $"extensions/{scope.ExtensionName}/{scope.DataQualifier}",
+            $"${LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}/{scope.DataQualifier}",
             createIfNotExists
         );
     }
@@ -182,7 +189,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private void RegisterSettingsValidators()
     {
         (bool result, string? error) VisibilityValidator((string newValueJson, string currentValueJson,
-            string allChangesJson, string projectType) data)
+            string allChangesJson, List<string> projectInterfaces) data)
         {
             try
             {
@@ -238,7 +245,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         string? defaultValue = ProjectSettingsService.GetDefault(
             PapiClient,
             settingName,
-            ProjectType.Paratext
+            [ProjectInterface.Paratext]
         );
         if (defaultValue == null)
             return ResponseToRequest.Failed($"Default value for {settingName} was null");
@@ -265,7 +272,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 currentValueJson,
                 settingName,
                 "",
-                ProjectType.Paratext))
+                [ProjectInterface.Paratext]))
             return ResponseToRequest.Failed($"Validation failed for {settingName}");
 
         // Figure out which setting name to use
@@ -301,7 +308,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         string? defaultValue = ProjectSettingsService.GetDefault(
             PapiClient,
             settingName,
-            ProjectType.Paratext
+            [ProjectInterface.Paratext]
         );
         if (defaultValue == null)
             return ResponseToRequest.Failed($"Default value for {settingName} was null");

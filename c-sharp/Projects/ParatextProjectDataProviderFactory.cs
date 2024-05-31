@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
+using Paranext.DataProvider.ServiceClients;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -15,14 +16,20 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         PapiClient papiClient,
         LocalParatextProjects paratextProjects
     )
-        : base(ProjectType.Paratext, papiClient)
+        : base([ProjectInterface.Paratext], papiClient)
     {
         _paratextProjects = paratextProjects;
     }
 
     protected override Task StartFactory()
     {
-        _paratextProjects.Initialize();
+        var shouldIncludePT9Projects = false;
+        if (OperatingSystem.IsWindows())
+        {
+            var shouldIncludePT9ProjectsElement = SettingsServiceClient.GetSetting(PapiClient, "platformScripture.includeMyParatext9Projects");
+            shouldIncludePT9Projects = shouldIncludePT9ProjectsElement!.Value.GetBoolean();
+        }
+        _paratextProjects.Initialize(shouldIncludePT9Projects);
         return Task.CompletedTask;
     }
 
@@ -31,7 +38,7 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         var projectMetadata = _paratextProjects
             .GetAllProjectDetails()
             .Select(pd => pd.Metadata)
-            .Where(m => m.ProjectType == ProjectType.Paratext)
+            .Where(m => m.ProjectInterfaces.Contains(ProjectInterface.Paratext))
             .ToList();
         return ResponseToRequest.Succeeded(projectMetadata);
     }

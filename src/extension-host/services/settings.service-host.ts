@@ -209,7 +209,7 @@ export async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-/** This is an internal-only export for testing purposes, and should not be used in development */
+/** This is an internal-only export for testing purposes and should not be used in development */
 export const testingSettingService = {
   implementSettingDataProviderEngine: (settingsData: Partial<AllSettingsData>) => {
     return new SettingDataProviderEngine(settingsData);
