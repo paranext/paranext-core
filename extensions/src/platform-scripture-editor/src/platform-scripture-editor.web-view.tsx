@@ -1,17 +1,19 @@
-import { VerseRef } from '@sillsdev/scripture';
-import { logger } from '@papi/frontend';
-import { useProjectData, useSetting } from '@papi/frontend/react';
-import { ScriptureReference, debounce } from 'platform-bible-utils';
-import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
-import type { WebViewProps } from '@papi/core';
 import {
-  Editor,
   EditorOptions,
+  Editorial,
   EditorRef,
+  Marginal,
+  MarginalRef,
   Usj,
   usjToUsxString,
   usxStringToUsj,
 } from '@biblionexus-foundation/platform-editor';
+import { VerseRef } from '@sillsdev/scripture';
+import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
+import type { WebViewProps } from '@papi/core';
+import { logger } from '@papi/frontend';
+import { useProjectData, useSetting } from '@papi/frontend/react';
+import { ScriptureReference, debounce } from 'platform-bible-utils';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -50,14 +52,15 @@ function scrollToScrRef(scrRef: ScriptureReference) {
 }
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
+  projectId,
   useWebViewState,
 }: WebViewProps): JSX.Element {
-  const [projectId] = useWebViewState<string>('projectId', '');
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
+  const Editor = isReadOnly ? Editorial : Marginal;
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
-  const editorRef = useRef<EditorRef | null>(null);
+  const editorRef = useRef<EditorRef | MarginalRef | null>(null);
   const [scrRef, setScrRefInternal] = useSetting('platform.verseRef', defaultScrRef);
 
   /**

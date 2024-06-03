@@ -1,14 +1,16 @@
 import { Tooltip } from '@mui/material';
-import { HamburgerMenuButton } from 'platform-bible-react';
+import { CommandHandler, HamburgerMenuButton } from 'platform-bible-react';
 import './platform-tab-title.component.scss';
 import menuDataService from '@shared/services/menu-data.service';
 import { useData } from '@renderer/hooks/papi-hooks';
-import { useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { handleMenuCommand } from '../platform-bible-menu.commands';
 
 type PlatformTabTitleProps = {
   /** What type of WebView this is. Unique to all other WebView definitions */
   webViewType?: `${string}.${string}`;
+  /** Id of the tab this title is on */
+  tabId: string;
   /** Url to image to show on the tab. Defaults to Platform.Bible logo */
   iconUrl?: string;
   /** Text to show on the tab */
@@ -26,6 +28,7 @@ type PlatformTabTitleProps = {
  */
 export default function PlatformTabTitle({
   webViewType,
+  tabId,
   iconUrl,
   text,
   tooltip,
@@ -62,6 +65,13 @@ export default function PlatformTabTitle({
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const containerRef = useRef<HTMLDivElement>(undefined!);
 
+  const commandHandler = useCallback<CommandHandler>(
+    (command) => {
+      handleMenuCommand(command, tabId);
+    },
+    [tabId],
+  );
+
   return (
     <Tooltip title={tooltipDiv}>
       <div ref={containerRef} className="title">
@@ -69,7 +79,7 @@ export default function PlatformTabTitle({
           icon
         ) : (
           <HamburgerMenuButton
-            commandHandler={handleMenuCommand}
+            commandHandler={commandHandler}
             normalMenu={webViewMenu?.topMenu}
             className="tab-menu-button"
             aria-label="Tab"
