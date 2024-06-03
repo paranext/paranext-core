@@ -15,12 +15,12 @@ internal class LocalParatextProjects
     // Inside of each project's "home" directory, these are the subdirectories and files
     protected const string PROJECT_SETTINGS_FILE = "Settings.xml";
 
-    protected static readonly List<string> _paratextProjectInterfaces = [ProjectInterface.Paratext];
+    protected static readonly List<string> _paratextProjectInterfaces = [ProjectInterfaces.Paratext];
 
     /// <summary>
     /// Directory inside a project's root directory where Platform.Bible's extension data is stored
     /// </summary>
-    public const string EXTENSION_DATA_SUBDIRECTORY = "platform.bible/extensions";
+    public const string EXTENSION_DATA_SUBDIRECTORY = "shared/platform.bible/extensions";
 
     protected readonly ConcurrentDictionary<string, ProjectDetails> _projectDetailsMap = new();
 
@@ -41,31 +41,28 @@ internal class LocalParatextProjects
     #region Public properties and methods
 
 
-    public virtual void Initialize(bool shouldIncludePT9Projects)
+    public virtual void Initialize(bool shouldIncludePT9ProjectsOnWindows)
     {
         if (!_projectDetailsMap.IsEmpty)
             return;
 
         CreateDirectory(ProjectRootFolder);
 
-        IEnumerable<ProjectDetails> allProjectDetails = LoadAllProjectDetails(shouldIncludePT9Projects);
+        IEnumerable<ProjectDetails> allProjectDetails = LoadAllProjectDetails(shouldIncludePT9ProjectsOnWindows);
 
         if (!allProjectDetails.Any())
         {
             SetUpSampleProject();
 
-            allProjectDetails = LoadAllProjectDetails(shouldIncludePT9Projects);
+            allProjectDetails = LoadAllProjectDetails(shouldIncludePT9ProjectsOnWindows);
         }
 
         foreach (ProjectDetails projectDetails in allProjectDetails)
         {
             try
             {
-                if (projectDetails.Metadata.ProjectInterfaces.Contains(ProjectInterface.Paratext))
-                {
-                    AddProjectToMaps(projectDetails);
-                    Console.WriteLine($"Loaded project metadata: {projectDetails}");
-                }
+                AddProjectToMaps(projectDetails);
+                Console.WriteLine($"Loaded project metadata: {projectDetails}");
             }
             catch (Exception ex)
             {
@@ -138,10 +135,10 @@ internal class LocalParatextProjects
     /// Return projects that are available on disk on the local machine
     /// </summary>
     /// <returns>Enumeration of (ProjectMetadata, project directory) tuples for all projects</returns>
-    private IEnumerable<ProjectDetails> LoadAllProjectDetails(bool shouldIncludePT9Projects)
+    private IEnumerable<ProjectDetails> LoadAllProjectDetails(bool shouldIncludePT9ProjectsOnWindows)
     {
         List<string> projectRootFolders = [ProjectRootFolder];
-        if (shouldIncludePT9Projects && Directory.Exists(Paratext9ProjectsFolder)) projectRootFolders.Add(Paratext9ProjectsFolder);
+        if (OperatingSystem.IsWindows() && shouldIncludePT9ProjectsOnWindows && Directory.Exists(Paratext9ProjectsFolder)) projectRootFolders.Add(Paratext9ProjectsFolder);
 
         foreach (var rootFolder in projectRootFolders)
         {

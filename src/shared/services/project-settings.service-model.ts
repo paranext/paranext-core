@@ -1,6 +1,6 @@
 import { serializeRequestType } from '@shared/utils/util';
 import * as networkService from '@shared/services/network.service';
-import { ProjectSettingNames, ProjectSettingTypes, ProjectInterfaces } from 'papi-shared-types';
+import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
 import { UnsubscriberAsync } from 'platform-bible-utils';
 
 /** Name prefix for registered commands that call project settings validators */
@@ -45,7 +45,6 @@ export interface IProjectSettingsService {
     key: ProjectSettingName,
     newValue: ProjectSettingTypes[ProjectSettingName],
     currentValue: ProjectSettingTypes[ProjectSettingName],
-    projectInterfaces: ProjectInterfaces[],
     allChanges?: SimultaneousProjectSettingsChanges,
   ): Promise<boolean>;
   /**
@@ -64,7 +63,6 @@ export interface IProjectSettingsService {
    */
   getDefault<ProjectSettingName extends ProjectSettingNames>(
     key: ProjectSettingName,
-    projectInterfaces: ProjectInterfaces[],
   ): Promise<ProjectSettingTypes[ProjectSettingName]>;
   /**
    * JSDOC SOURCE projectSettingsServiceRegisterValidator
@@ -108,7 +106,6 @@ export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNam
   newValue: ProjectSettingTypes[ProjectSettingName],
   currentValue: ProjectSettingTypes[ProjectSettingName],
   allChanges: SimultaneousProjectSettingsChanges,
-  projectInterfaces: ProjectInterfaces[],
 ) => Promise<boolean>;
 
 /**

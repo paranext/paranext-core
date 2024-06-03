@@ -13,17 +13,19 @@ namespace Paranext.DataProvider.Projects;
 internal abstract class ProjectDataProviderFactory : NetworkObject
 {
     private readonly List<string> _projectInterfaces;
+    private readonly string _pdpfName;
 
-    protected ProjectDataProviderFactory(List<string> projectInterfaces, PapiClient papiClient)
+    protected ProjectDataProviderFactory(List<string> projectInterfaces, string pdpfName, PapiClient papiClient)
         : base(papiClient)
     {
         _projectInterfaces = projectInterfaces;
+        _pdpfName = pdpfName;
     }
 
     public async Task Initialize()
     {
         await StartFactory();
-        var name = $"platform.pdpFactory-{string.Join(',', _projectInterfaces)}";
+        var name = $"platform.pdpFactory-{_pdpfName}";
         await RegisterNetworkObject(
             name,
             new MessageEventProjectDataProviderFactoryCreated(
@@ -48,7 +50,7 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
             jsonArray = request.Deserialize<JsonNode>()!.AsArray();
             if (jsonArray.Count == 0)
                 return ResponseToRequest.Failed(
-                    $"No function name provided when calling PDP Factory for {string.Join(',', _projectInterfaces)}"
+                    $"No function name provided when calling {_pdpfName} PDP Factory"
                 );
             functionName = (string)jsonArray[0]!;
             jsonArray.RemoveAt(0);

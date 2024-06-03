@@ -1,12 +1,13 @@
 using System.Collections.Concurrent;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
-using Paranext.DataProvider.ServiceClients;
+using Paranext.DataProvider.Services;
 
 namespace Paranext.DataProvider.Projects;
 
 internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
 {
+    internal const string PDPF_NAME = "Paratext";
     private readonly LocalParatextProjects _paratextProjects;
     private readonly ConcurrentDictionary<string, ParatextProjectDataProvider> _pdpMap = new();
     private readonly object _creationLock = new();
@@ -16,20 +17,22 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         PapiClient papiClient,
         LocalParatextProjects paratextProjects
     )
-        : base([ProjectInterface.Paratext], papiClient)
+        : base([ProjectInterfaces.Paratext], PDPF_NAME, papiClient)
     {
         _paratextProjects = paratextProjects;
     }
 
     protected override Task StartFactory()
     {
-        var shouldIncludePT9Projects = false;
+        var shouldIncludePT9ProjectsOnWindows = false;
         if (OperatingSystem.IsWindows())
         {
-            var shouldIncludePT9ProjectsElement = SettingsServiceClient.GetSetting(PapiClient, "platformScripture.includeMyParatext9Projects");
-            shouldIncludePT9Projects = shouldIncludePT9ProjectsElement!.Value.GetBoolean();
+            var shouldIncludePT9ProjectsElement = SettingsService.GetSettingValue<bool>(PapiClient, Settings.INCLUDE_MY_PARATEXT_9_PROJECTS);
+            if (!shouldIncludePT9ProjectsElement.HasValue)
+                throw new Exception($"Setting {Settings.INCLUDE_MY_PARATEXT_9_PROJECTS} was null!");
+            shouldIncludePT9ProjectsOnWindows = shouldIncludePT9ProjectsElement.Value;
         }
-        _paratextProjects.Initialize(shouldIncludePT9Projects);
+        _paratextProjects.Initialize(shouldIncludePT9ProjectsOnWindows);
         return Task.CompletedTask;
     }
 
@@ -38,7 +41,6 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         var projectMetadata = _paratextProjects
             .GetAllProjectDetails()
             .Select(pd => pd.Metadata)
-            .Where(m => m.ProjectInterfaces.Contains(ProjectInterface.Paratext))
             .ToList();
         return ResponseToRequest.Succeeded(projectMetadata);
     }

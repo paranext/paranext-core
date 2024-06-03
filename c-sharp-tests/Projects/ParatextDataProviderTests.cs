@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
@@ -23,13 +24,17 @@ namespace TestParanextDataProvider.Projects
         private ProjectDetails _projectDetails = null!; // Will be non-null when the test runs
 
         [SetUp]
-        public override void TestSetup()
+        public override async Task TestSetup()
         {
-            base.TestSetup();
+            await base.TestSetup();
             _scrText = CreateDummyProject();
 
             _projectDetails = CreateProjectDetails(_scrText);
             ParatextProjects.FakeAddProject(_projectDetails);
+
+            var settingsService = new DummySettingsService(Client);
+            await settingsService.RegisterDataProvider();
+            settingsService.AddSettingValue(Settings.INCLUDE_MY_PARATEXT_9_PROJECTS, true);
         }
 
         [TearDown]
@@ -459,7 +464,6 @@ namespace TestParanextDataProvider.Projects
             VerifyResponse(result2, null, requestType, requesterId, "Random file contents");
         }
 
-        // TODO:
         /// <summary>
         /// Tests that the ParatextProjectDataProvider has successfully registered a validator for
         /// the Validity property and that the validator is called to determine that the new value

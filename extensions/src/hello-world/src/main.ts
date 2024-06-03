@@ -19,6 +19,7 @@ import helloWorldProjectWebView from './web-views/hello-world-project/hello-worl
 import helloWorldProjectWebViewStyles from './web-views/hello-world-project/hello-world-project.web-view.scss?inline';
 import helloWorldProjectViewerWebView from './web-views/hello-world-project/hello-world-project-viewer.web-view?inline';
 import { HTML_COLOR_NAMES } from './util';
+import { HELLO_WORLD_PROJECT_INTERFACES } from './models/hello-world-project-data-provider-engine.model';
 
 /** User data storage key for all hello world project data */
 const allProjectDataStorageKey = 'allHelloWorldProjectData';
@@ -231,7 +232,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const helloWorldPdpefPromise = papi.projectDataProviders.registerProjectDataProviderEngineFactory(
-    'helloWorld',
+    HELLO_WORLD_PROJECT_INTERFACES,
     helloWorldProjectDataProviderEngineFactory,
   );
 

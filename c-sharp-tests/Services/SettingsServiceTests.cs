@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using TestParanextDataProvider;
 
-namespace Paranext.DataProvider.ServiceClients.Tests;
+namespace Paranext.DataProvider.Services.Tests;
 
 [ExcludeFromCodeCoverage]
 public class SettingsServiceTests
@@ -28,24 +28,24 @@ public class SettingsServiceTests
     #endregion
 
     [TestCase()]
-    public void GetSetting_Boolean_ReturnsValue()
+    public void GetSettingValue_Boolean_ReturnsValue()
     {
         var settingKey = "isTest";
         var settingValue = true;
         _settingsService.AddSettingValue(settingKey, settingValue);
 
-        var retrievedSettingValue = SettingsServiceClient.GetSetting(_client, settingKey);
-        Assert.That(retrievedSettingValue!.Value.GetBoolean(), Is.EqualTo(settingValue));
+        var retrievedSettingValue = SettingsService.GetSettingValue<bool>(_client, settingKey);
+        Assert.That(retrievedSettingValue, Is.EqualTo(settingValue));
     }
 
     [TestCase()]
-    public void GetSetting_Integer_ReturnsValue()
+    public void GetSettingValue_Integer_ReturnsValue()
     {
         var settingKey = "testNum";
         var settingValue = 15;
         _settingsService.AddSettingValue(settingKey, settingValue);
 
-        var retrievedSettingValue = SettingsServiceClient.GetSetting(_client, settingKey);
-        Assert.That(retrievedSettingValue!.Value.GetInt32(), Is.EqualTo(settingValue));
+        var retrievedSettingValue = SettingsService.GetSettingValue<int>(_client, settingKey);
+        Assert.That(retrievedSettingValue, Is.EqualTo(settingValue));
     }
 }

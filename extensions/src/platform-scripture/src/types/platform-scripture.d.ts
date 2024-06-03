@@ -22,7 +22,7 @@ declare module 'papi-shared-types' {
      * Whether to look in the Paratext 9 project storage folder for Paratext projects to load
      * (Windows only).
      *
-     * Located at "C:/My Paratext 9 Projects"
+     * Located at "C:\My Paratext 9 Projects"
      */
     'platformScripture.includeMyParatext9Projects': boolean;
   }

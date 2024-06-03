@@ -22,7 +22,7 @@ namespace TestParanextDataProvider
 
         #region Test setup/teardown
         [SetUp]
-        public virtual void TestSetup()
+        public virtual async Task TestSetup()
         {
             if (OperatingSystem.IsMacOS())
                 Assert.Ignore("Mac is missing ICU support so these tests will not work");

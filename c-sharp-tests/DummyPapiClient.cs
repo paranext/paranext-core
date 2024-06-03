@@ -4,7 +4,7 @@ using System.Text.Json;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
-using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
 
 namespace TestParanextDataProvider
 {
@@ -142,7 +142,7 @@ namespace TestParanextDataProvider
                     else if (
                         (requestType == "object:ProjectSettingsService.function")
                         && (requestContents is object[] details)
-                        && (details.Length > 2)
+                        && (details.Length >= 2)
                     )
                     {
                         // If this is a setting known to both Platform.Bible and Paratext, do the
@@ -160,12 +160,7 @@ namespace TestParanextDataProvider
                             switch (details[0])
                             {
                                 case "isValid":
-                                    if (
-                                        details.Length == 6
-                                        && ((List<string>)details[4]).Contains(
-                                            ProjectInterface.Paratext
-                                        )
-                                    )
+                                    if (details.Length == 5)
                                     {
                                         success = true;
                                         // Might be a setting we've registered to handle.
@@ -177,9 +172,7 @@ namespace TestParanextDataProvider
                                             // current value
                                             details[3],
                                             // all changes?
-                                            details[5],
-                                            // projectInterfaces
-                                            details[4],
+                                            details[4]
                                         };
                                         if (
                                             TryValidationUsingRegisteredHandler(
@@ -213,13 +206,7 @@ namespace TestParanextDataProvider
                                     }
                                     break;
                                 case "getDefault":
-                                    if (
-                                        details.Length == 3
-                                        && ((List<string>)details[2]).Contains(
-                                            ProjectInterface.Paratext
-                                        )
-                                        && pbSettingName != null
-                                    )
+                                    if (details.Length == 2 && pbSettingName != null)
                                     {
                                         success = true;
                                         result = $"default value for {pbSettingName}";

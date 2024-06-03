@@ -3,7 +3,11 @@ using Newtonsoft.Json;
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
-/// Represents the data inside a project's meta.json file
+/// Low-level information describing a project that Platform.Bible directly manages and uses to load
+/// project data
+///
+/// Returned from Project Data Provider Factories in order to inform others about what projects they
+/// support in what form.
 /// </summary>
 public class ProjectMetadata(string id, string name, List<string> projectInterfaces)
 {
@@ -24,25 +28,6 @@ public class ProjectMetadata(string id, string name, List<string> projectInterfa
     /// </summary>
     [JsonProperty("projectInterfaces")]
     public List<string> ProjectInterfaces { get; } = projectInterfaces;
-
-    public override bool Equals(object? obj)
-    {
-        ProjectMetadata? that = obj as ProjectMetadata;
-        return that != null && this.Equals(that);
-    }
-
-    protected bool Equals(ProjectMetadata other)
-    {
-        return ID.Equals(other.ID)
-            && Name == other.Name
-            && ProjectInterfaces.Count == other.ProjectInterfaces.Count &&
-            ProjectInterfaces.All(other.ProjectInterfaces.Contains);
-    }
-
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(ID, Name, string.Join(',', ProjectInterfaces));
-    }
 
     public override string ToString()
     {

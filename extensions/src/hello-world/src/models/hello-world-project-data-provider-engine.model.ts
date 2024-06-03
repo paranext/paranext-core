@@ -64,11 +64,7 @@ class HelloWorldProjectDataProviderEngine
     key: ProjectSettingName,
     newSetting: ProjectSettingTypes[ProjectSettingName],
   ): Promise<DataProviderUpdateInstructions<ProjectInterfaceDataTypes['helloWorld']>> {
-    if (
-      !(await papi.projectSettings.isValid(key, newSetting, await this.getSetting(key), [
-        'helloWorld',
-      ]))
-    )
+    if (!(await papi.projectSettings.isValid(key, newSetting, await this.getSetting(key))))
       return false;
 
     this.projectData.settings[key] = newSetting;

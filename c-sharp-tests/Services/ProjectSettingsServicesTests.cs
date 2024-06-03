@@ -2,12 +2,11 @@ using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json;
 using TestParanextDataProvider;
 
-namespace Paranext.DataProvider.Projects.Tests
+namespace Paranext.DataProvider.Services.Tests
 {
     [ExcludeFromCodeCoverage]
     public class ProjectSettingsServicesTests
     {
-        // TODO:
         [Test]
         public void IsValid_ValidLanguage_ReturnsTrue()
         {
@@ -24,8 +23,7 @@ namespace Paranext.DataProvider.Projects.Tests
                 newValueJson,
                 currentValueJson,
                 ProjectSettings.PT_LANGUAGE,
-                "",
-                [ProjectInterface.Paratext]
+                ""
             );
 
             Assert.That(result, Is.True);
@@ -42,46 +40,17 @@ namespace Paranext.DataProvider.Projects.Tests
                 newValueJson,
                 currentValueJson,
                 ProjectSettings.PT_LANGUAGE,
-                "",
-                [ProjectInterface.Paratext]
+                ""
             );
 
             Assert.That(result, Is.False);
         }
 
-        [Test]
-        public void IsValid_UnexpectedProjectInterfaces_ReturnsFalse()
-        {
-            DummyPapiClient papiClient = new DummyPapiClient();
-            var newValueJson = JsonConvert.SerializeObject("Spanish");
-            var currentValueJson = JsonConvert.SerializeObject("German");
-            papiClient.AddSettingValueToTreatAsValid(
-                ProjectSettings.PB_LANGUAGE,
-                newValueJson,
-                currentValueJson
-            );
-            var result = ProjectSettingsService.IsValid(
-                papiClient,
-                newValueJson,
-                currentValueJson,
-                ProjectSettings.PT_LANGUAGE,
-                "",
-                ["SomethingElse"]
-            );
-
-            Assert.That(result, Is.False);
-        }
-
-        // TODO:
         [Test]
         public void GetDefault_KnownProperty_ReturnsDefaultValue()
         {
             DummyPapiClient papiClient = new DummyPapiClient();
-            var result = ProjectSettingsService.GetDefault(
-                papiClient,
-                ProjectSettings.PT_LANGUAGE,
-                [ProjectInterface.Paratext]
-            );
+            var result = ProjectSettingsService.GetDefault(papiClient, ProjectSettings.PT_LANGUAGE);
 
             Assert.That(result, Is.EqualTo($"default value for {ProjectSettings.PB_LANGUAGE}"));
         }
@@ -90,27 +59,17 @@ namespace Paranext.DataProvider.Projects.Tests
         public void GetDefault_UnknownProperty_ReturnsNull()
         {
             DummyPapiClient papiClient = new DummyPapiClient();
-            var result = ProjectSettingsService.GetDefault(
-                papiClient,
-                "wonky.setting",
-                [ProjectInterface.Paratext]
-            );
+            var result = ProjectSettingsService.GetDefault(papiClient, "wonky.setting");
 
             Assert.That(result, Is.Null);
         }
 
-        // TODO:
         [Test]
         public void RegisterValidator_NewProperty_ReturnsTrue()
         {
             const string settingKey = "testScripture.MonkeyCount";
             (bool result, string? error) MonkeyCountValidator(
-                (
-                    string newValueJson,
-                    string currentValueJson,
-                    string allChangesJson,
-                    List<string> projectInterfaces
-                ) data
+                (string newValueJson, string currentValueJson, string allChangesJson) data
             )
             {
                 try
@@ -147,8 +106,7 @@ namespace Paranext.DataProvider.Projects.Tests
                     JsonConvert.SerializeObject(2),
                     JsonConvert.SerializeObject(5),
                     settingKey,
-                    "",
-                    [ProjectInterface.Paratext]
+                    ""
                 ),
                 Is.True
             );
@@ -167,8 +125,7 @@ namespace Paranext.DataProvider.Projects.Tests
                     JsonConvert.SerializeObject(1),
                     JsonConvert.SerializeObject(5),
                     settingKey,
-                    "",
-                    [ProjectInterface.Paratext]
+                    ""
                 ),
                 Is.False
             );
@@ -178,8 +135,7 @@ namespace Paranext.DataProvider.Projects.Tests
                     JsonConvert.SerializeObject(6),
                     JsonConvert.SerializeObject(5),
                     settingKey,
-                    "",
-                    [ProjectInterface.Paratext]
+                    ""
                 ),
                 Is.True
             );
@@ -190,12 +146,7 @@ namespace Paranext.DataProvider.Projects.Tests
         {
             const string settingKey = "testScripture.Oops";
             (bool result, string? error) OopsValidator(
-                (
-                    string newValueJson,
-                    string currentValueJson,
-                    string allChangesJson,
-                    List<string> projectInterfaces
-                ) data
+                (string newValueJson, string currentValueJson, string allChangesJson) data
             )
             {
                 return (false, "The Oops property has no valid values. Ha Ha!");

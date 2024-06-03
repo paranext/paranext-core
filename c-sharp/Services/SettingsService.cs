@@ -1,14 +1,14 @@
 using System.Text.Json;
 using Paranext.DataProvider.MessageTransports;
 
-namespace Paranext.DataProvider.ServiceClients;
+namespace Paranext.DataProvider.Services;
 
-internal static class SettingsServiceClient
+internal static class SettingsService
 {
     public const string SETTINGS_SERVICE_NAME = "platform.settingsServiceDataProvider";
     private const string SETTINGS_SERVICE_REQUEST = $"object:{SETTINGS_SERVICE_NAME}-data.function";
 
-    public static JsonElement? GetSetting(PapiClient papiClient, string key)
+    public static JsonElement? GetSettingRaw(PapiClient papiClient, string key)
     {
         JsonElement? value = null;
         TaskCompletionSource taskSource = new();
@@ -40,5 +40,17 @@ internal static class SettingsServiceClient
         using var cts = new CancellationTokenSource();
         getSettingTask.Wait(cts.Token);
         return value;
+    }
+
+    public static T? GetSettingObject<T>(PapiClient papiClient, string key)
+        where T : class
+    {
+        return GetSettingRaw(papiClient, key)?.Deserialize<T>();
+    }
+
+    public static T? GetSettingValue<T>(PapiClient papiClient, string key)
+        where T : struct
+    {
+        return GetSettingRaw(papiClient, key)?.Deserialize<T>();
     }
 }

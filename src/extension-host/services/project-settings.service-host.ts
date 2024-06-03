@@ -12,7 +12,7 @@ import {
   projectSettingsServiceObjectToProxy,
 } from '@shared/services/project-settings.service-model';
 import { serializeRequestType } from '@shared/utils/util';
-import { ProjectSettingNames, ProjectSettingTypes, ProjectInterfaces } from 'papi-shared-types';
+import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
 import { includes } from 'platform-bible-utils';
 import ProjectSettingsDocumentCombiner from '@shared/utils/project-settings-document-combiner';
 
@@ -50,13 +50,12 @@ async function isValid<ProjectSettingName extends ProjectSettingNames>(
   key: ProjectSettingName,
   newValue: ProjectSettingTypes[ProjectSettingName],
   currentValue: ProjectSettingTypes[ProjectSettingName],
-  projectInterfaces: ProjectInterfaces[],
   allChanges?: SimultaneousProjectSettingsChanges,
 ): Promise<boolean> {
   if (key in coreProjectSettingsValidators) {
     const projectSettingValidator = coreProjectSettingsValidators[key];
     if (projectSettingValidator)
-      return projectSettingValidator(newValue, currentValue, allChanges ?? {}, projectInterfaces);
+      return projectSettingValidator(newValue, currentValue, allChanges ?? {});
     // If key exists in coreProjectSettingsValidators but there is no validator, let the change go through
     return true;
   }
@@ -66,7 +65,6 @@ async function isValid<ProjectSettingName extends ProjectSettingNames>(
       newValue,
       currentValue,
       allChanges ?? {},
-      projectInterfaces,
     );
   } catch (error) {
     // If there is no validator just let the change go through
@@ -78,25 +76,20 @@ async function isValid<ProjectSettingName extends ProjectSettingNames>(
 
 async function getDefault<ProjectSettingName extends ProjectSettingNames>(
   key: ProjectSettingName,
-  projectInterfaces: ProjectInterfaces[],
 ): Promise<ProjectSettingTypes[ProjectSettingName]> {
   await initialize();
   const projectSettingInfo =
     projectSettingsDocumentCombiner.getProjectSettingsContributionInfo()?.settings[key];
 
   if (!projectSettingInfo) {
-    throw new Error(
-      `Could not find project setting ${key}. projectInterfaces: ${projectInterfaces}`,
-    );
+    throw new Error(`Could not find project setting ${key}.`);
   }
 
   // We shouldn't be able to hit this anymore since the project settings document combiner should
   // throw if this ever happened. But this is still here just in case because this would be a
   // serious error
   if (!('default' in projectSettingInfo)) {
-    throw new Error(
-      `Could not find default value for project setting ${key}. projectInterfaces: ${projectInterfaces}`,
-    );
+    throw new Error(`Could not find default value for project setting ${key}.`);
   }
 
   return projectSettingInfo.default;

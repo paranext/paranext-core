@@ -4377,7 +4377,7 @@ declare module 'shared/services/settings.service-model' {
     typeof settingsServiceObjectToProxy;
 }
 declare module 'shared/services/project-settings.service-model' {
-  import { ProjectSettingNames, ProjectSettingTypes, ProjectInterfaces } from 'papi-shared-types';
+  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
   import { UnsubscriberAsync } from 'platform-bible-utils';
   /** Name prefix for registered commands that call project settings validators */
   export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
@@ -4420,7 +4420,6 @@ declare module 'shared/services/project-settings.service-model' {
       key: ProjectSettingName,
       newValue: ProjectSettingTypes[ProjectSettingName],
       currentValue: ProjectSettingTypes[ProjectSettingName],
-      projectInterfaces: ProjectInterfaces[],
       allChanges?: SimultaneousProjectSettingsChanges,
     ): Promise<boolean>;
     /**
@@ -4439,7 +4438,6 @@ declare module 'shared/services/project-settings.service-model' {
      */
     getDefault<ProjectSettingName extends ProjectSettingNames>(
       key: ProjectSettingName,
-      projectInterfaces: ProjectInterfaces[],
     ): Promise<ProjectSettingTypes[ProjectSettingName]>;
     /**
      *
@@ -4481,7 +4479,6 @@ declare module 'shared/services/project-settings.service-model' {
     newValue: ProjectSettingTypes[ProjectSettingName],
     currentValue: ProjectSettingTypes[ProjectSettingName],
     allChanges: SimultaneousProjectSettingsChanges,
-    projectInterfaces: ProjectInterfaces[],
   ) => Promise<boolean>;
   /**
    * Validators for all project settings. Keys are setting keys, values are functions to validate new

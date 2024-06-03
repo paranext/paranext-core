@@ -11,7 +11,7 @@ namespace TestParanextDataProvider
             _projectDetailsMap[details.Metadata.ID] = details;
         }
 
-        public override void Initialize(bool shouldIncludePT9Projects)
+        public override void Initialize(bool shouldIncludePT9ProjectsOnWindows)
         {
             // Nothing to do
         }

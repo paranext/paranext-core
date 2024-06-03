@@ -591,6 +591,31 @@ export type DeepPartial<T> = T extends object ? {
 export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
 	[K in keyof T]: ReplaceType<T[K], A, B>;
 } : T;
+/**
+ * Converts a union type to an intersection type (`|` to `&`).
+ *
+ * Note: this utility type is for use on object types. It may fail on other types.
+ *
+ * @example
+ *
+ * ```typescript
+ * type TypeOne = { one: string };
+ * type TypeTwo = { two: number };
+ * type TypeThree = { three: string };
+ *
+ * type TypeNums = { one: TypeOne; two: TypeTwo; three: TypeThree };
+ * const numNames = ['one', 'two'] as const;
+ * type TypeNumNames = typeof numNames;
+ *
+ * // Same as `TypeOne | TypeTwo`
+ * // `{ one: string } | { two: number }`
+ * type TypeOneTwoUnion = TypeNums[TypeNumNames[number]];
+ *
+ * // Same as `TypeOne & TypeTwo`
+ * // `{ one: string; two: number }`
+ * type TypeOneTwoIntersection = UnionToIntersection<TypeOneTwoUnion>;
+ * ```
+ */
 export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (x: infer I) => void ? I : never;
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;

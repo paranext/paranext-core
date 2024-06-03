@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.NetworkObjects;
-using Paranext.DataProvider.ServiceClients;
+using Paranext.DataProvider.Services;
 
 namespace TestParanextDataProvider;
 
@@ -14,7 +14,7 @@ internal class DummySettingsService : DataProvider
     private readonly List<string> _supportedFunctions = ["get"];
 
     public DummySettingsService(PapiClient papiClient)
-        : base(SettingsServiceClient.SETTINGS_SERVICE_NAME, papiClient) { }
+        : base(SettingsService.SETTINGS_SERVICE_NAME, papiClient) { }
 
     public void AddSettingValue(string key, object value)
     {
