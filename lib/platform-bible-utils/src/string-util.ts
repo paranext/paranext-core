@@ -135,37 +135,33 @@ export function formatReplacementString(str: string, replacers: { [key: string]:
   while (i < stringLength(updatedStr)) {
     switch (charAt(updatedStr, i)) {
       case '{':
-        if (charAt(updatedStr, i) === '{') {
-          if (charAt(updatedStr, i - 1) !== '\\') {
-            // This character is an un-escaped open curly brace. Try to match and replace
-            const closeCurlyBraceIndex = indexOfClosestClosingCurlyBrace(updatedStr, i, false);
-            if (closeCurlyBraceIndex >= 0) {
-              // We have matching open and close indices. Try to replace the contents
-              const replacerKey = substring(updatedStr, i + 1, closeCurlyBraceIndex);
-              // Replace with the replacer string or just remove the curly braces
-              const replacerString =
-                replacerKey in replacers ? replacers[replacerKey] : replacerKey;
+        if (charAt(updatedStr, i - 1) !== '\\') {
+          // This character is an un-escaped open curly brace. Try to match and replace
+          const closeCurlyBraceIndex = indexOfClosestClosingCurlyBrace(updatedStr, i, false);
+          if (closeCurlyBraceIndex >= 0) {
+            // We have matching open and close indices. Try to replace the contents
+            const replacerKey = substring(updatedStr, i + 1, closeCurlyBraceIndex);
+            // Replace with the replacer string or just remove the curly braces
+            const replacerString = replacerKey in replacers ? replacers[replacerKey] : replacerKey;
 
-              updatedStr = `${substring(updatedStr, 0, i)}${replacerString}${substring(updatedStr, closeCurlyBraceIndex + 1)}`;
-              // Put our index at the closing brace adjusted for the new string length minus two
-              // because we are removing the curly braces
-              // Ex: "stuff {and} things"
-              // Replacer for and: n'
-              // closeCurlyBraceIndex is 10
-              // "stuff n' things"
-              // i = 10 + 2 - 3 - 2 = 7
-              i =
-                closeCurlyBraceIndex + stringLength(replacerString) - stringLength(replacerKey) - 2;
-            } else {
-              // This is an unexpected un-escaped open curly brace with no matching closing curly
-              // brace. Just ignore, I guess
-            }
+            updatedStr = `${substring(updatedStr, 0, i)}${replacerString}${substring(updatedStr, closeCurlyBraceIndex + 1)}`;
+            // Put our index at the closing brace adjusted for the new string length minus two
+            // because we are removing the curly braces
+            // Ex: "stuff {and} things"
+            // Replacer for and: n'
+            // closeCurlyBraceIndex is 10
+            // "stuff n' things"
+            // i = 10 + 2 - 3 - 2 = 7
+            i = closeCurlyBraceIndex + stringLength(replacerString) - stringLength(replacerKey) - 2;
           } else {
-            // This character is an escaped open curly brace. Remove the escape
-            updatedStr = `${substring(updatedStr, 0, i - 1)}${substring(updatedStr, i)}`;
-            // Adjust our index because we removed the escape
-            i -= 1;
+            // This is an unexpected un-escaped open curly brace with no matching closing curly
+            // brace. Just ignore, I guess
           }
+        } else {
+          // This character is an escaped open curly brace. Remove the escape
+          updatedStr = `${substring(updatedStr, 0, i - 1)}${substring(updatedStr, i)}`;
+          // Adjust our index because we removed the escape
+          i -= 1;
         }
         break;
       case '}':
