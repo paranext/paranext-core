@@ -19,6 +19,7 @@ import helloWorldProjectWebView from './web-views/hello-world-project/hello-worl
 import helloWorldProjectWebViewStyles from './web-views/hello-world-project/hello-world-project.web-view.scss?inline';
 import helloWorldProjectViewerWebView from './web-views/hello-world-project/hello-world-project-viewer.web-view?inline';
 import { HTML_COLOR_NAMES } from './util';
+import { HELLO_WORLD_PROJECT_INTERFACES } from './models/hello-world-project-data-provider-engine.model';
 
 /** User data storage key for all hello world project data */
 const allProjectDataStorageKey = 'allHelloWorldProjectData';
@@ -135,7 +136,7 @@ async function openHelloWorldProjectWebView(
     projectIdForWebView = await papi.dialogs.selectProject({
       title: 'Open Hello World Project',
       prompt: 'Choose the Hello World project to view:',
-      includeProjectTypes: '^helloWorld$',
+      includeProjectInterfaces: '^helloWorld$',
     });
   }
   if (!projectIdForWebView) return undefined;
@@ -148,7 +149,7 @@ async function openHelloWorldProjectWebView(
 
 function selectProjectToDelete(): Promise<string | undefined> {
   return papi.dialogs.selectProject({
-    includeProjectTypes: 'helloWorld',
+    includeProjectInterfaces: 'helloWorld',
     title: 'Delete Hello World Project',
     prompt: 'Please choose a project to delete:',
   });
@@ -231,7 +232,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const helloWorldPdpefPromise = papi.projectDataProviders.registerProjectDataProviderEngineFactory(
-    'helloWorld',
+    HELLO_WORLD_PROJECT_INTERFACES,
     helloWorldProjectDataProviderEngineFactory,
   );
 
@@ -293,7 +294,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       const projectIdForWebView =
         projectId ??
         (await papi.dialogs.selectProject({
-          includeProjectTypes: 'helloWorld',
+          includeProjectInterfaces: 'helloWorld',
           title: 'Open Hello World Project Viewer',
           prompt: 'Please choose a project for which to open the viewer:',
         }));

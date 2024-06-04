@@ -2,10 +2,15 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
+      "%settings_platformScripture_paratext_group_label%": "Paratext-related Settings",
+      "%settings_platformScripture_paratext_group_description%": "Settings related to how Platform.Bible should interact with older Paratext installations",
+      "%settings_platformScripture_includeMyParatext9Projects_label%": "Include My Paratext 9 Projects",
+      "%settings_platformScripture_includeMyParatext9Projects_description%": "Whether to look in the Paratext 9 project storage folder for Paratext projects to load (Windows only). Located at \"C:\\My Paratext 9 Projects\". Note: you must restart Platform.Bible in order for a change in this setting to take effect.",
       "%project_settings_platformScripture_booksPresent_label%": "Scripture Books Present",
       "%project_settings_platformScripture_booksPresent_description%": "Which books of the Bible are present in this Scripture project",
       "%project_settings_platformScripture_versification_label%": "Scripture Versification",
-      "%project_settings_platformScripture_versification_description%": "Which versification scheme this Scripture project follows"
+      "%project_settings_platformScripture_versification_description%": "Which versification scheme this Scripture project follows",
+      "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects"
     }
   }
 }

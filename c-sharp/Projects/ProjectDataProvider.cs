@@ -69,7 +69,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
             DataProviderName,
             functionNames.ToArray(),
             ProjectDetails.Metadata.ID,
-            ProjectDetails.Metadata.ProjectType
+            ProjectDetails.Metadata.ProjectInterfaces
         );
     }
 

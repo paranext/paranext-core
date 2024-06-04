@@ -1,9 +1,9 @@
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
-/// Format of main (Project Data Provider, not extension) data in a project
+/// Standardized set of methods exposed by a Project Data Provider for a project
 /// </summary>
-public static class ProjectType
+public static class ProjectInterfaces
 {
     public const string Paratext = "ParatextStandard";
 }

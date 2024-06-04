@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
 
 namespace TestParanextDataProvider.Projects
 {
@@ -9,7 +10,17 @@ namespace TestParanextDataProvider.Projects
     internal class ParatextProjectDataProviderFactoryTests : PapiTestBase
     {
         private const string PDB_FACTORY_GET_REQUEST =
-            "object:platform.pdpFactory-ParatextStandard.function";
+            $"object:platform.pdpFactory-{ParatextProjectDataProviderFactory.PDPF_NAME}.function";
+
+        [SetUp]
+        public override async Task TestSetup()
+        {
+            await base.TestSetup();
+
+            var settingsService = new DummySettingsService(Client);
+            await settingsService.RegisterDataProvider();
+            settingsService.AddSettingValue(Settings.INCLUDE_MY_PARATEXT_9_PROJECTS, true);
+        }
 
         [Test]
         public async Task InvalidProjectId_ReturnsError()

@@ -38,7 +38,6 @@ describe('isValid', () => {
       projectSettingKey,
       'eng',
       '%test_project_language_missing%',
-      'ParatextStandard',
     );
     expect(isSettingChangeValid).toBe(true);
   });
@@ -48,7 +47,6 @@ describe('isValid', () => {
       projectSettingKey,
       'ger',
       '%test_project_language_missing%',
-      'ParatextStandard',
     );
     expect(isSettingChangeValid).toBe(false);
   });
@@ -57,10 +55,7 @@ describe('isValid', () => {
 describe('getDefault', () => {
   it('should get default value', async () => {
     const projectSettingKey = 'platform.fullName';
-    const defaultValue = await testingProjectSettingsService.getDefault(
-      projectSettingKey,
-      'ParatextStandard',
-    );
+    const defaultValue = await testingProjectSettingsService.getDefault(projectSettingKey);
     expect(defaultValue).toBe('%test_project_full_name_missing%');
   });
 

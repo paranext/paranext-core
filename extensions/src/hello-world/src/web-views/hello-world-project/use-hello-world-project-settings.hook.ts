@@ -1,20 +1,20 @@
 import { useProjectSetting } from '@papi/frontend/react';
-import type { ProjectDataProviders } from 'papi-shared-types';
+import type { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
 import { CSSProperties, useMemo } from 'react';
 
-function useHelloWorldProjectSettings<ProjectType extends keyof ProjectDataProviders>(
-  projectType: ProjectType,
-  projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+function useHelloWorldProjectSettings<ProjectInterface extends ProjectInterfaces>(
+  projectInterface: ProjectInterface,
+  projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
 ) {
   const [headerSize, setHeaderSize, resetHeaderSize] = useProjectSetting(
-    projectType,
+    projectInterface,
     projectDataProviderSource,
     'helloWorld.headerSize',
     15,
   );
 
   const [headerColor, setHeaderColor, resetHeaderColor] = useProjectSetting(
-    projectType,
+    projectInterface,
     projectDataProviderSource,
     'helloWorld.headerColor',
     'Black',

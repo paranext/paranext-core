@@ -4,6 +4,28 @@ declare module 'platform-scripture' {
 }
 
 declare module 'papi-shared-types' {
+  export interface CommandHandlers {
+    /**
+     * Toggle the `platformScripture.includeMyParatext9Projects` setting on or off
+     *
+     * @param shouldIncludeMyParatext9Projects Provide this parameter to set it to `true` or `false`
+     *   instead of toggling
+     * @returns New value of the setting
+     */
+    'platformScripture.toggleIncludeMyParatext9Projects': (
+      shouldIncludeMyParatext9Projects?: boolean,
+    ) => Promise<boolean>;
+  }
+
+  export interface SettingTypes {
+    /**
+     * Whether to look in the Paratext 9 project storage folder for Paratext projects to load
+     * (Windows only).
+     *
+     * Located at "C:\My Paratext 9 Projects"
+     */
+    'platformScripture.includeMyParatext9Projects': boolean;
+  }
   export interface ProjectSettingTypes {
     /**
      * Which versification scheme this Scripture project uses
