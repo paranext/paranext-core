@@ -13,9 +13,12 @@ export type SearchBarProps = {
 
   /** Optional string that appears in the search bar without a search string */
   placeholder?: string;
+
+  /** Optional boolean to set the input base to full width */
+  isFullWidth?: boolean;
 };
 
-export default function SearchBar({ onSearch, placeholder }: SearchBarProps) {
+export default function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps) {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const handleInputChange = (searchString: string) => {
@@ -26,6 +29,7 @@ export default function SearchBar({ onSearch, placeholder }: SearchBarProps) {
   return (
     <Paper component="form" className="search-bar-paper">
       <TextField
+        isFullWidth={isFullWidth}
         className="search-bar-input"
         placeholder={placeholder}
         value={searchQuery}
