@@ -1,4 +1,4 @@
-import { useState, ChangeEvent, useMemo, useEffect, useCallback, MouseEvent } from 'react';
+import { useState, useMemo, useEffect, useCallback, MouseEvent } from 'react';
 import {
   GroupingState,
   useReactTable,
@@ -23,6 +23,16 @@ import {
   ScriptureReference,
 } from 'platform-bible-utils';
 import ResultsSource from './results-source.class';
+import { Button } from './shadcn-ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './shadcn-ui/select';
+import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from './shadcn-ui/table';
 
 export type ScriptureSrcItemDetail = ScriptureItemDetail & {
   /** Source/type of detail. Can be used for grouping. */
@@ -262,9 +272,8 @@ export default function ScriptureRefKeyedList({
     },
   ];
 
-  const handleSelectChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const selectedGrouping = JSON.parse(event.target.value);
-    setGrouping(selectedGrouping);
+  const handleSelectChange = (selectedGrouping: string) => {
+    setGrouping(JSON.parse(selectedGrouping));
   };
 
   const handleRowClick = (row: Row<ScriptureSrcItemDetail>, event: MouseEvent) => {
@@ -275,7 +284,7 @@ export default function ScriptureRefKeyedList({
 
   const getEvenOrOddBandingStyle = (row: Row<ScriptureSrcItemDetail>, index: number) => {
     if (row.getIsGrouped()) return '';
-    return index % 2 === 0 ? 'banded-row-even' : 'banded-row-odd';
+    return `banded-row ${index % 2 === 0 ? 'even pr-bg-neutral-300' : 'odd'}`;
   };
 
   const getIndent = (
@@ -286,28 +295,40 @@ export default function ScriptureRefKeyedList({
   };
 
   return (
-    <div className="p-2">
+    <div className="p-2 pr-w-full">
       <div className="h-2" />
       {!showColumnHeaders && (
-        <select value={JSON.stringify(grouping)} onChange={handleSelectChange}>
-          {groupingOptions.map((option) => (
-            <option key={option.label} value={JSON.stringify(option.value)}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={JSON.stringify(grouping)}
+          onValueChange={(value) => {
+            handleSelectChange(value);
+          }}
+        >
+          <SelectTrigger className="pr-mb-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="item-aligned">
+            <SelectGroup>
+              {groupingOptions.map((option) => (
+                <SelectItem key={option.label} value={JSON.stringify(option.value)}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       )}
-      <table>
+      <Table>
         {showColumnHeaders && (
-          <thead>
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
+              <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} colSpan={header.colSpan}>
+                  <TableHead key={header.id} colSpan={header.colSpan}>
                     {header.isPlaceholder ? undefined : (
                       <div>
                         {header.column.getCanGroup() ? (
-                          <button
+                          <Button
                             title={`Toggle grouping by ${header.column.columnDef.header}`}
                             onClick={header.column.getToggleGroupingHandler()}
                             style={{ cursor: 'pointer' }}
@@ -316,23 +337,23 @@ export default function ScriptureRefKeyedList({
                             {header.column.getIsGrouped()
                               ? `🛑(${header.column.getGroupedIndex()}) `
                               : `👊 `}
-                          </button>
+                          </Button>
                         ) : undefined}{' '}
                         {flexRender(header.column.columnDef.header, header.getContext())}
                       </div>
                     )}
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
+              </TableRow>
             ))}
-          </thead>
+          </TableHeader>
         )}
-        <tbody>
+        <TableBody>
           {table.getRowModel().rows.map((row, rowIndex) => {
             return (
-              <tr
+              <TableRow
                 key={row.id}
-                className={`${row.getIsSelected() ? 'selected ' : ''} ${getEvenOrOddBandingStyle(row, rowIndex)}`}
+                className={`${row.getIsSelected() ? 'selected' : ''} ${getEvenOrOddBandingStyle(row, rowIndex)}`}
                 onClick={(event) => handleRowClick(row, event)}
               >
                 {row.getVisibleCells().map((cell) => {
@@ -344,14 +365,14 @@ export default function ScriptureRefKeyedList({
                   )
                     return undefined;
                   return (
-                    <td
+                    <TableCell
                       key={cell.id}
-                      className={`${cell.column.columnDef.id}${getIndent(row, cell)}`}
+                      className={`${cell.column.columnDef.id}${getIndent(row, cell)} pr-p-[.5%]`}
                     >
                       {(() => {
                         if (cell.getIsGrouped()) {
                           return (
-                            <button
+                            <Button
                               onClick={row.getToggleExpandedHandler()}
                               style={{
                                 cursor: row.getCanExpand() ? 'pointer' : 'normal',
@@ -361,7 +382,7 @@ export default function ScriptureRefKeyedList({
                               {row.getIsExpanded() ? '👇' : '👉'}{' '}
                               {flexRender(cell.column.columnDef.cell, cell.getContext())} (
                               {row.subRows.length})
-                            </button>
+                            </Button>
                           );
                         }
 
@@ -374,14 +395,14 @@ export default function ScriptureRefKeyedList({
 
                         return flexRender(cell.column.columnDef.cell, cell.getContext());
                       })()}
-                    </td>
+                    </TableCell>
                   );
                 })}
-              </tr>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

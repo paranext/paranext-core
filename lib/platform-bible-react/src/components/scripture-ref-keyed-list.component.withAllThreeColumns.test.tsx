@@ -86,7 +86,7 @@ describe('ScriptureRefKeyedList with all three column headers (showing Check Typ
       throw new Error('The table does have any child elements.');
     }
 
-    expect(body.outerHTML).toMatch(/^<tbody>/);
+    expect(body.outerHTML).toMatch(/^<tbody(.*<\/tbody)?>$/);
     expect(body.childElementCount).toBe(4);
     const children = Array.from(body?.childNodes);
     children.forEach((child) => {

@@ -79,41 +79,9 @@ describe('ScriptureRefKeyedList default display mode (with combobox for grouping
     );
   });
 
-  it('should show grouping drop-down', () => {
-    const dropDown = screen.getByRole('combobox');
-    expect(dropDown.childElementCount).toBe(5);
-    const noGroupingOption = screen.getByText('No Grouping');
-    expect(noGroupingOption.attributes.getNamedItem('value')?.value).toBe('[]');
-    const groupByScrBookOption = screen.getByText('Group by Scripture Book');
-    expect(groupByScrBookOption.attributes.getNamedItem('value')?.value).toBe('["scrBook"]');
-    const groupByCheckTypeOption = screen.getByText(`Group by ${checkTypeHeader}`);
-    expect(groupByCheckTypeOption.attributes.getNamedItem('value')?.value).toBe('["source"]');
-    const groupByScrBookAndCheckTypeOption = screen.getByText(
-      `Group by Scripture Book and ${checkTypeHeader}`,
-    );
-    expect(groupByScrBookAndCheckTypeOption.attributes.getNamedItem('value')?.value).toBe(
-      '["scrBook","source"]',
-    );
-    const groupByCheckTypeAndScrBookOption = screen.getByText(
-      'Group by Check Type and Scripture Book',
-    );
-    expect(groupByCheckTypeAndScrBookOption.attributes.getNamedItem('value')?.value).toBe(
-      '["source","scrBook"]',
-    );
-    expect(dropDown.childNodes[0]).toBe(noGroupingOption);
-    // Use a type guard to ensure the element is an HTMLSelectElement
-    if (dropDown instanceof HTMLSelectElement) {
-      // Check the default selected option
-      // eslint-disable-next-line jest/no-conditional-expect
-      expect(dropDown.selectedIndex).toBe(0);
-    } else {
-      throw new Error('Drop-down is not an HTMLSelectElement');
-    }
-    expect(dropDown.childNodes[1]).toBe(groupByScrBookOption);
-    expect(dropDown.childNodes[2]).toBe(groupByCheckTypeOption);
-    expect(dropDown.childNodes[3]).toBe(groupByScrBookAndCheckTypeOption);
-    expect(dropDown.childNodes[4]).toBe(groupByCheckTypeAndScrBookOption);
-  });
+  // TODO (https://github.com/paranext/paranext-core/issues/923) More unit tests needed.
+  // it should show grouping drop-down when clicked
+  // it should change the grouping option to the selected one
 
   it('should not have column headers in the table', () => {
     const table = screen.getByRole('table');
@@ -127,7 +95,7 @@ describe('ScriptureRefKeyedList default display mode (with combobox for grouping
     if (!body) {
       throw new Error('The table does have any child elements.');
     }
-    expect(table.innerHTML).toMatch(/<tbody/);
+    expect(body.outerHTML).toMatch(/^<tbody(.*<\/tbody)?>$/);
     expect(body.childElementCount).toBe(4);
     const children = Array.from(body?.childNodes);
     children.forEach((child) => {
@@ -146,25 +114,29 @@ describe('ScriptureRefKeyedList default display mode (with combobox for grouping
     const rows = screen.getAllByRole('row');
     expect(rows.length).toBe(body.childElementCount);
 
+    rows.forEach((row) => {
+      expect(row.className).toMatch(/\bbanded-row\b/);
+    });
+
     const [firstRow, secondRow, thirdRow, fourthRow] = rows;
 
     let [scrRefCell, detailsCell] = firstRow.childNodes;
-    expect(firstRow.className).toBe('banded-row-even');
+    expect(firstRow.className).toMatch(/\beven\b/);
     expect(EnsureHTMLElement(scrRefCell).innerHTML).toBe('GEN 1:1');
     expect(EnsureHTMLElement(detailsCell).innerHTML).toBe(frogRepeatedError);
 
     [scrRefCell, detailsCell] = secondRow.childNodes;
-    expect(secondRow.className).toBe('banded-row-odd');
+    expect(secondRow.className).toMatch(/\bodd\b/);
     expect(EnsureHTMLElement(scrRefCell).innerHTML).toBe('EXO 2:3');
     expect(EnsureHTMLElement(detailsCell).innerHTML).toBe(unknownMarkerError);
 
     [scrRefCell, detailsCell] = thirdRow.childNodes;
-    expect(thirdRow.className).toBe('banded-row-even');
+    expect(firstRow.className).toMatch(/\beven\b/);
     expect(EnsureHTMLElement(scrRefCell).innerHTML).toBe('MAT 20:1');
     expect(EnsureHTMLElement(detailsCell).innerHTML).toBe(missingEndQuote);
 
     [scrRefCell, detailsCell] = fourthRow.childNodes;
-    expect(fourthRow.className).toBe('banded-row-odd');
+    expect(secondRow.className).toMatch(/\bodd\b/);
     expect(EnsureHTMLElement(scrRefCell).innerHTML).toBe('REV 10:15');
     expect(EnsureHTMLElement(detailsCell).innerHTML).toBe(unclosedMarkerError);
   });
@@ -177,6 +149,8 @@ describe('ScriptureRefKeyedList default display mode (with combobox for grouping
     expect(firstRow).toBeInTheDocument();
 
     if (!firstRow) throw new Error('First row is null');
+
+    expect(firstRow).not.toHaveClass('selected');
 
     // Simulate clicking the first row
     fireEvent.click(firstRow);

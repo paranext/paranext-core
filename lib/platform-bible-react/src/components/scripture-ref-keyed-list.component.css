@@ -20,27 +20,24 @@ td {
 }
 
 .indent1 {
-  padding-left: 20px;
+  padding-left: 30px;
 }
 
 .indent2 {
-  padding-left: 40px;
-}
-
-.banded-row-even {
-  background-color: lightgrey;
+  padding-left: 60px;
 }
 
 .selected {
   background-color: bisque;
 }
 
-.banded-row-even:hover,.banded-row-odd:hover {
+.banded-row:hover {
   background-color: lightcyan;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Subtle shadow */
   cursor: pointer;
 }
 
 .selected:hover {
+  background-color: bisque;
   cursor: default;
 }

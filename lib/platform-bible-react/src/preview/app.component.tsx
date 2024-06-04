@@ -1,79 +1,51 @@
-import { useState } from 'react';
 import './app.component.css';
-import ScriptureRefKeyedList from '@/components/scripture-ref-keyed-list.component';
-import ResultsSource from '@/components/results-source.class';
-import generateRandomCheckingData from './generate-random-checking-data';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '..';
+import { ThemeProvider } from './theme-provider.component';
+import ThemeToggle from './theme-toggle.component';
+import Basics from './components/basics.component';
+import Compositions from './components/compositions.component';
+import Examples from './components/examples.component';
+import Playground from './components/playground.component';
+import ScriptureItemListPreview from './components/scripture-item-list-preview.component';
 
 function App() {
-  const checks = [
-    {
-      id: 'Repeated Words',
-      possibleErrors: ['Word repeated'],
-    },
-    {
-      id: 'Characters',
-      possibleErrors: ['Invalid character', 'Unknown character'],
-    },
-    {
-      id: 'Quotation marks',
-      possibleErrors: [
-        'Closing first-level quotation mark missing',
-        'Closing second-level quotation mark missing',
-        'Closing third-level quotation mark missing',
-        'Missing continuer',
-      ],
-    },
-    {
-      id: 'Chapter/Verse Numbers',
-      possibleErrors: [
-        'Missing Verse number',
-        'Missing chapter',
-        'Empty verse',
-        'Verse out of order',
-        'Repeated verse number',
-      ],
-    },
-  ];
-
-  const [sources, setSources] = useState(() =>
-    checks.map(
-      (check) => new ResultsSource(generateRandomCheckingData(check.possibleErrors), check.id),
-    ),
-  );
-
-  const updateSource = (index: number) => {
-    const newData = generateRandomCheckingData(checks[index].possibleErrors);
-    const updatedSource = sources[index];
-    updatedSource.updateData(newData);
-    setSources([...sources]);
-  };
-
   return (
-    <>
-      <h1>platform-bible-react Preview</h1>
-      <p>
-        Edit <code>lib\platform-bible-react\src\preview\app.component.tsx</code> and save to see
-        updates
-      </p>
-      <div>
-        {checks.map((check, index) => (
-          <button
-            key={check.id}
-            type="button"
-            onClick={() => updateSource(index)}
-            style={{ margin: '0px 6px 10px 0px' }}
-          >
-            Update {check.id} check results
-          </button>
-        ))}
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      {/* pr-font-sans is added to mitigate issue introduced by scopedPreflightStyles */}
+      <div className="pr-twp pr-p-2 pr-font-sans">
+        <ThemeToggle className="pr-fixed pr-right-4 pr-top-4" />
+        <h1 className="pr-pb-4 pr-uppercase">platform-bible-react Preview</h1>
+        <p>
+          Edit <code>lib/platform-bible-react/src/preview/components/...</code> and save to see
+          updates
+        </p>
+        <Tabs defaultValue="Playground" className="pr-pt-4">
+          <TabsList>
+            <TabsTrigger value="Basics">Basic Components</TabsTrigger>
+            <TabsTrigger value="Compositions">Composition Components</TabsTrigger>
+            <TabsTrigger value="Examples">Example Layouts</TabsTrigger>
+            <TabsTrigger value="Scripture Item List">Scripture Item List</TabsTrigger>
+            <TabsTrigger value="Playground">Playground</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="Basics">
+            <Basics />
+          </TabsContent>
+          <TabsContent value="Compositions">
+            <Compositions />
+          </TabsContent>
+          <TabsContent value="Examples">
+            <Examples />
+          </TabsContent>
+          <TabsContent value="Scripture Item List">
+            <ScriptureItemListPreview />
+          </TabsContent>
+          <TabsContent value="Playground">
+            <Playground />
+          </TabsContent>
+        </Tabs>
       </div>
-      <ScriptureRefKeyedList
-        sources={sources}
-        scriptureReferenceColumnName="Scripture Reference"
-        typeColumnName="Check Type"
-        detailsColumnName="Error Details"
-      />
-    </>
+    </ThemeProvider>
   );
 }
 
