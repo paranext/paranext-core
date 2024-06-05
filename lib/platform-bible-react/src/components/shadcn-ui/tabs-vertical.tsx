@@ -56,11 +56,7 @@ export const VerticalTabsTrigger = React.forwardRef<
       'overflow-clip pr-inline-flex pr-w-[116px] pr-cursor-pointer pr-items-center pr-justify-center pr-break-words pr-rounded-sm pr-border-0 pr-bg-muted pr-px-3 pr-py-1.5 pr-text-sm pr-font-medium pr-text-inherit pr-ring-offset-background pr-transition-all hover:pr-text-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring focus-visible:pr-ring-offset-2 disabled:pr-pointer-events-none disabled:pr-opacity-50 data-[state=active]:pr-bg-background data-[state=active]:pr-text-foreground data-[state=active]:pr-shadow-sm',
       className,
     )}
-  >
-    <div className="pr-flex pr-flex-col pr-justify-center">
-      <div>{props.value}</div>
-    </div>
-  </TabsPrimitive.Trigger>
+  />
 ));
 
 export const VerticalTabsContent = React.forwardRef<
