@@ -1,6 +1,5 @@
-import { projectDataProviders, projectLookup } from '@papi/frontend';
 import { Button, DataTable } from 'platform-bible-react';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode } from 'react';
 import {
   ArrowUpDownIcon,
   ArrowDownIcon,
@@ -9,13 +8,15 @@ import {
   CircleXIcon,
   CircleHelpIcon,
 } from 'lucide-react';
-import { ColumnDef, Row, SortDirection, Table } from '@tanstack/react-table'; // TODO: Is this okay or should we integrate this into our DataTable component and re-export from there?
+// TODO: Is this okay or should we integrate this into our DataTable component and re-export from there?
+import { ColumnDef, Row, SortDirection, Table } from '@tanstack/react-table';
 
-type Status = true | false | undefined;
+export type Status = true | false | undefined;
 
 export type CharacterData = {
   character: string;
   count: number;
+  status: Status;
 };
 
 // #region UtilityFunctions
@@ -35,9 +36,7 @@ const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
 // #region Columns
 
 export const columns = (
-  updateStatus: (character: string, status: Status) => void,
-  validCharacters: string[],
-  invalidCharacters: string[],
+  statusChangeHandler: (character: string, status: Status) => void,
 ): ColumnDef<CharacterData>[] => [
   {
     accessorKey: 'character',
@@ -100,7 +99,7 @@ export const columns = (
               <CircleCheckIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
-                  updateStatus(character, true);
+                  statusChangeHandler(character, true);
                 }}
               />
             </Button>
@@ -108,7 +107,7 @@ export const columns = (
               <CircleXIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
-                  updateStatus(character, false);
+                  statusChangeHandler(character, false);
                 }}
               />
             </Button>
@@ -116,7 +115,7 @@ export const columns = (
               <CircleHelpIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
-                  updateStatus(character, undefined);
+                  statusChangeHandler(character, undefined);
                 }}
               />
             </Button>
@@ -125,11 +124,11 @@ export const columns = (
       );
     },
     cell: ({ row }) => {
-      const character: string = row.getValue('character');
-      if (validCharacters.includes(character)) {
+      const status: Status = row.getValue('status');
+      if (status === true) {
         return <CircleCheckIcon className="pr-ml-2 pr-h-5 pr-w-5" />;
       }
-      if (invalidCharacters.includes(character)) {
+      if (status === false) {
         return <CircleXIcon className="pr-ml-2 pr-h-5 pr-w-5" />;
       }
       return <CircleHelpIcon className="pr-ml-2 pr-h-5 pr-w-5" />;
@@ -146,95 +145,18 @@ const rowClickHandler = (table: Table<CharacterData>, row: Row<CharacterData>) =
   row.toggleSelected(true);
 };
 
-const getSetting = async (
-  characterSet: 'validCharacters' | 'invalidCharacters',
-  projectId: string,
-) => {
-  const projectMetadata = await projectLookup.getMetadataForProject(projectId);
-  const pdp = await projectDataProviders.get('ParatextStandard', projectMetadata.id);
-  const command =
-    characterSet === 'validCharacters'
-      ? 'platformScripture.validCharacters'
-      : 'platformScripture.invalidCharacters';
-  return (await pdp.getSetting(command)).split(' ');
-};
-
-const setSetting = async (
-  characterSet: 'validCharacters' | 'invalidCharacters',
-  projectId: string,
-  characters: string[],
-) => {
-  const projectMetadata = await projectLookup.getMetadataForProject(projectId);
-  const pdp = await projectDataProviders.get('ParatextStandard', projectMetadata.id);
-  const command =
-    characterSet === 'validCharacters'
-      ? 'platformScripture.validCharacters'
-      : 'platformScripture.invalidCharacters';
-  pdp.setSetting(command, characters.join(' '));
-};
-
 // #endregion
 
 interface InventoryDataTableProps {
-  projectId: string;
   tableData: CharacterData[];
+  onStatusChange: (character: string, status: Status) => void;
 }
 
-function InventoryDataTable({ projectId, tableData }: InventoryDataTableProps) {
-  const [validCharacters, setValidCharacters] = useState<string[]>([]);
-  const [invalidCharacters, setInvalidCharacters] = useState<string[]>([]);
-
-  useEffect(() => {
-    setSetting('validCharacters', projectId, validCharacters);
-  }, [projectId, validCharacters]);
-
-  useEffect(() => {
-    setSetting('invalidCharacters', projectId, invalidCharacters);
-  }, [invalidCharacters, projectId]);
-
-  useEffect(() => {
-    (async () => {
-      setValidCharacters(await getSetting('validCharacters', projectId));
-      setInvalidCharacters(await getSetting('invalidCharacters', projectId));
-    })();
-    return () => {};
-  }, [projectId]);
-
-  const setStatus = (character: string, status: Status) => {
-    if (status === true) {
-      if (!validCharacters.includes(character))
-        setValidCharacters((prevValidCharacters) => [...prevValidCharacters, character].sort());
-      if (invalidCharacters.includes(character))
-        setInvalidCharacters(
-          invalidCharacters.filter((invalidCharacter) => invalidCharacter !== character),
-        );
-    } else if (status === false) {
-      if (validCharacters.includes(character))
-        setValidCharacters(
-          validCharacters.filter((validCharacter) => validCharacter !== character),
-        );
-      if (!invalidCharacters.includes(character))
-        setInvalidCharacters((prevInvalidCharacters) =>
-          [...prevInvalidCharacters, character].sort(),
-        );
-    } else if (status === undefined) {
-      if (validCharacters.includes(character))
-        setValidCharacters(
-          validCharacters.filter((validCharacter) => validCharacter !== character),
-        );
-      if (invalidCharacters.includes(character))
-        setInvalidCharacters(
-          invalidCharacters.filter((invalidCharacter) => invalidCharacter !== character),
-        );
-    } else {
-      throw new Error('Trying to set unexpected status for character');
-    }
-  };
-
+function InventoryDataTable({ tableData, onStatusChange }: InventoryDataTableProps) {
   return (
     <div className="pr-overflow-y-auto">
       <DataTable
-        columns={columns(setStatus, validCharacters, invalidCharacters)}
+        columns={columns(onStatusChange)}
         data={tableData}
         onRowClickHandler={rowClickHandler}
       />
