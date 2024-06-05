@@ -17,16 +17,17 @@ import {
   substring,
   toArray,
   ordinalCompare,
+  testingStringUtils,
 } from './string-util';
 
-const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At🦄';
-const SHORT_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '🦄'];
+const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
+const SHORT_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '👨‍👩‍👧‍👦', '👮🏽‍♀️'];
 
-const MEDIUM_SURROGATE_PAIRS_STRING = 'Look𐐷At🦄This𐐷Thing😉Its𐐷Awesome';
-const MEDIUM_SURROGATE_PAIRS_ARRAY = ['Look', 'At🦄This', 'Thing😉Its', 'Awesome'];
+const MEDIUM_SURROGATE_PAIRS_STRING = 'Look𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome';
+const MEDIUM_SURROGATE_PAIRS_ARRAY = ['Look', 'At🦄This', 'Thing👮🏽‍♀️Its', 'Awesome'];
 
 const LONG_SURROGATE_PAIRS_STRING =
-  'Look𐐷At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented😉By🍕Surrogate🔥Pairs💋!🌟';
+  'Look𐐷At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented👮🏽‍♀️By🍕Surrogate🔥Pairs💋!🌟';
 
 const POS_FIRST_PIZZA = 25;
 const POS_SECOND_PIZZA = 57;
@@ -110,62 +111,155 @@ describe('endsWith', () => {
   });
 });
 
-describe('formatLocalizationString', () => {
-  test('formatLocalizationString with curly braces', () => {
-    const result = formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing😉Its𐐷Awesome', {
-      'one-horned': 'Unicorn',
-    });
-    expect(result).toEqual('Look𐐷At🦄This𐐷UnicornThing😉Its𐐷Awesome');
+describe('indexOfClosestClosingCurlyBrace', () => {
+  const curlyString =
+    //           1           2
+    // 23 456 78901 2 345678901 23456
+    'Thi\\{s👮🏽‍♀️{is}👨‍👩‍👧‍👦\\}a {stri\\}ng}!';
+
+  test('gets the closest un-escaped curly brace', () => {
+    let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 0, false);
+    expect(result).toBe(10);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 4, false);
+    expect(result).toBe(10);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 10, false);
+    expect(result).toBe(10);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 11, false);
+    expect(result).toBe(25);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 16, false);
+    expect(result).toBe(25);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 23, false);
+    expect(result).toBe(25);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 25, false);
+    expect(result).toBe(25);
   });
 
-  test('formatLocalizationString with multiple pairs of curly braces', () => {
-    const result = formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing😉Its𐐷Awesome{sauce}', {
+  test('gets the closest escaped curly brace', () => {
+    let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 0, true);
+    expect(result).toBe(13);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 4, true);
+    expect(result).toBe(13);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 10, true);
+    expect(result).toBe(13);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 11, true);
+    expect(result).toBe(13);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 13, true);
+    expect(result).toBe(13);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 16, true);
+    expect(result).toBe(22);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 22, true);
+    expect(result).toBe(22);
+  });
+
+  test('returns -1 when out of bounds or no more curly braces are found', () => {
+    const strLength = stringLength(curlyString);
+    let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -1, true);
+    expect(result).toBe(-1);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -1, false);
+    expect(result).toBe(-1);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -10, true);
+    expect(result).toBe(-1);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -10, false);
+    expect(result).toBe(-1);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength, true);
+    expect(result).toBe(-1);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength, false);
+    expect(result).toBe(-1);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength + 5, true);
+    expect(result).toBe(-1);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength + 5, false);
+    expect(result).toBe(-1);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 26, false);
+    expect(result).toBe(-1);
+    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 23, true);
+    expect(result).toBe(-1);
+  });
+});
+
+describe('formatReplacementString', () => {
+  test('with curly braces', () => {
+    const result = formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+      'one-horned': 'Unicorn',
+    });
+    expect(result).toEqual('Look𐐷At🦄This𐐷UnicornThing👮🏽‍♀️Its𐐷Awesome');
+  });
+
+  test('with surrogate pairs in the escape sequence', () => {
+    const result = formatReplacementString('Look𐐷At🦄This𐐷{one👮🏽‍♀️horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+      'one👮🏽‍♀️horned': 'Unicorn',
+    });
+    expect(result).toEqual('Look𐐷At🦄This𐐷UnicornThing👮🏽‍♀️Its𐐷Awesome');
+  });
+
+  test('with curly braces at the start', () => {
+    const result = formatReplacementString('{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+      'one-horned': 'Unicorn',
+    });
+    expect(result).toEqual('UnicornThing👮🏽‍♀️Its𐐷Awesome');
+  });
+
+  test('with curly braces as the whole string', () => {
+    const result = formatReplacementString('{one-horned}', {
+      'one-horned': 'Unicorn',
+    });
+    expect(result).toEqual('Unicorn');
+  });
+
+  test('with curly braces and an empty string replacer', () => {
+    const result = formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+      'one-horned': '',
+    });
+    expect(result).toEqual('Look𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome');
+  });
+
+  test('with multiple pairs of curly braces', () => {
+    const result = formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome{sauce}', {
       'one-horned': 'Unicorn',
       sauce: 'ness',
     });
-    expect(result).toEqual('Look𐐷At🦄This𐐷UnicornThing😉Its𐐷Awesomeness');
+    expect(result).toEqual('Look𐐷At🦄This𐐷UnicornThing👮🏽‍♀️Its𐐷Awesomeness');
   });
 
-  test('formatLocalizationString with empty curly braces', () => {
+  test('with empty curly braces', () => {
     const result = formatReplacementString('Look𐐷At🦄This𐐷{}', {
       'one-horned': 'Unicorn',
     });
     expect(result).toEqual('Look𐐷At🦄This𐐷');
   });
 
-  test('formatLocalizationString with unknown word in curly braces', () => {
+  test('with unknown word in curly braces', () => {
     const result = formatReplacementString('Look𐐷At🦄This𐐷{UFO}', {
       'one-horned': 'Unicorn',
     });
     expect(result).toEqual('Look𐐷At🦄This𐐷UFO');
   });
 
-  test('formatLocalizationString with escaped curly braces', () => {
-    const result = formatReplacementString('Look𐐷At🦄This𐐷\\{one-horned\\}Thing😉Its𐐷Awesome', {
+  test('with escaped curly braces', () => {
+    const result = formatReplacementString('Look𐐷At🦄This𐐷\\{one-horned\\}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one-horned': 'Unicorn',
     });
-    expect(result).toEqual('Look𐐷At🦄This𐐷{one-horned}Thing😉Its𐐷Awesome');
+    expect(result).toEqual('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome');
   });
 
-  test('formatLocalizationString with multiple pairs of escaped curly braces', () => {
+  test('with multiple pairs of escaped curly braces', () => {
     const result = formatReplacementString(
-      'Look𐐷At🦄This𐐷\\{one-horned\\}Thing😉Its𐐷Awesome\\{:)\\}',
+      'Look𐐷At🦄This𐐷\\{one-horned\\}Thing👮🏽‍♀️Its𐐷Awesome\\{:)\\}',
       {
         'one-horned': 'Unicorn',
         ':)': 'smiley face',
       },
     );
-    expect(result).toEqual('Look𐐷At🦄This𐐷{one-horned}Thing😉Its𐐷Awesome{:)}');
+    expect(result).toEqual('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome{:)}');
   });
 
-  test('formatLocalizedString with curly braces and escaped curly braces', () => {
+  test('with curly braces and escaped curly braces', () => {
     const result = formatReplacementString('Hi, this is {name}! I like \\{curly braces\\}!', {
       name: 'Jim',
     });
     expect(result).toEqual('Hi, this is Jim! I like {curly braces}!');
   });
 
-  test('formatLocalizedString with multiple pairs of curly braces and escaped curly braces', () => {
+  test('with multiple pairs of curly braces and escaped curly braces', () => {
     const result = formatReplacementString(
       'Hi, this is {name}! I like \\{curly braces\\}!Hi, this is {name}! I like \\{curly braces\\}!',
       {
@@ -258,11 +352,11 @@ describe('normalize', () => {
 
 describe('ordinalCompare', () => {
   it('should return a negative number if string1 comes before string2', () => {
-    expect(ordinalCompare('🦄', '😉')).toBeLessThan(0);
+    expect(ordinalCompare('👮🏽‍♀️', '🦄')).toBeLessThan(0);
   });
 
   it('should return a positive number if string1 comes after string2', () => {
-    expect(ordinalCompare('😉', '🦄')).toBeGreaterThan(0);
+    expect(ordinalCompare('🦄', '👮🏽‍♀️')).toBeGreaterThan(0);
   });
 
   it('should return 0 if string1 is equal to string2', () => {
@@ -329,7 +423,7 @@ describe('slice', () => {
   });
   test('start 0-L', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 3);
-    expect(result).toEqual('k𐐷At🦄This𐐷Thing😉Its𐐷Awesome');
+    expect(result).toEqual('k𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome');
   });
   test('start L-inf', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50);
@@ -341,7 +435,7 @@ describe('slice', () => {
   });
   test('start (-inf)-(-L) end (-L)-0', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -100, -10);
-    expect(result).toEqual('Look𐐷At🦄This𐐷Thing😉I');
+    expect(result).toEqual('Look𐐷At🦄This𐐷Thing👮🏽‍♀️I');
   });
   test('start (-inf)-(-L) end 0-L', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -100, 8);
@@ -378,7 +472,7 @@ describe('slice', () => {
   });
   test('start 0-L end (-L)-0', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, -10);
-    expect(result).toEqual('At🦄This𐐷Thing😉I');
+    expect(result).toEqual('At🦄This𐐷Thing👮🏽‍♀️I');
   });
   test('start 0-L end 0-L', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, 8);
@@ -390,7 +484,7 @@ describe('slice', () => {
   });
   test('start 0-L end L-inf', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, 100);
-    expect(result).toEqual('At🦄This𐐷Thing😉Its𐐷Awesome');
+    expect(result).toEqual('At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome');
   });
   test('start L-inf end (-inf)-(-L)', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50, -100);
@@ -424,7 +518,7 @@ describe('split', () => {
 
   test('split with splitLimit', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, '𐐷', 2);
-    expect(result).toEqual(['Look', 'At🦄This𐐷Thing😉Its𐐷Awesome']);
+    expect(result).toEqual(['Look', 'At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
   });
 
   test('split by empty string', () => {
@@ -439,12 +533,12 @@ describe('split', () => {
 
   test('split with RegExp separator', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /[A-Z]/);
-    expect(result).toEqual(['', 'ook𐐷', 't🦄', 'his𐐷', 'hing😉', 'ts𐐷', 'wesome']);
+    expect(result).toEqual(['', 'ook𐐷', 't🦄', 'his𐐷', 'hing👮🏽‍♀️', 'ts𐐷', 'wesome']);
   });
 
   test('split with RegExp separator that contains surrogate pairs', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /🦄/);
-    expect(result).toEqual(['Look𐐷At', 'This𐐷Thing😉Its𐐷Awesome']);
+    expect(result).toEqual(['Look𐐷At', 'This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
   });
 
   test('split with RegExp separator that matches nothing in the string', () => {
@@ -473,7 +567,7 @@ describe('startsWith', () => {
 describe('substring', () => {
   test('substring with begin', () => {
     const result = substring(LONG_SURROGATE_PAIRS_STRING, POS_FIRST_PIZZA);
-    expect(result).toEqual('🍕Symbols💩That🚀Are📷Represented😉By🍕Surrogate🔥Pairs💋!🌟');
+    expect(result).toEqual('🍕Symbols💩That🚀Are📷Represented👮🏽‍♀️By🍕Surrogate🔥Pairs💋!🌟');
   });
 
   test('substring with end', () => {
@@ -483,7 +577,7 @@ describe('substring', () => {
 
   test('substring with begin and end', () => {
     const result = substring(LONG_SURROGATE_PAIRS_STRING, POS_FIRST_PIZZA, POS_SECOND_PIZZA);
-    expect(result).toEqual('🍕Symbols💩That🚀Are📷Represented😉By');
+    expect(result).toEqual('🍕Symbols💩That🚀Are📷Represented👮🏽‍♀️By');
   });
 });
 

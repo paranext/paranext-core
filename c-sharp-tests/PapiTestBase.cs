@@ -22,7 +22,7 @@ namespace TestParanextDataProvider
 
         #region Test setup/teardown
         [SetUp]
-        public virtual void TestSetup()
+        public virtual async Task TestSetup()
         {
             if (OperatingSystem.IsMacOS())
                 Assert.Ignore("Mac is missing ICU support so these tests will not work");
@@ -97,10 +97,10 @@ namespace TestParanextDataProvider
         protected static ProjectDetails CreateProjectDetails(
             string id,
             string name,
-            string projectType = ""
+            List<string>? projectInterfaces = null
         )
         {
-            ProjectMetadata metadata = new(id, name, projectType);
+            ProjectMetadata metadata = new(id, name, projectInterfaces ?? []);
             return new ProjectDetails(metadata, "testDirectoryThatDoesNotExist");
         }
 

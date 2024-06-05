@@ -367,7 +367,7 @@ declare module 'usfm-data-provider' {
 declare module 'papi-shared-types' {
   import type { ParatextStandardProjectDataProvider, UsfmDataProvider } from 'usfm-data-provider';
 
-  export interface ProjectDataProviders {
+  export interface ProjectDataProviderInterfaces {
     ParatextStandard: ParatextStandardProjectDataProvider;
   }
 

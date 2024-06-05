@@ -591,6 +591,32 @@ export type DeepPartial<T> = T extends object ? {
 export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
 	[K in keyof T]: ReplaceType<T[K], A, B>;
 } : T;
+/**
+ * Converts a union type to an intersection type (`|` to `&`).
+ *
+ * Note: this utility type is for use on object types. It may fail on other types.
+ *
+ * @example
+ *
+ * ```typescript
+ * type TypeOne = { one: string };
+ * type TypeTwo = { two: number };
+ * type TypeThree = { three: string };
+ *
+ * type TypeNums = { one: TypeOne; two: TypeTwo; three: TypeThree };
+ * const numNames = ['one', 'two'] as const;
+ * type TypeNumNames = typeof numNames;
+ *
+ * // Same as `TypeOne | TypeTwo`
+ * // `{ one: string } | { two: number }`
+ * type TypeOneTwoUnion = TypeNums[TypeNumNames[number]];
+ *
+ * // Same as `TypeOne & TypeTwo`
+ * // `{ one: string; two: number }`
+ * type TypeOneTwoIntersection = UnionToIntersection<TypeOneTwoUnion>;
+ * ```
+ */
+export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (x: infer I) => void ? I : never;
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;
 /** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
@@ -1019,6 +1045,22 @@ export declare function codePointAt(string: string, index: number): number | und
  * @returns True if it ends with searchString, false if it does not
  */
 export declare function endsWith(string: string, searchString: string, endPosition?: number): boolean;
+/**
+ * Formats a string, replacing {localization key} with the localization (or multiple localizations
+ * if there are multiple in the string). Will also remove \ before curly braces if curly braces are
+ * escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this is {name}! I like
+ * `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
+ *
+ * If the key in unescaped braces is not found, just return the key without the braces. Empty
+ * unescaped curly braces will just return a string without the braces e.g. ('I am {Nemo}', {
+ * 'name': 'Jim'}) would return 'I am Nemo'.
+ *
+ * @param str String to format
+ * @returns Formatted string
+ */
+export declare function formatReplacementString(str: string, replacers: {
+	[key: string]: string;
+}): string;
 /**
  * This function mirrors the `includes` function from the JavaScript Standard String object. It
  * handles Unicode code points instead of UTF-16 character codes.
@@ -1486,22 +1528,98 @@ export interface ProjectSettingsGroup {
 export interface ProjectSettingProperties {
 	[k: ReferencedItem]: ProjectSetting;
 }
-/** Modifies setting type to be project setting */
 export interface ModifierProject {
-	[k: string]: unknown;
 	/**
-	 * `RegExp` pattern(s) to match against `projectType` (using the
+	 * String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s
+	 * (using the
 	 * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
-	 * function) to determine whether this project setting should be displayed in the Project Settings
-	 * Dialog of that `projectType`. null means do not show on any Project Settings dialog
+	 * function) to determine if they should be included.
+	 *
+	 * If this is one string, it will be matched against `projectInterface`s. If this is an array,
+	 * each entry is handled based on its type (at least one entry must match for this filter
+	 * condition to pass):
+	 *
+	 * - If the entry is a string, it will be matched against each `projectInterface`. If any match, the
+	 *   project will pass this filter condition
+	 * - If the entry is an array of strings, each will be matched against each `projectInterface`. If
+	 *   every string matches against at least one `projectInterface`, the project will pass this
+	 *   filter condition
+	 *
+	 * In other words, each entry in the first-level array is `OR`'ed together. Each entry in
+	 * second-level arrays (arrays within the first-level array) are `AND`'ed together.
+	 *
+	 * Defaults to all {@link ProjectInterfaces}, so all projects that do not match
+	 * `excludeProjectInterfaces` will be included
+	 *
+	 * @example
+	 *
+	 * ```typescript
+	 * includeProjectInterfaces: ['one', ['two', 'three']];
+	 * ```
+	 *
+	 * This filter condition will succeed on projects whose `projectInterface`s fulfill at least one
+	 * of the following conditions (At least one entry in the array must match):
+	 *
+	 * - Include `one`
+	 * - Include both `two` and `three`.
 	 */
-	includeProjectTypes?: undefined | string | string[];
+	includeProjectInterfaces?: undefined | string | (string | string[])[];
 	/**
-	 * `RegExp` pattern to match against `projectType` to determine if this project setting should
-	 * absolutely not be displayed in the Project Settings dialog of that `projectType` even if it
-	 * matches with `includeProjectTypes`
+	 * String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s
+	 * (using the
+	 * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+	 * function) to determine if they should absolutely not be included even if they match with
+	 * `includeProjectInterfaces`.
+	 *
+	 * If this is one string, it will be matched against `projectInterface`s. If this is an array,
+	 * each entry is handled based on its type (at least one entry must match for this filter
+	 * condition to exclude the project):
+	 *
+	 * - If the entry is a string, it will be matched against each `projectInterface`. If any match, the
+	 *   project will pass this filter condition and exclude the project
+	 * - If the entry is an array of strings, each will be matched against each `projectInterface`. If
+	 *   every string matches against at least one `projectInterface`, the project will pass this
+	 *   filter condition and exclude the project
+	 *
+	 * In other words, each entry in the first-level array is `OR`'ed together. Each entry in
+	 * second-level arrays (arrays within the first-level array) are `AND`'ed together.
+	 *
+	 * Defaults to no {@link ProjectInterfaces}, so all projects that match `includeProjectInterfaces`
+	 * will be included
+	 *
+	 * @example
+	 *
+	 * ```typescript
+	 * excludeProjectInterfaces: ['one', ['two', 'three']];
+	 * ```
+	 *
+	 * This filter condition will succeed and exclude projects whose `projectInterface`s fulfill at
+	 * least one of the following conditions (At least one entry in the array must match):
+	 *
+	 * - Include `one`
+	 * - Include both `two` and `three`.
 	 */
-	excludeProjectTypes?: undefined | string | string[];
+	excludeProjectInterfaces?: undefined | string | (string | string[])[];
+	/**
+	 * String representation of `RegExp` pattern(s) to match against the Project Data Provider Factory
+	 * Ids that provided each project's metadata (using the
+	 * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+	 * function) to determine if the projects should be included.
+	 *
+	 * Defaults to all Project Data Provider Factory Ids, so all projects that do not match
+	 * `excludePdpFactoryIds` will be included
+	 */
+	includePdpFactoryIds?: undefined | string | string[];
+	/**
+	 * String representation of `RegExp` pattern(s) to match against the Project Data Provider Factory
+	 * Ids that provided each project's metadata (using the
+	 * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+	 * function) to determine if the projects should absolutely not be included even if they match
+	 * with `includeProjectInterfaces`.
+	 *
+	 * Defaults to none, so all projects that match `includePdpFactoryIds` will be included
+	 */
+	excludePdpFactoryIds?: undefined | string | string[];
 }
 /** The data an extension provides to inform Platform.Bible of the user state it provides */
 export interface UserStateContribution {
@@ -1592,7 +1710,47 @@ export declare const projectSettingsDocumentSchema: {
 			description: string;
 			type: string;
 			properties: {
-				includeProjectTypes: {
+				includeProjectInterfaces: {
+					description: string;
+					anyOf: ({
+						type: string;
+						items?: undefined;
+					} | {
+						type: string;
+						items: {
+							anyOf: ({
+								type: string;
+								items?: undefined;
+							} | {
+								type: string;
+								items: {
+									type: string;
+								};
+							})[];
+						};
+					})[];
+				};
+				excludeProjectInterfaces: {
+					description: string;
+					anyOf: ({
+						type: string;
+						items?: undefined;
+					} | {
+						type: string;
+						items: {
+							anyOf: ({
+								type: string;
+								items?: undefined;
+							} | {
+								type: string;
+								items: {
+									type: string;
+								};
+							})[];
+						};
+					})[];
+				};
+				includePdpFactoryIds: {
 					description: string;
 					anyOf: ({
 						type: string;
@@ -1604,7 +1762,7 @@ export declare const projectSettingsDocumentSchema: {
 						};
 					})[];
 				};
-				excludeProjectTypes: {
+				excludePdpFactoryIds: {
 					description: string;
 					anyOf: ({
 						type: string;
@@ -1844,7 +2002,47 @@ export declare const settingsDocumentSchema: {
 			description: string;
 			type: string;
 			properties: {
-				includeProjectTypes: {
+				includeProjectInterfaces: {
+					description: string;
+					anyOf: ({
+						type: string;
+						items?: undefined;
+					} | {
+						type: string;
+						items: {
+							anyOf: ({
+								type: string;
+								items?: undefined;
+							} | {
+								type: string;
+								items: {
+									type: string;
+								};
+							})[];
+						};
+					})[];
+				};
+				excludeProjectInterfaces: {
+					description: string;
+					anyOf: ({
+						type: string;
+						items?: undefined;
+					} | {
+						type: string;
+						items: {
+							anyOf: ({
+								type: string;
+								items?: undefined;
+							} | {
+								type: string;
+								items: {
+									type: string;
+								};
+							})[];
+						};
+					})[];
+				};
+				includePdpFactoryIds: {
 					description: string;
 					anyOf: ({
 						type: string;
@@ -1856,7 +2054,7 @@ export declare const settingsDocumentSchema: {
 						};
 					})[];
 				};
-				excludeProjectTypes: {
+				excludePdpFactoryIds: {
 					description: string;
 					anyOf: ({
 						type: string;

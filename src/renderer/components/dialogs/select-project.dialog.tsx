@@ -19,8 +19,8 @@ function SelectProjectDialog({
   submitDialog,
   excludeProjectIds,
   includeProjectIds,
-  includeProjectTypes,
-  excludeProjectTypes,
+  includeProjectInterfaces,
+  excludeProjectInterfaces,
 }: DialogTypes[typeof SELECT_PROJECT_DIALOG_TYPE]['props']) {
   const [projects, isLoadingProjects] = usePromise(
     useCallback(async () => {
@@ -28,10 +28,10 @@ function SelectProjectDialog({
       return filterProjectsMetadata(allProjectsMetadata, {
         excludeProjectIds,
         includeProjectIds,
-        includeProjectTypes,
-        excludeProjectTypes,
+        includeProjectInterfaces,
+        excludeProjectInterfaces,
       });
-    }, [excludeProjectIds, includeProjectIds, includeProjectTypes, excludeProjectTypes]),
+    }, [excludeProjectIds, includeProjectIds, includeProjectInterfaces, excludeProjectInterfaces]),
     useMemo(() => [], []),
   );
 

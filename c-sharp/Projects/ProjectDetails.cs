@@ -18,22 +18,6 @@ internal class ProjectDetails
     /// </summary>
     public string HomeDirectory { get; }
 
-    public override bool Equals(object? obj)
-    {
-        ProjectDetails? that = obj as ProjectDetails;
-        return that != null && (this.Equals(that));
-    }
-
-    protected bool Equals(ProjectDetails other)
-    {
-        return Metadata.Equals(other.Metadata) && HomeDirectory == other.HomeDirectory;
-    }
-
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(Metadata, HomeDirectory);
-    }
-
     public override string ToString()
     {
         return $"[{HomeDirectory}] = {Metadata}";

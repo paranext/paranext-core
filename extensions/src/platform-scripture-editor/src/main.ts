@@ -43,7 +43,7 @@ async function open(
   if (!projectForWebView.projectId) {
     // Get a list of projects that are editable or not editable to show in the select project dialog
     const projectMetadatas = (await papi.projectLookup.getMetadataForAllProjects()).filter(
-      (projectMetadata) => projectMetadata.projectType === 'ParatextStandard',
+      (projectMetadata) => projectMetadata.projectInterfaces.includes('ParatextStandard'),
     );
     const projectsWithEditable = await Promise.all(
       projectMetadatas.map(async (projectMetadata) => {

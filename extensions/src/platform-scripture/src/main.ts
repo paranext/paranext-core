@@ -61,7 +61,7 @@ async function openPlatformCharactersInventory(
   // Temporary code to get a projectId. Preferably we want to get the id of the project that's
   // used in the scripture editor, but I didn't know how to find that
   const projectMetadatas = (await papi.projectLookup.getMetadataForAllProjects()).filter(
-    (projectMetadata) => projectMetadata.projectType === 'ParatextStandard',
+    (projectMetadata) => projectMetadata.projectInterfaces.includes('ParatextStandard'),
   );
   const projectsWithEditable = await Promise.all(
     projectMetadatas.map(async (projectMetadata) => {
@@ -124,6 +124,22 @@ const inventoryWebViewProvider: IWebViewProvider = {
 export async function activate(context: ExecutionActivationContext) {
   logger.info('platformScripture is activating!');
 
+  const includeProjectsCommandPromise = papi.commands.registerCommand(
+    'platformScripture.toggleIncludeMyParatext9Projects',
+    async (shouldInclude) => {
+      const currentSettingValue =
+        shouldInclude !== undefined
+          ? !shouldInclude
+          : await papi.settings.get('platformScripture.includeMyParatext9Projects');
+      const newSettingValue = !currentSettingValue;
+      await papi.settings.set('platformScripture.includeMyParatext9Projects', newSettingValue);
+      return newSettingValue;
+    },
+  );
+  const includeProjectsValidatorPromise = papi.settings.registerValidator(
+    'platformScripture.includeMyParatext9Projects',
+    async (newValue) => typeof newValue === 'boolean',
+  );
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
     booksPresentValidator,
@@ -152,6 +168,8 @@ export async function activate(context: ExecutionActivationContext) {
   );
 
   context.registrations.add(
+    await includeProjectsCommandPromise,
+    await includeProjectsValidatorPromise,
     await booksPresentPromise,
     await versificationPromise,
     await validCharactersPromise,
