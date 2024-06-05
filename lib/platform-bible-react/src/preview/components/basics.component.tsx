@@ -39,7 +39,7 @@ function Basics() {
           </div>
           <div>
             {/* eslint-disable-next-line no-alert */}
-            <ShadcnButton onClick={() => alert('Hello World')}>Plain Shadcn Button</ShadcnButton>
+            <ShadcnButton onClick={() => alert('Hello World')}>Shadcn Button</ShadcnButton>
           </div>
         </VerticalTabsContent>
 
@@ -115,26 +115,30 @@ function Basics() {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Tabs">
-          <Tabs>
+          <Tabs defaultValue="2-youShouldNotSeeThis">
             <TabsList>
-              <TabsTrigger value="1">Tab 1</TabsTrigger>
-              <TabsTrigger value="2">Tab 2</TabsTrigger>
+              <TabsTrigger value="1">
+                <Button>non-text tab trigger</Button>
+              </TabsTrigger>
+              <TabsTrigger value="2-youShouldNotSeeThis">Tab 2</TabsTrigger>
               <TabsTrigger value="3">Tab 3 - no linked content</TabsTrigger>
             </TabsList>
             <TabsContent value="1">Tab 1 Content</TabsContent>
-            <TabsContent value="2">Tab 2 Content</TabsContent>
+            <TabsContent value="2-youShouldNotSeeThis">Tab 2 Content</TabsContent>
             {/* intentionally left out 3 to see the effect */}
           </Tabs>
           <hr className="pr-my-4" />
-          <VerticalTabs defaultValue="2">
+          <VerticalTabs defaultValue="2-youShouldNotSeeThis">
             <VerticalTabsList>
-              <VerticalTabsTrigger value="1">Tab 1</VerticalTabsTrigger>
-              <VerticalTabsTrigger value="2">Tab 2</VerticalTabsTrigger>
+              <VerticalTabsTrigger value="1">
+                <Button>non-text tab trigger</Button>
+              </VerticalTabsTrigger>
+              <VerticalTabsTrigger value="2-youShouldNotSeeThis">Tab 2</VerticalTabsTrigger>
               <VerticalTabsTrigger value="3">Tab 3</VerticalTabsTrigger>
               <VerticalTabsTrigger value="4">Tab 4</VerticalTabsTrigger>
             </VerticalTabsList>
             <VerticalTabsContent value="1">Tab 1 Content</VerticalTabsContent>
-            <VerticalTabsContent value="2">Tab 2 Content</VerticalTabsContent>
+            <VerticalTabsContent value="2-youShouldNotSeeThis">Tab 2 Content</VerticalTabsContent>
             <VerticalTabsContent value="3">Tab 3 Content</VerticalTabsContent>
             <VerticalTabsContent value="4">Tab 4 Content</VerticalTabsContent>
           </VerticalTabs>
