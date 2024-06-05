@@ -11,7 +11,7 @@ import characterInventoryWebView from './character-inventory.web-view?inline';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 
-interface inventoryOptions extends GetWebViewOptions {
+interface InventoryOptions extends GetWebViewOptions {
   projectId: string | undefined;
   // Add inventory/check type
 }
@@ -45,47 +45,31 @@ const charactersValidator: ProjectSettingValidator<
 // #endregion
 
 async function openPlatformCharactersInventory(
-  projectId: string | undefined,
+  webViewId: string | undefined,
 ): Promise<string | undefined> {
-  // See if projectId is passed in. I don't think this works currently
-  if (projectId) {
-    return papi.webViews.getWebView(
-      characterInventoryWebViewType,
-      { type: 'float', floatSize: { width: 775, height: 815 } },
-      // This code will be removed once we find a better way to get the projectId in
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { projectId } as inventoryOptions,
-    );
+  let projectId: string | undefined;
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    projectId = webViewDefinition?.projectId;
   }
+  const projectIdForWebView =
+    projectId ??
+    (await papi.dialogs.selectProject({
+      includeProjectInterfaces: 'ParatextStandard',
+      title: 'Open Hello World Project Viewer',
+      prompt: 'Please choose a project for which to open the viewer:',
+    }));
 
-  // Temporary code to get a projectId. Preferably we want to get the id of the project that's
-  // used in the scripture editor, but I didn't know how to find that
-  const projectMetadatas = (await papi.projectLookup.getMetadataForAllProjects()).filter(
-    (projectMetadata) => projectMetadata.projectInterfaces.includes('ParatextStandard'),
-  );
-  const projectsWithEditable = await Promise.all(
-    projectMetadatas.map(async (projectMetadata) => {
-      const pdp = await papi.projectDataProviders.get('ParatextStandard', projectMetadata.id);
-      return {
-        projectId: projectMetadata.id,
-        isEditable: await pdp.getSetting('platform.isEditable'),
-      };
-    }),
-  );
+  if (!projectIdForWebView) return undefined;
 
-  const selectedProjectId = await papi.dialogs.selectProject({
-    title: 'Select proj',
-    prompt: 'Select proj',
-    includeProjectIds: projectsWithEditable.map(({ projectId: pId }) => pId),
-  });
-
-  if (selectedProjectId) {
+  if (projectId) {
+    const options: InventoryOptions = { projectId };
     return papi.webViews.getWebView(
       characterInventoryWebViewType,
       { type: 'float', floatSize: { width: 775, height: 815 } },
       // This code will be removed once we find a better way to get the projectId in
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { projectId: selectedProjectId } as inventoryOptions,
+      options,
     );
   }
   return undefined;
@@ -94,7 +78,7 @@ async function openPlatformCharactersInventory(
 const inventoryWebViewProvider: IWebViewProvider = {
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    getWebViewOptions: inventoryOptions,
+    getWebViewOptions: InventoryOptions,
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== characterInventoryWebViewType)
       throw new Error(
