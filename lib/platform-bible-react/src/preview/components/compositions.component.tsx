@@ -3,6 +3,7 @@ import { ScriptureReference } from 'platform-bible-utils';
 import ThemeToggle from '@/preview/theme-toggle.component';
 import {
   BookChapterControl,
+  SearchBar,
   VerticalTabs,
   VerticalTabsContent,
   VerticalTabsList,
@@ -21,9 +22,14 @@ function Compositions() {
   return (
     <VerticalTabs defaultValue="Book Chapter Control">
       <VerticalTabsList>
+        <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
         <VerticalTabsTrigger value="Book Chapter Control">Book Chapter Control</VerticalTabsTrigger>
         <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
       </VerticalTabsList>
+
+      <VerticalTabsContent value="Search Bar">
+        <SearchBar onSearch={() => {}} />
+      </VerticalTabsContent>
 
       <VerticalTabsContent value="Book Chapter Control">
         <div className="bcv-control-div">
