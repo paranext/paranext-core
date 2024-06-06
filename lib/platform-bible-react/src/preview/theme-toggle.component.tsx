@@ -1,7 +1,6 @@
 // source: https://ui.shadcn.com/docs/dark-mode/vite
 
-/* eslint-disable react/prop-types */
-import React from 'react';
+import React, { ComponentPropsWithoutRef } from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Moon, Sun } from 'lucide-react';
 import { Button } from '../components/shadcn-ui/button';
@@ -13,9 +12,13 @@ import {
 } from '../components/shadcn-ui/dropdown-menu';
 import { useTheme } from './theme-provider.component';
 
+export type ThemeToggleProps = ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
+  className?: string;
+};
+
 const ThemeToggle = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item>
+  ThemeToggleProps
 >(({ className }, ref) => {
   const { setTheme } = useTheme();
   return (

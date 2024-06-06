@@ -15,9 +15,10 @@ function App() {
       <div className="pr-twp pr-p-2 pr-font-sans">
         <ThemeToggle className="pr-fixed pr-right-4 pr-top-4" />
         <h1 className="pr-pb-4 pr-uppercase">platform-bible-react Preview</h1>
+        <p>Edit lib/platform-bible-react/src/preview/components/... and save to see updates</p>
         <p>
-          Edit <code>lib/platform-bible-react/src/preview/components/...</code> and save to see
-          updates
+          Styling variables are defined in styling.css, currently matching the Slate theme, whereas
+          ui.shadcn.com uses the Zinc theme (with a deviating --ring 240 5% 64.9%)
         </p>
         <Tabs defaultValue="Playground" className="pr-pt-4">
           <TabsList>

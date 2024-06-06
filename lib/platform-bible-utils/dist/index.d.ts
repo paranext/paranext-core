@@ -1060,6 +1060,22 @@ export declare function codePointAt(string: string, index: number): number | und
  */
 export declare function endsWith(string: string, searchString: string, endPosition?: number): boolean;
 /**
+ * Formats a string, replacing {localization key} with the localization (or multiple localizations
+ * if there are multiple in the string). Will also remove \ before curly braces if curly braces are
+ * escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this is {name}! I like
+ * `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
+ *
+ * If the key in unescaped braces is not found, just return the key without the braces. Empty
+ * unescaped curly braces will just return a string without the braces e.g. ('I am {Nemo}', {
+ * 'name': 'Jim'}) would return 'I am Nemo'.
+ *
+ * @param str String to format
+ * @returns Formatted string
+ */
+export declare function formatReplacementString(str: string, replacers: {
+	[key: string]: string;
+}): string;
+/**
  * This function mirrors the `includes` function from the JavaScript Standard String object. It
  * handles Unicode code points instead of UTF-16 character codes.
  *
