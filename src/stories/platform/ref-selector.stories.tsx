@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { useArgs } from '@storybook/client-api';
+import { useArgs } from '@storybook/preview-api';
 import { RefSelector, ScrRefSelectorProps, ScriptureReference } from 'platform-bible-react';
 import { ReactElement } from 'react';
 

@@ -1,4 +1,4 @@
-import { useArgs } from '@storybook/client-api';
+import { useArgs } from '@storybook/preview-api';
 import type { Meta, StoryObj } from '@storybook/react';
 import { BookChapterControlProps, BookChapterControl } from 'platform-bible-react';
 import { ScriptureReference } from 'platform-bible-utils';
