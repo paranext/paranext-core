@@ -15,15 +15,14 @@ import {
   MutexMap,
   UnionToIntersection,
   UnsubscriberAsyncList,
-  newGuid,
 } from 'platform-bible-utils';
 import IProjectDataProviderFactory, {
   PDP_FACTORY_OBJECT_TYPE,
 } from '@shared/models/project-data-provider-factory.interface';
-import projectLookupService, {
-  getMinimalMatchPdpFactoryId,
-} from '@shared/services/project-lookup.service';
+import projectLookupService from '@shared/services/project-lookup.service';
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { getPDPFactoryNetworkObjectNameFromId } from '@shared/models/project-lookup.service-model';
 
 /**
  * Class that creates Project Data Providers of a specific set of `projectInterface`s. Layers over
@@ -34,6 +33,7 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
 {
   private readonly pdpIdsMutexMap = new MutexMap();
   private readonly pdpIds: Map<string, string> = new Map();
+  private readonly pdpFactoryId: string;
   private readonly projectInterfaces: SupportedProjectInterfaces;
   private readonly pdpCleanupList: UnsubscriberAsyncList;
   private readonly pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>;
@@ -45,9 +45,11 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
    * @param pdpEngineFactory Object that can create the engines for PDPs
    */
   constructor(
+    pdpFactoryId: string,
     projectInterfaces: SupportedProjectInterfaces,
     pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>,
   ) {
+    this.pdpFactoryId = pdpFactoryId;
     this.projectInterfaces = projectInterfaces;
     this.pdpCleanupList = new UnsubscriberAsyncList(`PDP Factory for ${projectInterfaces}`);
     this.pdpEngineFactory = pdpEngineFactory;
@@ -92,16 +94,21 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
     projectDataProviderEngine: IProjectDataProviderEngine<SupportedProjectInterfaces>,
     projectId: string,
   ): Promise<string> {
-    // Add a check for new PDPs to make sure they fulfill `MandatoryProjectDataTypes`
+    // Check to make sure new Base PDPs fulfill the requirements of the `platform.base` `projectInterface`
     if (
-      !('getExtensionData' in projectDataProviderEngine) ||
-      !('getSetting' in projectDataProviderEngine)
+      this.projectInterfaces.includes(PROJECT_INTERFACE_PLATFORM_BASE) &&
+      (!('getExtensionData' in projectDataProviderEngine) ||
+        !('getSetting' in projectDataProviderEngine))
     )
-      throw new Error('projectDataProviderEngine must implement "MandatoryProjectDataTypes"');
+      throw new Error(
+        `\`BaseProjectDataProviderEngine\` with project id ${projectId} created by PDP Factory with id ${this.pdpFactoryId} must implement \`platform.base\` \`projectInterface\`. See \`IBaseProjectDataProvider\` for more information`,
+      );
+    // ENHANCEMENT: Re-add a check for new PDPs to make sure there is some PDP somewhere that
+    // fulfills `platform.base`
+
     const pdpId: string = `${newNonce()}-pdp`;
     const pdp = await registerEngineByType<
-      // @ts-ignore TypeScript thinks there is some unknown data type getting in, but there is not
-      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]>
+      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
     >(pdpId, projectDataProviderEngine, 'pdp', {
       projectId,
       projectInterfaces: this.projectInterfaces,
@@ -114,6 +121,7 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
 /**
  * Add a new Project Data Provider Factory to PAPI that uses the given engine.
  *
+ * @param pdpFactoryId Unique id for this PDP factory
  * @param projectInterfaces The standardized sets of methods (`projectInterface`s) supported by the
  *   Project Data Provider Engines produced by this factory. Indicates what sort of project data
  *   should be available on the PDPEs created by this factory.
@@ -123,13 +131,14 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
 export async function registerProjectDataProviderEngineFactory<
   SupportedProjectInterfaces extends ProjectInterfaces[],
 >(
+  pdpFactoryId: string,
   projectInterfaces: SupportedProjectInterfaces,
   pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>,
 ): Promise<Dispose> {
-  const factoryId = newGuid();
-  const factory = new ProjectDataProviderFactory(projectInterfaces, pdpEngineFactory);
+  const factoryNetworkObjectId = getPDPFactoryNetworkObjectNameFromId(pdpFactoryId);
+  const factory = new ProjectDataProviderFactory(pdpFactoryId, projectInterfaces, pdpEngineFactory);
   return networkObjectService.set<ProjectDataProviderFactory<SupportedProjectInterfaces>>(
-    factoryId,
+    factoryNetworkObjectId,
     factory,
     PDP_FACTORY_OBJECT_TYPE,
     { projectInterfaces },
@@ -142,7 +151,7 @@ export async function registerProjectDataProviderEngineFactory<
  * @example
  *
  * ```typescript
- * const pdp = await get('ParatextStandard', 'ProjectID12345');
+ * const pdp = await get('platformScripture.USFM_BCV', 'ProjectID12345');
  * pdp.getVerse(new VerseRef('JHN', '1', '1'));
  * ```
  *
@@ -169,17 +178,19 @@ export async function get<ProjectInterface extends ProjectInterfaces>(
     pdpFactoryId,
   );
 
-  const minimalMatchPdpFactoryId = getMinimalMatchPdpFactoryId(metadata, projectInterface);
+  const minimalMatchPdpFactoryId = projectLookupService.getMinimalMatchPdpFactoryId(
+    metadata,
+    projectInterface,
+  );
 
   if (!minimalMatchPdpFactoryId)
     throw new Error(
       `pdpService.get(${projectInterface}, ${projectId}, ${pdpFactoryId}): Somehow there was a project with the id and provided projectInterface, but could not find a PDPF that provided the projectInterface. This should not happen.`,
     );
 
-  const pdpFactory =
-    await networkObjectService.get<ProjectDataProviderFactory<[ProjectInterface]>>(
-      minimalMatchPdpFactoryId,
-    );
+  const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<[ProjectInterface]>>(
+    getPDPFactoryNetworkObjectNameFromId(minimalMatchPdpFactoryId),
+  );
   if (!pdpFactory)
     throw new Error(
       `pdpService.get(${projectInterface}, ${projectId}, ${pdpFactoryId}): Cannot get project data providers with projectInterface ${projectInterface}: Could not get pdpf with id ${minimalMatchPdpFactoryId}`,

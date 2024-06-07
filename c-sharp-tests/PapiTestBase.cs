@@ -21,6 +21,8 @@ namespace TestParanextDataProvider
         #endregion
 
         #region Test setup/teardown
+        // Ignore warning here because child classes need this to be async
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
         [SetUp]
         public virtual async Task TestSetup()
         {
@@ -30,6 +32,7 @@ namespace TestParanextDataProvider
             _projects = new DummyLocalParatextProjects();
             _client = new DummyPapiClient();
         }
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 
         [TearDown]
         public virtual void TestTearDown()
@@ -100,8 +103,8 @@ namespace TestParanextDataProvider
             List<string>? projectInterfaces = null
         )
         {
-            ProjectMetadata metadata = new(id, name, projectInterfaces ?? []);
-            return new ProjectDetails(metadata, "testDirectoryThatDoesNotExist");
+            ProjectMetadata metadata = new(id, projectInterfaces ?? []);
+            return new ProjectDetails(name, metadata, "testDirectoryThatDoesNotExist");
         }
 
         /// <summary>

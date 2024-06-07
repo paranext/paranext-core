@@ -15,7 +15,7 @@ internal class LocalParatextProjects
     // Inside of each project's "home" directory, these are the subdirectories and files
     protected const string PROJECT_SETTINGS_FILE = "Settings.xml";
 
-    protected static readonly List<string> _paratextProjectInterfaces = [ProjectInterfaces.Paratext];
+    public static readonly List<string> ParatextProjectInterfaces = [ProjectInterfaces.Base, ProjectInterfaces.USFM_BCV, ProjectInterfaces.USX_Chapter];
 
     /// <summary>
     /// Directory inside a project's root directory where Platform.Bible's extension data is stored
@@ -125,7 +125,7 @@ internal class LocalParatextProjects
 
         var projectName = new ProjectName
         {
-            ShortName = projectDetails.Metadata.Name,
+            ShortName = projectDetails.Name,
             ProjectPath = projectPath
         };
         ScrTextCollection.Add(new ScrText(projectName, RegistrationInfo.DefaultUser));
@@ -148,27 +148,27 @@ internal class LocalParatextProjects
                 // My Paratext 9 Projects
                 if (rootFolder == Paratext9ProjectsFolder && Path.GetFileName(dir).StartsWith('_')) continue;
 
-                ProjectMetadata? projectMetadata;
+                ProjectDetails? projectDetails;
                 string errorMessage;
                 try
                 {
-                    projectMetadata = LoadProjectMetadata(dir, out errorMessage);
+                    projectDetails = LoadProjectDetails(dir, out errorMessage);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error while getting project metadata from {dir}: {ex}");
+                    Console.WriteLine($"Error while getting project details from {dir}: {ex}");
                     continue;
                 }
 
-                if (projectMetadata == null)
+                if (projectDetails == null)
                     Console.WriteLine(errorMessage);
                 else
-                    yield return new ProjectDetails(projectMetadata, dir);
+                    yield return projectDetails;
             }
         }
     }
 
-    private static ProjectMetadata? LoadProjectMetadata(
+    private static ProjectDetails? LoadProjectDetails(
         string projectHomeDir,
         out string errorMessage
     )
@@ -199,10 +199,12 @@ internal class LocalParatextProjects
         }
         var id = idNode.InnerText;
 
-        var metadata = new ProjectMetadata(id, shortName, _paratextProjectInterfaces);
+        var metadata = new ProjectMetadata(id, ParatextProjectInterfaces);
+
+        var details = new ProjectDetails(shortName, metadata, projectHomeDir);
 
         errorMessage = "";
-        return metadata;
+        return details;
     }
 
     private void SetUpSampleProject()

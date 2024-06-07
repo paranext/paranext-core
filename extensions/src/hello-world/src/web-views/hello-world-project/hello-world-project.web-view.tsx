@@ -38,7 +38,7 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({
     setCurrentName('');
   }, [pdp, currentName, setCurrentName]);
 
-  const helloWorldProjectSettings = useHelloWorldProjectSettings('helloWorld', pdp);
+  const helloWorldProjectSettings = useHelloWorldProjectSettings(pdp);
   const { headerStyle } = helloWorldProjectSettings;
 
   return (

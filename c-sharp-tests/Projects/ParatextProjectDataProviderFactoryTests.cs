@@ -10,7 +10,7 @@ namespace TestParanextDataProvider.Projects
     internal class ParatextProjectDataProviderFactoryTests : PapiTestBase
     {
         private const string PDB_FACTORY_GET_REQUEST =
-            $"object:platform.pdpFactory-{ParatextProjectDataProviderFactory.PDPF_NAME}.function";
+            $"object:platform.pdpFactory-{ParatextProjectDataProviderFactory.PDPF_NAME}-pdpf.function";
 
         [SetUp]
         public override async Task TestSetup()

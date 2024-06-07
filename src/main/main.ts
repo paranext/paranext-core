@@ -27,6 +27,7 @@ import { get } from '@shared/services/project-data-provider.service';
 import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
+import { startProjectLookupService } from './services/project-lookup.service-host';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 
@@ -36,6 +37,9 @@ async function main() {
 
   // The network object status service relies on seeing everything else start up later
   await startNetworkObjectStatusService();
+
+  // The project lookup service relies on the network object status service
+  await startProjectLookupService();
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
@@ -339,17 +343,17 @@ async function main() {
 
     // Get a data provider and do something with it
     setTimeout(async () => {
-      const paratextPdp = await get<'ParatextStandard'>(
-        'ParatextStandard',
+      const usxPdp = await get(
+        'platformScripture.USX_Chapter',
         '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
       );
-      const verse = await paratextPdp.getChapterUSX(new VerseRef('JHN', '1', '1'));
+      const verse = await usxPdp.getChapterUSX(new VerseRef('JHN', '1', '1'));
       logger.info(`Got PDP data: ${verse}`);
 
-      if (verse !== undefined)
-        await paratextPdp.setChapterUSX(new VerseRef('JHN', '1', '1'), verse);
+      if (verse !== undefined) await usxPdp.setChapterUSX(new VerseRef('JHN', '1', '1'), verse);
 
-      paratextPdp.setExtensionData(
+      const basePdp = await get('platform.base', '32664dc3288a28df2e2bb75ded887fc8f17a15fb');
+      basePdp.setExtensionData(
         { extensionName: 'foo', dataQualifier: 'fooData' },
         'This is the data from extension foo',
       );

@@ -5,8 +5,6 @@ import {
   Marginal,
   MarginalRef,
   Usj,
-  usjToUsxString,
-  usxStringToUsj,
 } from '@biblionexus-foundation/platform-editor';
 import { VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -14,6 +12,7 @@ import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useSetting } from '@papi/frontend/react';
 import { ScriptureReference, debounce } from 'platform-bible-utils';
+import { USJDocument } from 'platform-scripture';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -29,6 +28,8 @@ const defaultScrRef: ScriptureReference = {
   chapterNum: 1,
   verseNum: 1,
 };
+
+const usjDocumentDefault: USJDocument = { type: 'USJ', version: '0.2.1', content: [] };
 
 function scrollToScrRef(scrRef: ScriptureReference) {
   const verseElement = document.querySelector<HTMLElement>(
@@ -83,31 +84,28 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
-  const [usx, setUsx] = useProjectData('ParatextStandard', projectId).ChapterUSX(
+  const [usj, setUsj] = useProjectData('platformScripture.USJ_Chapter', projectId).ChapterUSJ(
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
-    '',
+    usjDocumentDefault,
   );
 
-  const debouncedSetUsx = useMemo(
-    () => debounce((usj: Usj) => setUsx?.(usjToUsxString(usj)), 300),
-    [setUsx],
-  );
+  const debouncedSetUsx = useMemo(() => debounce((newUsj: Usj) => setUsj?.(newUsj), 300), [setUsj]);
 
   // TODO: remove debounce when issue #826 is done.
   const onChange = useCallback(debouncedSetUsx, [debouncedSetUsx]);
 
   useEffect(() => {
-    if (usx) editorRef.current?.setUsj(usxStringToUsj(usx));
-  }, [usx]);
+    if (usj) editorRef.current?.setUsj(usj);
+  }, [usj]);
 
   useEffect(() => {
-    if (usx && !hasFirstRetrievedScripture.current) {
+    if (usj && !hasFirstRetrievedScripture.current) {
       hasFirstRetrievedScripture.current = true;
       // Wait before scrolling to make sure there is time for the editor to load
       // TODO: hook into the editor and detect when it has loaded somehow
       setTimeout(() => scrollToScrRef(scrRef), EDITOR_LOAD_DELAY_TIME);
     }
-  }, [usx, scrRef]);
+  }, [usj, scrRef]);
 
   // Scroll the selected verse into view
   useEffect(() => {

@@ -14,7 +14,7 @@ import {
 /**
  * React hook to use data from a Project Data Provider
  *
- * @example `useProjectData('ParatextStandard', 'project id').VerseUSFM(...);`
+ * @example `useProjectData('platformScripture.USFM_BCV', 'project id').VerseUSFM(...);`
  */
 type UseProjectDataHook = {
   <ProjectInterface extends ProjectInterfaces>(
@@ -74,12 +74,12 @@ type UseProjectDataHook = {
  * Provider with `useProjectData('<projectInterface>', '<project_id>').<data_type>` and use like any
  * other React hook.
  *
- * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `ParatextStandard` project with
- * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
+ * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `platformScripture.USFM_BCV` project
+ * with projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
  *
  * ```typescript
  * const [verse, setVerse, verseIsLoading] = useProjectData(
- *   'ParatextStandard',
+ *   'platformScripture.USFM_BCV',
  *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
  * ).VerseUSFM(
  *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),

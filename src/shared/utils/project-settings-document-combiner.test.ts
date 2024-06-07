@@ -38,11 +38,11 @@ const platformSettingsLocalized: Localized<ProjectSettingsContribution> = {
   properties: {
     'platform.fullName': {
       label: 'project_settings_platform_fullName_label',
-      default: '%project_full_name_missing%',
+      default: 'project_full_name_missing',
     },
     'platform.language': {
       label: 'project_settings_platform_language_label',
-      default: '%project_language_missing%',
+      default: 'project_language_missing',
     },
   },
 };

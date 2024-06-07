@@ -10,8 +10,6 @@ import { ProjectInterfaces } from 'papi-shared-types';
 export type ProjectMetadataWithoutFactoryInfo = {
   /** ID of the project (must be unique and case insensitive) */
   id: string;
-  /** Short name of the project (not necessarily unique) */
-  name: string;
   /**
    * All `projectInterface`s (aka standardized sets of methods on a PDP) that Project Data Providers
    * for this project support. Indicates what sort of project data should be available on this

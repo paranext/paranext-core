@@ -22,14 +22,14 @@ namespace TestParanextDataProvider.Projects
 
         protected override string ProjectRootFolder => _folder.Path;
 
-        internal void CreateTempProject(string folder, ProjectMetadata projectMetadata)
+        internal void CreateTempProject(string folder, ProjectDetails projectDetails)
         {
             var folderPath = Path.Combine(ProjectRootFolder, folder);
             CreateDirectory(folderPath);
             var settings = new MinimalParatextProjectSettings
             {
-                Name = projectMetadata.Name,
-                Guid = projectMetadata.ID
+                Name = projectDetails.Name,
+                Guid = projectDetails.Metadata.ID
             };
             var settingsPath = Path.Join(folderPath, "Settings.xml");
             XmlSerializationHelper.SerializeToFileWithWriteThrough(settingsPath, settings);

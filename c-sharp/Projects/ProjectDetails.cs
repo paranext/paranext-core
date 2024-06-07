@@ -1,3 +1,5 @@
+using Paratext.Data.DBLServices;
+
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
@@ -5,11 +7,14 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 internal class ProjectDetails
 {
-    public ProjectDetails(ProjectMetadata metadata, string homeDirectory)
+    public ProjectDetails(string name, ProjectMetadata metadata, string homeDirectory)
     {
+        Name = name;
         Metadata = metadata;
         HomeDirectory = homeDirectory;
     }
+
+    public string Name { get; }
 
     public ProjectMetadata Metadata { get; }
 

@@ -4,6 +4,12 @@ import type {
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
 
+/**
+ * The name of the `projectInterface` representing the essential methods every Base Project Data
+ * Provider must implement
+ */
+export const PROJECT_INTERFACE_PLATFORM_BASE = 'platform.base';
+
 /** Indicates to a PDP what extension data is being referenced */
 export type ExtensionDataScope = {
   /** Name of an extension as provided in its manifest */

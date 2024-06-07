@@ -1,8 +1,8 @@
-import papi, { ProjectDataProviderEngine } from '@papi/backend';
+import papi, { BaseProjectDataProviderEngine } from '@papi/backend';
 import {
-  IProjectDataProviderEngine,
   DataProviderUpdateInstructions,
   ExtensionDataScope,
+  IBaseProjectDataProviderEngine,
 } from '@papi/core';
 import type {
   ProjectInterfaceDataTypes,
@@ -13,7 +13,10 @@ import type {
 /** The `projectInterface`s the hello world pdpf serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
 // needs to be used in ProjectMetadata as not readonly :p
-export const HELLO_WORLD_PROJECT_INTERFACES = ['helloWorld'] as const satisfies ['helloWorld'];
+export const HELLO_WORLD_PROJECT_INTERFACES = ['platform.base', 'helloWorld'] as const satisfies [
+  'platform.base',
+  'helloWorld',
+];
 
 export type HelloWorldProjectData = {
   projectName: string;
@@ -30,8 +33,8 @@ function getExtensionDataKey(scope: ExtensionDataScope): string {
 }
 
 class HelloWorldProjectDataProviderEngine
-  extends ProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>
-  implements IProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>
+  extends BaseProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>
+  implements IBaseProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>
 {
   private saveProjectData: () => Promise<void>;
 
@@ -53,11 +56,15 @@ class HelloWorldProjectDataProviderEngine
   async getSetting<ProjectSettingName extends keyof ProjectSettingTypes>(
     key: ProjectSettingName,
   ): Promise<ProjectSettingTypes[ProjectSettingName]> {
+    if (key === 'platform.name')
+      // TypeScript doesn't realize ProjectSettingName is 'platform.name' in this case for some reason
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      return this.projectData.projectName as ProjectSettingTypes[ProjectSettingName];
     // We are checking in this same line that it is there. TypeScript :/
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     if (key in this.projectData.settings) return this.projectData.settings[key]!;
 
-    return papi.projectSettings.getDefault(key, HELLO_WORLD_PROJECT_INTERFACES);
+    return papi.projectSettings.getDefault(key);
   }
 
   async setSetting<ProjectSettingName extends keyof ProjectSettingTypes>(
@@ -66,6 +73,11 @@ class HelloWorldProjectDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<ProjectInterfaceDataTypes['helloWorld']>> {
     if (!(await papi.projectSettings.isValid(key, newSetting, await this.getSetting(key))))
       return false;
+
+    if (key === 'platform.name')
+      // TypeScript doesn't realize ProjectSettingName is 'platform.name' in this case for some reason
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      this.projectData.projectName = newSetting as ProjectSettingTypes['platform.name'];
 
     this.projectData.settings[key] = newSetting;
     await this.saveProjectData();

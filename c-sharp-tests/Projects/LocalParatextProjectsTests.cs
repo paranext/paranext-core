@@ -40,13 +40,13 @@ public class LocalParatextProjectsTests
     [TestCase("ABC")]
     public void Initialize_NonStandardFolderName_ProjectIsRetrievable(string folder)
     {
-        CreateTempProject(folder, CreateParatextProjectMetadata("ABC"));
+        CreateTempProject(folder, CreateParatextProjectDetails(folder, "ABC"));
 
         _localProjects.Initialize(false);
         var details = _localProjects.GetAllProjectDetails().Single();
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
-        Assert.That(details.Metadata.Name, Is.EqualTo("ABC"));
+        Assert.That(details.Name, Is.EqualTo("ABC"));
         Assert.That(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -55,13 +55,13 @@ public class LocalParatextProjectsTests
     [TestCase("A-B-C_441f1e41ffb8d319650847df35f4ffb78f12914e", "ABC")]
     public void Initialize_NameDoesNotMatch_ProjectIsRetrievable(string folder, string name)
     {
-        var metadata = CreateParatextProjectMetadata(name);
+        var metadata = CreateParatextProjectDetails(folder, name);
         CreateTempProject(folder, metadata);
         _localProjects.Initialize(false);
         var details = _localProjects.GetAllProjectDetails().Single();
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
-        Assert.That(details.Metadata.Name, Is.EqualTo(name));
+        Assert.That(details.Name, Is.EqualTo(name));
         Assert.That(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -69,13 +69,13 @@ public class LocalParatextProjectsTests
     [TestCase("AB-C_541f1e41ffb8d319650847df35f4ffb78f12914e", "AB-C")]
     public void Initialize_IdDoesNotMatch_ProjectIsRetrievable(string folder, string name)
     {
-        var metadata = CreateParatextProjectMetadata(name);
+        var metadata = CreateParatextProjectDetails(folder, name);
         CreateTempProject(folder, metadata);
         _localProjects.Initialize(false);
         var details = _localProjects.GetAllProjectDetails().Single();
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
-        Assert.That(details.Metadata.Name, Is.EqualTo(name));
+        Assert.That(details.Name, Is.EqualTo(name));
         Assert.That(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -85,25 +85,25 @@ public class LocalParatextProjectsTests
     [TestCase("A-B-C_441f1e41ffb8d319650847df35f4ffb78f12914e", "A-B-C")]
     public void Initialize_IdAndNameMatch_ProjectIsRetrievable(string folder, string name)
     {
-        var metadata = CreateParatextProjectMetadata(name);
+        var metadata = CreateParatextProjectDetails(folder, name);
         CreateTempProject(folder, metadata);
         _localProjects.Initialize(false);
         var details = _localProjects.GetAllProjectDetails().Single();
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(TEST_ID)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));
-        Assert.That(details.Metadata.Name, Is.EqualTo(name));
+        Assert.That(details.Name, Is.EqualTo(name));
         Assert.That(details.Metadata.ID.Equals(TEST_ID, StringComparison.OrdinalIgnoreCase));
     }
 
     #endregion
 
-    private void CreateTempProject(string folder, ProjectMetadata metadata)
+    private void CreateTempProject(string folder, ProjectDetails details)
     {
-        ((TestLocalParatextProjectsInTempDir)_localProjects).CreateTempProject(folder, metadata);
+        ((TestLocalParatextProjectsInTempDir)_localProjects).CreateTempProject(folder, details);
     }
 
-    private static ProjectMetadata CreateParatextProjectMetadata(string name)
+    private static ProjectDetails CreateParatextProjectDetails(string folder, string name)
     {
-        return new ProjectMetadata(TEST_ID, name, ["paratext"]);
+        return new ProjectDetails(name, new ProjectMetadata(TEST_ID, ["paratext"]), folder);
     }
 }

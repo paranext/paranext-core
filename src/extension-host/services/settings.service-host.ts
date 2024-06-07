@@ -24,6 +24,8 @@ import {
   debounce,
   deserialize,
   includes,
+  isLocalizeKey,
+  isString,
   serialize,
 } from 'platform-bible-utils';
 import { joinUriPaths } from '@node/utils/util';
@@ -59,9 +61,9 @@ async function writeSettingsDataToFile(settingsData: Partial<AllSettingsData>) {
   await nodeFS.writeFile(SETTINGS_FILE_URI, JSON.stringify(settingsData));
 }
 
-function getDefaultValueForKey<SettingName extends SettingNames>(
+async function getDefaultValueForKey<SettingName extends SettingNames>(
   key: SettingName,
-): SettingTypes[SettingName] {
+): Promise<SettingTypes[SettingName]> {
   const settingInfo = settingsDocumentCombiner.getSettingsContributionInfo()?.settings[key];
   if (!settingInfo) {
     throw new Error(`No setting exists for key ${key}`);
@@ -73,7 +75,34 @@ function getDefaultValueForKey<SettingName extends SettingNames>(
     throw new Error(`No default value specified for key ${key}`);
   }
 
-  return settingInfo.default;
+  // If this key is the interface language, return it since we need to use that in the localization
+  // service. Or if default is not a localized string key, return it. Otherwise we need to get the
+  // localized version instead
+  if (
+    key === 'platform.interfaceLanguage' ||
+    !isString(settingInfo.default) ||
+    !isLocalizeKey(settingInfo.default)
+  )
+    return settingInfo.default;
+
+  const localizedSettingInfo = (
+    await settingsDocumentCombiner.getLocalizedSettingsContributionInfo()
+  )?.settings[key];
+
+  if (!localizedSettingInfo) {
+    throw new Error(`Could not find localized setting ${key}.`);
+  }
+
+  // We shouldn't be able to hit this anymore since the settings document combiner should
+  // throw if this ever happened. But this is still here just in case because this would be a
+  // serious error
+  if (!('default' in localizedSettingInfo)) {
+    throw new Error(`Could not find localized default value for setting ${key}.`);
+  }
+
+  // This type is correct. Looks like `ReplaceType` breaks mapped types and just unions the types
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return localizedSettingInfo.default as SettingTypes[SettingName];
 }
 
 async function validateSetting<SettingName extends SettingNames>(

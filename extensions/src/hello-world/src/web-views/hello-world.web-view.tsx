@@ -105,7 +105,7 @@ globalThis.webViewComponent = function HelloWorld({
       // Test ref parameter properly getting latest value
       currentRender: currentRender.current,
       optionsSource: 'hook',
-      includeProjectInterfaces: '^ParatextStandard$',
+      includeProjectInterfaces: ['platformScripture.USFM_BCV'],
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
@@ -150,7 +150,7 @@ globalThis.webViewComponent = function HelloWorld({
         iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
         title: 'Select List of Hello World Projects',
         selectedProjectIds: projects,
-        includeProjectInterfaces: '^ParatextStandard$',
+        includeProjectInterfaces: ['platformScripture.USFM_BCV'],
       }),
       [projects],
     ),
@@ -204,11 +204,11 @@ globalThis.webViewComponent = function HelloWorld({
   );
 
   const [currentProjectVerse] = useProjectData(
-    'ParatextStandard',
+    'platformScripture.USFM_BCV',
     projectId ?? undefined,
   ).VerseUSFM(verseRef, 'Loading Verse');
 
-  const helloWorldProjectSettings = useHelloWorldProjectSettings('ParatextStandard', projectId);
+  const helloWorldProjectSettings = useHelloWorldProjectSettings(projectId);
   const { headerStyle } = helloWorldProjectSettings;
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => ['%submitButton%'], []),

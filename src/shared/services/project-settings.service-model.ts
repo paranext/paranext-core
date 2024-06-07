@@ -56,8 +56,6 @@ export interface IProjectSettingsService {
    * throw.
    *
    * @param key The project setting key for which to get the default value
-   * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
-   *   for which to get the default setting value
    * @returns The default value for the setting if a default value is registered
    * @throws If a default value is not registered for the setting
    */
@@ -99,8 +97,6 @@ export type SimultaneousProjectSettingsChanges = {
  * @param newValue The new value requested to set the project setting value to
  * @param currentValue The current project setting value
  * @param allChanges All project settings changes being set in one batch
- * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
- *   whose setting is being changed
  */
 export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNames> = (
   newValue: ProjectSettingTypes[ProjectSettingName],

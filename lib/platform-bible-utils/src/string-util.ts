@@ -515,6 +515,34 @@ export function isLocalizeKey(str: string): str is LocalizeKey {
   return startsWith(str, '%') && endsWith(str, '%');
 }
 
+/**
+ * Escape RegExp special characters.
+ *
+ * You can also use this to escape a string that is inserted into the middle of a regex, for
+ * example, into a character class.
+ *
+ * All credit to [`escape-string-regexp`](https://www.npmjs.com/package/escape-string-regexp) - this
+ * function is simply copied directly from there to allow a common js export
+ *
+ * @example
+ *
+ *     import escapeStringRegexp from 'platform-bible-utils';
+ *
+ *     const escapedString = escapeStringRegexp('How much $ for a 🦄?');
+ *     //=> 'How much \\$ for a 🦄\\?'
+ *
+ *     new RegExp(escapedString);
+ */
+export function escapeStringRegexp(string: string): string {
+  if (typeof string !== 'string') {
+    throw new TypeError('Expected a string');
+  }
+
+  // Escape characters with special meaning either inside or outside character sets.
+  // Use a simple backslash escape when it’s always valid, and a `\xnn` escape when the simpler form would be disallowed by Unicode patterns’ stricter grammar.
+  return string.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
+}
+
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingStringUtils = {
   indexOfClosestClosingCurlyBrace,

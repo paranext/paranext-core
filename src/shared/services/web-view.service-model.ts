@@ -40,6 +40,12 @@ export interface WebViewServiceType {
   /**
    * Gets the saved properties on the WebView definition with the specified ID
    *
+   * Note: this only returns a representation of the current web view definition, not the actual web
+   * view definition itself. Changing properties on the returned definition does not affect the
+   * actual web view definition. You can possibly change the actual web view definition by calling
+   * {@link WebViewServiceType.getWebView} with certain `options`, depending on what options the web
+   * view provider has made available.
+   *
    * @param webViewId The ID of the WebView whose saved properties to get
    * @returns Saved properties of the WebView definition with the specified ID or undefined if not
    *   found
