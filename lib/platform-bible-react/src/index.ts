@@ -77,6 +77,7 @@ export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
 export { Input } from '@/components/shadcn-ui/input';
+export { Label } from '@/components/shadcn-ui/label';
 export * from '@/components/shadcn-ui/dropdown-menu';
 export { Tabs, TabsList, TabsContent, TabsTrigger } from '@/components/shadcn-ui/tabs';
 export {

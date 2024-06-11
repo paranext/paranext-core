@@ -120,6 +120,9 @@ describe('ScriptureRefKeyedList default display mode (with combobox for grouping
 
     const [firstRow, secondRow, thirdRow, fourthRow] = rows;
 
+    // UX has now said they don't think they want banding. I'm leaving in the code to
+    // set even and odd styles, but there's nothing in the CSS to style them differently.
+
     let [scrRefCell, detailsCell] = firstRow.childNodes;
     expect(firstRow.className).toMatch(/\beven\b/);
     expect(EnsureHTMLElement(scrRefCell).innerHTML).toBe('GEN 1:1');
@@ -150,7 +153,8 @@ describe('ScriptureRefKeyedList default display mode (with combobox for grouping
 
     if (!firstRow) throw new Error('First row is null');
 
-    expect(firstRow).not.toHaveClass('selected');
+    const dataState = firstRow.attributes.getNamedItem('data-state');
+    expect(dataState?.value).toBe('');
 
     // Simulate clicking the first row
     fireEvent.click(firstRow);
@@ -158,7 +162,7 @@ describe('ScriptureRefKeyedList default display mode (with combobox for grouping
     // Check if the row is selected
     // Assuming there's a class or attribute change on selection
     // Replace 'selected' with the actual class or attribute used
-    expect(firstRow).toHaveClass('selected');
+    expect(dataState?.value).toBe('selected');
 
     expect(numberOfRowSelectsHandled).toBe(1);
     expect(lastSelectedItem?.source).toBe(sources[0].checkDefinition);

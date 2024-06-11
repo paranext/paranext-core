@@ -1,43 +1,7 @@
-.basic-list-table {
-  overflow: auto;
-
-  .table-header {
-    text-align: left;
-  }
-}
-
-table {
-  border-spacing: 1px;
-}
-
-td {
-  padding-left: 3px;
-  padding-right: 3px;
-}
-
-.basic-list-expand-button {
-  cursor: pointer;
-}
-
-.indent1 {
-  padding-left: 30px;
-}
-
-.indent2 {
-  padding-left: 60px;
-}
-
-.selected {
-  background-color: bisque;
-}
-
 .banded-row:hover {
-  background-color: lightcyan;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Subtle shadow */
   cursor: pointer;
 }
 
-.selected:hover {
-  background-color: bisque;
+.banded-row[data-state="selected"]:hover {
   cursor: default;
 }

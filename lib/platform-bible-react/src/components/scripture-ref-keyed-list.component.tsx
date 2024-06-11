@@ -22,6 +22,7 @@ import {
   ScriptureItemDetail,
   ScriptureReference,
 } from 'platform-bible-utils';
+import { cn } from '@/utils/shadcn-ui.util';
 import ResultsSource from './results-source.class';
 import { Button } from './shadcn-ui/button';
 import {
@@ -284,19 +285,24 @@ export default function ScriptureRefKeyedList({
 
   const getEvenOrOddBandingStyle = (row: Row<ScriptureSrcItemDetail>, index: number) => {
     if (row.getIsGrouped()) return '';
-    return `banded-row ${index % 2 === 0 ? 'even pr-bg-neutral-300' : 'odd'}`;
+    // UX has now said they don't think they want banding. I'm leaving in the code to
+    // set even and odd styles, but there's nothing in the CSS to style them differently.
+    // The "even" style used to also have  pr-bg-neutral-300 (along with even) to create
+    // a visual banding effect. That could be added back in if UX changes the decision.
+    return cn('banded-row', index % 2 === 0 ? 'even' : 'odd');
   };
 
   const getIndent = (
+    groupingState: GroupingState,
     row: Row<ScriptureItemDetail>,
     cell: Cell<ScriptureSrcItemDetail, unknown>,
   ) => {
-    return row.depth >= cell.column.getIndex() ? ` indent${row.depth}` : '';
+    if (groupingState?.length === 0) return undefined;
+    return row.depth >= cell.column.getGroupedIndex() ? ` pr-px-${row.depth * 4}` : undefined;
   };
 
   return (
-    <div className="p-2 pr-w-full">
-      <div className="h-2" />
+    <div className="pr-twp pr-w-full">
       {!showColumnHeaders && (
         <Select
           value={JSON.stringify(grouping)}
@@ -304,7 +310,7 @@ export default function ScriptureRefKeyedList({
             handleSelectChange(value);
           }}
         >
-          <SelectTrigger className="pr-mb-1">
+          <SelectTrigger className="pr-mb-1 pr-mt-2">
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="item-aligned">
@@ -318,32 +324,34 @@ export default function ScriptureRefKeyedList({
           </SelectContent>
         </Select>
       )}
-      <Table>
+      <Table className="pr-p-0">
         {showColumnHeaders && (
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} colSpan={header.colSpan}>
-                    {header.isPlaceholder ? undefined : (
-                      <div>
-                        {header.column.getCanGroup() ? (
-                          <Button
-                            title={`Toggle grouping by ${header.column.columnDef.header}`}
-                            onClick={header.column.getToggleGroupingHandler()}
-                            style={{ cursor: 'pointer' }}
-                            type="button"
-                          >
-                            {header.column.getIsGrouped()
-                              ? `🛑(${header.column.getGroupedIndex()}) `
-                              : `👊 `}
-                          </Button>
-                        ) : undefined}{' '}
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </div>
-                    )}
-                  </TableHead>
-                ))}
+                {headerGroup.headers
+                  .filter((h) => h.column.columnDef.header)
+                  .map((header) => (
+                    <TableHead key={header.id} colSpan={header.colSpan}>
+                      {header.isPlaceholder ? undefined : (
+                        <div>
+                          {header.column.getCanGroup() ? (
+                            <Button
+                              title={`Toggle grouping by ${header.column.columnDef.header}`}
+                              onClick={header.column.getToggleGroupingHandler()}
+                              style={{ cursor: 'pointer' }}
+                              type="button"
+                            >
+                              {header.column.getIsGrouped()
+                                ? `🛑(${header.column.getGroupedIndex()}) `
+                                : `👊 `}
+                            </Button>
+                          ) : undefined}{' '}
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        </div>
+                      )}
+                    </TableHead>
+                  ))}
               </TableRow>
             ))}
           </TableHeader>
@@ -352,8 +360,9 @@ export default function ScriptureRefKeyedList({
           {table.getRowModel().rows.map((row, rowIndex) => {
             return (
               <TableRow
+                data-state={row.getIsSelected() ? 'selected' : ''}
                 key={row.id}
-                className={`${row.getIsSelected() ? 'selected' : ''} ${getEvenOrOddBandingStyle(row, rowIndex)}`}
+                className={cn(getEvenOrOddBandingStyle(row, rowIndex))}
                 onClick={(event) => handleRowClick(row, event)}
               >
                 {row.getVisibleCells().map((cell) => {
@@ -367,7 +376,16 @@ export default function ScriptureRefKeyedList({
                   return (
                     <TableCell
                       key={cell.id}
-                      className={`${cell.column.columnDef.id}${getIndent(row, cell)} pr-p-[.5%]`}
+                      // It seems like a hack to use pr-p-[1px] to override the "built in" pr-p-4
+                      // that comes in with the shadcn TableCell class. I could just remove it from
+                      // that class, but it's not clear that that is desirable. I'm not even 100%
+                      // sure I know what padding value to use here, but the problem with 4 (the
+                      // default) is that is prevents the nested indentation when grouping.
+                      className={cn(
+                        cell.column.columnDef.id,
+                        'pr-p-[1px]',
+                        getIndent(grouping, row, cell),
+                      )}
                     >
                       {(() => {
                         if (cell.getIsGrouped()) {
