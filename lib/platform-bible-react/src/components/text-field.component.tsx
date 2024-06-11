@@ -1,6 +1,6 @@
-import { Input as ShadInput } from '@/components/shadcn-ui/input';
+import { InputProps, Input as ShadInput } from '@/components/shadcn-ui/input';
 import { Label as ShadLabel } from '@/components/shadcn-ui/label';
-import { ChangeEventHandler, FocusEventHandler } from 'react';
+import React, { ChangeEventHandler, FocusEventHandler } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 
 export type TextFieldProps = {
@@ -50,6 +50,34 @@ export type TextFieldProps = {
   onBlur?: FocusEventHandler<HTMLInputElement>;
 };
 
+export interface ComposableTextFieldProps extends InputProps {
+  hasError?: boolean;
+  isFullWidth?: boolean;
+  label?: string;
+  helperText?: string;
+}
+
+export const ComposableTextField = React.forwardRef<HTMLInputElement, ComposableTextFieldProps>(
+  ({ className, hasError, label, isFullWidth, helperText, ...props }, ref) => {
+    return (
+      <div
+        className={cn('pr-inline-grid pr-items-center pr-gap-1.5', { 'pr-w-full': isFullWidth })}
+        ref={ref}
+      >
+        <ShadLabel
+          className={cn({
+            'pr-text-red-600': hasError,
+            'pr-hidden': !label,
+          })}
+          htmlFor={props.id}
+        >{`${label}${props.required ? '*' : ''}`}</ShadLabel>
+        <ShadInput className={cn(className, { 'pr-border-red-600': hasError })} {...props} />
+        <p className={cn({ 'pr-hidden': !helperText })}>{helperText}</p>
+      </div>
+    );
+  },
+);
+
 /**
  * Text input field
  *
@@ -73,28 +101,22 @@ function TextField({
   onBlur,
 }: TextFieldProps) {
   return (
-    <div className={cn('pr-inline-grid pr-items-center pr-gap-1.5', { 'pr-w-full': isFullWidth })}>
-      <ShadLabel
-        htmlFor={id}
-        className={cn({
-          'pr-text-red-600': hasError,
-          'pr-hidden': !label,
-        })}
-      >{`${label}${isRequired ? '*' : ''}`}</ShadLabel>
-      <ShadInput
-        id={id}
-        disabled={isDisabled}
-        placeholder={placeholder}
-        required={isRequired}
-        className={cn(className, { 'pr-border-red-600': hasError })}
-        defaultValue={defaultValue}
-        value={value}
-        onChange={onChange}
-        onFocus={onFocus}
-        onBlur={onBlur}
-      />
-      <p className={cn({ 'pr-hidden': !helperText })}>{helperText}</p>
-    </div>
+    <ComposableTextField
+      id={id}
+      disabled={isDisabled}
+      hasError={hasError}
+      isFullWidth={isFullWidth}
+      helperText={helperText}
+      label={label}
+      placeholder={placeholder}
+      required={isRequired}
+      className={className}
+      defaultValue={defaultValue}
+      value={value}
+      onChange={onChange}
+      onFocus={onFocus}
+      onBlur={onBlur}
+    />
   );
 }
 

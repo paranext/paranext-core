@@ -1,18 +1,12 @@
-import {
-  Autocomplete as MuiComboBox,
-  AutocompleteChangeDetails,
-  AutocompleteChangeReason,
-  TextField as MuiTextField,
-  AutocompleteValue,
-} from '@mui/material';
-import { FocusEventHandler, SyntheticEvent } from 'react';
+import React, { FocusEventHandler } from 'react';
 import '@/components/combo-box.component.css';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from './shadcn-ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from './shadcn-ui/popover';
+import { ComposableTextField } from './text-field.component';
+import { cn } from '@/utils/shadcn-ui.util';
 
 export type ComboBoxLabelOption = { label: string };
 export type ComboBoxOption = string | number | ComboBoxLabelOption;
-export type ComboBoxValue<T, X, Y, Z> = AutocompleteValue<T, X, Y, Z>;
-export type ComboBoxChangeDetails<T> = AutocompleteChangeDetails<T>;
-export type ComboBoxChangeReason = AutocompleteChangeReason;
 
 export type ComboBoxProps<T> = {
   /** Optional unique identifier */
@@ -53,14 +47,9 @@ export type ComboBoxProps<T> = {
    * The selected value that the combo box currently holds. Must be shallow equal to one of the
    * options entries.
    */
-  value?: T;
+  value: T;
   /** Triggers when content of textfield is changed */
-  onChange?: (
-    event: SyntheticEvent<Element, Event>,
-    value: ComboBoxValue<T, boolean | undefined, boolean | undefined, boolean | undefined>,
-    reason?: ComboBoxChangeReason,
-    details?: ComboBoxChangeDetails<T> | undefined,
-  ) => void;
+  onChange?: (value: T) => void;
   /** Triggers when textfield gets focus */
   onFocus?: FocusEventHandler<HTMLDivElement>; // Storybook crashes when giving the combo box focus
   /** Triggers when textfield loses focus */
@@ -68,6 +57,16 @@ export type ComboBoxProps<T> = {
   /** Used to determine the string value for a given option. */
   getOptionLabel?: (option: ComboBoxOption) => string;
 };
+
+function getOptionLabelDefault(option: ComboBoxOption): string {
+  if (typeof option === 'string') {
+    return option;
+  }
+  if (typeof option === 'number') {
+    return option.toString();
+  }
+  return option.label;
+}
 
 /**
  * Dropdown selector displaying various options from which to choose
@@ -86,36 +85,58 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   options = [],
   className,
   value,
-  onChange,
-  onFocus,
-  onBlur,
-  getOptionLabel,
+  onChange = () => {},
+  onFocus = () => {},
+  onBlur = () => {},
+  getOptionLabel = getOptionLabelDefault,
 }: ComboBoxProps<T>) {
+  const [open, setOpen] = React.useState(false);
+  const [textValue, setTextValue] = React.useState(getOptionLabel(value));
   return (
-    <MuiComboBox<T, boolean | undefined, boolean | undefined, boolean | undefined>
-      id={id}
-      disablePortal
-      disabled={isDisabled}
-      disableClearable={!isClearable}
-      fullWidth={isFullWidth}
-      options={options}
-      className={`papi-combo-box ${hasError ? 'error' : ''} ${className ?? ''}`}
-      value={value}
-      onChange={onChange}
-      onFocus={onFocus}
-      onBlur={onBlur}
-      getOptionLabel={getOptionLabel}
-      renderInput={(props) => (
-        <MuiTextField
-          {...props}
-          error={hasError}
-          fullWidth={isFullWidth}
-          disabled={isDisabled}
-          label={title}
-          style={{ width }}
-        />
-      )}
-    />
+    <Command id={id} className={cn({ 'pr-w-full': isFullWidth })}>
+      <Popover open={open}>
+        <PopoverTrigger asChild>
+          <CommandInput asChild onValueChange={setTextValue}>
+            <ComposableTextField
+              className={className}
+              value={open ? textValue : getOptionLabel(value)}
+              label={title}
+              width={width}
+              isFullWidth={isFullWidth}
+              disabled={isDisabled}
+              hasError={hasError}
+              onFocus={(event) => {
+                setTextValue(getOptionLabel(value));
+                setOpen(true);
+                event.target.select();
+                onFocus(event);
+              }}
+              onBlur={(event) => {
+                setOpen(false);
+                onBlur(event);
+              }}
+            />
+          </CommandInput>
+        </PopoverTrigger>
+        <PopoverContent
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+        >
+          <CommandList>
+            <CommandEmpty>No options</CommandEmpty>
+            {options.map((option) => (
+              <CommandItem
+                onSelect={() => {
+                  onChange(option);
+                }}
+              >
+                {getOptionLabel(option)}
+              </CommandItem>
+            ))}
+          </CommandList>
+        </PopoverContent>
+      </Popover>
+    </Command>
   );
 }
 
