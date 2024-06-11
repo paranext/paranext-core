@@ -110,7 +110,7 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public async Task GetProjectDataProviderID_ReturnsIdForProvider()
         {
-            const string projId = "monkey";
+            const string projId = "305531";
             const int requesterId1 = 47281;
             const int requesterId2 = 18542;
 

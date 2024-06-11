@@ -1,5 +1,3 @@
-using Paratext.Data.DBLServices;
-
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
