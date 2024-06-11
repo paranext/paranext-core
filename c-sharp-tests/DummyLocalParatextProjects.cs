@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Projects;
+using Paratext.Data;
 
 namespace TestParanextDataProvider
 {
@@ -8,7 +9,8 @@ namespace TestParanextDataProvider
     {
         public void FakeAddProject(ProjectDetails details)
         {
-            _projectDetailsMap[details.Metadata.ID] = details;
+            var dummyScrText = new DummyScrText(details);
+            ScrTextCollection.Add(dummyScrText, true);
         }
 
         public override void Initialize(bool shouldIncludePT9ProjectsOnWindows)

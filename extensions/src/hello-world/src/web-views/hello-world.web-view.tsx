@@ -1,4 +1,4 @@
-﻿import { ScrVers, VerseRef } from '@sillsdev/scripture';
+﻿import { VerseRef } from '@sillsdev/scripture';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
@@ -193,16 +193,6 @@ globalThis.webViewComponent = function HelloWorld({
 
   const [personAge] = useData('helloSomeone.people').Age(name, -1);
 
-  const [psalm1] = useData('usfm').Chapter(
-    useMemo(() => new VerseRef('PSA', '1', '1', ScrVers.English), []),
-    'Loading Psalm 1...',
-  );
-
-  const [john11] = useData('usfm').Verse(
-    useMemo(() => new VerseRef('JHN 1:1'), []),
-    'Loading John 1:1...',
-  );
-
   const [currentProjectVerse] = useProjectData(
     'platformScripture.USFM_BCV',
     projectId ?? undefined,
@@ -258,10 +248,6 @@ globalThis.webViewComponent = function HelloWorld({
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>
-      <h3>John 1:1</h3>
-      <div>{john11}</div>
-      <h3>Psalm 1</h3>
-      <div>{psalm1}</div>
       <br />
       <div>Selected Project: {projectId ?? 'None'}</div>
       <div>

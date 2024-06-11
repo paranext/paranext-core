@@ -67,7 +67,10 @@ class QuickVerseDataProviderEngine
   /** Latest updated verse reference */
   latestVerseRef = 'JHN 11:35';
 
-  usfmDataProviderPromise = papi.dataProviders.get('usfm');
+  usfmDataProviderPromise = papi.projectDataProviders.get(
+    'platformScripture.USFM_BCV',
+    '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+  );
 
   /** Number of times any verse has been modified by a user this session */
   heresyCount = 0;
@@ -185,7 +188,7 @@ class QuickVerseDataProviderEngine
       try {
         const usfmDataProvider = await this.usfmDataProviderPromise;
         if (!usfmDataProvider) throw Error('Unable to get USFM data provider');
-        const verseData = usfmDataProvider.getVerse(new VerseRef(selector));
+        const verseData = usfmDataProvider.getVerseUSFM(new VerseRef(selector));
         responseVerse = { text: (await verseData) ?? `${selector} not found` };
         // Cache the verse text, track the latest cached verse, and send an update
         this.verses[selector] = responseVerse;
