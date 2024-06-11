@@ -20,27 +20,63 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '../..';
+import { HasDirection } from '../direction-toggle';
 
-function Basics() {
+function Basics({ direction }: HasDirection) {
   return (
     <div>
-      <VerticalTabs>
+      <VerticalTabs defaultValue="Button" dir={direction}>
         <VerticalTabsList>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Button">
+          Wrapped
           <div>
             {/* eslint-disable-next-line no-alert */}
             <Button onClick={() => alert('Hello World')}>Wrapped Button</Button>
+            <Button className="primary">primary</Button>
+            <Button className="secondary">secondary</Button>
+            <Button className="secondary">disabled</Button>
+            <Button className="video">video</Button>
+            <Button className="paratext">paratext</Button>
+            <Button className="paratext bright">paratext bright</Button>
           </div>
-          <div>
-            {/* eslint-disable-next-line no-alert */}
-            <ShadcnButton onClick={() => alert('Hello World')}>Shadcn Button</ShadcnButton>
-          </div>
+          Shadcn
+          <table>
+            <tbody>
+              <tr>
+                <td>variant</td>
+                <td>
+                  {/* eslint-disable-next-line no-alert */}
+                  <ShadcnButton onClick={() => alert('Hello World')}>Shadcn Button</ShadcnButton>
+                  <ShadcnButton variant="default">default</ShadcnButton>
+                  <ShadcnButton variant="destructive">destructive</ShadcnButton>
+                  <ShadcnButton variant="outline">outline</ShadcnButton>
+                  <ShadcnButton variant="secondary">secondary</ShadcnButton>
+                  <ShadcnButton variant="ghost">ghost</ShadcnButton>
+                  <ShadcnButton variant="link">link</ShadcnButton>
+                </td>
+              </tr>
+              <tr>
+                <td>size</td>
+                <td>
+                  <span className="pr-mx-2">default:</span>
+                  <ShadcnButton size="default">AAA</ShadcnButton>
+                  <span className="pr-mx-2">icon:</span>
+                  <ShadcnButton size="icon">AAA</ShadcnButton>
+                  <span className="pr-mx-2">sm:</span>
+                  <ShadcnButton size="sm">AAA</ShadcnButton>
+                  <span className="pr-mx-2">lg:</span>
+                  <ShadcnButton size="lg">AAA</ShadcnButton>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Input">
@@ -97,6 +133,7 @@ function Basics() {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dropdown Menu">
+          <p>Note: the dropdown has a bad visibility in dark mode right now</p>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <ShadcnButton>Open</ShadcnButton>
@@ -115,7 +152,7 @@ function Basics() {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Tabs">
-          <Tabs defaultValue="2-youShouldNotSeeThis">
+          <Tabs defaultValue="2-youShouldNotSeeThis" dir={direction}>
             <TabsList>
               <TabsTrigger value="1">
                 <Button>non-text tab trigger</Button>
@@ -128,7 +165,7 @@ function Basics() {
             {/* intentionally left out 3 to see the effect */}
           </Tabs>
           <hr className="pr-my-4" />
-          <VerticalTabs defaultValue="2-youShouldNotSeeThis">
+          <VerticalTabs defaultValue="2-youShouldNotSeeThis" dir={direction}>
             <VerticalTabsList>
               <VerticalTabsTrigger value="1">
                 <Button>non-text tab trigger</Button>
@@ -138,11 +175,24 @@ function Basics() {
               <VerticalTabsTrigger value="4">Tab 4</VerticalTabsTrigger>
             </VerticalTabsList>
             <VerticalTabsContent value="1">Tab 1 Content</VerticalTabsContent>
-            <VerticalTabsContent value="2-youShouldNotSeeThis">Tab 2 Content</VerticalTabsContent>
+            <VerticalTabsContent value="2-youShouldNotSeeThis">
+              <div>
+                Tab 2 Content: Another set of vertical tabs without a default value
+                <VerticalTabs dir={direction}>
+                  <VerticalTabsList>
+                    <VerticalTabsTrigger value="1">Tab 2-1</VerticalTabsTrigger>
+                    <VerticalTabsTrigger value="2">Tab 2-2</VerticalTabsTrigger>
+                  </VerticalTabsList>
+                  <VerticalTabsContent value="1">Tab 2-1 Content</VerticalTabsContent>
+                  <VerticalTabsContent value="2">Tab 2-2 Content</VerticalTabsContent>
+                </VerticalTabs>
+              </div>
+            </VerticalTabsContent>
             <VerticalTabsContent value="3">Tab 3 Content</VerticalTabsContent>
             <VerticalTabsContent value="4">Tab 4 Content</VerticalTabsContent>
           </VerticalTabs>
         </VerticalTabsContent>
+        <VerticalTabsContent value="Table">TODO: add shadcn table here</VerticalTabsContent>
       </VerticalTabs>
     </div>
   );
