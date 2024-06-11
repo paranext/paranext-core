@@ -15,8 +15,6 @@ internal class LocalParatextProjects
     // Inside of each project's "home" directory, these are the subdirectories and files
     protected const string PROJECT_SETTINGS_FILE = "Settings.xml";
 
-    public static readonly List<string> ParatextProjectInterfaces = [ProjectInterfaces.Base, ProjectInterfaces.USFM_BCV, ProjectInterfaces.USX_Chapter];
-
     /// <summary>
     /// Directory inside a project's root directory where Platform.Bible's extension data is stored
     /// </summary>
@@ -96,6 +94,11 @@ internal class LocalParatextProjects
         return ScrTextCollection.GetById(HexId.FromStr(projectId));
     }
 
+    public static List<string> GetParatextProjectInterfaces()
+    {
+        return new List<string>(_paratextProjectInterfaces);
+    }
+
     #endregion
 
     #region Protected properties and methods
@@ -123,6 +126,8 @@ internal class LocalParatextProjects
 
     private bool _isInitialized = false;
     private List<string> _requiredProjectRootFiles = ["usfm.sty", "Attribution.md"];
+
+    private static readonly List<string> _paratextProjectInterfaces = [ProjectInterfaces.Base, ProjectInterfaces.USFM_BookChapterVerse, ProjectInterfaces.USX_Chapter];
 
     private static IEnumerable<ScrText> GetScrTexts() {
         return ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly);
@@ -209,7 +214,7 @@ internal class LocalParatextProjects
         }
         var id = idNode.InnerText;
 
-        var metadata = new ProjectMetadata(id, ParatextProjectInterfaces);
+        var metadata = new ProjectMetadata(id, GetParatextProjectInterfaces());
 
         var details = new ProjectDetails(shortName, metadata, projectHomeDir);
 

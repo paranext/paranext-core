@@ -30,9 +30,9 @@ public sealed class ProjectSettings
         new()
         {
             { PB_BOOKS_PRESENT, PT_BOOKS_PRESENT },
-            { PB_NAME, PT_NAME },
             { PB_FULL_NAME, PT_FULL_NAME },
             { PB_LANGUAGE, PT_LANGUAGE },
+            { PB_NAME, PT_NAME },
             { PB_VERSIFICATION, PT_VERSIFICATION },
             { PB_IS_EDITABLE, PT_IS_EDITABLE },
         };

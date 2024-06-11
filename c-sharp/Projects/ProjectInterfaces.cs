@@ -10,6 +10,6 @@ public static class ProjectInterfaces
     /// Provider must implement
     /// </summary>
     public const string Base = "platform.base";
-    public const string USFM_BCV = "platformScripture.USFM_BCV";
+    public const string USFM_BookChapterVerse = "platformScripture.USFM_BookChapterVerse";
     public const string USX_Chapter = "platformScripture.USX_Chapter";
 }

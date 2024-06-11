@@ -52,11 +52,11 @@ describe('Metadata generation:', () => {
   const expectedTestProjectInterfaces: ProjectInterfaces[] = [
     'platform.placeholder',
     'platform.notesOnly',
-    'platformScripture.USFM_BCV',
+    'platformScripture.USFM_BookChapterVerse',
     'helloWorld',
   ];
   const expectedTest2ProjectInterfaces: ProjectInterfaces[] = [
-    'platformScripture.USFM_BCV',
+    'platformScripture.USFM_BookChapterVerse',
     'platform.notesOnly',
   ];
   const test2ProjectId = 'test-2-project';
@@ -100,7 +100,7 @@ describe('Metadata generation:', () => {
           },
           {
             id: test2ProjectId,
-            projectInterfaces: ['platformScripture.USFM_BCV', 'platform.notesOnly'],
+            projectInterfaces: ['platformScripture.USFM_BookChapterVerse', 'platform.notesOnly'],
           },
         ];
       },
@@ -113,7 +113,7 @@ describe('Metadata generation:', () => {
             projectInterfaces: [
               'platform.placeholder',
               'platform.notesOnly',
-              'platformScripture.USFM_BCV',
+              'platformScripture.USFM_BookChapterVerse',
             ],
           },
         ];
@@ -182,7 +182,7 @@ describe('Metadata generation:', () => {
       expect(pdpfInfoValuesSorted[3].projectInterfaces).toEqual([
         'platform.placeholder',
         'platform.notesOnly',
-        'platformScripture.USFM_BCV',
+        'platformScripture.USFM_BookChapterVerse',
       ]);
     });
   });
@@ -341,7 +341,7 @@ describe('Metadata generation:', () => {
           projectInterfaces: [
             'platform.placeholder',
             'platform.notesOnly',
-            'platformScripture.USFM_BCV',
+            'platformScripture.USFM_BookChapterVerse',
           ],
         },
         'test-0': { projectInterfaces: ['platform.placeholder'] },
@@ -401,7 +401,7 @@ describe('Metadata generation:', () => {
 
       // `projectInterface`s should be just the `projectInterface`s from this pdpf
       const expectedTest2ProjectInterfacesOnePDPF = [
-        'platformScripture.USFM_BCV',
+        'platformScripture.USFM_BookChapterVerse',
         'platform.notesOnly',
       ];
       expect(test2ProjectMetadata.projectInterfaces.length).toEqual(
@@ -413,7 +413,9 @@ describe('Metadata generation:', () => {
 
       // Each entry in pdpfInfo should have only the `projectInterface`s provided by this pdpf
       expect(test2ProjectMetadata.pdpFactoryInfo).toEqual({
-        'test-1': { projectInterfaces: ['platformScripture.USFM_BCV', 'platform.notesOnly'] },
+        'test-1': {
+          projectInterfaces: ['platformScripture.USFM_BookChapterVerse', 'platform.notesOnly'],
+        },
       });
     });
 
@@ -488,10 +490,12 @@ describe('filterProjectsMetadata', () => {
     },
     {
       id: 'asdfg',
-      projectInterfaces: ['platformScripture.USFM_BCV', 'platform.notesOnly'],
+      projectInterfaces: ['platformScripture.USFM_BookChapterVerse', 'platform.notesOnly'],
       pdpFactoryInfo: {
-        test2: { projectInterfaces: ['platformScripture.USFM_BCV', 'platform.notesOnly'] },
-        test4: { projectInterfaces: ['platformScripture.USFM_BCV'] },
+        test2: {
+          projectInterfaces: ['platformScripture.USFM_BookChapterVerse', 'platform.notesOnly'],
+        },
+        test4: { projectInterfaces: ['platformScripture.USFM_BookChapterVerse'] },
       },
     },
     {
@@ -535,7 +539,10 @@ describe('filterProjectsMetadata', () => {
 
     options = {
       excludeProjectIds: ['asdf', 'asdfg'],
-      includeProjectInterfaces: ['^platformScripture\\.USFM_BCV$', '^platform\\.placeholder$'],
+      includeProjectInterfaces: [
+        '^platformScripture\\.USFM_BookChapterVerse$',
+        '^platform\\.placeholder$',
+      ],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -569,7 +576,10 @@ describe('filterProjectsMetadata', () => {
     options = {
       includeProjectIds: ['asdf', 'asdfg', 'asdfgh'],
       excludeProjectIds: 'asdfg',
-      includeProjectInterfaces: ['^platformScripture\\.USFM_BCV$', '^platform\\.placeholder$'],
+      includeProjectInterfaces: [
+        '^platformScripture\\.USFM_BookChapterVerse$',
+        '^platform\\.placeholder$',
+      ],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -601,7 +611,7 @@ describe('filterProjectsMetadata', () => {
     // Multiple OR'ed RegExps that match two project interfaces
 
     options = {
-      excludeProjectInterfaces: ['^helloWorld$', '^platformScripture\\.USFM_BCV$'],
+      excludeProjectInterfaces: ['^helloWorld$', '^platformScripture\\.USFM_BookChapterVerse$'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -642,7 +652,10 @@ describe('filterProjectsMetadata', () => {
 
     options = {
       excludeProjectInterfaces: 'USFM',
-      includeProjectInterfaces: ['^platformScripture\\.USFM_BCV$', '^platform\\.placeholder$'],
+      includeProjectInterfaces: [
+        '^platformScripture\\.USFM_BookChapterVerse$',
+        '^platform\\.placeholder$',
+      ],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -674,7 +687,7 @@ describe('filterProjectsMetadata', () => {
     // Multiple RegExps that match two project interfaces
 
     options = {
-      includeProjectInterfaces: ['^helloWorld$', '^platformScripture\\.USFM_BCV$'],
+      includeProjectInterfaces: ['^helloWorld$', '^platformScripture\\.USFM_BookChapterVerse$'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -715,7 +728,10 @@ describe('filterProjectsMetadata', () => {
 
     options = {
       excludeProjectInterfaces: 'USFM',
-      includeProjectInterfaces: ['^platformScripture\\.USFM_BCV$', '^platform\\.placeholder$'],
+      includeProjectInterfaces: [
+        '^platformScripture\\.USFM_BookChapterVerse$',
+        '^platform\\.placeholder$',
+      ],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);

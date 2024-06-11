@@ -105,7 +105,7 @@ globalThis.webViewComponent = function HelloWorld({
       // Test ref parameter properly getting latest value
       currentRender: currentRender.current,
       optionsSource: 'hook',
-      includeProjectInterfaces: ['platformScripture.USFM_BCV'],
+      includeProjectInterfaces: ['platformScripture.USFM_BookChapterVerse'],
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
@@ -150,7 +150,7 @@ globalThis.webViewComponent = function HelloWorld({
         iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
         title: 'Select List of Hello World Projects',
         selectedProjectIds: projects,
-        includeProjectInterfaces: ['platformScripture.USFM_BCV'],
+        includeProjectInterfaces: ['platformScripture.USFM_BookChapterVerse'],
       }),
       [projects],
     ),
@@ -194,7 +194,7 @@ globalThis.webViewComponent = function HelloWorld({
   const [personAge] = useData('helloSomeone.people').Age(name, -1);
 
   const [currentProjectVerse] = useProjectData(
-    'platformScripture.USFM_BCV',
+    'platformScripture.USFM_BookChapterVerse',
     projectId ?? undefined,
   ).VerseUSFM(verseRef, 'Loading Verse');
 

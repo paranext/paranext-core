@@ -101,7 +101,7 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
         !('getSetting' in projectDataProviderEngine))
     )
       throw new Error(
-        `\`BaseProjectDataProviderEngine\` with project id ${projectId} created by PDP Factory with id ${this.pdpFactoryId} must implement \`platform.base\` \`projectInterface\`. See \`IBaseProjectDataProvider\` for more information`,
+        `\`BaseProjectDataProviderEngine\` with project id ${projectId} created by PDP Factory with id ${this.pdpFactoryId} must implement \`${PROJECT_INTERFACE_PLATFORM_BASE}\` \`projectInterface\`. See \`IBaseProjectDataProvider\` for more information`,
       );
     // ENHANCEMENT: Re-add a check for new PDPs to make sure there is some PDP somewhere that
     // fulfills `platform.base`
@@ -151,7 +151,7 @@ export async function registerProjectDataProviderEngineFactory<
  * @example
  *
  * ```typescript
- * const pdp = await get('platformScripture.USFM_BCV', 'ProjectID12345');
+ * const pdp = await get('platformScripture.USFM_BookChapterVerse', 'ProjectID12345');
  * pdp.getVerse(new VerseRef('JHN', '1', '1'));
  * ```
  *

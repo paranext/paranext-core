@@ -15,6 +15,7 @@ import {
   SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 
 function SelectMultipleProjectsDialog({
   prompt,
@@ -42,7 +43,7 @@ function SelectMultipleProjectsDialog({
       const projectsMetadataDisplay: ProjectMetadataDisplay[] = await Promise.all(
         projectsMetadata.map(async (projectMetadata) => {
           const pdp = await papiFrontendProjectDataProviderService.get(
-            'platform.base',
+            PROJECT_INTERFACE_PLATFORM_BASE,
             projectMetadata.id,
           );
 

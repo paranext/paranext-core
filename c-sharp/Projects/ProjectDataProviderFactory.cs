@@ -25,7 +25,7 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
     public async Task Initialize()
     {
         await StartFactory();
-        var name = $"platform.pdpFactory-{_pdpfName}-pdpf";
+        var name = $"platform.{_pdpfName}-pdpf";
         await RegisterNetworkObject(
             name,
             new MessageEventProjectDataProviderFactoryCreated(

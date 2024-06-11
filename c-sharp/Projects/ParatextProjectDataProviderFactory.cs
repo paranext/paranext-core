@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Dynamic;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.Services;
@@ -17,7 +18,7 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         PapiClient papiClient,
         LocalParatextProjects paratextProjects
     )
-        : base(LocalParatextProjects.ParatextProjectInterfaces, PDPF_NAME, papiClient)
+        : base(LocalParatextProjects.GetParatextProjectInterfaces(), PDPF_NAME, papiClient)
     {
         _paratextProjects = paratextProjects;
     }

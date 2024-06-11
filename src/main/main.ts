@@ -27,7 +27,8 @@ import { get } from '@shared/services/project-data-provider.service';
 import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
-import { startProjectLookupService } from './services/project-lookup.service-host';
+import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 
@@ -352,7 +353,10 @@ async function main() {
 
       if (verse !== undefined) await usxPdp.setChapterUSX(new VerseRef('JHN', '1', '1'), verse);
 
-      const basePdp = await get('platform.base', '32664dc3288a28df2e2bb75ded887fc8f17a15fb');
+      const basePdp = await get(
+        PROJECT_INTERFACE_PLATFORM_BASE,
+        '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+      );
       basePdp.setExtensionData(
         { extensionName: 'foo', dataQualifier: 'fooData' },
         'This is the data from extension foo',

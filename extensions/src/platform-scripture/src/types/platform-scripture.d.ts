@@ -10,7 +10,7 @@ declare module 'platform-scripture' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
 
   /** Provides Scripture data in USFM format by book, chapter, or verse */
-  export type USFMBCVProjectInterfaceDataTypes = {
+  export type USFMBookChapterVerseProjectInterfaceDataTypes = {
     /** Gets/sets the "raw" USFM data for the specified book */
     BookUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
     /** Gets/sets the "raw" USFM data for the specified chapter */
@@ -189,15 +189,15 @@ declare module 'platform-scripture' {
     };
 
   /** Provides Scripture data in USFM format by book, chapter, or verse */
-  export type IUSFMBCVProjectDataProvider =
-    IProjectDataProvider<USFMBCVProjectInterfaceDataTypes> & {
+  export type IUSFMBookChapterVerseProjectDataProvider =
+    IProjectDataProvider<USFMBookChapterVerseProjectInterfaceDataTypes> & {
       /** Gets the "raw" USFM data for the specified book */
       getBookUSFM(verseRef: VerseRef): Promise<string | undefined>;
       /** Sets the "raw" USFM data for the specified book */
       setBookUSFM(
         verseRef: VerseRef,
         usfm: string,
-      ): Promise<DataProviderUpdateInstructions<USFMBCVProjectInterfaceDataTypes>>;
+      ): Promise<DataProviderUpdateInstructions<USFMBookChapterVerseProjectInterfaceDataTypes>>;
       /**
        * Subscribe to run a callback function when the "raw" USFM data is changed
        *
@@ -218,7 +218,7 @@ declare module 'platform-scripture' {
       setChapterUSFM(
         verseRef: VerseRef,
         usfm: string,
-      ): Promise<DataProviderUpdateInstructions<USFMBCVProjectInterfaceDataTypes>>;
+      ): Promise<DataProviderUpdateInstructions<USFMBookChapterVerseProjectInterfaceDataTypes>>;
       /**
        * Subscribe to run a callback function when the "raw" USFM data is changed
        *
@@ -239,7 +239,7 @@ declare module 'platform-scripture' {
       setVerseUSFM(
         verseRef: VerseRef,
         usfm: string,
-      ): Promise<DataProviderUpdateInstructions<USFMBCVProjectInterfaceDataTypes>>;
+      ): Promise<DataProviderUpdateInstructions<USFMBookChapterVerseProjectInterfaceDataTypes>>;
       /**
        * Subscribe to run a callback function when the "raw" USFM data is changed
        *
@@ -375,13 +375,13 @@ declare module 'platform-scripture' {
 
 declare module 'papi-shared-types' {
   import type {
-    IUSFMBCVProjectDataProvider,
+    IUSFMBookChapterVerseProjectDataProvider,
     IUSXChapterProjectDataProvider,
     IUSJChapterProjectDataProvider,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
-    'platformScripture.USFM_BCV': IUSFMBCVProjectDataProvider;
+    'platformScripture.USFM_BookChapterVerse': IUSFMBookChapterVerseProjectDataProvider;
     'platformScripture.USX_Chapter': IUSXChapterProjectDataProvider;
     'platformScripture.USJ_Chapter': IUSJChapterProjectDataProvider;
   }

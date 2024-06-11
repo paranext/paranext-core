@@ -21,18 +21,17 @@ namespace TestParanextDataProvider
         #endregion
 
         #region Test setup/teardown
-        // Ignore warning here because child classes need this to be async
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
         [SetUp]
-        public virtual async Task TestSetup()
+        public virtual Task TestSetup()
         {
             if (OperatingSystem.IsMacOS())
                 Assert.Ignore("Mac is missing ICU support so these tests will not work");
 
             _projects = new DummyLocalParatextProjects();
             _client = new DummyPapiClient();
+
+            return Task.CompletedTask;
         }
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 
         [TearDown]
         public virtual void TestTearDown()
