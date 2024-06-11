@@ -31,7 +31,6 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Button">
@@ -192,7 +191,6 @@ function Basics({ direction }: HasDirection) {
             <VerticalTabsContent value="4">Tab 4 Content</VerticalTabsContent>
           </VerticalTabs>
         </VerticalTabsContent>
-        <VerticalTabsContent value="Table">TODO: add shadcn table here</VerticalTabsContent>
       </VerticalTabs>
     </div>
   );
