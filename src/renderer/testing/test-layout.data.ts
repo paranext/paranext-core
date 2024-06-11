@@ -94,6 +94,7 @@ const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
                       'Engine problems',
                     ),
                   ],
+                  project: 'Dummy project',
                 },
               },
             ] as SavedTabInfo[],
