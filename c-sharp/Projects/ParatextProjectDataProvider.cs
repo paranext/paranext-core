@@ -295,18 +295,22 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L259
         if (paratextSettingName == ProjectSettings.PT_NAME)
         {
-            // Don't set a lock because this is literally moving the whole folder (chances this will
-            // actually succeed are very slim as the project must only have Settings.xml and the
-            // ldml file for this not to instantly throw)
+            // Lock the whole project because this is literally moving the whole folder (chances
+            // this will actually succeed are very slim as the project must only have Settings.xml
+            // and the ldml file for this not to instantly throw)
             // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L1793
-            try
-            {
-                scrText.Name = value;
-            }
-            catch (Exception ex)
-            {
-                errorMessage = ex.Message;
-            }
+            RunWithinLock(
+                WriteScope.EntireProject(scrText),
+                _ => {
+                        try
+                        {
+                            scrText.Name = value;
+                        }
+                        catch (Exception ex)
+                        {
+                            errorMessage = ex.Message;
+                        }
+                });
         }
         else
         {
