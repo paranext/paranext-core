@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Dynamic;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.Services;

@@ -8,7 +8,10 @@ internal static class ScrTextExtensions
     {
         return new(
             scrText.Name,
-            new(scrText.Guid.ToString(), LocalParatextProjects.GetParatextProjectInterfaces()),
+            new(
+                scrText.Guid.ToString().ToUpperInvariant(),
+                LocalParatextProjects.GetParatextProjectInterfaces()
+            ),
             scrText.Directory
         );
     }

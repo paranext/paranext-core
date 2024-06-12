@@ -20,6 +20,12 @@ internal class LocalParatextProjects
     /// </summary>
     public const string EXTENSION_DATA_SUBDIRECTORY = "shared/platform.bible/extensions";
 
+    private bool _isInitialized = false;
+
+    private List<string> _requiredProjectRootFiles = ["usfm.sty", "Attribution.md"];
+
+    private static readonly List<string> _paratextProjectInterfaces = [ProjectInterfaces.Base, ProjectInterfaces.USFM_BookChapterVerse, ProjectInterfaces.USX_Chapter];
+
     public LocalParatextProjects()
     {
         ProjectRootFolder = Path.Join(
@@ -123,11 +129,6 @@ internal class LocalParatextProjects
     #endregion
 
     #region Private properties and methods
-
-    private bool _isInitialized = false;
-    private List<string> _requiredProjectRootFiles = ["usfm.sty", "Attribution.md"];
-
-    private static readonly List<string> _paratextProjectInterfaces = [ProjectInterfaces.Base, ProjectInterfaces.USFM_BookChapterVerse, ProjectInterfaces.USX_Chapter];
 
     private static IEnumerable<ScrText> GetScrTexts() {
         return ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly);

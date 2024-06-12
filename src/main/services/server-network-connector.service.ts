@@ -523,7 +523,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
       if (responderId !== CLIENT_ID_UNKNOWN) break;
 
       logger.debug(
-        `Server network connector could not route request of type ${requestMessage.requestType} on attempt ${maxAttempts - attemptsRemaining + 1} of ${maxAttempts}.${attemptsRemaining === 1 ? '' : ' Retrying...'}`,
+        `Server network connector could not route client ${requestMessage.senderId}'s request ${requestMessage.requestId} of type ${requestMessage.requestType} on attempt ${maxAttempts - attemptsRemaining + 1} of ${maxAttempts}.${attemptsRemaining === 1 ? '' : ' Retrying...'}`,
       );
 
       // No need to wait again after the last attempt fails
