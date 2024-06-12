@@ -7,10 +7,10 @@ namespace TestParanextDataProvider
     [ExcludeFromCodeCoverage]
     internal class DummyLocalParatextProjects : LocalParatextProjects
     {
-        public void FakeAddProject(ProjectDetails details)
+        public void FakeAddProject(ProjectDetails details, ScrText? scrText = null)
         {
-            var dummyScrText = new DummyScrText(details);
-            ScrTextCollection.Add(dummyScrText, true);
+            scrText ??= new DummyScrText(details);
+            ScrTextCollection.Add(scrText, true);
         }
 
         public override void Initialize(bool shouldIncludePT9ProjectsOnWindows)
