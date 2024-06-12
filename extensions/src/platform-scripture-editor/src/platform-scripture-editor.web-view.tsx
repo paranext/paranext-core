@@ -5,7 +5,7 @@ import {
   Marginal,
   MarginalRef,
 } from '@biblionexus-foundation/platform-editor';
-import type { Usj } from '@biblionexus-foundation/scripture-utilities';
+import { Usj } from '@biblionexus-foundation/scripture-utilities';
 import { VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
