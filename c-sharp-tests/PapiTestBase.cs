@@ -75,12 +75,11 @@ namespace TestParanextDataProvider
 
         #region Helper methods to create test data
         /// <summary>
-        /// Creates a new dummy project for testing purposes. The project is added to the ScrTextCollection.
+        /// Creates a new dummy project for testing purposes
         /// </summary>
         protected static DummyScrText CreateDummyProject()
         {
             DummyScrText scrText = new();
-            ScrTextCollection.Add(scrText, true);
             return scrText;
         }
 

@@ -162,7 +162,7 @@ internal class LocalParatextProjects
             {
                 // There are a lot of folders with underscores in the name that we should ignore in
                 // My Paratext 9 Projects
-                if (rootFolder == Paratext9ProjectsFolder && Path.GetFileName(dir).StartsWith('_')) continue;
+                if (rootFolder == Paratext9ProjectsFolder && Path.GetFileNameWithoutExtension(dir).StartsWith('_')) continue;
 
                 ProjectDetails? projectDetails;
                 string errorMessage;
@@ -199,13 +199,13 @@ internal class LocalParatextProjects
         var settings = new XmlDocument();
         settings.Load(settingsFilePath);
 
-        var nameNode = settings.SelectSingleNode("/ScriptureText/Name");
-        if (nameNode == null)
-        {
-            errorMessage = $"Could not find Name in Settings.xml of {projectHomeDir}";
-            return null;
-        }
-        var shortName = nameNode.InnerText;
+        // ScrText always prioritizes the folder name over the Name setting as the "name" even when
+        // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
+        // the folder name instead of Settings.Name.
+        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L258
+        // Removing extension twice because file may be in form name.id.ext to match Paratext
+        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrTextCollection.cs#L1661
+        var shortName = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(projectHomeDir));
 
         var idNode = settings.SelectSingleNode("/ScriptureText/Guid");
         if (idNode == null)
