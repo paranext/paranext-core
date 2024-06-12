@@ -233,7 +233,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
         // the folder name instead of Settings.Name.
         // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ProjectSettingsAccess/ProjectSettings.cs#L1438
-        if (settingName == "Name")
+        if (settingName == ProjectSettings.PT_NAME)
             return ResponseToRequest.Succeeded(scrText.Name);
 
         if (scrText.Settings.ParametersDictionary.TryGetValue(settingName, out string? settingValue)) {
@@ -293,7 +293,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
         // the folder name instead of Settings.Name.
         // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L259
-        if (paratextSettingName == "Name")
+        if (paratextSettingName == ProjectSettings.PT_NAME)
         {
             // Don't set a lock because this is literally moving the whole folder (chances this will
             // actually succeed are very slim as the project must only have Settings.xml and the
