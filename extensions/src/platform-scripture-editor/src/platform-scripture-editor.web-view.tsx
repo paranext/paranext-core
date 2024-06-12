@@ -4,15 +4,14 @@ import {
   EditorRef,
   Marginal,
   MarginalRef,
-  Usj,
 } from '@biblionexus-foundation/platform-editor';
+import type { Usj } from '@biblionexus-foundation/scripture-utilities';
 import { VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useSetting } from '@papi/frontend/react';
 import { ScriptureReference, debounce } from 'platform-bible-utils';
-import { USJDocument } from 'platform-scripture';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -29,7 +28,7 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-const usjDocumentDefault: USJDocument = { type: 'USJ', version: '0.2.1', content: [] };
+const usjDocumentDefault: Usj = { type: 'USJ', version: '0.2.1', content: [] };
 
 function scrollToScrRef(scrRef: ScriptureReference) {
   const verseElement = document.querySelector<HTMLElement>(

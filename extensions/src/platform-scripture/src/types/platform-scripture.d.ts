@@ -8,6 +8,7 @@ declare module 'platform-scripture' {
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
   import { UnsubscriberAsync } from 'platform-bible-utils';
+  import type { Usj } from '@biblionexus-foundation/scripture-utilities';
 
   /** Provides Scripture data in USFM format by book, chapter, or verse */
   export type USFMBookChapterVerseProjectInterfaceDataTypes = {
@@ -32,7 +33,7 @@ declare module 'platform-scripture' {
      *
      * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
      */
-    ChapterUSJ: DataProviderDataType<VerseRef, USJDocument | undefined, USJDocument>;
+    ChapterUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
   };
 
   /**
@@ -50,7 +51,7 @@ declare module 'platform-scripture' {
      * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
      * change over time.
      */
-    BookUSJ: DataProviderDataType<VerseRef, USJDocument | undefined, USJDocument>;
+    BookUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
     /**
      * Gets the tokenized USJ data for the specified verse
      *
@@ -58,7 +59,7 @@ declare module 'platform-scripture' {
      * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
      * change over time.
      */
-    VerseUSJ: DataProviderDataType<VerseRef, USJDocument | undefined, USJDocument>;
+    VerseUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
   };
 
   /**
@@ -77,7 +78,7 @@ declare module 'platform-scripture' {
        * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
        * change over time.
        */
-      getBookUSJ(verseRef: VerseRef): Promise<USJDocument | undefined>;
+      getBookUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
       /**
        * Sets the tokenized USJ data for the specified book
        *
@@ -87,7 +88,7 @@ declare module 'platform-scripture' {
        */
       setBookUSJ(
         verseRef: VerseRef,
-        usj: USJDocument,
+        usj: Usj,
       ): Promise<DataProviderUpdateInstructions<UnfinishedScriptureProjectDataTypes>>;
       /**
        * Subscribe to run a callback function when the tokenized USJ data is changed
@@ -103,7 +104,7 @@ declare module 'platform-scripture' {
        */
       subscribeBookUSJ(
         verseRef: VerseRef,
-        callback: (usj: USJDocument | undefined) => void,
+        callback: (usj: Usj | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
 
@@ -114,7 +115,7 @@ declare module 'platform-scripture' {
        * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
        * change over time.
        */
-      getVerseUSJ(verseRef: VerseRef): Promise<USJDocument | undefined>;
+      getVerseUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
       /**
        * Sets the tokenized USJ data for the specified verse
        *
@@ -124,7 +125,7 @@ declare module 'platform-scripture' {
        */
       setVerseUSJ(
         verseRef: VerseRef,
-        usj: USJDocument,
+        usj: Usj,
       ): Promise<DataProviderUpdateInstructions<UnfinishedScriptureProjectDataTypes>>;
       /**
        * Subscribe to run a callback function when the tokenized USJ data is changed
@@ -140,7 +141,7 @@ declare module 'platform-scripture' {
        */
       subscribeVerseUSJ(
         verseRef: VerseRef,
-        callback: (usj: USJDocument | undefined) => void,
+        callback: (usj: Usj | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
 
@@ -288,7 +289,7 @@ declare module 'platform-scripture' {
        *
        * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
        */
-      getChapterUSJ(verseRef: VerseRef): Promise<USJDocument | undefined>;
+      getChapterUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
       /**
        * Sets the tokenized USJ data for the specified chapter
        *
@@ -296,7 +297,7 @@ declare module 'platform-scripture' {
        */
       setChapterUSJ(
         verseRef: VerseRef,
-        usj: USJDocument,
+        usj: Usj,
       ): Promise<DataProviderUpdateInstructions<USJChapterProjectInterfaceDataTypes>>;
       /**
        * Subscribe to run a callback function when the tokenized USJ data is changed
@@ -310,67 +311,12 @@ declare module 'platform-scripture' {
        */
       subscribeChapterUSJ(
         verseRef: VerseRef,
-        callback: (usj: USJDocument | undefined) => void,
+        callback: (usj: Usj | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
 
   // #region USJ types
-
-  /**
-   * Scripture data represented in JSON format. Transformation from USX
-   *
-   * [See more information
-   * here](https://github.com/paranext/paranext-core/issues/480#issuecomment-1751094148)
-   */
-  export type USJDocument = {
-    /** The Scripture data serialization format used for this document */
-    type: 'USJ';
-    /** The USJ spec version */
-    // Temporarily changed to 0.2.1 until we get the shared Scripture utils package which will have types that replace these
-    version: '0.2.1';
-    /** Scripture contents laid out in a linear fashion */
-    content: MarkerContent[];
-  };
-
-  /** One piece of Scripture content. Can be a simple string or a marker and its contents */
-  export type MarkerContent = string | MarkerObject;
-
-  /** A Scripture Marker and its contents */
-  export type MarkerObject = {
-    /**
-     * The kind of node or element this is, corresponding to each marker in USFM or each node in USX
-     *
-     * Its format is `type:style`
-     *
-     * @example `para:p`, `verse:v`, `char:nd`
-     */
-    type: `${string}:${string}`;
-    /** This marker's contents laid out in a linear fashion */
-    content?: MarkerContent[];
-    /** Indicates the Book-chapter-verse value in the paragraph based structure */
-    sid?: string;
-    /** Chapter number or verse number */
-    number?: string;
-    /** The 3-letter book code in the id element */
-    code?: BookCode;
-    /** Alternate chapter number or verse number */
-    altnumber?: string;
-    /** Published character of chapter or verse */
-    pubnumber?: string;
-    /** Caller character for footnotes and cross-refs */
-    caller?: string;
-    /** Alignment of table cells */
-    align?: string;
-    /** Category of extended study bible sections */
-    category?: string;
-  };
-
-  /** Three-letter Scripture book code */
-  // prettier-ignore
-  export type BookCode = "GEN" | "EXO" | "LEV" | "NUM" | "DEU" | "JOS" | "JDG" | "RUT" | "1SA" | "2SA" | "1KI" | "2KI" | "1CH" | "2CH" | "EZR" | "NEH" | "EST" | "JOB" | "PSA" | "PRO" | "ECC" | "SNG" | "ISA" | "JER" | "LAM" | "EZK" | "DAN" | "HOS" | "JOL" | "AMO" | "OBA" | "JON" | "MIC" | "NAM" | "HAB" | "ZEP" | "HAG" | "ZEC" | "MAL" | "MAT" | "MRK" | "LUK" | "JHN" | "ACT" | "ROM" | "1CO" | "2CO" | "GAL" | "EPH" | "PHP" | "COL" | "1TH" | "2TH" | "1TI" | "2TI" | "TIT" | "PHM" | "HEB" | "JAS" | "1PE" | "2PE" | "1JN" | "2JN" | "3JN" | "JUD" | "REV" | "TOB" | "JDT" | "ESG" | "WIS" | "SIR" | "BAR" | "LJE" | "S3Y" | "SUS" | "BEL" | "1MA" | "2MA" | "3MA" | "4MA" | "1ES" | "2ES" | "MAN" | "PS2" | "ODA" | "PSS" | "EZA" | "5EZ" | "6EZ" | "DAG" | "PS3" | "2BA" | "LBA" | "JUB" | "ENO" | "1MQ" | "2MQ" | "3MQ" | "REP" | "4BA" | "LAO" | "FRT" | "BAK" | "OTH" | "INT" | "CNC" | "GLO" | "TDX" | "NDX" | "XXA" | "XXB" | "XXC" | "XXD" | "XXE" | "XXF" | "XXG";
-
-  // #endregion
 }
 
 declare module 'papi-shared-types' {

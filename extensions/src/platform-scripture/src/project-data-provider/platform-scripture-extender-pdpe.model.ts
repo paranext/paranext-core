@@ -6,9 +6,8 @@ import { DataProviderUpdateInstructions, IProjectDataProviderEngine } from '@pap
 import { VerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import { UnsubscriberAsync, UnsubscriberAsyncList } from 'platform-bible-utils';
-import { USJChapterProjectInterfaceDataTypes, USJDocument } from 'platform-scripture';
-import { usjToUsxString } from './scripture-utils/usj-to-usx';
-import { usxStringToUsj } from './scripture-utils/usx-to-usj';
+import { USJChapterProjectInterfaceDataTypes } from 'platform-scripture';
+import { Usj, usjToUsxString, usxStringToUsj } from '@biblionexus-foundation/scripture-utilities';
 
 /** The `projectInterface`s the Scripture Extender PDPF serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
@@ -74,7 +73,7 @@ class ScriptureExtenderProjectDataProviderEngine
   @papi.dataProviders.decorators.doNotNotify
   async setChapterUSJ(
     verseRef: VerseRef,
-    chapterUsj: USJDocument,
+    chapterUsj: Usj,
   ): Promise<DataProviderUpdateInstructions<USJChapterProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Chapter'].setChapterUSX(
       verseRef,
@@ -84,7 +83,7 @@ class ScriptureExtenderProjectDataProviderEngine
     return false;
   }
 
-  async getChapterUSJ(verseRef: VerseRef): Promise<USJDocument | undefined> {
+  async getChapterUSJ(verseRef: VerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef);
     return usx ? usxStringToUsj(usx) : undefined;
   }
