@@ -1232,6 +1232,25 @@ export declare function toArray(string: string): string[];
 /** Determine whether the string is a `LocalizeKey` meant to be localized in Platform.Bible. */
 export declare function isLocalizeKey(str: string): str is LocalizeKey;
 /**
+ * Escape RegExp special characters.
+ *
+ * You can also use this to escape a string that is inserted into the middle of a regex, for
+ * example, into a character class.
+ *
+ * All credit to [`escape-string-regexp`](https://www.npmjs.com/package/escape-string-regexp) - this
+ * function is simply copied directly from there to allow a common js export
+ *
+ * @example
+ *
+ *     import escapeStringRegexp from 'platform-bible-utils';
+ *
+ *     const escapedString = escapeStringRegexp('How much $ for a 🦄?');
+ *     //=> 'How much \\$ for a 🦄\\?'
+ *
+ *     new RegExp(escapedString);
+ */
+export declare function escapeStringRegexp(string: string): string;
+/**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
  * @param a The first object to compare

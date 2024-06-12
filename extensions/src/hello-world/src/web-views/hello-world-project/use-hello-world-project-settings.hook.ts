@@ -1,20 +1,19 @@
 import { useProjectSetting } from '@papi/frontend/react';
-import type { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
+import type { IBaseProjectDataProvider } from 'papi-shared-types';
 import { CSSProperties, useMemo } from 'react';
 
-function useHelloWorldProjectSettings<ProjectInterface extends ProjectInterfaces>(
-  projectInterface: ProjectInterface,
-  projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+function useHelloWorldProjectSettings(
+  // Any Base PDP type works. Without `any`, the DataProviderUpdateInstructions types are incompatible
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,
 ) {
   const [headerSize, setHeaderSize, resetHeaderSize] = useProjectSetting(
-    projectInterface,
     projectDataProviderSource,
     'helloWorld.headerSize',
     15,
   );
 
   const [headerColor, setHeaderColor, resetHeaderColor] = useProjectSetting(
-    projectInterface,
     projectDataProviderSource,
     'helloWorld.headerColor',
     'Black',

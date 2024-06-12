@@ -4,9 +4,18 @@ import { Checkbox } from 'platform-bible-react';
 import { ProjectInterfaces } from 'papi-shared-types';
 import { PropsWithChildren, useCallback, JSX } from 'react';
 
-export type Project = ProjectMetadata & {
-  id: string;
+/** Project metadata and some display information */
+export type ProjectMetadataDisplay = ProjectMetadata & {
+  /**
+   * Name to display in the list for this project
+   *
+   * Generally this should come from the project setting `platform.name`
+   */
   name: string;
+};
+
+export type Project = ProjectMetadataDisplay & {
+  id: string;
   description: string;
   isDownloadable: boolean;
   isDownloaded: boolean;
@@ -99,7 +108,7 @@ export function fetchProjects(): Project[] {
 
 export type ProjectListProps = PropsWithChildren<{
   /** Projects to display in the list */
-  projects: ProjectMetadata[];
+  projects: ProjectMetadataDisplay[];
 
   /** Handler to perform an action when the project is clicked */
   handleSelectProject: (projectId: string) => void;
@@ -137,7 +146,7 @@ export default function ProjectList({
   children,
 }: ProjectListProps) {
   const isSelected = useCallback(
-    (project: ProjectMetadata) => {
+    (project: ProjectMetadataDisplay) => {
       if (isMultiselect && selectedProjectIds) {
         return selectedProjectIds.includes(project.id);
       }
@@ -146,7 +155,7 @@ export default function ProjectList({
     [isMultiselect, selectedProjectIds],
   );
 
-  const createListItemContents = (project: ProjectMetadata): JSX.Element => {
+  const createListItemContents = (project: ProjectMetadataDisplay): JSX.Element => {
     return (
       <ListItemButton
         selected={isSelected(project)}

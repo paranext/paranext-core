@@ -13,7 +13,7 @@ import {
 } from '@shared/services/project-settings.service-model';
 import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-import { includes } from 'platform-bible-utils';
+import { includes, isLocalizeKey, isString } from 'platform-bible-utils';
 import ProjectSettingsDocumentCombiner from '@shared/utils/project-settings-document-combiner';
 
 /**
@@ -92,7 +92,29 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
     throw new Error(`Could not find default value for project setting ${key}.`);
   }
 
-  return projectSettingInfo.default;
+  // If this default is not a localized string key, return it. Otherwise we need to get the
+  // localized version instead
+  if (!isString(projectSettingInfo.default) || !isLocalizeKey(projectSettingInfo.default))
+    return projectSettingInfo.default;
+
+  const localizedProjectSettingInfo = (
+    await projectSettingsDocumentCombiner.getLocalizedProjectSettingsContributionInfo()
+  )?.settings[key];
+
+  if (!localizedProjectSettingInfo) {
+    throw new Error(`Could not find localized project setting ${key}.`);
+  }
+
+  // We shouldn't be able to hit this anymore since the project settings document combiner should
+  // throw if this ever happened. But this is still here just in case because this would be a
+  // serious error
+  if (!('default' in localizedProjectSettingInfo)) {
+    throw new Error(`Could not find localized default value for project setting ${key}.`);
+  }
+
+  // This type is correct. Looks like `ReplaceType` breaks mapped types and just unions the types
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return localizedProjectSettingInfo.default as ProjectSettingTypes[ProjectSettingName];
 }
 
 const { registerValidator } = projectSettingsServiceObjectToProxy;

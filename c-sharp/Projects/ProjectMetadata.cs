@@ -9,19 +9,13 @@ namespace Paranext.DataProvider.Projects;
 /// Returned from Project Data Provider Factories in order to inform others about what projects they
 /// support in what form.
 /// </summary>
-public class ProjectMetadata(string id, string name, List<string> projectInterfaces)
+public class ProjectMetadata(string id, List<string> projectInterfaces)
 {
     /// <summary>
     /// ID of the project (must be unique and case-insensitive)
     /// </summary>
     [JsonProperty("id")]
     public string ID { get; } = id.ToUpperInvariant();
-
-    /// <summary>
-    /// Short name of the project (not necessarily unique)
-    /// </summary>
-    [JsonProperty("name")]
-    public string Name { get; } = name;
 
     /// <summary>
     /// Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
@@ -31,6 +25,6 @@ public class ProjectMetadata(string id, string name, List<string> projectInterfa
 
     public override string ToString()
     {
-        return $"[{Name} ({ID}): {string.Join(',', ProjectInterfaces)}]";
+        return $"[({ID}): {string.Join(',', ProjectInterfaces)}]";
     }
 }

@@ -5,6 +5,9 @@ public sealed class ProjectSettings
     public const string PB_BOOKS_PRESENT = "platformScripture.booksPresent";
     public const string PT_BOOKS_PRESENT = "BooksPresent";
 
+    public const string PB_NAME = "platform.name";
+    public const string PT_NAME = "Name";
+
     public const string PB_FULL_NAME = "platform.fullName";
     public const string PT_FULL_NAME = "FullName";
 
@@ -29,6 +32,7 @@ public sealed class ProjectSettings
             { PB_BOOKS_PRESENT, PT_BOOKS_PRESENT },
             { PB_FULL_NAME, PT_FULL_NAME },
             { PB_LANGUAGE, PT_LANGUAGE },
+            { PB_NAME, PT_NAME },
             { PB_VERSIFICATION, PT_VERSIFICATION },
             { PB_IS_EDITABLE, PT_IS_EDITABLE },
         };

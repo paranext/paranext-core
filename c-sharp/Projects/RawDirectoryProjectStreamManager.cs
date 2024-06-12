@@ -25,7 +25,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
     {
         if (!Directory.Exists(_projectDetails.HomeDirectory))
             throw new Exception(
-                $"Project contents missing for {_projectDetails.Metadata.Name} ({_projectDetails.Metadata.ID})"
+                $"Project contents missing for {_projectDetails.Name} ({_projectDetails.Metadata.ID})"
             );
     }
 

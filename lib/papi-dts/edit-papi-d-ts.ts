@@ -112,13 +112,6 @@ papiDTS = papiDTS.replace(
   "\n$2// @ts-ignore TypeScript pretends it can't find `$3`, but it works just fine$1",
 );
 
-// Add ignore error messages to the `UnionToIntersection` on generics extending
-// `DataProviderDataTypes`
-papiDTS = papiDTS.replace(
-  /WithProjectDataProviderEngine(ExtensionData|Setting)Methods<(?<!\/\/ @ts-ignore.*)(\n(\s*).*UnionToIntersection<ProjectInterfaceDataTypes\[SupportedProjectInterfaces\[number\]\]>)/g,
-  'WithProjectDataProviderEngine$1Methods<\n$3// @ts-ignore TypeScript thinks there is some unknown data type getting in, but there is not$2',
-);
-
 // Fix all the path-aliased imports. For some reason, generating `papi.d.ts` removes the @ from path
 // aliases on module declarations and static imports but not on dynamic imports to other modules.
 // Though we could go either way, we will remove the @ on dynamic imports to avoid confusing core

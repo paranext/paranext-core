@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
 using System.Xml;
+using Paranext.DataProvider.ParatextUtils;
 using Paratext.Data;
 using Paratext.Data.Users;
 
@@ -15,14 +15,16 @@ internal class LocalParatextProjects
     // Inside of each project's "home" directory, these are the subdirectories and files
     protected const string PROJECT_SETTINGS_FILE = "Settings.xml";
 
-    protected static readonly List<string> _paratextProjectInterfaces = [ProjectInterfaces.Paratext];
-
     /// <summary>
     /// Directory inside a project's root directory where Platform.Bible's extension data is stored
     /// </summary>
     public const string EXTENSION_DATA_SUBDIRECTORY = "shared/platform.bible/extensions";
 
-    protected readonly ConcurrentDictionary<string, ProjectDetails> _projectDetailsMap = new();
+    private bool _isInitialized = false;
+
+    private List<string> _requiredProjectRootFiles = ["usfm.sty", "Attribution.md"];
+
+    private static readonly List<string> _paratextProjectInterfaces = [ProjectInterfaces.Base, ProjectInterfaces.USFM_BookChapterVerse, ProjectInterfaces.USX_Chapter];
 
     public LocalParatextProjects()
     {
@@ -43,47 +45,64 @@ internal class LocalParatextProjects
 
     public virtual void Initialize(bool shouldIncludePT9ProjectsOnWindows)
     {
-        if (!_projectDetailsMap.IsEmpty)
+        if (_isInitialized)
             return;
 
-        CreateDirectory(ProjectRootFolder);
+        // Make sure the necessary directory and files exist for the project root folder
+        SetUpProjectRootFolder();
 
-        IEnumerable<ProjectDetails> allProjectDetails = LoadAllProjectDetails(shouldIncludePT9ProjectsOnWindows);
+        // Set up the ScrTextCollection and read the projects in that folder
+        ParatextGlobals.Initialize(ProjectRootFolder);
 
-        if (!allProjectDetails.Any())
-        {
-            SetUpSampleProject();
+        Console.WriteLine($"Projects loaded from {ProjectRootFolder}: {GetScrTexts().Select(scrText => scrText.Name)}");
 
-            allProjectDetails = LoadAllProjectDetails(shouldIncludePT9ProjectsOnWindows);
-        }
+        // Read the projects in any locations other than project root folder
+        IEnumerable<ProjectDetails> otherProjectDetails = LoadOtherProjectDetails(shouldIncludePT9ProjectsOnWindows);
 
-        foreach (ProjectDetails projectDetails in allProjectDetails)
+        if (otherProjectDetails.Any())
+            Console.WriteLine($"Projects found in other locations: {otherProjectDetails.Select(projectDetails => projectDetails.Name)}");
+
+        foreach (ProjectDetails projectDetails in otherProjectDetails)
         {
             try
             {
-                AddProjectToMaps(projectDetails);
-                Console.WriteLine($"Loaded project metadata: {projectDetails}");
+                AddProjectToScrTextCollection(projectDetails);
+                Console.WriteLine($"Loaded project details: {projectDetails}");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to load project for {projectDetails}: {ex}");
             }
         }
+
+        // If there are no projects available anywhere, throw in the sample WEB one
+        if (!GetScrTexts().Any())
+        {
+            Console.WriteLine("No projects found. Setting up sample WEB project");
+            SetUpSampleProject();
+
+            ScrTextCollection.RefreshScrTexts();
+        }
     }
 
-    public IList<ProjectDetails> GetAllProjectDetails()
+    public IEnumerable<ProjectDetails> GetAllProjectDetails()
     {
-        return _projectDetailsMap.Values.ToList();
+        return GetScrTexts().Select(scrText => scrText.GetProjectDetails());
     }
 
     public ProjectDetails GetProjectDetails(string projectId)
     {
-        return _projectDetailsMap[projectId.ToUpperInvariant()];
+        return GetParatextProject(projectId).GetProjectDetails();
     }
 
     public static ScrText GetParatextProject(string projectId)
     {
         return ScrTextCollection.GetById(HexId.FromStr(projectId));
+    }
+
+    public static List<string> GetParatextProjectInterfaces()
+    {
+        return new List<string>(_paratextProjectInterfaces);
     }
 
     #endregion
@@ -111,21 +130,17 @@ internal class LocalParatextProjects
 
     #region Private properties and methods
 
-    private void AddProjectToMaps(ProjectDetails projectDetails)
+    private static IEnumerable<ScrText> GetScrTexts() {
+        return ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly);
+    }
+
+    private static void AddProjectToScrTextCollection(ProjectDetails projectDetails)
     {
         var projectPath = projectDetails.HomeDirectory;
 
-        var id = projectDetails.Metadata.ID;
-        Console.WriteLine(
-            _projectDetailsMap.ContainsKey(id)
-                ? $"Replacing Paratext project in map: {id} = {projectPath}"
-                : $"Adding Paratext project in map: {id} = {projectPath}"
-        );
-        _projectDetailsMap[id.ToUpperInvariant()] = projectDetails;
-
         var projectName = new ProjectName
         {
-            ShortName = projectDetails.Metadata.Name,
+            ShortName = projectDetails.Name,
             ProjectPath = projectPath
         };
         ScrTextCollection.Add(new ScrText(projectName, RegistrationInfo.DefaultUser));
@@ -135,40 +150,41 @@ internal class LocalParatextProjects
     /// Return projects that are available on disk on the local machine
     /// </summary>
     /// <returns>Enumeration of (ProjectMetadata, project directory) tuples for all projects</returns>
-    private IEnumerable<ProjectDetails> LoadAllProjectDetails(bool shouldIncludePT9ProjectsOnWindows)
+    private IEnumerable<ProjectDetails> LoadOtherProjectDetails(bool shouldIncludePT9ProjectsOnWindows)
     {
-        List<string> projectRootFolders = [ProjectRootFolder];
-        if (OperatingSystem.IsWindows() && shouldIncludePT9ProjectsOnWindows && Directory.Exists(Paratext9ProjectsFolder)) projectRootFolders.Add(Paratext9ProjectsFolder);
+        // Get project info for projects outside of the normal project root folder
+        List<string> nonPT9ProjectRootFolders = [];
+        if (OperatingSystem.IsWindows() && shouldIncludePT9ProjectsOnWindows && Directory.Exists(Paratext9ProjectsFolder)) nonPT9ProjectRootFolders.Add(Paratext9ProjectsFolder);
 
-        foreach (var rootFolder in projectRootFolders)
+        foreach (var rootFolder in nonPT9ProjectRootFolders)
         {
             foreach (var dir in Directory.EnumerateDirectories(rootFolder))
             {
                 // There are a lot of folders with underscores in the name that we should ignore in
                 // My Paratext 9 Projects
-                if (rootFolder == Paratext9ProjectsFolder && Path.GetFileName(dir).StartsWith('_')) continue;
+                if (rootFolder == Paratext9ProjectsFolder && Path.GetFileNameWithoutExtension(dir).StartsWith('_')) continue;
 
-                ProjectMetadata? projectMetadata;
+                ProjectDetails? projectDetails;
                 string errorMessage;
                 try
                 {
-                    projectMetadata = LoadProjectMetadata(dir, out errorMessage);
+                    projectDetails = LoadProjectDetails(dir, out errorMessage);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error while getting project metadata from {dir}: {ex}");
+                    Console.WriteLine($"Error while getting project details from {dir}: {ex}");
                     continue;
                 }
 
-                if (projectMetadata == null)
+                if (projectDetails == null)
                     Console.WriteLine(errorMessage);
                 else
-                    yield return new ProjectDetails(projectMetadata, dir);
+                    yield return projectDetails;
             }
         }
     }
 
-    private static ProjectMetadata? LoadProjectMetadata(
+    private static ProjectDetails? LoadProjectDetails(
         string projectHomeDir,
         out string errorMessage
     )
@@ -183,13 +199,13 @@ internal class LocalParatextProjects
         var settings = new XmlDocument();
         settings.Load(settingsFilePath);
 
-        var nameNode = settings.SelectSingleNode("/ScriptureText/Name");
-        if (nameNode == null)
-        {
-            errorMessage = $"Could not find Name in Settings.xml of {projectHomeDir}";
-            return null;
-        }
-        var shortName = nameNode.InnerText;
+        // ScrText always prioritizes the folder name over the Name setting as the "name" even when
+        // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
+        // the folder name instead of Settings.Name.
+        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L258
+        // Removing extension twice because file may be in form name.id.ext to match Paratext
+        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrTextCollection.cs#L1661
+        var shortName = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(projectHomeDir));
 
         var idNode = settings.SelectSingleNode("/ScriptureText/Guid");
         if (idNode == null)
@@ -199,10 +215,25 @@ internal class LocalParatextProjects
         }
         var id = idNode.InnerText;
 
-        var metadata = new ProjectMetadata(id, shortName, _paratextProjectInterfaces);
+        var metadata = new ProjectMetadata(id, GetParatextProjectInterfaces());
+
+        var details = new ProjectDetails(shortName, metadata, projectHomeDir);
 
         errorMessage = "";
-        return metadata;
+        return details;
+    }
+
+    private void SetUpProjectRootFolder()
+    {
+        CreateDirectory(ProjectRootFolder);
+
+        // Add usfm.sty and Attribution.md
+        foreach (string requiredFile in _requiredProjectRootFiles)
+        {
+            var dest = Path.Join(ProjectRootFolder, requiredFile);
+            if (!File.Exists(dest))
+                File.Copy(Path.Join("assets", requiredFile), dest);
+        }
     }
 
     private void SetUpSampleProject()

@@ -1,4 +1,3 @@
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Paranext.DataProvider.Projects;
 
@@ -7,7 +6,6 @@ namespace Paranext.DataProvider.JsonUtils
     internal static class ProjectMetadataConverter
     {
         private const string ID = "id";
-        private const string NAME = "name";
         private const string PROJECT_INTERFACES = "projectInterfaces";
 
         public static bool TryGetMetadata(
@@ -20,9 +18,8 @@ namespace Paranext.DataProvider.JsonUtils
             {
                 JObject parsedArgs = JObject.Parse(jsonString);
                 string id = Get(parsedArgs, ID);
-                string name = Get(parsedArgs, NAME);
                 List<string> projectInterfaces = GetStrings(parsedArgs, PROJECT_INTERFACES);
-                projectMetadata = new ProjectMetadata(id, name, projectInterfaces);
+                projectMetadata = new ProjectMetadata(id, projectInterfaces);
             }
             catch (Exception ex)
             {
@@ -62,17 +59,15 @@ namespace Paranext.DataProvider.JsonUtils
             return new JObject
             {
                 [ID] = projectMetadata.ID,
-                [NAME] = projectMetadata.Name,
                 [PROJECT_INTERFACES] = JToken.FromObject(projectMetadata.ProjectInterfaces)
             }.ToString();
         }
 
-        public static string ToJsonString(string id, string name, List<string> projectInterfaces)
+        public static string ToJsonString(string id, List<string> projectInterfaces)
         {
             return new JObject
             {
                 [ID] = id,
-                [NAME] = name,
                 [PROJECT_INTERFACES] = JToken.FromObject(projectInterfaces)
             }.ToString();
         }

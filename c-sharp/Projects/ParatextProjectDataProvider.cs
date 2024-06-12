@@ -229,6 +229,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
 
+        // ScrText always prioritizes the folder name over the Name setting as the "name" even when
+        // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
+        // the folder name instead of Settings.Name.
+        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ProjectSettingsAccess/ProjectSettings.cs#L1438
+        if (settingName == ProjectSettings.PT_NAME)
+            return ResponseToRequest.Succeeded(scrText.Name);
+
         if (scrText.Settings.ParametersDictionary.TryGetValue(settingName, out string? settingValue)) {
             // Paratext project setting value found, so return the value with the appropriate type
             if (ProjectSettings.IsParatextSettingABoolean(settingName))
@@ -281,19 +288,47 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Now actually write the setting
         string? errorMessage = null;
-        RunWithinLock(
-            WriteScope.AllSettingsFiles(),
-            _ => {
-                    try
-                    {
-                        scrText.Settings.SetSetting(paratextSettingName, value);
-                        scrText.Settings.Save();
-                    }
-                    catch (Exception ex)
-                    {
-                        errorMessage = ex.Message;
-                    }
-            });
+
+        // ScrText always prioritizes the folder name over the Name setting as the "name" even when
+        // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
+        // the folder name instead of Settings.Name.
+        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L259
+        if (paratextSettingName == ProjectSettings.PT_NAME)
+        {
+            // Lock the whole project because this is literally moving the whole folder (chances
+            // this will actually succeed are very slim as the project must only have Settings.xml
+            // and the ldml file for this not to instantly throw)
+            // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L1793
+            RunWithinLock(
+                WriteScope.AllSettingsFiles(),
+                _ => {
+                        try
+                        {
+                            scrText.Name = value;
+                        }
+                        catch (Exception ex)
+                        {
+                            errorMessage = ex.Message;
+                        }
+                });
+        }
+        else
+        {
+            RunWithinLock(
+                WriteScope.AllSettingsFiles(),
+                _ => {
+                        try
+                        {
+                            scrText.Settings.SetSetting(paratextSettingName, value);
+                            scrText.Settings.Save();
+                        }
+                        catch (Exception ex)
+                        {
+                            errorMessage = ex.Message;
+                        }
+                });
+        }
+
         return (errorMessage != null)
             ? ResponseToRequest.Failed(errorMessage)
             : ResponseToRequest.Succeeded(ProjectDataType.SETTING);
