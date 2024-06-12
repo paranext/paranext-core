@@ -1,6 +1,7 @@
 import { CloseEvent, MessageEvent, WebSocket, WebSocketServer } from 'ws';
 import {
   CLIENT_ID_SERVER,
+  CLIENT_ID_UNKNOWN,
   ConnectionStatus,
   InternalEvent,
   InternalNetworkEventHandler,
@@ -19,6 +20,7 @@ import {
   serialize,
   newGuid,
   PlatformEventEmitter,
+  wait,
 } from 'platform-bible-utils';
 import {
   ClientConnect,
@@ -508,9 +510,31 @@ export default class ServerNetworkConnector implements INetworkConnector {
       throw new Error(`Received a request but cannot route it without a requestRouter`);
 
     // Figure out if we can handle this request or if we need to send it
-    const responderId = this.requestRouter(requestMessage.requestType);
-    if (this.connectorInfo.clientId === responderId) {
-      // This request is ours. Handle the request
+    let responderId = CLIENT_ID_UNKNOWN;
+
+    // https://github.com/paranext/paranext-core/issues/51
+    // If the request type doesn't have a registered handler yet, retry a few times to help with race
+    // conditions. This approach is hacky but works well enough for now.
+    const maxAttempts = 10;
+    const networkWaitTimeMs = 1000;
+    for (let attemptsRemaining = maxAttempts; attemptsRemaining > 0; attemptsRemaining--) {
+      responderId = this.requestRouter(requestMessage.requestType);
+
+      if (responderId !== CLIENT_ID_UNKNOWN) break;
+
+      logger.debug(
+        `Server network connector could not route request of type ${requestMessage.requestType} on attempt ${maxAttempts - attemptsRemaining + 1} of ${maxAttempts}.${attemptsRemaining === 1 ? '' : ' Retrying...'}`,
+      );
+
+      // No need to wait again after the last attempt fails
+      if (attemptsRemaining === 1) break;
+
+      // eslint-disable-next-line no-await-in-loop
+      await wait(networkWaitTimeMs);
+    }
+
+    if (this.connectorInfo.clientId === responderId || responderId === CLIENT_ID_UNKNOWN) {
+      // This request is ours or is unknown. Handle the request
       if (!this.localRequestHandler) throw new Error('Handling request without a requestHandler!');
 
       // Run the request handler for this request

@@ -5,6 +5,13 @@
 
 import { ComplexRequest, ComplexResponse, SerializedRequestType } from '@shared/utils/util';
 
+/**
+ * Represents when the request router does not know to which client id the request belongs. Server
+ * should try to determine the correct client id through other means, and client should just send to
+ * server
+ */
+export const CLIENT_ID_UNKNOWN = -2;
+
 /** Represents when the client id has not been assigned by the server */
 export const CLIENT_ID_UNASSIGNED = -1;
 
