@@ -68,7 +68,6 @@ function Basics({ direction }: HasDirection) {
         <VerticalTabsContent value="Button">
           Wrapped
           <div>
-            {/* eslint-disable-next-line no-alert */}
             <Button onClick={() => alert('Hello World')}>Wrapped Button</Button>
             <Button className="primary">primary</Button>
             <Button className="secondary">secondary</Button>
@@ -83,7 +82,6 @@ function Basics({ direction }: HasDirection) {
               <tr>
                 <td>variant</td>
                 <td>
-                  {/* eslint-disable-next-line no-alert */}
                   <ShadcnButton onClick={() => alert('Hello World')}>Shadcn Button</ShadcnButton>
                   <ShadcnButton variant="default">default</ShadcnButton>
                   <ShadcnButton variant="destructive">destructive</ShadcnButton>
@@ -116,7 +114,6 @@ function Basics({ direction }: HasDirection) {
               <td>
                 Text Field <div className="pr-text-xs">(wrapped)</div>
               </td>
-              {/* eslint-disable-next-line jsx-a11y/control-has-associated-label */}
               <td>
                 <TextField />
               </td>
@@ -126,7 +123,6 @@ function Basics({ direction }: HasDirection) {
                 Shadcn Input
                 <div className="pr-text-xs">(shadcn-ui/input)</div>
               </td>
-              {/* eslint-disable-next-line jsx-a11y/control-has-associated-label */}
               <td>
                 <Input />
               </td>
@@ -135,7 +131,6 @@ function Basics({ direction }: HasDirection) {
               <td>
                 Shdcn Input <div className="pr-text-xs">(from ui.shadcn.com &rarr; input)</div>
               </td>
-              {/* eslint-disable-next-line jsx-a11y/control-has-associated-label */}
               <td className="">
                 {/* copied from ui.shadcn.com but replaced ring-ring with pr-ring-[240 5% 64.9%], as they set --ring to this value in their style.css */}
                 <Input className="pr-flex pr-h-10 pr-w-full pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-border-0 file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-[color:hsl(240,5%,64.9%)] focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50" />
@@ -146,7 +141,6 @@ function Basics({ direction }: HasDirection) {
                 Small Input
                 <div className="pr-text-xs">(from ui.jln.dev &rarr; popover)</div>
               </td>
-              {/* eslint-disable-next-line jsx-a11y/control-has-associated-label */}
               <td>
                 <Input className="pr-full pr-file:border-0 pr-col-span-2 pr-flex pr-h-8 pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50" />
               </td>
@@ -155,7 +149,6 @@ function Basics({ direction }: HasDirection) {
               <td>
                 BVC Input <div className="pr-text-xs">(from book-chapter-control)</div>
               </td>
-              {/* eslint-disable-next-line jsx-a11y/control-has-associated-label */}
               <td>
                 <Input className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none" />
               </td>
