@@ -9,7 +9,7 @@ import {
   CircleHelpIcon,
 } from 'lucide-react';
 // TODO: Is this okay or should we integrate this into our DataTable component and re-export from there?
-import { ColumnDef, Row, SortDirection, Table } from '@tanstack/react-table';
+import { ColumnDef, Row, SortDirection } from '@tanstack/react-table';
 
 export type Status = true | false | undefined;
 
@@ -36,7 +36,7 @@ const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
 // #region Columns
 
 export const columns = (
-  statusChangeHandler: (character: string, status: Status) => void,
+  statusChangeHandler: (characters: string[], status: Status) => void,
 ): ColumnDef<CharacterData>[] => [
   {
     accessorKey: 'character',
@@ -80,15 +80,10 @@ export const columns = (
     header: ({ table }) => {
       const selectedRows = table.getSelectedRowModel().rows;
 
-      if (selectedRows.length === 0) {
-        return;
-      }
-      if (selectedRows.length > 1) {
-        throw new Error(
-          'No more than one row can be selected when setting status of inventory item.',
-        );
-      }
-      const character: string = selectedRows[0].getValue('character');
+      const characters: string[] = [];
+      selectedRows.forEach((row) => {
+        characters.push(row.getValue('character'));
+      });
 
       // eslint-disable-next-line consistent-return
       return (
@@ -99,7 +94,7 @@ export const columns = (
               <CircleCheckIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
-                  statusChangeHandler(character, true);
+                  statusChangeHandler(characters, true);
                 }}
               />
             </Button>
@@ -107,7 +102,7 @@ export const columns = (
               <CircleXIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
-                  statusChangeHandler(character, false);
+                  statusChangeHandler(characters, false);
                 }}
               />
             </Button>
@@ -115,7 +110,7 @@ export const columns = (
               <CircleHelpIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
-                  statusChangeHandler(character, undefined);
+                  statusChangeHandler(characters, undefined);
                 }}
               />
             </Button>
@@ -137,22 +132,23 @@ export const columns = (
 ];
 
 // #endregion
-
-// #region EventHandlers
-
-const rowClickHandler = (table: Table<CharacterData>, row: Row<CharacterData>) => {
-  table.toggleAllRowsSelected(false);
-  row.toggleSelected(true);
-};
-
-// #endregion
-
 interface InventoryDataTableProps {
   tableData: CharacterData[];
-  onStatusChange: (character: string, status: Status) => void;
+  onStatusChange: (characters: string[], status: Status) => void;
+  onSelectCharacter: (character: string) => void;
 }
 
-function InventoryDataTable({ tableData, onStatusChange }: InventoryDataTableProps) {
+function InventoryDataTable({
+  tableData,
+  onStatusChange,
+  onSelectCharacter,
+}: InventoryDataTableProps) {
+  const rowClickHandler = (row: Row<CharacterData>) => {
+    row.toggleSelected(true);
+
+    onSelectCharacter(row.getValue('character'));
+  };
+
   return (
     <div className="pr-overflow-y-auto">
       <DataTable

@@ -5,7 +5,6 @@ import {
   ColumnFiltersState,
   Row,
   SortingState,
-  Table as TanStackTable,
   VisibilityState,
   flexRender,
   getCoreRowModel,
@@ -33,7 +32,7 @@ interface DataTableProps<TData, TValue> {
   enablePagination?: boolean;
   showPaginationControls?: boolean;
   showColumnVisibilityControls?: boolean;
-  onRowClickHandler?: (table: TanStackTable<TData>, row: Row<TData>) => void;
+  onRowClickHandler?: (row: Row<TData>) => void;
 }
 
 function DataTable<TData, TValue>({
@@ -42,8 +41,7 @@ function DataTable<TData, TValue>({
   enablePagination = false,
   showPaginationControls = false,
   showColumnVisibilityControls = false,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onRowClickHandler = (_table: TanStackTable<TData>, _row: Row<TData>) => {},
+  onRowClickHandler = () => {},
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -93,7 +91,7 @@ function DataTable<TData, TValue>({
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
-                  onClick={() => onRowClickHandler(table, row)}
+                  onClick={() => onRowClickHandler(row)}
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
                 >

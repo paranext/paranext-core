@@ -137,8 +137,7 @@ export const columns = (
   },
 ];
 
-const rowClickHandler = (table: Table<CharacterData>, row: Row<CharacterData>) => {
-  table.toggleAllRowsSelected(false);
+const rowClickHandler = (row: Row<CharacterData>) => {
   row.toggleSelected(undefined);
 };
 

@@ -8,6 +8,7 @@ import InventoryDataTable, {
   CharacterData,
   Status,
 } from './components/inventory-data-table.component';
+import OccurrencesTable from './components/occurrences-table.component';
 
 const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNum: 1 };
 
@@ -30,18 +31,21 @@ const setSetting = async (
   pdp.setSetting(`platformScripture.${characterSet}`, characters.join(' '));
 };
 
-const buildTableData = async (
-  projectId: string,
-  bookNum: number,
-  validCharacters: string[],
-  invalidCharacters: string[],
-): Promise<CharacterData[]> => {
+const getBookText = async (projectId: string, bookNum: number): Promise<string> => {
   const projectDataProvider = await papi.projectDataProviders.get('ParatextStandard', projectId);
   const verseRef = new VerseRef(bookNum, 1, 1);
   const bookText = await projectDataProvider.getBookUSFM(verseRef);
 
-  if (!bookText) return [];
+  if (!bookText) return '';
 
+  return bookText;
+};
+
+const buildTableData = async (
+  bookText: string,
+  validCharacters: string[],
+  invalidCharacters: string[],
+): Promise<CharacterData[]> => {
   const characterData: CharacterData[] = [];
   bookText.split('').forEach((character) => {
     const characterDataPoint = characterData.find((dataPoint) => {
@@ -70,53 +74,65 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   const [scriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
   const [validCharacters, setValidCharacters] = useState<string[]>([]);
   const [invalidCharacters, setInvalidCharacters] = useState<string[]>([]);
-  const [tableData, setTableData] = useState<CharacterData[]>([]);
+  const [bookText, setBookText] = useState<string>('');
+  const [inventoryTableData, setInventoryTableData] = useState<CharacterData[]>([]);
+  const [selectedCharacter, setSelectedCharacter] = useState<string>('');
 
-  const statusChangeHandler = (character: string, status: Status) => {
-    setTableData((prevTableData) => {
-      const newTableData = prevTableData.map((tableElement) => {
-        if (tableElement.character === character) {
-          if (tableElement.status === status) return tableElement;
-          return { ...tableElement, status };
-        }
-        return tableElement;
+  const statusChangeHandler = (characters: string[], status: Status) => {
+    setInventoryTableData((prevTableData) => {
+      let tableData: CharacterData[] = [];
+      characters.forEach((character) => {
+        tableData = prevTableData.map((tableElement) => {
+          if (tableElement.character === character) {
+            if (tableElement.status === status) return tableElement;
+            return { ...tableElement, status };
+          }
+          return tableElement;
+        });
       });
 
-      const characterData = newTableData.find(
-        (tableElement) => tableElement.character === character,
+      const updatedCharacters = new Set(characters);
+
+      const characterData = tableData.filter((tableElement) =>
+        updatedCharacters.has(tableElement.character),
       );
-      if (!characterData) return newTableData;
+      if (characterData.length === 0) return tableData;
 
       setValidCharacters((prevValidCharacters) => {
-        let newValidCharacters: string[] = [];
-        if (status === true) {
-          newValidCharacters = prevValidCharacters.includes(character)
-            ? prevValidCharacters
-            : [...prevValidCharacters, character];
-        } else {
-          newValidCharacters = prevValidCharacters.filter((validChar) => validChar !== character);
-        }
+        let newValidCharacters: string[] = [...prevValidCharacters];
+        characters.forEach((character) => {
+          if (status === true) {
+            if (!newValidCharacters.includes(character)) {
+              newValidCharacters.push(character);
+            }
+          } else {
+            newValidCharacters = newValidCharacters.filter((validChar) => validChar !== character);
+          }
+        });
 
         setSetting('validCharacters', projectId, newValidCharacters);
         return newValidCharacters;
       });
 
       setInvalidCharacters((prevInvalidCharacters) => {
-        let newInvalidCharacters: string[] = [];
-        if (status === false) {
-          newInvalidCharacters = prevInvalidCharacters.includes(character)
-            ? prevInvalidCharacters
-            : [...prevInvalidCharacters, character];
-        } else {
-          newInvalidCharacters = prevInvalidCharacters.filter(
-            (invalidChar) => invalidChar !== character,
-          );
-        }
+        let newInvalidCharacters: string[] = [...prevInvalidCharacters];
+        characters.forEach((character) => {
+          if (status === false) {
+            if (!newInvalidCharacters.includes(character)) {
+              newInvalidCharacters.push(character);
+            }
+          } else {
+            newInvalidCharacters = newInvalidCharacters.filter(
+              (invalidChar) => invalidChar !== character,
+            );
+          }
+        });
+
         setSetting('invalidCharacters', projectId, newInvalidCharacters);
         return newInvalidCharacters;
       });
 
-      return newTableData;
+      return prevTableData;
     });
   };
 
@@ -136,8 +152,10 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   useEffect(() => {
     const buildData = async () => {
       try {
-        setTableData(
-          await buildTableData(projectId, scriptureRef.bookNum, validCharacters, invalidCharacters),
+        const newBookText = await getBookText(projectId, scriptureRef.bookNum);
+        setBookText(newBookText);
+        setInventoryTableData(
+          await buildTableData(newBookText, validCharacters, invalidCharacters),
         );
       } catch (error) {
         throw new Error('Failed building table data');
@@ -147,5 +165,22 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
     buildData();
   }, [projectId, scriptureRef.bookNum, validCharacters, invalidCharacters]);
 
-  return <InventoryDataTable tableData={tableData} onStatusChange={statusChangeHandler} />;
+  const selectCharacterHandler = (character: string) => {
+    setSelectedCharacter(character);
+  };
+
+  return (
+    <div className="pr-flex pr-flex-col pr-h-[600px]">
+      <div className="pr-flex-1">
+        <InventoryDataTable
+          tableData={inventoryTableData}
+          onStatusChange={statusChangeHandler}
+          onSelectCharacter={selectCharacterHandler}
+        />
+      </div>
+      <div className="pr-flex-1">
+        <OccurrencesTable selectedCharacter={selectedCharacter} bookText={bookText} />
+      </div>
+    </div>
+  );
 };

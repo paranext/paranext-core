@@ -3,7 +3,7 @@
 import { AutocompleteChangeDetails, AutocompleteChangeReason, AutocompleteValue, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
-import { ColumnDef, Row, Table as TanStackTable } from '@tanstack/react-table';
+import { ColumnDef, Row } from '@tanstack/react-table';
 import React$1 from 'react';
 import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
 import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';
@@ -918,7 +918,7 @@ export interface DataTableProps<TData, TValue> {
 	enablePagination?: boolean;
 	showPaginationControls?: boolean;
 	showColumnVisibilityControls?: boolean;
-	onRowClickHandler?: (table: TanStackTable<TData>, row: Row<TData>) => void;
+	onRowClickHandler?: (row: Row<TData>) => void;
 }
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 export type TextFieldProps = {
