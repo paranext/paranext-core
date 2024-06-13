@@ -26,17 +26,13 @@ namespace TestParanextDataProvider.Projects
         {
             var folderPath = Path.Combine(ProjectRootFolder, folder);
             CreateDirectory(folderPath);
-            var settings = new MinimalParatextProjectSettings { Guid = projectMetadata.ID };
-            var projectParatextSubdirectory = Path.Join(
-                folderPath,
-                PROJECT_SUBDIRECTORY,
-                PARATEXT_DATA_SUBDIRECTORY
-            );
-            CreateDirectory(projectParatextSubdirectory);
-            var settingsPath = Path.Join(projectParatextSubdirectory, "Settings.xml");
+            var settings = new MinimalParatextProjectSettings
+            {
+                Name = projectMetadata.Name,
+                Guid = projectMetadata.ID
+            };
+            var settingsPath = Path.Join(folderPath, "Settings.xml");
             XmlSerializationHelper.SerializeToFileWithWriteThrough(settingsPath, settings);
-
-            SaveProjectMetadata(folderPath, projectMetadata, false);
         }
     }
 }

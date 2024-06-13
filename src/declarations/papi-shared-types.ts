@@ -228,10 +228,10 @@ declare module 'papi-shared-types' {
    * over an {@link IProjectDataProviderEngine} provided by an extension. Returned from getting a
    * project data provider with `papi.projectDataProviders.get`.
    *
-   * Project Data Providers are a specialized version of {@link IDataProvider} that works with a
-   * project of a specific `projectType`. For each project available, a new instance of a PDP with
-   * that project's `projectType` is created by the Project Data Provider Factory with that
-   * project's `projectType`.
+   * Project Data Providers are a specialized version of {@link IDataProvider} that work with
+   * projects by exposing methods according to a set of `projectInterface`s. For each project
+   * available, a Project Data Provider Factory that supports that project with some set of
+   * `projectInterface`s creates a new instance of a PDP with the supported `projectInterface`s.
    *
    * Every PDP **must** fulfill the requirements of all PDPs according to
    * {@link MandatoryProjectDataTypes}.
@@ -267,25 +267,26 @@ declare module 'papi-shared-types' {
   };
 
   /**
-   * {@link IProjectDataProvider} types for each `projectType` supported by PAPI. Extensions can add
-   * more Project Data Providers with corresponding `projectType`s by adding details to their
-   * `.d.ts` file and registering a Project Data Provider factory with the corresponding
-   * `projectType`.
+   * {@link IProjectDataProvider} types for each `projectInterface` supported by PAPI. Extensions can
+   * add more Project Data Providers with corresponding `projectInterface`s by adding details to
+   * their `.d.ts` file and registering a Project Data Provider factory with the corresponding
+   * `projectInterface`.
    *
-   * All Project Data Providers' data types **must** extend {@link MandatoryProjectDataTypes} like
-   * the following example. Please see its documentation for information on how Project Data
-   * Providers can implement this interface.
+   * All Project Data Provider Interfaces' data types **must** extend
+   * {@link MandatoryProjectDataTypes} like the following example. Please see its documentation for
+   * information on how Project Data Providers can implement this interface.
    *
-   * Note: The keys of this interface are the `projectType`s for the associated Project Data
-   * Providers.
+   * Note: The keys of this interface are the `projectInterface`s for the associated Project Data
+   * Provider Interfaces. `projectInterface`s represent standardized sets of methods on a PDP.
    *
-   * WARNING: Each Project Storage Interpreter **must** fulfill certain requirements for its
-   * `getSetting`, `setSetting`, and `resetSetting` methods. See {@link MandatoryProjectDataTypes}
-   * for more information.
+   * WARNING: Each Project Data Provider **must** fulfill certain requirements for its `getSetting`,
+   * `setSetting`, and `resetSetting` methods. See {@link MandatoryProjectDataTypes} for more
+   * information.
    *
-   * An extension can extend this interface to add types for the Project Data Providers its
-   * registered factory provides by adding the following to its `.d.ts` file (in this example, we
-   * are adding a Project Data Provider type for the `MyExtensionProjectTypeName` `projectType`):
+   * An extension can extend this interface to add types for the Project Data Provider Interfaces
+   * its registered factory provides by adding the following to its `.d.ts` file (in this example,
+   * we are adding a Project Data Provider interface for the `MyExtensionProjectInterfaceName`
+   * `projectInterface`):
    *
    * @example
    *
@@ -295,49 +296,53 @@ declare module 'papi-shared-types' {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   };
    *
-   *   export interface ProjectDataProviders {
-   *     MyExtensionProjectTypeName: IDataProvider<MyProjectDataTypes>;
+   *   export interface ProjectDataProviderInterfaces {
+   *     MyExtensionProjectInterfaceName: IDataProvider<MyProjectDataTypes>;
    *   }
    * }
    * ```
    */
-  export interface ProjectDataProviders {
+  export interface ProjectDataProviderInterfaces {
     'platform.notesOnly': IProjectDataProvider<NotesOnlyProjectDataTypes>;
     'platform.placeholder': IProjectDataProvider<PlaceholderDataTypes>;
   }
 
   /**
-   * Names for each `projectType` available on the papi. Each of the `projectType`s should have a
-   * registered Project Data Provider Factory that provides Project Data Providers for the
-   * `projectType`.
+   * Names for each `projectInterface` available on the papi. `projectInterface`s represent
+   * standardized sets of methods on a PDP. Extensions can register a Project Data Provider Factory
+   * with one or more `projectInterface`s to indicate that factory provides Project Data Providers
+   * that have the methods associated with those `projectInterface`s.
    *
-   * Automatically includes all extensions' `projectTypes` that are added to
-   * {@link ProjectDataProviders}.
+   * Automatically includes all extensions' `projectInterface`s that are added to
+   * {@link ProjectDataProviderInterfaces}.
    *
    * @example 'platform.notesOnly'
    */
-  export type ProjectTypes = keyof ProjectDataProviders;
+  export type ProjectInterfaces = keyof ProjectDataProviderInterfaces;
 
   /**
-   * `DataProviderDataTypes` for each Project Data Provider supported by PAPI. These are the data
-   * types served by Project Data Providers for each `projectType`.
+   * `DataProviderDataTypes` for each Project Data Provider Interface supported by PAPI. These are
+   * the data types served by Project Data Providers for each `projectInterface`.
    *
-   * Automatically includes all extensions' `projectTypes` that are added to
-   * {@link ProjectDataProviders}.
+   * Automatically includes all extensions' `projectInterface`s that are added to
+   * {@link ProjectDataProviderInterfaces}.
    *
-   * Note: The keys of this interface are the `projectType`s for the associated project data
-   * provider data types.
+   * Note: The keys of this interface are the `projectInterface`s for the associated project data
+   * provider interface data types. `projectInterface`s represent standardized sets of methods on a
+   * PDP.
    *
    * @example
    *
    * ```typescript
-   * ProjectDataTypes['MyExtensionProjectTypeName'] => MandatoryProjectDataTypes & {
+   * ProjectInterfaceDataTypes['MyExtensionProjectInterfaceName'] => MandatoryProjectDataTypes & {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   }
    * ```
    */
-  export type ProjectDataTypes = {
-    [ProjectType in ProjectTypes]: ExtractDataProviderDataTypes<ProjectDataProviders[ProjectType]>;
+  export type ProjectInterfaceDataTypes = {
+    [ProjectInterface in ProjectInterfaces]: ExtractDataProviderDataTypes<
+      ProjectDataProviderInterfaces[ProjectInterface]
+    >;
   };
 
   // #endregion

@@ -26,6 +26,22 @@ const versificationValidator: ProjectSettingValidator<'platformScripture.versifi
 export async function activate(context: ExecutionActivationContext) {
   logger.info('platformScripture is activating!');
 
+  const includeProjectsCommandPromise = papi.commands.registerCommand(
+    'platformScripture.toggleIncludeMyParatext9Projects',
+    async (shouldInclude) => {
+      const currentSettingValue =
+        shouldInclude !== undefined
+          ? !shouldInclude
+          : await papi.settings.get('platformScripture.includeMyParatext9Projects');
+      const newSettingValue = !currentSettingValue;
+      await papi.settings.set('platformScripture.includeMyParatext9Projects', newSettingValue);
+      return newSettingValue;
+    },
+  );
+  const includeProjectsValidatorPromise = papi.settings.registerValidator(
+    'platformScripture.includeMyParatext9Projects',
+    async (newValue) => typeof newValue === 'boolean',
+  );
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
     booksPresentValidator,
@@ -35,7 +51,12 @@ export async function activate(context: ExecutionActivationContext) {
     versificationValidator,
   );
 
-  context.registrations.add(await booksPresentPromise, await versificationPromise);
+  context.registrations.add(
+    await includeProjectsCommandPromise,
+    await includeProjectsValidatorPromise,
+    await booksPresentPromise,
+    await versificationPromise,
+  );
 
   logger.info('platformScripture is finished activating!');
 }

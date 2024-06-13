@@ -22,7 +22,7 @@ public sealed class MessageEventProjectDataProviderFactoryCreated
     public MessageEventProjectDataProviderFactoryCreated(
         string id,
         string[] functions,
-        string projectType
+        List<string> projectInterfaces
     )
         : base(
             Messages.EventType.OBJECT_CREATE,
@@ -31,7 +31,10 @@ public sealed class MessageEventProjectDataProviderFactoryCreated
                 Id = id,
                 ObjectType = NetworkObjectType.PROJECT_DATA_PROVIDER_FACTORY,
                 Functions = functions,
-                Attributes = new ProjectDataProviderFactoryAttributes { ProjectType = projectType }
+                Attributes = new ProjectDataProviderFactoryAttributes
+                {
+                    ProjectInterfaces = projectInterfaces,
+                }
             }
         ) { }
 }
@@ -45,11 +48,11 @@ public sealed record MessageEventProjectDataProviderFactoryCreatedContents
 
     public override string ToString()
     {
-        return $"Id = {Id}, ObjectType = {ObjectType}, Functions = {(Functions != null ? string.Join(',', Functions) : "[null]")}, ProjectType = {Attributes?.ProjectType}";
+        return $"Id = {Id}, ObjectType = {ObjectType}, Functions = {(Functions != null ? string.Join(',', Functions) : "[null]")}, ProjectInterfaces = {(Attributes?.ProjectInterfaces != null ? string.Join(',', Attributes.ProjectInterfaces) : "")}";
     }
 }
 
 public sealed record ProjectDataProviderFactoryAttributes
 {
-    public string? ProjectType { get; set; }
+    public List<string>? ProjectInterfaces { get; set; }
 }

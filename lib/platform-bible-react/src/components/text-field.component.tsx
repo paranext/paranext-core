@@ -18,6 +18,12 @@ export type TextFieldProps = {
    * @default false
    */
   hasError?: boolean;
+  /**
+   * If `true`, the input will take up the full width of its container.
+   *
+   * @default false
+   */
+  isFullWidth?: boolean;
   /** Text that gives the user instructions on what contents the TextField expects */
   helperText?: string;
   /** The title of the TextField */
@@ -54,6 +60,7 @@ function TextField({
   id,
   isDisabled = false,
   hasError = false,
+  isFullWidth = false,
   helperText,
   label,
   placeholder,
@@ -66,7 +73,7 @@ function TextField({
   onBlur,
 }: TextFieldProps) {
   return (
-    <div className="pr-inline-grid pr-items-center pr-gap-1.5">
+    <div className={cn('pr-inline-grid pr-items-center pr-gap-1.5', { 'pr-w-full': isFullWidth })}>
       <ShadLabel
         htmlFor={id}
         className={cn({

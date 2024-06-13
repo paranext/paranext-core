@@ -8,9 +8,11 @@ using Newtonsoft.Json.Linq;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
+using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
+using ProjectSettings = Paranext.DataProvider.Services.ProjectSettings;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -63,7 +65,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     protected override Task StartDataProvider()
     {
-        _paratextProjects.Initialize();
+        bool? shouldIncludePT9ProjectsOnWindows = false;
+        if (OperatingSystem.IsWindows())
+        {
+            shouldIncludePT9ProjectsOnWindows = SettingsService.GetSettingValue<bool>(PapiClient, Settings.INCLUDE_MY_PARATEXT_9_PROJECTS);
+            if (!shouldIncludePT9ProjectsOnWindows.HasValue)
+                throw new Exception($"Setting {Settings.INCLUDE_MY_PARATEXT_9_PROJECTS} was null!");
+        }
+        _paratextProjects.Initialize(shouldIncludePT9ProjectsOnWindows.Value);
         return Task.CompletedTask;
     }
 
@@ -165,7 +174,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
         return extensionStreamManager.GetDataStream(
-            $"extensions/{scope.ExtensionName}/{scope.DataQualifier}",
+            $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}/{scope.DataQualifier}",
             createIfNotExists
         );
     }
@@ -182,7 +191,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private void RegisterSettingsValidators()
     {
         (bool result, string? error) VisibilityValidator((string newValueJson, string currentValueJson,
-            string allChangesJson, string projectType) data)
+            string allChangesJson) data)
         {
             try
             {
@@ -237,8 +246,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Setting not found, so get the default value
         string? defaultValue = ProjectSettingsService.GetDefault(
             PapiClient,
-            settingName,
-            ProjectType.Paratext
+            settingName
         );
         if (defaultValue == null)
             return ResponseToRequest.Failed($"Default value for {settingName} was null");
@@ -264,8 +272,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 value,
                 currentValueJson,
                 settingName,
-                "",
-                ProjectType.Paratext))
+                ""))
             return ResponseToRequest.Failed($"Validation failed for {settingName}");
 
         // Figure out which setting name to use
@@ -300,8 +307,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         string settingName = JToken.Parse(jsonKey).ToString();
         string? defaultValue = ProjectSettingsService.GetDefault(
             PapiClient,
-            settingName,
-            ProjectType.Paratext
+            settingName
         );
         if (defaultValue == null)
             return ResponseToRequest.Failed($"Default value for {settingName} was null");

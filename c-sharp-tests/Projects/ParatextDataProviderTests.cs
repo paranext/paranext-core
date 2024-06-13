@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
@@ -23,13 +24,17 @@ namespace TestParanextDataProvider.Projects
         private ProjectDetails _projectDetails = null!; // Will be non-null when the test runs
 
         [SetUp]
-        public override void TestSetup()
+        public override async Task TestSetup()
         {
-            base.TestSetup();
+            await base.TestSetup();
             _scrText = CreateDummyProject();
 
             _projectDetails = CreateProjectDetails(_scrText);
             ParatextProjects.FakeAddProject(_projectDetails);
+
+            var settingsService = new DummySettingsService(Client);
+            await settingsService.RegisterDataProvider();
+            settingsService.AddSettingValue(Settings.INCLUDE_MY_PARATEXT_9_PROJECTS, true);
         }
 
         [TearDown]
@@ -244,20 +249,11 @@ namespace TestParanextDataProvider.Projects
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
                 .First();
 
-            VerifyResponse(
-                result,
-                null,
-                requestType,
-                requesterId,
-                AllScriptureDataTypes
-            );
+            VerifyResponse(result, null, requestType, requesterId, AllScriptureDataTypes);
 
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
-            Assert.That(
-                updateEvents[0].Event,
-                Is.EqualTo(AllScriptureDataTypes)
-            );
+            Assert.That(updateEvents[0].Event, Is.EqualTo(AllScriptureDataTypes));
 
             // Verify the new text was saved to disk
             VerseRef reference =
@@ -338,20 +334,11 @@ namespace TestParanextDataProvider.Projects
                 .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
                 .First();
 
-            VerifyResponse(
-                result,
-                null,
-                requestType,
-                requesterId,
-                AllScriptureDataTypes
-            );
+            VerifyResponse(result, null, requestType, requesterId, AllScriptureDataTypes);
 
             // Verify an update event was sent out properly
             Assert.That(updateEvents.Count, Is.EqualTo(1));
-            Assert.That(
-                updateEvents[0].Event,
-                Is.EqualTo(AllScriptureDataTypes)
-            );
+            Assert.That(updateEvents[0].Event, Is.EqualTo(AllScriptureDataTypes));
 
             // Verify the new text was saved to disk
             VerseRef reference =
@@ -491,7 +478,8 @@ namespace TestParanextDataProvider.Projects
 
             var result = provider.SetProjectSetting(
                 JsonConvert.SerializeObject(VisibilitySettingName),
-                JsonConvert.SerializeObject(ProjectVisibility.Public.ToString()));
+                JsonConvert.SerializeObject(ProjectVisibility.Public.ToString())
+            );
 
             Assert.That(result.Success, Is.True);
         }
@@ -510,7 +498,8 @@ namespace TestParanextDataProvider.Projects
 
             var result = provider.SetProjectSetting(
                 JsonConvert.SerializeObject(VisibilitySettingName),
-                JsonConvert.SerializeObject(89));
+                JsonConvert.SerializeObject(89)
+            );
 
             Assert.That(result.Success, Is.False);
         }

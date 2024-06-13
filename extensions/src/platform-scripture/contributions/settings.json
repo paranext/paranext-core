@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "label": "%settings_platformScripture_paratext_group_label%",
+    "description": "%settings_platformScripture_paratext_group_description%",
+    "properties": {
+      "platformScripture.includeMyParatext9Projects": {
+        "label": "%settings_platformScripture_includeMyParatext9Projects_label%",
+        "description": "%settings_platformScripture_includeMyParatext9Projects_description%",
+        "default": false
+      }
+    }
+  }
+]

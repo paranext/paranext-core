@@ -6,13 +6,13 @@
         "label": "%project_settings_helloWorld_headerSize_label%",
         "description": "%project_settings_helloWorld_headerSize_description%",
         "default": 15,
-        "includeProjectTypes": ["^helloWorld$"]
+        "includeProjectInterfaces": ["^helloWorld$"]
       },
       "helloWorld.headerColor": {
         "label": "%project_settings_helloWorld_headerColor_label%",
         "description": "%project_settings_helloWorld_headerColor_description%",
         "default": "Black",
-        "includeProjectTypes": ["^helloWorld$"]
+        "includeProjectInterfaces": ["^helloWorld$"]
       }
     }
   }

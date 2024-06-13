@@ -600,8 +600,10 @@ export type SearchBarProps = {
 	onSearch: (searchQuery: string) => void;
 	/** Optional string that appears in the search bar without a search string */
 	placeholder?: string;
+	/** Optional boolean to set the input base to full width */
+	isFullWidth?: boolean;
 };
-export function SearchBar({ onSearch, placeholder }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SliderProps = {
 	/** Optional unique identifier */
 	id?: string;
@@ -992,6 +994,12 @@ export type TextFieldProps = {
 	 * @default false
 	 */
 	hasError?: boolean;
+	/**
+	 * If `true`, the input will take up the full width of its container.
+	 *
+	 * @default false
+	 */
+	isFullWidth?: boolean;
 	/** Text that gives the user instructions on what contents the TextField expects */
 	helperText?: string;
 	/** The title of the TextField */
@@ -1023,7 +1031,7 @@ export type TextFieldProps = {
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/input#with-label
  */
-export declare function TextField({ id, isDisabled, hasError, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
+export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
 export type ToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	commandHandler: CommandHandler;

@@ -3,9 +3,13 @@ using Newtonsoft.Json;
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
-/// Represents the data inside a project's meta.json file
+/// Low-level information describing a project that Platform.Bible directly manages and uses to load
+/// project data
+///
+/// Returned from Project Data Provider Factories in order to inform others about what projects they
+/// support in what form.
 /// </summary>
-public class ProjectMetadata(string id, string name, string projectType)
+public class ProjectMetadata(string id, string name, List<string> projectInterfaces)
 {
     /// <summary>
     /// ID of the project (must be unique and case-insensitive)
@@ -22,29 +26,11 @@ public class ProjectMetadata(string id, string name, string projectType)
     /// <summary>
     /// Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
     /// </summary>
-    [JsonProperty("projectType")]
-    public string ProjectType { get; } = projectType;
-
-    public override bool Equals(object? obj)
-    {
-        ProjectMetadata? that = obj as ProjectMetadata;
-        return that != null && (this.Equals(that));
-    }
-
-    protected bool Equals(ProjectMetadata other)
-    {
-        return ID.Equals(other.ID)
-            && Name == other.Name
-            && ProjectType == other.ProjectType;
-    }
-
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(ID, Name, ProjectType);
-    }
+    [JsonProperty("projectInterfaces")]
+    public List<string> ProjectInterfaces { get; } = projectInterfaces;
 
     public override string ToString()
     {
-        return $"[{Name} ({ID}): {ProjectType}]";
+        return $"[{Name} ({ID}): {string.Join(',', ProjectInterfaces)}]";
     }
 }

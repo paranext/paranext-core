@@ -4,10 +4,8 @@ import {
   EditorRef,
   Marginal,
   MarginalRef,
-  Usj,
-  usjToUsxString,
-  usxStringToUsj,
 } from '@biblionexus-foundation/platform-editor';
+import { Usj, usjToUsxString, usxStringToUsj } from '@biblionexus-foundation/scripture-utilities';
 import { VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';

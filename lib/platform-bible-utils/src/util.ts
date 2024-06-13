@@ -244,3 +244,36 @@ export type ReplaceType<T, A, B> = T extends A
   : T extends object
     ? { [K in keyof T]: ReplaceType<T[K], A, B> }
     : T;
+
+// Thanks to jcalz at https://stackoverflow.com/a/50375286
+/**
+ * Converts a union type to an intersection type (`|` to `&`).
+ *
+ * Note: this utility type is for use on object types. It may fail on other types.
+ *
+ * @example
+ *
+ * ```typescript
+ * type TypeOne = { one: string };
+ * type TypeTwo = { two: number };
+ * type TypeThree = { three: string };
+ *
+ * type TypeNums = { one: TypeOne; two: TypeTwo; three: TypeThree };
+ * const numNames = ['one', 'two'] as const;
+ * type TypeNumNames = typeof numNames;
+ *
+ * // Same as `TypeOne | TypeTwo`
+ * // `{ one: string } | { two: number }`
+ * type TypeOneTwoUnion = TypeNums[TypeNumNames[number]];
+ *
+ * // Same as `TypeOne & TypeTwo`
+ * // `{ one: string; two: number }`
+ * type TypeOneTwoIntersection = UnionToIntersection<TypeOneTwoUnion>;
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (
+  x: infer I,
+) => void
+  ? I
+  : never;

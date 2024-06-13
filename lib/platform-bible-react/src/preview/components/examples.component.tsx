@@ -21,7 +21,8 @@ function Example() {
   return (
     <VerticalTabs defaultValue="Window">
       <VerticalTabsList>
-        <VerticalTabsTrigger value="Window">Window / Tab</VerticalTabsTrigger>
+        <VerticalTabsTrigger value="Window">Window or Tab</VerticalTabsTrigger>
+        <VerticalTabsTrigger value="Settings">Settings (n/a)</VerticalTabsTrigger>
       </VerticalTabsList>
 
       <VerticalTabsContent value="Window">
