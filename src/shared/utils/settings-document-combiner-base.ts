@@ -12,6 +12,8 @@ import {
   SettingsContribution,
   SettingsGroup,
   deepClone,
+  isLocalizeKey,
+  isString,
   startsWith,
 } from 'platform-bible-utils';
 
@@ -80,6 +82,8 @@ async function localizeSettingsContributionInfo(
         Object.values(settingsGroup.properties).forEach((setting: Setting) => {
           localizedStringKeys.add(setting.label);
           if (setting.description) localizedStringKeys.add(setting.description);
+          if (isString(setting.default) && isLocalizeKey(setting.default))
+            localizedStringKeys.add(setting.default);
         });
       }),
     );
@@ -112,6 +116,8 @@ async function localizeSettingsContributionInfo(
             // We are changing the type from LocalizeKey to the localized string here
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             setting.description = localizedStrings[setting.description as LocalizeKey];
+          if (isString(setting.default) && isLocalizeKey(setting.default))
+            setting.default = localizedStrings[setting.default];
         });
       }),
     );

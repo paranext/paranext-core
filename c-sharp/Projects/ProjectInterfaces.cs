@@ -5,5 +5,11 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 public static class ProjectInterfaces
 {
-    public const string Paratext = "ParatextStandard";
+    /// <summary>
+    /// The name of the `projectInterface` representing the essential methods every Base Project Data
+    /// Provider must implement
+    /// </summary>
+    public const string Base = "platform.base";
+    public const string USFM_BookChapterVerse = "platformScripture.USFM_BookChapterVerse";
+    public const string USX_Chapter = "platformScripture.USX_Chapter";
 }

@@ -1,4 +1,7 @@
 import { testingSettingService } from '@extension-host/services/settings.service-host';
+import { LocalizationSelectors } from '@shared/services/localization.service-model';
+import { SettingNames } from 'papi-shared-types';
+import { slice } from 'platform-bible-utils';
 
 const MOCK_SETTINGS_DATA = {
   'platform.interfaceLanguage': ['fre'],
@@ -32,6 +35,10 @@ jest.mock('@extension-host/data/core-settings-info.data', () => ({
     label: '%platform_group1%',
     description: '%platform_group1_description%',
     properties: {
+      'platform.name': {
+        label: '%settings_platform_name_label%',
+        default: '%missing%',
+      },
       'platform.verseRef': {
         label: '%settings_platform_verseRef_label%',
         default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
@@ -53,6 +60,16 @@ jest.mock('@extension-host/data/core-settings-info.data', () => ({
     },
   },
 }));
+jest.mock('@shared/services/localization.service', () => ({
+  __esModule: true,
+  default: {
+    async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
+      [localizeKey: string]: string;
+    }> {
+      return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+    },
+  },
+}));
 
 test('Get verseRef returns default value', async () => {
   const result = await settingsProviderEngine.get('platform.verseRef');
@@ -62,6 +79,13 @@ test('Get verseRef returns default value', async () => {
 test('Get interfaceLanguage returns stored value', async () => {
   const result = await settingsProviderEngine.get('platform.interfaceLanguage');
   expect(result).toEqual(MOCK_SETTINGS_DATA['platform.interfaceLanguage']);
+});
+
+test('Get default localizeKey returns localized string', async () => {
+  // This is a fake setting
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const result = await settingsProviderEngine.get('platform.name' as SettingNames);
+  expect(result).toEqual('missing');
 });
 
 test('No setting exists for key', async () => {

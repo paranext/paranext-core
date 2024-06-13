@@ -109,7 +109,9 @@ const helloWorldProjectWebViewProvider: IWebViewProviderWithType = {
     return {
       title: projectId
         ? `Hello World Project: ${
-            (await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId
+            (await (
+              await papi.projectDataProviders.get('platform.base', projectId)
+            ).getSetting('platform.name')) ?? projectId
           }`
         : 'Hello World Project',
       ...savedWebView,
@@ -175,7 +177,9 @@ const helloWorldProjectViewerProvider: IWebViewProviderWithType = {
     return {
       title: projectId
         ? `Hello World Project Viewer: ${
-            (await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId
+            (await (
+              await papi.projectDataProviders.get('platform.base', projectId)
+            ).getSetting('platform.name')) ?? projectId
           }`
         : 'Hello World Project Viewer',
       ...savedWebView,
@@ -232,6 +236,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const helloWorldPdpefPromise = papi.projectDataProviders.registerProjectDataProviderEngineFactory(
+    'helloWorld.helloWorldPdpf',
     HELLO_WORLD_PROJECT_INTERFACES,
     helloWorldProjectDataProviderEngineFactory,
   );

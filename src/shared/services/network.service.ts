@@ -7,18 +7,17 @@
 import {
   ClientConnectEvent,
   ClientDisconnectEvent,
-  CLIENT_ID_SERVER,
   NetworkEventHandler,
   RequestHandler,
   RequestRouter,
   CATEGORY_COMMAND,
+  CLIENT_ID_UNKNOWN,
 } from '@shared/data/internal-connection.model';
 import {
   aggregateUnsubscriberAsyncs,
   stringLength,
   UnsubscriberAsync,
   getErrorMessage,
-  wait,
   PlatformEventEmitter,
   PlatformEvent,
   indexOf,
@@ -187,24 +186,7 @@ const requestRawUnsafe = async <TParam, TReturn>(
       `Cannot perform raw request ${requestType} as the NetworkService is not initialized`,
     );
 
-  // https://github.com/paranext/paranext-core/issues/51
-  // If the request type doesn't have a registered handler yet, retry a few times to help with race
-  // conditions. This approach is hacky but works well enough for now.
-  const expectedErrorMsg: string = `No handler was found to process the request of type ${requestType}`;
-  const maxAttempts: number = 10;
-  for (let attemptsRemaining = maxAttempts; attemptsRemaining > 0; attemptsRemaining--) {
-    // eslint-disable-next-line no-await-in-loop
-    const response = await connectionService.request<TParam, TReturn>(requestType, contents);
-    if (response.success || attemptsRemaining === 1 || response.errorMessage !== expectedErrorMsg)
-      return response;
-
-    // eslint-disable-next-line no-await-in-loop
-    await wait(1000);
-
-    logger.debug(`Retrying network service request of type ${requestType}`);
-  }
-
-  throw new Error(`Raw request ${requestType} failed`);
+  return connectionService.request<TParam, TReturn>(requestType, contents);
 };
 
 /**
@@ -652,8 +634,8 @@ const routeRequest: RequestRouter = (requestType: string): number => {
   const registration = requestRegistrations.get(requestType);
   if (!registration)
     // We are the client and we need to send the request to the server or we are the server and we
-    // need to return an error
-    return CLIENT_ID_SERVER;
+    // need to try to figure out the recipient or return an error
+    return CLIENT_ID_UNKNOWN;
   if (registration.registrationType === 'local')
     // We will handle this request here
     return connectionService.getClientId();

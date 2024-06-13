@@ -171,12 +171,6 @@ i.add-comment {
   background-image: url("/assets/images/icons/chat-left-text.svg");
 }
 
-@media (max-width: 1024px) {
-  .CommentPlugin_AddCommentBox {
-    display: none;
-  }
-}
-
 .CommentPlugin_CommentInputBox {
   display: block;
   position: absolute;
@@ -275,10 +269,11 @@ i.add-comment {
 }
 
 .CommentPlugin_ShowCommentsButton {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  background-color: #ddd;
+  padding-top: 6px;
+  padding-bottom: 7px;
+  padding-left: 13px;
+  padding-right: 13px;
+  background-color: inherit;
   border-radius: 10px;
 }
 
@@ -294,12 +289,6 @@ i.comments {
   transition: opacity 0.2s linear;
 }
 
-@media (max-width: 1024px) {
-  .CommentPlugin_ShowCommentsButton {
-    display: none;
-  }
-}
-
 /* stylelint-disable-next-line selector-no-qualifying-type */
 .CommentPlugin_ShowCommentsButton:hover i.comments {
   opacity: 1;
@@ -310,16 +299,12 @@ i.comments {
 }
 
 .CommentPlugin_CommentsPanel {
-  position: fixed;
-  right: 0;
   width: 300px;
-  height: calc(100% - 88px);
-  top: 88px;
+  height: 100%;
   background-color: #fff;
   border-top-left-radius: 10px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   animation: show-comments 0.2s ease;
-  z-index: 25;
 }
 
 @keyframes show-comments {
@@ -414,14 +399,14 @@ i.send {
   top: calc(50% - 15px);
   margin: 0;
   padding: 0;
-  width: 100%;
+  width: inherit;
 }
 
 .CommentPlugin_CommentsPanel_List {
   list-style-type: none;
   margin: 0;
   padding: 0;
-  width: 100%;
+  width: inherit;
   position: absolute;
   top: 45px;
   overflow-y: auto;

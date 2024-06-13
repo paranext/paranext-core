@@ -8,6 +8,7 @@ declare module 'papi-shared-types' {
   } from '@shared/models/data-provider.model';
   import type {
     MandatoryProjectDataTypes,
+    PROJECT_INTERFACE_PLATFORM_BASE,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from '@shared/models/project-data-provider.model';
   import type { IDisposableDataProvider } from '@shared/models/data-provider.interface';
@@ -138,6 +139,13 @@ declare module 'papi-shared-types' {
      */
     'platform.language': string;
     /**
+     * Short name of the project (not necessarily unique). This will be displayed directly in the
+     * UI.
+     *
+     * @example 'WEB'
+     */
+    'platform.name': string;
+    /**
      * Localized full name of the project. This will be displayed directly in the UI.
      *
      * @example 'World English Bible'
@@ -233,33 +241,56 @@ declare module 'papi-shared-types' {
    * available, a Project Data Provider Factory that supports that project with some set of
    * `projectInterface`s creates a new instance of a PDP with the supported `projectInterface`s.
    *
-   * Every PDP **must** fulfill the requirements of all PDPs according to
-   * {@link MandatoryProjectDataTypes}.
+   * Often, these objects are Layering PDPs, meaning they manipulate data provided by Base PDPs
+   * which actually control the saving and loading of the data. Base PDPs must implement
+   * {@link IBaseProjectDataProvider}, which imposes additional requirements.
+   *
+   * See more information, including the difference between Base and Layering PDPs, at
+   * {@link ProjectDataProviderInterfaces}.
    */
-  export type IProjectDataProvider<TProjectDataTypes extends DataProviderDataTypes> = IDataProvider<
-    TProjectDataTypes & MandatoryProjectDataTypes
-  > &
-    WithProjectDataProviderEngineSettingMethods<TProjectDataTypes> &
-    WithProjectDataProviderEngineExtensionDataMethods<TProjectDataTypes> & {
-      /**
-       * Subscribe to receive updates to the specified project setting.
-       *
-       * Note: By default, this `subscribeSetting` function automatically retrieves the current
-       * project setting value and runs the provided callback as soon as possible. That way, if you
-       * want to keep your data up-to-date, you do not also have to run `getSetting`. You can turn
-       * this functionality off in the `options` parameter.
-       *
-       * @param key The string id of the project setting for which to listen to changes
-       * @param callback Function to run with the updated project setting value
-       * @param options Various options to adjust how the subscriber emits updates
-       * @returns Unsubscriber to stop listening for updates
-       */
-      subscribeSetting: <ProjectSettingName extends ProjectSettingNames>(
-        key: ProjectSettingName,
-        callback: (value: ProjectSettingTypes[ProjectSettingName]) => void,
-        options: DataProviderSubscriberOptions,
-      ) => Promise<UnsubscriberAsync>;
-    };
+  export type IProjectDataProvider<TProjectDataTypes extends DataProviderDataTypes> =
+    IDataProvider<TProjectDataTypes>;
+
+  /**
+   * An object on the papi for interacting with that project data. Created by the papi and layers
+   * over an {@link IBaseProjectDataProviderEngine} provided by an extension. Sometimes returned from
+   * getting a project data provider with `papi.projectDataProviders.get` (depending on if the PDP
+   * supports the `platform.base` `projectInterface`).
+   *
+   * Project Data Providers are a specialized version of {@link IDataProvider} that work with
+   * projects by exposing methods according to a set of `projectInterface`s. For each project
+   * available, a Project Data Provider Factory that supports that project with some set of
+   * `projectInterface`s creates a new instance of a PDP with the supported `projectInterface`s.
+   *
+   * Every Base PDP **must** fulfill the requirements of this interface in order to support the
+   * methods the PAPI requires for interacting with project data.
+   *
+   * See more information, including the difference between Base and Layering PDPs, at
+   * {@link ProjectDataProviderInterfaces}.
+   */
+  export type IBaseProjectDataProvider<TProjectDataTypes extends DataProviderDataTypes> =
+    IProjectDataProvider<TProjectDataTypes & MandatoryProjectDataTypes> &
+      WithProjectDataProviderEngineSettingMethods<TProjectDataTypes> &
+      WithProjectDataProviderEngineExtensionDataMethods<TProjectDataTypes> & {
+        /**
+         * Subscribe to receive updates to the specified project setting.
+         *
+         * Note: By default, this `subscribeSetting` function automatically retrieves the current
+         * project setting value and runs the provided callback as soon as possible. That way, if
+         * you want to keep your data up-to-date, you do not also have to run `getSetting`. You can
+         * turn this functionality off in the `options` parameter.
+         *
+         * @param key The string id of the project setting for which to listen to changes
+         * @param callback Function to run with the updated project setting value
+         * @param options Various options to adjust how the subscriber emits updates
+         * @returns Unsubscriber to stop listening for updates
+         */
+        subscribeSetting: <ProjectSettingName extends ProjectSettingNames>(
+          key: ProjectSettingName,
+          callback: (value: ProjectSettingTypes[ProjectSettingName]) => void,
+          options: DataProviderSubscriberOptions,
+        ) => Promise<UnsubscriberAsync>;
+      };
 
   /** This is just a simple example so we have more than one. It's not intended to be real. */
   export type NotesOnlyProjectDataTypes = MandatoryProjectDataTypes & {
@@ -272,37 +303,69 @@ declare module 'papi-shared-types' {
    * their `.d.ts` file and registering a Project Data Provider factory with the corresponding
    * `projectInterface`.
    *
-   * All Project Data Provider Interfaces' data types **must** extend
-   * {@link MandatoryProjectDataTypes} like the following example. Please see its documentation for
-   * information on how Project Data Providers can implement this interface.
+   * There are two types of Project Data Providers (and Project Data Provider Factories that serve
+   * them):
+   *
+   * 1. Base Project Data Provider - provides project data via some `projectInterface`s for its own
+   *    projects with **its own unique project ids**. These PDPs **must support the `platform.base`
+   *    `projectInterface` by implementing {@link IBaseProjectDataProvider}**. More information
+   *    below.
+   * 2. Layering Project Data Provider - layers over other PDPs and provides additional
+   *    `projectInterface`s for projects on other PDPs. Likely **does not provide its own unique
+   *    project ids** but rather layers over base PDPs' project ids. These PDPs **do not need to
+   *    support the `platform.base` `projectInterface` and should instead implement
+   *    {@link IProjectDataProvider}**. Instead of providing projects themselves, they likely use the
+   *    `ExtensionData` data type exposed via the `platform.base` `projectInterface` on Base PDPs to
+   *    provide additional project data on top of Base PDPs.
+   *
+   * All Base Project Data Provider Interfaces' data types **must** implement
+   * {@link IBaseProjectDataProvider} (which extends {@link MandatoryProjectDataTypes}) like in the
+   * following example. Please see its documentation for information on how Project Data Providers
+   * can implement this interface.
    *
    * Note: The keys of this interface are the `projectInterface`s for the associated Project Data
    * Provider Interfaces. `projectInterface`s represent standardized sets of methods on a PDP.
    *
-   * WARNING: Each Project Data Provider **must** fulfill certain requirements for its `getSetting`,
-   * `setSetting`, and `resetSetting` methods. See {@link MandatoryProjectDataTypes} for more
-   * information.
+   * WARNING: Each Base Project Data Provider **must** fulfill certain requirements for its
+   * `getSetting`, `setSetting`, `resetSetting`, `getExtensionData`, and `setExtensionData` methods.
+   * See {@link IBaseProjectDataProvider} and {@link MandatoryProjectDataTypes} for more information.
    *
    * An extension can extend this interface to add types for the Project Data Provider Interfaces
    * its registered factory provides by adding the following to its `.d.ts` file (in this example,
-   * we are adding a Project Data Provider interface for the `MyExtensionProjectInterfaceName`
-   * `projectInterface`):
+   * we are adding a Base Project Data Provider interface for the `MyExtensionBaseProjectInterface`
+   * `projectInterface` and a Layering Project Data Provider interface for the
+   * `MyExtensionLayeringProjectInterface` `projectInterface`):
    *
    * @example
    *
    * ```typescript
    * declare module 'papi-shared-types' {
-   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
+   *   export type MyBaseProjectDataTypes = {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   };
    *
+   *   export type MyLayeringProjectDataTypes = {
+   *     MyOtherProjectData: DataProviderDataType<number, number, number>;
+   *   };
+   *
    *   export interface ProjectDataProviderInterfaces {
-   *     MyExtensionProjectInterfaceName: IDataProvider<MyProjectDataTypes>;
+   *     // Note that the base PDP implements `I**Base**ProjectDataProvider`
+   *     MyExtensionBaseProjectInterface: IBaseProjectDataProvider<MyProjectDataTypes>;
+   *     // Note that the layering PDP only implements `IProjectDataProvider` because the base PDP already
+   *     // provides the `platform.base` data types
+   *     MyExtensionLayeringProjectInterface: IProjectDataProvider<MyLayeringProjectDataTypes>;
    *   }
    * }
    * ```
    */
   export interface ProjectDataProviderInterfaces {
+    /**
+     * Base `projectInterface` that all PDPs that expose their own unique project ids must
+     * implement.
+     *
+     * There should be a PDP that provides `platform.base` for all available project ids.
+     */
+    [PROJECT_INTERFACE_PLATFORM_BASE]: IBaseProjectDataProvider<MandatoryProjectDataTypes>;
     'platform.notesOnly': IProjectDataProvider<NotesOnlyProjectDataTypes>;
     'platform.placeholder': IProjectDataProvider<PlaceholderDataTypes>;
   }

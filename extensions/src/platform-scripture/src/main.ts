@@ -7,6 +7,10 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import ScriptureExtenderProjectDataProviderEngineFactory, {
+  SCRIPTURE_EXTENDER_PDPF_ID,
+} from './project-data-provider/platform-scripture-extender-pdpef.model';
+import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 import characterInventoryWebView from './character-inventory.web-view?inline';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
@@ -18,7 +22,6 @@ interface InventoryOptions extends GetWebViewOptions {
 
 // #region Project Setting Validators
 
-// Based on https://github.com/paranext/paranext-core/blob/5c403e272b002ddd8970f735bc119f335c78c509/extensions/src/usfm-data-provider/index.d.ts#L401
 // Should be 123 characters long
 const booksPresentValidator: ProjectSettingValidator<'platformScripture.booksPresent'> = async (
   newValue: string,
@@ -26,7 +29,6 @@ const booksPresentValidator: ProjectSettingValidator<'platformScripture.booksPre
   return newValue.length === 123 && newValue.replace(/[01]/g, '').length === 0;
 };
 
-// Based on https://github.com/paranext/paranext-core/blob/5c403e272b002ddd8970f735bc119f335c78c509/extensions/src/usfm-data-provider/index.d.ts#L391
 // There are 7 options in the enum
 const versificationValidator: ProjectSettingValidator<'platformScripture.versification'> = async (
   newValue: number,
@@ -108,6 +110,13 @@ const inventoryWebViewProvider: IWebViewProvider = {
 export async function activate(context: ExecutionActivationContext) {
   logger.info('platformScripture is activating!');
 
+  const scriptureExtenderPdpefPromise =
+    papi.projectDataProviders.registerProjectDataProviderEngineFactory(
+      SCRIPTURE_EXTENDER_PDPF_ID,
+      SCRIPTURE_EXTENDER_PROJECT_INTERFACES,
+      new ScriptureExtenderProjectDataProviderEngineFactory(),
+    );
+
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',
     async (shouldInclude) => {
@@ -152,6 +161,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
 
   context.registrations.add(
+    await scriptureExtenderPdpefPromise,
     await includeProjectsCommandPromise,
     await includeProjectsValidatorPromise,
     await booksPresentPromise,

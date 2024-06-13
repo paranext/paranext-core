@@ -1,4 +1,4 @@
-﻿import { ScrVers, VerseRef } from '@sillsdev/scripture';
+﻿import { VerseRef } from '@sillsdev/scripture';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
@@ -105,7 +105,7 @@ globalThis.webViewComponent = function HelloWorld({
       // Test ref parameter properly getting latest value
       currentRender: currentRender.current,
       optionsSource: 'hook',
-      includeProjectInterfaces: '^ParatextStandard$',
+      includeProjectInterfaces: ['platformScripture.USFM_BookChapterVerse'],
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
@@ -150,7 +150,7 @@ globalThis.webViewComponent = function HelloWorld({
         iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
         title: 'Select List of Hello World Projects',
         selectedProjectIds: projects,
-        includeProjectInterfaces: '^ParatextStandard$',
+        includeProjectInterfaces: ['platformScripture.USFM_BookChapterVerse'],
       }),
       [projects],
     ),
@@ -193,22 +193,12 @@ globalThis.webViewComponent = function HelloWorld({
 
   const [personAge] = useData('helloSomeone.people').Age(name, -1);
 
-  const [psalm1] = useData('usfm').Chapter(
-    useMemo(() => new VerseRef('PSA', '1', '1', ScrVers.English), []),
-    'Loading Psalm 1...',
-  );
-
-  const [john11] = useData('usfm').Verse(
-    useMemo(() => new VerseRef('JHN 1:1'), []),
-    'Loading John 1:1...',
-  );
-
   const [currentProjectVerse] = useProjectData(
-    'ParatextStandard',
+    'platformScripture.USFM_BookChapterVerse',
     projectId ?? undefined,
   ).VerseUSFM(verseRef, 'Loading Verse');
 
-  const helloWorldProjectSettings = useHelloWorldProjectSettings('ParatextStandard', projectId);
+  const helloWorldProjectSettings = useHelloWorldProjectSettings(projectId);
   const { headerStyle } = helloWorldProjectSettings;
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => ['%submitButton%'], []),
@@ -258,10 +248,6 @@ globalThis.webViewComponent = function HelloWorld({
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>
-      <h3>John 1:1</h3>
-      <div>{john11}</div>
-      <h3>Psalm 1</h3>
-      <div>{psalm1}</div>
       <br />
       <div>Selected Project: {projectId ?? 'None'}</div>
       <div>

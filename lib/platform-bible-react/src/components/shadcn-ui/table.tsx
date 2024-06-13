@@ -1,6 +1,3 @@
-// Not sure if this is ok
-/* eslint-disable react/jsx-props-no-spreading */
-
 import * as React from 'react';
 
 import { cn } from '@/utils/shadcn-ui.util';

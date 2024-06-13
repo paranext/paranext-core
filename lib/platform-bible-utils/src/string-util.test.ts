@@ -3,6 +3,7 @@ import {
   charAt,
   codePointAt,
   endsWith,
+  escapeStringRegexp,
   formatReplacementString,
   includes,
   indexOf,
@@ -585,5 +586,12 @@ describe('toArray', () => {
   test('toArray returns correct array', () => {
     const result = toArray(SHORT_SURROGATE_PAIRS_STRING);
     expect(result).toEqual(SHORT_SURROGATE_PAIRS_ARRAY);
+  });
+});
+
+describe('escapeStringRegexp', () => {
+  test('properly escapes stuff', () => {
+    const result = escapeStringRegexp('How much $ for a 🦄?');
+    expect(result).toEqual('How much \\$ for a 🦄\\?');
   });
 });

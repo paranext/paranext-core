@@ -2,11 +2,11 @@ import { ListItemIcon } from '@mui/material';
 import { useCallback, useMemo, useState } from 'react';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import DoneIcon from '@mui/icons-material/Done';
-import ProjectList from '@renderer/components/projects/project-list.component';
+import ProjectList, {
+  ProjectMetadataDisplay,
+} from '@renderer/components/projects/project-list.component';
 import '@renderer/components/dialogs/select-multiple-projects.dialog.scss';
-import projectLookupService, {
-  filterProjectsMetadata,
-} from '@shared/services/project-lookup.service';
+import projectLookupService from '@shared/services/project-lookup.service';
 import { Button, usePromise } from 'platform-bible-react';
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
 import {
@@ -14,6 +14,8 @@ import {
   DialogTypes,
   SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
+import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 
 function SelectMultipleProjectsDialog({
   prompt,
@@ -22,18 +24,43 @@ function SelectMultipleProjectsDialog({
   includeProjectIds,
   includeProjectInterfaces,
   excludeProjectInterfaces,
+  includePdpFactoryIds,
+  excludePdpFactoryIds,
   selectedProjectIds: initialSelectedProjectIds,
 }: DialogTypes[typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]['props']) {
   const [projects, isLoadingProjects] = usePromise(
     useCallback(async () => {
-      const allProjectsMetadata = await projectLookupService.getMetadataForAllProjects();
-      return filterProjectsMetadata(allProjectsMetadata, {
+      const projectsMetadata = await projectLookupService.getMetadataForAllProjects({
         excludeProjectIds,
         includeProjectIds,
         includeProjectInterfaces,
         excludeProjectInterfaces,
+        includePdpFactoryIds,
+        excludePdpFactoryIds,
       });
-    }, [excludeProjectIds, includeProjectIds, includeProjectInterfaces, excludeProjectInterfaces]),
+
+      // Get project names
+      const projectsMetadataDisplay: ProjectMetadataDisplay[] = await Promise.all(
+        projectsMetadata.map(async (projectMetadata) => {
+          const pdp = await papiFrontendProjectDataProviderService.get(
+            PROJECT_INTERFACE_PLATFORM_BASE,
+            projectMetadata.id,
+          );
+
+          const name = await pdp.getSetting('platform.name');
+
+          return { ...projectMetadata, name };
+        }),
+      );
+      return projectsMetadataDisplay;
+    }, [
+      excludeProjectIds,
+      includeProjectIds,
+      includeProjectInterfaces,
+      excludeProjectInterfaces,
+      includePdpFactoryIds,
+      excludePdpFactoryIds,
+    ]),
     useMemo(() => [], []),
   );
 
