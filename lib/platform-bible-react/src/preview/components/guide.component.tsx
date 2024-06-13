@@ -5,17 +5,13 @@ import {
   VerticalTabsTrigger,
 } from '@/components/shadcn-ui/tabs-vertical';
 
-import { Dispatch, SetStateAction } from 'react';
 import { History } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
-import { DirToggle, Direction, HasDirection } from '../direction-toggle';
+import { DirToggle, DirectionProps } from '../direction-toggle';
 import { ThemeButton } from '../theme-toggle.component';
 
-function Guide({
-  direction,
-  setDirection,
-}: HasDirection & { setDirection: Dispatch<SetStateAction<Direction>> }) {
+function Guide({ direction, setDirection }: DirectionProps) {
   return (
     <div>
       <p className="pr-mb-2">This section allows you too look up and learn about some concepts</p>

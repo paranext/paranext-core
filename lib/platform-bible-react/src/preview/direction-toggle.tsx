@@ -3,23 +3,23 @@ import { Button, ButtonProps } from '..';
 
 export type Direction = 'rtl' | 'ltr';
 export type HasDirection = { direction: Direction };
+export type DirectionProps = HasDirection & {
+  setDirection: Dispatch<SetStateAction<Direction>>;
+};
 
-export const DirToggle = React.forwardRef<
-  HTMLButtonElement,
-  ButtonProps & { direction: Direction; setDirection: Dispatch<SetStateAction<Direction>> }
->(({ className, direction, setDirection, ...props }) => {
-  const oppositeDirection = direction === 'rtl' ? 'ltr' : 'rtl';
-  return (
-    // eslint-disable-next-line no-alert
-    <Button
-      className={className}
-      onClick={() => {
-        setDirection(oppositeDirection);
-      }}
-      // eslint-disable-next-line react/jsx-props-no-spreading
-      {...props}
-    >
-      {oppositeDirection}
-    </Button>
-  );
-});
+export const DirToggle = React.forwardRef<HTMLButtonElement, ButtonProps & DirectionProps>(
+  ({ className, direction, setDirection, ...props }) => {
+    const oppositeDirection = direction === 'rtl' ? 'ltr' : 'rtl';
+    return (
+      <Button
+        className={className}
+        onClick={() => {
+          setDirection(oppositeDirection);
+        }}
+        {...props}
+      >
+        {oppositeDirection}
+      </Button>
+    );
+  },
+);
