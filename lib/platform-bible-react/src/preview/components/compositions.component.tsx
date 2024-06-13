@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ScriptureReference } from 'platform-bible-utils';
 import ThemeToggle from '@/preview/theme-toggle.component';
 import {
