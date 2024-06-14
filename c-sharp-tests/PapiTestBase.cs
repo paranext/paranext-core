@@ -24,9 +24,6 @@ namespace TestParanextDataProvider
         [SetUp]
         public virtual Task TestSetup()
         {
-            if (OperatingSystem.IsMacOS())
-                Assert.Ignore("Mac is missing ICU support so these tests will not work");
-
             _projects = new DummyLocalParatextProjects();
             _client = new DummyPapiClient();
 
