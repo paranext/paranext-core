@@ -1,0 +1,19 @@
+.select-books-dialog {
+  display: flex;
+  flex-direction: column;
+  padding: 5%;
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+.select-books-dialog-submit-button {
+  margin-left: auto;
+}
+
+.book-list {
+  height: 250px;
+  width: 400px;
+  columns: 2;
+  column-fill: balance;
+  overflow-y: auto;
+}

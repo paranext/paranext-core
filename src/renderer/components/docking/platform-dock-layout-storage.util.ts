@@ -18,7 +18,7 @@ import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/w
 import LogError from '@shared/log-error.model';
 
 import {
-  mergeUpdatablePropertiesIntoWebViewDefinition,
+  mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
   saveTabInfoBase,
 } from '@renderer/services/web-view.service-host';
 import {
@@ -246,7 +246,8 @@ export function getWebViewDefinition(
  *   same
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
- * @returns True if successfully found the WebView to update; false otherwise
+ * @returns True if successfully found the WebView to update and actually updated any properties;
+ *   false otherwise
  */
 export function updateWebViewDefinition(
   webViewId: string,
@@ -261,11 +262,17 @@ export function updateWebViewDefinition(
 
   if (!targetTabInfo || !targetTabWebViewData) return false;
 
-  // Add the updatable properties according to `WebViewDefinitionUpdateInfo` to the tab's data
-  const updatedWebViewData = mergeUpdatablePropertiesIntoWebViewDefinition(
+  // If there are no properties to update, don't update
+
+  // Try to add the updatable properties according to `WebViewDefinitionUpdateInfo` to the tab's data
+  const updatedWebViewData = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(
     targetTabWebViewData,
     updateInfo,
   );
+
+  // If there were no property updates, return false
+  if (!updatedWebViewData) return false;
+
   const updatedTabData = createRCDockTabFromTabInfo(
     updateWebViewTab(targetTabInfo, updatedWebViewData),
   );

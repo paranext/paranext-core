@@ -1,5 +1,6 @@
-.check-option {
+.check-item {
   flex-wrap: wrap;
+  vertical-align: middle;
 }
 
 .papi-checkbox {

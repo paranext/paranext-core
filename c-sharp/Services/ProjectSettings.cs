@@ -1,9 +1,12 @@
-namespace Paranext.DataProvider.Projects;
+namespace Paranext.DataProvider.Services;
 
 public sealed class ProjectSettings
 {
     public const string PB_BOOKS_PRESENT = "platformScripture.booksPresent";
     public const string PT_BOOKS_PRESENT = "BooksPresent";
+
+    public const string PB_NAME = "platform.name";
+    public const string PT_NAME = "Name";
 
     public const string PB_FULL_NAME = "platform.fullName";
     public const string PT_FULL_NAME = "FullName";
@@ -14,6 +17,14 @@ public sealed class ProjectSettings
     public const string PB_VERSIFICATION = "platformScripture.versification";
     public const string PT_VERSIFICATION = "Versification";
 
+    public const string PB_IS_EDITABLE = "platform.isEditable";
+    public const string PT_IS_EDITABLE = "Editable";
+
+    /// <summary>
+    /// Paratext setting names that are either T or F and need to be converted to booleans
+    /// </summary>
+    private static readonly HashSet<string> _ptSettingBooleans = ["Editable", "MatchBasedOnStems", "AllowReadAccess", "AllowSharingWithSLDR", ];
+
     // Make sure this dictionary gets updated whenever new settings are added
     private static readonly Dictionary<string, string> s_platformBibleToParatextSettingsNames =
         new()
@@ -21,7 +32,9 @@ public sealed class ProjectSettings
             { PB_BOOKS_PRESENT, PT_BOOKS_PRESENT },
             { PB_FULL_NAME, PT_FULL_NAME },
             { PB_LANGUAGE, PT_LANGUAGE },
+            { PB_NAME, PT_NAME },
             { PB_VERSIFICATION, PT_VERSIFICATION },
+            { PB_IS_EDITABLE, PT_IS_EDITABLE },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =
@@ -49,5 +62,15 @@ public sealed class ProjectSettings
         return s_paratextToPlatformBibleSettingsNames.TryGetValue(ptSettingName, out string? retVal)
             ? retVal
             : null;
+    }
+
+    /// <summary>
+    /// Determines whether a Paratext Setting is expected to be a boolean ("T" or "F" only)
+    /// </summary>
+    /// <param name="ptSettingName"></param>
+    /// <returns></returns>
+    public static bool IsParatextSettingABoolean(string ptSettingName)
+    {
+        return _ptSettingBooleans.Contains(ptSettingName);
     }
 }

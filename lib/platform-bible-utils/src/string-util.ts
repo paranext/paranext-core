@@ -1,3 +1,4 @@
+import { LocalizeKey } from 'menus.model';
 import {
   indexOf as stringzIndexOf,
   substring as stringzSubstring,
@@ -82,6 +83,108 @@ export function endsWith(
   return true;
 }
 
+/**
+ * Get the index of the closest closing curly brace in a string.
+ *
+ * Note: when escaped, gets the index of the curly brace, not the backslash before it.
+ *
+ * @param str String to search
+ * @param index Index at which to start searching. Inclusive of this index
+ * @param escaped Whether to search for an escaped or an unescaped closing curly brace
+ * @returns Index of closest closing curly brace or -1 if not found
+ */
+function indexOfClosestClosingCurlyBrace(str: string, index: number, escaped: boolean) {
+  if (index < 0) return -1;
+  if (escaped) {
+    if (charAt(str, index) === '}' && charAt(str, index - 1) === '\\') return index;
+    const closeCurlyBraceIndex = indexOf(str, '\\}', index);
+    return closeCurlyBraceIndex >= 0 ? closeCurlyBraceIndex + 1 : closeCurlyBraceIndex;
+  }
+
+  let i = index;
+  const strLength = stringLength(str);
+  while (i < strLength) {
+    i = indexOf(str, '}', i);
+
+    if (i === -1 || charAt(str, i - 1) !== '\\') break;
+
+    // Didn't find an un-escaped close brace, so keep looking
+    i += 1;
+  }
+
+  return i >= strLength ? -1 : i;
+}
+
+/**
+ * Formats a string, replacing {localization key} with the localization (or multiple localizations
+ * if there are multiple in the string). Will also remove \ before curly braces if curly braces are
+ * escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this is {name}! I like
+ * `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
+ *
+ * If the key in unescaped braces is not found, just return the key without the braces. Empty
+ * unescaped curly braces will just return a string without the braces e.g. ('I am {Nemo}', {
+ * 'name': 'Jim'}) would return 'I am Nemo'.
+ *
+ * @param str String to format
+ * @returns Formatted string
+ */
+export function formatReplacementString(str: string, replacers: { [key: string]: string }): string {
+  let updatedStr = str;
+
+  let i = 0;
+  while (i < stringLength(updatedStr)) {
+    switch (charAt(updatedStr, i)) {
+      case '{':
+        if (charAt(updatedStr, i - 1) !== '\\') {
+          // This character is an un-escaped open curly brace. Try to match and replace
+          const closeCurlyBraceIndex = indexOfClosestClosingCurlyBrace(updatedStr, i, false);
+          if (closeCurlyBraceIndex >= 0) {
+            // We have matching open and close indices. Try to replace the contents
+            const replacerKey = substring(updatedStr, i + 1, closeCurlyBraceIndex);
+            // Replace with the replacer string or just remove the curly braces
+            const replacerString = replacerKey in replacers ? replacers[replacerKey] : replacerKey;
+
+            updatedStr = `${substring(updatedStr, 0, i)}${replacerString}${substring(updatedStr, closeCurlyBraceIndex + 1)}`;
+            // Put our index at the closing brace adjusted for the new string length minus two
+            // because we are removing the curly braces
+            // Ex: "stuff {and} things"
+            // Replacer for and: n'
+            // closeCurlyBraceIndex is 10
+            // "stuff n' things"
+            // i = 10 + 2 - 3 - 2 = 7
+            i = closeCurlyBraceIndex + stringLength(replacerString) - stringLength(replacerKey) - 2;
+          } else {
+            // This is an unexpected un-escaped open curly brace with no matching closing curly
+            // brace. Just ignore, I guess
+          }
+        } else {
+          // This character is an escaped open curly brace. Remove the escape
+          updatedStr = `${substring(updatedStr, 0, i - 1)}${substring(updatedStr, i)}`;
+          // Adjust our index because we removed the escape
+          i -= 1;
+        }
+        break;
+      case '}':
+        if (charAt(updatedStr, i - 1) !== '\\') {
+          // This character is an un-escaped closing curly brace with no matching open curly
+          // brace. Just ignore, I guess
+        } else {
+          // This character is an escaped closing curly brace. Remove the escape
+          updatedStr = `${substring(updatedStr, 0, i - 1)}${substring(updatedStr, i)}`;
+          // Adjust our index because we removed the escape
+          i -= 1;
+        }
+        break;
+      default:
+        // No need to do anything with other characters at this point
+        break;
+    }
+
+    i += 1;
+  }
+
+  return updatedStr;
+}
 /**
  * This function mirrors the `includes` function from the JavaScript Standard String object. It
  * handles Unicode code points instead of UTF-16 character codes.
@@ -406,3 +509,41 @@ export function substring(
 export function toArray(string: string): string[] {
   return stringzToArray(string);
 }
+
+/** Determine whether the string is a `LocalizeKey` meant to be localized in Platform.Bible. */
+export function isLocalizeKey(str: string): str is LocalizeKey {
+  return startsWith(str, '%') && endsWith(str, '%');
+}
+
+/**
+ * Escape RegExp special characters.
+ *
+ * You can also use this to escape a string that is inserted into the middle of a regex, for
+ * example, into a character class.
+ *
+ * All credit to [`escape-string-regexp`](https://www.npmjs.com/package/escape-string-regexp) - this
+ * function is simply copied directly from there to allow a common js export
+ *
+ * @example
+ *
+ *     import escapeStringRegexp from 'platform-bible-utils';
+ *
+ *     const escapedString = escapeStringRegexp('How much $ for a 🦄?');
+ *     //=> 'How much \\$ for a 🦄\\?'
+ *
+ *     new RegExp(escapedString);
+ */
+export function escapeStringRegexp(string: string): string {
+  if (typeof string !== 'string') {
+    throw new TypeError('Expected a string');
+  }
+
+  // Escape characters with special meaning either inside or outside character sets.
+  // Use a simple backslash escape when it’s always valid, and a `\xnn` escape when the simpler form would be disallowed by Unicode patterns’ stricter grammar.
+  return string.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
+}
+
+/** This is an internal-only export for testing purposes and should not be used in development */
+export const testingStringUtils = {
+  indexOfClosestClosingCurlyBrace,
+};

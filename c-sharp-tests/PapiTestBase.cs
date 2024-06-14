@@ -22,13 +22,15 @@ namespace TestParanextDataProvider
 
         #region Test setup/teardown
         [SetUp]
-        public virtual void TestSetup()
+        public virtual Task TestSetup()
         {
             if (OperatingSystem.IsMacOS())
                 Assert.Ignore("Mac is missing ICU support so these tests will not work");
 
             _projects = new DummyLocalParatextProjects();
             _client = new DummyPapiClient();
+
+            return Task.CompletedTask;
         }
 
         [TearDown]
@@ -73,12 +75,11 @@ namespace TestParanextDataProvider
 
         #region Helper methods to create test data
         /// <summary>
-        /// Creates a new dummy project for testing purposes. The project is added to the ScrTextCollection.
+        /// Creates a new dummy project for testing purposes
         /// </summary>
         protected static DummyScrText CreateDummyProject()
         {
             DummyScrText scrText = new();
-            ScrTextCollection.Add(scrText, true);
             return scrText;
         }
 
@@ -97,11 +98,11 @@ namespace TestParanextDataProvider
         protected static ProjectDetails CreateProjectDetails(
             string id,
             string name,
-            string projectType = ""
+            List<string>? projectInterfaces = null
         )
         {
-            ProjectMetadata metadata = new(id, name, projectType);
-            return new ProjectDetails(metadata, "testDirectoryThatDoesNotExist");
+            ProjectMetadata metadata = new(id, projectInterfaces ?? []);
+            return new ProjectDetails(name, metadata, "testDirectoryThatDoesNotExist");
         }
 
         /// <summary>

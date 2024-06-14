@@ -1,17 +1,17 @@
+import {
+  EditorOptions,
+  Editorial,
+  EditorRef,
+  Marginal,
+  MarginalRef,
+} from '@biblionexus-foundation/platform-editor';
+import { Usj } from '@biblionexus-foundation/scripture-utilities';
 import { VerseRef } from '@sillsdev/scripture';
+import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
+import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useSetting } from '@papi/frontend/react';
 import { ScriptureReference, debounce } from 'platform-bible-utils';
-import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
-import type { WebViewProps } from '@papi/core';
-import {
-  Editor,
-  EditorOptions,
-  EditorRef,
-  Usj,
-  usjToUsxString,
-  usxStringToUsj,
-} from '@biblionexus-foundation/platform-editor';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -27,6 +27,8 @@ const defaultScrRef: ScriptureReference = {
   chapterNum: 1,
   verseNum: 1,
 };
+
+const usjDocumentDefault: Usj = { type: 'USJ', version: '0.2.1', content: [] };
 
 function scrollToScrRef(scrRef: ScriptureReference) {
   const verseElement = document.querySelector<HTMLElement>(
@@ -50,14 +52,15 @@ function scrollToScrRef(scrRef: ScriptureReference) {
 }
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
+  projectId,
   useWebViewState,
 }: WebViewProps): JSX.Element {
-  const [projectId] = useWebViewState<string>('projectId', '');
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
+  const Editor = isReadOnly ? Editorial : Marginal;
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
-  const editorRef = useRef<EditorRef | null>(null);
+  const editorRef = useRef<EditorRef | MarginalRef | null>(null);
   const [scrRef, setScrRefInternal] = useSetting('platform.verseRef', defaultScrRef);
 
   /**
@@ -80,31 +83,28 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
-  const [usx, setUsx] = useProjectData('ParatextStandard', projectId).ChapterUSX(
+  const [usj, setUsj] = useProjectData('platformScripture.USJ_Chapter', projectId).ChapterUSJ(
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
-    '',
+    usjDocumentDefault,
   );
 
-  const debouncedSetUsx = useMemo(
-    () => debounce((usj: Usj) => setUsx?.(usjToUsxString(usj)), 300),
-    [setUsx],
-  );
+  const debouncedSetUsx = useMemo(() => debounce((newUsj: Usj) => setUsj?.(newUsj), 300), [setUsj]);
 
   // TODO: remove debounce when issue #826 is done.
   const onChange = useCallback(debouncedSetUsx, [debouncedSetUsx]);
 
   useEffect(() => {
-    if (usx) editorRef.current?.setUsj(usxStringToUsj(usx));
-  }, [usx]);
+    if (usj) editorRef.current?.setUsj(usj);
+  }, [usj]);
 
   useEffect(() => {
-    if (usx && !hasFirstRetrievedScripture.current) {
+    if (usj && !hasFirstRetrievedScripture.current) {
       hasFirstRetrievedScripture.current = true;
       // Wait before scrolling to make sure there is time for the editor to load
       // TODO: hook into the editor and detect when it has loaded somehow
       setTimeout(() => scrollToScrRef(scrRef), EDITOR_LOAD_DELAY_TIME);
     }
-  }, [usx, scrRef]);
+  }, [usj, scrRef]);
 
   // Scroll the selected verse into view
   useEffect(() => {

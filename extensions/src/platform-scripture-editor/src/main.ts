@@ -39,16 +39,52 @@ async function open(
   projectId: string | undefined,
   isReadOnly: boolean,
 ): Promise<string | undefined> {
-  let projectIdForWebView = projectId;
-  if (!projectIdForWebView) {
-    projectIdForWebView = await papi.dialogs.selectProject({
-      title: 'Select Resource',
-      prompt: 'Choose the resource project:',
-      includeProjectTypes: '^ParatextStandard$',
+  const projectForWebView = { projectId, isEditable: !isReadOnly };
+  if (!projectForWebView.projectId) {
+    // Get a list of projects that are editable or not editable to show in the select project dialog
+    const projectMetadatas = await papi.projectLookup.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
     });
+    const projectsWithEditable = await Promise.all(
+      projectMetadatas.map(async (projectMetadata) => {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectMetadata.id);
+        return {
+          projectId: projectMetadata.id,
+          isEditable: await pdp.getSetting('platform.isEditable'),
+        };
+      }),
+    );
+
+    const projectIdsMatchingReadonly = projectsWithEditable
+      .filter(({ isEditable }) => isEditable !== isReadOnly)
+      .map(({ projectId: pId }) => pId);
+
+    if (projectIdsMatchingReadonly.length > 0) {
+      projectForWebView.projectId = await papi.dialogs.selectProject({
+        title: isReadOnly
+          ? '%platformScriptureEditor_dialog_openResourceViewer_title%'
+          : '%platformScriptureEditor_dialog_openScriptureEditor_title%',
+        prompt: isReadOnly
+          ? '%platformScriptureEditor_dialog_openResourceViewer_prompt%'
+          : '%platformScriptureEditor_dialog_openScriptureEditor_prompt%',
+        // Include projects whose editable matches readonly
+        includeProjectIds: projectIdsMatchingReadonly,
+      });
+    } else {
+      logger.warn(
+        `Open ${isReadOnly ? 'Resource Viewer' : 'Scripture Editor'} did not find any projects with matching isEditable! Would show a prompt or something if there were a dialog available to do so`,
+      );
+    }
+  } else {
+    // Get whether the provided project is editable
+    const pdp = await papi.projectDataProviders.get('platform.base', projectForWebView.projectId);
+    projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
-  if (projectIdForWebView) {
-    const options: PlatformScriptureEditorOptions = { projectId: projectIdForWebView, isReadOnly };
+  if (projectForWebView.projectId) {
+    const options: PlatformScriptureEditorOptions = {
+      projectId: projectForWebView.projectId,
+      isReadOnly: !projectForWebView.isEditable,
+    };
     // REVIEW: If an editor is already open for the selected project, we open another.
     // This matches the current behavior in P9, though it might not be what we want long-term.
     return papi.webViews.getWebView(scriptureEditorWebViewType, undefined, options);
@@ -68,15 +104,15 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
       );
 
     // We know that the projectId (if present in the state) will be a string.
-    const projectId =
-      getWebViewOptions.projectId ||
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      (savedWebView.state?.projectId as string) ||
-      undefined;
+    const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
     let title = '';
     if (projectId) {
-      title = `${(await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId}${isReadOnly ? '' : ' (Editable)'}`;
+      title = `${
+        (await (
+          await papi.projectDataProviders.get('platform.base', projectId)
+        ).getSetting('platform.name')) ?? projectId
+      }${isReadOnly ? '' : ' (Editable)'}`;
     } else title = isReadOnly ? 'Resource Viewer' : 'Scripture Editor';
 
     return {
@@ -86,9 +122,9 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
       styles: platformScriptureEditorWebViewStyles,
       state: {
         ...savedWebView.state,
-        projectId,
         isReadOnly,
       },
+      projectId,
     };
   },
 };

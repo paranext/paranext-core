@@ -40,7 +40,19 @@ declare module 'shared/models/web-view.model' {
     title?: string;
     /** Tooltip that is shown when hovering over the webview title */
     tooltip?: string;
-    /** General object to store unique state for this webview */
+    /**
+     * Project id associated with this web view.
+     *
+     * Note: This field may be used in other contexts (like menu commands) for project-specific
+     * operations related to this web view.
+     */
+    projectId?: string;
+    /**
+     * General object to store unique state for this webview.
+     *
+     * WARNING: This storage is not private; other extensions can access this data. Do not store
+     * secrets in here
+     */
     state?: Record<string, unknown>;
     /**
      * Whether to allow the WebView iframe to interact with its parent as a same-origin website.
@@ -150,20 +162,47 @@ declare module 'shared/models/web-view.model' {
     | WebViewDefinitionHtml
     | WebViewDefinitionURL;
   /**
+   * The keys of properties on a WebViewDefinition that are omitted when converting to a
+   * {@link SavedWebViewDefinition}
+   */
+  export const SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS: readonly [
+    'content',
+    'styles',
+    'allowScripts',
+    'allowSameOrigin',
+    'allowedFrameSources',
+  ];
+  /**
+   * The keys of properties on a WebViewDefinition that are omitted when converting to a
+   * {@link SavedWebViewDefinition}
+   */
+  export type SavedWebViewDefinitionOmittedKeys =
+    (typeof SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS)[number];
+  /**
    * Saved WebView information that does not contain the actual content of the WebView. Saved into
    * layouts. Could have as little as the type and ID. WebView providers load these into actual
    * {@link WebViewDefinition}s and verify any existing properties on the WebViews.
    */
   export type SavedWebViewDefinition = (
-    | Partial<Omit<WebViewDefinitionReact, 'content' | 'styles' | 'allowScripts'>>
-    | Partial<Omit<WebViewDefinitionHtml, 'content' | 'allowScripts'>>
-    | Partial<Omit<WebViewDefinitionURL, 'content' | 'allowScripts'>>
+    | Partial<Omit<WebViewDefinitionReact, SavedWebViewDefinitionOmittedKeys>>
+    | Partial<Omit<WebViewDefinitionHtml, SavedWebViewDefinitionOmittedKeys>>
+    | Partial<Omit<WebViewDefinitionURL, SavedWebViewDefinitionOmittedKeys>>
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+  /**
+   * The keys of properties on a WebViewDefinition that may be updated when that webview is already
+   * displayed
+   */
+  export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS: readonly [
+    'iconUrl',
+    'title',
+    'tooltip',
+    'projectId',
+  ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
     WebViewDefinitionBase,
-    'iconUrl' | 'title' | 'tooltip'
+    (typeof WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS)[number]
   >;
   /**
    * WebViewDefinition properties for updating a WebView that is already displayed. Any unspecified
@@ -217,14 +256,12 @@ declare module 'shared/models/web-view.model' {
   ];
   /**
    *
-   * Gets the updatable properties on this WebView's WebView definition
+   * Gets the saved properties on this WebView's WebView definition
    *
-   * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found for
-   * some reason
+   * _＠returns_ saved properties this WebView's WebView definition or undefined if not found for some
+   * reason
    */
-  export type GetWebViewDefinitionUpdatableProperties = () =>
-    | WebViewDefinitionUpdatableProperties
-    | undefined;
+  export type GetSavedWebViewDefinition = () => SavedWebViewDefinition | undefined;
   /**
    *
    * Updates this WebView with the specified properties
@@ -232,7 +269,8 @@ declare module 'shared/models/web-view.model' {
    * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
    * the same
    *
-   * _＠returns_ true if successfully found the WebView to update; false otherwise
+   * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
+   * false otherwise
    *
    * _＠example_
    *
@@ -242,7 +280,7 @@ declare module 'shared/models/web-view.model' {
    */
   export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) => boolean;
   /** Props that are passed into the web view itself inside the iframe in the web view tab component */
-  export type WebViewProps = {
+  export type WebViewProps = SavedWebViewDefinition & {
     /**
      *
      * A React hook for working with a state object tied to a webview. Returns a WebView state value and
@@ -283,20 +321,13 @@ declare module 'shared/models/web-view.model' {
     useWebViewState: UseWebViewStateHook;
     /**
      *
-     * Gets the updatable properties on this WebView's WebView definition
-     *
-     * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found for
-     * some reason
-     */
-    getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
-    /**
-     *
      * Updates this WebView with the specified properties
      *
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
      * the same
      *
-     * _＠returns_ true if successfully found the WebView to update; false otherwise
+     * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
+     * false otherwise
      *
      * _＠example_
      *
@@ -335,10 +366,10 @@ declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';
   import {
-    GetWebViewDefinitionUpdatableProperties,
+    GetSavedWebViewDefinition,
+    SavedWebViewDefinition,
     UpdateWebViewDefinition,
     UseWebViewStateHook,
-    WebViewDefinitionUpdatableProperties,
     WebViewDefinitionUpdateInfo,
     WebViewProps,
   } from 'shared/models/web-view.model';
@@ -410,21 +441,19 @@ declare module 'shared/global-this.model' {
     var setWebViewState: <T>(stateKey: string, stateValue: T) => void;
     /** Remove the value for a given key in the web view state */
     var resetWebViewState: (stateKey: string) => void;
-    var getWebViewDefinitionUpdatablePropertiesById: (
-      webViewId: string,
-    ) => WebViewDefinitionUpdatableProperties | undefined;
+    var getSavedWebViewDefinitionById: (webViewId: string) => SavedWebViewDefinition | undefined;
     var updateWebViewDefinitionById: (
       webViewId: string,
       webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
     ) => boolean;
     /**
      *
-     * Gets the updatable properties on this WebView's WebView definition
+     * Gets the saved properties on this WebView's WebView definition
      *
-     * _＠returns_ updatable properties this WebView's WebView definition or undefined if not found for
-     * some reason
+     * _＠returns_ saved properties this WebView's WebView definition or undefined if not found for some
+     * reason
      */
-    var getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
+    var getSavedWebViewDefinition: GetSavedWebViewDefinition;
     /**
      *
      * Updates this WebView with the specified properties
@@ -432,7 +461,8 @@ declare module 'shared/global-this.model' {
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
      * the same
      *
-     * _＠returns_ true if successfully found the WebView to update; false otherwise
+     * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
+     * false otherwise
      *
      * _＠example_
      *
@@ -573,6 +603,12 @@ declare module 'shared/data/internal-connection.model' {
    * to be used outside of NetworkConnectors and ConnectionService.ts
    */
   import { ComplexRequest, ComplexResponse, SerializedRequestType } from 'shared/utils/util';
+  /**
+   * Represents when the request router does not know to which client id the request belongs. Server
+   * should try to determine the correct client id through other means, and client should just send to
+   * server
+   */
+  export const CLIENT_ID_UNKNOWN = -2;
   /** Represents when the client id has not been assigned by the server */
   export const CLIENT_ID_UNASSIGNED = -1;
   /** "Client id" for the server */
@@ -1866,6 +1902,11 @@ declare module 'shared/models/project-data-provider.model' {
     DataProviderDataTypes,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
+  /**
+   * The name of the `projectInterface` representing the essential methods every Base Project Data
+   * Provider must implement
+   */
+  export const PROJECT_INTERFACE_PLATFORM_BASE = 'platform.base';
   /** Indicates to a PDP what extension data is being referenced */
   export type ExtensionDataScope = {
     /** Name of an extension as provided in its manifest */
@@ -2238,6 +2279,7 @@ declare module 'papi-shared-types' {
   } from 'shared/models/data-provider.model';
   import type {
     MandatoryProjectDataTypes,
+    PROJECT_INTERFACE_PLATFORM_BASE,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from 'shared/models/project-data-provider.model';
   import type { IDisposableDataProvider } from 'shared/models/data-provider.interface';
@@ -2347,11 +2389,25 @@ declare module 'papi-shared-types' {
      */
     'platform.language': string;
     /**
+     * Short name of the project (not necessarily unique). This will be displayed directly in the
+     * UI.
+     *
+     * @example 'WEB'
+     */
+    'platform.name': string;
+    /**
      * Localized full name of the project. This will be displayed directly in the UI.
      *
      * @example 'World English Bible'
      */
     'platform.fullName': string;
+    /**
+     * Whether or not the project is editable. This is a general "editable", not necessarily that it
+     * is editable by the current user.
+     *
+     * Projects that are not editable are sometimes called "resources".
+     */
+    'platform.isEditable': boolean;
   }
   /**
    * Names for each user setting available on the papi.
@@ -2423,112 +2479,171 @@ declare module 'papi-shared-types' {
    * over an {@link IProjectDataProviderEngine} provided by an extension. Returned from getting a
    * project data provider with `papi.projectDataProviders.get`.
    *
-   * Project Data Providers are a specialized version of {@link IDataProvider} that works with a
-   * project of a specific `projectType`. For each project available, a new instance of a PDP with
-   * that project's `projectType` is created by the Project Data Provider Factory with that
-   * project's `projectType`.
+   * Project Data Providers are a specialized version of {@link IDataProvider} that work with
+   * projects by exposing methods according to a set of `projectInterface`s. For each project
+   * available, a Project Data Provider Factory that supports that project with some set of
+   * `projectInterface`s creates a new instance of a PDP with the supported `projectInterface`s.
    *
-   * Every PDP **must** fulfill the requirements of all PDPs according to
-   * {@link MandatoryProjectDataTypes}.
+   * Often, these objects are Layering PDPs, meaning they manipulate data provided by Base PDPs
+   * which actually control the saving and loading of the data. Base PDPs must implement
+   * {@link IBaseProjectDataProvider}, which imposes additional requirements.
+   *
+   * See more information, including the difference between Base and Layering PDPs, at
+   * {@link ProjectDataProviderInterfaces}.
    */
-  type IProjectDataProvider<TProjectDataTypes extends DataProviderDataTypes> = IDataProvider<
-    TProjectDataTypes & MandatoryProjectDataTypes
-  > &
-    WithProjectDataProviderEngineSettingMethods<TProjectDataTypes> &
-    WithProjectDataProviderEngineExtensionDataMethods<TProjectDataTypes> & {
-      /**
-       * Subscribe to receive updates to the specified project setting.
-       *
-       * Note: By default, this `subscribeSetting` function automatically retrieves the current
-       * project setting value and runs the provided callback as soon as possible. That way, if you
-       * want to keep your data up-to-date, you do not also have to run `getSetting`. You can turn
-       * this functionality off in the `options` parameter.
-       *
-       * @param key The string id of the project setting for which to listen to changes
-       * @param callback Function to run with the updated project setting value
-       * @param options Various options to adjust how the subscriber emits updates
-       * @returns Unsubscriber to stop listening for updates
-       */
-      subscribeSetting: <ProjectSettingName extends ProjectSettingNames>(
-        key: ProjectSettingName,
-        callback: (value: ProjectSettingTypes[ProjectSettingName]) => void,
-        options: DataProviderSubscriberOptions,
-      ) => Promise<UnsubscriberAsync>;
-    };
+  type IProjectDataProvider<TProjectDataTypes extends DataProviderDataTypes> =
+    IDataProvider<TProjectDataTypes>;
+  /**
+   * An object on the papi for interacting with that project data. Created by the papi and layers
+   * over an {@link IBaseProjectDataProviderEngine} provided by an extension. Sometimes returned from
+   * getting a project data provider with `papi.projectDataProviders.get` (depending on if the PDP
+   * supports the `platform.base` `projectInterface`).
+   *
+   * Project Data Providers are a specialized version of {@link IDataProvider} that work with
+   * projects by exposing methods according to a set of `projectInterface`s. For each project
+   * available, a Project Data Provider Factory that supports that project with some set of
+   * `projectInterface`s creates a new instance of a PDP with the supported `projectInterface`s.
+   *
+   * Every Base PDP **must** fulfill the requirements of this interface in order to support the
+   * methods the PAPI requires for interacting with project data.
+   *
+   * See more information, including the difference between Base and Layering PDPs, at
+   * {@link ProjectDataProviderInterfaces}.
+   */
+  type IBaseProjectDataProvider<TProjectDataTypes extends DataProviderDataTypes> =
+    IProjectDataProvider<TProjectDataTypes & MandatoryProjectDataTypes> &
+      WithProjectDataProviderEngineSettingMethods<TProjectDataTypes> &
+      WithProjectDataProviderEngineExtensionDataMethods<TProjectDataTypes> & {
+        /**
+         * Subscribe to receive updates to the specified project setting.
+         *
+         * Note: By default, this `subscribeSetting` function automatically retrieves the current
+         * project setting value and runs the provided callback as soon as possible. That way, if
+         * you want to keep your data up-to-date, you do not also have to run `getSetting`. You can
+         * turn this functionality off in the `options` parameter.
+         *
+         * @param key The string id of the project setting for which to listen to changes
+         * @param callback Function to run with the updated project setting value
+         * @param options Various options to adjust how the subscriber emits updates
+         * @returns Unsubscriber to stop listening for updates
+         */
+        subscribeSetting: <ProjectSettingName extends ProjectSettingNames>(
+          key: ProjectSettingName,
+          callback: (value: ProjectSettingTypes[ProjectSettingName]) => void,
+          options: DataProviderSubscriberOptions,
+        ) => Promise<UnsubscriberAsync>;
+      };
   /** This is just a simple example so we have more than one. It's not intended to be real. */
   type NotesOnlyProjectDataTypes = MandatoryProjectDataTypes & {
     Notes: DataProviderDataType<string, string | undefined, string>;
   };
   /**
-   * {@link IProjectDataProvider} types for each `projectType` supported by PAPI. Extensions can add
-   * more Project Data Providers with corresponding `projectType`s by adding details to their
-   * `.d.ts` file and registering a Project Data Provider factory with the corresponding
-   * `projectType`.
+   * {@link IProjectDataProvider} types for each `projectInterface` supported by PAPI. Extensions can
+   * add more Project Data Providers with corresponding `projectInterface`s by adding details to
+   * their `.d.ts` file and registering a Project Data Provider factory with the corresponding
+   * `projectInterface`.
    *
-   * All Project Data Providers' data types **must** extend {@link MandatoryProjectDataTypes} like
-   * the following example. Please see its documentation for information on how Project Data
-   * Providers can implement this interface.
+   * There are two types of Project Data Providers (and Project Data Provider Factories that serve
+   * them):
    *
-   * Note: The keys of this interface are the `projectType`s for the associated Project Data
-   * Providers.
+   * 1. Base Project Data Provider - provides project data via some `projectInterface`s for its own
+   *    projects with **its own unique project ids**. These PDPs **must support the `platform.base`
+   *    `projectInterface` by implementing {@link IBaseProjectDataProvider}**. More information
+   *    below.
+   * 2. Layering Project Data Provider - layers over other PDPs and provides additional
+   *    `projectInterface`s for projects on other PDPs. Likely **does not provide its own unique
+   *    project ids** but rather layers over base PDPs' project ids. These PDPs **do not need to
+   *    support the `platform.base` `projectInterface` and should instead implement
+   *    {@link IProjectDataProvider}**. Instead of providing projects themselves, they likely use the
+   *    `ExtensionData` data type exposed via the `platform.base` `projectInterface` on Base PDPs to
+   *    provide additional project data on top of Base PDPs.
    *
-   * WARNING: Each Project Storage Interpreter **must** fulfill certain requirements for its
-   * `getSetting`, `setSetting`, and `resetSetting` methods. See {@link MandatoryProjectDataTypes}
-   * for more information.
+   * All Base Project Data Provider Interfaces' data types **must** implement
+   * {@link IBaseProjectDataProvider} (which extends {@link MandatoryProjectDataTypes}) like in the
+   * following example. Please see its documentation for information on how Project Data Providers
+   * can implement this interface.
    *
-   * An extension can extend this interface to add types for the Project Data Providers its
-   * registered factory provides by adding the following to its `.d.ts` file (in this example, we
-   * are adding a Project Data Provider type for the `MyExtensionProjectTypeName` `projectType`):
+   * Note: The keys of this interface are the `projectInterface`s for the associated Project Data
+   * Provider Interfaces. `projectInterface`s represent standardized sets of methods on a PDP.
+   *
+   * WARNING: Each Base Project Data Provider **must** fulfill certain requirements for its
+   * `getSetting`, `setSetting`, `resetSetting`, `getExtensionData`, and `setExtensionData` methods.
+   * See {@link IBaseProjectDataProvider} and {@link MandatoryProjectDataTypes} for more information.
+   *
+   * An extension can extend this interface to add types for the Project Data Provider Interfaces
+   * its registered factory provides by adding the following to its `.d.ts` file (in this example,
+   * we are adding a Base Project Data Provider interface for the `MyExtensionBaseProjectInterface`
+   * `projectInterface` and a Layering Project Data Provider interface for the
+   * `MyExtensionLayeringProjectInterface` `projectInterface`):
    *
    * @example
    *
    * ```typescript
    * declare module 'papi-shared-types' {
-   *   export type MyProjectDataTypes = MandatoryProjectDataTypes & {
+   *   export type MyBaseProjectDataTypes = {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   };
    *
-   *   export interface ProjectDataProviders {
-   *     MyExtensionProjectTypeName: IDataProvider<MyProjectDataTypes>;
+   *   export type MyLayeringProjectDataTypes = {
+   *     MyOtherProjectData: DataProviderDataType<number, number, number>;
+   *   };
+   *
+   *   export interface ProjectDataProviderInterfaces {
+   *     // Note that the base PDP implements `I**Base**ProjectDataProvider`
+   *     MyExtensionBaseProjectInterface: IBaseProjectDataProvider<MyProjectDataTypes>;
+   *     // Note that the layering PDP only implements `IProjectDataProvider` because the base PDP already
+   *     // provides the `platform.base` data types
+   *     MyExtensionLayeringProjectInterface: IProjectDataProvider<MyLayeringProjectDataTypes>;
    *   }
    * }
    * ```
    */
-  interface ProjectDataProviders {
+  interface ProjectDataProviderInterfaces {
+    /**
+     * Base `projectInterface` that all PDPs that expose their own unique project ids must
+     * implement.
+     *
+     * There should be a PDP that provides `platform.base` for all available project ids.
+     */
+    [PROJECT_INTERFACE_PLATFORM_BASE]: IBaseProjectDataProvider<MandatoryProjectDataTypes>;
     'platform.notesOnly': IProjectDataProvider<NotesOnlyProjectDataTypes>;
     'platform.placeholder': IProjectDataProvider<PlaceholderDataTypes>;
   }
   /**
-   * Names for each `projectType` available on the papi. Each of the `projectType`s should have a
-   * registered Project Data Provider Factory that provides Project Data Providers for the
-   * `projectType`.
+   * Names for each `projectInterface` available on the papi. `projectInterface`s represent
+   * standardized sets of methods on a PDP. Extensions can register a Project Data Provider Factory
+   * with one or more `projectInterface`s to indicate that factory provides Project Data Providers
+   * that have the methods associated with those `projectInterface`s.
    *
-   * Automatically includes all extensions' `projectTypes` that are added to
-   * {@link ProjectDataProviders}.
+   * Automatically includes all extensions' `projectInterface`s that are added to
+   * {@link ProjectDataProviderInterfaces}.
    *
    * @example 'platform.notesOnly'
    */
-  type ProjectTypes = keyof ProjectDataProviders;
+  type ProjectInterfaces = keyof ProjectDataProviderInterfaces;
   /**
-   * `DataProviderDataTypes` for each Project Data Provider supported by PAPI. These are the data
-   * types served by Project Data Providers for each `projectType`.
+   * `DataProviderDataTypes` for each Project Data Provider Interface supported by PAPI. These are
+   * the data types served by Project Data Providers for each `projectInterface`.
    *
-   * Automatically includes all extensions' `projectTypes` that are added to
-   * {@link ProjectDataProviders}.
+   * Automatically includes all extensions' `projectInterface`s that are added to
+   * {@link ProjectDataProviderInterfaces}.
    *
-   * Note: The keys of this interface are the `projectType`s for the associated project data
-   * provider data types.
+   * Note: The keys of this interface are the `projectInterface`s for the associated project data
+   * provider interface data types. `projectInterface`s represent standardized sets of methods on a
+   * PDP.
    *
    * @example
    *
    * ```typescript
-   * ProjectDataTypes['MyExtensionProjectTypeName'] => MandatoryProjectDataTypes & {
+   * ProjectInterfaceDataTypes['MyExtensionProjectInterfaceName'] => MandatoryProjectDataTypes & {
    *     MyProjectData: DataProviderDataType<string, string, string>;
    *   }
    * ```
    */
-  type ProjectDataTypes = {
-    [ProjectType in ProjectTypes]: ExtractDataProviderDataTypes<ProjectDataProviders[ProjectType]>;
+  type ProjectInterfaceDataTypes = {
+    [ProjectInterface in ProjectInterfaces]: ExtractDataProviderDataTypes<
+      ProjectDataProviderInterfaces[ProjectInterface]
+    >;
   };
   type StuffDataTypes = {
     Stuff: DataProviderDataType<string, number, never>;
@@ -2857,7 +2972,12 @@ declare module 'shared/models/docking-framework.model' {
   };
 }
 declare module 'shared/services/web-view.service-model' {
-  import { GetWebViewOptions, WebViewId, WebViewType } from 'shared/models/web-view.model';
+  import {
+    GetWebViewOptions,
+    SavedWebViewDefinition,
+    WebViewId,
+    WebViewType,
+  } from 'shared/models/web-view.model';
   import { AddWebViewEvent, Layout } from 'shared/models/docking-framework.model';
   import { PlatformEvent } from 'platform-bible-utils';
   /**
@@ -2887,6 +3007,20 @@ declare module 'shared/services/web-view.service-model' {
       layout?: Layout,
       options?: GetWebViewOptions,
     ) => Promise<WebViewId | undefined>;
+    /**
+     * Gets the saved properties on the WebView definition with the specified ID
+     *
+     * Note: this only returns a representation of the current web view definition, not the actual web
+     * view definition itself. Changing properties on the returned definition does not affect the
+     * actual web view definition. You can possibly change the actual web view definition by calling
+     * {@link WebViewServiceType.getWebView} with certain `options`, depending on what options the web
+     * view provider has made available.
+     *
+     * @param webViewId The ID of the WebView whose saved properties to get
+     * @returns Saved properties of the WebView definition with the specified ID or undefined if not
+     *   found
+     */
+    getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
   }
   /** Name to use when creating a network event that is fired when webViews are created */
   export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
@@ -3389,67 +3523,97 @@ declare module 'shared/services/data-provider.service' {
   export default dataProviderService;
 }
 declare module 'shared/models/project-metadata.model' {
-  import { ProjectTypes } from 'papi-shared-types';
+  import { ProjectInterfaces } from 'papi-shared-types';
   /**
    * Low-level information describing a project that Platform.Bible directly manages and uses to load
    * project data
+   *
+   * Returned from Project Data Provider Factories in order to inform others about what projects they
+   * support in what form. Layered over to create {@link ProjectMetadata}
    */
-  export type ProjectMetadata = {
+  export type ProjectMetadataWithoutFactoryInfo = {
     /** ID of the project (must be unique and case insensitive) */
     id: string;
-    /** Short name of the project (not necessarily unique) */
-    name: string;
     /**
-     * Indicates what sort of project this is which implies its data shape (e.g., what data streams
-     * should be available)
+     * All `projectInterface`s (aka standardized sets of methods on a PDP) that Project Data Providers
+     * for this project support. Indicates what sort of project data should be available on this
+     * project.
      */
-    projectType: ProjectTypes;
+    projectInterfaces: ProjectInterfaces[];
+  };
+  export type ProjectDataProviderFactoryMetadataInfo = {
+    /**
+     * Which `projectInterface`s (aka standardized sets of methods on a PDP) the Project Data Provider
+     * for this project created by this Project Data Provider Factory supports. Indicates what sort of
+     * project data should be available on this project from this PDP Factory.
+     */
+    projectInterfaces: ProjectInterfaces[];
+  };
+  /**
+   * Low-level information describing a project that Platform.Bible directly manages and uses to load
+   * project data
+   *
+   * `papi.projectLookup` retrieves, aggregates, and augments
+   * {@link ProjectMetadataWithoutFactoryInfo}s from Project Data Provider Factories to create these in
+   * order to inform others about what projects are available and in what forms. This metadata may be
+   * merged from metadata provided by multiple PDPFs.
+   */
+  export type ProjectMetadata = ProjectMetadataWithoutFactoryInfo & {
+    /**
+     * Specifics regarding which Project Data Provider Factories provide which `projectInterface`s.
+     * This is additional metadata in addition to the `projectInterfaces` property that may be useful
+     * in a few specific situations. All `projectInterfaces` contained in this data are already listed
+     * in `projectInterfaces`, so you can use that unless you have a specific need to use this extra
+     * information.
+     *
+     * The keys of this object are ids of the PDP Factories that provide the metadata, namely the
+     * `projectInterface`s for this project (meaning this PDPF can provide a Project Data Provider for
+     * this project with these `projectInterfaces`)
+     */
+    pdpFactoryInfo: {
+      [pdpFactoryId: string]: ProjectDataProviderFactoryMetadataInfo | undefined;
+    };
   };
 }
 declare module 'shared/models/project-data-provider-engine.model' {
-  import {
-    ProjectTypes,
-    ProjectDataTypes,
-    WithProjectDataProviderEngineSettingMethods,
-    ProjectSettingNames,
-    ProjectSettingTypes,
-  } from 'papi-shared-types';
-  import {
-    MandatoryProjectDataTypes,
-    WithProjectDataProviderEngineExtensionDataMethods,
-  } from 'shared/models/project-data-provider.model';
+  import { ProjectInterfaces, ProjectInterfaceDataTypes } from 'papi-shared-types';
   import IDataProviderEngine, {
     DataProviderEngine,
   } from 'shared/models/data-provider-engine.model';
-  import { DataProviderDataType } from 'shared/models/data-provider.model';
-  import { ProjectMetadata } from 'shared/models/project-metadata.model';
-  /** All possible types for ProjectDataProviderEngines: IProjectDataProviderEngine<ProjectDataType> */
-  export type ProjectDataProviderEngineTypes = {
-    [ProjectType in ProjectTypes]: IProjectDataProviderEngine<ProjectType>;
-  };
+  import { DataProviderDataTypes } from 'shared/models/data-provider.model';
+  import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
+  import { UnionToIntersection } from 'platform-bible-utils';
   /**
    * A factory object registered with the papi that creates a Project Data Provider Engine for each
-   * project of the factory's `projectType` when the papi requests. Used by the papi to create
-   * {@link IProjectDataProviderEngine}s for a specific project when someone gets a project data
-   * provider with `papi.projectDataProviders.get`. When this factory object is registered with
-   * `papi.projectDataProviders.registerProjectDataProviderEngineFactory`, the papi creates a
-   * {@link ProjectDataProviderFactory} that layers over this engine to create
+   * project with the factory's specified `projectInterface`s when the papi requests. Used by the papi
+   * to create {@link IProjectDataProviderEngine}s for a specific project and `projectInterface` when
+   * someone gets a project data provider with `papi.projectDataProviders.get`. When this factory
+   * object is registered with `papi.projectDataProviders.registerProjectDataProviderEngineFactory`,
+   * the papi creates a {@link ProjectDataProviderFactory} that layers over this engine to create
    * {@link IProjectDataProvider}s.
    *
-   * Project Data Provider Engine Factories create Project Data Provider Engines for a specific
-   * `projectType`. For each project available, a new instance of a PDP with that project's
-   * `projectType` is created by the Project Data Provider Factory with that project's `projectType`.
+   * Project Data Provider Engine Factories create Project Data Provider Engines for specific
+   * `projectInterface`s. For each project id available on a Project Data Provider Factory, the
+   * factory that supports that project with some set of `projectInterface`s creates a new instance of
+   * a PDP with the supported `projectInterface`s.
+   *
+   * A PDP Factory can provide its own unique project ids (Base PDP Factory) or layer over other PDPFs
+   * and provide additional `projectInterface`s on those projects (Layering PDP Factory). Base PDP
+   * Factories must create PDPs that support the `platform.base` `projectInterface`. See
+   * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
    */
-  export interface IProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
+  export interface IProjectDataProviderEngineFactory<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  > {
     /**
      * Get a list of metadata objects for all projects that can be the targets of PDPs created by this
      * factory engine
      */
-    getAvailableProjects(): Promise<ProjectMetadata[]>;
+    getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]>;
     /**
      * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
-     * {@link IProjectDataProvider} for the project. This project will have the same `projectType` as
-     * this Project Data Provider Engine Factory
+     * {@link IProjectDataProvider} for the project. This project will have the same
+     * `projectInterface`s as this Project Data Provider Engine Factory
      *
      * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
      * @returns A promise that resolves to a {@link IProjectDataProviderEngine} for the project passed
@@ -3457,7 +3621,7 @@ declare module 'shared/models/project-data-provider-engine.model' {
      */
     createProjectDataProviderEngine(
       projectId: string,
-    ): Promise<ProjectDataProviderEngineTypes[ProjectType]>;
+    ): Promise<IProjectDataProviderEngine<SupportedProjectInterfaces>>;
   }
   /**
    * The object to return from
@@ -3479,7 +3643,7 @@ declare module 'shared/models/project-data-provider-engine.model' {
    *    Intellisense that you can run `notifyUpdate` with the `Setting` data type for you:
    *
    * ```typescript
-   * class MyPDPE extends ProjectDataProviderEngine<'MyProjectData'> implements IProjectDataProviderEngine<'MyProjectData'> {
+   * class MyPDPE extends ProjectDataProviderEngine<['MyProjectData']> implements IProjectDataProviderEngine<['MyProjectData']> {
    *   ...
    * }
    * ```
@@ -3489,7 +3653,7 @@ declare module 'shared/models/project-data-provider-engine.model' {
    *    the {@link WithNotifyUpdate} type) to your Project Data Provider Engine like so:
    *
    * ```typescript
-   * const myPDPE: IProjectDataProviderEngine<'MyProjectData'> & WithNotifyUpdate<ProjectDataTypes['MyProjectData']> = {
+   * const myPDPE: IProjectDataProviderEngine<['MyProjectData']> & WithNotifyUpdate<ProjectDataTypes['MyProjectData']> = {
    *   notifyUpdate(updateInstructions) {},
    *   ...
    * }
@@ -3498,17 +3662,16 @@ declare module 'shared/models/project-data-provider-engine.model' {
    * OR
    *
    * ```typescript
-   * class MyPDPE implements IProjectDataProviderEngine<'MyProjectData'> {
+   * class MyPDPE implements IProjectDataProviderEngine<['MyProjectData']> {
    *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<ProjectDataTypes['MyProjectData']>) {}
    *   ...
    * }
    * ```
    */
-  export type IProjectDataProviderEngine<ProjectType extends ProjectTypes> = IDataProviderEngine<
-    ProjectDataTypes[ProjectType] & MandatoryProjectDataTypes
-  > &
-    WithProjectDataProviderEngineSettingMethods<ProjectDataTypes[ProjectType]> &
-    WithProjectDataProviderEngineExtensionDataMethods<ProjectDataTypes[ProjectType]>;
+  export type IProjectDataProviderEngine<SupportedProjectInterfaces extends ProjectInterfaces[]> =
+    IDataProviderEngine<
+      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
+    >;
   /**
    *
    * Abstract class that provides a placeholder `notifyUpdate` for Project Data Provider Engine
@@ -3525,9 +3688,108 @@ declare module 'shared/models/project-data-provider-engine.model' {
    * @see {@link IProjectDataProviderEngine} for more information on extending this class.
    */
   export abstract class ProjectDataProviderEngine<
-    ProjectType extends ProjectTypes,
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+    AdditionalDataTypes extends DataProviderDataTypes = {},
   > extends DataProviderEngine<
-    ProjectDataTypes[ProjectType] & {
+    UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> &
+      AdditionalDataTypes
+  > {}
+}
+declare module 'shared/models/base-project-data-provider-engine.model' {
+  import {
+    ProjectInterfaces,
+    ProjectInterfaceDataTypes,
+    WithProjectDataProviderEngineSettingMethods,
+    ProjectSettingNames,
+    ProjectSettingTypes,
+  } from 'papi-shared-types';
+  import {
+    PROJECT_INTERFACE_PLATFORM_BASE,
+    WithProjectDataProviderEngineExtensionDataMethods,
+  } from 'shared/models/project-data-provider.model';
+  import { DataProviderDataType } from 'shared/models/data-provider.model';
+  import { UnionToIntersection } from 'platform-bible-utils';
+  import {
+    IProjectDataProviderEngine,
+    ProjectDataProviderEngine,
+  } from 'shared/models/project-data-provider-engine.model';
+  /**
+   * The object to return from
+   * {@link IProjectDataProviderEngineFactory.createProjectDataProviderEngine} that the PAPI registers
+   * to create a Base Project Data Provider for a specific project. The ProjectDataProviderService
+   * creates an {@link IBaseProjectDataProvider} on the papi that layers over this engine, providing
+   * special functionality.
+   *
+   * See {@link DataProviderDataTypes} for information on how to make powerful types that work well
+   * with Intellisense.
+   *
+   * Note: papi creates a `notifyUpdate` function on the Project Data Provider Engine if one is not
+   * provided, so it is not necessary to provide one in order to call `this.notifyUpdate`. However,
+   * TypeScript does not understand that papi will create one as you are writing your Base Project
+   * Data Provider Engine, so you can avoid type errors with one of the following options:
+   *
+   * 1. If you are using a class to create a Base Project Data Provider Engine, you can extend the
+   *    {@link BaseProjectDataProviderEngine} class, and it will provide `notifyUpdate` as well as
+   *    inform Intellisense that you can run `notifyUpdate` with the `Setting` data type for you:
+   *
+   * ```typescript
+   * class MyPDPE extends BaseProjectDataProviderEngine<['MyProjectData']> implements IBaseProjectDataProviderEngine<['MyProjectData']> {
+   *   ...
+   * }
+   * ```
+   *
+   * 2. If you are using an object or class not extending {@link BaseProjectDataProviderEngine} to create
+   *    a Base Project Data Provider Engine, you can add a `notifyUpdate` function (and, with an
+   *    object, add the {@link WithNotifyUpdate} type) to your Base Project Data Provider Engine like
+   *    so:
+   *
+   * ```typescript
+   * const myPDPE: IBaseProjectDataProviderEngine<['MyProjectData']> & WithNotifyUpdate<ProjectDataTypes['MyProjectData']> = {
+   *   notifyUpdate(updateInstructions) {},
+   *   ...
+   * }
+   * ```
+   *
+   * OR
+   *
+   * ```typescript
+   * class MyPDPE implements IBaseProjectDataProviderEngine<['MyProjectData']> {
+   *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<ProjectDataTypes['MyProjectData']>) {}
+   *   ...
+   * }
+   * ```
+   */
+  export type IBaseProjectDataProviderEngine<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  > = IProjectDataProviderEngine<
+    [typeof PROJECT_INTERFACE_PLATFORM_BASE, ...SupportedProjectInterfaces]
+  > &
+    WithProjectDataProviderEngineSettingMethods<
+      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
+    > &
+    WithProjectDataProviderEngineExtensionDataMethods<
+      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
+    >;
+  /**
+   *
+   * Abstract class that provides a placeholder `notifyUpdate` for Base Project Data Provider Engine
+   * classes. If a Base Project Data Provider Engine class extends this class, it doesn't have to
+   * specify its own `notifyUpdate` function in order to use `notifyUpdate`.
+   *
+   * Additionally, extending this class informs Intellisense that you can run `notifyUpdate` with the
+   * `Setting` data type if needed like so:
+   *
+   * ```typescript
+   * this.notifyUpdate('Setting');
+   * ```
+   *
+   * @see {@link IBaseProjectDataProviderEngine} for more information on extending this class.
+   */
+  export abstract class BaseProjectDataProviderEngine<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  > extends ProjectDataProviderEngine<
+    [typeof PROJECT_INTERFACE_PLATFORM_BASE, ...SupportedProjectInterfaces],
+    {
       Setting: DataProviderDataType<
         ProjectSettingNames,
         ProjectSettingTypes[ProjectSettingNames],
@@ -3538,17 +3800,22 @@ declare module 'shared/models/project-data-provider-engine.model' {
 }
 declare module 'shared/models/project-data-provider-factory.interface' {
   import { Dispose } from 'platform-bible-utils';
-  import { ProjectMetadata } from 'shared/models/project-metadata.model';
+  import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
   export const PDP_FACTORY_OBJECT_TYPE: string;
   /**
-   * Network object that creates Project Data Providers of a specific `projectType` as requested on
-   * the `papi`. These are created internally within the platform to layer over
+   * Network object that creates Project Data Providers of a specific set of `projectInterface`s as
+   * requested on the `papi`. These are created internally within the platform to layer over
    * TypeScript-extension-provided {@link IProjectDataProviderEngineFactory} or are created by
    * independent processes on the `papi`.
+   *
+   * A PDP Factory can provide its own unique project ids (Base PDP Factory) or layer over other PDPFs
+   * and provide additional `projectInterface`s on those projects (Layering PDP Factory). Base PDP
+   * Factories must create PDPs that support the `platform.base` `projectInterface`. See
+   * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
    */
   interface IProjectDataProviderFactory extends Dispose {
     /** Get data about all projects that can be created by this PDP factory */
-    getAvailableProjects(): Promise<ProjectMetadata[]>;
+    getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]>;
     /**
      * Returns the registered network object name of a PDP for the given project ID. Called by the
      * platform when someone uses the project data provider service to access a project's data.
@@ -3564,64 +3831,386 @@ declare module 'shared/models/project-data-provider-factory.interface' {
   export default IProjectDataProviderFactory;
 }
 declare module 'shared/models/project-lookup.service-model' {
-  import { ProjectMetadata } from 'shared/models/project-metadata.model';
-  import { ProjectTypes } from 'papi-shared-types';
-  export type ProjectMetadataWithFactoryId = ProjectMetadata & {
-    pdpFactoryId: string;
-  };
-  export type ProjectMetadataFilterOptions = {
+  import {
+    ProjectDataProviderFactoryMetadataInfo,
+    ProjectMetadata,
+  } from 'shared/models/project-metadata.model';
+  import { ProjectInterfaces } from 'papi-shared-types';
+  import { ModifierProject } from 'platform-bible-utils';
+  export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
+  /**
+   * Transform the well-known pdp factory id into an id for its network object to use
+   *
+   * @param pdpFactoryId Id extensions use to identify this pdp factory
+   * @returns Id for then network object for this pdp factory
+   */
+  export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string): string;
+  /**
+   * Transform a network object id for a pdp factory into its well-known pdp factory id
+   *
+   * @param pdpFactoryNetworkObjectName Id for then network object for this pdp factory
+   * @returns Id extensions use to identify this pdp factory
+   */
+  export function getPDPFactoryIdFromNetworkObjectName(pdpFactoryNetworkObjectName: string): string;
+  export type ProjectMetadataFilterOptions = ModifierProject & {
+    /** Project IDs to include */
+    includeProjectIds?: string | string[];
     /** Project IDs to exclude */
     excludeProjectIds?: string | string[];
-    /**
-     * String representation of `RegExp` pattern(s) to match against projects' `projectType` (using
-     * the
-     * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
-     * function) to determine if they should be included.
-     *
-     * Defaults to all {@link ProjectTypes}, so all projects that do not match `excludeProjectTypes`
-     * will be included
-     */
-    includeProjectTypes?: string | string[];
-    /**
-     * String representation of `RegExp` pattern(s) to match against projects' `projectType` (using
-     * the
-     * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
-     * function) to determine if they should absolutely not be included even if they match with
-     * `includeProjectTypes`
-     *
-     * Defaults to no {@link ProjectTypes}, so all projects that match `includeProjectTypes` will be
-     * included
-     */
-    excludeProjectTypes?: string | string[];
   };
   /**
    *
    * Provides metadata for projects known by the platform
+   *
+   * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
+   * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
+   * their types are synchronous locally.
    */
-  export interface ProjectLookupServiceType {
+  export type ProjectLookupServiceType = {
     /**
      * Provide metadata for all projects that have PDP factories
      *
+     * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
+     * the parameters, their project metadata will all be combined, so all available
+     * `projectInterface`s provided by the PDP Factory with the matching id (or all PDP Factories if
+     * no id is specified) for the project will be returned. If you need `projectInterface`s supported
+     * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+     *
+     * @param options Options for specifying filters for the project metadata retrieved. If a PDP
+     *   Factory Id does not match the filter, it will not be contacted at all for this function call.
+     *   As a result, a PDP factory that intends to layer over other PDP factories **must** specify
+     *   its id in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
      * @returns ProjectMetadata for all projects stored on the local system
      */
-    getMetadataForAllProjects: () => Promise<ProjectMetadataWithFactoryId[]>;
+    getMetadataForAllProjects(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
     /**
      * Look up metadata for a specific project ID
      *
+     * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
+     * the parameters, their project metadata will all be combined, so all available
+     * `projectInterface`s provided by the PDP Factory with the matching id (or all PDP Factories if
+     * no id is specified) for the project will be returned. If you need `projectInterface`s supported
+     * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+     *
      * @param projectId ID of the project to load
-     * @param projectType Optional type of the project to load. If not provided, then look at all
-     *   project types for the given project ID.
+     * @param projectInterface Optional `projectInterface` of the project to load. If not provided,
+     *   then look at all `projectInterface`s for the given project ID.
      * @param pdpFactoryId Optional ID of the PDP factory where the project ID should be loaded. If
      *   not provided, then look in all available PDP factories for the given project ID.
      * @returns ProjectMetadata for the given project
      */
-    getMetadataForProject: (
+    getMetadataForProject(
       projectId: string,
-      projectType?: ProjectTypes,
+      projectInterface?: ProjectInterfaces,
       pdpFactoryId?: string,
-    ) => Promise<ProjectMetadataWithFactoryId>;
+    ): Promise<ProjectMetadata>;
+    /**
+     * Compare two project ids to determine if they are equal
+     *
+     * We're treating project IDs as case insensitive strings.
+     *
+     * From
+     * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Collator/Collator:
+     *
+     * Only strings that differ in base letters or accents and other diacritic marks compare as
+     * unequal. Examples: a ≠ b, a ≠ á, a = A.
+     */
+    areProjectIdsEqual(projectIdA: string, projectIdB: string): boolean;
+    /** Filter an array of {@link ProjectMetadata} in various ways */
+    filterProjectsMetadata(
+      projectsMetadata: ProjectMetadata[],
+      options: ProjectMetadataFilterOptions,
+    ): ProjectMetadata[];
+    /**
+     * Get the PDP Factory info whose `projectInterface`s are most minimally matching to the provided
+     * `projectInterface`
+     *
+     * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s
+     * to avoid unnecessary redirects through layered PDPs
+     *
+     * @param projectMetadata Metadata for project for which to get minimally matching PDPF
+     * @param projectInterface Which `projectInterface` to minimally match for
+     * @returns PDP Factory id whose `projectInterface`s minimally match the provided
+     *   `projectInterface` if at least one PDP Factory was found that supports the `projectInterface`
+     *   provided
+     */
+    getMinimalMatchPdpFactoryId(
+      projectMetadata: ProjectMetadata,
+      projectInterface: ProjectInterfaces,
+    ): string | undefined;
+  };
+  /** Local object of functions to run locally on each process as part of the project lookup service */
+  export const projectLookupServiceBase: ProjectLookupServiceType;
+  /**
+   * Note: If there are multiple PDPs available whose metadata matches the conditions provided by the
+   * parameters, their project metadata will all be combined, so all available `projectInterface`s
+   * provided by the PDP Factory with the matching id (or all PDP Factories if no id is specified) for
+   * the project will be returned. If you need `projectInterface`s supported by specific PDP
+   * Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+   */
+  function internalGetMetadata(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
+  function transformGetMetadataForProjectParametersToFilter(
+    projectId?: string,
+    projectInterface?: ProjectInterfaces,
+    pdpFactoryId?: string,
+  ): {
+    includeProjectIds: string | undefined;
+    includeProjectInterfaces: string | undefined;
+    includePdpFactoryIds: string | undefined;
+  };
+  /**
+   * Compare function (for array sorting and such) that compares two PDPF Metadata infos by most
+   * minimal match to the `projectInterface` in question.
+   *
+   * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s to
+   * avoid unnecessary redirects through layered PDPs
+   *
+   * @param pdpFMetadataInfoA First ProjectDataProviderFactoryMetadataInfo to compare
+   * @param pdpFMetadataInfoB Second ProjectDataProviderFactoryMetadataInfo to compare
+   * @returns -1 if a is less than b, 0 if equal, and 1 otherwise
+   */
+  function compareProjectDataProviderFactoryMetadataInfoMinimalMatch(
+    pdpFMetadataInfoA: ProjectDataProviderFactoryMetadataInfo | undefined,
+    pdpFMetadataInfoB: ProjectDataProviderFactoryMetadataInfo | undefined,
+  ): -1 | 0 | 1;
+  /** This is an internal-only export for testing purposes and should not be used in development */
+  export const testingProjectLookupService: {
+    internalGetMetadata: typeof internalGetMetadata;
+    compareProjectDataProviderFactoryMetadataInfoMinimalMatch: typeof compareProjectDataProviderFactoryMetadataInfoMinimalMatch;
+    transformGetMetadataForProjectParametersToFilter: typeof transformGetMetadataForProjectParametersToFilter;
+  };
+}
+declare module 'shared/services/project-lookup.service' {
+  const projectLookupService: import('shared/models/project-lookup.service-model').ProjectLookupServiceType;
+  export default projectLookupService;
+}
+declare module 'shared/services/project-data-provider.service' {
+  import { ProjectInterfaces, ProjectDataProviderInterfaces } from 'papi-shared-types';
+  import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
+  import { Dispose } from 'platform-bible-utils';
+  /**
+   * Add a new Project Data Provider Factory to PAPI that uses the given engine.
+   *
+   * @param pdpFactoryId Unique id for this PDP factory
+   * @param projectInterfaces The standardized sets of methods (`projectInterface`s) supported by the
+   *   Project Data Provider Engines produced by this factory. Indicates what sort of project data
+   *   should be available on the PDPEs created by this factory.
+   * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
+   * @returns Promise that resolves to a disposable object when the registration operation completes
+   */
+  export function registerProjectDataProviderEngineFactory<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  >(
+    pdpFactoryId: string,
+    projectInterfaces: SupportedProjectInterfaces,
+    pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>,
+  ): Promise<Dispose>;
+  /**
+   * Get a Project Data Provider for the given project ID.
+   *
+   * @example
+   *
+   * ```typescript
+   * const pdp = await get('platformScripture.USFM_BookChapterVerse', 'ProjectID12345');
+   * pdp.getVerse(new VerseRef('JHN', '1', '1'));
+   * ```
+   *
+   * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
+   *   type for the returned project data provider will have the project data provider interface type
+   *   associated with this `projectInterface`. If the project does not implement this
+   *   `projectInterface` (according to its metadata), an error will be thrown.
+   * @param projectId ID for the project to load
+   * @param pdpFactoryId Optional ID of the PDP factory from which to get the project data provider if
+   *   the PDP factory supports this project id and project interface. If not provided, then look in
+   *   all available PDP factories for the given project ID.
+   * @returns Project data provider with types that are associated with the given `projectInterface`
+   * @throws If did not find a project data provider for the project id that supports the requested
+   *   `projectInterface` (and from the requested PDP factory if specified)
+   */
+  export function get<ProjectInterface extends ProjectInterfaces>(
+    projectInterface: ProjectInterface,
+    projectId: string,
+    pdpFactoryId?: string,
+  ): Promise<ProjectDataProviderInterfaces[ProjectInterface]>;
+  export interface PapiBackendProjectDataProviderService {
+    registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
+    get: typeof get;
   }
-  export const projectLookupServiceNetworkObjectName = 'ProjectLookupService';
+  /**
+   *
+   * Service that registers and gets project data providers
+   */
+  export const papiBackendProjectDataProviderService: PapiBackendProjectDataProviderService;
+  export interface PapiFrontendProjectDataProviderService {
+    get: typeof get;
+  }
+  /**
+   *
+   * Service that gets project data providers
+   */
+  export const papiFrontendProjectDataProviderService: {
+    get: typeof get;
+  };
+}
+declare module 'shared/data/file-system.model' {
+  /** Types to use with file system operations */
+  /**
+   * Represents a path in file system or other. Has a scheme followed by :// followed by a relative
+   * path. If no scheme is provided, the app scheme is used. Available schemes are as follows:
+   *
+   * - `app://` - goes to the `.platform.bible` directory inside the user's home directory.
+   *
+   *   - On Linux and Mac, this is `$HOME/.platform.bible`
+   *   - On Windows, this is `%USERPROFILE%/.platform.bible`
+   *   - Note: In development, `app://` always goes to `paranext-core/dev-appdata`
+   * - `cache://` - goes to the app's temporary file cache at `app://cache`
+   * - `data://` - goes to the app's data storage location at `app://data`
+   * - `resources://` - goes to the `resources` directory inside the install directory
+   *
+   *   - Note: In development, `resources://` always goes to the repo root, `paranext-core`. Not all files
+   *       are copied into the production `resources` folder, though. See `electron-builder.json5`'s
+   *       `extraResources` for some that are copied.
+   * - `file://` - an absolute file path from drive root
+   *
+   * Note: projects are stored in the production version of `app://projects` regardless of whether you
+   * are in production or development
+   */
+  export type Uri = string;
+}
+declare module 'node/utils/util' {
+  import { Uri } from 'shared/data/file-system.model';
+  export const FILE_PROTOCOL = 'file://';
+  export const RESOURCES_PROTOCOL = 'resources://';
+  export function resolveHtmlPath(htmlFileName: string): string;
+  /**
+   * Gets the platform-specific user Platform.Bible folder for this application
+   *
+   * When running in development: `<repo_directory>/dev-appdata`
+   *
+   * When packaged: `<user_home_directory>/.platform.bible`
+   */
+  export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
+  /**
+   * Resolves the uri to a path
+   *
+   * @param uri The uri to resolve
+   * @returns Real path to the uri supplied
+   */
+  export function getPathFromUri(uri: Uri): string;
+  /**
+   * Combines the uri passed in with the paths passed in to make one uri
+   *
+   * @param uri Uri to start from
+   * @param paths Paths to combine into the uri
+   * @returns One uri that combines the uri and the paths in left-to-right order
+   */
+  export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
+  /**
+   * Determines if running in noisy dev mode
+   *
+   * @returns True if the process is running in noisy dev mode, false otherwise
+   */
+  export const isNoisyDevModeEnvVariableSet: () => boolean;
+}
+declare module 'node/services/node-file-system.service' {
+  /** File system calls from Node */
+  import fs, { BigIntStats } from 'fs';
+  import { Uri } from 'shared/data/file-system.model';
+  /**
+   * Read a text file
+   *
+   * @param uri URI of file
+   * @returns Promise that resolves to the contents of the file
+   */
+  export function readFileText(uri: Uri): Promise<string>;
+  /**
+   * Read a binary file
+   *
+   * @param uri URI of file
+   * @returns Promise that resolves to the contents of the file
+   */
+  export function readFileBinary(uri: Uri): Promise<Buffer>;
+  /**
+   * Write data to a file
+   *
+   * @param uri URI of file
+   * @param fileContents String or Buffer to write into the file
+   * @returns Promise that resolves after writing the file
+   */
+  export function writeFile(uri: Uri, fileContents: string | Buffer): Promise<void>;
+  /**
+   * Copies a file from one location to another. Creates the path to the destination if it does not
+   * exist
+   *
+   * @param sourceUri The location of the file to copy
+   * @param destinationUri The uri to the file to create as a copy of the source file
+   * @param mode Bitwise modifiers that affect how the copy works. See
+   *   [`fsPromises.copyFile`](https://nodejs.org/api/fs.html#fspromisescopyfilesrc-dest-mode) for
+   *   more information
+   */
+  export function copyFile(
+    sourceUri: Uri,
+    destinationUri: Uri,
+    mode?: Parameters<typeof fs.promises.copyFile>[2],
+  ): Promise<void>;
+  /**
+   * Delete a file if it exists
+   *
+   * @param uri URI of file
+   * @returns Promise that resolves when the file is deleted or determined to not exist
+   */
+  export function deleteFile(uri: Uri): Promise<void>;
+  /**
+   * Get stats about the file or directory. Note that BigInts are used instead of ints to avoid.
+   * https://en.wikipedia.org/wiki/Year_2038_problem
+   *
+   * @param uri URI of file or directory
+   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if
+   *   file or directory exists, undefined if it doesn't
+   */
+  export function getStats(uri: Uri): Promise<BigIntStats | undefined>;
+  /**
+   * Set the last modified and accessed times for the file or directory
+   *
+   * @param uri URI of file or directory
+   * @returns Promise that resolves once the touch operation finishes
+   */
+  export function touch(uri: Uri, date: Date): Promise<void>;
+  /** Type of file system item in a directory */
+  export enum EntryType {
+    File = 'file',
+    Directory = 'directory',
+    Unknown = 'unknown',
+  }
+  /** All entries in a directory, mapped from entry type to array of uris for the entries */
+  export type DirectoryEntries = Readonly<{
+    [entryType in EntryType]: Uri[];
+  }>;
+  /**
+   * Reads a directory and returns lists of entries in the directory by entry type.
+   *
+   * @param uri - URI of directory.
+   * @param entryFilter - Function to filter out entries in the directory based on their names.
+   * @returns Map of entry type to list of uris for each entry in the directory with that type.
+   */
+  export function readDir(
+    uri: Uri,
+    entryFilter?: (entryName: string) => boolean,
+  ): Promise<DirectoryEntries>;
+  /**
+   * Create a directory in the file system if it does not exist. Does not throw if it already exists.
+   *
+   * @param uri URI of directory
+   * @returns Promise that resolves once the directory has been created
+   */
+  export function createDir(uri: Uri): Promise<void>;
+  /**
+   * Remove a directory and all its contents recursively from the file system
+   *
+   * @param uri URI of directory
+   * @returns Promise that resolves when the delete operation finishes
+   */
+  export function deleteDir(uri: Uri): Promise<void>;
 }
 declare module 'node/utils/crypto-util' {
   export function createUuid(): string;
@@ -3649,29 +4238,139 @@ declare module 'node/models/execution-token.model' {
     getHash(): string;
   }
 }
-declare module 'extension-host/extension-types/extension-activation-context.model' {
+declare module 'node/services/execution-token.service' {
   import { ExecutionToken } from 'node/models/execution-token.model';
-  import { UnsubscriberAsyncList } from 'platform-bible-utils';
-  /** An object of this type is passed into `activate()` for each extension during initialization */
-  export type ExecutionActivationContext = {
-    /** Canonical name of the extension */
-    name: string;
-    /** Used to save and load data from the storage service. */
-    executionToken: ExecutionToken;
-    /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
-    registrations: UnsubscriberAsyncList;
+  /**
+   * This should be called when extensions are being loaded
+   *
+   * @param extensionName Name of the extension to register
+   * @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers. It
+   *   is important that the token is not shared to avoid impersonation of API callers.
+   */
+  function registerExtension(extensionName: string): ExecutionToken;
+  /**
+   * Remove a registered token. Note that a hash of a token is what is needed to unregister, not the
+   * full token itself (notably not the nonce), so something can be delegated the ability to
+   * unregister a token without having been given the full token itself.
+   *
+   * @param extensionName Name of the extension that was originally registered
+   * @param tokenHash Value of `getHash()` of the token that was originally registered.
+   * @returns `true` if the token was successfully unregistered, `false` otherwise
+   */
+  function unregisterExtension(extensionName: string, tokenHash: string): boolean;
+  /**
+   * This should only be needed by services that need to contextualize the response for the caller
+   *
+   * @param executionToken Token that was previously registered.
+   * @returns `true` if the token matches a token that was previous registered, `false` otherwise.
+   */
+  function tokenIsValid(executionToken: ExecutionToken): boolean;
+  const executionTokenService: {
+    registerExtension: typeof registerExtension;
+    unregisterExtension: typeof unregisterExtension;
+    tokenIsValid: typeof tokenIsValid;
   };
+  export default executionTokenService;
+}
+declare module 'extension-host/services/extension-storage.service' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  import { Buffer } from 'buffer';
+  /**
+   * This is only intended to be called by the extension service. This service cannot call into the
+   * extension service or it causes a circular dependency.
+   */
+  export function setExtensionUris(urisPerExtension: Map<string, string>): void;
+  /** Return a path to the specified file within the extension's installation directory */
+  export function buildExtensionPathFromName(extensionName: string, fileName: string): string;
+  /**
+   * Read a text file from the the extension's installation directory
+   *
+   * @param token ExecutionToken provided to the extension when `activate()` was called
+   * @param fileName Name of the file to be read
+   * @returns Promise for a string with the contents of the file
+   */
+  function readTextFileFromInstallDirectory(
+    token: ExecutionToken,
+    fileName: string,
+  ): Promise<string>;
+  /**
+   * Read a binary file from the the extension's installation directory
+   *
+   * @param token ExecutionToken provided to the extension when `activate()` was called
+   * @param fileName Name of the file to be read
+   * @returns Promise for a Buffer with the contents of the file
+   */
+  function readBinaryFileFromInstallDirectory(
+    token: ExecutionToken,
+    fileName: string,
+  ): Promise<Buffer>;
+  /**
+   * Read data specific to the user (as identified by the OS) and extension (as identified by the
+   * ExecutionToken)
+   *
+   * @param token ExecutionToken provided to the extension when `activate()` was called
+   * @param key Unique identifier of the data
+   * @returns Promise for a string containing the data
+   */
+  function readUserData(token: ExecutionToken, key: string): Promise<string>;
+  /**
+   * Write data specific to the user (as identified by the OS) and extension (as identified by the
+   * ExecutionToken)
+   *
+   * @param token ExecutionToken provided to the extension when `activate()` was called
+   * @param key Unique identifier of the data
+   * @param data Data to be written
+   * @returns Promise that will resolve if the data is written successfully
+   */
+  function writeUserData(token: ExecutionToken, key: string, data: string): Promise<void>;
+  /**
+   * Delete data previously written that is specific to the user (as identified by the OS) and
+   * extension (as identified by the ExecutionToken)
+   *
+   * @param token ExecutionToken provided to the extension when `activate()` was called
+   * @param key Unique identifier of the data
+   * @returns Promise that will resolve if the data is deleted successfully
+   */
+  function deleteUserData(token: ExecutionToken, key: string): Promise<void>;
+  export interface ExtensionStorageService {
+    readTextFileFromInstallDirectory: typeof readTextFileFromInstallDirectory;
+    readBinaryFileFromInstallDirectory: typeof readBinaryFileFromInstallDirectory;
+    readUserData: typeof readUserData;
+    writeUserData: typeof writeUserData;
+    deleteUserData: typeof deleteUserData;
+  }
+  /**
+   *
+   * This service provides extensions in the extension host the ability to read/write data based on
+   * the extension identity and current user (as identified by the OS). This service will not work
+   * within the renderer.
+   */
+  const extensionStorageService: ExtensionStorageService;
+  export default extensionStorageService;
 }
 declare module 'shared/models/dialog-options.model' {
+  import { LocalizeKey } from 'platform-bible-utils';
   /** General options to adjust dialogs (created from `papi.dialogs`) */
   export type DialogOptions = {
-    /** Dialog title to display in the header. Default depends on the dialog */
-    title?: string;
+    /**
+     * Dialog title to display in the header. If you provide a {@link LocalizeKey}, it will be
+     * localized before displaying.
+     *
+     * Default depends on the dialog
+     */
+    title?: string | LocalizeKey;
     /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
     iconUrl?: string;
-    /** The message to show the user in the dialog. Default depends on the dialog */
-    prompt?: string;
+    /**
+     * The message to show the user in the dialog. If you provide a {@link LocalizeKey}, it will be
+     * localized before displaying.
+     *
+     * Default depends on the dialog
+     */
+    prompt?: string | LocalizeKey;
   };
+  /** Keys of properties on {@link DialogOptions} that should be localized if they are LocalizeKeys */
+  export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS: readonly ['title', 'prompt'];
   /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
   export type DialogData = DialogOptions & {
     isDialog: true;
@@ -3775,6 +4474,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
   /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
+  /** The tabType for the select books dialog in `select-books.dialog.tsx` */
+  export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -3782,6 +4483,11 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
     /** Project IDs that should start selected in the dialog */
     selectedProjectIds?: string[];
+  };
+  /** Options to provide when showing the Select Books dialog */
+  export type SelectBooksDialogOptions = DialogOptions & {
+    /** Books IDs that should start selected in the dialog */
+    selectedBookIds?: string[];
   };
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs
@@ -3796,6 +4502,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
       SelectMultipleProjectsDialogOptions,
       string[]
     >;
+    [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
   }
   /** Each type of dialog. These are the tab types used in the dock layout */
   export type DialogTabTypes = keyof DialogTypes;
@@ -3874,6 +4581,19 @@ declare module 'shared/services/dialog.service' {
   import { DialogService } from 'shared/services/dialog.service-model';
   const dialogService: DialogService;
   export default dialogService;
+}
+declare module 'extension-host/extension-types/extension-activation-context.model' {
+  import { ExecutionToken } from 'node/models/execution-token.model';
+  import { UnsubscriberAsyncList } from 'platform-bible-utils';
+  /** An object of this type is passed into `activate()` for each extension during initialization */
+  export type ExecutionActivationContext = {
+    /** Canonical name of the extension */
+    name: string;
+    /** Used to save and load data from the storage service. */
+    executionToken: ExecutionToken;
+    /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
+    registrations: UnsubscriberAsyncList;
+  };
 }
 declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
@@ -4263,7 +4983,7 @@ declare module 'shared/services/settings.service-model' {
     typeof settingsServiceObjectToProxy;
 }
 declare module 'shared/services/project-settings.service-model' {
-  import { ProjectSettingNames, ProjectSettingTypes, ProjectTypes } from 'papi-shared-types';
+  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
   import { UnsubscriberAsync } from 'platform-bible-utils';
   /** Name prefix for registered commands that call project settings validators */
   export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
@@ -4297,15 +5017,15 @@ declare module 'shared/services/project-settings.service-model' {
      * @param newValue The new value requested to set the project setting value to
      * @param currentValue The current project setting value
      * @param key The project setting key being set
+     * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
+     *   whose setting is being changed
      * @param allChanges All project settings changes being set in one batch
-     * @param projectType The `projectType` for the project whose setting is being changed
      * @returns `true` if change is valid, `false` otherwise
      */
     isValid<ProjectSettingName extends ProjectSettingNames>(
       key: ProjectSettingName,
       newValue: ProjectSettingTypes[ProjectSettingName],
       currentValue: ProjectSettingTypes[ProjectSettingName],
-      projectType: ProjectTypes,
       allChanges?: SimultaneousProjectSettingsChanges,
     ): Promise<boolean>;
     /**
@@ -4317,13 +5037,11 @@ declare module 'shared/services/project-settings.service-model' {
      * throw.
      *
      * @param key The project setting key for which to get the default value
-     * @param projectType The `projectType` to get default setting value for
      * @returns The default value for the setting if a default value is registered
      * @throws If a default value is not registered for the setting
      */
     getDefault<ProjectSettingName extends ProjectSettingNames>(
       key: ProjectSettingName,
-      projectType: ProjectTypes,
     ): Promise<ProjectSettingTypes[ProjectSettingName]>;
     /**
      *
@@ -4352,12 +5070,17 @@ declare module 'shared/services/project-settings.service-model' {
       currentValue: ProjectSettingTypes[ProjectSettingName];
     };
   };
-  /** Function that validates whether a new project setting value should be allowed to be set */
+  /**
+   * Function that validates whether a new project setting value should be allowed to be set
+   *
+   * @param newValue The new value requested to set the project setting value to
+   * @param currentValue The current project setting value
+   * @param allChanges All project settings changes being set in one batch
+   */
   export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNames> = (
     newValue: ProjectSettingTypes[ProjectSettingName],
     currentValue: ProjectSettingTypes[ProjectSettingName],
     allChanges: SimultaneousProjectSettingsChanges,
-    projectType: ProjectTypes,
   ) => Promise<boolean>;
   /**
    * Validators for all project settings. Keys are setting keys, values are functions to validate new
@@ -4392,8 +5115,13 @@ declare module '@papi/core' {
     IProjectDataProviderEngine,
     IProjectDataProviderEngineFactory,
   } from 'shared/models/project-data-provider-engine.model';
+  export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
   export type { default as IProjectDataProviderFactory } from 'shared/models/project-data-provider-factory.interface';
-  export type { ProjectMetadata } from 'shared/models/project-metadata.model';
+  export type {
+    ProjectDataProviderFactoryMetadataInfo,
+    ProjectMetadata,
+    ProjectMetadataWithoutFactoryInfo,
+  } from 'shared/models/project-metadata.model';
   export type {
     LocalizationData,
     LocalizationSelector,
@@ -4413,346 +5141,6 @@ declare module '@papi/core' {
     SimultaneousProjectSettingsChanges,
     ProjectSettingValidator,
   } from 'shared/services/project-settings.service-model';
-}
-declare module 'shared/services/project-lookup.service' {
-  import {
-    ProjectLookupServiceType,
-    ProjectMetadataFilterOptions,
-  } from 'shared/models/project-lookup.service-model';
-  import { ProjectMetadata } from 'shared/models/project-metadata.model';
-  export function filterProjectsMetadata(
-    projectsMetadata: ProjectMetadata[],
-    options: ProjectMetadataFilterOptions,
-  ): ProjectMetadata[];
-  const projectLookupService: ProjectLookupServiceType;
-  export default projectLookupService;
-}
-declare module 'shared/services/project-data-provider.service' {
-  import { ProjectTypes, ProjectDataProviders } from 'papi-shared-types';
-  import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
-  import { Dispose } from 'platform-bible-utils';
-  /**
-   * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
-   * existing factory already that handles the same project type or this operation will fail.
-   *
-   * @param projectType Type of project that pdpEngineFactory supports
-   * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
-   * @returns Promise that resolves to a disposable object when the registration operation completes
-   */
-  export function registerProjectDataProviderEngineFactory<ProjectType extends ProjectTypes>(
-    projectType: ProjectType,
-    pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>,
-  ): Promise<Dispose>;
-  /**
-   * Get a Project Data Provider for the given project ID.
-   *
-   * @example
-   *
-   * ```typescript
-   * const pdp = await get('ParatextStandard', 'ProjectID12345');
-   * pdp.getVerse(new VerseRef('JHN', '1', '1'));
-   * ```
-   *
-   * @param projectType Type of the project to load. The TypeScript type for the returned project data
-   *   provider will have the project data provider type associated with this project type. If this
-   *   argument does not match the project's actual `projectType` (according to its metadata), an
-   *   error will be thrown.
-   * @param projectId ID for the project to load
-   * @returns Data provider with types that are associated with the given project type
-   */
-  export function get<ProjectType extends ProjectTypes>(
-    projectType: ProjectType,
-    projectId: string,
-  ): Promise<ProjectDataProviders[ProjectType]>;
-  export interface PapiBackendProjectDataProviderService {
-    registerProjectDataProviderEngineFactory: typeof registerProjectDataProviderEngineFactory;
-    get: typeof get;
-  }
-  /**
-   *
-   * Service that registers and gets project data providers
-   */
-  export const papiBackendProjectDataProviderService: PapiBackendProjectDataProviderService;
-  export interface PapiFrontendProjectDataProviderService {
-    get: typeof get;
-  }
-  /**
-   *
-   * Service that gets project data providers
-   */
-  export const papiFrontendProjectDataProviderService: {
-    get: typeof get;
-  };
-}
-declare module 'shared/data/file-system.model' {
-  /** Types to use with file system operations */
-  /**
-   * Represents a path in file system or other. Has a scheme followed by :// followed by a relative
-   * path. If no scheme is provided, the app scheme is used. Available schemes are as follows:
-   *
-   * - `app://` - goes to the `.platform.bible` directory inside the user's home directory.
-   *
-   *   - On Linux and Mac, this is `$HOME/.platform.bible`
-   *   - On Windows, this is `%USERPROFILE%/.platform.bible`
-   *   - Note: In development, `app://` always goes to `paranext-core/dev-appdata`
-   * - `cache://` - goes to the app's temporary file cache at `app://cache`
-   * - `data://` - goes to the app's data storage location at `app://data`
-   * - `resources://` - goes to the `resources` directory inside the install directory
-   *
-   *   - Note: In development, `resources://` always goes to the repo root, `paranext-core`. Not all files
-   *       are copied into the production `resources` folder, though. See `electron-builder.json5`'s
-   *       `extraResources` for some that are copied.
-   * - `file://` - an absolute file path from drive root
-   *
-   * Note: projects are stored in the production version of `app://projects` regardless of whether you
-   * are in production or development
-   */
-  export type Uri = string;
-}
-declare module 'node/utils/util' {
-  import { Uri } from 'shared/data/file-system.model';
-  export const FILE_PROTOCOL = 'file://';
-  export const RESOURCES_PROTOCOL = 'resources://';
-  export function resolveHtmlPath(htmlFileName: string): string;
-  /**
-   * Gets the platform-specific user Platform.Bible folder for this application
-   *
-   * When running in development: `<repo_directory>/dev-appdata`
-   *
-   * When packaged: `<user_home_directory>/.platform.bible`
-   */
-  export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
-  /**
-   * Resolves the uri to a path
-   *
-   * @param uri The uri to resolve
-   * @returns Real path to the uri supplied
-   */
-  export function getPathFromUri(uri: Uri): string;
-  /**
-   * Combines the uri passed in with the paths passed in to make one uri
-   *
-   * @param uri Uri to start from
-   * @param paths Paths to combine into the uri
-   * @returns One uri that combines the uri and the paths in left-to-right order
-   */
-  export function joinUriPaths(uri: Uri, ...paths: string[]): Uri;
-  /**
-   * Determines if running in noisy dev mode
-   *
-   * @returns True if the process is running in noisy dev mode, false otherwise
-   */
-  export const isNoisyDevModeEnvVariableSet: () => boolean;
-}
-declare module 'node/services/node-file-system.service' {
-  /** File system calls from Node */
-  import fs, { BigIntStats } from 'fs';
-  import { Uri } from 'shared/data/file-system.model';
-  /**
-   * Read a text file
-   *
-   * @param uri URI of file
-   * @returns Promise that resolves to the contents of the file
-   */
-  export function readFileText(uri: Uri): Promise<string>;
-  /**
-   * Read a binary file
-   *
-   * @param uri URI of file
-   * @returns Promise that resolves to the contents of the file
-   */
-  export function readFileBinary(uri: Uri): Promise<Buffer>;
-  /**
-   * Write data to a file
-   *
-   * @param uri URI of file
-   * @param fileContents String or Buffer to write into the file
-   * @returns Promise that resolves after writing the file
-   */
-  export function writeFile(uri: Uri, fileContents: string | Buffer): Promise<void>;
-  /**
-   * Copies a file from one location to another. Creates the path to the destination if it does not
-   * exist
-   *
-   * @param sourceUri The location of the file to copy
-   * @param destinationUri The uri to the file to create as a copy of the source file
-   * @param mode Bitwise modifiers that affect how the copy works. See
-   *   [`fsPromises.copyFile`](https://nodejs.org/api/fs.html#fspromisescopyfilesrc-dest-mode) for
-   *   more information
-   */
-  export function copyFile(
-    sourceUri: Uri,
-    destinationUri: Uri,
-    mode?: Parameters<typeof fs.promises.copyFile>[2],
-  ): Promise<void>;
-  /**
-   * Delete a file if it exists
-   *
-   * @param uri URI of file
-   * @returns Promise that resolves when the file is deleted or determined to not exist
-   */
-  export function deleteFile(uri: Uri): Promise<void>;
-  /**
-   * Get stats about the file or directory. Note that BigInts are used instead of ints to avoid.
-   * https://en.wikipedia.org/wiki/Year_2038_problem
-   *
-   * @param uri URI of file or directory
-   * @returns Promise that resolves to object of type https://nodejs.org/api/fs.html#class-fsstats if
-   *   file or directory exists, undefined if it doesn't
-   */
-  export function getStats(uri: Uri): Promise<BigIntStats | undefined>;
-  /**
-   * Set the last modified and accessed times for the file or directory
-   *
-   * @param uri URI of file or directory
-   * @returns Promise that resolves once the touch operation finishes
-   */
-  export function touch(uri: Uri, date: Date): Promise<void>;
-  /** Type of file system item in a directory */
-  export enum EntryType {
-    File = 'file',
-    Directory = 'directory',
-    Unknown = 'unknown',
-  }
-  /** All entries in a directory, mapped from entry type to array of uris for the entries */
-  export type DirectoryEntries = Readonly<{
-    [entryType in EntryType]: Uri[];
-  }>;
-  /**
-   * Reads a directory and returns lists of entries in the directory by entry type.
-   *
-   * @param uri - URI of directory.
-   * @param entryFilter - Function to filter out entries in the directory based on their names.
-   * @returns Map of entry type to list of uris for each entry in the directory with that type.
-   */
-  export function readDir(
-    uri: Uri,
-    entryFilter?: (entryName: string) => boolean,
-  ): Promise<DirectoryEntries>;
-  /**
-   * Create a directory in the file system if it does not exist. Does not throw if it already exists.
-   *
-   * @param uri URI of directory
-   * @returns Promise that resolves once the directory has been created
-   */
-  export function createDir(uri: Uri): Promise<void>;
-  /**
-   * Remove a directory and all its contents recursively from the file system
-   *
-   * @param uri URI of directory
-   * @returns Promise that resolves when the delete operation finishes
-   */
-  export function deleteDir(uri: Uri): Promise<void>;
-}
-declare module 'node/services/execution-token.service' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
-  /**
-   * This should be called when extensions are being loaded
-   *
-   * @param extensionName Name of the extension to register
-   * @returns Token that can be passed to `tokenIsValid` to authenticate or authorize API callers. It
-   *   is important that the token is not shared to avoid impersonation of API callers.
-   */
-  function registerExtension(extensionName: string): ExecutionToken;
-  /**
-   * Remove a registered token. Note that a hash of a token is what is needed to unregister, not the
-   * full token itself (notably not the nonce), so something can be delegated the ability to
-   * unregister a token without having been given the full token itself.
-   *
-   * @param extensionName Name of the extension that was originally registered
-   * @param tokenHash Value of `getHash()` of the token that was originally registered.
-   * @returns `true` if the token was successfully unregistered, `false` otherwise
-   */
-  function unregisterExtension(extensionName: string, tokenHash: string): boolean;
-  /**
-   * This should only be needed by services that need to contextualize the response for the caller
-   *
-   * @param executionToken Token that was previously registered.
-   * @returns `true` if the token matches a token that was previous registered, `false` otherwise.
-   */
-  function tokenIsValid(executionToken: ExecutionToken): boolean;
-  const executionTokenService: {
-    registerExtension: typeof registerExtension;
-    unregisterExtension: typeof unregisterExtension;
-    tokenIsValid: typeof tokenIsValid;
-  };
-  export default executionTokenService;
-}
-declare module 'extension-host/services/extension-storage.service' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
-  import { Buffer } from 'buffer';
-  /**
-   * This is only intended to be called by the extension service. This service cannot call into the
-   * extension service or it causes a circular dependency.
-   */
-  export function setExtensionUris(urisPerExtension: Map<string, string>): void;
-  /** Return a path to the specified file within the extension's installation directory */
-  export function buildExtensionPathFromName(extensionName: string, fileName: string): string;
-  /**
-   * Read a text file from the the extension's installation directory
-   *
-   * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param fileName Name of the file to be read
-   * @returns Promise for a string with the contents of the file
-   */
-  function readTextFileFromInstallDirectory(
-    token: ExecutionToken,
-    fileName: string,
-  ): Promise<string>;
-  /**
-   * Read a binary file from the the extension's installation directory
-   *
-   * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param fileName Name of the file to be read
-   * @returns Promise for a Buffer with the contents of the file
-   */
-  function readBinaryFileFromInstallDirectory(
-    token: ExecutionToken,
-    fileName: string,
-  ): Promise<Buffer>;
-  /**
-   * Read data specific to the user (as identified by the OS) and extension (as identified by the
-   * ExecutionToken)
-   *
-   * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param key Unique identifier of the data
-   * @returns Promise for a string containing the data
-   */
-  function readUserData(token: ExecutionToken, key: string): Promise<string>;
-  /**
-   * Write data specific to the user (as identified by the OS) and extension (as identified by the
-   * ExecutionToken)
-   *
-   * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param key Unique identifier of the data
-   * @param data Data to be written
-   * @returns Promise that will resolve if the data is written successfully
-   */
-  function writeUserData(token: ExecutionToken, key: string, data: string): Promise<void>;
-  /**
-   * Delete data previously written that is specific to the user (as identified by the OS) and
-   * extension (as identified by the ExecutionToken)
-   *
-   * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param key Unique identifier of the data
-   * @returns Promise that will resolve if the data is deleted successfully
-   */
-  function deleteUserData(token: ExecutionToken, key: string): Promise<void>;
-  export interface ExtensionStorageService {
-    readTextFileFromInstallDirectory: typeof readTextFileFromInstallDirectory;
-    readBinaryFileFromInstallDirectory: typeof readBinaryFileFromInstallDirectory;
-    readUserData: typeof readUserData;
-    writeUserData: typeof writeUserData;
-    deleteUserData: typeof deleteUserData;
-  }
-  /**
-   *
-   * This service provides extensions in the extension host the ability to read/write data based on
-   * the extension identity and current user (as identified by the OS). This service will not work
-   * within the renderer.
-   */
-  const extensionStorageService: ExtensionStorageService;
-  export default extensionStorageService;
 }
 declare module 'shared/services/menu-data.service-model' {
   import {
@@ -4881,8 +5269,8 @@ declare module 'shared/services/menu-data.service' {
 }
 declare module 'shared/services/localization.service' {
   import { ILocalizationService } from 'shared/services/localization.service-model';
-  const localizationDataService: ILocalizationService;
-  export default localizationDataService;
+  const localizationService: ILocalizationService;
+  export default localizationService;
 }
 declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';
@@ -4908,6 +5296,7 @@ declare module '@papi/backend' {
   import { DataProviderService } from 'shared/services/data-provider.service';
   import { DataProviderEngine as PapiDataProviderEngine } from 'shared/models/data-provider-engine.model';
   import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
+  import { BaseProjectDataProviderEngine as PapiBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
   import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
@@ -4942,6 +5331,22 @@ declare module '@papi/backend' {
      * @see {@link IProjectDataProviderEngine} for more information on extending this class.
      */
     ProjectDataProviderEngine: typeof PapiProjectDataProviderEngine;
+    /**
+     *
+     * Abstract class that provides a placeholder `notifyUpdate` for Base Project Data Provider Engine
+     * classes. If a Base Project Data Provider Engine class extends this class, it doesn't have to
+     * specify its own `notifyUpdate` function in order to use `notifyUpdate`.
+     *
+     * Additionally, extending this class informs Intellisense that you can run `notifyUpdate` with the
+     * `Setting` data type if needed like so:
+     *
+     * ```typescript
+     * this.notifyUpdate('Setting');
+     * ```
+     *
+     * @see {@link IBaseProjectDataProviderEngine} for more information on extending this class.
+     */
+    BaseProjectDataProviderEngine: typeof PapiBaseProjectDataProviderEngine;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
     /**
@@ -4999,6 +5404,10 @@ declare module '@papi/backend' {
     /**
      *
      * Provides metadata for projects known by the platform
+     *
+     * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
+     * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
+     * their types are synchronous locally.
      */
     projectLookup: ProjectLookupServiceType;
     /**
@@ -5052,6 +5461,22 @@ declare module '@papi/backend' {
    * @see {@link IProjectDataProviderEngine} for more information on extending this class.
    */
   export const ProjectDataProviderEngine: typeof PapiProjectDataProviderEngine;
+  /**
+   *
+   * Abstract class that provides a placeholder `notifyUpdate` for Base Project Data Provider Engine
+   * classes. If a Base Project Data Provider Engine class extends this class, it doesn't have to
+   * specify its own `notifyUpdate` function in order to use `notifyUpdate`.
+   *
+   * Additionally, extending this class informs Intellisense that you can run `notifyUpdate` with the
+   * `Setting` data type if needed like so:
+   *
+   * ```typescript
+   * this.notifyUpdate('Setting');
+   * ```
+   *
+   * @see {@link IBaseProjectDataProviderEngine} for more information on extending this class.
+   */
+  export const BaseProjectDataProviderEngine: typeof PapiBaseProjectDataProviderEngine;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
   /**
@@ -5109,6 +5534,10 @@ declare module '@papi/backend' {
   /**
    *
    * Provides metadata for projects known by the platform
+   *
+   * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
+   * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
+   * their types are synchronous locally.
    */
   export const projectLookup: ProjectLookupServiceType;
   /**
@@ -5460,25 +5889,29 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
-  import { ProjectDataProviders } from 'papi-shared-types';
+  import { ProjectDataProviderInterfaces } from 'papi-shared-types';
   /**
    * Gets a project data provider with specified provider name
    *
-   * @param projectType Indicates what you expect the `projectType` to be for the project with the
-   *   specified id. The TypeScript type for the returned Project Data Provider will have the Project
-   *   Data Provider type associated with this `projectType`. If this argument does not match the
-   *   project's actual `projectType` (according to its metadata), a warning will be logged
+   * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
+   *   type for the returned project data provider will have the project data provider interface type
+   *   associated with this `projectInterface`. If the project does not implement this
+   *   `projectInterface` (according to its metadata), an error will be thrown.
    * @param projectDataProviderSource String name of the id of the project to get OR
    *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
    *   data provider again)
+   * @param pdpFactoryId Optional ID of the PDP factory from which to get the project data provider if
+   *   the PDP factory supports this project id and project interface. If not provided, then look in
+   *   all available PDP factories for the given project ID.
    * @returns `undefined` if the Project Data Provider has not been retrieved, the requested Project
    *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
    *   Data Provider is disposed
    */
-  const useProjectDataProvider: <ProjectType extends keyof ProjectDataProviders>(
-    projectType: ProjectType,
-    projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
-  ) => ProjectDataProviders[ProjectType] | undefined;
+  const useProjectDataProvider: <ProjectInterface extends keyof ProjectDataProviderInterfaces>(
+    projectInterface: ProjectInterface,
+    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+    pdpFactoryId?: string,
+  ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
   export default useProjectDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
@@ -5486,31 +5919,41 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
-  import { ProjectDataProviders, ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
+  import {
+    ProjectDataProviderInterfaces,
+    ProjectInterfaceDataTypes,
+    ProjectInterfaces,
+  } from 'papi-shared-types';
   /**
    * React hook to use data from a Project Data Provider
    *
-   * @example `useProjectData('ParatextStandard', 'project id').VerseUSFM(...);`
+   * @example `useProjectData('platformScripture.USFM_BookChapterVerse', 'project
+   * id').VerseUSFM(...);`
    */
   type UseProjectDataHook = {
-    <ProjectType extends ProjectTypes>(
-      projectType: ProjectType,
-      projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+    <ProjectInterface extends ProjectInterfaces>(
+      projectInterface: ProjectInterface,
+      projectDataProviderSource:
+        | string
+        | ProjectDataProviderInterfaces[ProjectInterface]
+        | undefined,
     ): {
-      [TDataType in keyof ProjectDataTypes[ProjectType]]: (
+      [TDataType in keyof ProjectInterfaceDataTypes[ProjectInterface]]: (
         // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
-        selector: ProjectDataTypes[ProjectType][TDataType]['selector'],
+        selector: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['selector'],
         // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        defaultValue: ProjectDataTypes[ProjectType][TDataType]['getData'],
+        defaultValue: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        ProjectDataTypes[ProjectType][TDataType]['getData'],
+        ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
         (
           | ((
               // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
-              newData: ProjectDataTypes[ProjectType][TDataType]['setData'],
-            ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+              newData: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['setData'],
+            ) => Promise<
+              DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>
+            >)
           | undefined
         ),
         boolean,
@@ -5519,19 +5962,19 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   };
   /**
    * ```typescript
-   * useProjectData<ProjectType extends ProjectTypes>(
-   *     projectType: ProjectType,
-   *     projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+   * useProjectData<ProjectInterface extends ProjectInterfaces>(
+   *     projectInterface: ProjectInterface,
+   *     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
    *   ).DataType(
-   *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
-   *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
+   *       selector: ProjectInterfaceDataTypes[ProjectInterface][DataType]['selector'],
+   *       defaultValue: ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
    *       subscriberOptions?: DataProviderSubscriberOptions,
    *     ) => [
-   *       ProjectDataTypes[ProjectType][DataType]['getData'],
+   *       ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
    *       (
    *         | ((
-   *             newData: ProjectDataTypes[ProjectType][DataType]['setData'],
-   *           ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+   *             newData: ProjectInterfaceDataTypes[ProjectInterface][DataType]['setData'],
+   *           ) => Promise<DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>>)
    *         | undefined
    *       ),
    *       boolean,
@@ -5540,18 +5983,19 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *
    * React hook to use data from a Project Data Provider. Subscribes to run a callback on a Project
    * Data Provider's data with specified selector on the specified data type that the Project Data
-   * Provider serves according to its `projectType`.
+   * Provider serves according to its supported `projectInterface`s.
    *
-   * Usage: Specify the project type, the project id, and the data type on the Project Data Provider
-   * with `useProjectData('<project_type>', '<project_id>').<data_type>` and use like any other React
-   * hook.
+   * Usage: Specify the `projectInterface`, the project id, and the data type on the Project Data
+   * Provider with `useProjectData('<projectInterface>', '<project_id>').<data_type>` and use like any
+   * other React hook.
    *
-   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `ParatextStandard` project with
-   * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
+   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a
+   * `platformScripture.USFM_BookChapterVerse` project with projectId
+   * `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
    *
    * ```typescript
    * const [verse, setVerse, verseIsLoading] = useProjectData(
-   *   'ParatextStandard',
+   *   'platformScripture.USFM_BookChapterVerse',
    *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
    * ).VerseUSFM(
    *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
@@ -5559,10 +6003,10 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * );
    * ```
    *
-   * _＠param_ `projectType` Indicates what you expect the `projectType` to be for the project with the
-   * specified id. The TypeScript type for the returned Project Data Provider will have the Project
-   * Data Provider type associated with this project type. If this argument does not match the
-   * project's actual `projectType` (according to its metadata), a warning will be logged
+   * _＠param_ `projectInterface` `projectInterface` that the project to load must support. The
+   * TypeScript type for the returned project data provider will have the project data provider
+   * interface type associated with this `projectInterface`. If the project does not implement this
+   * `projectInterface` (according to its metadata), an error will be thrown.
    *
    * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
    * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
@@ -5597,20 +6041,20 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   export default useProjectData;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
-  import { ProjectDataProviders, ProjectSettingTypes } from 'papi-shared-types';
+  import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
   /**
    * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
    * subscribers when the project setting changes and gets updated when the project setting is changed
    * by others.
    *
-   * @param projectType Indicates what you expect the `projectType` to be for the project with the
-   *   specified id. The TypeScript type for the returned Project Data Provider will have the Project
-   *   Data Provider type associated with this `projectType`. If this argument does not match the
-   *   project's actual `projectType` (according to its metadata), a warning will be logged
    * @param projectDataProviderSource `projectDataProviderSource` String name of the id of the project
    *   to get OR projectDataProvider (result of `useProjectDataProvider` if you want to consolidate
-   *   and only get the Project Data Provider once)
+   *   and only get the Project Data Provider once). If you provide a project id, this hook will use a
+   *   PDP for this project that supports the `platform.base` `projectInterface`.
+   *
+   *   Note: If you provide a projectDataProvider directly, it must be an
+   *   {@link IBaseProjectDataProvider}
    * @param key The string id of the project setting to interact with
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
@@ -5637,12 +6081,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
-  const useProjectSetting: <
-    ProjectType extends keyof ProjectDataProviders,
-    ProjectSettingName extends keyof ProjectSettingTypes,
-  >(
-    projectType: ProjectType,
-    projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+  const useProjectSetting: <ProjectSettingName extends keyof ProjectSettingTypes>(
+    projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,
     key: ProjectSettingName,
     defaultValue: ProjectSettingTypes[ProjectSettingName],
     subscriberOptions?: DataProviderSubscriberOptions,
@@ -5688,6 +6128,39 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   ): (DataProviders[EachDataProviderName[number]] | undefined)[];
   export default useDataProviderMulti;
 }
+declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
+  import { LocalizationData } from 'shared/services/localization.service-model';
+  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import { LocalizeKey } from 'platform-bible-utils';
+  /**
+   * Gets localizations on the papi.
+   *
+   * @param localizationKeys Array of keys to get localizations of
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param localizationLocales Array of localization languages to look up the keys in
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param subscriberOptions Various options to adjust how the subscriber emits updates
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   *   until `dataProviderSource` or `selector` changes.
+   * @returns `[localizedStrings]`
+   *
+   *   - `localizedStrings`: The current state of the localizations, either `defaultState` or the stored
+   *       state on the papi, if any
+   */
+  const useLocalizedStrings: (
+    localizationKeys: LocalizeKey[],
+    localizationLocales?: string[],
+    subscriberOptions?: DataProviderSubscriberOptions,
+  ) => [localizedStrings: LocalizationData, isLoading: boolean];
+  export default useLocalizedStrings;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
@@ -5697,6 +6170,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
+  export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
 }
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
@@ -5847,6 +6321,10 @@ declare module '@papi/frontend' {
     /**
      *
      * Provides metadata for projects known by the platform
+     *
+     * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
+     * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
+     * their types are synchronous locally.
      */
     projectLookup: ProjectLookupServiceType;
     /**
@@ -5934,6 +6412,10 @@ declare module '@papi/frontend' {
   /**
    *
    * Provides metadata for projects known by the platform
+   *
+   * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
+   * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
+   * their types are synchronous locally.
    */
   export const projectLookup: ProjectLookupServiceType;
   /**

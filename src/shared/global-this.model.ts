@@ -1,10 +1,10 @@
 import { LogLevel } from 'electron-log';
 import { FunctionComponent } from 'react';
 import {
-  GetWebViewDefinitionUpdatableProperties,
+  GetSavedWebViewDefinition,
+  SavedWebViewDefinition,
   UpdateWebViewDefinition,
   UseWebViewStateHook,
-  WebViewDefinitionUpdatableProperties,
   WebViewDefinitionUpdateInfo,
   WebViewProps,
 } from '@shared/models/web-view.model';
@@ -47,15 +47,13 @@ declare global {
   // but probably wouldn't be used in a webview
   // TODO: Find a way to move this to `@renderer/global-this.model.ts` without causing an error on
   // building papi.d.ts
-  var getWebViewDefinitionUpdatablePropertiesById: (
-    webViewId: string,
-  ) => WebViewDefinitionUpdatableProperties | undefined;
+  var getSavedWebViewDefinitionById: (webViewId: string) => SavedWebViewDefinition | undefined;
   var updateWebViewDefinitionById: (
     webViewId: string,
     webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
   ) => boolean;
-  /** JSDOC DESTINATION GetWebViewDefinitionUpdatableProperties */
-  var getWebViewDefinitionUpdatableProperties: GetWebViewDefinitionUpdatableProperties;
+  /** JSDOC DESTINATION GetSavedWebViewDefinition */
+  var getSavedWebViewDefinition: GetSavedWebViewDefinition;
   /** JSDOC DESTINATION UpdateWebViewDefinition */
   var updateWebViewDefinition: UpdateWebViewDefinition;
   /** Indicates whether test code meant just for developers to see should be run */

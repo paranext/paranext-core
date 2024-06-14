@@ -1,43 +1,57 @@
-import { ProjectTypes, ProjectDataTypes, ProjectDataProviders } from 'papi-shared-types';
 import {
-  ProjectDataProviderEngineTypes,
+  ProjectInterfaces,
+  ProjectInterfaceDataTypes,
+  ProjectDataProviderInterfaces,
+} from 'papi-shared-types';
+import {
   IProjectDataProviderEngineFactory,
+  IProjectDataProviderEngine,
 } from '@shared/models/project-data-provider-engine.model';
 import networkObjectService from '@shared/services/network-object.service';
 import { getByType, registerEngineByType } from '@shared/services/data-provider.service';
 import { newNonce } from '@shared/utils/util';
-import { Dispose, MutexMap, UnsubscriberAsyncList } from 'platform-bible-utils';
+import {
+  Dispose,
+  MutexMap,
+  UnionToIntersection,
+  UnsubscriberAsyncList,
+} from 'platform-bible-utils';
 import IProjectDataProviderFactory, {
   PDP_FACTORY_OBJECT_TYPE,
 } from '@shared/models/project-data-provider-factory.interface';
 import projectLookupService from '@shared/services/project-lookup.service';
-import { ProjectMetadata } from '@shared/services/papi-core.service';
+import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { getPDPFactoryNetworkObjectNameFromId } from '@shared/models/project-lookup.service-model';
 
 /**
- * Class that creates Project Data Providers of a specified `projectType`. Layers over
+ * Class that creates Project Data Providers of a specific set of `projectInterface`s. Layers over
  * extension-provided {@link IProjectDataProviderEngineFactory}. Internal only
  */
-class ProjectDataProviderFactory<ProjectType extends ProjectTypes>
+class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInterfaces[]>
   implements IProjectDataProviderFactory
 {
   private readonly pdpIdsMutexMap = new MutexMap();
   private readonly pdpIds: Map<string, string> = new Map();
-  private readonly projectType: ProjectType;
+  private readonly pdpFactoryId: string;
+  private readonly projectInterfaces: SupportedProjectInterfaces;
   private readonly pdpCleanupList: UnsubscriberAsyncList;
-  private readonly pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>;
+  private readonly pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>;
 
   /**
    * Create a new PDP factory that is used to create PDPs
    *
-   * @param projectType Specified which project type this PDP factory supports
+   * @param projectInterfaces All the `projectInterface`s this PDP factory's PDPs can support
    * @param pdpEngineFactory Object that can create the engines for PDPs
    */
   constructor(
-    projectType: ProjectType,
-    pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>,
+    pdpFactoryId: string,
+    projectInterfaces: SupportedProjectInterfaces,
+    pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>,
   ) {
-    this.projectType = projectType;
-    this.pdpCleanupList = new UnsubscriberAsyncList(`PDP Factory for ${projectType}`);
+    this.pdpFactoryId = pdpFactoryId;
+    this.projectInterfaces = projectInterfaces;
+    this.pdpCleanupList = new UnsubscriberAsyncList(`PDP Factory for ${projectInterfaces}`);
     this.pdpEngineFactory = pdpEngineFactory;
   }
 
@@ -45,7 +59,7 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes>
    * Returns a list of metadata objects for all projects that can be the targets of PDPs created by
    * this factory
    */
-  getAvailableProjects(): Promise<ProjectMetadata[]> {
+  getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
     return this.pdpEngineFactory.getAvailableProjects();
   }
 
@@ -77,54 +91,57 @@ class ProjectDataProviderFactory<ProjectType extends ProjectTypes>
 
   /** Convert the PDP engine into a PDP using the data provider service */
   private async registerProjectDataProvider(
-    projectDataProviderEngine: ProjectDataProviderEngineTypes[ProjectType],
+    projectDataProviderEngine: IProjectDataProviderEngine<SupportedProjectInterfaces>,
     projectId: string,
   ): Promise<string> {
-    // Add a check for extensions that provide new project types to make sure they fulfill
-    // `MandatoryProjectDataTypes`
+    // Check to make sure new Base PDPs fulfill the requirements of the `platform.base` `projectInterface`
     if (
-      !('getExtensionData' in projectDataProviderEngine) ||
-      !('getSetting' in projectDataProviderEngine)
+      this.projectInterfaces.includes(PROJECT_INTERFACE_PLATFORM_BASE) &&
+      (!('getExtensionData' in projectDataProviderEngine) ||
+        !('getSetting' in projectDataProviderEngine))
     )
-      throw new Error('projectDataProviderEngine must implement "MandatoryProjectDataTypes"');
+      throw new Error(
+        `\`BaseProjectDataProviderEngine\` with project id ${projectId} created by PDP Factory with id ${this.pdpFactoryId} must implement \`${PROJECT_INTERFACE_PLATFORM_BASE}\` \`projectInterface\`. See \`IBaseProjectDataProvider\` for more information`,
+      );
+    // ENHANCEMENT: Re-add a check for new PDPs to make sure there is some PDP somewhere that
+    // fulfills `platform.base`
+
     const pdpId: string = `${newNonce()}-pdp`;
-    const pdp = await registerEngineByType<ProjectDataTypes[ProjectType]>(
-      pdpId,
-      projectDataProviderEngine,
-      'pdp',
-      {
-        projectId,
-        projectType: this.projectType,
-      },
-    );
+    const pdp = await registerEngineByType<
+      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
+    >(pdpId, projectDataProviderEngine, 'pdp', {
+      projectId,
+      projectInterfaces: this.projectInterfaces,
+    });
     this.pdpCleanupList.add(pdp);
     return pdpId;
   }
 }
 
-function getProjectDataProviderFactoryId(projectType: ProjectTypes) {
-  return `platform.pdpFactory-${projectType}`;
-}
-
 /**
- * Add a new Project Data Provider Factory to PAPI that uses the given engine. There must not be an
- * existing factory already that handles the same project type or this operation will fail.
+ * Add a new Project Data Provider Factory to PAPI that uses the given engine.
  *
- * @param projectType Type of project that pdpEngineFactory supports
+ * @param pdpFactoryId Unique id for this PDP factory
+ * @param projectInterfaces The standardized sets of methods (`projectInterface`s) supported by the
+ *   Project Data Provider Engines produced by this factory. Indicates what sort of project data
+ *   should be available on the PDPEs created by this factory.
  * @param pdpEngineFactory Used in a ProjectDataProviderFactory to create ProjectDataProviders
  * @returns Promise that resolves to a disposable object when the registration operation completes
  */
-export async function registerProjectDataProviderEngineFactory<ProjectType extends ProjectTypes>(
-  projectType: ProjectType,
-  pdpEngineFactory: IProjectDataProviderEngineFactory<ProjectType>,
+export async function registerProjectDataProviderEngineFactory<
+  SupportedProjectInterfaces extends ProjectInterfaces[],
+>(
+  pdpFactoryId: string,
+  projectInterfaces: SupportedProjectInterfaces,
+  pdpEngineFactory: IProjectDataProviderEngineFactory<SupportedProjectInterfaces>,
 ): Promise<Dispose> {
-  const factoryId = getProjectDataProviderFactoryId(projectType);
-  const factory = new ProjectDataProviderFactory(projectType, pdpEngineFactory);
-  return networkObjectService.set<ProjectDataProviderFactory<ProjectType>>(
-    factoryId,
+  const factoryNetworkObjectId = getPDPFactoryNetworkObjectNameFromId(pdpFactoryId);
+  const factory = new ProjectDataProviderFactory(pdpFactoryId, projectInterfaces, pdpEngineFactory);
+  return networkObjectService.set<ProjectDataProviderFactory<SupportedProjectInterfaces>>(
+    factoryNetworkObjectId,
     factory,
     PDP_FACTORY_OBJECT_TYPE,
-    { projectType },
+    { projectInterfaces },
   );
 }
 
@@ -134,30 +151,57 @@ export async function registerProjectDataProviderEngineFactory<ProjectType exten
  * @example
  *
  * ```typescript
- * const pdp = await get('ParatextStandard', 'ProjectID12345');
+ * const pdp = await get('platformScripture.USFM_BookChapterVerse', 'ProjectID12345');
  * pdp.getVerse(new VerseRef('JHN', '1', '1'));
  * ```
  *
- * @param projectType Type of the project to load. The TypeScript type for the returned project data
- *   provider will have the project data provider type associated with this project type. If this
- *   argument does not match the project's actual `projectType` (according to its metadata), an
- *   error will be thrown.
+ * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
+ *   type for the returned project data provider will have the project data provider interface type
+ *   associated with this `projectInterface`. If the project does not implement this
+ *   `projectInterface` (according to its metadata), an error will be thrown.
  * @param projectId ID for the project to load
- * @returns Data provider with types that are associated with the given project type
+ * @param pdpFactoryId Optional ID of the PDP factory from which to get the project data provider if
+ *   the PDP factory supports this project id and project interface. If not provided, then look in
+ *   all available PDP factories for the given project ID.
+ * @returns Project data provider with types that are associated with the given `projectInterface`
+ * @throws If did not find a project data provider for the project id that supports the requested
+ *   `projectInterface` (and from the requested PDP factory if specified)
  */
-export async function get<ProjectType extends ProjectTypes>(
-  projectType: ProjectType,
+export async function get<ProjectInterface extends ProjectInterfaces>(
+  projectInterface: ProjectInterface,
   projectId: string,
-): Promise<ProjectDataProviders[ProjectType]> {
-  const metadata = await projectLookupService.getMetadataForProject(projectId, projectType);
-  const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<ProjectType>>(
-    metadata.pdpFactoryId,
+  pdpFactoryId?: string,
+): Promise<ProjectDataProviderInterfaces[ProjectInterface]> {
+  const metadata = await projectLookupService.getMetadataForProject(
+    projectId,
+    projectInterface,
+    pdpFactoryId,
   );
-  if (!pdpFactory) throw new Error(`Cannot create project data providers of type ${projectType}`);
+
+  const minimalMatchPdpFactoryId = projectLookupService.getMinimalMatchPdpFactoryId(
+    metadata,
+    projectInterface,
+  );
+
+  if (!minimalMatchPdpFactoryId)
+    throw new Error(
+      `pdpService.get(${projectInterface}, ${projectId}, ${pdpFactoryId}): Somehow there was a project with the id and provided projectInterface, but could not find a PDPF that provided the projectInterface. This should not happen.`,
+    );
+
+  const pdpFactory = await networkObjectService.get<ProjectDataProviderFactory<[ProjectInterface]>>(
+    getPDPFactoryNetworkObjectNameFromId(minimalMatchPdpFactoryId),
+  );
+  if (!pdpFactory)
+    throw new Error(
+      `pdpService.get(${projectInterface}, ${projectId}, ${pdpFactoryId}): Cannot get project data providers with projectInterface ${projectInterface}: Could not get pdpf with id ${minimalMatchPdpFactoryId}`,
+    );
 
   const pdpId = await pdpFactory.getProjectDataProviderId(projectId);
-  const pdp = await getByType<ProjectDataProviders[ProjectType]>(pdpId);
-  if (!pdp) throw new Error(`Cannot create project data provider for project ID ${projectId}`);
+  const pdp = await getByType<ProjectDataProviderInterfaces[ProjectInterface]>(pdpId);
+  if (!pdp)
+    throw new Error(
+      `pdpService.get(${projectInterface}, ${projectId}, ${pdpFactoryId}): Cannot get project data provider for project ID ${projectId}`,
+    );
   return pdp;
 }
 

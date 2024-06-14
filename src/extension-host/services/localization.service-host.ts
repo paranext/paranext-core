@@ -336,7 +336,7 @@ export async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-/** This is an internal-only export for testing purposes, and should not be used in development */
+/** This is an internal-only export for testing purposes and should not be used in development */
 export const testingLocalizationService = {
   implementLocalizationDataProviderEngine: async () => {
     await loadAllLocalizationData();
@@ -348,7 +348,7 @@ export const testingLocalizationService = {
 // remove code that will be used later
 // @ts-ignore 6133
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const localizationDataService = createSyncProxyForAsyncObject<ILocalizationService>(async () => {
+const localizationService = createSyncProxyForAsyncObject<ILocalizationService>(async () => {
   await initialize();
   return dataProvider;
 }, localizationServiceObjectToProxy);

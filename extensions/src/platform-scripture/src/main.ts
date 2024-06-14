@@ -1,9 +1,12 @@
 import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
+import ScriptureExtenderProjectDataProviderEngineFactory, {
+  SCRIPTURE_EXTENDER_PDPF_ID,
+} from './project-data-provider/platform-scripture-extender-pdpef.model';
+import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 
 // #region Project Setting Validators
 
-// Based on https://github.com/paranext/paranext-core/blob/5c403e272b002ddd8970f735bc119f335c78c509/extensions/src/usfm-data-provider/index.d.ts#L401
 // Should be 123 characters long
 const booksPresentValidator: ProjectSettingValidator<'platformScripture.booksPresent'> = async (
   newValue: string,
@@ -11,7 +14,6 @@ const booksPresentValidator: ProjectSettingValidator<'platformScripture.booksPre
   return newValue.length === 123 && newValue.replace(/[01]/g, '').length === 0;
 };
 
-// Based on https://github.com/paranext/paranext-core/blob/5c403e272b002ddd8970f735bc119f335c78c509/extensions/src/usfm-data-provider/index.d.ts#L391
 // There are 7 options in the enum
 const versificationValidator: ProjectSettingValidator<'platformScripture.versification'> = async (
   newValue: number,
@@ -26,6 +28,29 @@ const versificationValidator: ProjectSettingValidator<'platformScripture.versifi
 export async function activate(context: ExecutionActivationContext) {
   logger.info('platformScripture is activating!');
 
+  const scriptureExtenderPdpefPromise =
+    papi.projectDataProviders.registerProjectDataProviderEngineFactory(
+      SCRIPTURE_EXTENDER_PDPF_ID,
+      SCRIPTURE_EXTENDER_PROJECT_INTERFACES,
+      new ScriptureExtenderProjectDataProviderEngineFactory(),
+    );
+
+  const includeProjectsCommandPromise = papi.commands.registerCommand(
+    'platformScripture.toggleIncludeMyParatext9Projects',
+    async (shouldInclude) => {
+      const currentSettingValue =
+        shouldInclude !== undefined
+          ? !shouldInclude
+          : await papi.settings.get('platformScripture.includeMyParatext9Projects');
+      const newSettingValue = !currentSettingValue;
+      await papi.settings.set('platformScripture.includeMyParatext9Projects', newSettingValue);
+      return newSettingValue;
+    },
+  );
+  const includeProjectsValidatorPromise = papi.settings.registerValidator(
+    'platformScripture.includeMyParatext9Projects',
+    async (newValue) => typeof newValue === 'boolean',
+  );
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
     booksPresentValidator,
@@ -35,7 +60,13 @@ export async function activate(context: ExecutionActivationContext) {
     versificationValidator,
   );
 
-  context.registrations.add(await booksPresentPromise, await versificationPromise);
+  context.registrations.add(
+    await scriptureExtenderPdpefPromise,
+    await includeProjectsCommandPromise,
+    await includeProjectsValidatorPromise,
+    await booksPresentPromise,
+    await versificationPromise,
+  );
 
   logger.info('platformScripture is finished activating!');
 }

@@ -38,11 +38,11 @@ const platformSettingsLocalized: Localized<ProjectSettingsContribution> = {
   properties: {
     'platform.fullName': {
       label: 'project_settings_platform_fullName_label',
-      default: '%project_full_name_missing%',
+      default: 'project_full_name_missing',
     },
     'platform.language': {
       label: 'project_settings_platform_language_label',
-      default: '%project_language_missing%',
+      default: 'project_language_missing',
     },
   },
 };
@@ -56,13 +56,13 @@ const test1ExtensionContribution: ProjectSettingsContribution = {
       label: '%test1.setting1_label%',
       description: '%test1.setting1_description%',
       default: 'hi',
-      includeProjectTypes: '^thing$',
+      includeProjectInterfaces: '^thing$',
     },
     'test1.setting2': {
       label: '%test1.setting2_label%',
       description: '%test1.setting2_description%',
       default: 5,
-      excludeProjectTypes: ['^stuff', 'b[oO]rk$'],
+      excludeProjectInterfaces: ['^stuff', 'b[oO]rk$'],
     },
   },
 };
@@ -74,13 +74,13 @@ const test1ExtensionContributionLocalized: Localized<ProjectSettingsContribution
       label: 'test1.setting1_label',
       description: 'test1.setting1_description',
       default: 'hi',
-      includeProjectTypes: '^thing$',
+      includeProjectInterfaces: '^thing$',
     },
     'test1.setting2': {
       label: 'test1.setting2_label',
       description: 'test1.setting2_description',
       default: 5,
-      excludeProjectTypes: ['^stuff', 'b[oO]rk$'],
+      excludeProjectInterfaces: ['^stuff', 'b[oO]rk$'],
     },
   },
 };

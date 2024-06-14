@@ -1,12 +1,21 @@
 import { List, ListItem, ListItemButton, ListItemText, ListSubheader } from '@mui/material';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { Checkbox } from 'platform-bible-react';
-import { ProjectTypes } from 'papi-shared-types';
+import { ProjectInterfaces } from 'papi-shared-types';
 import { PropsWithChildren, useCallback, JSX } from 'react';
 
-export type Project = ProjectMetadata & {
-  id: string;
+/** Project metadata and some display information */
+export type ProjectMetadataDisplay = ProjectMetadata & {
+  /**
+   * Name to display in the list for this project
+   *
+   * Generally this should come from the project setting `platform.name`
+   */
   name: string;
+};
+
+export type Project = ProjectMetadataDisplay & {
+  id: string;
   description: string;
   isDownloadable: boolean;
   isDownloaded: boolean;
@@ -34,7 +43,12 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 1',
       isDownloadable: true,
       isDownloaded: false,
-      projectType: 'test' as ProjectTypes,
+      projectInterfaces: ['test' as ProjectInterfaces],
+      pdpFactoryInfo: {
+        'test-pdpf': {
+          projectInterfaces: ['test' as ProjectInterfaces],
+        },
+      },
     },
     {
       id: 'project-2',
@@ -42,7 +56,12 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 2',
       isDownloadable: false,
       isDownloaded: true,
-      projectType: 'test' as ProjectTypes,
+      projectInterfaces: ['test' as ProjectInterfaces],
+      pdpFactoryInfo: {
+        'test-pdpf': {
+          projectInterfaces: ['test' as ProjectInterfaces],
+        },
+      },
     },
     {
       id: 'project-3',
@@ -50,7 +69,12 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 3',
       isDownloadable: true,
       isDownloaded: false,
-      projectType: 'test' as ProjectTypes,
+      projectInterfaces: ['test' as ProjectInterfaces],
+      pdpFactoryInfo: {
+        'test-pdpf': {
+          projectInterfaces: ['test' as ProjectInterfaces],
+        },
+      },
     },
     {
       id: 'project-4',
@@ -58,7 +82,12 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 4',
       isDownloadable: false,
       isDownloaded: false,
-      projectType: 'test' as ProjectTypes,
+      projectInterfaces: ['test' as ProjectInterfaces],
+      pdpFactoryInfo: {
+        'test-pdpf': {
+          projectInterfaces: ['test' as ProjectInterfaces],
+        },
+      },
     },
     {
       id: 'project-5',
@@ -66,7 +95,12 @@ export function fetchProjects(): Project[] {
       description: 'Description of project 5',
       isDownloadable: false,
       isDownloaded: true,
-      projectType: 'test' as ProjectTypes,
+      projectInterfaces: ['test' as ProjectInterfaces],
+      pdpFactoryInfo: {
+        'test-pdpf': {
+          projectInterfaces: ['test' as ProjectInterfaces],
+        },
+      },
     },
   ];
   /* eslint-enable */
@@ -74,7 +108,7 @@ export function fetchProjects(): Project[] {
 
 export type ProjectListProps = PropsWithChildren<{
   /** Projects to display in the list */
-  projects: ProjectMetadata[];
+  projects: ProjectMetadataDisplay[];
 
   /** Handler to perform an action when the project is clicked */
   handleSelectProject: (projectId: string) => void;
@@ -112,7 +146,7 @@ export default function ProjectList({
   children,
 }: ProjectListProps) {
   const isSelected = useCallback(
-    (project: ProjectMetadata) => {
+    (project: ProjectMetadataDisplay) => {
       if (isMultiselect && selectedProjectIds) {
         return selectedProjectIds.includes(project.id);
       }
@@ -121,7 +155,7 @@ export default function ProjectList({
     [isMultiselect, selectedProjectIds],
   );
 
-  const createListItemContents = (project: ProjectMetadata): JSX.Element => {
+  const createListItemContents = (project: ProjectMetadataDisplay): JSX.Element => {
     return (
       <ListItemButton
         selected={isSelected(project)}

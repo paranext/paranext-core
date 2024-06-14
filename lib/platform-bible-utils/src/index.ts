@@ -42,8 +42,11 @@ export {
   charAt,
   codePointAt,
   endsWith,
+  escapeStringRegexp,
+  formatReplacementString,
   includes,
   indexOf,
+  isLocalizeKey,
   lastIndexOf,
   stringLength,
   normalize,
@@ -62,7 +65,7 @@ export { serialize, deserialize, isSerializable, htmlEncode } from './serializat
 export { default as getCurrentLocale } from './intl-util';
 
 // Types
-export type { DeepPartial, ReplaceType } from './util';
+export type { DeepPartial, ReplaceType, UnionToIntersection } from './util';
 export type {
   Dispose,
   OnDidDispose,

@@ -5,32 +5,37 @@ import {
 } from '@shared/models/data-provider.model';
 import IDataProvider from '@shared/models/data-provider.interface';
 import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
-import { ProjectDataProviders, ProjectDataTypes, ProjectTypes } from 'papi-shared-types';
+import {
+  ProjectDataProviderInterfaces,
+  ProjectInterfaceDataTypes,
+  ProjectInterfaces,
+} from 'papi-shared-types';
 
 /**
  * React hook to use data from a Project Data Provider
  *
- * @example `useProjectData('ParatextStandard', 'project id').VerseUSFM(...);`
+ * @example `useProjectData('platformScripture.USFM_BookChapterVerse', 'project
+ * id').VerseUSFM(...);`
  */
 type UseProjectDataHook = {
-  <ProjectType extends ProjectTypes>(
-    projectType: ProjectType,
-    projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+  <ProjectInterface extends ProjectInterfaces>(
+    projectInterface: ProjectInterface,
+    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
   ): {
-    [TDataType in keyof ProjectDataTypes[ProjectType]]: (
+    [TDataType in keyof ProjectInterfaceDataTypes[ProjectInterface]]: (
       // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
-      selector: ProjectDataTypes[ProjectType][TDataType]['selector'],
+      selector: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['selector'],
       // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-      defaultValue: ProjectDataTypes[ProjectType][TDataType]['getData'],
+      defaultValue: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
       subscriberOptions?: DataProviderSubscriberOptions,
     ) => [
       // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-      ProjectDataTypes[ProjectType][TDataType]['getData'],
+      ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
       (
         | ((
             // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
-            newData: ProjectDataTypes[ProjectType][TDataType]['setData'],
-          ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+            newData: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['setData'],
+          ) => Promise<DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>>)
         | undefined
       ),
       boolean,
@@ -43,19 +48,19 @@ type UseProjectDataHook = {
 // put this comment on an actual function, so we can fix the comments back to using real @
 /**
  * ```typescript
- * useProjectData<ProjectType extends ProjectTypes>(
- *     projectType: ProjectType,
- *     projectDataProviderSource: string | ProjectDataProviders[ProjectType] | undefined,
+ * useProjectData<ProjectInterface extends ProjectInterfaces>(
+ *     projectInterface: ProjectInterface,
+ *     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
  *   ).DataType(
- *       selector: ProjectDataTypes[ProjectType][DataType]['selector'],
- *       defaultValue: ProjectDataTypes[ProjectType][DataType]['getData'],
+ *       selector: ProjectInterfaceDataTypes[ProjectInterface][DataType]['selector'],
+ *       defaultValue: ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
  *       subscriberOptions?: DataProviderSubscriberOptions,
  *     ) => [
- *       ProjectDataTypes[ProjectType][DataType]['getData'],
+ *       ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
  *       (
  *         | ((
- *             newData: ProjectDataTypes[ProjectType][DataType]['setData'],
- *           ) => Promise<DataProviderUpdateInstructions<ProjectDataTypes[ProjectType]>>)
+ *             newData: ProjectInterfaceDataTypes[ProjectInterface][DataType]['setData'],
+ *           ) => Promise<DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>>)
  *         | undefined
  *       ),
  *       boolean,
@@ -64,18 +69,19 @@ type UseProjectDataHook = {
  *
  * React hook to use data from a Project Data Provider. Subscribes to run a callback on a Project
  * Data Provider's data with specified selector on the specified data type that the Project Data
- * Provider serves according to its `projectType`.
+ * Provider serves according to its supported `projectInterface`s.
  *
- * Usage: Specify the project type, the project id, and the data type on the Project Data Provider
- * with `useProjectData('<project_type>', '<project_id>').<data_type>` and use like any other React
- * hook.
+ * Usage: Specify the `projectInterface`, the project id, and the data type on the Project Data
+ * Provider with `useProjectData('<projectInterface>', '<project_id>').<data_type>` and use like any
+ * other React hook.
  *
- * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `ParatextStandard` project with
- * projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
+ * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a
+ * `platformScripture.USFM_BookChapterVerse` project with projectId
+ * `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
  *
  * ```typescript
  * const [verse, setVerse, verseIsLoading] = useProjectData(
- *   'ParatextStandard',
+ *   'platformScripture.USFM_BookChapterVerse',
  *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
  * ).VerseUSFM(
  *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
@@ -83,10 +89,10 @@ type UseProjectDataHook = {
  * );
  * ```
  *
- * _＠param_ `projectType` Indicates what you expect the `projectType` to be for the project with the
- * specified id. The TypeScript type for the returned Project Data Provider will have the Project
- * Data Provider type associated with this project type. If this argument does not match the
- * project's actual `projectType` (according to its metadata), a warning will be logged
+ * _＠param_ `projectInterface` `projectInterface` that the project to load must support. The
+ * TypeScript type for the returned project data provider will have the project data provider
+ * interface type associated with this `projectInterface`. If the project does not implement this
+ * `projectInterface` (according to its metadata), an error will be thrown.
  *
  * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
  * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
@@ -121,8 +127,9 @@ type UseProjectDataHook = {
 /* eslint-disable no-type-assertion/no-type-assertion */
 const useProjectData = createUseDataHook(
   useProjectDataProvider as (
-    projectType: ProjectTypes,
+    projectInterface: ProjectInterfaces,
     dataProviderSource: string | IDataProvider | undefined,
+    pdpFactoryId?: string,
   ) => IDataProvider | undefined,
 ) as UseProjectDataHook;
 /* eslint-enable */

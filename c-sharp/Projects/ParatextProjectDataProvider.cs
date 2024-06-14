@@ -8,9 +8,11 @@ using Newtonsoft.Json.Linq;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
+using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
+using ProjectSettings = Paranext.DataProvider.Services.ProjectSettings;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -63,7 +65,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     protected override Task StartDataProvider()
     {
-        _paratextProjects.Initialize();
+        bool? shouldIncludePT9ProjectsOnWindows = false;
+        if (OperatingSystem.IsWindows())
+        {
+            shouldIncludePT9ProjectsOnWindows = SettingsService.GetSettingValue<bool>(PapiClient, Settings.INCLUDE_MY_PARATEXT_9_PROJECTS);
+            if (!shouldIncludePT9ProjectsOnWindows.HasValue)
+                throw new Exception($"Setting {Settings.INCLUDE_MY_PARATEXT_9_PROJECTS} was null!");
+        }
+        _paratextProjects.Initialize(shouldIncludePT9ProjectsOnWindows.Value);
         return Task.CompletedTask;
     }
 
@@ -165,7 +174,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
         return extensionStreamManager.GetDataStream(
-            $"extensions/{scope.ExtensionName}/{scope.DataQualifier}",
+            $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}/{scope.DataQualifier}",
             createIfNotExists
         );
     }
@@ -182,7 +191,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private void RegisterSettingsValidators()
     {
         (bool result, string? error) VisibilityValidator((string newValueJson, string currentValueJson,
-            string allChangesJson, string projectType) data)
+            string allChangesJson) data)
         {
             try
             {
@@ -219,21 +228,47 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettings.GetParatextSettingNameFromPlatformBibleSettingName(settingName) ??
             settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
-        return ResponseToRequest.Succeeded(scrText.Settings.ParametersDictionary[settingName]);
+
+        // ScrText always prioritizes the folder name over the Name setting as the "name" even when
+        // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
+        // the folder name instead of Settings.Name.
+        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ProjectSettingsAccess/ProjectSettings.cs#L1438
+        if (settingName == ProjectSettings.PT_NAME)
+            return ResponseToRequest.Succeeded(scrText.Name);
+
+        if (scrText.Settings.ParametersDictionary.TryGetValue(settingName, out string? settingValue)) {
+            // Paratext project setting value found, so return the value with the appropriate type
+            if (ProjectSettings.IsParatextSettingABoolean(settingName))
+            {
+                return settingValue switch
+                {
+                    "T" => ResponseToRequest.Succeeded(true),
+                    "F" => ResponseToRequest.Succeeded(false),
+                    _ => ResponseToRequest.Failed($"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"),
+                };
+            }
+            return ResponseToRequest.Succeeded(settingValue);
+        }
+
+        // Setting not found, so get the default value
+        string? defaultValue = ProjectSettingsService.GetDefault(
+            PapiClient,
+            settingName
+        );
+        if (defaultValue == null)
+            return ResponseToRequest.Failed($"Default value for {settingName} was null");
+
+        return ResponseToRequest.Succeeded(defaultValue);
     }
 
     public ResponseToRequest SetProjectSetting(string jsonKey, string value)
     {
         var settingName = JToken.Parse(jsonKey).ToString();
+
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
 
         // If there is no Paratext setting for the name given, we'll create one lower down
-        var currentValueResponse = ResponseToRequest.Failed("");
-        try
-        {
-            currentValueResponse = GetProjectSetting(jsonKey);
-        }
-        catch (KeyNotFoundException) { }
+        var currentValueResponse = GetProjectSetting(jsonKey);
 
         // Make sure the value we're planning to set is valid
         var currentValueJson = currentValueResponse.Success
@@ -244,8 +279,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 value,
                 currentValueJson,
                 settingName,
-                "",
-                ProjectType.Paratext))
+                ""))
             return ResponseToRequest.Failed($"Validation failed for {settingName}");
 
         // Figure out which setting name to use
@@ -254,22 +288,50 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Now actually write the setting
         string? errorMessage = null;
-        RunWithinLock(
-            WriteScope.AllSettingsFiles(),
-            _ => {
-                    try
-                    {
-                        scrText.Settings.SetSetting(paratextSettingName, value);
-                        scrText.Settings.Save();
-                    }
-                    catch (Exception ex)
-                    {
-                        errorMessage = ex.Message;
-                    }
-            });
+
+        // ScrText always prioritizes the folder name over the Name setting as the "name" even when
+        // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
+        // the folder name instead of Settings.Name.
+        // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L259
+        if (paratextSettingName == ProjectSettings.PT_NAME)
+        {
+            // Lock the whole project because this is literally moving the whole folder (chances
+            // this will actually succeed are very slim as the project must only have Settings.xml
+            // and the ldml file for this not to instantly throw)
+            // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L1793
+            RunWithinLock(
+                WriteScope.AllSettingsFiles(),
+                _ => {
+                        try
+                        {
+                            scrText.Name = value;
+                        }
+                        catch (Exception ex)
+                        {
+                            errorMessage = ex.Message;
+                        }
+                });
+        }
+        else
+        {
+            RunWithinLock(
+                WriteScope.AllSettingsFiles(),
+                _ => {
+                        try
+                        {
+                            scrText.Settings.SetSetting(paratextSettingName, value);
+                            scrText.Settings.Save();
+                        }
+                        catch (Exception ex)
+                        {
+                            errorMessage = ex.Message;
+                        }
+                });
+        }
+
         return (errorMessage != null)
             ? ResponseToRequest.Failed(errorMessage)
-            : ResponseToRequest.Succeeded(ProjectDataType.SETTINGS);
+            : ResponseToRequest.Succeeded(ProjectDataType.SETTING);
     }
 
     // Typically for "reset" we would want to erase the setting and then call "getDefault" if a
@@ -280,8 +342,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         string settingName = JToken.Parse(jsonKey).ToString();
         string? defaultValue = ProjectSettingsService.GetDefault(
             PapiClient,
-            settingName,
-            ProjectType.Paratext
+            settingName
         );
         if (defaultValue == null)
             return ResponseToRequest.Failed($"Default value for {settingName} was null");

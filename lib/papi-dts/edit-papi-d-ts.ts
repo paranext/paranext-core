@@ -108,7 +108,7 @@ papiDTS = papiDTS.replace(
   "\n$2// @ts-ignore TypeScript pretends it can't find `$3`, but it works just fine$1",
 );
 papiDTS = papiDTS.replace(
-  /(?<!\/\/ @ts-ignore.*)(\n(\s*).*ProjectDataTypes\[ProjectType\]\[TDataType\]\['(\w+)'\])/g,
+  /(?<!\/\/ @ts-ignore.*)(\n(\s*).*ProjectInterfaceDataTypes\[ProjectInterface\]\[TDataType\]\['(\w+)'\])/g,
   "\n$2// @ts-ignore TypeScript pretends it can't find `$3`, but it works just fine$1",
 );
 

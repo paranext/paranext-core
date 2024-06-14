@@ -1,12 +1,11 @@
-import { PlatformEvent } from 'platform-bible-utils';
-import { GetWebViewOptions, WebViewType } from '@shared/models/web-view.model';
+import { PlatformEvent, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
-import { AddWebViewEvent, Layout } from '@shared/models/docking-framework.model';
+import { AddWebViewEvent } from '@shared/models/docking-framework.model';
 import networkObjectService from '@shared/services/network-object.service';
 import networkObjectStatusService from './network-object-status.service';
 
@@ -46,12 +45,14 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const webViewService: WebViewServiceType = {
-  getWebView: async (webViewType: WebViewType, layout?: Layout, options?: GetWebViewOptions) => {
+const webViewService = createSyncProxyForAsyncObject<WebViewServiceType>(
+  async () => {
     await initialize();
-    return networkObject.getWebView(webViewType, layout, options);
+    return networkObject;
   },
-  onDidAddWebView,
-};
+  {
+    onDidAddWebView,
+  },
+);
 
 export default webViewService;

@@ -1,5 +1,7 @@
 import { testingProjectSettingsService } from '@extension-host/services/project-settings.service-host';
+import { LocalizationSelectors } from '@shared/services/localization.service-model';
 import { ProjectSettingValidator } from '@shared/services/project-settings.service-model';
+import { slice } from 'platform-bible-utils';
 
 jest.mock('@shared/services/network.service', () => ({
   ...jest.requireActual('@shared/services/network.service'),
@@ -30,6 +32,16 @@ jest.mock('@extension-host/data/core-project-settings-info.data', () => ({
     },
   },
 }));
+jest.mock('@shared/services/localization.service', () => ({
+  __esModule: true,
+  default: {
+    async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
+      [localizeKey: string]: string;
+    }> {
+      return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+    },
+  },
+}));
 
 describe('isValid', () => {
   it('should return true', async () => {
@@ -38,7 +50,6 @@ describe('isValid', () => {
       projectSettingKey,
       'eng',
       '%test_project_language_missing%',
-      'ParatextStandard',
     );
     expect(isSettingChangeValid).toBe(true);
   });
@@ -48,7 +59,6 @@ describe('isValid', () => {
       projectSettingKey,
       'ger',
       '%test_project_language_missing%',
-      'ParatextStandard',
     );
     expect(isSettingChangeValid).toBe(false);
   });
@@ -57,11 +67,8 @@ describe('isValid', () => {
 describe('getDefault', () => {
   it('should get default value', async () => {
     const projectSettingKey = 'platform.fullName';
-    const defaultValue = await testingProjectSettingsService.getDefault(
-      projectSettingKey,
-      'ParatextStandard',
-    );
-    expect(defaultValue).toBe('%test_project_full_name_missing%');
+    const defaultValue = await testingProjectSettingsService.getDefault(projectSettingKey);
+    expect(defaultValue).toBe('test_project_full_name_missing');
   });
 
   it('should throw if a default is not present', async () => {
@@ -69,7 +76,7 @@ describe('getDefault', () => {
     await expect(
       // This key does not exist. We are testing what happens
       // @ts-expect-error
-      testingProjectSettingsService.getDefault(projectSettingKey, 'ParatextStandard'),
+      testingProjectSettingsService.getDefault(projectSettingKey),
     ).rejects.toThrow(new RegExp(`Could not find project setting ${projectSettingKey}`));
   });
 });

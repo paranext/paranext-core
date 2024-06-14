@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
 
 namespace TestParanextDataProvider.Projects
 {
@@ -9,20 +10,33 @@ namespace TestParanextDataProvider.Projects
     internal class ParatextProjectDataProviderFactoryTests : PapiTestBase
     {
         private const string PDB_FACTORY_GET_REQUEST =
-            "object:platform.pdpFactory-ParatextStandard.function";
+            $"object:platform.{ParatextProjectDataProviderFactory.PDPF_NAME}-pdpf.function";
 
-        [Test]
-        public async Task InvalidProjectId_ReturnsError()
+        [SetUp]
+        public override async Task TestSetup()
+        {
+            await base.TestSetup();
+
+            var settingsService = new DummySettingsService(Client);
+            await settingsService.RegisterDataProvider();
+            settingsService.AddSettingValue(Settings.INCLUDE_MY_PARATEXT_9_PROJECTS, true);
+        }
+
+        [TestCase("0000", "Paratext.Data.ProjectNotFoundException: Project not found: 0000")]
+        // HexId-related problems
+        [TestCase("12345", "System.ArgumentException: Input must have even number of characters")]
+        [TestCase(
+            "abcdefgh",
+            "System.ArgumentException: String must contain only hexadecimal characters: abcdefgh"
+        )]
+        public async Task InvalidProjectId_ReturnsError(string projectId, string startOfError)
         {
             const int requesterId = 47192;
 
             ParatextProjectDataProviderFactory factory = new(Client, ParatextProjects);
             await factory.Initialize();
 
-            JsonElement serverMessage = CreateRequestMessage(
-                "getProjectDataProviderId",
-                "unknownProj"
-            );
+            JsonElement serverMessage = CreateRequestMessage("getProjectDataProviderId", projectId);
 
             Message result = Client
                 .FakeMessageFromServer(
@@ -32,7 +46,7 @@ namespace TestParanextDataProvider.Projects
 
             Assert.That(result.Type, Is.EqualTo(MessageType.RESPONSE));
             MessageResponse response = (MessageResponse)result;
-            Assert.That(response.ErrorMessage, Is.EqualTo("Unknown project ID: unknownProj"));
+            Assert.That(response.ErrorMessage, Does.StartWith(startOfError));
             Assert.That(response.RequestId, Is.EqualTo(requesterId));
             Assert.That(response.Contents, Is.Null);
         }
@@ -40,7 +54,7 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public async Task WrongNumberOfParameters_ReturnsError()
         {
-            const string projId = "monkey";
+            const string projId = "ABC123";
             const int requesterId = 47281;
 
             ParatextProjects.FakeAddProject(CreateProjectDetails(projId, "Monkey Soup"));
@@ -70,7 +84,7 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public async Task InvalidFunction_ReturnsError()
         {
-            const string projId = "monkey";
+            const string projId = "CDE539";
             const int requesterId = 47192;
 
             ParatextProjects.FakeAddProject(CreateProjectDetails(projId, "Monkey Soup"));
@@ -99,7 +113,7 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public async Task GetProjectDataProviderID_ReturnsIdForProvider()
         {
-            const string projId = "monkey";
+            const string projId = "305531";
             const int requesterId1 = 47281;
             const int requesterId2 = 18542;
 

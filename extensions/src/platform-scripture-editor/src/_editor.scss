@@ -18,6 +18,7 @@
 .editor-inner {
   background: #fff;
   position: relative;
+  display: flex;
 }
 
 .editor-input {
@@ -29,6 +30,7 @@
   outline: 0;
   padding: 15px 10px;
   caret-color: #444;
+  flex: auto;
 }
 
 .editor-placeholder {
@@ -175,27 +177,48 @@
   color: #dd4a68;
 }
 
-/* stylelint-disable-next-line selector-class-pattern */
-.editor-mark {
+.editor-typed-mark-spelling {
+  background: inherit;
+  text-decoration: underline wavy red;
+}
+
+.editor-typed-mark-grammar {
+  background: inherit;
+  text-decoration: underline wavy grey;
+}
+
+.editor-typed-mark-other {
+  background: inherit;
+  text-decoration: underline wavy green;
+}
+
+.editor-typed-mark-spelling.editor-typed-mark-grammar {
+  text-decoration-color: rgb(192, 64, 64);
+}
+
+.editor-typed-mark-spelling.editor-typed-mark-grammar.editor-typed-mark-other {
+  text-decoration-color: rgb(128, 85, 43);
+}
+
+.editor-typed-mark-comment {
   background: rgba(255, 212, 0, 0.14);
   border-bottom: 2px solid rgba(255, 212, 0, 0.3);
   padding-bottom: 2px;
 }
 
-/* stylelint-disable-next-line selector-class-pattern */
-.editor-mark.selected {
+.editor-typed-mark-comment.selected {
   background: rgba(255, 212, 0, 0.5);
   border-bottom: 2px solid rgba(255, 212, 0, 1);
 }
 
 /* stylelint-disable-next-line selector-class-pattern */
-.editor-markOverlap {
+.editor-typed-markOverlap-comment {
   background: rgba(255, 212, 0, 0.3);
   border-bottom: 2px solid rgba(255, 212, 0, 0.7);
 }
 
 /* stylelint-disable-next-line selector-class-pattern */
-.editor-markOverlap.selected {
+.editor-typed-markOverlap-comment.selected {
   background: rgba(255, 212, 0, 0.7);
   border-bottom: 2px solid rgba(255, 212, 0, 0.7);
 }

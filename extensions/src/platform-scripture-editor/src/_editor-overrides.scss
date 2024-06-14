@@ -1,9 +1,39 @@
 /* Platform.Bible image protocol overrides */
 /* stylelint-disable selector-no-qualifying-type */
 
+// Platform.Bible modifications
+
 .editor-container {
   max-width: none;
+  margin-right: 16px;
 }
+
+/* stylelint-disable-next-line selector-class-pattern */
+.CommentPlugin_ShowCommentsButton {
+  z-index: 10;
+  right: 26px;
+}
+
+// _commenting.scss
+
+i.add-comment {
+  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chat-left-text.svg');
+}
+
+i.comments {
+  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/comments.svg');
+}
+
+i.send {
+  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/send.svg');
+}
+
+/* stylelint-disable-next-line selector-class-pattern */
+.CommentPlugin_CommentsPanel_List_DeleteButton i.delete {
+  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/trash3.svg');
+}
+
+// _editor.scss
 
 .link-editor div.link-edit {
   background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/pencil-fill.svg');

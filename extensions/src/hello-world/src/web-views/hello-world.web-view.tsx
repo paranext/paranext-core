@@ -1,4 +1,4 @@
-﻿import { ScrVers, VerseRef } from '@sillsdev/scripture';
+﻿import { VerseRef } from '@sillsdev/scripture';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
@@ -6,6 +6,7 @@ import {
   useSetting,
   useDialogCallback,
   useDataProvider,
+  useLocalizedStrings,
 } from '@papi/frontend/react';
 import {
   Button,
@@ -17,7 +18,6 @@ import {
   TextField,
   Table,
   ScriptureReference,
-  usePromise,
   useEvent,
 } from 'platform-bible-react';
 import type { WebViewProps } from '@papi/core';
@@ -26,6 +26,8 @@ import type { HelloWorldEvent } from 'hello-world';
 import { debounce } from 'platform-bible-utils';
 import Clock from './components/clock.component';
 import Logo from '../../assets/offline.svg';
+import ProjectSettingsEditor from './hello-world-project/project-settings-editor.component';
+import useHelloWorldProjectSettings from './hello-world-project/use-hello-world-project-settings.hook';
 
 type Row = {
   id: string;
@@ -58,8 +60,9 @@ papi
   .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
 globalThis.webViewComponent = function HelloWorld({
+  title,
+  projectId,
   useWebViewState,
-  getWebViewDefinitionUpdatableProperties,
   updateWebViewDefinition,
 }: WebViewProps) {
   const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
@@ -83,13 +86,9 @@ globalThis.webViewComponent = function HelloWorld({
   );
 
   useEffect(() => {
-    logger.debug(
-      `Hello World WebView previous title: ${getWebViewDefinitionUpdatableProperties()?.title}`,
-    );
+    logger.debug(`Hello World WebView previous title: ${title}`);
     updateWebViewDefinition({ title: `Hello World ${clicks}` });
-  }, [getWebViewDefinitionUpdatableProperties, updateWebViewDefinition, clicks]);
-
-  const [project, setProject] = useWebViewState<string>('project', '');
+  }, [title, updateWebViewDefinition, clicks]);
 
   const currentRender = useRef(-1);
   currentRender.current += 1;
@@ -106,17 +105,17 @@ globalThis.webViewComponent = function HelloWorld({
       // Test ref parameter properly getting latest value
       currentRender: currentRender.current,
       optionsSource: 'hook',
-      includeProjectTypes: '^ParatextStandard$',
+      includeProjectInterfaces: ['platformScripture.USFM_BookChapterVerse'],
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
-        if (selectedProject) setProject(selectedProject);
+        if (selectedProject) updateWebViewDefinition({ projectId: selectedProject });
 
         logger.info(
           `Show project dialog resolved to ${selectedProject}. Dialog was shown at render ${dialogRender} with options from ${optionsSource}`,
         );
       },
-      [setProject],
+      [updateWebViewDefinition],
     ),
   );
 
@@ -141,7 +140,7 @@ globalThis.webViewComponent = function HelloWorld({
     'Loading latest Scripture text...',
   );
 
-  const [projects, setProjects] = useWebViewState('projects', ['None']);
+  const [projects, setProjects] = useWebViewState<string[]>('projects', []);
 
   const selectProjects = useDialogCallback(
     'platform.selectMultipleProjects',
@@ -151,7 +150,7 @@ globalThis.webViewComponent = function HelloWorld({
         iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
         title: 'Select List of Hello World Projects',
         selectedProjectIds: projects,
-        includeProjectTypes: '^ParatextStandard$',
+        includeProjectInterfaces: ['platformScripture.USFM_BookChapterVerse'],
       }),
       [projects],
     ),
@@ -194,30 +193,19 @@ globalThis.webViewComponent = function HelloWorld({
 
   const [personAge] = useData('helloSomeone.people').Age(name, -1);
 
-  const [psalm1] = useData('usfm').Chapter(
-    useMemo(() => new VerseRef('PSA', '1', '1', ScrVers.English), []),
-    'Loading Psalm 1...',
+  const [currentProjectVerse] = useProjectData(
+    'platformScripture.USFM_BookChapterVerse',
+    projectId ?? undefined,
+  ).VerseUSFM(verseRef, 'Loading Verse');
+
+  const helloWorldProjectSettings = useHelloWorldProjectSettings(projectId);
+  const { headerStyle } = helloWorldProjectSettings;
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => ['%submitButton%'], []),
+    useMemo(() => ['fr', 'en'], []),
   );
 
-  const [john11] = useData('usfm').Verse(
-    useMemo(() => new VerseRef('JHN 1:1'), []),
-    'Loading John 1:1...',
-  );
-
-  const [currentProjectVerse] = useProjectData('ParatextStandard', project ?? undefined).VerseUSFM(
-    verseRef,
-    'Loading Verse',
-  );
-
-  const [localizedString] = usePromise(
-    useCallback(() => {
-      return papi.localization.getLocalizedString({
-        localizeKey: '%submitButton%',
-        locales: ['fr', 'en'],
-      });
-    }, []),
-    'defaultValue',
-  );
+  const localizedString = localizedStrings['%submitButton%'];
 
   return (
     <div>
@@ -260,19 +248,32 @@ globalThis.webViewComponent = function HelloWorld({
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>
-      <h3>John 1:1</h3>
-      <div>{john11}</div>
-      <h3>Psalm 1</h3>
-      <div>{psalm1}</div>
       <br />
-      <div>Selected Project: {project ?? 'None'}</div>
+      <div>Selected Project: {projectId ?? 'None'}</div>
       <div>
         <Button onClick={selectProject}>Select Project</Button>
       </div>
-      <h3>{verseRef.toString()}</h3>
+      <div>
+        <Button
+          onClick={() =>
+            papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId)
+          }
+        >
+          Open in Scripture Editor
+        </Button>
+        <Button
+          onClick={() =>
+            papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId)
+          }
+        >
+          Open in Resource Viewer
+        </Button>
+      </div>
+      <h3 style={headerStyle}>{verseRef.toString()}</h3>
       <div>{currentProjectVerse}</div>
+      <ProjectSettingsEditor {...helloWorldProjectSettings} />
       <h3>List of Selected Project Id(s):</h3>
-      <div>{projects.join(', ')}</div>
+      <div>{(projects.length > 0 ? projects : ['None']).join(', ')}</div>
       <div>
         <Button onClick={() => selectProjects()}>Select Projects</Button>
       </div>
