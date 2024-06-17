@@ -240,6 +240,7 @@ export default function ScriptureRefKeyedList({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getRowId: getRowKey,
+    autoResetExpanded: false,
     enableMultiRowSelection: false,
     enableSubRowSelection: false,
   });
