@@ -11,7 +11,7 @@ import { TAB_TYPE_SETTINGS_DIALOG } from '@renderer/components/settings-dialog/s
 import { TAB_TYPE_RUN_BASIC_CHECKS } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
 import { TAB_TYPE_CHECKING_RESULTS_LIST } from '@renderer/components/basic-list/checking-results-list.component';
 import { ResultsSource } from 'platform-bible-react';
-import { ScriptureItemDetail } from 'platform-bible-utils';
+import { ScriptureCheckDefinition, ScriptureItemDetail } from 'platform-bible-utils';
 import LOREM_IPSUM from './lorem-ipsum';
 
 function generateRandomCheckingData(details: string[]): ScriptureItemDetail[] {
@@ -44,6 +44,39 @@ function generateRandomCheckingData(details: string[]): ScriptureItemDetail[] {
 }
 
 export const FIRST_TAB_ID = 'About';
+
+class TestCheck extends ResultsSource {
+  check: ScriptureCheckDefinition;
+  possibleErrors: string[];
+
+  constructor(id: string, displayName: string, possibleErrors: string[]) {
+    const chk = {
+      id: `test.${id}`,
+      displayName,
+    };
+    super(generateRandomCheckingData(possibleErrors), undefined, chk);
+    this.check = chk;
+    this.possibleErrors = possibleErrors;
+  }
+
+  reRun(): void {
+    const newRandomData = generateRandomCheckingData(this.possibleErrors);
+    this.updateData(newRandomData);
+  }
+}
+
+const badLeftoversCheck = new TestCheck('badLeftovers', 'Bad Leftovers', [
+  'Moldy lasagna',
+  'Iffy meatloaf',
+  'Dried out chicken',
+  'Stinky cheese',
+]);
+
+const engineProblemsCheck = new TestCheck('engineProblems', 'Engine problems', [
+  'Dirty spark plugs',
+  'Low oil',
+  'Stuck valves',
+]);
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
@@ -79,22 +112,12 @@ const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
                 id: 'Checking Results List',
                 tabType: TAB_TYPE_CHECKING_RESULTS_LIST,
                 data: {
-                  sources: [
-                    new ResultsSource(
-                      generateRandomCheckingData([
-                        'Moldy lasagna',
-                        'Iffy meatloaf',
-                        'Dried out chicken',
-                        'Stinky cheese',
-                      ]),
-                      'Bad leftovers',
-                    ),
-                    new ResultsSource(
-                      generateRandomCheckingData(['Dirty spark plugs', 'Low oil', 'Stuck valves']),
-                      'Engine problems',
-                    ),
-                  ],
+                  sources: [badLeftoversCheck, engineProblemsCheck],
                   project: 'Dummy project',
+                  onRerun: () => {
+                    badLeftoversCheck.reRun();
+                    engineProblemsCheck.reRun();
+                  },
                 },
               },
             ] as SavedTabInfo[],
