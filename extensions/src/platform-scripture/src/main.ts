@@ -32,7 +32,7 @@ export async function activate(context: ExecutionActivationContext) {
     papi.projectDataProviders.registerProjectDataProviderEngineFactory(
       SCRIPTURE_EXTENDER_PDPF_ID,
       SCRIPTURE_EXTENDER_PROJECT_INTERFACES,
-      new ScriptureExtenderProjectDataProviderEngineFactory(),
+      new ScriptureExtenderProjectDataProviderEngineFactory(SCRIPTURE_EXTENDER_PDPF_ID),
     );
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
