@@ -35,7 +35,7 @@ export default function ScriptureItemListPreview() {
     },
   ];
 
-  const [sources, setSources] = useState(() =>
+  const [sources] = useState(() =>
     checks.map(
       (check) => new ResultsSource(generateRandomCheckingData(check.possibleErrors), check.id),
     ),
@@ -45,7 +45,6 @@ export default function ScriptureItemListPreview() {
     const newData = generateRandomCheckingData(checks[index].possibleErrors);
     const updatedSource = sources[index];
     updatedSource.updateData(newData);
-    setSources([...sources]);
   };
 
   return (

@@ -183,12 +183,12 @@ export default function ScriptureRefKeyedList({
     };
 
     sources.forEach((source) => {
-      source.resultsUpdated.addEventListener('resultsUpdated', handleUpdatedResults);
+      source.addEventListener('resultsUpdated', handleUpdatedResults);
     });
 
     return () => {
       sources.forEach((source) => {
-        source.resultsUpdated.removeEventListener('resultsUpdated', handleUpdatedResults);
+        source.removeEventListener('resultsUpdated', handleUpdatedResults);
       });
     };
   }, [sources]);
@@ -294,7 +294,7 @@ export default function ScriptureRefKeyedList({
 
   const getIndent = (
     groupingState: GroupingState,
-    row: Row<ScriptureItemDetail>,
+    row: Row<ScriptureSrcItemDetail>,
     cell: Cell<ScriptureSrcItemDetail, unknown>,
   ) => {
     if (groupingState?.length === 0) return undefined;
