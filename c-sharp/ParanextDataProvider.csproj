@@ -23,12 +23,12 @@
 
   <ItemGroup>
     <PackageReference Include="ParatextData" Version="9.5.0.5" />
-    <PackageReference Include="SIL.Core" Version="13.0.1" />
-    <PackageReference Include="SIL.Scripture" Version="13.0.1" />
-    <PackageReference Include="SIL.WritingSystems" Version="13.0.1" />
+    <PackageReference Include="SIL.Core" Version="14.2.0-beta0009" />
+    <PackageReference Include="SIL.Scripture" Version="14.2.0-beta0009" />
+    <PackageReference Include="SIL.WritingSystems" Version="14.2.0-beta0009" />
     <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
-    <PackageReference Include="icu.net" Version="2.9.0" />
+    <PackageReference Include="icu.net" Version="2.9.1-beta.9" />
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.1" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
   </ItemGroup>
 
@@ -37,9 +37,22 @@
     For some reason, the .config file only copies inconsistently from the NuGet package without this explicit reference.
   -->
   <ItemGroup>
-    <None Update="$(NuGetPackageRoot)\icu.net\2.9.0\contentFiles\any\any\icu.net.dll.config">
+    <None Update="$(NuGetPackageRoot)\icu.net\2.9.1-beta.9\contentFiles\any\any\icu.net.dll.config">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <!--
+    This assumes that icu4c libs are installed under "/opt/local/lib" on macOS. This is the default
+    location for libs that MacPorts installs. If we need to start bundling icu4c libs from
+    somewhere other than "/opt/local/lib", this path and some other paths in the build scripts will
+    need to be updated. We have to bundle the icu4c libs somehow unless macOS starts to include them
+    by default.
+    -->
+  <ItemGroup>
+    <Content Include="/opt/local/lib/libicu*.??.dylib" Condition="$([MSBuild]::IsOsPlatform('macOS'))">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
