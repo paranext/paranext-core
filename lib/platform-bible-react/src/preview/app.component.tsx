@@ -12,14 +12,14 @@ import Guide from './components/guide.component';
 
 function App() {
   const [direction, setDirection] = useState<Direction>('ltr');
-  const changeDirection = (dir: Direction) => setDirection(dir);
+  const changeDirectionHandler = (dir: Direction) => setDirection(dir);
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       {/* pr-font-sans is added to mitigate issue introduced by scopedPreflightStyles */}
       <div className="pr-twp pr-p-2 pr-font-sans">
         <div className="pr-fixed pr-right-4 pr-top-4 pr-flex pr-gap-2">
-          <DirToggle direction={direction} changeDirection={changeDirection} />
+          <DirToggle direction={direction} onChangeDirection={changeDirectionHandler} />
           <ThemeButton />
         </div>
         <h1 className="pr-pb-4 pr-uppercase">platform-bible-react Preview</h1>
@@ -50,7 +50,7 @@ function App() {
             <Playground />
           </TabsContent>
           <TabsContent value="Guide">
-            <Guide direction={direction} changeDirection={changeDirection} />
+            <Guide direction={direction} onChangeDirection={changeDirectionHandler} />
           </TabsContent>
         </Tabs>
       </div>

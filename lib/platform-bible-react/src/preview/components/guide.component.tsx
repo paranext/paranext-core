@@ -11,7 +11,7 @@ import { Input } from '@/components/shadcn-ui/input';
 import { DirToggle, DirectionProps } from '../direction-toggle';
 import { ThemeButton } from '../theme-toggle.component';
 
-function Guide({ direction, changeDirection: setDirection }: DirectionProps) {
+function Guide({ direction, onChangeDirection: setDirection }: DirectionProps) {
   return (
     <div>
       <p className="pr-mb-2">This section allows you too look up and learn about some concepts</p>
@@ -32,7 +32,7 @@ function Guide({ direction, changeDirection: setDirection }: DirectionProps) {
           </p>
           <div className="pr-flex pr-items-center pr-gap-2">
             Try it: change direction to
-            <DirToggle direction={direction} changeDirection={setDirection} />
+            <DirToggle direction={direction} onChangeDirection={setDirection} />
           </div>
 
           <br />
