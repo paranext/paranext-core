@@ -2,17 +2,19 @@ import { ListItemIcon } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import './select-project.dialog.scss';
 import { useCallback, useMemo } from 'react';
-import ProjectList from '@renderer/components/projects/project-list.component';
+import ProjectList, {
+  ProjectMetadataDisplay,
+} from '@renderer/components/projects/project-list.component';
 import { usePromise } from 'platform-bible-react';
-import projectLookupService, {
-  filterProjectsMetadata,
-} from '@shared/services/project-lookup.service';
+import projectLookupService from '@shared/services/project-lookup.service';
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,
   DialogTypes,
   SELECT_PROJECT_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
+import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 
 function SelectProjectDialog({
   prompt,
@@ -21,17 +23,42 @@ function SelectProjectDialog({
   includeProjectIds,
   includeProjectInterfaces,
   excludeProjectInterfaces,
+  includePdpFactoryIds,
+  excludePdpFactoryIds,
 }: DialogTypes[typeof SELECT_PROJECT_DIALOG_TYPE]['props']) {
   const [projects, isLoadingProjects] = usePromise(
     useCallback(async () => {
-      const allProjectsMetadata = await projectLookupService.getMetadataForAllProjects();
-      return filterProjectsMetadata(allProjectsMetadata, {
+      const projectsMetadata = await projectLookupService.getMetadataForAllProjects({
         excludeProjectIds,
         includeProjectIds,
         includeProjectInterfaces,
         excludeProjectInterfaces,
+        includePdpFactoryIds,
+        excludePdpFactoryIds,
       });
-    }, [excludeProjectIds, includeProjectIds, includeProjectInterfaces, excludeProjectInterfaces]),
+
+      // Get project names
+      const projectsMetadataDisplay: ProjectMetadataDisplay[] = await Promise.all(
+        projectsMetadata.map(async (projectMetadata) => {
+          const pdp = await papiFrontendProjectDataProviderService.get(
+            PROJECT_INTERFACE_PLATFORM_BASE,
+            projectMetadata.id,
+          );
+
+          const name = await pdp.getSetting('platform.name');
+
+          return { ...projectMetadata, name };
+        }),
+      );
+      return projectsMetadataDisplay;
+    }, [
+      excludeProjectIds,
+      includeProjectIds,
+      includeProjectInterfaces,
+      excludeProjectInterfaces,
+      includePdpFactoryIds,
+      excludePdpFactoryIds,
+    ]),
     useMemo(() => [], []),
   );
 

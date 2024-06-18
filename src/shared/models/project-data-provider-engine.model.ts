@@ -1,16 +1,6 @@
-import {
-  ProjectInterfaces,
-  ProjectInterfaceDataTypes,
-  WithProjectDataProviderEngineSettingMethods,
-  ProjectSettingNames,
-  ProjectSettingTypes,
-} from 'papi-shared-types';
-import {
-  MandatoryProjectDataTypes,
-  WithProjectDataProviderEngineExtensionDataMethods,
-} from '@shared/models/project-data-provider.model';
+import { ProjectInterfaces, ProjectInterfaceDataTypes } from 'papi-shared-types';
 import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
-import { DataProviderDataType } from '@shared/models/data-provider.model';
+import { DataProviderDataTypes } from '@shared/models/data-provider.model';
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
 import { UnionToIntersection } from 'platform-bible-utils';
 
@@ -24,9 +14,14 @@ import { UnionToIntersection } from 'platform-bible-utils';
  * {@link IProjectDataProvider}s.
  *
  * Project Data Provider Engine Factories create Project Data Provider Engines for specific
- * `projectInterface`s. For each project available, a Project Data Provider Factory that supports
- * that project with some set of `projectInterface`s creates a new instance of a PDP with the
- * supported `projectInterface`s.
+ * `projectInterface`s. For each project id available on a Project Data Provider Factory, the
+ * factory that supports that project with some set of `projectInterface`s creates a new instance of
+ * a PDP with the supported `projectInterface`s.
+ *
+ * A PDP Factory can provide its own unique project ids (Base PDP Factory) or layer over other PDPFs
+ * and provide additional `projectInterface`s on those projects (Layering PDP Factory). Base PDP
+ * Factories must create PDPs that support the `platform.base` `projectInterface`. See
+ * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
  */
 export interface IProjectDataProviderEngineFactory<
   SupportedProjectInterfaces extends ProjectInterfaces[],
@@ -97,17 +92,8 @@ export interface IProjectDataProviderEngineFactory<
  */
 export type IProjectDataProviderEngine<SupportedProjectInterfaces extends ProjectInterfaces[]> =
   IDataProviderEngine<
-    UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> &
-      MandatoryProjectDataTypes
-  > &
-    WithProjectDataProviderEngineSettingMethods<
-      // @ts-ignore TypeScript thinks there is some unknown data type getting in, but there is not
-      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]>
-    > &
-    WithProjectDataProviderEngineExtensionDataMethods<
-      // @ts-ignore TypeScript thinks there is some unknown data type getting in, but there is not
-      UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]>
-    >;
+    UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
+  >;
 
 /**
  * JSDOC SOURCE ProjectDataProviderEngine
@@ -127,14 +113,8 @@ export type IProjectDataProviderEngine<SupportedProjectInterfaces extends Projec
  */
 export abstract class ProjectDataProviderEngine<
   SupportedProjectInterfaces extends ProjectInterfaces[],
+  AdditionalDataTypes extends DataProviderDataTypes = {},
 > extends DataProviderEngine<
-  UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {
-    // Including `Setting` here so we can emit `Setting` events though the event types are not
-    // tight enough to use on the actual `Setting` data type and methods
-    Setting: DataProviderDataType<
-      ProjectSettingNames,
-      ProjectSettingTypes[ProjectSettingNames],
-      ProjectSettingTypes[ProjectSettingNames]
-    >;
-  }
+  UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> &
+    AdditionalDataTypes
 > {}

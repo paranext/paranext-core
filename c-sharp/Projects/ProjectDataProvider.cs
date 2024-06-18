@@ -49,7 +49,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
             throw new Exception("No data scope provided");
 
         dataScope.ProjectID = ProjectDetails.Metadata.ID;
-        dataScope.ProjectName = ProjectDetails.Metadata.Name;
+        dataScope.ProjectName = ProjectDetails.Name;
         return dataScope;
     }
 

@@ -30,7 +30,7 @@ namespace TestParanextDataProvider.Projects
             _scrText = CreateDummyProject();
 
             _projectDetails = CreateProjectDetails(_scrText);
-            ParatextProjects.FakeAddProject(_projectDetails);
+            ParatextProjects.FakeAddProject(_projectDetails, _scrText);
 
             var settingsService = new DummySettingsService(Client);
             await settingsService.RegisterDataProvider();

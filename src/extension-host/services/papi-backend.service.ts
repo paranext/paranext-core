@@ -17,6 +17,7 @@ import internetService, { InternetService } from '@shared/services/internet.serv
 import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine as PapiDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
+import { BaseProjectDataProviderEngine as PapiBaseProjectDataProviderEngine } from '@shared/models/base-project-data-provider-engine.model';
 import {
   papiBackendProjectDataProviderService,
   PapiBackendProjectDataProviderService,
@@ -51,6 +52,8 @@ const papi = {
   DataProviderEngine: PapiDataProviderEngine,
   /** JSDOC DESTINATION ProjectDataProviderEngine */
   ProjectDataProviderEngine: PapiProjectDataProviderEngine,
+  /** JSDOC DESTINATION BaseProjectDataProviderEngine */
+  BaseProjectDataProviderEngine: PapiBaseProjectDataProviderEngine,
 
   // Functions
   /** This is just an alias for internet.fetch */
@@ -104,6 +107,9 @@ Object.freeze(papi.DataProviderEngine);
 /** JSDOC DESTINATION ProjectDataProviderEngine */
 export const { ProjectDataProviderEngine } = papi;
 Object.freeze(papi.ProjectDataProviderEngine);
+/** JSDOC DESTINATION BaseProjectDataProviderEngine */
+export const { BaseProjectDataProviderEngine } = papi;
+Object.freeze(papi.BaseProjectDataProviderEngine);
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 Object.freeze(papi.fetch);

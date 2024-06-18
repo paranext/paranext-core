@@ -7,7 +7,12 @@ namespace TestParanextDataProvider.Projects
     [ExcludeFromCodeCoverage]
     public class FixtureSetup
     {
-        private static readonly string s_testFolder = Path.Combine(Path.GetTempPath(), "Platform.Bible.Tests");
+        private static readonly string s_testFolder = Path.Combine(
+            Path.GetTempPath(),
+            "Platform.Bible.Tests"
+        );
+
+        public static string TestFolderPath => s_testFolder;
 
         [OneTimeSetUp]
         public void RunBeforeAnyTests()
@@ -26,7 +31,6 @@ namespace TestParanextDataProvider.Projects
             // Clean up after the tests are run.
             if (Directory.Exists(s_testFolder))
                 Directory.Delete(s_testFolder, true);
-
         }
     }
 }

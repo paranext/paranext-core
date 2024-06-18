@@ -42,10 +42,6 @@ namespace TestParanextDataProvider
         [Test]
         public void LoadPackagedWEB_LoadsProject()
         {
-            // This functionality doesn't work on macOS for now
-            if (OperatingSystem.IsMacOS())
-                return;
-
             Alert.Implementation = new DummyAlert();
             EnsureIcuConfigFileIsInPlace();
 

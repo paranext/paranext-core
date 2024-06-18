@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import {
+  IBaseProjectDataProvider,
   ProjectDataProviderInterfaces,
   ProjectInterfaceDataTypes,
   ProjectSettingNames,
   ProjectSettingTypes,
-  ProjectInterfaces,
 } from 'papi-shared-types';
 import useProjectData from '@renderer/hooks/papi-hooks/use-project-data.hook';
 import {
@@ -12,20 +12,21 @@ import {
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
 import ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
-import useProjectDataProvider from './use-project-data-provider.hook';
+import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 
 /**
  * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
  * subscribers when the project setting changes and gets updated when the project setting is changed
  * by others.
  *
- * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
- *   type for the returned project data provider will have the project data provider interface type
- *   associated with this `projectInterface`. If the project does not implement this
- *   `projectInterface` (according to its metadata), an error will be thrown.
  * @param projectDataProviderSource `projectDataProviderSource` String name of the id of the project
  *   to get OR projectDataProvider (result of `useProjectDataProvider` if you want to consolidate
- *   and only get the Project Data Provider once)
+ *   and only get the Project Data Provider once). If you provide a project id, this hook will use a
+ *   PDP for this project that supports the `platform.base` `projectInterface`.
+ *
+ *   Note: If you provide a projectDataProvider directly, it must be an
+ *   {@link IBaseProjectDataProvider}
  * @param key The string id of the project setting to interact with
  *
  *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
@@ -52,12 +53,10 @@ import useProjectDataProvider from './use-project-data-provider.hook';
  * @throws When subscription callback function is called with an update that has an unexpected
  *   message type
  */
-const useProjectSetting = <
-  ProjectInterface extends ProjectInterfaces,
-  ProjectSettingName extends ProjectSettingNames,
->(
-  projectInterface: ProjectInterface,
-  projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+const useProjectSetting = <ProjectSettingName extends ProjectSettingNames>(
+  // Any Base PDP type works. Without `any`, the DataProviderUpdateInstructions types are incompatible
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,
   key: ProjectSettingName,
   defaultValue: ProjectSettingTypes[ProjectSettingName],
   subscriberOptions?: DataProviderSubscriberOptions,
@@ -67,14 +66,20 @@ const useProjectSetting = <
   resetSetting: (() => void) | undefined,
   isLoading: boolean,
 ] => {
-  const projectDataProvider = useProjectDataProvider(projectInterface, projectDataProviderSource);
+  const projectDataProvider = useProjectDataProvider(
+    PROJECT_INTERFACE_PLATFORM_BASE,
+    // Reduce the type to just the important part. Now that we have `any` here, the DataProviderUpdateInstructions
+    // are again not compatible without type asserting
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    projectDataProviderSource as ProjectDataProviderInterfaces[typeof PROJECT_INTERFACE_PLATFORM_BASE],
+  );
 
   // Unfortunately `Setting` isn't an actual `DataProviderDataType` on Project Data Providers. They
   // instead manually implement on `IProjectDataProvider` with a generic `ProjectSettingName`.
   // We must type assert to use it because `useProjectData` only sees actual `DataProviderDataType`s
   /* eslint-disable no-type-assertion/no-type-assertion */
   const [setting, setSetting, isLoading] = (
-    useProjectData(projectInterface, projectDataProvider) as {
+    useProjectData(PROJECT_INTERFACE_PLATFORM_BASE, projectDataProvider) as unknown as {
       Setting: (
         selector: ProjectSettingName,
         defaultValue: ProjectSettingTypes[ProjectSettingName],
@@ -86,7 +91,9 @@ const useProjectSetting = <
               newData: ProjectSettingTypes[ProjectSettingName],
             ) => Promise<
               DataProviderUpdateInstructions<
-                ExtractDataProviderDataTypes<ProjectInterfaceDataTypes[ProjectInterface]>
+                ExtractDataProviderDataTypes<
+                  ProjectInterfaceDataTypes[typeof PROJECT_INTERFACE_PLATFORM_BASE]
+                >
               >
             >)
           | undefined,

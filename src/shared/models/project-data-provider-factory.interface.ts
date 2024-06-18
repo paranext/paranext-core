@@ -9,7 +9,10 @@ export const PDP_FACTORY_OBJECT_TYPE: string = 'pdpFactory';
  * TypeScript-extension-provided {@link IProjectDataProviderEngineFactory} or are created by
  * independent processes on the `papi`.
  *
- * See {@link IProjectDataProvider} for more information.
+ * A PDP Factory can provide its own unique project ids (Base PDP Factory) or layer over other PDPFs
+ * and provide additional `projectInterface`s on those projects (Layering PDP Factory). Base PDP
+ * Factories must create PDPs that support the `platform.base` `projectInterface`. See
+ * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
  */
 interface IProjectDataProviderFactory extends Dispose {
   /** Get data about all projects that can be created by this PDP factory */

@@ -11,12 +11,13 @@ namespace Paranext.DataProvider.ParatextUtils
 
         public static void Initialize(string dataFolderPath)
         {
-            // Paratext not supported on MacOS for now
-            if (OperatingSystem.IsMacOS())
-                return;
-
             if (s_initialized)
+            {
+                // Update the paratext data path to make sure we're using the latest path passed in
+                // For now, this is only used in tests
+                SetParatextDataPath(dataFolderPath);
                 return;
+            }
 
             lock (s_locker)
             {
@@ -34,10 +35,15 @@ namespace Paranext.DataProvider.ParatextUtils
                 ICUDllLocator.Initialize(false, false);
 
                 // Now tell Paratext.Data to use the specified folder
-                dataFolderPath = Path.GetFullPath(dataFolderPath); // Make sure path is rooted
-                ParatextData.Initialize(dataFolderPath, false);
-                s_initialized = true;
+                SetParatextDataPath(dataFolderPath);
             }
+        }
+
+        private static void SetParatextDataPath(string dataFolderPath)
+        {
+            dataFolderPath = Path.GetFullPath(dataFolderPath); // Make sure path is rooted
+            ParatextData.Initialize(dataFolderPath, false);
+            s_initialized = true;
         }
     }
 }

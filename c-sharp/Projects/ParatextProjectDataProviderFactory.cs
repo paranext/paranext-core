@@ -17,7 +17,7 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         PapiClient papiClient,
         LocalParatextProjects paratextProjects
     )
-        : base([ProjectInterfaces.Paratext], PDPF_NAME, papiClient)
+        : base(LocalParatextProjects.GetParatextProjectInterfaces(), PDPF_NAME, papiClient)
     {
         _paratextProjects = paratextProjects;
     }
@@ -27,7 +27,10 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         bool? shouldIncludePT9ProjectsOnWindows = false;
         if (OperatingSystem.IsWindows())
         {
-            shouldIncludePT9ProjectsOnWindows = SettingsService.GetSettingValue<bool>(PapiClient, Settings.INCLUDE_MY_PARATEXT_9_PROJECTS);
+            shouldIncludePT9ProjectsOnWindows = SettingsService.GetSettingValue<bool>(
+                PapiClient,
+                Settings.INCLUDE_MY_PARATEXT_9_PROJECTS
+            );
             if (!shouldIncludePT9ProjectsOnWindows.HasValue)
                 throw new Exception($"Setting {Settings.INCLUDE_MY_PARATEXT_9_PROJECTS} was null!");
         }

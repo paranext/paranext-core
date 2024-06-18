@@ -7,14 +7,9 @@ const namesDefault: string[] = [];
 globalThis.webViewComponent = function HelloWorldProjectViewer({ projectId }: WebViewProps) {
   const [names] = useProjectData('helloWorld', projectId).Names(undefined, namesDefault);
 
-  const [headerSize] = useProjectSetting('helloWorld', projectId, 'helloWorld.headerSize', 15);
+  const [headerSize] = useProjectSetting(projectId, 'helloWorld.headerSize', 15);
 
-  const [headerColor] = useProjectSetting(
-    'helloWorld',
-    projectId,
-    'helloWorld.headerColor',
-    'Black',
-  );
+  const [headerColor] = useProjectSetting(projectId, 'helloWorld.headerColor', 'Black');
 
   const headerStyle = useMemo<CSSProperties>(
     () => ({ fontSize: `${headerSize}pt`, color: headerColor }),

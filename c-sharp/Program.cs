@@ -23,10 +23,9 @@ public static class Program
                 return;
             }
 
-            var sdp = new UsfmDataProvider(papi, "assets", "WEB");
             var paratextProjects = new LocalParatextProjects();
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
-            await Task.WhenAll(sdp.RegisterDataProvider(), paratextFactory.Initialize());
+            await Task.WhenAll(paratextFactory.Initialize());
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");
