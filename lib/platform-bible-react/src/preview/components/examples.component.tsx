@@ -8,6 +8,7 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '../..';
+import { HasDirection } from '../direction-toggle';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -15,11 +16,11 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-function Example() {
+function Examples({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
 
   return (
-    <VerticalTabs defaultValue="Window">
+    <VerticalTabs defaultValue="Window" dir={direction}>
       <VerticalTabsList>
         <VerticalTabsTrigger value="Window">Window or Tab</VerticalTabsTrigger>
         <VerticalTabsTrigger value="Settings">Settings (n/a)</VerticalTabsTrigger>
@@ -31,7 +32,7 @@ function Example() {
             <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
           </div>
           <div className="pr-grow" />
-          <div className="bcv-control-div pr-flex pr-space-x-2">
+          <div className="bcv-control-div pr-flex pr-gap-2">
             <Button>&#x22ee;</Button>
             <Button>Help</Button>
             <Button>X</Button>
@@ -74,4 +75,4 @@ function Example() {
   );
 }
 
-export default Example;
+export default Examples;
