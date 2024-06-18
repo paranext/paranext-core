@@ -50,7 +50,7 @@ function App() {
             <Playground />
           </TabsContent>
           <TabsContent value="Guide">
-            <Guide direction={direction} changeDirection={setDirection} />
+            <Guide direction={direction} changeDirection={changeDirection} />
           </TabsContent>
         </Tabs>
       </div>
