@@ -2,20 +2,16 @@ import networkObjectService from '@shared/services/network-object.service';
 import {
   ProjectDataProviderFactoryMetadataInfo,
   ProjectMetadata,
+  ProjectMetadataWithoutFactoryInfo,
 } from '@shared/models/project-metadata.model';
 import logger from '@shared/services/logger.service';
 import networkObjectStatusService from '@shared/services/network-object-status.service';
 import { ProjectInterfaces } from 'papi-shared-types';
 import IProjectDataProviderFactory, {
   PDP_FACTORY_OBJECT_TYPE,
+  ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';
-import {
-  deepClone,
-  endsWith,
-  escapeStringRegexp,
-  ModifierProject,
-  slice,
-} from 'platform-bible-utils';
+import { deepClone, endsWith, escapeStringRegexp, slice } from 'platform-bible-utils';
 
 export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
 
@@ -52,13 +48,6 @@ export function getPDPFactoryIdFromNetworkObjectName(pdpFactoryNetworkObjectName
 }
 
 // #endregion
-
-export type ProjectMetadataFilterOptions = ModifierProject & {
-  /** Project IDs to include */
-  includeProjectIds?: string | string[];
-  /** Project IDs to exclude */
-  excludeProjectIds?: string | string[];
-};
 
 // #region Project lookup service
 
@@ -126,6 +115,11 @@ export type ProjectLookupServiceType = {
     projectsMetadata: ProjectMetadata[],
     options: ProjectMetadataFilterOptions,
   ): ProjectMetadata[];
+  /** Combines two project metadata filters, removing duplicate items */
+  mergeMetadataFilters(
+    metadataFilter1: ProjectMetadataFilterOptions | undefined,
+    metadataFilter2: ProjectMetadataFilterOptions | undefined,
+  ): ProjectMetadataFilterOptions;
   /**
    * Get the PDP Factory info whose `projectInterface`s are most minimally matching to the provided
    * `projectInterface`
@@ -243,6 +237,59 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
       return true;
     });
   },
+  mergeMetadataFilters(
+    metadataFilter1: ProjectMetadataFilterOptions | undefined,
+    metadataFilter2: ProjectMetadataFilterOptions | undefined,
+  ) {
+    const mergedFilter: ProjectMetadataFilterOptions = {};
+
+    if (metadataFilter1?.includeProjectIds || metadataFilter2?.includeProjectIds)
+      mergedFilter.includeProjectIds = [
+        ...new Set([
+          ...ensureArray(metadataFilter1?.includeProjectIds),
+          ...ensureArray(metadataFilter2?.includeProjectIds),
+        ]),
+      ];
+    if (metadataFilter1?.excludeProjectIds || metadataFilter2?.excludeProjectIds)
+      mergedFilter.excludeProjectIds = [
+        ...new Set([
+          ...ensureArray(metadataFilter1?.excludeProjectIds),
+          ...ensureArray(metadataFilter2?.excludeProjectIds),
+        ]),
+      ];
+
+    if (metadataFilter1?.includeProjectInterfaces || metadataFilter2?.includeProjectInterfaces)
+      mergedFilter.includeProjectInterfaces = [
+        ...new Set([
+          ...ensureArray(metadataFilter1?.includeProjectInterfaces),
+          ...ensureArray(metadataFilter2?.includeProjectInterfaces),
+        ]),
+      ];
+    if (metadataFilter1?.excludeProjectInterfaces || metadataFilter2?.excludeProjectInterfaces)
+      mergedFilter.excludeProjectInterfaces = [
+        ...new Set([
+          ...ensureArray(metadataFilter1?.excludeProjectInterfaces),
+          ...ensureArray(metadataFilter2?.excludeProjectInterfaces),
+        ]),
+      ];
+
+    if (metadataFilter1?.includePdpFactoryIds || metadataFilter2?.includePdpFactoryIds)
+      mergedFilter.includePdpFactoryIds = [
+        ...new Set([
+          ...ensureArray(metadataFilter1?.includePdpFactoryIds),
+          ...ensureArray(metadataFilter2?.includePdpFactoryIds),
+        ]),
+      ];
+    if (metadataFilter1?.excludePdpFactoryIds || metadataFilter2?.excludePdpFactoryIds)
+      mergedFilter.excludePdpFactoryIds = [
+        ...new Set([
+          ...ensureArray(metadataFilter1?.excludePdpFactoryIds),
+          ...ensureArray(metadataFilter2?.excludePdpFactoryIds),
+        ]),
+      ];
+
+    return mergedFilter;
+  },
   getMinimalMatchPdpFactoryId(
     projectMetadata: ProjectMetadata,
     projectInterface: ProjectInterfaces,
@@ -314,10 +361,31 @@ async function internalGetMetadata(
       const pdpFactory = await networkObjectService.get<IProjectDataProviderFactory>(
         getPDPFactoryNetworkObjectNameFromId(pdpFactoryId),
       );
-      const projectsMetadata = await pdpFactory?.getAvailableProjects();
+      // Get all projects from the PDP factory, and pass in the include/exclude PDP factory ids to
+      // make sure two layering PDPFs don't get into an infinite loop together. Each layering PDP
+      // factory should call all other pdp factories matching this filter merged with its own
+      // filter. We need to pass these but not the other filter properties because we can filter the
+      // other properties later in this function (and doing so gives us the full metadata for each
+      // project), but we cannot filter these properties for any layering PDP factory we're calling
+      const projectsMetadata = await pdpFactory?.getAvailableProjects({
+        includePdpFactoryIds: options.includePdpFactoryIds,
+        // Add this pdp factory id onto the excluded PDP factory IDs to be sure the Layering PDPF
+        // doesn't get into an infinite loop with itself. Then it should pass these back into this
+        // function to pass to other layering PDPFs so they don't call each other infinitely
+        excludePdpFactoryIds: [
+          ...ensureArray(options.excludePdpFactoryIds),
+          escapeStringRegexp(pdpFactoryId),
+        ],
+      });
       if (projectsMetadata) {
         const clonedProjectsMetadata = deepClone(projectsMetadata);
         clonedProjectsMetadata.forEach((md) => {
+          // The metadata that comes in from PDPs could have extra pdpFactoryInfo on it, but we
+          // want to build it ourselves. So we want to delete it when it comes in
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          delete (md as ProjectMetadataWithoutFactoryInfo & Partial<ProjectMetadata>)
+            .pdpFactoryInfo;
+
           // Type assert to add the factory info to the object
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           const enrichedMd = allProjectsMetadata.get(md.id) ?? (md as ProjectMetadata);
