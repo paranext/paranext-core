@@ -8,13 +8,13 @@ export type DirectionProps = HasDirection & {
 };
 
 export const DirToggle = React.forwardRef<HTMLButtonElement, ButtonProps & DirectionProps>(
-  ({ className, direction, changeDirection: setDirection, ...props }) => {
+  ({ className, direction, changeDirection, ...props }) => {
     const oppositeDirection = direction === 'rtl' ? 'ltr' : 'rtl';
     return (
       <Button
         className={className}
         onClick={() => {
-          setDirection(oppositeDirection);
+          changeDirection(oppositeDirection);
         }}
         {...props}
       >
