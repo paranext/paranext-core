@@ -11,7 +11,7 @@ import { Input } from '@/components/shadcn-ui/input';
 import { DirToggle, DirectionProps } from '../direction-toggle';
 import { ThemeButton } from '../theme-toggle.component';
 
-function Guide({ direction, setDirection }: DirectionProps) {
+function Guide({ direction, changeDirection: setDirection }: DirectionProps) {
   return (
     <div>
       <p className="pr-mb-2">This section allows you too look up and learn about some concepts</p>
@@ -32,7 +32,7 @@ function Guide({ direction, setDirection }: DirectionProps) {
           </p>
           <div className="pr-flex pr-items-center pr-gap-2">
             Try it: change direction to
-            <DirToggle direction={direction} setDirection={setDirection} />
+            <DirToggle direction={direction} changeDirection={setDirection} />
           </div>
 
           <br />
@@ -96,7 +96,7 @@ function Guide({ direction, setDirection }: DirectionProps) {
           <div className="pr-flex">
             <div className="pr-relative">
               <Input
-                value="icon is always right"
+                value="icon not to stay right"
                 className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none"
               />
               <History className="pr-absolute pr-right-3 pr-top-1/2 pr-h-4 pr-w-4 pr--translate-y-1/2 pr-transform pr-cursor-pointer pr-text-gray-500" />
@@ -105,7 +105,7 @@ function Guide({ direction, setDirection }: DirectionProps) {
           <div className="pr-flex">
             <div className="pr-relative">
               <Input
-                value="text does not clip before the icon"
+                value="text should clip before the icon"
                 className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none"
               />
               <History className="pr-absolute pr-right-3 pr-top-1/2 pr-h-4 pr-w-4 pr--translate-y-1/2 pr-transform pr-cursor-pointer pr-text-gray-500" />
