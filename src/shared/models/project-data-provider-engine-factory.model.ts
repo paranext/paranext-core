@@ -25,7 +25,9 @@ import { escapeStringRegexp } from 'platform-bible-utils';
  * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
  *
  * WARNING: For Layering PDPFs, `getAvailableProjects` has very specific requirements that
- * **absolutely must** be met.
+ * **absolutely must** be met. Please see
+ * {@link IProjectDataProviderEngineFactory.getAvailableProjects} for more information on the
+ * requirements.
  *
  * To make creating a Layering PDPF easier, you can extend
  * {@link LayeringProjectDataProviderEngineFactory}, which automatically fulfills the special
@@ -60,7 +62,9 @@ export interface IProjectDataProviderEngineFactory<
  * easier.
  *
  * Extending this class automatically fulfills the special requirements for Layering PDPfs, so we
- * highly recommend extending this class.
+ * highly recommend extending this class. Please see
+ * {@link IProjectDataProviderEngineFactory.getAvailableProjects} for more information on the
+ * requirements.
  */
 export abstract class LayeringProjectDataProviderEngineFactory<
   SupportedProjectInterfaces extends ProjectInterfaces[],
