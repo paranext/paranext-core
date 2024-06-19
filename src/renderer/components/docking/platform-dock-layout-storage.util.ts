@@ -24,7 +24,7 @@ import {
 import {
   TAB_TYPE_CHECKING_RESULTS_LIST,
   loadCheckingResultsListTab,
-} from '@renderer/components/basic-list/checking-results-list.component';
+} from '@renderer/components/checking-results-list/checking-results-list.component';
 import DIALOGS from '@renderer/components/dialogs';
 import {
   TAB_TYPE_EXTENSION_MANAGER,
