@@ -153,7 +153,7 @@ export default function ScriptureRefKeyedList({
   const [data, setData] = useState<ScriptureSrcItemDetail[]>(() => {
     // Initial data extraction from sources
     return sources.flatMap((source) => {
-      const srcOrId = source.checkDefinition ?? source.id;
+      const srcOrId = source.src;
       return source.data.map((item) => ({
         ...item,
         source: srcOrId,
@@ -166,7 +166,7 @@ export default function ScriptureRefKeyedList({
     const handleUpdatedResults = (event: CustomEvent<ResultsSource>) => {
       const { detail } = event;
       const updatedSource = detail;
-      const srcOrId = updatedSource.checkDefinition ?? updatedSource.id;
+      const srcOrId = updatedSource.src;
       const newDataFromSource: ScriptureSrcItemDetail[] = updatedSource.data.map((item) => ({
         ...item,
         source: srcOrId,

@@ -54,7 +54,7 @@ class TestCheck extends ResultsSource {
       id: `test.${id}`,
       displayName,
     };
-    super(generateRandomCheckingData(possibleErrors), undefined, chk);
+    super(chk, generateRandomCheckingData(possibleErrors));
     this.check = chk;
     this.possibleErrors = possibleErrors;
   }

@@ -28,7 +28,7 @@ const getLabel = (
   }
   if (datetime) result += `${datetime}; `;
   result += sources
-    .map((s) => s.checkDefinition?.displayName ?? s.id)
+    .map((s) => (typeof s.src === 'object' ? s.src.displayName : s.src))
     .filter(Boolean)
     .join(', ');
   return result;

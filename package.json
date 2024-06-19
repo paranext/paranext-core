@@ -100,7 +100,6 @@
     "@faker-js/faker": "^8.3.1",
     "@mui/icons-material": "^5.15.10",
     "@mui/material": "^5.15.10",
-    "@radix-ui/react-select": "^2.0.0",
     "@sillsdev/scripture": "^1.4.3",
     "@tanstack/react-table": "^8.11.7",
     "ajv": "^8.12.0",

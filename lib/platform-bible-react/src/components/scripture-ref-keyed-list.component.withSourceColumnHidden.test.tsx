@@ -16,40 +16,28 @@ describe('ScriptureRefKeyedList with only Scripture ref and details columns', ()
   const textAnchor = { jsonPath: '', offset: 3 };
 
   const sources = [
-    new ResultsSource(
-      [
-        {
-          start: { bookNum: 1, chapterNum: 1, verseNum: 1, ...textAnchor },
-          detail: frogRepeatedError,
-        },
-      ],
-      undefined,
-      repeatedWordsCheck,
-    ),
-    new ResultsSource(
-      [
-        {
-          start: { bookNum: 2, chapterNum: 2, verseNum: 3, ...textAnchor },
-          detail: unknownMarkerError,
-        },
-        {
-          start: { bookNum: 66, chapterNum: 10, verseNum: 15, ...textAnchor },
-          detail: unclosedMarkerError,
-        },
-      ],
-      undefined,
-      markersCheck,
-    ),
-    new ResultsSource(
-      [
-        {
-          start: { bookNum: 40, chapterNum: 20, verseNum: 1, ...textAnchor },
-          detail: missingEndQuote,
-        },
-      ],
-      undefined,
-      quotationsCheck,
-    ),
+    new ResultsSource(repeatedWordsCheck, [
+      {
+        start: { bookNum: 1, chapterNum: 1, verseNum: 1, ...textAnchor },
+        detail: frogRepeatedError,
+      },
+    ]),
+    new ResultsSource(markersCheck, [
+      {
+        start: { bookNum: 2, chapterNum: 2, verseNum: 3, ...textAnchor },
+        detail: unknownMarkerError,
+      },
+      {
+        start: { bookNum: 66, chapterNum: 10, verseNum: 15, ...textAnchor },
+        detail: unclosedMarkerError,
+      },
+    ]),
+    new ResultsSource(quotationsCheck, [
+      {
+        start: { bookNum: 40, chapterNum: 20, verseNum: 1, ...textAnchor },
+        detail: missingEndQuote,
+      },
+    ]),
   ];
 
   beforeEach(() => {
