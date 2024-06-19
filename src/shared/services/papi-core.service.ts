@@ -22,12 +22,13 @@ export type {
   ExtensionDataScope,
   MandatoryProjectDataTypes,
 } from '@shared/models/project-data-provider.model';
-export type {
-  IProjectDataProviderEngine,
-  IProjectDataProviderEngineFactory,
-} from '@shared/models/project-data-provider-engine.model';
+export type { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
+export type { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model.ts';
 export type { IBaseProjectDataProviderEngine } from '@shared/models/base-project-data-provider-engine.model';
-export type { default as IProjectDataProviderFactory } from '@shared/models/project-data-provider-factory.interface';
+export type {
+  default as IProjectDataProviderFactory,
+  ProjectMetadataFilterOptions,
+} from '@shared/models/project-data-provider-factory.interface';
 export type {
   ProjectDataProviderFactoryMetadataInfo,
   ProjectMetadata,
