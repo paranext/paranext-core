@@ -154,26 +154,38 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
     // Wait for an appropriate PDP factory to be registered
     const timeoutInMS = 20 * 1000;
     if (pdpFactoryId) {
-      await networkObjectStatusService.waitForNetworkObject(
-        {
-          objectType: PDP_FACTORY_OBJECT_TYPE,
-          id: getPDPFactoryNetworkObjectNameFromId(pdpFactoryId),
-        },
-        timeoutInMS,
-      );
+      try {
+        await networkObjectStatusService.waitForNetworkObject(
+          {
+            objectType: PDP_FACTORY_OBJECT_TYPE,
+            id: getPDPFactoryNetworkObjectNameFromId(pdpFactoryId),
+          },
+          timeoutInMS,
+        );
+      } catch (e) {
+        throw new Error(`getMetadataForProject wait for PDPF ${pdpFactoryId} threw! ${e}`);
+      }
     } else if (projectInterface) {
-      await networkObjectStatusService.waitForNetworkObject(
-        {
-          objectType: PDP_FACTORY_OBJECT_TYPE,
-          attributes: { projectInterfaces: [projectInterface] },
-        },
-        timeoutInMS,
-      );
+      try {
+        await networkObjectStatusService.waitForNetworkObject(
+          {
+            objectType: PDP_FACTORY_OBJECT_TYPE,
+            attributes: { projectInterfaces: [projectInterface] },
+          },
+          timeoutInMS,
+        );
+      } catch (e) {
+        throw new Error(`getMetadataForProject wait for PDPF with ${projectInterface} threw! ${e}`);
+      }
     } else {
-      await networkObjectStatusService.waitForNetworkObject(
-        { objectType: PDP_FACTORY_OBJECT_TYPE },
-        timeoutInMS,
-      );
+      try {
+        await networkObjectStatusService.waitForNetworkObject(
+          { objectType: PDP_FACTORY_OBJECT_TYPE },
+          timeoutInMS,
+        );
+      } catch (e) {
+        throw new Error(`getMetadataForProject wait for any PDPF threw! ${e}`);
+      }
     }
 
     const metadata = await internalGetMetadata(
