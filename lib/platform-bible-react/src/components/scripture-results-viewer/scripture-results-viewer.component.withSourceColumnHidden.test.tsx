@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ScriptureResultsViewer from '@/components/scripture-results-viewer.component';
+import ScriptureResultsViewer from '@/components/scripture-results-viewer/scripture-results-viewer.component';
 import ResultsSource from './results-source.class';
 
 describe('ScriptureResultsViewer with only Scripture ref and details columns', () => {

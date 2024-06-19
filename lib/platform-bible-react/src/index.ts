@@ -31,13 +31,13 @@ export { default as MenuItem } from './components/menu-item.component';
 export type { CommandHandler, MenuItemListProps } from './components/menu-item.component';
 export { default as RefSelector } from './components/ref-selector.component';
 export type { ScrRefSelectorProps } from './components/ref-selector.component';
-export { default as ResultsSource } from './components/results-source.class';
-export { default as ScriptureResultsViewer } from './components/scripture-results-viewer.component';
+export { default as ResultsSource } from './components/scripture-results-viewer/results-source.class';
+export { default as ScriptureResultsViewer } from './components/scripture-results-viewer/scripture-results-viewer.component';
 export type {
   ScriptureResultsViewerColumnInfo,
   ScriptureResultsViewerProps,
   ScriptureSrcItemDetail,
-} from './components/scripture-results-viewer.component';
+} from './components/scripture-results-viewer/scripture-results-viewer.component';
 export { default as SearchBar } from './components/search-bar.component';
 export type { SearchBarProps } from './components/search-bar.component';
 export { default as Slider } from './components/slider.component';

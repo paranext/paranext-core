@@ -1,5 +1,5 @@
-import ScriptureResultsViewer from '@/components/scripture-results-viewer.component';
-import ResultsSource from '@/components/results-source.class';
+import ScriptureResultsViewer from '@/components/scripture-results-viewer/scripture-results-viewer.component';
+import ResultsSource from '@/components/scripture-results-viewer/results-source.class';
 import { useState } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import generateRandomCheckingData from './generate-random-checking-data';

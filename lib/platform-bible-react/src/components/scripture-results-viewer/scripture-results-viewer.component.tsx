@@ -14,7 +14,7 @@ import {
   RowSelectionState,
 } from '@tanstack/react-table';
 import { Canon } from '@sillsdev/scripture';
-import '@/components/scripture-results-viewer.component.css';
+import '@/components/scripture-results-viewer/scripture-results-viewer.component.css';
 import {
   compare,
   format,
@@ -24,7 +24,7 @@ import {
 } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui.util';
 import ResultsSource from './results-source.class';
-import { Button } from './shadcn-ui/button';
+import { Button } from '../shadcn-ui/button';
 import {
   Select,
   SelectContent,
@@ -32,8 +32,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './shadcn-ui/select';
-import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from './shadcn-ui/table';
+} from '../shadcn-ui/select';
+import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '../shadcn-ui/table';
 
 export type ScriptureSrcItemDetail = ScriptureItemDetail & {
   /** Source/type of detail. Can be used for grouping. */
@@ -304,8 +304,23 @@ export default function ScriptureResultsViewer({
     row: Row<ScriptureSrcItemDetail>,
     cell: Cell<ScriptureSrcItemDetail, unknown>,
   ) => {
-    if (groupingState?.length === 0) return undefined;
-    return row.depth >= cell.column.getGroupedIndex() ? ` pr-px-${row.depth * 4}` : undefined;
+    if (groupingState?.length === 0 || row.depth < cell.column.getGroupedIndex()) return undefined;
+    if (row.getIsGrouped()) {
+      switch (row.depth) {
+        case 1:
+          return 'pr-ps-4';
+        default:
+          return undefined;
+      }
+    }
+    switch (row.depth) {
+      case 1:
+        return 'pr-ps-8';
+      case 2:
+        return 'pr-ps-12';
+      default:
+        return undefined;
+    }
   };
 
   return (
@@ -344,9 +359,9 @@ export default function ScriptureResultsViewer({
                         <div>
                           {header.column.getCanGroup() ? (
                             <Button
+                              variant="ghost"
                               title={`Toggle grouping by ${header.column.columnDef.header}`}
                               onClick={header.column.getToggleGroupingHandler()}
-                              style={{ cursor: 'pointer' }}
                               type="button"
                             >
                               {header.column.getIsGrouped()
@@ -398,10 +413,8 @@ export default function ScriptureResultsViewer({
                         if (cell.getIsGrouped()) {
                           return (
                             <Button
+                              variant="ghost"
                               onClick={row.getToggleExpandedHandler()}
-                              style={{
-                                cursor: row.getCanExpand() ? 'pointer' : 'normal',
-                              }}
                               type="button"
                             >
                               {row.getIsExpanded() ? '👇' : '👉'}{' '}
