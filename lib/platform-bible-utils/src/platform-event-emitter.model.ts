@@ -88,7 +88,10 @@ export default class PlatformEventEmitter<T> implements Dispose {
   protected emitFn(event: T) {
     this.assertNotDisposed();
 
-    this.subscriptions?.forEach((callback) => callback(event));
+    // Clone the subscriptions array before iterating over the callbacks so the callback index
+    // doesn't get messed up if someone subscribes or unsubscribes inside one of the callbacks
+    const emitCallbacks = [...(this.subscriptions ?? [])];
+    emitCallbacks.forEach((callback) => callback(event));
   }
 
   /** Check to make sure this emitter is not disposed. Throw if it is */

@@ -14,7 +14,7 @@ export declare class AsyncVariable<T> {
 	 * @param variableName Name to use when logging about this variable
 	 * @param rejectIfNotSettledWithinMS Milliseconds to wait before verifying if the promise was
 	 *   settled (resolved or rejected); will reject if it has not settled by that time. Use -1 if you
-	 *   do not want a timeout at all.
+	 *   do not want a timeout at all. Defaults to 10000 ms
 	 */
 	constructor(variableName: string, rejectIfNotSettledWithinMS?: number);
 	/**
@@ -35,7 +35,7 @@ export declare class AsyncVariable<T> {
 	 *
 	 * @param value This variable's promise will resolve to this value
 	 * @param throwIfAlreadySettled Determines whether to throw if the variable was already resolved
-	 *   or rejected
+	 *   or rejected. Defaults to `false`
 	 */
 	resolveToValue(value: T, throwIfAlreadySettled?: boolean): void;
 	/**
@@ -43,7 +43,7 @@ export declare class AsyncVariable<T> {
 	 *
 	 * @param reason This variable's promise will be rejected with this reason
 	 * @param throwIfAlreadySettled Determines whether to throw if the variable was already resolved
-	 *   or rejected
+	 *   or rejected. Defaults to `false`
 	 */
 	rejectWithReason(reason: string, throwIfAlreadySettled?: boolean): void;
 	/** Prevent any further updates to this variable */
