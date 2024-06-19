@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ScriptureRefKeyedList, {
+import ScriptureResultsViewer, {
   ScriptureSrcItemDetail,
-} from '@/components/scripture-ref-keyed-list.component';
+} from '@/components/scripture-results-viewer.component';
 import ResultsSource from './results-source.class';
 
 let lastSelectedItem: ScriptureSrcItemDetail | undefined;
@@ -19,7 +19,7 @@ function EnsureHTMLElement(node: Node): HTMLElement {
   return node;
 }
 
-describe('ScriptureRefKeyedList default display mode (with combobox for grouping option)', () => {
+describe('ScriptureResultsViewer default display mode (with combobox for grouping option)', () => {
   const repeatedWordsCheck = { id: 'testCheck1', displayName: 'Repeated Words' };
   const markersCheck = { id: 'testCheck2', displayName: 'Markers' };
   const quotationsCheck = { id: 'testCheck3', displayName: 'Quotations' };
@@ -58,7 +58,7 @@ describe('ScriptureRefKeyedList default display mode (with combobox for grouping
 
   beforeEach(() => {
     render(
-      <ScriptureRefKeyedList
+      <ScriptureResultsViewer
         sources={sources}
         typeColumnName={checkTypeHeader}
         detailsColumnName={errorDetailsTypeHeader}

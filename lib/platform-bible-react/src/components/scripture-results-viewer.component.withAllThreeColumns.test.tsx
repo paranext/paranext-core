@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ScriptureRefKeyedList from '@/components/scripture-ref-keyed-list.component';
+import ScriptureResultsViewer from '@/components/scripture-results-viewer.component';
 import ResultsSource from './results-source.class';
 
-describe('ScriptureRefKeyedList with all three column headers (showing Check Type/source column)', () => {
+describe('ScriptureResultsViewer with all three column headers (showing Check Type/source column)', () => {
   const repeatedWordsCheck = { id: 'testCheck1', displayName: 'Repeated Words' };
   const markersCheck = { id: 'testCheck2', displayName: 'Markers' };
   const quotationsCheck = { id: 'testCheck3', displayName: 'Quotations' };
@@ -42,7 +42,7 @@ describe('ScriptureRefKeyedList with all three column headers (showing Check Typ
 
   beforeEach(() => {
     render(
-      <ScriptureRefKeyedList
+      <ScriptureResultsViewer
         sources={sources}
         typeColumnName={checkTypeHeader}
         detailsColumnName={errorDetailsTypeHeader}

@@ -14,7 +14,7 @@ import {
   RowSelectionState,
 } from '@tanstack/react-table';
 import { Canon } from '@sillsdev/scripture';
-import '@/components/scripture-ref-keyed-list.component.css';
+import '@/components/scripture-results-viewer.component.css';
 import {
   compare,
   format,
@@ -50,7 +50,7 @@ const defaultScrBookGroupName = 'Scripture Book';
 const defaultTypeColumnName = 'Type';
 const defaultDetailsColumnName = 'Details';
 
-export type ScriptureRefKeyedListColumnInfo = {
+export type ScriptureResultsViewerColumnInfo = {
   /** Optional header to display for the Reference column. Default value: 'Scripture Reference'. */
   scriptureReferenceColumnName?: string;
 
@@ -64,7 +64,7 @@ export type ScriptureRefKeyedListColumnInfo = {
   detailsColumnName?: string;
 };
 
-export type ScriptureRefKeyedListProps = ScriptureRefKeyedListColumnInfo & {
+export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
   /**
    * Instances of Scripture checks or other objects that emit resultsUpdated events and provide
    * ScriptureItemDetail objects
@@ -82,7 +82,7 @@ export type ScriptureRefKeyedListProps = ScriptureRefKeyedListColumnInfo & {
 };
 
 function getColumns(
-  colInfo?: ScriptureRefKeyedListColumnInfo,
+  colInfo?: ScriptureResultsViewerColumnInfo,
   showSourceColumn?: boolean,
 ): ColumnDef<ScriptureSrcItemDetail>[] {
   const showSrcCol = showSourceColumn ?? false;
@@ -137,8 +137,16 @@ function getColumns(
     },
   ];
 }
-
-export default function ScriptureRefKeyedList({
+/**
+ * Component to display a combined list of detailed items from one or more sources, where the items
+ * are keyed primarily by Scripture reference. This is particularly useful for displaying a list of
+ * results from Scripture checks, but more generally could be used to display any "results" from any
+ * source(s). The component allows for grouping by Scripture book, source, or both. By default, it
+ * displays somewhat "tree-like" which allows it to be more horizontally compact and intuitive. But
+ * it also has the option of displaying as a traditional table with column headings (with or without
+ * the source column showing).
+ */
+export default function ScriptureResultsViewer({
   sources,
   showColumnHeaders = false,
   showSourceColumn = false,
@@ -147,7 +155,7 @@ export default function ScriptureRefKeyedList({
   typeColumnName,
   detailsColumnName,
   onRowSelected,
-}: ScriptureRefKeyedListProps) {
+}: ScriptureResultsViewerProps) {
   const [grouping, setGrouping] = useState<GroupingState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: scrBookColId, desc: false }]);
   const [data, setData] = useState<ScriptureSrcItemDetail[]>(() => {
@@ -164,22 +172,20 @@ export default function ScriptureRefKeyedList({
 
   useEffect(() => {
     const handleUpdatedResults = (event: CustomEvent<ResultsSource>) => {
-      const { detail } = event;
-      const updatedSource = detail;
-      const srcOrId = updatedSource.src;
+      const { detail: updatedSource } = event;
+      const { src } = updatedSource;
       const newDataFromSource: ScriptureSrcItemDetail[] = updatedSource.data.map((item) => ({
         ...item,
-        source: srcOrId,
+        source: src,
       }));
-      if (detail !== undefined) {
-        setData((prevData) => {
-          // Filter out items from prevData that originated from the updated source
-          const filteredPrevData = prevData.filter((item) => item.source !== srcOrId);
 
-          // Create a unique set of data merging filteredPrevData and newDataFromSource
-          return [...filteredPrevData, ...newDataFromSource];
-        });
-      }
+      setData((prevData) => {
+        // Filter out items from prevData that originated from the updated source
+        const filteredPrevData = prevData.filter((item) => item.source !== src);
+
+        // Create a unique set of data merging filteredPrevData and newDataFromSource
+        return [...filteredPrevData, ...newDataFromSource];
+      });
     };
 
     sources.forEach((source) => {

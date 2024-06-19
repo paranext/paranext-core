@@ -32,12 +32,12 @@ export type { CommandHandler, MenuItemListProps } from './components/menu-item.c
 export { default as RefSelector } from './components/ref-selector.component';
 export type { ScrRefSelectorProps } from './components/ref-selector.component';
 export { default as ResultsSource } from './components/results-source.class';
-export { default as ScriptureRefKeyedList } from './components/scripture-ref-keyed-list.component';
+export { default as ScriptureResultsViewer } from './components/scripture-results-viewer.component';
 export type {
-  ScriptureRefKeyedListColumnInfo,
-  ScriptureRefKeyedListProps,
+  ScriptureResultsViewerColumnInfo,
+  ScriptureResultsViewerProps,
   ScriptureSrcItemDetail,
-} from './components/scripture-ref-keyed-list.component';
+} from './components/scripture-results-viewer.component';
 export { default as SearchBar } from './components/search-bar.component';
 export type { SearchBarProps } from './components/search-bar.component';
 export { default as Slider } from './components/slider.component';

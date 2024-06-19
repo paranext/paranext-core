@@ -3,14 +3,14 @@ import {
   Button,
   Label,
   ResultsSource,
-  ScriptureRefKeyedList,
-  ScriptureRefKeyedListProps,
+  ScriptureResultsViewer,
+  ScriptureResultsViewerProps,
 } from 'platform-bible-react';
 import { useEffect, useState } from 'react';
 
 export const TAB_TYPE_CHECKING_RESULTS_LIST = 'checking-results-list';
 
-export type CheckingResultsListProps = ScriptureRefKeyedListProps & {
+export type CheckingResultsListProps = ScriptureResultsViewerProps & {
   project?: string;
 
   onRerun?: () => void;
@@ -62,7 +62,7 @@ export default function CheckingResultsList(props: CheckingResultsListProps) {
       {onRerun && <Button onClick={onRerun}>Rerun</Button>}
       {/* TODO: Find a way to truncate the text and display ellipsis using Tailwind. */}
       {label && <Label>{label}</Label>}
-      <ScriptureRefKeyedList sources={sources} />
+      <ScriptureResultsViewer sources={sources} />
     </div>
   );
 }

@@ -548,6 +548,11 @@ export interface ScrRefSelectorProps {
 	id?: string;
 }
 export declare function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Interface to be implemented by a ResultsEventDispatcher. This interface with its generic T (which
+ * will probably always be a ResultsSource) somehow helps to break a circular dependency. It's
+ * complicated and I don't really understand it.
+ */
 export interface ResultsEventTarget<T> {
 	addEventListener: (type: "resultsUpdated", callback: (event: CustomEvent<T>) => void) => void;
 	removeEventListener: (type: "resultsUpdated", callback: (event: CustomEvent<T>) => void) => void;
@@ -556,36 +561,40 @@ export interface ResultsEventTarget<T> {
 /**
  * Class representing a source of results keyed by Scripture reference. Generally, the source will
  * be a particular Scripture check, but this class also allows for other types of (uniquely
- * identifiable but potentially unnamed) sources.
- * It handles storing and updating Scripture item details and notifies listeners about updates.
+ * identifiable but potentially unnamed) sources. It handles storing and updating Scripture item
+ * details and notifies listeners about updates.
  */
 export declare class ResultsSource {
 	/**
 	 * Object that defines/describes the backing source associated with this results source, ensuring
 	 * that it can be uniquely identified.
+	 *
 	 * @type {string | ScriptureCheckDefinition}
 	 */
 	src: string | ScriptureCheckDefinition;
 	/**
 	 * Array of Scripture item details (messages keyed by Scripture reference).
+	 *
 	 * @type {ScriptureItemDetail[]}
 	 */
 	data: ScriptureItemDetail[];
 	/**
 	 * Event target for dispatching results-updated events.
+	 *
 	 * @type {ResultsEventTarget<ResultsSource>}
 	 */
 	resultsUpdated: ResultsEventTarget<ResultsSource>;
 	/**
 	 * Creates an instance of ResultsSource.
 	 *
-	 * @param {string | ScriptureCheckDefinition} [source] - Object that defines/describes the backing source associated with this results source, ensuring
-	 * that it can be uniquely identified
+	 * @param {string | ScriptureCheckDefinition} [source] - Object that defines/describes the backing
+	 *   source associated with this results source, ensuring that it can be uniquely identified
 	 * @param {ScriptureItemDetail[]} initialData - Initial data for the results source.
 	 */
 	constructor(source: string | ScriptureCheckDefinition, initialData: ScriptureItemDetail[]);
 	/**
-	 * Updates the results data with new Scripture item details and dispatches a 'resultsUpdated' event.
+	 * Updates the results data with new Scripture item details and dispatches a 'resultsUpdated'
+	 * event.
 	 */
 	updateData(newData: ScriptureItemDetail[]): void;
 	/**
@@ -593,16 +602,16 @@ export declare class ResultsSource {
 	 *
 	 * @param {'resultsUpdated'} type - Type of the event to listen for (always 'resultsUpdated').
 	 * @param {(event: CustomEvent<ResultsSource>) => void} callback - Function to call when the event
-	 * is dispatched.
+	 *   is dispatched.
 	 */
 	addEventListener(type: "resultsUpdated", callback: (event: CustomEvent<ResultsSource>) => void): void;
 	/**
 	 * Removes a 'resultsUpdated' event listener.
 	 *
 	 * @param {'resultsUpdated'} type - Type of the event to remove the listener for (always
-	 * 'resultsUpdated').
+	 *   'resultsUpdated').
 	 * @param {(event: CustomEvent<ResultsSource>) => void} callback - Listener callback function to
-	 * remove.
+	 *   remove.
 	 */
 	removeEventListener(type: "resultsUpdated", callback: (event: CustomEvent<ResultsSource>) => void): void;
 }
@@ -610,7 +619,7 @@ export type ScriptureSrcItemDetail = ScriptureItemDetail & {
 	/** Source/type of detail. Can be used for grouping. */
 	source: string | ScriptureCheckDefinition;
 };
-export type ScriptureRefKeyedListColumnInfo = {
+export type ScriptureResultsViewerColumnInfo = {
 	/** Optional header to display for the Reference column. Default value: 'Scripture Reference'. */
 	scriptureReferenceColumnName?: string;
 	/** Optional text to display to refer to the Scripture book group. Default value: 'Scripture Book'. */
@@ -620,7 +629,7 @@ export type ScriptureRefKeyedListColumnInfo = {
 	/** Optional header to display for the Details column. Default value: 'Details' */
 	detailsColumnName?: string;
 };
-export type ScriptureRefKeyedListProps = ScriptureRefKeyedListColumnInfo & {
+export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
 	/**
 	 * Instances of Scripture checks or other objects that emit resultsUpdated events and provide
 	 * ScriptureItemDetail objects
@@ -633,7 +642,16 @@ export type ScriptureRefKeyedListProps = ScriptureRefKeyedListColumnInfo & {
 	/** Callback function to notify when a row is selected */
 	onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
 };
-export function ScriptureRefKeyedList({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureRefKeyedListProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Component to display a combined list of detailed items from one or more sources, where the items
+ * are keyed primarily by Scripture reference. This is particularly useful for displaying a list of
+ * results from Scripture checks, but more generally could be used to display any "results" from any
+ * source(s). The component allows for grouping by Scripture book, source, or both. By default, it
+ * displays somewhat "tree-like" which allows it to be more horizontally compact and intuitive. But
+ * it also has the option of displaying as a traditional table with column headings (with or without
+ * the source column showing).
+ */
+export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 export type SearchBarProps = {
 	/**
 	 * Callback fired to handle the search query when button pressed

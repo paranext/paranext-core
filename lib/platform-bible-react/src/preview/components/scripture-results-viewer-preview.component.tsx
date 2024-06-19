@@ -1,10 +1,10 @@
-import ScriptureRefKeyedList from '@/components/scripture-ref-keyed-list.component';
+import ScriptureResultsViewer from '@/components/scripture-results-viewer.component';
 import ResultsSource from '@/components/results-source.class';
 import { useState } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import generateRandomCheckingData from './generate-random-checking-data';
 
-export default function ScriptureItemListPreview() {
+export default function ScriptureResultsViewerPreview() {
   const checks = [
     {
       id: 'Repeated Words',
@@ -61,7 +61,7 @@ export default function ScriptureItemListPreview() {
           </Button>
         ))}
       </div>
-      <ScriptureRefKeyedList
+      <ScriptureResultsViewer
         sources={sources}
         scriptureReferenceColumnName="Scripture Reference"
         typeColumnName="Check Type"

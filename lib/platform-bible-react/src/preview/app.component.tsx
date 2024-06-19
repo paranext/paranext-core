@@ -7,7 +7,7 @@ import Basics from './components/basics.component';
 import Compositions from './components/compositions.component';
 import Examples from './components/examples.component';
 import Playground from './components/playground.component';
-import ScriptureItemListPreview from './components/scripture-item-list-preview.component';
+import ScriptureResultsViewerPreview from './components/scripture-results-viewer-preview.component';
 import { DirToggle, Direction } from './direction-toggle';
 import Guide from './components/guide.component';
 
@@ -49,7 +49,7 @@ function App() {
             <Examples direction={direction} />
           </TabsContent>
           <TabsContent value="Scripture Item List">
-            <ScriptureItemListPreview />
+            <ScriptureResultsViewerPreview />
           </TabsContent>
           <TabsContent value="Playground">
             <Playground />
