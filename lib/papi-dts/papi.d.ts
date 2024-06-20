@@ -5719,6 +5719,8 @@ declare module '@papi/backend' {
    * within the renderer.
    */
   export const storage: ExtensionStorageService;
+  /** */
+  export const settings: ISettingsService;
   /**
    *
    * Service that allows to get and store menu data
