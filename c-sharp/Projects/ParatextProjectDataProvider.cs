@@ -12,7 +12,6 @@ using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
-using ProjectSettings = Paranext.DataProvider.Services.ProjectSettings;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -27,7 +26,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectDataType.BOOK_USFM,
         ProjectDataType.CHAPTER_USFM,
         ProjectDataType.VERSE_USFM,
-        ProjectDataType.CHAPTER_USX
+        ProjectDataType.BOOK_USX,
+        ProjectDataType.CHAPTER_USX,
+        ProjectDataType.VERSE_USX
     ];
 
     private readonly LocalParatextProjects _paratextProjects;
@@ -46,12 +47,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         _paratextProjects = paratextProjects;
         Getters.Add("getBookUSFM", GetBookUsfm);
+        Setters.Add("setBookUSFM", SetBookUsfm);
         Getters.Add("getChapterUSFM", GetChapterUsfm);
         Setters.Add("setChapterUSFM", SetChapterUsfm);
         Getters.Add("getVerseUSFM", GetVerseUsfm);
 
+        Getters.Add("getBookUSX", GetBookUsx);
+        Setters.Add("setBookUSX", SetBookUsx);
         Getters.Add("getChapterUSX", GetChapterUsx);
         Setters.Add("setChapterUSX", SetChapterUsx);
+        Getters.Add("getVerseUSX", GetVerseUsx);
 
         Getters.Add("getSetting", GetProjectSetting);
         Setters.Add("setSetting", SetProjectSetting);
@@ -148,7 +153,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         try
         {
             RunWithinLock(
-                WriteScope.ProjectData(scrText),
+                WriteScope.EntireProject(scrText),
                 writeLock =>
                 {
                     if (!writeLock.Active)
@@ -187,9 +192,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #endregion
 
     #region Settings
+
     public static string VisibilitySettingName => Setting.Visibility.ToString();
     private void RegisterSettingsValidators()
     {
+        ProjectSettingsService.RegisterValidator(PapiClient, VisibilitySettingName,
+            VisibilityValidator);
+        return;
+
         (bool result, string? error) VisibilityValidator((string newValueJson, string currentValueJson,
             string allChangesJson) data)
         {
@@ -204,7 +214,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     error = $"New {VisibilitySettingName} value cannot be null.";
                 }
                 else if (value is not ProjectVisibility && (value is not string valueStr ||
-                    !Enum.TryParse<ProjectVisibility>(valueStr, out var visibility)))
+                    !Enum.TryParse<ProjectVisibility>(valueStr, out _)))
                 {
                     result = false;
                     error = $"New {VisibilitySettingName} value is not valid.";
@@ -216,16 +226,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 return (false, ex.Message);
             }
         }
-
-        ProjectSettingsService.RegisterValidator(PapiClient, VisibilitySettingName,
-            VisibilityValidator);
     }
 
     public ResponseToRequest GetProjectSetting(string jsonKey)
     {
         var settingName = JToken.Parse(jsonKey).ToString();
         settingName =
-            ProjectSettings.GetParatextSettingNameFromPlatformBibleSettingName(settingName) ??
+            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName) ??
             settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
 
@@ -233,12 +240,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
         // the folder name instead of Settings.Name.
         // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ProjectSettingsAccess/ProjectSettings.cs#L1438
-        if (settingName == ProjectSettings.PT_NAME)
+        if (settingName == ProjectSettingsNames.PT_NAME)
             return ResponseToRequest.Succeeded(scrText.Name);
 
         if (scrText.Settings.ParametersDictionary.TryGetValue(settingName, out string? settingValue)) {
             // Paratext project setting value found, so return the value with the appropriate type
-            if (ProjectSettings.IsParatextSettingABoolean(settingName))
+            if (ProjectSettingsNames.IsParatextSettingABoolean(settingName))
             {
                 return settingValue switch
                 {
@@ -283,7 +290,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             return ResponseToRequest.Failed($"Validation failed for {settingName}");
 
         // Figure out which setting name to use
-        var paratextSettingName = ProjectSettings.GetParatextSettingNameFromPlatformBibleSettingName(
+        var paratextSettingName = ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(
                 settingName) ?? settingName;
 
         // Now actually write the setting
@@ -293,14 +300,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
         // the folder name instead of Settings.Name.
         // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L259
-        if (paratextSettingName == ProjectSettings.PT_NAME)
+        if (paratextSettingName == ProjectSettingsNames.PT_NAME)
         {
             // Lock the whole project because this is literally moving the whole folder (chances
             // this will actually succeed are very slim as the project must only have Settings.xml
             // and the ldml file for this not to instantly throw)
             // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L1793
             RunWithinLock(
-                WriteScope.AllSettingsFiles(),
+                WriteScope.EntireProject(scrText),
                 _ => {
                         try
                         {
@@ -315,12 +322,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         else
         {
             RunWithinLock(
-                WriteScope.AllSettingsFiles(),
+                WriteScope.EntireProject(scrText),
                 _ => {
                         try
                         {
                             scrText.Settings.SetSetting(paratextSettingName, value);
-                            scrText.Settings.Save();
+                            // We are notifying when we release our lock, so don't automatically
+                            // notify in `Save`
+                            scrText.Settings.Save(false);
                         }
                         catch (Exception ex)
                         {
@@ -373,6 +382,44 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             (ScrText scrText, VerseRef verseRef) => scrText.Parser.GetVerseUsfmText(verseRef));
     }
 
+    public ResponseToRequest SetBookUsfm(string jsonString, string data)
+    {
+        if (!VerseRefConverter.TryCreateVerseRef(jsonString, out var verseRef, out var error))
+            return ResponseToRequest.Failed(error);
+        verseRef.ChapterNum = 0;
+
+        try
+        {
+            var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
+            RunWithinLock(
+                WriteScope.EntireProject(scrText),
+                _ =>
+                {
+                    BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
+                    if (!localBooksPresentSet.IsSelected(verseRef.BookNum) && !scrText.Creatable(verseRef.BookNum))
+                        throw new Exception($"{verseRef.Book} cannot be created");
+                    if (!scrText.Writable(verseRef.BookNum, 0))
+                        throw new Exception($"{verseRef.Book} is not writable");
+                    if (!scrText.Settings.Editable)
+                        throw new Exception($"{verseRef.Book} is not editable");
+                    byte[] rawData = scrText.Settings.Encoder.Convert(data, out string errorMessage);
+                    if (!string.IsNullOrEmpty(errorMessage))
+                        throw new Exception(errorMessage);
+                    string bookFilePath = scrText.Settings.BookFileName(verseRef.BookNum, true);
+                    File.WriteAllBytes(bookFilePath, rawData);
+                    scrText.Reload();
+                }
+            );
+        }
+        catch (Exception e)
+        {
+            return ResponseToRequest.Failed(e.ToString());
+        }
+
+        // The value of returned strings are case-sensitive and cannot change unless data provider subscriptions change
+        return ResponseToRequest.Succeeded(AllScriptureDataTypes);
+    }
+
     public ResponseToRequest SetChapterUsfm(string jsonString, string data)
     {
         if (!VerseRefConverter.TryCreateVerseRef(jsonString, out var verseRef, out var error))
@@ -382,7 +429,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
             RunWithinLock(
-                WriteScope.ProjectText(scrText, verseRef.BookNum, verseRef.ChapterNum),
+                WriteScope.EntireProject(scrText),
                 writeLock =>
                 {
                     scrText.PutText(
@@ -408,23 +455,39 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #region USX
 
+    public ResponseToRequest GetBookUsx(string jsonString)
+    {
+        return GetFromScrText(jsonString,
+            (ScrText scrText, VerseRef verseRef) => ConvertUsfmToUsx(scrText, verseRef, false));
+    }
+
     public ResponseToRequest GetChapterUsx(string jsonString)
     {
         return GetFromScrText(jsonString,
-            (ScrText scrText, VerseRef verseRef) =>
-            {
-                var scrStylesheet = scrText.ScrStylesheet(verseRef.BookNum);
-                // Tokenize usfm
-                List<UsfmToken> tokens = UsfmToken.Tokenize(scrStylesheet, scrText.GetText(verseRef, true, true) ?? string.Empty, false);
+            (ScrText scrText, VerseRef verseRef) => ConvertUsfmToUsx(scrText, verseRef, true));
+    }
 
-                XmlDocument doc = new();
-                using (XmlWriter xmlWriter = doc.CreateNavigator()!.AppendChild())
-                {
-                    UsfmToUsx.ConvertToXmlWriter(scrStylesheet, tokens, xmlWriter, false);
-                    xmlWriter.Flush();
-                }
-                return doc.OuterXml;
-            });
+    public ResponseToRequest GetVerseUsx(string jsonString)
+    {
+        return GetFromScrText(jsonString, ExtractVerseUsx);
+    }
+
+    public ResponseToRequest SetBookUsx(string jsonString, string data)
+    {
+        if (!VerseRefConverter.TryCreateVerseRef(jsonString, out var verseRef, out var error))
+            return ResponseToRequest.Failed(error);
+
+        try
+        {
+            // Don't need to take a write lock in this function because SetBookUsfm will do it
+            var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
+            string usfm = ConvertUsxToUsfm(scrText, verseRef, data);
+            return SetBookUsfm(jsonString, usfm);
+        }
+        catch (Exception e)
+        {
+            return ResponseToRequest.Failed(e.ToString());
+        }
     }
 
     public ResponseToRequest SetChapterUsx(string jsonString, string data)
@@ -437,27 +500,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
             RunWithinLock(
-                WriteScope.ProjectText(scrText, verseRef.BookNum, verseRef.ChapterNum),
+                WriteScope.EntireProject(scrText),
                 writeLock =>
                 {
-                    XDocument doc;
-                    using (TextReader reader = new StringReader(data))
-                        doc = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
-
-                    if (doc.Root?.Name != "usx")
-                    {
-                        failedMessage = "Invalid USX";
-                        return;
-                    }
-
-                    UsxFragmenter.FindFragments(
-                        scrText.ScrStylesheet(verseRef.BookNum),
-                        doc.CreateNavigator(),
-                        XPathExpression.Compile("*[false()]"),
-                        out string usfm
-                    );
-
-                    usfm = UsfmToken.NormalizeUsfm(scrText, verseRef.BookNum, usfm);
+                    var usfm = ConvertUsxToUsfm(scrText, verseRef, data);
                     scrText.PutText(verseRef.BookNum, verseRef.ChapterNum, true, usfm, writeLock);
                 });
         }
@@ -489,6 +535,71 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             return ResponseToRequest.Failed($"Project with ID '{ProjectDetails.Metadata.ID}' was not found");
         }
+    }
+
+    private static string ConvertUsfmToUsx(ScrText scrText, VerseRef verseRef, bool chapterOnly)
+    {
+        var scrStylesheet = scrText.ScrStylesheet(verseRef.BookNum);
+        string usfmData = scrText.GetText(verseRef, chapterOnly, true) ?? string.Empty;
+        XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(scrStylesheet, usfmData, false);
+        return xmlDoc.OuterXml;
+    }
+
+    private static string ConvertUsxToUsfm(ScrText scrText, VerseRef verseRef, string usxData)
+    {
+        XDocument doc;
+        using (TextReader reader = new StringReader(usxData))
+            doc = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+
+        if (doc.Root?.Name != "usx")
+            throw new Exception($"Invalid USX: {usxData}");
+
+        UsxFragmenter.FindFragments(
+            scrText.ScrStylesheet(verseRef.BookNum),
+            doc.CreateNavigator(),
+            XPathExpression.Compile("*[false()]"),
+            out string usfm
+        );
+
+        return UsfmToken.NormalizeUsfm(scrText, verseRef.BookNum, usfm);
+    }
+
+    // This does an imperfect job at extracting a verse's USX because the USX standard itself may
+    // split the text so that portions are in a child or parent node while others are just in text
+    // following the verse node. It's probably worth revisiting.
+    private static string ExtractVerseUsx(ScrText scrText, VerseRef vRef)
+    {
+        // Here is an XPath expression that represents a different approach that was abandoned
+        // $"//chapter[@number=\"{verseRef.ChapterNum}\"]/following::verse[@number=\"{verseRef.VerseNum}\"][1]/following::node()[preceding::chapter[1]/@number=\"{verseRef.ChapterNum}\"][preceding-sibling::verse[1]/@number=\"{verseRef.VerseNum}\"][not(self::verse)]";
+        // It's more likely that a successful approach would require walking the XmlDocument DOM
+
+        var scrStylesheet = scrText.ScrStylesheet(vRef.BookNum);
+        string usfmData = scrText.GetText(vRef, true, true) ?? string.Empty;
+        XmlDocument usxData = UsfmToUsx.ConvertToXmlDocument(scrStylesheet, usfmData, false);
+        var chapterNode = usxData.SelectSingleNode(VerseXPath(vRef.ChapterNum, 1));
+        if (chapterNode == null)
+            return string.Empty;
+        var verseNode = usxData.SelectSingleNode(VerseXPath(vRef.ChapterNum, vRef.VerseNum));
+        if (verseNode == null)
+            return string.Empty;
+        var nextVerseNode =
+            usxData.SelectSingleNode(VerseXPath(vRef.ChapterNum, vRef.VerseNum + 1))
+            ?? usxData.SelectSingleNode(VerseXPath(vRef.ChapterNum + 1, 1));
+        string allXmlData = usxData.OuterXml;
+        int chapterIndex =
+            allXmlData.IndexOf(chapterNode.OuterXml, StringComparison.InvariantCulture);
+        int verseIndex = allXmlData.IndexOf(verseNode.OuterXml, chapterIndex,
+            StringComparison.InvariantCulture);
+        int nextVerseIndex = nextVerseNode == null
+            ? allXmlData.Length
+            : allXmlData.IndexOf(nextVerseNode.OuterXml, chapterIndex,
+                StringComparison.InvariantCulture);
+        return allXmlData.Substring(verseIndex, nextVerseIndex - verseIndex);
+    }
+
+    private static string VerseXPath(int chapterNum, int verseNum)
+    {
+        return $"//chapter[@number=\"{chapterNum}\"]/following::verse[@number=\"{verseNum}\"][preceding::chapter[1]/@number=\"{chapterNum}\"]";
     }
 
     private static void RunWithinLock(WriteScope writeScope, Action<WriteLock> action)

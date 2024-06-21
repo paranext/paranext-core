@@ -83,7 +83,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
-  const [usj, setUsj] = useProjectData('platformScripture.USJ_Chapter', projectId).ChapterUSJ(
+  const [usj, setUsj] = useProjectData(
+    'platformScripture.USJ_BookChapterVerse',
+    projectId,
+  ).ChapterUSJ(
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     usjDocumentDefault,
   );
