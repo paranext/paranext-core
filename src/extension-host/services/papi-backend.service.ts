@@ -155,6 +155,9 @@ Object.freeze(papi.projectSettings);
 /** JSDOC DESTINATION extensionStorageService */
 export const { storage } = papi;
 Object.freeze(papi.storage);
+/** JSDOC DESTINATION settingsService */
+export const { settings } = papi;
+Object.freeze(papi.settings);
 /** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);
