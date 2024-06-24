@@ -21,13 +21,23 @@ declare module 'platform-scripture' {
   };
 
   /** Provides Scripture data in USX format by chapter */
-  export type USXChapterProjectInterfaceDataTypes = {
+  export type USXBookChapterVerseProjectInterfaceDataTypes = {
+    /** Gets/sets the data in USX form for the specified book */
+    BookUSX: DataProviderDataType<VerseRef, string | undefined, string>;
     /** Gets/sets the data in USX form for the specified chapter */
     ChapterUSX: DataProviderDataType<VerseRef, string | undefined, string>;
+    /** Gets/sets the data in USX form for the specified verse */
+    VerseUSX: DataProviderDataType<VerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USJ format by chapter */
-  export type USJChapterProjectInterfaceDataTypes = {
+  export type USJBookChapterVerseProjectInterfaceDataTypes = {
+    /**
+     * Gets the tokenized USJ data for the specified book
+     *
+     * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
+     */
+    BookUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
     /**
      * Gets the tokenized USJ data for the specified chapter
      *
@@ -43,24 +53,7 @@ declare module 'platform-scripture' {
    * them. Following are a number of others that may be implemented at some point. This is not yet a
    * complete list of the data types available from Scripture projects.
    */
-  type UnfinishedScriptureProjectDataTypes = {
-    /**
-     * Gets the tokenized USJ data for the specified book
-     *
-     * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
-     * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
-     * change over time.
-     */
-    BookUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
-    /**
-     * Gets the tokenized USJ data for the specified verse
-     *
-     * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
-     * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
-     * change over time.
-     */
-    VerseUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
-  };
+  type UnfinishedScriptureProjectDataTypes = {};
 
   /**
    * Provides project data for Scripture projects.
@@ -69,125 +62,50 @@ declare module 'platform-scripture' {
    * them. Following are a number of others that may be implemented at some point. This is not yet a
    * complete list of the data types available from Scripture projects.
    */
-  type UnfinishedProjectDataProviderExpanded =
-    IProjectDataProvider<UnfinishedScriptureProjectDataTypes> & {
-      /**
-       * Gets the tokenized USJ data for the specified book
-       *
-       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
-       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
-       * change over time.
-       */
-      getBookUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
-      /**
-       * Sets the tokenized USJ data for the specified book
-       *
-       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
-       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
-       * change over time.
-       */
-      setBookUSJ(
-        verseRef: VerseRef,
-        usj: Usj,
-      ): Promise<DataProviderUpdateInstructions<UnfinishedScriptureProjectDataTypes>>;
-      /**
-       * Subscribe to run a callback function when the tokenized USJ data is changed
-       *
-       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
-       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
-       * change over time.
-       *
-       * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USJ for this selector
-       * @param options Various options to adjust how the subscriber emits updates
-       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-       */
-      subscribeBookUSJ(
-        verseRef: VerseRef,
-        callback: (usj: Usj | undefined) => void,
-        options?: DataProviderSubscriberOptions,
-      ): Promise<UnsubscriberAsync>;
-
-      /**
-       * Gets the tokenized USJ data for the specified verse
-       *
-       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
-       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
-       * change over time.
-       */
-      getVerseUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
-      /**
-       * Sets the tokenized USJ data for the specified verse
-       *
-       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
-       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
-       * change over time.
-       */
-      setVerseUSJ(
-        verseRef: VerseRef,
-        usj: Usj,
-      ): Promise<DataProviderUpdateInstructions<UnfinishedScriptureProjectDataTypes>>;
-      /**
-       * Subscribe to run a callback function when the tokenized USJ data is changed
-       *
-       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
-       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
-       * change over time.
-       *
-       * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USJ for this selector
-       * @param options Various options to adjust how the subscriber emits updates
-       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-       */
-      subscribeVerseUSJ(
-        verseRef: VerseRef,
-        callback: (usj: Usj | undefined) => void,
-        options?: DataProviderSubscriberOptions,
-      ): Promise<UnsubscriberAsync>;
-
-      /**
-       * Gets an extension's serialized project data (so the extension can provide and manipulate
-       * its project data)
-       *
-       * @example `{ extensionName: 'biblicalTerms', dataQualifier: 'renderings' }`
-       *
-       * @param dataScope Contains the name of the extension requesting the data and which data it
-       *   is requesting
-       * @returns Promise that resolves to the requested extension project data
-       */
-      getExtensionData(dataScope: ExtensionDataScope): Promise<string | undefined>;
-      /**
-       * Sets an extension's serialized project data (so the extension can provide and manipulate
-       * its project data)
-       *
-       * @example `{ extensionName: 'biblicalTerms', dataQualifier: 'renderings' }`
-       *
-       * @param dataScope Contains the name of the extension requesting the data and which data it
-       *   is requesting
-       * @param extensionData The new project data for this extension
-       * @returns Promise that resolves indicating which data types received updates
-       */
-      setExtensionData(
-        dataScope: ExtensionDataScope,
-        extensionData: string | undefined,
-      ): Promise<DataProviderUpdateInstructions<UnfinishedScriptureProjectDataTypes>>;
-      /**
-       * Subscribe to run a callback function when an extension's serialized project data is changed
-       *
-       * @example `{ extensionName: 'biblicalTerms', dataQualifier: 'renderings' }`
-       *
-       * @param dataScope Contains the name of the extension requesting the data and which data it
-       *   is requesting
-       * @param callback Function to run with the updated extension data for this selector
-       * @param options Various options to adjust how the subscriber emits updates
-       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-       */
-      subscribeExtensionData(
-        dataScope: ExtensionDataScope,
-        callback: (extensionData: string | undefined) => void,
-        options?: DataProviderSubscriberOptions,
-      ): Promise<UnsubscriberAsync>;
-    };
+  type UnfinishedProjectDataProviderExpanded = {
+    /**
+     * Gets an extension's serialized project data (so the extension can provide and manipulate its
+     * project data)
+     *
+     * @example `{ extensionName: 'biblicalTerms', dataQualifier: 'renderings' }`
+     *
+     * @param dataScope Contains the name of the extension requesting the data and which data it is
+     *   requesting
+     * @returns Promise that resolves to the requested extension project data
+     */
+    getExtensionData(dataScope: ExtensionDataScope): Promise<string | undefined>;
+    /**
+     * Sets an extension's serialized project data (so the extension can provide and manipulate its
+     * project data)
+     *
+     * @example `{ extensionName: 'biblicalTerms', dataQualifier: 'renderings' }`
+     *
+     * @param dataScope Contains the name of the extension requesting the data and which data it is
+     *   requesting
+     * @param extensionData The new project data for this extension
+     * @returns Promise that resolves indicating which data types received updates
+     */
+    setExtensionData(
+      dataScope: ExtensionDataScope,
+      extensionData: string | undefined,
+    ): Promise<DataProviderUpdateInstructions<UnfinishedScriptureProjectDataTypes>>;
+    /**
+     * Subscribe to run a callback function when an extension's serialized project data is changed
+     *
+     * @example `{ extensionName: 'biblicalTerms', dataQualifier: 'renderings' }`
+     *
+     * @param dataScope Contains the name of the extension requesting the data and which data it is
+     *   requesting
+     * @param callback Function to run with the updated extension data for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeExtensionData(
+      dataScope: ExtensionDataScope,
+      callback: (extensionData: string | undefined) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  };
 
   /** Provides Scripture data in USFM format by book, chapter, or verse */
   export type IUSFMBookChapterVerseProjectDataProvider =
@@ -257,15 +175,36 @@ declare module 'platform-scripture' {
     };
 
   /** Provides Scripture data in USX format by chapter */
-  export type IUSXChapterProjectDataProvider =
-    IProjectDataProvider<USXChapterProjectInterfaceDataTypes> & {
+  export type IUSXBookChapterVerseProjectDataProvider =
+    IProjectDataProvider<USXBookChapterVerseProjectInterfaceDataTypes> & {
+      /** Gets the "raw" USX data for the specified book */
+      getBookUSX(verseRef: VerseRef): Promise<string | undefined>;
+      /** Sets the "raw" USX data for the specified book */
+      setBookUSX(
+        verseRef: VerseRef,
+        usx: string,
+      ): Promise<DataProviderUpdateInstructions<USFMBookChapterVerseProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the "raw" USX data is changed
+       *
+       * @param verseRef Tells the provider what changes to listen for
+       * @param callback Function to run with the updated USFM for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeBookUSX(
+        verseRef: VerseRef,
+        callback: (usx: string | undefined) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+
       /** Gets the Scripture text in USX format for the specified chapter */
       getChapterUSX(verseRef: VerseRef): Promise<string | undefined>;
       /** Sets the Scripture text in USX format for the specified chapter */
       setChapterUSX(
         verseRef: VerseRef,
         usx: string,
-      ): Promise<DataProviderUpdateInstructions<USXChapterProjectInterfaceDataTypes>>;
+      ): Promise<DataProviderUpdateInstructions<USXBookChapterVerseProjectInterfaceDataTypes>>;
       /**
        * Subscribe to run a callback function when the USX data is changed
        *
@@ -279,11 +218,69 @@ declare module 'platform-scripture' {
         callback: (usx: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
+
+      /** Gets the "raw" USX data for the specified verse */
+      getVerseUSX(verseRef: VerseRef): Promise<string | undefined>;
+      /** Sets the "raw" USX data for the specified verse */
+      setVerseUSX(
+        verseRef: VerseRef,
+        usx: string,
+      ): Promise<DataProviderUpdateInstructions<USFMBookChapterVerseProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the "raw" USX data is changed
+       *
+       * @param verseRef Tells the provider what changes to listen for
+       * @param callback Function to run with the updated USFM for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeVerseUSX(
+        verseRef: VerseRef,
+        callback: (usx: string | undefined) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
     };
 
   /** Provides Scripture data in USJ format by chapter */
-  export type IUSJChapterProjectDataProvider =
-    IProjectDataProvider<USJChapterProjectInterfaceDataTypes> & {
+  export type IUSJBookChapterVerseProjectDataProvider =
+    IProjectDataProvider<USJBookChapterVerseProjectInterfaceDataTypes> & {
+      /**
+       * Gets the tokenized USJ data for the specified book
+       *
+       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
+       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
+       * change over time.
+       */
+      getBookUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
+      /**
+       * Sets the tokenized USJ data for the specified book
+       *
+       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
+       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
+       * change over time.
+       */
+      setBookUSJ(
+        verseRef: VerseRef,
+        usj: Usj,
+      ): Promise<DataProviderUpdateInstructions<USJBookChapterVerseProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the tokenized USJ data is changed
+       *
+       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
+       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
+       * change over time.
+       *
+       * @param verseRef Tells the provider what changes to listen for
+       * @param callback Function to run with the updated USJ for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeBookUSJ(
+        verseRef: VerseRef,
+        callback: (usj: Usj | undefined) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+
       /**
        * Gets the tokenized USJ data for the specified chapter
        *
@@ -298,7 +295,7 @@ declare module 'platform-scripture' {
       setChapterUSJ(
         verseRef: VerseRef,
         usj: Usj,
-      ): Promise<DataProviderUpdateInstructions<USJChapterProjectInterfaceDataTypes>>;
+      ): Promise<DataProviderUpdateInstructions<USJBookChapterVerseProjectInterfaceDataTypes>>;
       /**
        * Subscribe to run a callback function when the tokenized USJ data is changed
        *
@@ -314,6 +311,43 @@ declare module 'platform-scripture' {
         callback: (usj: Usj | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
+
+      /**
+       * Gets the tokenized USJ data for the specified verse
+       *
+       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
+       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
+       * change over time.
+       */
+      getVerseUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
+      /**
+       * Sets the tokenized USJ data for the specified verse
+       *
+       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
+       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
+       * change over time.
+       */
+      setVerseUSJ(
+        verseRef: VerseRef,
+        usj: Usj,
+      ): Promise<DataProviderUpdateInstructions<USJBookChapterVerseProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the tokenized USJ data is changed
+       *
+       * WARNING: USJ is one of many possible tokenized formats that we may use, so this may change
+       * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
+       * change over time.
+       *
+       * @param verseRef Tells the provider what changes to listen for
+       * @param callback Function to run with the updated USJ for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeVerseUSJ(
+        verseRef: VerseRef,
+        callback: (usj: Usj | undefined) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
     };
 
   // #region USJ types
@@ -322,14 +356,14 @@ declare module 'platform-scripture' {
 declare module 'papi-shared-types' {
   import type {
     IUSFMBookChapterVerseProjectDataProvider,
-    IUSXChapterProjectDataProvider,
-    IUSJChapterProjectDataProvider,
+    IUSXBookChapterVerseProjectDataProvider,
+    IUSJBookChapterVerseProjectDataProvider,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
     'platformScripture.USFM_BookChapterVerse': IUSFMBookChapterVerseProjectDataProvider;
-    'platformScripture.USX_Chapter': IUSXChapterProjectDataProvider;
-    'platformScripture.USJ_Chapter': IUSJChapterProjectDataProvider;
+    'platformScripture.USX_BookChapterVerse': IUSXBookChapterVerseProjectDataProvider;
+    'platformScripture.USJ_BookChapterVerse': IUSJBookChapterVerseProjectDataProvider;
   }
 
   export interface CommandHandlers {

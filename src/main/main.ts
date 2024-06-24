@@ -345,9 +345,10 @@ async function main() {
     // Get a data provider and do something with it
     setTimeout(async () => {
       const usxPdp = await get(
-        'platformScripture.USX_Chapter',
+        'platformScripture.USX_BookChapterVerse',
         '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
       );
+      logger.info('Getting PDP data');
       const verse = await usxPdp.getChapterUSX(new VerseRef('JHN', '1', '1'));
       logger.info(`Got PDP data: ${verse}`);
 

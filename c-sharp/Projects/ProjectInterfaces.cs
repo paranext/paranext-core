@@ -11,5 +11,5 @@ public static class ProjectInterfaces
     /// </summary>
     public const string Base = "platform.base";
     public const string USFM_BookChapterVerse = "platformScripture.USFM_BookChapterVerse";
-    public const string USX_Chapter = "platformScripture.USX_Chapter";
+    public const string USX_BookChapterVerse = "platformScripture.USX_BookChapterVerse";
 }

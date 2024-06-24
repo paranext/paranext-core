@@ -14,7 +14,7 @@ namespace Paranext.DataProvider.Services.Tests
             var newValueJson = JsonConvert.SerializeObject("Spanish");
             var currentValueJson = JsonConvert.SerializeObject("German");
             papiClient.AddSettingValueToTreatAsValid(
-                ProjectSettings.PB_LANGUAGE,
+                ProjectSettingsNames.PB_LANGUAGE,
                 newValueJson,
                 currentValueJson
             );
@@ -22,7 +22,7 @@ namespace Paranext.DataProvider.Services.Tests
                 papiClient,
                 newValueJson,
                 currentValueJson,
-                ProjectSettings.PT_LANGUAGE,
+                ProjectSettingsNames.PT_LANGUAGE,
                 ""
             );
 
@@ -39,7 +39,7 @@ namespace Paranext.DataProvider.Services.Tests
                 papiClient,
                 newValueJson,
                 currentValueJson,
-                ProjectSettings.PT_LANGUAGE,
+                ProjectSettingsNames.PT_LANGUAGE,
                 ""
             );
 
@@ -50,9 +50,9 @@ namespace Paranext.DataProvider.Services.Tests
         public void GetDefault_KnownProperty_ReturnsDefaultValue()
         {
             DummyPapiClient papiClient = new DummyPapiClient();
-            var result = ProjectSettingsService.GetDefault(papiClient, ProjectSettings.PT_LANGUAGE);
+            var result = ProjectSettingsService.GetDefault(papiClient, ProjectSettingsNames.PT_LANGUAGE);
 
-            Assert.That(result, Is.EqualTo($"default value for {ProjectSettings.PB_LANGUAGE}"));
+            Assert.That(result, Is.EqualTo($"default value for {ProjectSettingsNames.PB_LANGUAGE}"));
         }
 
         [Test]

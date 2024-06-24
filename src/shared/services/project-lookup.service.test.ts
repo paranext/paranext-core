@@ -53,9 +53,9 @@ describe('Getting project metadata with Layering PDPs', () => {
   const testProjectId = 'test-project';
   const baseProjectInterfaces: ProjectInterfaces[] = ['platform.base', 'platform.placeholder'];
   const layeringPDPInterfaces: { [pdpfName: string]: ProjectInterfaces[] } = {
-    [getPDPFactoryNetworkObjectNameFromId('layer-1')]: ['platformScripture.USJ_Chapter'],
-    [getPDPFactoryNetworkObjectNameFromId('layer-2')]: ['platformScripture.USX_Chapter'],
-    [getPDPFactoryNetworkObjectNameFromId('layer-3')]: ['platformScripture.USX_Chapter'],
+    [getPDPFactoryNetworkObjectNameFromId('layer-1')]: ['platformScripture.USJ_BookChapterVerse'],
+    [getPDPFactoryNetworkObjectNameFromId('layer-2')]: ['platformScripture.USX_BookChapterVerse'],
+    [getPDPFactoryNetworkObjectNameFromId('layer-3')]: ['platformScripture.USX_BookChapterVerse'],
     [getPDPFactoryNetworkObjectNameFromId('meta-layer-3')]: ['platform.notesOnly'],
     [getPDPFactoryNetworkObjectNameFromId('non-layer')]: [
       'platformScripture.USFM_BookChapterVerse',
