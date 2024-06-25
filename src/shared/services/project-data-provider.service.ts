@@ -148,7 +148,7 @@ export async function registerProjectDataProviderEngineFactory<
  * @example
  *
  * ```typescript
- * const pdp = await get('platformScripture.USFM_BookChapterVerse', 'ProjectID12345');
+ * const pdp = await get('platformScripture.USFM_Verse', 'ProjectID12345');
  * pdp.getVerse(new VerseRef('JHN', '1', '1'));
  * ```
  *

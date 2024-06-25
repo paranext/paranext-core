@@ -170,10 +170,7 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
     );
   };
 
-  const project = useProjectDataProvider(
-    'platformScripture.USFM_BookChapterVerse',
-    currentProjectId,
-  );
+  const project = useProjectDataProvider('platformScripture.USFM_Verse', currentProjectId);
 
   const [projectString] = usePromise(
     useMemo(() => {
