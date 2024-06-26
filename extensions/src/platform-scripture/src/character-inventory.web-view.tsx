@@ -17,7 +17,7 @@ const getSetting = async (
   projectId: string,
 ) => {
   const projectMetadata = await projectLookup.getMetadataForProject(projectId);
-  const pdp = await projectDataProviders.get('ParatextStandard', projectMetadata.id);
+  const pdp = await projectDataProviders.get('platform.base', projectMetadata.id);
   return (await pdp.getSetting(`platformScripture.${characterSet}`)).split(' ');
 };
 
@@ -27,12 +27,15 @@ const setSetting = async (
   characters: string[],
 ) => {
   const projectMetadata = await projectLookup.getMetadataForProject(projectId);
-  const pdp = await projectDataProviders.get('ParatextStandard', projectMetadata.id);
+  const pdp = await projectDataProviders.get('platform.base', projectMetadata.id);
   pdp.setSetting(`platformScripture.${characterSet}`, characters.join(' '));
 };
 
 const getBookText = async (projectId: string, bookNum: number): Promise<string> => {
-  const projectDataProvider = await papi.projectDataProviders.get('ParatextStandard', projectId);
+  const projectDataProvider = await papi.projectDataProviders.get(
+    'platformScripture.USFM_BookChapterVerse',
+    projectId,
+  );
   const verseRef = new VerseRef(bookNum, 1, 1);
   const bookText = await projectDataProvider.getBookUSFM(verseRef);
 
