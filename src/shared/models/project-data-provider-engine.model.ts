@@ -1,49 +1,10 @@
 import { ProjectInterfaces, ProjectInterfaceDataTypes } from 'papi-shared-types';
 import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderDataTypes } from '@shared/models/data-provider.model';
-import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
 import { UnionToIntersection } from 'platform-bible-utils';
-
-/**
- * A factory object registered with the papi that creates a Project Data Provider Engine for each
- * project with the factory's specified `projectInterface`s when the papi requests. Used by the papi
- * to create {@link IProjectDataProviderEngine}s for a specific project and `projectInterface` when
- * someone gets a project data provider with `papi.projectDataProviders.get`. When this factory
- * object is registered with `papi.projectDataProviders.registerProjectDataProviderEngineFactory`,
- * the papi creates a {@link ProjectDataProviderFactory} that layers over this engine to create
- * {@link IProjectDataProvider}s.
- *
- * Project Data Provider Engine Factories create Project Data Provider Engines for specific
- * `projectInterface`s. For each project id available on a Project Data Provider Factory, the
- * factory that supports that project with some set of `projectInterface`s creates a new instance of
- * a PDP with the supported `projectInterface`s.
- *
- * A PDP Factory can provide its own unique project ids (Base PDP Factory) or layer over other PDPFs
- * and provide additional `projectInterface`s on those projects (Layering PDP Factory). Base PDP
- * Factories must create PDPs that support the `platform.base` `projectInterface`. See
- * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
- */
-export interface IProjectDataProviderEngineFactory<
-  SupportedProjectInterfaces extends ProjectInterfaces[],
-> {
-  /**
-   * Get a list of metadata objects for all projects that can be the targets of PDPs created by this
-   * factory engine
-   */
-  getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]>;
-  /**
-   * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
-   * {@link IProjectDataProvider} for the project. This project will have the same
-   * `projectInterface`s as this Project Data Provider Engine Factory
-   *
-   * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-   * @returns A promise that resolves to a {@link IProjectDataProviderEngine} for the project passed
-   *   in
-   */
-  createProjectDataProviderEngine(
-    projectId: string,
-  ): Promise<IProjectDataProviderEngine<SupportedProjectInterfaces>>;
-}
+// Referenced in JSDoc below
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model.ts';
 
 /**
  * The object to return from

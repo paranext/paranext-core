@@ -9,6 +9,7 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '../..';
+import { HasDirection } from '../direction-toggle';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -16,11 +17,11 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-function Compositions() {
+function Compositions({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
 
   return (
-    <VerticalTabs defaultValue="Book Chapter Control">
+    <VerticalTabs defaultValue="Book Chapter Control" dir={direction}>
       <VerticalTabsList>
         <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
         <VerticalTabsTrigger value="Book Chapter Control">Book Chapter Control</VerticalTabsTrigger>
@@ -32,9 +33,7 @@ function Compositions() {
       </VerticalTabsContent>
 
       <VerticalTabsContent value="Book Chapter Control">
-        <div className="bcv-control-div">
-          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
-        </div>
+        <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
         <div>{JSON.stringify(scrRef)}</div>
       </VerticalTabsContent>
 

@@ -18,6 +18,7 @@ import dataProviderService, { DataProviderService } from '@shared/services/data-
 import { DataProviderEngine as PapiDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 import { BaseProjectDataProviderEngine as PapiBaseProjectDataProviderEngine } from '@shared/models/base-project-data-provider-engine.model';
+import { LayeringProjectDataProviderEngineFactory as PapiLayeringProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model';
 import {
   papiBackendProjectDataProviderService,
   PapiBackendProjectDataProviderService,
@@ -54,6 +55,8 @@ const papi = {
   ProjectDataProviderEngine: PapiProjectDataProviderEngine,
   /** JSDOC DESTINATION BaseProjectDataProviderEngine */
   BaseProjectDataProviderEngine: PapiBaseProjectDataProviderEngine,
+  /** JSDOC DESTINATION LayeringProjectDataProviderEngineFactory */
+  LayeringProjectDataProviderEngineFactory: PapiLayeringProjectDataProviderEngineFactory,
 
   // Functions
   /** This is just an alias for internet.fetch */
@@ -110,6 +113,9 @@ Object.freeze(papi.ProjectDataProviderEngine);
 /** JSDOC DESTINATION BaseProjectDataProviderEngine */
 export const { BaseProjectDataProviderEngine } = papi;
 Object.freeze(papi.BaseProjectDataProviderEngine);
+/** JSDOC DESTINATION LayeringProjectDataProviderEngineFactory */
+export const { LayeringProjectDataProviderEngineFactory } = papi;
+Object.freeze(papi.LayeringProjectDataProviderEngineFactory);
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 Object.freeze(papi.fetch);
@@ -149,6 +155,9 @@ Object.freeze(papi.projectSettings);
 /** JSDOC DESTINATION extensionStorageService */
 export const { storage } = papi;
 Object.freeze(papi.storage);
+/** JSDOC DESTINATION settingsService */
+export const { settings } = papi;
+Object.freeze(papi.settings);
 /** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);

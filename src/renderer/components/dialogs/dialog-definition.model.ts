@@ -1,7 +1,7 @@
 import { DialogOptions } from '@shared/models/dialog-options.model';
 import { DialogDefinitionBase, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import { ReactElement } from 'react';
-import { ProjectMetadataFilterOptions } from '@shared/models/project-lookup.service-model';
+import { ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
 
 /** The tabType for the select project dialog in `select-project.dialog.tsx` */
 export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';

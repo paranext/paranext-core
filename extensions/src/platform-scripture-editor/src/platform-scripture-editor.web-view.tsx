@@ -88,10 +88,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     usjDocumentDefault,
   );
 
-  const debouncedSetUsx = useMemo(() => debounce((newUsj: Usj) => setUsj?.(newUsj), 300), [setUsj]);
+  const debouncedSetUsj = useMemo(() => debounce((newUsj: Usj) => setUsj?.(newUsj), 300), [setUsj]);
 
   // TODO: remove debounce when issue #826 is done.
-  const onChange = useCallback(debouncedSetUsx, [debouncedSetUsx]);
+  const onChange = useCallback(debouncedSetUsj, [debouncedSetUsj]);
 
   useEffect(() => {
     if (usj) editorRef.current?.setUsj(usj);
@@ -151,7 +151,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       scrRef={scrRef}
       setScrRef={setScrRef}
       options={options}
-      onChange={onChange}
+      onChange={isReadOnly ? undefined : onChange}
       logger={logger}
     />
   );

@@ -36,6 +36,30 @@ Set up pre-requisites for building:
 
 Add the system libraries needed for Electron, [Build Instructions (Linux)](https://www.electronjs.org/docs/latest/development/build-instructions-linux).
 
+### macOS Development Pre-requisites
+
+macOS doesn't come preinstalled with all the
+[icu4c](https://unicode-org.github.io/icu/userguide/icu4c/) libraries. They must be
+installed separately to provide Unicode support to our .NET code. Platform.Bible is
+configured to expect those libraries to be installed using
+[MacPorts](https://www.macports.org/). The
+[icu package on MacPorts](https://ports.macports.org/port/icu/) has the icu4c
+libraries needed for icu.net to run properly.
+
+The build processes are configured to automatically download and package icu4c
+libraries with the application, but for development this has to be done manually.
+
+The .NET data provider is configured to automatically copy the icu4c `dylib`s into
+its build output directory. If for some reason you need to disable that, you will
+need to set an environment variable for the OS to find them. For example:
+
+```bash
+export DYLD_FALLBACK_LIBRARY_PATH="$HOME/lib:/usr/local/lib:/usr/lib:/opt/local/lib"
+```
+
+If you need to set environment variables like the above, consider adding them to
+your `.zprofile` so you don't have to remember to do it manually.
+
 ### All Platforms Development Pre-requisites
 
 Install [`Node.js` version >=18.0.0](https://nodejs.org/) (18.0.0 or greater is required for using `fetch`). We recommend using [Volta](#javascript-tool-manager).

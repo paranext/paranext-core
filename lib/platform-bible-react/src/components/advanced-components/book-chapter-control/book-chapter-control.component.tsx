@@ -323,7 +323,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   }, [isContentOpenDelayed]);
 
   return (
-    <div>
+    <div className="pr-flex">
       <ShadDropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
         <ShadDropdownMenuTrigger asChild>
           <BookChapterInput
