@@ -12,7 +12,7 @@ internal class LocalParatextProjects
 {
     #region Constructors, consts, and fields
 
-    // Inside of each project's "home" directory, these are the subdirectories and files
+    // Inside each project's "home" directory, these are the subdirectories and files
     protected const string PROJECT_SETTINGS_FILE = "Settings.xml";
 
     /// <summary>
@@ -21,10 +21,18 @@ internal class LocalParatextProjects
     public const string EXTENSION_DATA_SUBDIRECTORY = "shared/platform.bible/extensions";
 
     private bool _isInitialized = false;
+    private readonly object _initializationLock = new();
 
-    private List<string> _requiredProjectRootFiles = ["usfm.sty", "Attribution.md"];
+    private readonly List<string> _requiredProjectRootFiles = ["usfm.sty", "Attribution.md"];
 
-    private static readonly List<string> _paratextProjectInterfaces = [ProjectInterfaces.Base, ProjectInterfaces.USFM_BookChapterVerse, ProjectInterfaces.USX_Chapter];
+    private static readonly List<string> s_paratextProjectInterfaces = [
+        ProjectInterfaces.BASE,
+        ProjectInterfaces.USFM_BOOK,
+        ProjectInterfaces.USFM_CHAPTER,
+        ProjectInterfaces.USFM_VERSE,
+        ProjectInterfaces.USX_BOOK,
+        ProjectInterfaces.USX_CHAPTER,
+        ProjectInterfaces.USX_VERSE];
 
     public LocalParatextProjects()
     {
@@ -42,46 +50,56 @@ internal class LocalParatextProjects
 
     #region Public properties and methods
 
-
     public virtual void Initialize(bool shouldIncludePT9ProjectsOnWindows)
     {
         if (_isInitialized)
             return;
 
-        // Make sure the necessary directory and files exist for the project root folder
-        SetUpProjectRootFolder();
-
-        // Set up the ScrTextCollection and read the projects in that folder
-        ParatextGlobals.Initialize(ProjectRootFolder);
-
-        Console.WriteLine($"Projects loaded from {ProjectRootFolder}: {GetScrTexts().Select(scrText => scrText.Name)}");
-
-        // Read the projects in any locations other than project root folder
-        IEnumerable<ProjectDetails> otherProjectDetails = LoadOtherProjectDetails(shouldIncludePT9ProjectsOnWindows);
-
-        if (otherProjectDetails.Any())
-            Console.WriteLine($"Projects found in other locations: {otherProjectDetails.Select(projectDetails => projectDetails.Name)}");
-
-        foreach (ProjectDetails projectDetails in otherProjectDetails)
+        lock (_initializationLock)
         {
-            try
-            {
-                AddProjectToScrTextCollection(projectDetails);
-                Console.WriteLine($"Loaded project details: {projectDetails}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to load project for {projectDetails}: {ex}");
-            }
-        }
+            if (_isInitialized)
+                return;
 
-        // If there are no projects available anywhere, throw in the sample WEB one
-        if (!GetScrTexts().Any())
-        {
-            Console.WriteLine("No projects found. Setting up sample WEB project");
-            SetUpSampleProject();
+            // Make sure the necessary directory and files exist for the project root folder
+            SetUpProjectRootFolder();
 
-            ScrTextCollection.RefreshScrTexts();
+            // Set up the ScrTextCollection and read the projects in that folder
+            ParatextGlobals.Initialize(ProjectRootFolder);
+
+            Console.WriteLine(
+                $"Projects loaded from {ProjectRootFolder}: {string.Join(",", GetScrTexts().Select(scrText => scrText.Name))}");
+
+            // Read the projects in any locations other than project root folder
+            IEnumerable<ProjectDetails> otherProjectDetails =
+                LoadOtherProjectDetails(shouldIncludePT9ProjectsOnWindows);
+
+            if (otherProjectDetails.Any())
+                Console.WriteLine(
+                    $"Projects found in other locations: {string.Join(",", otherProjectDetails.Select(projectDetails => projectDetails.Name))}");
+
+            foreach (ProjectDetails projectDetails in otherProjectDetails)
+            {
+                try
+                {
+                    AddProjectToScrTextCollection(projectDetails);
+                    Console.WriteLine($"Loaded project details: {projectDetails}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to load project for {projectDetails}: {ex}");
+                }
+            }
+
+            // If there are no projects available anywhere, throw in the sample WEB one
+            if (!GetScrTexts().Any())
+            {
+                Console.WriteLine("No projects found. Setting up sample WEB project");
+                SetUpSampleProject();
+
+                ScrTextCollection.RefreshScrTexts();
+            }
+
+            _isInitialized = true;
         }
     }
 
@@ -102,7 +120,7 @@ internal class LocalParatextProjects
 
     public static List<string> GetParatextProjectInterfaces()
     {
-        return new List<string>(_paratextProjectInterfaces);
+        return [..s_paratextProjectInterfaces];
     }
 
     #endregion
@@ -152,7 +170,7 @@ internal class LocalParatextProjects
     /// <returns>Enumeration of (ProjectMetadata, project directory) tuples for all projects</returns>
     private IEnumerable<ProjectDetails> LoadOtherProjectDetails(bool shouldIncludePT9ProjectsOnWindows)
     {
-        // Get project info for projects outside of the normal project root folder
+        // Get project info for projects outside the normal project root folder
         List<string> nonPT9ProjectRootFolders = [];
         if (OperatingSystem.IsWindows() && shouldIncludePT9ProjectsOnWindows && Directory.Exists(Paratext9ProjectsFolder)) nonPT9ProjectRootFolders.Add(Paratext9ProjectsFolder);
 

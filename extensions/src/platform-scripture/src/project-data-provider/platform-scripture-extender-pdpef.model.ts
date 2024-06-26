@@ -28,7 +28,7 @@ class ScriptureExtenderProjectDataProviderEngineFactory
   // eslint-disable-next-line class-methods-use-this
   async createProjectDataProviderEngine(
     projectId: string,
-  ): Promise<IProjectDataProviderEngine<['platformScripture.USJ_Chapter']>> {
+  ): Promise<IProjectDataProviderEngine<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>> {
     // We're creating a ScriptureExtenderOverlayPDPs. Seems Object.fromEntries doesn't support
     // mapped types very well
     // eslint-disable-next-line no-type-assertion/no-type-assertion

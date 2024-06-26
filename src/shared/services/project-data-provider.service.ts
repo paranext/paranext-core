@@ -148,8 +148,8 @@ export async function registerProjectDataProviderEngineFactory<
  * @example
  *
  * ```typescript
- * const pdp = await get('platformScripture.USFM_BookChapterVerse', 'ProjectID12345');
- * pdp.getVerse(new VerseRef('JHN', '1', '1'));
+ * const pdp = await get('platformScripture.USFM_Verse', 'ProjectID12345');
+ * pdp.getVerseUSFM(new VerseRef('JHN', '1', '1'));
  * ```
  *
  * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
