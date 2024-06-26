@@ -151,7 +151,7 @@ namespace TestParanextDataProvider
                         // handle, and no translation is needed.
                         var ourSettingName = (string)details[1];
                         var pbSettingName =
-                            ProjectSettings.GetPlatformBibleSettingNameFromParatextSettingName(
+                            ProjectSettingsNames.GetPlatformBibleSettingNameFromParatextSettingName(
                                 ourSettingName
                             );
 

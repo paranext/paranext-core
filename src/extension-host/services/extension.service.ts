@@ -35,7 +35,7 @@ import menuDataService from '@shared/services/menu-data.service';
 import { localizedStringsDocumentCombiner } from '@extension-host/services/localization.service-host';
 import { settingsDocumentCombiner } from '@extension-host/services/settings.service-host';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-import { projectSettingsDocumentCombiner } from './project-settings.service-host';
+import { projectSettingsDocumentCombiner } from '@extension-host/services/project-settings.service-host';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.

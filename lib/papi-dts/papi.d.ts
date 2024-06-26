@@ -4152,8 +4152,8 @@ declare module 'shared/services/project-data-provider.service' {
    * @example
    *
    * ```typescript
-   * const pdp = await get('platformScripture.USFM_BookChapterVerse', 'ProjectID12345');
-   * pdp.getVerse(new VerseRef('JHN', '1', '1'));
+   * const pdp = await get('platformScripture.USFM_Verse', 'ProjectID12345');
+   * pdp.getVerseUSFM(new VerseRef('JHN', '1', '1'));
    * ```
    *
    * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
@@ -6096,8 +6096,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   /**
    * React hook to use data from a Project Data Provider
    *
-   * @example `useProjectData('platformScripture.USFM_BookChapterVerse', 'project
-   * id').VerseUSFM(...);`
+   * @example `useProjectData('platformScripture.USFM_Verse', 'project id').VerseUSFM(...);`
    */
   type UseProjectDataHook = {
     <ProjectInterface extends ProjectInterfaces>(
@@ -6158,13 +6157,12 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * Provider with `useProjectData('<projectInterface>', '<project_id>').<data_type>` and use like any
    * other React hook.
    *
-   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a
-   * `platformScripture.USFM_BookChapterVerse` project with projectId
-   * `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
+   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `platformScripture.USFM_Verse`
+   * project with projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
    *
    * ```typescript
    * const [verse, setVerse, verseIsLoading] = useProjectData(
-   *   'platformScripture.USFM_BookChapterVerse',
+   *   'platformScripture.USFM_Verse',
    *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
    * ).VerseUSFM(
    *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
