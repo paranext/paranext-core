@@ -181,7 +181,7 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
           onSelectCharacter={selectCharacterHandler}
         />
       </div>
-      <div className="pr-flex-1">
+      <div className="pr-flex-1 pr-mt-4 pr-rounded-md pr-border">
         <OccurrencesTable selectedCharacter={selectedCharacter} bookText={bookText} />
       </div>
     </div>

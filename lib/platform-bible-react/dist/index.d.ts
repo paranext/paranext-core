@@ -5,8 +5,7 @@ import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { ColumnDef, Row } from '@tanstack/react-table';
 import React$1 from 'react';
-import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
-import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';
+import { ChangeEvent, ChangeEventHandler, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, SyntheticEvent } from 'react';
 
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
@@ -703,215 +702,6 @@ export type SwitchProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Switch({ id, isChecked: checked, isDisabled, hasError, className, onChange, }: SwitchProps): import("react/jsx-runtime").JSX.Element;
-export interface TableCalculatedColumn<R> extends TableColumn<R> {
-	readonly parent: TableCalculatedColumnParent<R> | undefined;
-	readonly idx: number;
-	readonly level: number;
-	readonly width: number | string;
-	readonly minWidth: number;
-	readonly maxWidth: number | undefined;
-	readonly resizable: boolean;
-	readonly sortable: boolean;
-	readonly draggable: boolean;
-	readonly frozen: boolean;
-	readonly isLastFrozenColumn: boolean;
-	readonly renderCell: (props: RenderCellProps<R>) => React$1.ReactNode;
-}
-export declare interface TableCalculatedColumnParent<R> {
-	readonly name: string | React$1.ReactElement;
-	readonly parent: TableCalculatedColumnParent<R> | undefined;
-	readonly idx: number;
-	readonly colSpan: number;
-	readonly level: number;
-	readonly headerCellClass?: string | null;
-}
-export type TableCellClickArgs<R> = CellClickArgs<R>;
-export type TableCellKeyboardEvent = CellKeyboardEvent;
-export type TableCellKeyDownArgs<R> = CellKeyDownArgs<R>;
-export type TableCellMouseEvent = CellMouseEvent;
-export type TableColumn<R> = {
-	/** The name of the column. By default it will be displayed in the header cell */
-	readonly name: string | React$1.ReactElement;
-	/** A unique key to distinguish each column */
-	readonly key: string;
-	/**
-	 * Column width. If not specified, it will be determined automatically based on grid width and
-	 * specified widths of other columns
-	 */
-	readonly width?: number | string;
-	/** Minimum column width in px. */
-	readonly minWidth?: number;
-	/** Maximum column width in px. */
-	readonly maxWidth?: number;
-	/**
-	 * If `true`, editing is enabled. If no custom cell editor is provided through `renderEditCell`
-	 * the default text editor will be used for editing. Note: If `editable` is set to 'true' and no
-	 * custom `renderEditCell` is provided, the internal logic that sets the `renderEditCell` will
-	 * shallow clone the column.
-	 */
-	readonly editable?: boolean | ((row: R) => boolean) | null;
-	/** Determines whether column is frozen or not */
-	readonly frozen?: boolean;
-	/** Enable resizing of a column */
-	readonly resizable?: boolean;
-	/** Enable sorting of a column */
-	readonly sortable?: boolean;
-	/**
-	 * Sets the column sort order to be descending instead of ascending the first time the column is
-	 * sorted
-	 */
-	readonly sortDescendingFirst?: boolean | null;
-	/**
-	 * Editor to be rendered when cell of column is being edited. Don't forget to also set the
-	 * `editable` prop to true in order to enable editing.
-	 */
-	readonly renderEditCell?: ((props: TableEditorProps<R>) => React$1.ReactNode) | null;
-};
-export type TableCopyEvent<R> = CopyEvent<R>;
-export type TableEditorProps<R> = {
-	column: TableCalculatedColumn<R>;
-	row: R;
-	onRowChange: (row: R, commitChanges?: boolean) => void;
-	onClose: (commitChanges?: boolean) => void;
-};
-export type TablePasteEvent<R> = PasteEvent<R>;
-export type TableRowsChangeData<R> = RowsChangeData<R>;
-export type TableSortColumn = SortColumn;
-export type TableProps<R> = {
-	/** An array of objects representing each column on the grid */
-	columns: readonly TableColumn<R>[];
-	/** Whether or not a column with checkboxes is inserted that allows you to select rows */
-	enableSelectColumn?: boolean;
-	/**
-	 * Specifies the width of the select column. Only relevant when enableSelectColumn is true
-	 *
-	 * @default 50
-	 */
-	selectColumnWidth?: number;
-	/** An array of objects representing the currently sorted columns */
-	sortColumns?: readonly TableSortColumn[];
-	/**
-	 * A callback function that is called when the sorted columns change
-	 *
-	 * @param sortColumns An array of objects representing the currently sorted columns in the table.
-	 */
-	onSortColumnsChange?: (sortColumns: TableSortColumn[]) => void;
-	/**
-	 * A callback function that is called when a column is resized
-	 *
-	 * @param idx The index of the column being resized
-	 * @param width The new width of the column in pixels
-	 */
-	onColumnResize?: (idx: number, width: number) => void;
-	/**
-	 * Default column width. If not specified, it will be determined automatically based on grid width
-	 * and specified widths of other columns
-	 */
-	defaultColumnWidth?: number;
-	/** Minimum column width in px. */
-	defaultColumnMinWidth?: number;
-	/** Maximum column width in px. */
-	defaultColumnMaxWidth?: number;
-	/**
-	 * Whether or not columns are sortable by default
-	 *
-	 * @default true
-	 */
-	defaultColumnSortable?: boolean;
-	/**
-	 * Whether or not columns are resizable by default
-	 *
-	 * @default true
-	 */
-	defaultColumnResizable?: boolean;
-	/** An array of objects representing the rows in the grid */
-	rows: readonly R[];
-	/** A function that returns the key for a given row */
-	rowKeyGetter?: (row: R) => React$1.Key;
-	/**
-	 * The height of each row in pixels
-	 *
-	 * @default 35
-	 */
-	rowHeight?: number;
-	/**
-	 * The height of the header row in pixels
-	 *
-	 * @default 35
-	 */
-	headerRowHeight?: number;
-	/** A set of keys representing the currently selected rows */
-	selectedRows?: ReadonlySet<React$1.Key>;
-	/** A callback function that is called when the selected rows change */
-	onSelectedRowsChange?: (selectedRows: Set<React$1.Key>) => void;
-	/** A callback function that is called when the rows in the grid change */
-	onRowsChange?: (rows: R[], data: TableRowsChangeData<R>) => void;
-	/**
-	 * A callback function that is called when a cell is clicked
-	 *
-	 * @param event The event source of the callback
-	 */
-	onCellClick?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
-	/**
-	 * A callback function that is called when a cell is double-clicked
-	 *
-	 * @param event The event source of the callback
-	 */
-	onCellDoubleClick?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
-	/**
-	 * A callback function that is called when a cell is right-clicked
-	 *
-	 * @param event The event source of the callback
-	 */
-	onCellContextMenu?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
-	/**
-	 * A callback function that is called when a key is pressed while a cell is focused
-	 *
-	 * @param event The event source of the callback
-	 */
-	onCellKeyDown?: (args: TableCellKeyDownArgs<R>, event: TableCellKeyboardEvent) => void;
-	/**
-	 * The text direction of the table
-	 *
-	 * @default 'ltr'
-	 */
-	direction?: "ltr" | "rtl";
-	/**
-	 * Whether or not virtualization is enabled for the table
-	 *
-	 * @default true
-	 */
-	enableVirtualization?: boolean;
-	/**
-	 * A callback function that is called when the table is scrolled
-	 *
-	 * @param event The event source of the callback
-	 */
-	onScroll?: (event: React$1.UIEvent<HTMLDivElement>) => void;
-	/**
-	 * A callback function that is called when the user copies data from the table.
-	 *
-	 * @param event The event source of the callback
-	 */
-	onCopy?: (event: TableCopyEvent<R>) => void;
-	/**
-	 * A callback function that is called when the user pastes data into the table.
-	 *
-	 * @param event The event source of the callback
-	 */
-	onPaste?: (event: TablePasteEvent<R>) => R;
-	/** Additional css classes to help with unique styling of the table */
-	className?: string;
-	/** Optional unique identifier for testing */
-	"data-testid"?: string;
-};
-/**
- * Configurable table component
- *
- * Thanks to Adazzle for heavy inspiration and documentation
- * https://adazzle.github.io/react-data-grid/
- */
-export declare function Table<R>({ columns, sortColumns, onSortColumnsChange, onColumnResize, defaultColumnWidth, defaultColumnMinWidth, defaultColumnMaxWidth, defaultColumnSortable, defaultColumnResizable, rows, enableSelectColumn, selectColumnWidth, rowKeyGetter, rowHeight, headerRowHeight, selectedRows, onSelectedRowsChange, onRowsChange, onCellClick, onCellDoubleClick, onCellContextMenu, onCellKeyDown, direction, enableVirtualization, onCopy, onPaste, onScroll, className, "data-testid": testId, }: TableProps<R>): import("react/jsx-runtime").JSX.Element;
 export interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
 	data: TData[];
@@ -1161,5 +951,13 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & React$1.RefAttributes<HTMLTableElement>>;
+export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & React$1.RefAttributes<HTMLTableRowElement>>;
+export declare const TableHead: React$1.ForwardRefExoticComponent<React$1.ThHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
+export declare const TableCell: React$1.ForwardRefExoticComponent<React$1.TdHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
+export declare const TableCaption: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableCaptionElement> & React$1.RefAttributes<HTMLTableCaptionElement>>;
 
 export {};

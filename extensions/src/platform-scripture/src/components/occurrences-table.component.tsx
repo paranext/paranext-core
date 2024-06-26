@@ -1,3 +1,11 @@
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from 'platform-bible-react';
 import { useEffect, useState } from 'react';
 
 interface SearchResult {
@@ -8,6 +16,7 @@ interface SearchResult {
 const processVerseText = (
   verseText: string,
   character: string,
+  book: string,
   chapter: string,
   verse: string,
   results: SearchResult[],
@@ -17,7 +26,7 @@ const processVerseText = (
     const occurrences = (word.match(new RegExp(character, 'g')) || []).length;
     for (let i = 0; i < occurrences; i++) {
       results.push({
-        reference: `Gen ${chapter}:${verse}`,
+        reference: `${book} ${chapter}:${verse}`,
         word,
       });
     }
@@ -30,6 +39,7 @@ const searchUSFM = (usfmData: string, character: string): SearchResult[] => {
   const results: SearchResult[] = [];
   const lines = usfmData.split('\n');
 
+  let currentBook = '';
   let currentChapter = '';
   let currentVerse = '';
   let verseText = '';
@@ -37,13 +47,17 @@ const searchUSFM = (usfmData: string, character: string): SearchResult[] => {
   lines.forEach((line) => {
     const trimmedLine = line.trim();
 
+    if (line.startsWith('\\id ')) {
+      // Extract book title
+      [, currentBook] = trimmedLine.split(' ');
+    }
     if (line.startsWith('\\c ')) {
       // Extract chapter number
       [, currentChapter] = trimmedLine.split(' ');
     } else if (line.startsWith('\\v ')) {
       // When encountering a verse, process the previous verse text
       if (verseText) {
-        processVerseText(verseText, character, currentChapter, currentVerse, results);
+        processVerseText(verseText, character, currentBook, currentChapter, currentVerse, results);
       }
       // Extract verse number and start a new verse text
       const parts = line.split(' ');
@@ -60,7 +74,7 @@ const searchUSFM = (usfmData: string, character: string): SearchResult[] => {
 
   // Process the last verse text
   if (verseText) {
-    processVerseText(verseText, character, currentChapter, currentVerse, results);
+    processVerseText(verseText, character, currentBook, currentChapter, currentVerse, results);
   }
 
   return results;
@@ -81,22 +95,22 @@ function OccurrencesTable({ selectedCharacter, bookText }: OccurrencesTableProps
   );
 
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Reference</th>
-          <th>Word</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Reference</TableHead>
+          <TableHead>Word</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {tableData.map((result) => (
-          <tr key={`${result.reference}-${result.word}-${Math.random()}`}>
-            <td>{result.reference}</td>
-            <td>{result.word}</td>
-          </tr>
+          <TableRow key={`${result.reference}-${result.word}-${Math.random()}`}>
+            <TableCell>{result.reference}</TableCell>
+            <TableCell>{result.word}</TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 

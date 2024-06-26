@@ -42,21 +42,6 @@ export type {
 } from './components/snackbar.component';
 export { default as Switch } from './components/switch.component';
 export type { SwitchProps } from './components/switch.component';
-export { default as Table } from './components/table.component';
-export type {
-  TableCalculatedColumn,
-  TableCellClickArgs,
-  TableCellKeyboardEvent,
-  TableCellKeyDownArgs,
-  TableCellMouseEvent,
-  TableColumn,
-  TableCopyEvent,
-  TableEditorProps,
-  TablePasteEvent,
-  TableRowsChangeData,
-  TableSortColumn,
-  TableProps,
-} from './components/table.component';
 export { default as DataTable } from './components/advanced-components/data-table/data-table.component';
 export { default as TextField } from './components/text-field.component';
 export type { TextFieldProps } from './components/text-field.component';
@@ -77,3 +62,13 @@ export {
   VerticalTabsContent,
   VerticalTabsTrigger,
 } from '@/components/shadcn-ui/tabs-vertical';
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableCaption,
+} from '@/components/shadcn-ui/table';
