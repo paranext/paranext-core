@@ -1,5 +1,5 @@
 import { Canon } from '@sillsdev/scripture';
-import { SyntheticEvent, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   offsetBook,
   offsetChapter,
@@ -14,6 +14,7 @@ import '@/components/ref-selector.component.css';
 import ComboBox, { ComboBoxLabelOption } from '@/components/combo-box.component';
 import Button from '@/components/button.component';
 import TextField from '@/components/text-field.component';
+import { Label } from './shadcn-ui/label';
 
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
@@ -50,11 +51,11 @@ function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
     handleSubmit(newRef);
   };
 
-  const onSelectBook = (_event: SyntheticEvent<Element, Event>, value: unknown) => {
+  const onSelectBook = (value: BookNameOption) => {
     // Asserting because value is type unknown, value is type unknown because combobox props aren't precise enough yet
     // Issue https://github.com/paranext/paranext-core/issues/560
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const bookNum: number = Canon.bookIdToNumber((value as BookNameOption).bookId);
+    const bookNum: number = Canon.bookIdToNumber(value.bookId);
     const newRef: ScriptureReference = { bookNum, chapterNum: 1, verseNum: 1 };
 
     onChangeBook(newRef);
@@ -72,15 +73,10 @@ function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
 
   return (
     <span id={id} className="pr-flex pr-place-items-center">
-      <ComboBox
-        title="Book"
-        className="papi-ref-selector book"
-        value={currentBookName}
-        options={getBookNameOptions()}
-        onChange={onSelectBook}
-        isClearable={false}
-        width={200}
-      />
+      <div className="pr-inline-grid pr-items-center pr-gap-1.5">
+        <Label>Book</Label>
+        <ComboBox value={currentBookName} options={getBookNameOptions()} onChange={onSelectBook} />
+      </div>
       <Button
         onClick={() => onChangeBook(offsetBook(scrRef, -1))}
         isDisabled={scrRef.bookNum <= FIRST_SCR_BOOK_NUM}

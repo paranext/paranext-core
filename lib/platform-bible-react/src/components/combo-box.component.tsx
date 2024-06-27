@@ -1,50 +1,18 @@
-import {
-  Autocomplete as MuiComboBox,
-  AutocompleteChangeDetails,
-  AutocompleteChangeReason,
-  TextField as MuiTextField,
-  AutocompleteValue,
-} from '@mui/material';
-import { FocusEventHandler, SyntheticEvent } from 'react';
+import { useState } from 'react';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import '@/components/combo-box.component.css';
+import { cn } from '@/utils/shadcn-ui.util';
+import { Popover, PopoverContent, PopoverTrigger } from './shadcn-ui/popover';
+import { Button } from './shadcn-ui/button';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from './shadcn-ui/command';
 
 export type ComboBoxLabelOption = { label: string };
 export type ComboBoxOption = string | number | ComboBoxLabelOption;
-export type ComboBoxValue<T, X, Y, Z> = AutocompleteValue<T, X, Y, Z>;
-export type ComboBoxChangeDetails<T> = AutocompleteChangeDetails<T>;
-export type ComboBoxChangeReason = AutocompleteChangeReason;
 
 export type ComboBoxProps<T> = {
   /** Optional unique identifier */
   id?: string;
   /** Text label title for combobox */
-  title?: string;
-  /**
-   * If `true`, the component is disabled.
-   *
-   * @default false
-   */
-  isDisabled?: boolean;
-  /**
-   * If `true`, the component can be cleared, and will have a button to do so
-   *
-   * @default true
-   */
-  isClearable?: boolean;
-  /**
-   * True when (input related to) switch is erroneous
-   *
-   * @default false
-   */
-  hasError?: boolean;
-  /**
-   * If `true`, the input will take up the full width of its container.
-   *
-   * @default false
-   */
-  isFullWidth?: boolean;
-  /** Width of the combobox in pixels. Setting this prop overrides the `isFullWidth` prop */
-  width?: number;
   /** List of available options for the dropdown menu */
   options?: readonly T[];
   /** Additional css classes to help with unique styling of the combo box */
@@ -55,67 +23,86 @@ export type ComboBoxProps<T> = {
    */
   value?: T;
   /** Triggers when content of textfield is changed */
-  onChange?: (
-    event: SyntheticEvent<Element, Event>,
-    value: ComboBoxValue<T, boolean | undefined, boolean | undefined, boolean | undefined>,
-    reason?: ComboBoxChangeReason,
-    details?: ComboBoxChangeDetails<T> | undefined,
-  ) => void;
-  /** Triggers when textfield gets focus */
-  onFocus?: FocusEventHandler<HTMLDivElement>; // Storybook crashes when giving the combo box focus
-  /** Triggers when textfield loses focus */
-  onBlur?: FocusEventHandler<HTMLDivElement>;
+  onChange?: (newValue: T) => void;
   /** Used to determine the string value for a given option. */
   getOptionLabel?: (option: ComboBoxOption) => string;
+  /** Text displayed on button if `value` is undefined */
+  buttonPlaceholder?: string;
+  /** Placeholder text for text field */
+  testPlaceholder?: string;
 };
+
+function getOptionLabelDefault(option: ComboBoxOption): string {
+  if (typeof option === 'string') {
+    return option;
+  }
+  if (typeof option === 'number') {
+    return option.toString();
+  }
+  return option.label;
+}
 
 /**
  * Dropdown selector displaying various options from which to choose
  *
- * Thanks to MUI for heavy inspiration and documentation
- * https://mui.com/material-ui/getting-started/overview/
+ * Thanks to Shadcn for heavy inspiration and documentation
+ * https://ui.shadcn.com/docs/components/combobox
  */
 function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   id,
-  title,
-  isDisabled = false,
-  isClearable = true,
-  hasError = false,
-  isFullWidth = false,
-  width,
   options = [],
   className,
   value,
-  onChange,
-  onFocus,
-  onBlur,
-  getOptionLabel,
+  onChange = () => {},
+  getOptionLabel = getOptionLabelDefault,
+  buttonPlaceholder = '',
+  testPlaceholder = '',
 }: ComboBoxProps<T>) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <MuiComboBox<T, boolean | undefined, boolean | undefined, boolean | undefined>
-      id={id}
-      disablePortal
-      disabled={isDisabled}
-      disableClearable={!isClearable}
-      fullWidth={isFullWidth}
-      options={options}
-      className={`papi-combo-box ${hasError ? 'error' : ''} ${className ?? ''}`}
-      value={value}
-      onChange={onChange}
-      onFocus={onFocus}
-      onBlur={onBlur}
-      getOptionLabel={getOptionLabel}
-      renderInput={(props) => (
-        <MuiTextField
-          {...props}
-          error={hasError}
-          fullWidth={isFullWidth}
-          disabled={isDisabled}
-          label={title}
-          style={{ width }}
-        />
-      )}
-    />
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          id={id}
+          className={cn('pr-w-[200px] pr-justify-between', className)}
+        >
+          {value ? getOptionLabel(value) : buttonPlaceholder}
+          <ChevronsUpDown className="pr-ml-2 pr-h-4 pr-w-4 pr-shrink-0 pr-opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="pr-w-[200px] pr-p-0">
+        <Command>
+          <CommandInput placeholder={testPlaceholder} className="pr-text-inherit" />
+          <CommandEmpty>No framework found.</CommandEmpty>
+          <CommandList>
+            {options.map((option) => (
+              <CommandItem
+                key={getOptionLabel(option)}
+                value={getOptionLabel(option)}
+                onSelect={() => {
+                  onChange(option);
+                  setOpen(false);
+                }}
+              >
+                <Check
+                  className={cn(
+                    'pr-mr-2 pr-h-4 pr-w-4',
+                    !value || getOptionLabel(value) === getOptionLabel(option)
+                      ? 'pr-opacity-100'
+                      : 'pr-opacity-0',
+                  )}
+                />
+                {getOptionLabel(option)}
+              </CommandItem>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 

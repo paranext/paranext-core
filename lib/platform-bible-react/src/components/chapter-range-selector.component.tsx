@@ -1,4 +1,4 @@
-import { SyntheticEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FormControlLabel } from '@mui/material';
 import ComboBox from '@/components/combo-box.component';
 
@@ -29,7 +29,7 @@ export default function ChapterRangeSelector({
     setChapterOptions(Array.from({ length: chapterCount }, (_, i) => i + 1));
   }, [chapterCount, handleSelectEndChapter, handleSelectStartChapter]);
 
-  const onChangeStartChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
+  const onChangeStartChapter = (value: number) => {
     setStartChapter(value);
     handleSelectStartChapter(value);
     if (value > endChapter) {
@@ -38,7 +38,7 @@ export default function ChapterRangeSelector({
     }
   };
 
-  const onChangeEndChapter = (_event: SyntheticEvent<Element, Event>, value: number) => {
+  const onChangeEndChapter = (value: number) => {
     setEndChapter(value);
     handleSelectEndChapter(value);
     if (value < startChapter) {
@@ -57,14 +57,12 @@ export default function ChapterRangeSelector({
             // Type asserting because combobox props aren't precise enough yet
             // Issue https://github.com/paranext/paranext-core/issues/560
             // eslint-disable-next-line no-type-assertion/no-type-assertion
-            onChange={(e, value) => onChangeStartChapter(e, value as number)}
+            onChange={onChangeStartChapter}
             className="book-selection-chapter"
             key="start chapter"
-            isClearable={false}
             options={chapterOptions}
             getOptionLabel={(option) => option.toString()}
             value={startChapter}
-            isDisabled={isDisabled}
           />
         }
         label="Chapters"
@@ -78,14 +76,12 @@ export default function ChapterRangeSelector({
             // Type asserting because combobox props aren't precise enough yet
             // Issue https://github.com/paranext/paranext-core/issues/560
             // eslint-disable-next-line no-type-assertion/no-type-assertion
-            onChange={(e, value) => onChangeEndChapter(e, value as number)}
+            onChange={onChangeEndChapter}
             className="book-selection-chapter"
             key="end chapter"
-            isClearable={false}
             options={chapterOptions}
             getOptionLabel={(option) => option.toString()}
             value={endChapter}
-            isDisabled={isDisabled}
           />
         }
         label="to"
