@@ -88,9 +88,9 @@ export const columns = (
       // eslint-disable-next-line consistent-return
       return (
         <div className="pr-flex pr-flex-col">
-          <Button>Status</Button>
-          <div className="pr-flex">
-            <Button>
+          <div className="pr-flex pr-justify-center">Status</div>
+          <div className="pr-flex pr-justify-center">
+            <Button className="pr-p-1">
               <CircleCheckIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
@@ -98,7 +98,7 @@ export const columns = (
                 }}
               />
             </Button>
-            <Button>
+            <Button className="pr-m-1">
               <CircleXIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
@@ -106,7 +106,7 @@ export const columns = (
                 }}
               />
             </Button>
-            <Button>
+            <Button className="pr-m-1">
               <CircleHelpIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
@@ -144,7 +144,7 @@ function InventoryDataTable({
   onSelectCharacter,
 }: InventoryDataTableProps) {
   const rowClickHandler = (row: Row<CharacterData>) => {
-    row.toggleSelected(true);
+    row.toggleSelected(undefined);
 
     onSelectCharacter(row.getValue('character'));
   };

@@ -173,17 +173,19 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   };
 
   return (
-    <div className="pr-flex pr-flex-col pr-h-[600px]">
-      <div className="pr-flex-1">
+    <div className="pr-flex pr-flex-col ">
+      <div className={`pr-overflow-y-auto ${selectedCharacter !== '' ? 'pr-max-h-96' : ''}`}>
         <InventoryDataTable
           tableData={inventoryTableData}
           onStatusChange={statusChangeHandler}
           onSelectCharacter={selectCharacterHandler}
         />
       </div>
-      <div className="pr-flex-1 pr-mt-4 pr-rounded-md pr-border">
-        <OccurrencesTable selectedCharacter={selectedCharacter} bookText={bookText} />
-      </div>
+      {selectedCharacter !== '' && (
+        <div className="pr-mt-4 pr-rounded-md pr-border">
+          <OccurrencesTable selectedCharacter={selectedCharacter} bookText={bookText} />
+        </div>
+      )}
     </div>
   );
 };

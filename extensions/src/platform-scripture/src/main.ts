@@ -69,8 +69,6 @@ async function openPlatformCharactersInventory(
     return papi.webViews.getWebView(
       characterInventoryWebViewType,
       { type: 'float', floatSize: { width: 775, height: 815 } },
-      // This code will be removed once we find a better way to get the projectId in
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
       options,
     );
   }
