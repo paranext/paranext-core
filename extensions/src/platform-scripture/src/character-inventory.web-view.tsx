@@ -33,7 +33,7 @@ const setSetting = async (
 
 const getBookText = async (projectId: string, bookNum: number): Promise<string> => {
   const projectDataProvider = await papi.projectDataProviders.get(
-    'platformScripture.USFM_BookChapterVerse',
+    'platformScripture.USFM_Book',
     projectId,
   );
   const verseRef = new VerseRef(bookNum, 1, 1);
