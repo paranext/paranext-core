@@ -1,6 +1,6 @@
 namespace Paranext.DataProvider.Services;
 
-public sealed class ProjectSettings
+public sealed class ProjectSettingsNames
 {
     public const string PB_BOOKS_PRESENT = "platformScripture.booksPresent";
     public const string PT_BOOKS_PRESENT = "BooksPresent";
@@ -29,7 +29,7 @@ public sealed class ProjectSettings
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
-    private static readonly HashSet<string> _ptSettingBooleans = ["Editable", "MatchBasedOnStems", "AllowReadAccess", "AllowSharingWithSLDR", ];
+    private static readonly HashSet<string> s_ptSettingBooleans = ["Editable", "MatchBasedOnStems", "AllowReadAccess", "AllowSharingWithSLDR", ];
 
     // Make sure this dictionary gets updated whenever new settings are added
     private static readonly Dictionary<string, string> s_platformBibleToParatextSettingsNames =
@@ -79,6 +79,6 @@ public sealed class ProjectSettings
     /// <returns></returns>
     public static bool IsParatextSettingABoolean(string ptSettingName)
     {
-        return _ptSettingBooleans.Contains(ptSettingName);
+        return s_ptSettingBooleans.Contains(ptSettingName);
     }
 }
