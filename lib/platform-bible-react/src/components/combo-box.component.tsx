@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
-import '@/components/combo-box.component.css';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Popover, PopoverContent, PopoverTrigger } from './shadcn-ui/popover';
-import { Button } from './shadcn-ui/button';
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from './shadcn-ui/command';
+import { Button } from '@/components/shadcn-ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/shadcn-ui/command';
 
 export type ComboBoxLabelOption = { label: string };
 export type ComboBoxOption = string | number | ComboBoxLabelOption;
@@ -29,7 +34,11 @@ export type ComboBoxProps<T> = {
   /** Text displayed on button if `value` is undefined */
   buttonPlaceholder?: string;
   /** Placeholder text for text field */
-  testPlaceholder?: string;
+  textPlaceholder?: string;
+  /** Text to display when no options match input */
+  commandEmptyMessage?: string;
+  /** Variant of button */
+  buttonVariant?: 'outline' | 'link' | 'default' | 'secondary' | 'destructive' | 'ghost';
 };
 
 function getOptionLabelDefault(option: ComboBoxOption): string {
@@ -43,7 +52,7 @@ function getOptionLabelDefault(option: ComboBoxOption): string {
 }
 
 /**
- * Dropdown selector displaying various options from which to choose
+ * Autocomplete input and command palette with a list of suggestions.
  *
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
@@ -56,7 +65,9 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   onChange = () => {},
   getOptionLabel = getOptionLabelDefault,
   buttonPlaceholder = '',
-  testPlaceholder = '',
+  textPlaceholder = '',
+  commandEmptyMessage = 'No option found',
+  buttonVariant = 'outline',
 }: ComboBoxProps<T>) {
   const [open, setOpen] = useState(false);
 
@@ -64,7 +75,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
+          variant={buttonVariant}
           role="combobox"
           aria-expanded={open}
           id={id}
@@ -76,8 +87,8 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
       </PopoverTrigger>
       <PopoverContent className="pr-w-[200px] pr-p-0">
         <Command>
-          <CommandInput placeholder={testPlaceholder} className="pr-text-inherit" />
-          <CommandEmpty>No framework found.</CommandEmpty>
+          <CommandInput placeholder={textPlaceholder} className="pr-text-inherit" />
+          <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
           <CommandList>
             {options.map((option) => (
               <CommandItem
@@ -89,12 +100,9 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
                 }}
               >
                 <Check
-                  className={cn(
-                    'pr-mr-2 pr-h-4 pr-w-4',
-                    !value || getOptionLabel(value) === getOptionLabel(option)
-                      ? 'pr-opacity-100'
-                      : 'pr-opacity-0',
-                  )}
+                  className={cn('pr-mr-2 pr-h-4 pr-w-4', {
+                    'pr-opacity-0': value && getOptionLabel(value) !== getOptionLabel(option),
+                  })}
                 />
                 {getOptionLabel(option)}
               </CommandItem>

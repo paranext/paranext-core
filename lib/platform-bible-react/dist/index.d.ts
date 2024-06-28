@@ -275,15 +275,19 @@ export type ComboBoxProps<T> = {
 	/** Text displayed on button if `value` is undefined */
 	buttonPlaceholder?: string;
 	/** Placeholder text for text field */
-	testPlaceholder?: string;
+	textPlaceholder?: string;
+	/** Text to display when no options match input */
+	commandEmptyMessage?: string;
+	/** Variant of button */
+	buttonVariant?: "outline" | "link" | "default" | "secondary" | "destructive" | "ghost";
 };
 /**
- * Dropdown selector displaying various options from which to choose
+ * Autocomplete input and command palette with a list of suggestions.
  *
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, testPlaceholder, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;

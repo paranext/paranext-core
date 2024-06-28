@@ -54,9 +54,6 @@ export default function ChapterRangeSelector({
         disabled={isDisabled}
         control={
           <ComboBox
-            // Type asserting because combobox props aren't precise enough yet
-            // Issue https://github.com/paranext/paranext-core/issues/560
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
             onChange={onChangeStartChapter}
             className="book-selection-chapter"
             key="start chapter"
@@ -73,9 +70,6 @@ export default function ChapterRangeSelector({
         disabled={isDisabled}
         control={
           <ComboBox
-            // Type asserting because combobox props aren't precise enough yet
-            // Issue https://github.com/paranext/paranext-core/issues/560
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
             onChange={onChangeEndChapter}
             className="book-selection-chapter"
             key="end chapter"

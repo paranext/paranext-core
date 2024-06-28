@@ -14,7 +14,7 @@ import '@/components/ref-selector.component.css';
 import ComboBox, { ComboBoxLabelOption } from '@/components/combo-box.component';
 import Button from '@/components/button.component';
 import TextField from '@/components/text-field.component';
-import { Label } from './shadcn-ui/label';
+import { Label } from '@/components/shadcn-ui/label';
 
 export interface ScrRefSelectorProps {
   scrRef: ScriptureReference;
@@ -52,9 +52,6 @@ function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
   };
 
   const onSelectBook = (value: BookNameOption) => {
-    // Asserting because value is type unknown, value is type unknown because combobox props aren't precise enough yet
-    // Issue https://github.com/paranext/paranext-core/issues/560
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const bookNum: number = Canon.bookIdToNumber(value.bookId);
     const newRef: ScriptureReference = { bookNum, chapterNum: 1, verseNum: 1 };
 
