@@ -101,7 +101,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
               >
                 <Check
                   className={cn('pr-mr-2 pr-h-4 pr-w-4', {
-                    'pr-opacity-0': value && getOptionLabel(value) !== getOptionLabel(option),
+                    'pr-opacity-0': !value || getOptionLabel(value) !== getOptionLabel(option),
                   })}
                 />
                 {getOptionLabel(option)}
