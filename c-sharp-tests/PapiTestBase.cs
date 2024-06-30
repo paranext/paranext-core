@@ -114,6 +114,26 @@ namespace TestParanextDataProvider
         }
 
         /// <summary>
+        /// Creates JSON that represents a verse reference having the specified parameters in full
+        /// serialization.
+        /// </summary>
+        protected static JsonNode CreateFullSerializationVerseRefNode(
+            string book,
+            int chapterNum,
+            int verseNum
+        )
+        {
+            var jsonObject = new JsonObject
+            {
+                ["book"] = book,
+                ["chapterNum"] = chapterNum,
+                ["verseNum"] = verseNum,
+                ["versificationStr"] = "English",
+            };
+            return jsonObject;
+        }
+
+        /// <summary>
         /// Creates a JSON string node with the specified data
         /// </summary>
         protected static JsonNode CreateJsonString(string data)

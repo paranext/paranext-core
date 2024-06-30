@@ -50,8 +50,15 @@ namespace Paranext.DataProvider.JsonUtils
                 }
                 else
                     versification = new ScrVers(versificationText.Value<string>());
+            else if (parsedArgs.TryGetValue("versificationStr", out versificationText))
+                if (versificationText is not JObject)
+                    versification = new ScrVers(versificationText.Value<string>());
 
-            if (!parsedArgs.ContainsKey("book") && !parsedArgs.ContainsKey("_bookNum"))
+            if (
+                !parsedArgs.ContainsKey("book")
+                && !parsedArgs.ContainsKey("chapterNum")
+                && !parsedArgs.ContainsKey("_bookNum")
+            )
             {
                 errorMessage = $"Invalid VerseRef ({jsonString}): No recognized properties";
                 return false;
@@ -71,6 +78,25 @@ namespace Paranext.DataProvider.JsonUtils
                             parsedArgs["_bookNum"]!.Value<int>(),
                             parsedArgs["_chapterNum"]!.Value<int>(),
                             parsedArgs["_verseNum"]!.Value<int>()
+                        );
+            }
+            else if (parsedArgs.ContainsKey("chapterNum"))
+            {
+                var verse = parsedArgs.ContainsKey("verse")
+                    ? parsedArgs["verse"]!.Value<string>()
+                    : parsedArgs["verseNum"]!.Value<int>().ToString();
+                verseRef =
+                    (versification != null)
+                        ? new VerseRef(
+                            parsedArgs["book"]!.Value<string>(),
+                            parsedArgs["chapterNum"]!.Value<int>().ToString(),
+                            verse,
+                            versification
+                        )
+                        : new VerseRef(
+                            Canon.BookIdToNumber(parsedArgs["book"]!.Value<string>()),
+                            parsedArgs["chapterNum"]!.Value<int>(),
+                            parsedArgs["verseNum"]!.Value<int>()
                         );
             }
             else
