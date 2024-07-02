@@ -1,0 +1,10 @@
+{
+  "icon": "",
+  "localizedDisplayInfo": {
+    "en": {
+      "displayName": "Scripture Access Functionality Extension",
+      "shortSummary": "Basic Scripture access functionality extension",
+      "description": "assets/descriptions/description-en.md"
+    }
+  }
+}
