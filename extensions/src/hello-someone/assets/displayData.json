@@ -1,0 +1,10 @@
+{
+  "icon": "",
+  "localizedDisplayInfo": {
+    "en": {
+      "displayName": "Hello Someone Extension",
+      "shortSummary": "Simple hello someone extension",
+      "description": "assets/descriptions/description-en.md"
+    }
+  }
+}
