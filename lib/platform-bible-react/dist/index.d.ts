@@ -142,7 +142,7 @@ export type BookChapterControlProps = {
 	handleSubmit: (scrRef: ScriptureReference) => void;
 };
 export declare function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
-declare const buttonVariants: (props?: ({
+export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;

@@ -2,7 +2,7 @@ import './index.css';
 
 // Components and Types
 export { default as BookChapterControl } from './components/book-chapter-control/book-chapter-control.component';
-export { Button } from './components/shadcn-ui/button';
+export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export { default as ChapterRangeSelector } from './components/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/chapter-range-selector.component';
 export { default as Checkbox } from './components/checkbox.component';
