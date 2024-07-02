@@ -9,3 +9,21 @@ export interface BookInfo {
   fullNames: string[];
   chapters: number;
 }
+
+export type ScriptureNode = ScriptureReference & {
+  jsonPath: string;
+};
+
+export type ScriptureTextAnchor = ScriptureNode & {
+  offset: number;
+};
+
+export type ScriptureSelection = {
+  start: ScriptureNode | ScriptureTextAnchor;
+  end?: ScriptureNode | ScriptureTextAnchor;
+};
+
+export type ScriptureCheckDefinition = {
+  id: string;
+  displayName: string;
+};
