@@ -12,12 +12,9 @@ export { default as Checklist } from './components/checklist.component';
 export type { ChecklistProps } from './components/checklist.component';
 export { default as ComboBox } from './components/combo-box.component';
 export type {
-  ComboBoxChangeDetails,
-  ComboBoxChangeReason,
   ComboBoxLabelOption,
   ComboBoxProps,
   ComboBoxOption,
-  ComboBoxValue,
 } from './components/combo-box.component';
 export { default as GridMenu } from './components/grid-menu.component';
 export type { GridMenuProps, GridMenuInfo } from './components/grid-menu.component';
