@@ -10,11 +10,17 @@ import ScriptureExtenderProjectDataProviderEngine, {
 /** PDP Factory ID for the Scripture Extender PDPF */
 export const SCRIPTURE_EXTENDER_PDPF_ID = 'platformScripture.scriptureExtenderPdpf';
 
-/** Regex strings for the project interfaces the Scripture Extender Layering PDPF layers over */
-const SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES_REGEX_STRINGS =
+/**
+ * Regex strings for the project interfaces the Scripture Extender Layering PDPF layers over
+ *
+ * Need to wrap in an array to AND the interfaces together since this Layering PDPF only supports
+ * projects that have all three interfaces available
+ */
+const SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES_REGEX_STRINGS = [
   SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES.map((projectInterface) =>
     escapeStringRegexp(projectInterface),
-  );
+  ),
+];
 
 class ScriptureExtenderProjectDataProviderEngineFactory
   extends LayeringProjectDataProviderEngineFactory<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>
