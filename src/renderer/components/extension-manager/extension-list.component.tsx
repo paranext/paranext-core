@@ -77,8 +77,8 @@ export default function ExtensionList({
           >
             {isGallery ? (
               <div className="action-buttons">
-                <Button isDisabled={toggledExtensionNames.includes(ext.name)}>Remove</Button>
-                <Button isDisabled={!ext.hasUpdateAvailable}>Update</Button>
+                <Button disabled={toggledExtensionNames.includes(ext.name)}>Remove</Button>
+                <Button disabled={!ext.hasUpdateAvailable}>Update</Button>
               </div>
             ) : undefined}
             {children}
