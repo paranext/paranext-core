@@ -4,6 +4,8 @@ import ScriptureExtenderProjectDataProviderEngineFactory, {
   SCRIPTURE_EXTENDER_PDPF_ID,
 } from './project-data-provider/platform-scripture-extender-pdpef.model';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
+import checkHostingService from './checks/check-hosting.service';
+import checkAggregatingService from './checks/check-aggregating.service';
 
 // #region Project Setting Validators
 
@@ -60,12 +62,17 @@ export async function activate(context: ExecutionActivationContext) {
     versificationValidator,
   );
 
+  await checkHostingService.initialize();
+  await checkAggregatingService.initialize();
+
   context.registrations.add(
     await scriptureExtenderPdpefPromise,
     await includeProjectsCommandPromise,
     await includeProjectsValidatorPromise,
     await booksPresentPromise,
     await versificationPromise,
+    checkHostingService.dispose,
+    checkAggregatingService.dispose,
   );
 
   logger.info('platformScripture is finished activating!');

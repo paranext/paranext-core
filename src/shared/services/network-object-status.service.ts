@@ -88,6 +88,11 @@ async function waitForNetworkObject(
   return asyncVar.promise;
 }
 
+/**
+ * JSDOC SOURCE networkObjectStatusService
+ *
+ * Provides functions related to the set of available network objects
+ */
 const networkObjectStatusService: NetworkObjectStatusServiceType = {
   getAllNetworkObjectDetails,
   waitForNetworkObject,
