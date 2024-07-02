@@ -1,5 +1,5 @@
 import { Config } from 'tailwindcss';
-// import { scopedPreflightStyles } from 'tailwindcss-scoped-preflight';
+import { scopedPreflightStyles } from 'tailwindcss-scoped-preflight';
 import tailwindCssAnimate from 'tailwindcss-animate';
 
 const config: Config = {
@@ -74,12 +74,11 @@ const config: Config = {
     },
   },
   plugins: [
-    // THIS PRODUCED UNEXPECTED RESULTS
-    // // Restrict tailwind's preflight base css style modifications to within this component library
-    // scopedPreflightStyles({
-    //   // short for platform-bible-react tailwind-preflight - need to put this class on top of each component
-    //   cssSelector: '.pr-twp',
-    // }),
+    // Restrict tailwind's preflight base css style modifications to within this component library
+    scopedPreflightStyles({
+      // short for platform-bible-react tailwind-preflight - need to put this class on top of each component
+      cssSelector: '.pr-twp',
+    }),
     // Plugin from shadcn/ui
     tailwindCssAnimate,
   ],

@@ -173,8 +173,8 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   };
 
   return (
-    <div className="pr-flex pr-flex-col ">
-      <div className={`pr-overflow-y-auto ${selectedCharacter !== '' ? 'pr-max-h-96' : ''}`}>
+    <div className="pr-twp pr-font-sans">
+      <div className={`pr-overflow-y-auto ${selectedCharacter !== '' && 'pr-max-h-96'}`}>
         <InventoryDataTable
           tableData={inventoryTableData}
           onStatusChange={statusChangeHandler}

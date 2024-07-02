@@ -9,7 +9,8 @@ import {
   CircleHelpIcon,
 } from 'lucide-react';
 // TODO: Is this okay or should we integrate this into our DataTable component and re-export from there?
-import { ColumnDef, Row, SortDirection } from '@tanstack/react-table';
+// Also there's a name conflict between tanstack Table and our shadcn Table component (which we're not using here, fortunately)
+import { ColumnDef, Row, SortDirection, Table } from '@tanstack/react-table';
 
 export type Status = true | false | undefined;
 
@@ -87,7 +88,7 @@ export const columns = (
 
       // eslint-disable-next-line consistent-return
       return (
-        <div className="pr-flex pr-flex-col">
+        <div>
           <div className="pr-flex pr-justify-center">Status</div>
           <div className="pr-flex pr-justify-center">
             <Button className="pr-p-1">
@@ -143,7 +144,8 @@ function InventoryDataTable({
   onStatusChange,
   onSelectCharacter,
 }: InventoryDataTableProps) {
-  const rowClickHandler = (row: Row<CharacterData>) => {
+  const rowClickHandler = (row: Row<CharacterData>, table: Table<CharacterData>) => {
+    table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
     row.toggleSelected(undefined);
 
     onSelectCharacter(row.getValue('character'));

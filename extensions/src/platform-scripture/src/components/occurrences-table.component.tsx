@@ -8,74 +8,47 @@ import {
 } from 'platform-bible-react';
 import { useEffect, useState } from 'react';
 
-interface SearchResult {
+type SearchResult = {
   reference: string;
-  word: string;
-}
-
-const processVerseText = (
-  verseText: string,
-  character: string,
-  book: string,
-  chapter: string,
-  verse: string,
-  results: SearchResult[],
-) => {
-  const words = verseText.split(/\s+/).map((word) => word.replace(/[^\w']+/g, ''));
-  words.forEach((word) => {
-    const occurrences = (word.match(new RegExp(character, 'g')) || []).length;
-    for (let i = 0; i < occurrences; i++) {
-      results.push({
-        reference: `${book} ${chapter}:${verse}`,
-        word,
-      });
-    }
-  });
+  snippet: string;
 };
 
-const searchUSFM = (usfmData: string, character: string): SearchResult[] => {
-  if (usfmData === '' || character === '') return [];
+const extractOccurrences = (text: string, character: string): SearchResult[] => {
+  if (text === '' || character === '') return [];
 
   const results: SearchResult[] = [];
-  const lines = usfmData.split('\n');
+  const lines = text.split('\n');
 
-  let currentBook = '';
-  let currentChapter = '';
-  let currentVerse = '';
-  let verseText = '';
+  let currentBook: string = '';
+  let currentChapter: number = 0;
+  let currentVerse: number = 0;
 
   lines.forEach((line) => {
-    const trimmedLine = line.trim();
-
-    if (line.startsWith('\\id ')) {
-      // Extract book title
-      [, currentBook] = trimmedLine.split(' ');
+    const words = line.split(/\s+/);
+    if (line.startsWith('\\id')) {
+      [, currentBook] = words;
     }
-    if (line.startsWith('\\c ')) {
-      // Extract chapter number
-      [, currentChapter] = trimmedLine.split(' ');
-    } else if (line.startsWith('\\v ')) {
-      // When encountering a verse, process the previous verse text
-      if (verseText) {
-        processVerseText(verseText, character, currentBook, currentChapter, currentVerse, results);
+    if (line.startsWith('\\c')) {
+      currentChapter += 1;
+      currentVerse = 0;
+    }
+    if (line.startsWith('\\v')) {
+      currentVerse += 1;
+    }
+
+    for (let i = 0; i < words.length; i++) {
+      if (words[i].includes(character)) {
+        const start = Math.max(0, i - 2);
+        const end = Math.min(words.length, i + 3);
+        const snippet = words.slice(start, end).join(' ');
+        const result: SearchResult = {
+          reference: `${currentBook} ${currentChapter}:${currentVerse}`,
+          snippet,
+        };
+        results.push(result);
       }
-      // Extract verse number and start a new verse text
-      const parts = line.split(' ');
-      [, currentVerse] = parts;
-      verseText = parts.slice(2).join(' ');
-    } else if (line.startsWith('\\s')) {
-      // Handle section breaks
-      verseText = ''; // Reset verse text when a new section starts
-    } else {
-      // Accumulate text for the current verse
-      verseText += ` ${line}`;
     }
   });
-
-  // Process the last verse text
-  if (verseText) {
-    processVerseText(verseText, character, currentBook, currentChapter, currentVerse, results);
-  }
 
   return results;
 };
@@ -87,10 +60,11 @@ interface OccurrencesTableProps {
 
 function OccurrencesTable({ selectedCharacter, bookText }: OccurrencesTableProps) {
   const [tableData, setTableData] = useState<SearchResult[]>(
-    searchUSFM(bookText, selectedCharacter),
+    extractOccurrences(bookText, selectedCharacter),
   );
+
   useEffect(
-    () => setTableData(searchUSFM(bookText, selectedCharacter)),
+    () => setTableData(extractOccurrences(bookText, selectedCharacter)),
     [bookText, selectedCharacter],
   );
 
@@ -104,9 +78,9 @@ function OccurrencesTable({ selectedCharacter, bookText }: OccurrencesTableProps
       </TableHeader>
       <TableBody>
         {tableData.map((result) => (
-          <TableRow key={`${result.reference}-${result.word}-${Math.random()}`}>
+          <TableRow key={`${result.reference}-${result.snippet}-${Math.random()}`}>
             <TableCell>{result.reference}</TableCell>
-            <TableCell>{result.word}</TableCell>
+            <TableCell>{result.snippet}</TableCell>
           </TableRow>
         ))}
       </TableBody>

@@ -12,6 +12,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  Table as tsTable,
 } from '@tanstack/react-table';
 
 import {
@@ -32,7 +33,7 @@ interface DataTableProps<TData, TValue> {
   enablePagination?: boolean;
   showPaginationControls?: boolean;
   showColumnVisibilityControls?: boolean;
-  onRowClickHandler?: (row: Row<TData>) => void;
+  onRowClickHandler?: (row: Row<TData>, table: tsTable<TData>) => void;
 }
 
 function DataTable<TData, TValue>({
@@ -70,7 +71,7 @@ function DataTable<TData, TValue>({
   return (
     <div>
       {showColumnVisibilityControls && <DataTableViewOptions table={table} />}
-      <div className="pr-rounded-md pr-border">
+      <div className="pr-twp pr-rounded-md pr-border pr-font-sans">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -91,7 +92,7 @@ function DataTable<TData, TValue>({
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
-                  onClick={() => onRowClickHandler(row)}
+                  onClick={() => onRowClickHandler(row, table)}
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
                 >
