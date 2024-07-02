@@ -9,10 +9,10 @@ import {
   useLocalizedStrings,
 } from '@papi/frontend/react';
 import {
+  BookChapterControl,
   Button,
   Checkbox,
   ComboBox,
-  RefSelector,
   Slider,
   Switch,
   TextField,
@@ -284,7 +284,7 @@ globalThis.webViewComponent = function HelloWorld({
         <Switch /> {/* no label available */}
         <ComboBox title="Test Me" options={['option 1', 'option 2']} />
         <Slider /> {/* no label available */}
-        <RefSelector scrRef={scrRef} handleSubmit={(newScrRef) => setScrRef(newScrRef)} />
+        <BookChapterControl scrRef={scrRef} handleSubmit={(newScrRef) => setScrRef(newScrRef)} />
         <Table<Row>
           columns={[
             {

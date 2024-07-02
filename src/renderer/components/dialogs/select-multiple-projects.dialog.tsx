@@ -5,7 +5,7 @@ import DoneIcon from '@mui/icons-material/Done';
 import ProjectList, {
   ProjectMetadataDisplay,
 } from '@renderer/components/projects/project-list.component';
-import './select-multiple-projects-dialog.component.scss';
+import '@renderer/components/dialogs/select-multiple-projects.dialog.scss';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { Button, usePromise } from 'platform-bible-react';
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';

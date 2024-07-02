@@ -1,7 +1,7 @@
 import './index.css';
 
 // Components and Types
-export { default as BookChapterControl } from './components/book-chapter-control/book-chapter-control.component';
+export { default as BookChapterControl } from './components/advanced-components/book-chapter-control/book-chapter-control.component';
 export { default as Button } from './components/button.component';
 export type { ButtonProps } from './components/button.component';
 export { default as ChapterRangeSelector } from './components/chapter-range-selector.component';
@@ -29,8 +29,6 @@ export type { IconButtonProps } from './components/icon-button.component';
 export { default as LabelPosition } from './components/label-position.model';
 export { default as MenuItem } from './components/menu-item.component';
 export type { CommandHandler, MenuItemListProps } from './components/menu-item.component';
-export { default as RefSelector } from './components/ref-selector.component';
-export type { ScrRefSelectorProps } from './components/ref-selector.component';
 export { default as SearchBar } from './components/search-bar.component';
 export type { SearchBarProps } from './components/search-bar.component';
 export { default as Slider } from './components/slider.component';
@@ -44,21 +42,7 @@ export type {
 } from './components/snackbar.component';
 export { default as Switch } from './components/switch.component';
 export type { SwitchProps } from './components/switch.component';
-export { default as Table } from './components/table.component';
-export type {
-  TableCalculatedColumn,
-  TableCellClickArgs,
-  TableCellKeyboardEvent,
-  TableCellKeyDownArgs,
-  TableCellMouseEvent,
-  TableColumn,
-  TableCopyEvent,
-  TableEditorProps,
-  TablePasteEvent,
-  TableRowsChangeData,
-  TableSortColumn,
-  TableProps,
-} from './components/table.component';
+export { default as DataTable } from './components/advanced-components/data-table/data-table.component';
 export { default as TextField } from './components/text-field.component';
 export type { TextFieldProps } from './components/text-field.component';
 export { default as Toolbar } from './components/toolbar.component';
@@ -78,3 +62,13 @@ export {
   VerticalTabsContent,
   VerticalTabsTrigger,
 } from '@/components/shadcn-ui/tabs-vertical';
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableCaption,
+} from '@/components/shadcn-ui/table';

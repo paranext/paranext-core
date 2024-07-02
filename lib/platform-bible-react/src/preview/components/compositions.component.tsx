@@ -3,7 +3,6 @@ import { ScriptureReference } from 'platform-bible-utils';
 import ThemeToggle from '@/preview/theme-toggle.component';
 import {
   BookChapterControl,
-  RefSelector,
   SearchBar,
   VerticalTabs,
   VerticalTabsContent,
@@ -34,7 +33,6 @@ function Compositions({ direction }: HasDirection) {
       </VerticalTabsContent>
 
       <VerticalTabsContent value="Book Chapter Control">
-        <RefSelector scrRef={scrRef} handleSubmit={setScrRef} />
         <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
         <div>{JSON.stringify(scrRef)}</div>
       </VerticalTabsContent>

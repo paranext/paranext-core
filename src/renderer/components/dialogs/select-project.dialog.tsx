@@ -1,6 +1,6 @@
 import { ListItemIcon } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import './select-project.dialog.scss';
+import '@renderer/components/dialogs/select-project.dialog.scss';
 import { useCallback, useMemo } from 'react';
 import ProjectList, {
   ProjectMetadataDisplay,
