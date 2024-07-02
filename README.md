@@ -41,6 +41,17 @@ To make the process of customizing from the template as smooth as possible, we r
   - Replace the description with your own description
   - Update ownership information and other relevant fields as desired
 
+- In `assets/displayData.json`:
+
+  - If your extension has an icon, update the `icon` value to point towards the icon file (for example: `assets/icon.svg`)
+  - Update the `en` entry of `localizedDisplayInfo` so that:
+
+    - `displayName` contains a human-readable name for your extension (i.e. `Your Extension Name`).
+    - `shortSummary` contains a short, few sentence summary of what your extension does.
+    - `description` points to a Markdown (`.md`) file containing the full description of your extension (similar to what you would put in a `README`).
+
+  - If your extension supports multiple languages, add another entry to `localizedDisplayInfo` by copying and pasting the `en` entry, changing `en` to the [BCP 47 language tag](https://en.wikipedia.org/wiki/IETF_language_tag) of the language you want to support, and translating the `displayName`, `shortSummary`, and `description` fields appropriately. We recommend naming your description files `description-<language tag>.md`.
+
 - In `LICENSE`:
 
   - Adjust as desired (feel free to choose a different license)
@@ -71,7 +82,10 @@ The general file structure is as follows:
   - `src/types/paranext-extension-template.d.ts` is this extension's types file that defines how other extensions can use this extension through the `papi`. It is copied into the build folder
   - `*.web-view.tsx` files will be treated as React WebViews
   - `*.web-view.html` files are a conventional way to provide HTML WebViews (no special functionality)
-- `assets/` contains asset files the extension and its WebViews can retrieve using the `papi-extension:` protocol. It is copied into the build folder
+- `assets/` contains asset files the extension and its WebViews can retrieve using the `papi-extension:` protocol, as well as textual descriptions in various languages. It is copied into the build folder
+  - `assets/displayData.json` contains (optionally) a path to the extension's icon file as well as text for the extension's display name, short summary, and path to the full description file
+  - `assets/descriptions/` contains textual descriptions of the extension in various languages
+    - `assets/descriptions/description-<locale>.md` contains a brief description of the extension in the language specified by `<locale>`
 - `contributions/` contains JSON files the platform uses to extend data structures for things like menus and settings. The JSON files are referenced from the manifest
 - `public/` contains other static files that are copied into the build folder
 - `dist/` is a generated folder containing the built extension files
