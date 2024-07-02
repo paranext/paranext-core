@@ -78,7 +78,7 @@ function OccurrencesTable({ selectedCharacter, bookText }: OccurrencesTableProps
       </TableHeader>
       <TableBody>
         {tableData.map((result) => (
-          <TableRow key={`${result.reference}-${result.snippet}-${Math.random()}`}>
+          <TableRow>
             <TableCell>{result.reference}</TableCell>
             <TableCell>{result.snippet}</TableCell>
           </TableRow>

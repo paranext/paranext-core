@@ -50,29 +50,22 @@ async function openPlatformCharactersInventory(
   webViewId: string | undefined,
 ): Promise<string | undefined> {
   let projectId: string | undefined;
+
   if (webViewId) {
     const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
     projectId = webViewDefinition?.projectId;
   }
-  const projectIdForWebView =
-    projectId ??
-    (await papi.dialogs.selectProject({
-      includeProjectInterfaces: 'ParatextStandard',
-      title: 'Open Hello World Project Viewer',
-      prompt: 'Please choose a project for which to open the viewer:',
-    }));
 
-  if (!projectIdForWebView) return undefined;
-
-  if (projectId) {
-    const options: InventoryOptions = { projectId };
-    return papi.webViews.getWebView(
-      characterInventoryWebViewType,
-      { type: 'float', floatSize: { width: 775, height: 815 } },
-      options,
-    );
+  if (!projectId) {
+    return undefined;
   }
-  return undefined;
+
+  const options: InventoryOptions = { projectId };
+  return papi.webViews.getWebView(
+    characterInventoryWebViewType,
+    { type: 'float', floatSize: { width: 775, height: 815 } },
+    options,
+  );
 }
 
 const inventoryWebViewProvider: IWebViewProvider = {
