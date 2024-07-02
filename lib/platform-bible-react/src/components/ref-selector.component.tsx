@@ -12,7 +12,7 @@ import {
 } from 'platform-bible-utils';
 import '@/components/ref-selector.component.css';
 import ComboBox, { ComboBoxLabelOption } from '@/components/combo-box.component';
-import Button from '@/components/button.component';
+import { Button } from '@/components/shadcn-ui/button';
 import TextField from '@/components/text-field.component';
 
 export interface ScrRefSelectorProps {
@@ -83,13 +83,13 @@ function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
       />
       <Button
         onClick={() => onChangeBook(offsetBook(scrRef, -1))}
-        isDisabled={scrRef.bookNum <= FIRST_SCR_BOOK_NUM}
+        disabled={scrRef.bookNum <= FIRST_SCR_BOOK_NUM}
       >
         &lt;
       </Button>
       <Button
         onClick={() => onChangeBook(offsetBook(scrRef, 1))}
-        isDisabled={scrRef.bookNum >= getBookNameOptions().length}
+        disabled={scrRef.bookNum >= getBookNameOptions().length}
       >
         &gt;
       </Button>
@@ -101,13 +101,13 @@ function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
       />
       <Button
         onClick={() => handleSubmit(offsetChapter(scrRef, -1))}
-        isDisabled={scrRef.chapterNum <= FIRST_SCR_CHAPTER_NUM}
+        disabled={scrRef.chapterNum <= FIRST_SCR_CHAPTER_NUM}
       >
         &lt;
       </Button>
       <Button
         onClick={() => handleSubmit(offsetChapter(scrRef, 1))}
-        isDisabled={scrRef.chapterNum >= getChaptersForBook(scrRef.bookNum)}
+        disabled={scrRef.chapterNum >= getChaptersForBook(scrRef.bookNum)}
       >
         &gt;
       </Button>
@@ -119,7 +119,7 @@ function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps) {
       />
       <Button
         onClick={() => handleSubmit(offsetVerse(scrRef, -1))}
-        isDisabled={scrRef.verseNum <= FIRST_SCR_VERSE_NUM}
+        disabled={scrRef.verseNum <= FIRST_SCR_VERSE_NUM}
       >
         &lt;
       </Button>

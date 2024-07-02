@@ -79,7 +79,7 @@
     "start:extension-host": "cross-env NODE_ENV=development nodemon --transpile-only ./src/extension-host/extension-host.ts",
     "start:extensions": "cd extensions && npm run watch",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
-    "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
+    "start:renderer": "DEV_NOISY=true cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
     "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
     "stop": "tsx stop-processes.mjs",
     "test:core": "jest --silent",
