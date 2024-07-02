@@ -1,0 +1,10 @@
+{
+  "icon": "",
+  "localizedDisplayInfo": {
+    "en": {
+      "displayName": "Paranext Extension Template",
+      "shortSummary": "Base template for a Paranext Extension",
+      "description": "assets/descriptions/description-en.md"
+    }
+  }
+}
