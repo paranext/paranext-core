@@ -2,6 +2,7 @@
 
 import { AutocompleteChangeDetails, AutocompleteChangeReason, AutocompleteValue, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import * as SelectPrimitive from '@radix-ui/react-select';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { ColumnDef, Row, Table as tsTable } from '@tanstack/react-table';
 import React$1 from 'react';
@@ -141,6 +142,15 @@ export type BookChapterControlProps = {
 	handleSubmit: (scrRef: ScriptureReference) => void;
 };
 export declare function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export interface DataTableProps<TData, TValue> {
+	columns: ColumnDef<TData, TValue>[];
+	data: TData[];
+	enablePagination?: boolean;
+	showPaginationControls?: boolean;
+	showColumnVisibilityControls?: boolean;
+	onRowClickHandler?: (row: Row<TData>, table: tsTable<TData>) => void;
+}
+export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 export type ButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
@@ -702,15 +712,6 @@ export type SwitchProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Switch({ id, isChecked: checked, isDisabled, hasError, className, onChange, }: SwitchProps): import("react/jsx-runtime").JSX.Element;
-export interface DataTableProps<TData, TValue> {
-	columns: ColumnDef<TData, TValue>[];
-	data: TData[];
-	enablePagination?: boolean;
-	showPaginationControls?: boolean;
-	showColumnVisibilityControls?: boolean;
-	onRowClickHandler?: (row: Row<TData>, table: tsTable<TData>) => void;
-}
-export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 export type TextFieldProps = {
 	/** Optional unique identifier */
 	id?: string;
@@ -778,78 +779,6 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	className?: string;
 }>;
 export function Toolbar({ menuProvider, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
-/**
- * Adds an event handler to an event so the event handler runs when the event is emitted. Use
- * `papi.network.getNetworkEvent` to use a networked event with this hook.
- *
- * @param event The event to subscribe to.
- *
- *   - If event is a `PlatformEvent`, that event will be used
- *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
- *       available for example
- *
- * @param eventHandler The callback to run when the event is emitted
- *
- *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
- *   every render
- */
-export declare const useEvent: <T>(event: PlatformEvent<T> | undefined, eventHandler: PlatformEventHandler<T>) => void;
-/**
- * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
- * runs when the event is emitted. Use `papi.network.getNetworkEvent` to use a networked event with
- * this hook.
- *
- * @param event The asynchronously (un)subscribing event to subscribe to.
- *
- *   - If event is a `PlatformEvent` or `PlatformEventAsync`, that event will be used
- *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
- *       available for example
- *
- * @param eventHandler The callback to run when the event is emitted
- *
- *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
- *   every render
- */
-export declare const useEventAsync: <T>(event: PlatformEvent<T> | PlatformEventAsync<T> | undefined, eventHandler: PlatformEventHandler<T>) => void;
-export type UsePromiseOptions = {
-	/**
-	 * Whether to leave the value as the most recent resolved promise value or set it back to
-	 * defaultValue while running the promise again. Defaults to true
-	 */
-	preserveValue?: boolean;
-};
-/**
- * Awaits a promise and returns a loading value while the promise is unresolved
- *
- * @param promiseFactoryCallback A function that returns the promise to await. If this callback is
- *   undefined, the current value will be returned (defaultValue unless it was previously changed
- *   and `options.preserveValue` is true), and there will be no loading.
- *
- *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
- *   every render
- * @param defaultValue The initial value to return while first awaiting the promise. If
- *   `options.preserveValue` is false, this value is also shown while awaiting the promise on
- *   subsequent calls.
- *
- *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
- *   to re-run with its new value. This means that, if the `promiseFactoryCallback` changes and
- *   `options.preserveValue` is `false`, the returned value will be set to the current
- *   `defaultValue`. However, the returned value will not be updated if`defaultValue` changes.
- * @param options Various options for adjusting how this hook runs the `promiseFactoryCallback`
- *
- *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
- *   to re-run with its new value. However, the latest `options.preserveValue` will always be used
- *   appropriately to determine whether to preserve the returned value when changing the
- *   `promiseFactoryCallback`
- * @returns `[value, isLoading]`
- *
- *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
- *   - `isLoading`: whether the promise is waiting to be resolved
- */
-export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) | undefined, defaultValue: T, options?: UsePromiseOptions) => [
-	value: T,
-	isLoading: boolean
-];
 export interface InputProps extends React$1.InputHTMLAttributes<HTMLInputElement> {
 }
 export declare const Input: React$1.ForwardRefExoticComponent<InputProps & React$1.RefAttributes<HTMLInputElement>>;
@@ -924,6 +853,24 @@ export declare function DropdownMenuShortcut({ className, ...props }: DropdownMe
 export declare namespace DropdownMenuShortcut {
 	var displayName: string;
 }
+export declare const Select: React$1.FC<SelectPrimitive.SelectProps>;
+export declare const SelectGroup: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectValue: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectValueProps & React$1.RefAttributes<HTMLSpanElement>>;
+export declare const SelectTrigger: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const SelectScrollUpButton: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectScrollUpButtonProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectScrollDownButton: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectScrollDownButtonProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectContent: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & React$1.RefAttributes<HTMLTableElement>>;
+export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & React$1.RefAttributes<HTMLTableRowElement>>;
+export declare const TableHead: React$1.ForwardRefExoticComponent<React$1.ThHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
+export declare const TableCell: React$1.ForwardRefExoticComponent<React$1.TdHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
+export declare const TableCaption: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableCaptionElement> & React$1.RefAttributes<HTMLTableCaptionElement>>;
 export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
 export type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
 	className?: string;
@@ -951,13 +898,77 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
-export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & React$1.RefAttributes<HTMLTableElement>>;
-export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
-export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
-export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
-export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & React$1.RefAttributes<HTMLTableRowElement>>;
-export declare const TableHead: React$1.ForwardRefExoticComponent<React$1.ThHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
-export declare const TableCell: React$1.ForwardRefExoticComponent<React$1.TdHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
-export declare const TableCaption: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableCaptionElement> & React$1.RefAttributes<HTMLTableCaptionElement>>;
+/**
+ * Adds an event handler to an event so the event handler runs when the event is emitted. Use
+ * `papi.network.getNetworkEvent` to use a networked event with this hook.
+ *
+ * @param event The event to subscribe to.
+ *
+ *   - If event is a `PlatformEvent`, that event will be used
+ *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
+ *       available for example
+ *
+ * @param eventHandler The callback to run when the event is emitted
+ *
+ *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
+ *   every render
+ */
+export declare const useEvent: <T>(event: PlatformEvent<T> | undefined, eventHandler: PlatformEventHandler<T>) => void;
+/**
+ * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
+ * runs when the event is emitted. Use `papi.network.getNetworkEvent` to use a networked event with
+ * this hook.
+ *
+ * @param event The asynchronously (un)subscribing event to subscribe to.
+ *
+ *   - If event is a `PlatformEvent` or `PlatformEventAsync`, that event will be used
+ *   - If event is undefined, the callback will not be subscribed. Useful if the event is not yet
+ *       available for example
+ *
+ * @param eventHandler The callback to run when the event is emitted
+ *
+ *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
+ *   every render
+ */
+export declare const useEventAsync: <T>(event: PlatformEvent<T> | PlatformEventAsync<T> | undefined, eventHandler: PlatformEventHandler<T>) => void;
+export type UsePromiseOptions = {
+	/**
+	 * Whether to leave the value as the most recent resolved promise value or set it back to
+	 * defaultValue while running the promise again. Defaults to true
+	 */
+	preserveValue?: boolean;
+};
+/**
+ * Awaits a promise and returns a loading value while the promise is unresolved
+ *
+ * @param promiseFactoryCallback A function that returns the promise to await. If this callback is
+ *   undefined, the current value will be returned (defaultValue unless it was previously changed
+ *   and `options.preserveValue` is true), and there will be no loading.
+ *
+ *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
+ *   every render
+ * @param defaultValue The initial value to return while first awaiting the promise. If
+ *   `options.preserveValue` is false, this value is also shown while awaiting the promise on
+ *   subsequent calls.
+ *
+ *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+ *   to re-run with its new value. This means that, if the `promiseFactoryCallback` changes and
+ *   `options.preserveValue` is `false`, the returned value will be set to the current
+ *   `defaultValue`. However, the returned value will not be updated if`defaultValue` changes.
+ * @param options Various options for adjusting how this hook runs the `promiseFactoryCallback`
+ *
+ *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+ *   to re-run with its new value. However, the latest `options.preserveValue` will always be used
+ *   appropriately to determine whether to preserve the returned value when changing the
+ *   `promiseFactoryCallback`
+ * @returns `[value, isLoading]`
+ *
+ *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
+ *   - `isLoading`: whether the promise is waiting to be resolved
+ */
+export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) | undefined, defaultValue: T, options?: UsePromiseOptions) => [
+	value: T,
+	isLoading: boolean
+];
 
 export {};

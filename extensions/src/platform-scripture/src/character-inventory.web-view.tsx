@@ -3,7 +3,15 @@ import { WebViewProps } from '@papi/core';
 import papi, { projectDataProviders, projectLookup } from '@papi/frontend';
 import { useSetting } from '@papi/frontend/react';
 import { VerseRef } from '@sillsdev/scripture';
-import { ScriptureReference } from 'platform-bible-react';
+import {
+  Input,
+  ScriptureReference,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from 'platform-bible-react';
 import InventoryDataTable, {
   CharacterData,
   Status,
@@ -46,11 +54,18 @@ const getBookText = async (projectId: string, bookNum: number): Promise<string> 
 
 const buildTableData = async (
   bookText: string,
+  scope: string,
+  statusFilter: string,
+  textFilter: string,
   validCharacters: string[],
   invalidCharacters: string[],
 ): Promise<CharacterData[]> => {
   const characterData: CharacterData[] = [];
+  if (scope !== 'Current book') {
+    return characterData;
+  }
   bookText.split('').forEach((character) => {
+    if (textFilter !== '' && !character.includes(textFilter)) return;
     const characterDataPoint = characterData.find((dataPoint) => {
       return dataPoint.character === character;
     });
@@ -60,12 +75,19 @@ const buildTableData = async (
       let characterStatus: Status;
       if (validCharacters.includes(character)) characterStatus = true;
       if (invalidCharacters.includes(character)) characterStatus = false;
-      const newCharacter: CharacterData = {
-        character,
-        count: 1,
-        status: characterStatus,
-      };
-      characterData.push(newCharacter);
+      if (
+        statusFilter === 'All characters' ||
+        (statusFilter === 'Approved' && characterStatus === true) ||
+        (statusFilter === 'Unapproved' && characterStatus === false) ||
+        (statusFilter === 'Unknown' && characterStatus === undefined)
+      ) {
+        const newCharacter: CharacterData = {
+          character,
+          count: 1,
+          status: characterStatus,
+        };
+        characterData.push(newCharacter);
+      }
     }
   });
 
@@ -80,6 +102,9 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   const [bookText, setBookText] = useState<string>('');
   const [inventoryTableData, setInventoryTableData] = useState<CharacterData[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
+  const [scope, setScope] = useState<string>('Current book');
+  const [statusFilter, setStatusFilter] = useState<string>('All characters');
+  const [textFilter, setTextFilter] = useState<string>('');
 
   const statusChangeHandler = (characters: string[], status: Status) => {
     setInventoryTableData((prevTableData) => {
@@ -158,7 +183,14 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
         const newBookText = await getBookText(projectId, scriptureRef.bookNum);
         setBookText(newBookText);
         setInventoryTableData(
-          await buildTableData(newBookText, validCharacters, invalidCharacters),
+          await buildTableData(
+            newBookText,
+            scope,
+            statusFilter,
+            textFilter,
+            validCharacters,
+            invalidCharacters,
+          ),
         );
       } catch (error) {
         throw new Error('Failed building table data');
@@ -166,7 +198,15 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
     };
 
     buildData();
-  }, [projectId, scriptureRef.bookNum, validCharacters, invalidCharacters]);
+  }, [
+    projectId,
+    scriptureRef.bookNum,
+    validCharacters,
+    invalidCharacters,
+    scope,
+    statusFilter,
+    textFilter,
+  ]);
 
   const selectCharacterHandler = (character: string) => {
     setSelectedCharacter(character);
@@ -174,6 +214,36 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
 
   return (
     <div className="pr-twp pr-font-sans">
+      <div className="pr-flex">
+        <Select onValueChange={(value) => setStatusFilter(value)} defaultValue={statusFilter}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select filter" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="All characters">All characters</SelectItem>
+            <SelectItem value="Approved">Approved</SelectItem>
+            <SelectItem value="Unapproved">Unapproved</SelectItem>
+            <SelectItem value="Unknown">Unknown</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select onValueChange={(value) => setScope(value)} defaultValue={scope}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select scope" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Current book">Current book</SelectItem>
+            <SelectItem value="Current chapter">Current chapter</SelectItem>
+            <SelectItem value="Current verse">Current verse</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          placeholder="Find..."
+          value={textFilter}
+          onChange={(event) => {
+            setTextFilter(event.target.value);
+          }}
+        />
+      </div>
       <div
         className={`pr-rounded-md pr-border pr-overflow-y-auto ${selectedCharacter !== '' && 'pr-max-h-96'}`}
       >

@@ -2,6 +2,8 @@ import './index.css';
 
 // Components and Types
 export { default as BookChapterControl } from './components/advanced-components/book-chapter-control/book-chapter-control.component';
+export { default as DataTable } from './components/advanced-components/data-table/data-table.component';
+
 export { default as Button } from './components/button.component';
 export type { ButtonProps } from './components/button.component';
 export { default as ChapterRangeSelector } from './components/chapter-range-selector.component';
@@ -42,33 +44,25 @@ export type {
 } from './components/snackbar.component';
 export { default as Switch } from './components/switch.component';
 export type { SwitchProps } from './components/switch.component';
-export { default as DataTable } from './components/advanced-components/data-table/data-table.component';
 export { default as TextField } from './components/text-field.component';
 export type { TextFieldProps } from './components/text-field.component';
 export { default as Toolbar } from './components/toolbar.component';
 export type { ToolbarProps } from './components/toolbar.component';
+
+export { Input } from './components/shadcn-ui/input';
+export * from './components/shadcn-ui/dropdown-menu';
+export * from './components/shadcn-ui/select';
+export * from './components/shadcn-ui/table';
+export { Tabs, TabsList, TabsContent, TabsTrigger } from './components/shadcn-ui/tabs';
+export {
+  VerticalTabs,
+  VerticalTabsList,
+  VerticalTabsContent,
+  VerticalTabsTrigger,
+} from './components/shadcn-ui/tabs-vertical';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
-export { Input } from '@/components/shadcn-ui/input';
-export * from '@/components/shadcn-ui/dropdown-menu';
-export { Tabs, TabsList, TabsContent, TabsTrigger } from '@/components/shadcn-ui/tabs';
-export {
-  VerticalTabs,
-  VerticalTabsList,
-  VerticalTabsContent,
-  VerticalTabsTrigger,
-} from '@/components/shadcn-ui/tabs-vertical';
-export {
-  Table,
-  TableHeader,
-  TableBody,
-  TableFooter,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableCaption,
-} from '@/components/shadcn-ui/table';
