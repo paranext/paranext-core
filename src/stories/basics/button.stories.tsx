@@ -6,7 +6,8 @@ const meta: Meta<typeof Button> = {
   component: Button,
   tags: ['autodocs'],
   argTypes: {
-    isDisabled: { control: 'boolean' },
+    disabled: { control: 'boolean' },
+    variant: { string: 'boolean' },
   },
 };
 export default meta;
@@ -15,21 +16,21 @@ type Story = StoryObj<typeof Button>;
 
 export const Primary: Story = {
   args: {
-    className: 'primary',
+    variant: 'default',
     children: 'Primary Button',
   },
 };
 
 export const Secondary: Story = {
   args: {
-    className: 'secondary',
+    variant: 'secondary',
     children: 'Secondary Button',
   },
 };
 
 export const Disabled: Story = {
   args: {
-    isDisabled: true,
+    disabled: true,
     children: 'Disabled Button',
   },
 };
@@ -41,16 +42,30 @@ export const CustomJSXContents: Story = {
   },
 };
 
-export const Paratext: Story = {
+export const Destructive: Story = {
   args: {
-    className: 'paratext',
-    children: 'Paratext Button',
+    variant: 'destructive',
+    children: 'Destructive Button',
   },
 };
 
-export const ParatextBright: Story = {
+export const Outline: Story = {
   args: {
-    className: 'paratext bright',
-    children: 'Paratext Button',
+    variant: 'outline',
+    children: 'Outline Button',
+  },
+};
+
+export const Ghost: Story = {
+  args: {
+    variant: 'ghost',
+    children: 'Ghost Button',
+  },
+};
+
+export const Link: Story = {
+  args: {
+    variant: 'link',
+    children: 'Link Button',
   },
 };

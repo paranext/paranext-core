@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, ButtonProps } from '..';
+import { Button, type ButtonProps } from '..';
 
 export type Direction = 'rtl' | 'ltr';
 export type HasDirection = { direction: Direction };

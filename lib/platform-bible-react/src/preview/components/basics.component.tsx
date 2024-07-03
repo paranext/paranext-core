@@ -66,17 +66,6 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsList>
 
         <VerticalTabsContent value="Button">
-          Wrapped
-          <div>
-            <Button onClick={() => alert('Hello World')}>Wrapped Button</Button>
-            <Button className="primary">primary</Button>
-            <Button className="secondary">secondary</Button>
-            <Button className="secondary">disabled</Button>
-            <Button className="video">video</Button>
-            <Button className="paratext">paratext</Button>
-            <Button className="paratext bright">paratext bright</Button>
-          </div>
-          Shadcn
           <table>
             <tbody>
               <tr>
