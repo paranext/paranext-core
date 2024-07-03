@@ -1557,7 +1557,7 @@ declare module 'shared/services/network-object.service' {
         }
       | undefined,
   ) => Promise<DisposableNetworkObject<T>>;
-  interface NetworkObjectService {
+  export interface NetworkObjectService {
     initialize: typeof initialize;
     hasKnown: typeof hasKnown;
     get: typeof get;
@@ -1565,6 +1565,7 @@ declare module 'shared/services/network-object.service' {
     onDidCreateNetworkObject: typeof onDidCreateNetworkObject;
   }
   /**
+   *
    * Network objects are distributed objects within PAPI for TS/JS objects. @see
    * https://en.wikipedia.org/wiki/Distributed_object
    *
@@ -3037,7 +3038,10 @@ declare module 'shared/models/network-object-status.service-model' {
      */
     getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
   }
-  /** Provides functions related to the set of available network objects */
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
   export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
     /**
      * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
@@ -3059,6 +3063,10 @@ declare module 'shared/models/network-object-status.service-model' {
 }
 declare module 'shared/services/network-object-status.service' {
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
   const networkObjectStatusService: NetworkObjectStatusServiceType;
   export default networkObjectStatusService;
 }
@@ -5239,7 +5247,10 @@ declare module '@papi/core' {
   export type { ExecutionToken } from 'node/models/execution-token.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
-  export type { default as IDataProvider } from 'shared/models/data-provider.interface';
+  export type {
+    default as IDataProvider,
+    IDisposableDataProvider,
+  } from 'shared/models/data-provider.interface';
   export type {
     DataProviderUpdateInstructions,
     DataProviderDataType,
@@ -5269,6 +5280,7 @@ declare module '@papi/core' {
     LocalizationSelector,
     LocalizationSelectors,
   } from 'shared/services/localization.service-model';
+  export type { NetworkObjectDetails } from 'shared/models/network-object.model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type {
     GetWebViewOptions,
@@ -5445,9 +5457,11 @@ declare module '@papi/backend' {
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
   import { DialogService } from 'shared/services/dialog.service-model';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  import { NetworkObjectService } from 'shared/services/network-object.service';
+  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
-  import { ILocalizationService } from 'shared/services/localization.service-model';
   const papi: {
     /**
      *
@@ -5534,6 +5548,40 @@ declare module '@papi/backend' {
      * Service that provides a way to send and receive network events
      */
     network: PapiNetworkService;
+    /**
+     *
+     * Network objects are distributed objects within PAPI for TS/JS objects. @see
+     * https://en.wikipedia.org/wiki/Distributed_object
+     *
+     * Objects registered via {@link networkObjectService.set} are retrievable using
+     * {@link networkObjectService.get}.
+     *
+     * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+     * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+     * the registered object are proxied except for constructors, `dispose`, and functions starting with
+     * `on` since those should be events (which are not intended to be proxied) based on our naming
+     * convention. If you don't want a function to be proxied, don't make it a property of the
+     * registered object.
+     *
+     * Functions on a network object will be called asynchronously by other processes regardless of
+     * whether the functions are synchronous or asynchronous, so it is best to make them all
+     * asynchronous. All shared functions' arguments and return values must be serializable to be called
+     * across processes.
+     *
+     * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+     * of that service, and only that service, to call `dispose` on that object when it is no longer
+     * intended to be shared with other services.
+     *
+     * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+     * event handler will be called. After an object is disposed, calls to its functions will no longer
+     * be proxied to the original object.
+     */
+    networkObject: NetworkObjectService;
+    /**
+     *
+     * Provides functions related to the set of available network objects
+     */
+    networkObjectStatus: NetworkObjectStatusServiceType;
     /**
      *
      * All extensions and services should use this logger to provide a unified output of logs
@@ -5676,6 +5724,40 @@ declare module '@papi/backend' {
    * Service that provides a way to send and receive network events
    */
   export const network: PapiNetworkService;
+  /**
+   *
+   * Network objects are distributed objects within PAPI for TS/JS objects. @see
+   * https://en.wikipedia.org/wiki/Distributed_object
+   *
+   * Objects registered via {@link networkObjectService.set} are retrievable using
+   * {@link networkObjectService.get}.
+   *
+   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+   * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+   * the registered object are proxied except for constructors, `dispose`, and functions starting with
+   * `on` since those should be events (which are not intended to be proxied) based on our naming
+   * convention. If you don't want a function to be proxied, don't make it a property of the
+   * registered object.
+   *
+   * Functions on a network object will be called asynchronously by other processes regardless of
+   * whether the functions are synchronous or asynchronous, so it is best to make them all
+   * asynchronous. All shared functions' arguments and return values must be serializable to be called
+   * across processes.
+   *
+   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+   * of that service, and only that service, to call `dispose` on that object when it is no longer
+   * intended to be shared with other services.
+   *
+   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+   * event handler will be called. After an object is disposed, calls to its functions will no longer
+   * be proxied to the original object.
+   */
+  export const networkObject: NetworkObjectService;
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
+  export const networkObjectStatus: NetworkObjectStatusServiceType;
   /**
    *
    * All extensions and services should use this logger to provide a unified output of logs
