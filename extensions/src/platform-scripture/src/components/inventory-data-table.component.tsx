@@ -78,7 +78,7 @@ export const columns = (
   },
   {
     accessorKey: 'status',
-    header: ({ table }) => {
+    header: ({ column, table }) => {
       const selectedRows = table.getSelectedRowModel().rows;
 
       const characters: string[] = [];
@@ -86,12 +86,16 @@ export const columns = (
         characters.push(row.getValue('character'));
       });
 
-      // eslint-disable-next-line consistent-return
       return (
         <div>
-          <div className="pr-flex pr-justify-center">Status</div>
           <div className="pr-flex pr-justify-center">
-            <Button className="pr-p-1">
+            <Button onClick={() => column.toggleSorting(undefined)}>
+              Status
+              {getSortingIcon(column.getIsSorted())}
+            </Button>
+          </div>
+          <div className="pr-flex pr-justify-center">
+            <Button>
               <CircleCheckIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
@@ -99,7 +103,7 @@ export const columns = (
                 }}
               />
             </Button>
-            <Button className="pr-m-1">
+            <Button>
               <CircleXIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
@@ -107,7 +111,7 @@ export const columns = (
                 }}
               />
             </Button>
-            <Button className="pr-m-1">
+            <Button>
               <CircleHelpIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {

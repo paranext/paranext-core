@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from 'platform-bible-react';
+import type { ProjectDataProviderInterfaces as PDPI } from 'papi-shared-types';
 import InventoryDataTable, {
   CharacterData,
   Status,
@@ -39,31 +40,54 @@ const setSetting = async (
   pdp.setSetting(`platformScripture.${characterSet}`, characters.join(' '));
 };
 
-const getBookText = async (projectId: string, bookNum: number): Promise<string> => {
-  const projectDataProvider = await papi.projectDataProviders.get(
-    'platformScripture.USFM_Book',
-    projectId,
+const getText = async (
+  projectId: string,
+  scriptureRef: ScriptureReference,
+  scope: string,
+): Promise<string> => {
+  let projectInterface: keyof PDPI = 'platformScripture.USFM_Book';
+  if (scope === 'Current chapter') {
+    projectInterface = 'platformScripture.USFM_Chapter';
+  } else if (scope === 'Current verse') {
+    projectInterface = 'platformScripture.USFM_Verse';
+  }
+
+  const PDP = await papi.projectDataProviders.get(projectInterface, projectId);
+
+  const verseRef = new VerseRef(
+    scriptureRef.bookNum,
+    scriptureRef.chapterNum,
+    scriptureRef.verseNum,
   );
-  const verseRef = new VerseRef(bookNum, 1, 1);
-  const bookText = await projectDataProvider.getBookUSFM(verseRef);
+  let text: string | undefined;
 
-  if (!bookText) return '';
+  if (projectInterface === 'platformScripture.USFM_Book') {
+    // We know the PDP interface is of type `platformScripture.USFM_Book`
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    text = await (PDP as PDPI['platformScripture.USFM_Book']).getBookUSFM(verseRef);
+  } else if (projectInterface === 'platformScripture.USFM_Chapter') {
+    // We know the PDP interface is of type `platformScripture.USFM_Chapter`
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    text = await (PDP as PDPI['platformScripture.USFM_Chapter']).getChapterUSFM(verseRef);
+  } else if (projectInterface === 'platformScripture.USFM_Verse') {
+    // We know the PDP interface is of type `platformScripture.USFM_Verse`
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    text = await (PDP as PDPI['platformScripture.USFM_Verse']).getVerseUSFM(verseRef);
+  }
 
-  return bookText;
+  if (!text) return '';
+
+  return text;
 };
 
 const buildTableData = async (
   bookText: string,
-  scope: string,
   statusFilter: string,
   textFilter: string,
   validCharacters: string[],
   invalidCharacters: string[],
 ): Promise<CharacterData[]> => {
   const characterData: CharacterData[] = [];
-  if (scope !== 'Current book') {
-    return characterData;
-  }
   bookText.split('').forEach((character) => {
     if (textFilter !== '' && !character.includes(textFilter)) return;
     const characterDataPoint = characterData.find((dataPoint) => {
@@ -99,7 +123,7 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   const [scriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
   const [validCharacters, setValidCharacters] = useState<string[]>([]);
   const [invalidCharacters, setInvalidCharacters] = useState<string[]>([]);
-  const [bookText, setBookText] = useState<string>('');
+  const [bookText, setText] = useState<string>('');
   const [inventoryTableData, setInventoryTableData] = useState<CharacterData[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
   const [scope, setScope] = useState<string>('Current book');
@@ -180,12 +204,11 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   useEffect(() => {
     const buildData = async () => {
       try {
-        const newBookText = await getBookText(projectId, scriptureRef.bookNum);
-        setBookText(newBookText);
+        const newText = await getText(projectId, scriptureRef, scope);
+        setText(newText);
         setInventoryTableData(
           await buildTableData(
-            newBookText,
-            scope,
+            newText,
             statusFilter,
             textFilter,
             validCharacters,
@@ -200,7 +223,7 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
     buildData();
   }, [
     projectId,
-    scriptureRef.bookNum,
+    scriptureRef,
     validCharacters,
     invalidCharacters,
     scope,
@@ -219,7 +242,7 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
           <SelectTrigger>
             <SelectValue placeholder="Select filter" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="pr-font-sans">
             <SelectItem value="All characters">All characters</SelectItem>
             <SelectItem value="Approved">Approved</SelectItem>
             <SelectItem value="Unapproved">Unapproved</SelectItem>
@@ -230,7 +253,7 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
           <SelectTrigger>
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="pr-font-sans">
             <SelectItem value="Current book">Current book</SelectItem>
             <SelectItem value="Current chapter">Current chapter</SelectItem>
             <SelectItem value="Current verse">Current verse</SelectItem>
