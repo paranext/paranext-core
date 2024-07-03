@@ -20,6 +20,7 @@ import helloWorldProjectWebViewStyles from './web-views/hello-world-project/hell
 import helloWorldProjectViewerWebView from './web-views/hello-world-project/hello-world-project-viewer.web-view?inline';
 import { HTML_COLOR_NAMES } from './util';
 import { HELLO_WORLD_PROJECT_INTERFACES } from './models/hello-world-project-data-provider-engine.model';
+import { checkDetails, createHelloCheck } from './checks';
 
 /** User data storage key for all hello world project data */
 const allProjectDataStorageKey = 'allHelloWorldProjectData';
@@ -390,6 +391,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     context.registrations.add(unsubGreetings);
   }
 
+  const checkPromise = papi.commands.sendCommand(
+    'platformScripture.registerCheck',
+    checkDetails,
+    createHelloCheck,
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await helloWorldPdpefPromise,
@@ -409,6 +416,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     onHelloWorldEmitter,
     await helloWorldPromise,
     await helloExceptionPromise,
+    await checkPromise,
   );
 
   logger.info('Hello World is finished activating!');
