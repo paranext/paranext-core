@@ -1,4 +1,7 @@
+import { useSetting } from '@papi/frontend/react';
+import { Canon } from '@sillsdev/scripture';
 import {
+  ScriptureReference,
   Table,
   TableBody,
   TableCell,
@@ -8,32 +11,38 @@ import {
 } from 'platform-bible-react';
 import { useEffect, useState } from 'react';
 
+const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNum: 1 };
+
 type SearchResult = {
   reference: string;
   snippet: string;
 };
 
-const extractOccurrences = (text: string, character: string): SearchResult[] => {
+const extractOccurrences = (
+  text: string,
+  character: string,
+  scriptureRef: ScriptureReference,
+): SearchResult[] => {
   if (text === '' || character === '') return [];
 
   const results: SearchResult[] = [];
   const lines = text.split('\n');
 
-  let currentBook: string = '';
-  let currentChapter: number = 0;
-  let currentVerse: number = 0;
+  const currentBook: string = Canon.bookNumberToEnglishName(scriptureRef.bookNum);
+  let currentChapter: string = '0';
+  let currentVerse: string = '0';
 
   lines.forEach((line) => {
     const words = line.split(/\s+/);
-    if (line.startsWith('\\id')) {
-      [, currentBook] = words;
-    }
     if (line.startsWith('\\c')) {
-      currentChapter += 1;
-      currentVerse = 0;
+      [, currentChapter] = words;
+      currentVerse = '0';
     }
     if (line.startsWith('\\v')) {
-      currentVerse += 1;
+      [, currentVerse] = words;
+      if (currentChapter === '0') {
+        currentChapter = scriptureRef.chapterNum.toString();
+      }
     }
 
     for (let i = 0; i < words.length; i++) {
@@ -55,17 +64,18 @@ const extractOccurrences = (text: string, character: string): SearchResult[] => 
 
 interface OccurrencesTableProps {
   selectedCharacter: string;
-  bookText: string;
+  text: string;
 }
 
-function OccurrencesTable({ selectedCharacter, bookText }: OccurrencesTableProps) {
+function OccurrencesTable({ selectedCharacter, text }: OccurrencesTableProps) {
+  const [scriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
   const [tableData, setTableData] = useState<SearchResult[]>(
-    extractOccurrences(bookText, selectedCharacter),
+    extractOccurrences(text, selectedCharacter, scriptureRef),
   );
 
   useEffect(
-    () => setTableData(extractOccurrences(bookText, selectedCharacter)),
-    [bookText, selectedCharacter],
+    () => setTableData(extractOccurrences(text, selectedCharacter, scriptureRef)),
+    [text, selectedCharacter, scriptureRef],
   );
 
   return (
@@ -78,6 +88,7 @@ function OccurrencesTable({ selectedCharacter, bookText }: OccurrencesTableProps
       </TableHeader>
       <TableBody>
         {tableData.map((result) => (
+          // This needs a unique key
           <TableRow>
             <TableCell>{result.reference}</TableCell>
             <TableCell>{result.snippet}</TableCell>

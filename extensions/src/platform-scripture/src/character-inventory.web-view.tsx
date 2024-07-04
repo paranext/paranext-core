@@ -123,7 +123,7 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   const [scriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
   const [validCharacters, setValidCharacters] = useState<string[]>([]);
   const [invalidCharacters, setInvalidCharacters] = useState<string[]>([]);
-  const [bookText, setText] = useState<string>('');
+  const [text, setText] = useState<string>('');
   const [inventoryTableData, setInventoryTableData] = useState<CharacterData[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
   const [scope, setScope] = useState<string>('Current book');
@@ -132,21 +132,20 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
 
   const statusChangeHandler = (characters: string[], status: Status) => {
     setInventoryTableData((prevTableData) => {
+      // Update local table data
       let tableData: CharacterData[] = [];
       characters.forEach((character) => {
-        tableData = prevTableData.map((tableElement) => {
-          if (tableElement.character === character) {
-            if (tableElement.status === status) return tableElement;
-            return { ...tableElement, status };
-          }
-          return tableElement;
+        tableData = prevTableData.map((tableEntry) => {
+          if (tableEntry.character === character && tableEntry.status !== status)
+            return { ...tableEntry, status };
+          return tableEntry;
         });
       });
 
+      // Early return if changed characters don't appear in table
       const updatedCharacters = new Set(characters);
-
-      const characterData = tableData.filter((tableElement) =>
-        updatedCharacters.has(tableElement.character),
+      const characterData = tableData.filter((tableEntry) =>
+        updatedCharacters.has(tableEntry.character),
       );
       if (characterData.length === 0) return tableData;
 
@@ -184,7 +183,7 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
         return newInvalidCharacters;
       });
 
-      return prevTableData;
+      return tableData;
     });
   };
 
@@ -278,7 +277,7 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
       </div>
       {selectedCharacter !== '' && (
         <div className="pr-mt-4 pr-rounded-md pr-border">
-          <OccurrencesTable selectedCharacter={selectedCharacter} bookText={bookText} />
+          <OccurrencesTable selectedCharacter={selectedCharacter} text={text} />
         </div>
       )}
     </div>
