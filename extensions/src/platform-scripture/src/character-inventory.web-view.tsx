@@ -259,7 +259,7 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
           </SelectContent>
         </Select>
         <Input
-          placeholder="Find..."
+          placeholder="Filter text..."
           value={textFilter}
           onChange={(event) => {
             setTextFilter(event.target.value);
