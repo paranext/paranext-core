@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNum: 1 };
 
 type SearchResult = {
-  reference: string;
+  reference: ScriptureReference;
   snippet: string;
 };
 
@@ -28,7 +28,6 @@ const extractOccurrences = (
   const results: SearchResult[] = [];
   const lines = text.split('\n');
 
-  const currentBook: string = Canon.bookNumberToEnglishName(scriptureRef.bookNum);
   let currentChapter: string = '0';
   let currentVerse: string = '0';
 
@@ -51,7 +50,7 @@ const extractOccurrences = (
         const end = Math.min(words.length, i + 3);
         const snippet = words.slice(start, end).join(' ');
         const result: SearchResult = {
-          reference: `${currentBook} ${currentChapter}:${currentVerse}`,
+          reference: { ...scriptureRef, chapterNum: +currentChapter, verseNum: +currentVerse },
           snippet,
         };
         results.push(result);
@@ -68,7 +67,7 @@ interface OccurrencesTableProps {
 }
 
 function OccurrencesTable({ selectedCharacter, text }: OccurrencesTableProps) {
-  const [scriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
+  const [scriptureRef, setScriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
   const [tableData, setTableData] = useState<SearchResult[]>(
     extractOccurrences(text, selectedCharacter, scriptureRef),
   );
@@ -89,8 +88,12 @@ function OccurrencesTable({ selectedCharacter, text }: OccurrencesTableProps) {
       <TableBody>
         {tableData.map((result) => (
           // This needs a unique key
-          <TableRow>
-            <TableCell>{result.reference}</TableCell>
+          <TableRow
+            onClick={() => {
+              setScriptureRef(result.reference);
+            }}
+          >
+            <TableCell>{`${Canon.bookNumberToEnglishName(result.reference.bookNum)} ${result.reference.chapterNum}:${result.reference.verseNum}`}</TableCell>
             <TableCell>{result.snippet}</TableCell>
           </TableRow>
         ))}
