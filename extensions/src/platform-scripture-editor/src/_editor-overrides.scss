@@ -6,12 +6,15 @@
 .editor-container {
   max-width: none;
 
+  // remove rounded top corners to look better in tabs
   .toolbar {
     border-top-left-radius: 0;
     border-top-right-radius: 0;
   }
 }
 
+// make the toolbar shrink and grow dynamically
+// work around https://github.com/BiblioNexus-Foundation/scripture-editors/issues/126
 .toolbar-item.block-controls {
   max-width: calc(100% - 140px);
 
@@ -24,11 +27,13 @@
   }
 }
 
+// work around https://github.com/BiblioNexus-Foundation/scripture-editors/issues/124
 /* stylelint-disable-next-line selector-class-pattern */
 .CommentPlugin_CommentsPanel_Heading {
   width: auto;
 }
 
+// work around https://github.com/BiblioNexus-Foundation/scripture-editors/issues/127
 /* stylelint-disable-next-line selector-class-pattern */
 .CommentPlugin_AddCommentBox {
   left: unset !important;

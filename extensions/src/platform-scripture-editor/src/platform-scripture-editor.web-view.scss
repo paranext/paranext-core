@@ -4,7 +4,10 @@
 @import './editor-overrides';
 
 body {
+  // use the same color as the editor content - caution: long term this should be changed to support
+  // theming (e.g. dark mode)
   background-color: #fff;
+// remove margins added by the electron browser user-agent style sheet
   margin: 0;
 }
 
