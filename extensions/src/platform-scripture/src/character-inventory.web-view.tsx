@@ -81,14 +81,14 @@ const getText = async (
 };
 
 const buildTableData = async (
-  bookText: string,
+  text: string,
   statusFilter: string,
   textFilter: string,
   validCharacters: string[],
   invalidCharacters: string[],
 ): Promise<CharacterData[]> => {
   const characterData: CharacterData[] = [];
-  bookText.split('').forEach((character) => {
+  text.split('').forEach((character) => {
     if (textFilter !== '' && !character.includes(textFilter)) return;
     const characterDataPoint = characterData.find((dataPoint) => {
       return dataPoint.character === character;
@@ -124,11 +124,11 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   const [validCharacters, setValidCharacters] = useState<string[]>([]);
   const [invalidCharacters, setInvalidCharacters] = useState<string[]>([]);
   const [text, setText] = useState<string>('');
-  const [inventoryTableData, setInventoryTableData] = useState<CharacterData[]>([]);
-  const [selectedCharacter, setSelectedCharacter] = useState<string>('');
   const [scope, setScope] = useState<string>('Current book');
   const [statusFilter, setStatusFilter] = useState<string>('All characters');
   const [textFilter, setTextFilter] = useState<string>('');
+  const [inventoryTableData, setInventoryTableData] = useState<CharacterData[]>([]);
+  const [selectedCharacter, setSelectedCharacter] = useState<string>('');
 
   const statusChangeHandler = (characters: string[], status: Status) => {
     setInventoryTableData((prevTableData) => {
@@ -201,18 +201,23 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   }, [projectId]);
 
   useEffect(() => {
-    const buildData = async () => {
+    const getNewText = async () => {
       try {
         const newText = await getText(projectId, scriptureRef, scope);
         setText(newText);
+      } catch (error) {
+        throw new Error('Failed getting scripture text');
+      }
+    };
+
+    getNewText();
+  }, [projectId, scriptureRef, scope]);
+
+  useEffect(() => {
+    const buildData = async () => {
+      try {
         setInventoryTableData(
-          await buildTableData(
-            newText,
-            statusFilter,
-            textFilter,
-            validCharacters,
-            invalidCharacters,
-          ),
+          await buildTableData(text, statusFilter, textFilter, validCharacters, invalidCharacters),
         );
       } catch (error) {
         throw new Error('Failed building table data');
@@ -220,19 +225,7 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
     };
 
     buildData();
-  }, [
-    projectId,
-    scriptureRef,
-    validCharacters,
-    invalidCharacters,
-    scope,
-    statusFilter,
-    textFilter,
-  ]);
-
-  const selectCharacterHandler = (character: string) => {
-    setSelectedCharacter(character);
-  };
+  }, [validCharacters, invalidCharacters, text, statusFilter, textFilter]);
 
   return (
     <div className="pr-twp pr-font-sans">
@@ -272,7 +265,9 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
         <InventoryDataTable
           tableData={inventoryTableData}
           onStatusChange={statusChangeHandler}
-          onSelectCharacter={selectCharacterHandler}
+          onSelectCharacter={(character: string) => {
+            setSelectedCharacter(character);
+          }}
         />
       </div>
       {selectedCharacter !== '' && (
