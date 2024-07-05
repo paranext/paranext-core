@@ -56,7 +56,8 @@ export const ThemeButton = React.forwardRef<
     <div className="pr-flex pr-gap-2">
       <div ref={ref} className={className}>
         <Button
-          variant={theme.includes('dark') ? 'default' : 'outline'}
+          variant={theme === 'paratext-dark' ? 'default' : 'outline'}
+          className={theme.includes('paratext') ? 'pr-bg-[#FFFBF3]' : ''}
           size="icon"
           onClick={() =>
             setTheme(
