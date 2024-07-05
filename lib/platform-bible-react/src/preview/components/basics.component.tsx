@@ -219,7 +219,10 @@ function Basics({ direction }: HasDirection) {
             </TableHeader>
             <TableBody>
               {invoices.map((invoice) => (
-                <TableRow key={invoice.invoice}>
+                <TableRow
+                  key={invoice.invoice}
+                  data-state={invoice.paymentStatus === 'Paid' ? 'selected' : ''}
+                >
                   <TableCell className="font-medium">{invoice.invoice}</TableCell>
                   <TableCell>{invoice.paymentStatus}</TableCell>
                   <TableCell>{invoice.paymentMethod}</TableCell>
