@@ -107,8 +107,8 @@
       background-color: hsl(0, 60%, 51%, 0.9);
     }
 
-    .hover\:pr-bg-muted\/50:hover,
-    .pr-bg-muted\/50 {
+    .pr-bg-muted\/50,
+    .hover\:pr-bg-muted\/50:hover {
       background-color: hsl(33.9, 32.4%, 86.1%, 0.5);
     }
   }
@@ -147,6 +147,7 @@
       background-color: hsl(0, 60%, 51%, 0.9);
     }
 
+    .pr-bg-muted\/50,
     .hover\:pr-bg-muted\/50:hover {
       background-color: hsl(15.5, 13.2%, 53.9%, 0.5);
     }
