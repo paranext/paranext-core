@@ -12,13 +12,14 @@ export const DirToggle = React.forwardRef<HTMLButtonElement, ButtonProps & Direc
     const oppositeDirection = direction === 'rtl' ? 'ltr' : 'rtl';
     return (
       <Button
+        variant="outline"
         className={className}
         onClick={() => {
           changeDirection(oppositeDirection);
         }}
         {...props}
       >
-        {oppositeDirection}
+        {direction}
       </Button>
     );
   },
