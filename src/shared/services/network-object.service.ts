@@ -537,16 +537,22 @@ const set = async <T extends NetworkableObject>(
 
 // #endregion
 
-// Declare an interface for the object we're exporting so that JSDoc comments propagate
-interface NetworkObjectService {
-  initialize: typeof initialize;
-  hasKnown: typeof hasKnown;
+// Declare an interface for the object we will export to PAPI
+export interface MinimalNetworkObjectService {
   get: typeof get;
   set: typeof set;
   onDidCreateNetworkObject: typeof onDidCreateNetworkObject;
 }
 
+// Declare an interface for the object we're exporting so that JSDoc comments propagate
+export interface NetworkObjectService extends MinimalNetworkObjectService {
+  initialize: typeof initialize;
+  hasKnown: typeof hasKnown;
+}
+
 /**
+ * JSDOC SOURCE networkObjectService
+ *
  * Network objects are distributed objects within PAPI for TS/JS objects. @see
  * https://en.wikipedia.org/wiki/Distributed_object
  *
@@ -582,3 +588,11 @@ const networkObjectService: NetworkObjectService = {
 };
 
 export default networkObjectService;
+
+// This is only intended for use on PAPI
+/** JSDOC DESTINATION networkObjectService */
+export const minimalNetworkObjectService: MinimalNetworkObjectService = {
+  get,
+  set,
+  onDidCreateNetworkObject,
+};
