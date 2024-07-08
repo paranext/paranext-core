@@ -146,7 +146,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dropdown Menu">
-          <p>Note: the dropdown has a bad visibility in dark mode right now</p>
+          <p>Note: the shadcn dropdown has a bad contrast to the background in dark mode</p>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <ShadcnButton>Open</ShadcnButton>
