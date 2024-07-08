@@ -12,9 +12,24 @@
       "%project_settings_platformScripture_versification_description%": "Which versification scheme this Scripture project follows",
       "%project_settings_platformScripture_validCharacters_label%": "Valid Characters",
       "%project_settings_platformScripture_validCharacters_description%": "List of characters that are accepted in this project.",
-      "%project_settings_platformScripture_invalidCharacters_label%": "Is Editable",
+      "%project_settings_platformScripture_invalidCharacters_label%": "Invalid Characters",
       "%project_settings_platformScripture_invalidCharacters_description%": "List of characters that are not accepted in this project.",
-      "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects"
+      "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects",
+      "%webView_characterInventory_title%": "Character Inventory",
+      "%webView_characterInventory_characters_all%": "All characters",
+      "%webView_characterInventory_characters_approved%": "Approved characters",
+      "%webView_characterInventory_characters_unapproved%": "Unapproved characters",
+      "%webView_characterInventory_characters_unknown%": "Unknown characters",
+      "%webView_inventory_scope_book%": "Current book",
+      "%webView_inventory_scope_chapter%": "Current chapter",
+      "%webView_inventory_scope_verse%": "Current verse",
+      "%webView_inventory_filter_text%": "Filter text...",
+      "%webView_inventory_table_header_character%": "Character",
+      "%webView_inventory_table_header_unicode_value%": "Unicode Value",
+      "%webView_inventory_table_header_count%": "Count",
+      "%webView_inventory_table_header_status%": "Status",
+      "%webView_inventory_occurrences_table_header_reference%": "Reference",
+      "%webView_inventory_occurrences_table_header_occurrence%": "Occurrence"
     }
   }
 }

@@ -61,11 +61,7 @@ async function openPlatformCharactersInventory(
   }
 
   const options: InventoryOptions = { projectId };
-  return papi.webViews.getWebView(
-    characterInventoryWebViewType,
-    { type: 'float', floatSize: { width: 775, height: 815 } },
-    options,
-  );
+  return papi.webViews.getWebView(characterInventoryWebViewType, { type: 'float' }, options);
 }
 
 const inventoryWebViewProvider: IWebViewProvider = {

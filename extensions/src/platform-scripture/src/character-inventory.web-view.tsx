@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { WebViewProps } from '@papi/core';
 import papi, { projectDataProviders, projectLookup } from '@papi/frontend';
-import { useSetting } from '@papi/frontend/react';
+import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { VerseRef } from '@sillsdev/scripture';
 import {
   Input,
@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from 'platform-bible-react';
-import type { ProjectDataProviderInterfaces as PDPI } from 'papi-shared-types';
+import { LocalizeKey, split } from 'platform-bible-utils';
 import InventoryDataTable, {
   CharacterData,
   Status,
@@ -27,7 +27,7 @@ const getSetting = async (
 ) => {
   const projectMetadata = await projectLookup.getMetadataForProject(projectId);
   const pdp = await projectDataProviders.get('platform.base', projectMetadata.id);
-  return (await pdp.getSetting(`platformScripture.${characterSet}`)).split(' ');
+  return split(await pdp.getSetting(`platformScripture.${characterSet}`), ' ');
 };
 
 const setSetting = async (
@@ -44,40 +44,27 @@ const getText = async (
   projectId: string,
   scriptureRef: ScriptureReference,
   scope: string,
-): Promise<string> => {
-  let projectInterface: keyof PDPI = 'platformScripture.USFM_Book';
-  if (scope === 'Current chapter') {
-    projectInterface = 'platformScripture.USFM_Chapter';
-  } else if (scope === 'Current verse') {
-    projectInterface = 'platformScripture.USFM_Verse';
-  }
-
-  const PDP = await papi.projectDataProviders.get(projectInterface, projectId);
-
+): Promise<string | undefined> => {
   const verseRef = new VerseRef(
     scriptureRef.bookNum,
     scriptureRef.chapterNum,
     scriptureRef.verseNum,
   );
-  let text: string | undefined;
 
-  if (projectInterface === 'platformScripture.USFM_Book') {
-    // We know the PDP interface is of type `platformScripture.USFM_Book`
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    text = await (PDP as PDPI['platformScripture.USFM_Book']).getBookUSFM(verseRef);
-  } else if (projectInterface === 'platformScripture.USFM_Chapter') {
-    // We know the PDP interface is of type `platformScripture.USFM_Chapter`
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    text = await (PDP as PDPI['platformScripture.USFM_Chapter']).getChapterUSFM(verseRef);
-  } else if (projectInterface === 'platformScripture.USFM_Verse') {
-    // We know the PDP interface is of type `platformScripture.USFM_Verse`
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    text = await (PDP as PDPI['platformScripture.USFM_Verse']).getVerseUSFM(verseRef);
+  if (scope === 'book') {
+    const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Book', projectId);
+    return PDP.getBookUSFM(verseRef);
+  }
+  if (scope === 'chapter') {
+    const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Chapter', projectId);
+    return PDP.getChapterUSFM(verseRef);
+  }
+  if (scope === 'verse') {
+    const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Verse', projectId);
+    return PDP.getVerseUSFM(verseRef);
   }
 
-  if (!text) return '';
-
-  return text;
+  throw new Error('Cannot get scripture for unknown scope');
 };
 
 const buildTableData = async (
@@ -88,7 +75,7 @@ const buildTableData = async (
   invalidCharacters: string[],
 ): Promise<CharacterData[]> => {
   const characterData: CharacterData[] = [];
-  text.split('').forEach((character) => {
+  split(text, '').forEach((character) => {
     if (textFilter !== '' && !character.includes(textFilter)) return;
     const characterDataPoint = characterData.find((dataPoint) => {
       return dataPoint.character === character;
@@ -100,10 +87,10 @@ const buildTableData = async (
       if (validCharacters.includes(character)) characterStatus = true;
       if (invalidCharacters.includes(character)) characterStatus = false;
       if (
-        statusFilter === 'All characters' ||
-        (statusFilter === 'Approved' && characterStatus === true) ||
-        (statusFilter === 'Unapproved' && characterStatus === false) ||
-        (statusFilter === 'Unknown' && characterStatus === undefined)
+        statusFilter === 'all' ||
+        (statusFilter === 'approved' && characterStatus === true) ||
+        (statusFilter === 'unapproved' && characterStatus === false) ||
+        (statusFilter === 'unknown' && characterStatus === undefined)
       ) {
         const newCharacter: CharacterData = {
           character,
@@ -118,14 +105,37 @@ const buildTableData = async (
   return characterData;
 };
 
+const STRING_KEYS: LocalizeKey[] = [
+  '%webView_characterInventory_characters_all%',
+  '%webView_characterInventory_characters_approved%',
+  '%webView_characterInventory_characters_unapproved%',
+  '%webView_characterInventory_characters_unknown%',
+  '%webView_inventory_scope_book%',
+  '%webView_inventory_scope_chapter%',
+  '%webView_inventory_scope_verse%',
+  '%webView_inventory_filter_text%',
+];
+
 global.webViewComponent = function CharacterInventory({ useWebViewState }: WebViewProps) {
+  const [
+    {
+      '%webView_characterInventory_characters_all%': allCharacters,
+      '%webView_characterInventory_characters_approved%': approvedCharacters,
+      '%webView_characterInventory_characters_unapproved%': unapprovedCharacters,
+      '%webView_characterInventory_characters_unknown%': unknownCharacters,
+      '%webView_inventory_scope_book%': scopeBook,
+      '%webView_inventory_scope_chapter%': scopeChapter,
+      '%webView_inventory_scope_verse%': scopeVerse,
+      '%webView_inventory_filter_text%': filterText,
+    },
+  ] = useLocalizedStrings(STRING_KEYS);
   const [projectId] = useWebViewState('projectId', '');
   const [scriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
   const [validCharacters, setValidCharacters] = useState<string[]>([]);
   const [invalidCharacters, setInvalidCharacters] = useState<string[]>([]);
-  const [text, setText] = useState<string>('');
-  const [scope, setScope] = useState<string>('Current book');
-  const [statusFilter, setStatusFilter] = useState<string>('All characters');
+  const [text, setText] = useState<string | undefined>(undefined);
+  const [scope, setScope] = useState<string>('book');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [textFilter, setTextFilter] = useState<string>('');
   const [inventoryTableData, setInventoryTableData] = useState<CharacterData[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
@@ -214,6 +224,10 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
   }, [projectId, scriptureRef, scope]);
 
   useEffect(() => {
+    if (!text) {
+      setInventoryTableData([]);
+      return;
+    }
     const buildData = async () => {
       try {
         setInventoryTableData(
@@ -235,10 +249,10 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
             <SelectValue placeholder="Select filter" />
           </SelectTrigger>
           <SelectContent className="pr-font-sans">
-            <SelectItem value="All characters">All characters</SelectItem>
-            <SelectItem value="Approved">Approved</SelectItem>
-            <SelectItem value="Unapproved">Unapproved</SelectItem>
-            <SelectItem value="Unknown">Unknown</SelectItem>
+            <SelectItem value="all">{allCharacters}</SelectItem>
+            <SelectItem value="approved">{approvedCharacters}</SelectItem>
+            <SelectItem value="unapproved">{unapprovedCharacters}</SelectItem>
+            <SelectItem value="unknown">{unknownCharacters}</SelectItem>
           </SelectContent>
         </Select>
         <Select onValueChange={(value) => setScope(value)} defaultValue={scope}>
@@ -246,13 +260,14 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>
           <SelectContent className="pr-font-sans">
-            <SelectItem value="Current book">Current book</SelectItem>
-            <SelectItem value="Current chapter">Current chapter</SelectItem>
-            <SelectItem value="Current verse">Current verse</SelectItem>
+            <SelectItem value="book">{scopeBook}</SelectItem>
+            <SelectItem value="chapter">{scopeChapter}</SelectItem>
+            <SelectItem value="verse">{scopeVerse}</SelectItem>
           </SelectContent>
         </Select>
         <Input
-          placeholder="Filter text..."
+          className="pr-border pr-rounded-md"
+          placeholder={filterText}
           value={textFilter}
           onChange={(event) => {
             setTextFilter(event.target.value);

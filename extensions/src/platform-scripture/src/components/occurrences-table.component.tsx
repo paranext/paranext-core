@@ -1,4 +1,4 @@
-import { useSetting } from '@papi/frontend/react';
+import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { Canon } from '@sillsdev/scripture';
 import {
   ScriptureReference,
@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
+import { LocalizeKey } from 'platform-bible-utils';
 import { useEffect, useState } from 'react';
 
 const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNum: 1 };
@@ -19,11 +20,11 @@ type SearchResult = {
 };
 
 const extractOccurrences = (
-  text: string,
+  text: string | undefined,
   character: string,
   scriptureRef: ScriptureReference,
 ): SearchResult[] => {
-  if (text === '' || character === '') return [];
+  if (!text || text === '' || character === '') return [];
 
   const results: SearchResult[] = [];
   const lines = text.split('\n');
@@ -63,10 +64,21 @@ const extractOccurrences = (
 
 interface OccurrencesTableProps {
   selectedCharacter: string;
-  text: string;
+  text: string | undefined;
 }
 
+const STRING_KEYS: LocalizeKey[] = [
+  '%webView_inventory_occurrences_table_header_reference%',
+  '%webView_inventory_occurrences_table_header_occurrence%',
+];
+
 function OccurrencesTable({ selectedCharacter, text }: OccurrencesTableProps) {
+  const [
+    {
+      '%webView_inventory_occurrences_table_header_reference%': reference,
+      '%webView_inventory_occurrences_table_header_occurrence%': occurrence,
+    },
+  ] = useLocalizedStrings(STRING_KEYS);
   const [scriptureRef, setScriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
   const [tableData, setTableData] = useState<SearchResult[]>(
     extractOccurrences(text, selectedCharacter, scriptureRef),
@@ -81,8 +93,8 @@ function OccurrencesTable({ selectedCharacter, text }: OccurrencesTableProps) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Reference</TableHead>
-          <TableHead>Word</TableHead>
+          <TableHead>{reference}</TableHead>
+          <TableHead>{occurrence}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

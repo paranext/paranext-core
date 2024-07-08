@@ -11,6 +11,8 @@ import {
 // TODO: Is this okay or should we integrate this into our DataTable component and re-export from there?
 // Also there's a name conflict between tanstack Table and our shadcn Table component (which we're not using here, fortunately)
 import { ColumnDef, Row, SortDirection, Table } from '@tanstack/react-table';
+import { LocalizeKey } from 'platform-bible-utils';
+import { useLocalizedStrings } from '@papi/frontend/react';
 
 export type Status = true | false | undefined;
 
@@ -37,6 +39,10 @@ const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
 // #region Columns
 
 export const columns = (
+  characterLabel: string,
+  unicodeValueLabel: string,
+  countLabel: string,
+  statusLabel: string,
   statusChangeHandler: (characters: string[], status: Status) => void,
 ): ColumnDef<CharacterData>[] => [
   {
@@ -44,7 +50,7 @@ export const columns = (
     header: ({ column }) => {
       return (
         <Button onClick={() => column.toggleSorting(undefined)}>
-          Character
+          {characterLabel}
           {getSortingIcon(column.getIsSorted())}
         </Button>
       );
@@ -55,7 +61,7 @@ export const columns = (
     header: ({ column }) => {
       return (
         <Button onClick={() => column.toggleSorting(undefined)}>
-          Unicode Value
+          {unicodeValueLabel}
           {getSortingIcon(column.getIsSorted())}
         </Button>
       );
@@ -70,7 +76,7 @@ export const columns = (
     header: ({ column }) => {
       return (
         <Button onClick={() => column.toggleSorting(undefined)}>
-          Count
+          {countLabel}
           {getSortingIcon(column.getIsSorted())}
         </Button>
       );
@@ -90,7 +96,7 @@ export const columns = (
         <div>
           <div className="pr-flex pr-justify-center">
             <Button onClick={() => column.toggleSorting(undefined)}>
-              Status
+              {statusLabel}
               {getSortingIcon(column.getIsSorted())}
             </Button>
           </div>
@@ -137,6 +143,14 @@ export const columns = (
 ];
 
 // #endregion
+
+const STRING_KEYS: LocalizeKey[] = [
+  '%webView_inventory_table_header_character%',
+  '%webView_inventory_table_header_unicode_value%',
+  '%webView_inventory_table_header_count%',
+  '%webView_inventory_table_header_status%',
+];
+
 interface InventoryDataTableProps {
   tableData: CharacterData[];
   onStatusChange: (characters: string[], status: Status) => void;
@@ -148,6 +162,15 @@ function InventoryDataTable({
   onStatusChange,
   onSelectCharacter,
 }: InventoryDataTableProps) {
+  const [
+    {
+      '%webView_inventory_table_header_character%': characterLabel,
+      '%webView_inventory_table_header_unicode_value%': unicodeValueLabel,
+      '%webView_inventory_table_header_count%': countLabel,
+      '%webView_inventory_table_header_status%': statusLabel,
+    },
+  ] = useLocalizedStrings(STRING_KEYS);
+
   const rowClickHandler = (row: Row<CharacterData>, table: Table<CharacterData>) => {
     table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
     row.toggleSelected(undefined);
@@ -158,7 +181,13 @@ function InventoryDataTable({
   return (
     <div className="pr-overflow-y-auto">
       <DataTable
-        columns={columns(onStatusChange)}
+        columns={columns(
+          characterLabel,
+          unicodeValueLabel,
+          countLabel,
+          statusLabel,
+          onStatusChange,
+        )}
         data={tableData}
         onRowClickHandler={rowClickHandler}
       />
