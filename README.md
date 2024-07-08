@@ -230,7 +230,7 @@ Formatting happens automatically when you commit. If you use VS Code with this r
 To check TypeScript for readability, maintainability, and functionality errors, and to check a few other files for proper formatting, run the following from the repo root (or just use VS Code with this repo's recommended extensions)
 
 ```bash
-npm run prettier
+npm run format
 npm run lint
 ```
 
