@@ -24,6 +24,8 @@
     "typeRoots": [
       // Include default type declarations
       "./node_modules/@types",
+      // Since we don't have duplicate node_modules installed here, get types from the root
+      "../node_modules/@types",
       // Include papi-dts type declarations (for papi.d.ts)
       "../lib",
       // Include these bundled extensions' type declarations

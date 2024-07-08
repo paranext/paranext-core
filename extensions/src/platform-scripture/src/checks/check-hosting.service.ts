@@ -285,7 +285,7 @@ async function initialize(): Promise<void> {
 
 // #endregion
 
-const checkHostingService: ICheckHostingService = {
+let checkHostingService: ICheckHostingService = {
   initialize,
   dispose: async () => dataProvider.dispose(),
   getCheckRunner: async () => {
@@ -295,3 +295,10 @@ const checkHostingService: ICheckHostingService = {
 };
 
 export default checkHostingService;
+
+// https://stackoverflow.com/a/72567275
+// Only export "registerCheck" when testing since commands aren't available
+if (process.env['NODE_DEV'] === 'TEST') {
+  //@ts-expect-error
+  checkHostingService.registerCheck = registerCheck;
+}
